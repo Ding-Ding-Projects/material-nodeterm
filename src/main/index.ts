@@ -24,6 +24,7 @@ import {
   recordAgentEvent
 } from '../core/agent-status-mirror'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
+import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
 import { retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
@@ -1028,6 +1029,12 @@ app.whenReady().then(async () => {
       target.webContents.send(IPC.agentControl, { requestId, sourceNodeId: nodeId, verb, args })
     })
   })
+  // Network-git relay for the mobile companion: over SSH the macOS Keychain refuses a
+  // non-interactive session (-25308), so the phone's push/pull/fetch against an https remote
+  // can't get credentials — the same op run HERE, in the GUI session, can. Whitelisted ops
+  // only; token-gated like every hook route. Desktop-only by design: the Server Edition's
+  // process env is the same one an SSH exec channel gets, so a proxy there changes nothing.
+  hookServer.setGitRemoteHandler((req) => runGitRemoteOp(req))
   await hookServer.start()
   initMediaProtocol()
 

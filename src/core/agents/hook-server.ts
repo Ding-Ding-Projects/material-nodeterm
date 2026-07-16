@@ -51,6 +51,16 @@ class HookServer {
         error?: string
       }>)
     | null = null
+  /** `/git/remote-op` executor (git-remote-proxy.ts), registered by the desktop shell — the
+   *  route 404s when absent, which the phone reads as "proxy unavailable". */
+  private gitRemoteHandler:
+    | ((req: { cwd?: string; op?: string; branch?: string }) => Promise<{
+        ok: boolean
+        exitCode: number
+        stdout: string
+        stderr: string
+      }>)
+    | null = null
   private endpointPath = ''
 
   endpointFilePath(): string {
@@ -80,6 +90,10 @@ class HookServer {
 
   setControlHandler(cb: NonNullable<HookServer['controlHandler']>): void {
     this.controlHandler = cb
+  }
+
+  setGitRemoteHandler(cb: NonNullable<HookServer['gitRemoteHandler']>): void {
+    this.gitRemoteHandler = cb
   }
 
   async start(): Promise<void> {
@@ -116,6 +130,27 @@ class HookServer {
               })
             : { ok: false, error: 'control unavailable' }
           res.writeHead(result.ok ? 200 : 400, { 'content-type': 'application/json' })
+          res.end(JSON.stringify(result))
+          return
+        }
+        if (reqUrl.pathname === '/git/remote-op') {
+          // The mobile companion's network-git relay (see git-remote-proxy.ts). Contract with
+          // the phone: 200 + JSON result (ok:false carries git's own stderr) = the op RAN here;
+          // any other status (404 no handler, older builds' fail-open 204) = proxy unavailable,
+          // so the phone falls back to its direct-git error + advice.
+          if (!this.gitRemoteHandler) {
+            res.writeHead(404)
+            res.end()
+            return
+          }
+          let parsed: { cwd?: string; op?: string; branch?: string } = {}
+          try {
+            parsed = JSON.parse(await readBody(req))
+          } catch {
+            parsed = {}
+          }
+          const result = await this.gitRemoteHandler(parsed)
+          res.writeHead(200, { 'content-type': 'application/json' })
           res.end(JSON.stringify(result))
           return
         }
