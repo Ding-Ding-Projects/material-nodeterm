@@ -97,9 +97,40 @@ export const PENDING_TTL_MS = 5000
  */
 export const REMOVED_MAX = 512
 
-/** The node a mutation addresses. */
-export function mutationNodeId(m: CanvasMutation): string {
-  return m.op === 'remove' ? m.id : m.node.id
+/**
+ * The THING a mutation addresses — the key everything below orders by.
+ *
+ * Nodes and edges live in ONE key space with a prefix, not two maps: a node id and an edge id are
+ * generated independently and could collide, and the rules here (highest `seq` wins, our unacked
+ * cast suppresses peers, a remove tombstones the key) are the same for both. The prefix is what
+ * keeps them from being confused for one another.
+ *
+ * Edges key on the id ALONE — the `kind` is deliberately not in the key. One id is one edge; a
+ * bridge and a rope claiming the same id must fight in the total order and be resolved to one
+ * thing, not held as two independent entities on different clients.
+ */
+export function mutationKey(m: CanvasMutation): string {
+  if (m.op === 'edge-remove') return `e:${m.id}`
+  if (m.op === 'edge-upsert') return `e:${m.edge.id}`
+  return `n:${m.op === 'remove' ? m.id : m.node.id}`
+}
+
+/** The node a mutation addresses. Node ops only — an edge mutation addresses no node. */
+export function mutationNodeId(m: CanvasMutation): string | null {
+  if (m.op === 'remove') return m.id
+  if (m.op === 'upsert') return m.node.id
+  return null
+}
+
+/** Does this mutation ADD-OR-REPLACE its subject (as opposed to dropping it)? Nodes and edges are
+ *  ordered by the same rules, so every rule below asks this rather than `op === 'upsert'`. */
+function isUpsert(m: CanvasMutation): boolean {
+  return m.op === 'upsert' || m.op === 'edge-upsert'
+}
+
+/** Does this mutation DROP its subject? The mirror of `isUpsert`. */
+function isRemove(m: CanvasMutation): boolean {
+  return m.op === 'remove' || m.op === 'edge-remove'
 }
 
 export interface CanvasOrder {
@@ -199,7 +230,7 @@ export function createCanvasOrder(
    * legitimate edit. Degrade to the pre-rule-4 behaviour rather than break.
    */
   const supersededByRemove = (m: CanvasMutation, id: string): boolean => {
-    if (m.op !== 'upsert') return false
+    if (!isUpsert(m)) return false
     const at = removed.get(id)
     if (at === undefined) return false
     return typeof m.seen === 'number' && m.seen < at
@@ -226,7 +257,7 @@ export function createCanvasOrder(
     },
 
     onLocal(m) {
-      const id = mutationNodeId(m)
+      const id = mutationKey(m)
       const p = pending.get(id)
       if (p) {
         p.count++
@@ -242,7 +273,7 @@ export function createCanvasOrder(
     },
 
     accept(m) {
-      const id = mutationNodeId(m)
+      const id = mutationKey(m)
       const seq = m.seq ?? 0
       const highest = seen.get(id) ?? 0
       // `seq` 0 means an unstamped mutation (no reflector in the path) — never treat it as stale.
@@ -257,7 +288,7 @@ export function createCanvasOrder(
       // it: a straggler describes a state the total order has already left behind.
       const stale = supersededByRemove(m, id)
       if (current) {
-        if (m.op === 'remove') noteRemoved(id, seq)
+        if (isRemove(m)) noteRemoved(id, seq)
         else if (!stale) removed.delete(id) // a deliberate re-creation: this node is alive again
       }
 
@@ -288,7 +319,7 @@ export function createCanvasOrder(
       // NEVER for a `remove`. Rule 2 rests on our unacked mutation winning everywhere, and under
       // rule 4 it does not: every other client is about to drop it for being older than this
       // delete. Holding the remove off here is the one way to end up disagreeing with them.
-      if (m.op !== 'remove' && suppressing(id)) return false
+      if (!isRemove(m) && suppressing(id)) return false
       // Applying a peer's mutation over an unacked cast of ours (the TTL lapsed — `suppressing`
       // just said so, but the entry is still there): remember that our value is gone, so the late
       // ack can repair it (rule 3).

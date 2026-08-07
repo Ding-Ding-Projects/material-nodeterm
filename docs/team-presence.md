@@ -412,6 +412,45 @@ independently on each client from the already-broadcast `agent:status` stream; a
   (`committedRef`) rather than replacing it, so a local edit still inside the 300 ms undo debounce
   survives a peer's mutation landing on top of it.
 
+## Edge sync (bridges + ropes)
+
+Stage 3 addressed **nodes**. Edges — `bridges` (context links, which an agent actually reads
+through) and `ropes` (display-only "spawned by" lineage) — were left out, and that was the worst
+gap the stage shipped with, because they are **persisted in the same whole-file `workspace.save`**.
+An edge you drew never reached your teammate, and their next save — of a canvas that never had it —
+**deleted it**. Same in reverse. The advice was "draw links when you are alone on the canvas".
+
+They are in the vocabulary now, and everything around them is the node machinery unchanged:
+
+- **Vocabulary** — `CanvasMutation` gains `edge-upsert` / `edge-remove`, each carrying a
+  `kind: 'bridge' | 'rope'` (which persisted list to write) and the edge's three ids. **Only the ids
+  travel.** Colour, markers and handles are re-derived on each client from its own copy of the
+  source node — a rope's colour comes from the source agent, so sending it would ship one client's
+  palette to another.
+- **Ordering** — the same `CanvasOrder`, keyed by `mutationKey`: `n:<id>` for nodes, `e:<id>` for
+  edges, one key space with a prefix (a node id and an edge id are generated independently and could
+  collide). The `kind` is deliberately **not** in the key: one id is one edge, and a bridge and a
+  rope claiming the same id must be resolved to one thing rather than held as two. Rule 4 (the
+  causal delete) therefore covers an edge exactly as it covers a node.
+- **Publisher** — the snapshot became a `CanvasScene` (`{nodes, bridges, ropes}`), so one diff, one
+  throttle and one baseline cover both. The Canvas publish effect has the edge arrays in its deps:
+  drawing a link never touches `nodes`, so without that the edit would never be published. React
+  Flow rebuilds those arrays on a mere **selection** change too — that costs one diff yielding no
+  mutation (the diff compares id/source/target only), and the solo gate means a solo user does not
+  pay even that.
+- **Batch order is load-bearing.** A peer applies mutations one at a time, so `diffToMutations`
+  emits **node adds → edge adds → edge removes → node removes**: an edge naming a node that has not
+  arrived yet would draw into nothing, and an edge whose node dies in the same batch has to be
+  removed while it is still there.
+- **Ephemeral endpoints are filtered** (`publishableScene`). An edge naming a subagent / loop card
+  addresses a node the peer derives itself, with its own lifetime — it would be pruned there at a
+  moment we do not control and re-published back at us.
+- **Background projects** get `useProjects.applyEdgeMutation`, for the same reason nodes do: that
+  project's serialized edges are what our next whole-file save writes.
+
+What this does **not** change: an edge is still pruned locally when an endpoint disappears, so a
+peer's node delete can leave one drawn against nothing for a tick (see Known risks).
+
 ## UI
 
 `PresenceLayer` renders inside React Flow's `<ViewportPortal>`, so cursors sit in flow
@@ -618,13 +657,11 @@ here so the delta is legible.
    (`TOMBSTONE_MAX` / `TOMBSTONE_TTL_MS`), still exempting the destroyer so their own ⌘Z works.
 
 5. **What canvas sync does NOT cover** (all deliberate; none of it is fixed by this stage):
-   - **Edges are NOT in the mutation vocabulary** — only nodes are, and edges (`edges`, `bridges`,
-     `ropes`) ride the same whole-file `workspace.save`, which is last-write-wins. So this is worse
-     than a cosmetic gap: an edge you draw does not appear on your peer's canvas, **and their next
-     save — of a canvas that never had it — DELETES it**, because their file write is authoritative
-     for the whole project. (Same in reverse: their edge dies on your save.) A peer's node delete
-     also leaves a **dangling edge** on your canvas until the next save/load drops it. Edge sync is
-     the obvious next slice of this stage; until then, draw links when you are alone on the canvas.
+   - ~~**Edges are NOT in the mutation vocabulary**~~ — **closed; see
+     [Edge sync](#edge-sync-bridges--ropes) below.** This was the worst of the gaps and not a
+     cosmetic one: edges rode the whole-file `workspace.save` without being in the vocabulary, so an
+     edge you drew never reached your peer **and their next save — of a canvas that never had it —
+     DELETED it**.
    - **A peer's node removal unmounts the node and disposes its terminal co-state**
      (`disposeTerminalOnUnmount` — the module-level xterm/park/co-attach state), but it does **not**
      run the rest of the local delete path (`useAgentStatus.remove`, chat-driver dispose). The
@@ -665,6 +702,9 @@ concurrently with a peer's delete.
 - **Intent, on a contended node.** Two people dragging the same node fight: the node lands wherever
   the last-ordered frame put it. Two people typing a title get one title. That is last-write-wins,
   not a merge — by design (no CRDT).
+- **Edge array ORDER**, for the same reason and with even less consequence: two clients that draw
+  an edge at the same time each append the peer's to their own, so the two arrays hold the same
+  edges in different slots. Nothing lists edges in order; they are rendered as a set.
 - **Anything outside the node/edge vocabulary** — project lifecycle (see item 5 above).
 
 ### A delete beats a concurrent edit — CAUSALLY, not by a tiebreak (rule 4)
@@ -937,9 +977,8 @@ logged in, named, and on the **same project**.
   people dragging one node fight over it and the last-ordered frame decides. (A delete no longer
   loses that race — see rule 4 under
   [Concurrent-edit resolution](#concurrent-edit-resolution-what-converges-and-what-does-not).)
-- **A peer's edge (context link / note link) is deleted by your next save.** Edges are not synced but
-  they *are* persisted, in the same whole-file write. See item 5 of
-  [What Stage 3 changed](#what-stage-3-changed-relative-to-this-spec).
+- ~~**A peer's edge (context link / note link) is deleted by your next save.**~~ Closed — edges are
+  in the vocabulary now ([Edge sync](#edge-sync-bridges--ropes)).
 - **The publisher's solo gate reads the presence peer table.** If a client's presence handshake never
   completes, that client sees no peers and therefore publishes nothing (it still *applies* what it
   receives, and the first mutation from a peer flips the gate on for good). Presence and canvas sync
@@ -968,6 +1007,8 @@ logged in, named, and on the **same project**.
   - **The tombstone remains in-memory**, so it dies with the core process; across a core restart both
     of the above degrade to "the node comes back". Bounded and honestly named, not a promise. See
     [What Stage 3 changed](#what-stage-3-changed-relative-to-this-spec) (item 4).
-- **A peer's node delete can leave a dangling edge.** Edges are not in the mutation vocabulary — only
-  nodes are — so a context-link / note-link edge whose endpoint a peer deleted stays drawn on your
-  canvas until the next save/load drops it. Drawing an edge is likewise not synced.
+- **A peer's node delete can still leave a dangling edge for a moment.** The delete and the edge
+  removal are two mutations, and the peer that owns the edge prunes it on its next node change, so
+  an edge whose endpoint a peer deleted can be drawn against nothing for a tick. It is dropped by
+  the same prune that has always handled a locally-deleted endpoint — the durable half (your save
+  erasing their edge) is what closed.

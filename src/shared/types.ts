@@ -273,6 +273,24 @@ export interface CanvasState {
 export type CanvasMutation =
   | { op: 'upsert'; node: CanvasNodeState; src?: string; seq?: number; seen?: number }
   | { op: 'remove'; id: string; src?: string; seq?: number; seen?: number }
+  | {
+      op: 'edge-upsert'
+      kind: CanvasEdgeKind
+      edge: BridgeLink
+      src?: string
+      seq?: number
+      seen?: number
+    }
+  | { op: 'edge-remove'; kind: CanvasEdgeKind; id: string; src?: string; seq?: number; seen?: number }
+
+/**
+ * Which persisted edge list a mutation addresses — `bridges` (context links, which an agent can
+ * actually READ through) or `ropes` (display-only "spawned by" lineage). They are two arrays on
+ * the project with two different meanings, so the kind travels with the mutation; the ORDER,
+ * however, is keyed on the edge id alone (canvas-order's `e:<id>`), because one id is one edge and
+ * two clients must never end up holding it as both a bridge and a rope.
+ */
+export type CanvasEdgeKind = 'bridge' | 'rope'
 
 /** Canvas pan/zoom state. */
 export interface Viewport {
