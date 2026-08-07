@@ -325,11 +325,17 @@ export interface CanvasState {
  *    that echo is the ACK that tells the sender where its edit landed in the total order).
  *  - `seq` is stamped by the reflector (src/core/canvas-sync.ts) and is the TOTAL ORDER. It is
  *    server-authoritative: a client-supplied `seq` is overwritten at ingest, never trusted.
- * The relay's host↔client mirror (src/main/remote) uses the same vocabulary and simply omits both.
+ *  - `seen` is the sender's CAUSAL stamp: the highest `seq` it had applied at the moment it cast.
+ *    It answers the one question `seq` alone cannot — "did this client already know about the
+ *    delete?" — which is what lets a delete beat a concurrent drag frame instead of being
+ *    resurrected by it (canvas-order's rule 4). Client-supplied, so the reflector BOUNDS it
+ *    (it can never legitimately reach the order it is being given); a mutation without it is
+ *    judged exactly as before, so an unstamped peer degrades rather than breaks.
+ * The relay's host↔client mirror (src/main/remote) uses the same vocabulary and simply omits them.
  */
 export type CanvasMutation =
-  | { op: 'upsert'; node: CanvasNodeState; src?: string; seq?: number }
-  | { op: 'remove'; id: string; src?: string; seq?: number }
+  | { op: 'upsert'; node: CanvasNodeState; src?: string; seq?: number; seen?: number }
+  | { op: 'remove'; id: string; src?: string; seq?: number; seen?: number }
 
 /** Canvas pan/zoom state. */
 export interface Viewport {
