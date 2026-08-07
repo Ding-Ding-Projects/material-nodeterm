@@ -1880,6 +1880,11 @@ export function Canvas() {
       (m) => {
         const projectId = useProjects.getState().activeProjectId
         if (!projectId) return false // no active canvas: nothing was cast — retry on the next publish
+        // Stamp our causal position FIRST (canvas-order rule 4: what we had applied when we cast —
+        // it is what lets a teammate's delete beat this frame instead of being resurrected by it),
+        // so the size guard below judges the EXACT payload that goes on the wire. `stamp` is pure:
+        // a refusal still records no pending entry.
+        const stamped = order.stamp(m)
         // The reflector REFUSES an oversized / malformed mutation at ingest, silently: no peer ever
         // sees it and there is no negative ack. Ask the same predicate FIRST, so a refusal costs us
         // neither a pending entry (which would deafen this node to its peers for the whole TTL — a
@@ -1887,20 +1892,20 @@ export function Canvas() {
         // resurrect their node) nor the retry (the publisher keeps the node in its baseline). The
         // only thing that can legitimately blow the cap is free text, i.e. a sticky's body — so say
         // so, instead of letting the note silently never sync.
-        if (!guard(m)) {
+        if (!guard(stamped)) {
           setSyncNote(
             'This note is too large to share with your teammates (over 250 KB). It stays on your ' +
               'canvas, but they will not see it until you shorten it.'
           )
           return false
         }
-        order.onLocal(m)
+        order.onLocal(stamped)
         // Cast to the ACTIVE session's core — a relay tab publishes to the relay HOST, not to B's
         // own local core (the bug this fixes). Byte-identical on a local tab (`activeSession.api`
         // IS `window.nodeTerminal`). `canvasSyncTarget` decides the GATE (hasPeers) at bind time;
         // the cast target is just the session's api, so reach it directly — no per-cast allocation
         // on this ~20 Hz path.
-        activeSession.api.canvas.mutate(projectId, m)
+        activeSession.api.canvas.mutate(projectId, stamped)
         return true
       },
       { src, shouldPublish: () => hasPeersRef.current }

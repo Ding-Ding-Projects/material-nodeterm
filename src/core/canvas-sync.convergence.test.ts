@@ -167,12 +167,15 @@ class Client {
         // pending entry or casting. A refusal means nothing was cast — so nothing is pending (the
         // node stays open to its peers) and the publisher keeps the node in its baseline and
         // retries it on the next publish. Canvas also surfaces the refusal to the user.
-        if (!isCanvasMutation(m)) {
+        // Stamp our causal position FIRST, so the guard judges the exact payload that is cast
+        // (canvas-order rule 4 — `seen` is what lets a delete beat a concurrent drag frame).
+        const stamped = this.order.stamp(m)
+        if (!isCanvasMutation(stamped)) {
           this.refused++
           return false
         }
-        this.order.onLocal(m)
-        bus.cast(id, PROJECT, m)
+        this.order.onLocal(stamped)
+        bus.cast(id, PROJECT, stamped)
         return true
       },
       { src }
@@ -287,7 +290,12 @@ describe('canvas convergence (async bus)', () => {
   // The bug Stage 3 exists to kill, in its sharpest form: A deletes a node while B is dragging it.
   // Divergence here is not cosmetic — A's next whole-file workspace.save would write the node
   // straight back over B's canvas (or vice versa).
-  it('concurrent delete vs move of the same node converges (no split-brain save)', () => {
+  //
+  // RULE 4 also decides WHICH way it converges. Plain last-write-wins let B's next drag frame — a
+  // frame produced in ignorance of the delete — win the order and keep the node ALIVE on every
+  // canvas, as a shell around a tmux session A's `kill-session` had already killed. `seen` says B
+  // had not yet applied the remove, so the frame is dropped everywhere and the delete stands.
+  it('concurrent delete vs move of the same node converges — on DELETED', () => {
     a.edit([node('n1', 0), node('n2', 0)])
     bus.settle()
 
@@ -295,14 +303,45 @@ describe('canvas convergence (async bus)', () => {
     b.edit(b.states.map((n) => (n.id === 'n1' ? node('n1', 50) : n))) // …while B drags it
     bus.settle()
 
-    // Whatever the total order decided, BOTH clients agree — that is the save-safety property.
-    // Here A's remove was ordered first, so B's later drag frame wins and the node survives on both
-    // (an honest last-write-wins outcome; see docs/team-presence.md). What can no longer happen is
-    // A holding the node while B does not — the split-brain that made A's save resurrect it on disk.
+    expect(a.ids()).toEqual(b.ids()) // the save-safety property, unchanged
+    expect(a.ids()).toEqual(['n2']) // …and the node nobody asked back stays gone
+    expect(canon(a)).toEqual(canon(b))
+    expect(a.persisted()).toEqual(b.persisted())
+  })
+
+  // The other half of rule 4, and the reason it is not a blunt "delete always wins": an upsert cast
+  // AFTER the client applied the delete is a deliberate re-creation (⌘Z on the delete, or the node
+  // being added again) and must land. Without the causal test, a bounded "delete wins" window would
+  // silently eat it.
+  it('a node re-created AFTER the delete landed is not eaten by the delete', () => {
+    a.edit([node('n1', 0), node('n2', 0)])
+    bus.settle()
+
+    a.edit(a.states.filter((n) => n.id !== 'n1')) // A deletes n1
+    bus.settle() // …and everyone has applied it
+    b.edit([...b.states, node('n1', 7)]) // B adds it back, knowing it was deleted
+    bus.settle()
+
     expect(a.ids()).toEqual(b.ids())
-    expect(a.ids()).toEqual(['n1', 'n2'])
-    expect(canon(a)).toEqual(canon(b)) // same node set, same values (A re-appended n1: see `canon`)
-    expect(a.x('n1')).toBe(50) // B's drag frame is the last write
+    expect(a.ids()).toContain('n1')
+    expect(a.x('n1')).toBe(7)
+    expect(a.persisted()).toEqual(b.persisted())
+  })
+
+  // A stale frame from a client whose socket was stalled must not resurrect the node either — this
+  // is the "disconnected peer erases / revives what everyone else settled" hazard, and it is the one
+  // a TIME-based delete-wins window would get wrong (the frame arrives long after any window).
+  it('a very late drag frame from a stalled client cannot revive the deleted node', () => {
+    a.edit([node('n1', 0), node('n2', 0)])
+    bus.settle()
+
+    b.edit(b.states.map((n) => (n.id === 'n1' ? node('n1', 50) : n))) // B's frame is cast…
+    a.edit(a.states.filter((n) => n.id !== 'n1')) // …A deletes n1
+    clock += 60_000 // …and B's cast sits on a stalled link for a minute
+    bus.settle()
+
+    expect(a.ids()).toEqual(b.ids())
+    expect(a.ids()).toEqual(['n2'])
   })
 
   it('delete wins when it is the later write, and stays deleted on both', () => {

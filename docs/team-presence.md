@@ -658,26 +658,43 @@ concurrently with a peer's delete.
 
 **Does NOT converge — named, not hidden:**
 
-- **Array order after a resurrection.** If a delete *loses* the order race, the client that issued it
-  removed the node and then re-appended it, so it can sit in a different **slot** in the array than
-  on a client that never removed it. Node set, positions, sizes and data all agree; only the array
-  order (which drives the sidebar listing) can differ, and the next load normalizes it.
+- **Array order after a resurrection.** If a node is deleted and then legitimately re-created, the
+  client that issued the delete removed it and re-appended it, so it can sit in a different **slot**
+  in the array than on a client that never removed it. Node set, positions, sizes and data all agree;
+  only the array order (which drives the sidebar listing) can differ, and the next load normalizes it.
 - **Intent, on a contended node.** Two people dragging the same node fight: the node lands wherever
   the last-ordered frame put it. Two people typing a title get one title. That is last-write-wins,
   not a merge — by design (no CRDT).
-- **A delete that loses to a concurrent edit — and the node comes back with a DEAD TERMINAL.** If A
-  deletes a node while B is mid-drag, and B's next frame is ordered after A's remove, the node
-  **survives on both canvases** — the last write wins, and it happened to be an upsert. But A's
-  `transport.destroy` had already run `tmux kill-session`, and nothing resurrects a killed session:
-  the node that comes back is a **shell around a dead terminal**. Its scrollback and its running
-  process are gone; the next time it is opened, `pty.create` starts a **fresh** session under the same
-  `nt-<nodeId>` (a cold start: scrollback replay finds nothing, an agent node re-launches its CLI).
-  The canvas is *consistent* everywhere (no split-brain save, which was the whole point) — the node
-  content is not. Deleting a node someone else is actively dragging is a race between two humans;
-  nodeterm resolves the canvas, it cannot un-kill a process. A "delete always wins" tiebreak would
-  trade this for the opposite hazard (a stale drag frame from a disconnected peer erasing a node that
-  was legitimately re-created), so v1 leaves the total order in charge and names the wart here.
-- **Anything outside the node vocabulary** — edges, project lifecycle (see item 5 above).
+- **Anything outside the node/edge vocabulary** — project lifecycle (see item 5 above).
+
+### A delete beats a concurrent edit — CAUSALLY, not by a tiebreak (rule 4)
+
+This used to be in the list above, as a named wart: A deletes a node while B is mid-drag, B's next
+frame is ordered after A's remove, so the node **survived on every canvas** — but A's
+`transport.destroy` had already run `tmux kill-session`, so what came back was a **shell around a
+dead terminal**. Consistent, and nobody had asked for that node back.
+
+The fix is not the "delete always wins" tiebreak this document previously rejected — that one buys
+the opposite hazard, a stale drag frame from a disconnected peer erasing a node that was
+legitimately re-created. The missing fact was **causality**, so every mutation now carries `seen`:
+the highest `seq` its sender had applied when it cast. The rule is exact, with no timer:
+
+> an upsert for a removed node is dropped **iff** `seen < the seq the remove was ordered at`.
+
+B's drag frame was produced in ignorance of the delete and dies everywhere; a re-creation (⌘Z on
+the delete, the node added again) necessarily carries `seen` at or past it and lands. Its mirror on
+the receiving side: **a `remove` is never held off by rule 2's suppression** — rule 2 rests on "our
+unacked mutation wins everywhere", which under rule 4 it no longer does, so suppressing the remove
+would be the one way to disagree with our peers.
+
+`seen` is client-supplied and it *decides* something, so the reflector **bounds** it
+(`stampMutation`): it can never legitimately reach the order the mutation is being given, so it is
+clamped there, and a non-integer/negative one is dropped. A mutation with **no** `seen` (an older
+peer, the relay mirror) is judged exactly as before rule 4 existed — degrade, never break.
+
+What this does **not** do: un-kill the process. If the delete wins, the terminal is gone, which is
+what the human asked for. If the node is deliberately re-created later, it is still a fresh session
+under the same `nt-<nodeId>` (a cold start).
 
 ## Non-goals (v1)
 
@@ -916,10 +933,10 @@ logged in, named, and on the **same project**.
 - **Weak identity** — anyone can claim any name.
 - **Concurrent typing garbles input** — accepted; the badge is the warning.
 - **Cross-user undo** — last-write-wins, no CRDT.
-- **Per-node last-write-wins is a resolution, not an arbitration.** Clients always converge, but a
-  delete can lose to a concurrent drag frame (the node survives everywhere, with a dead session), and
-  two people dragging one node fight over it. Named in full under
-  [Concurrent-edit resolution](#concurrent-edit-resolution-what-converges-and-what-does-not).
+- **Per-node last-write-wins is a resolution, not an arbitration.** Clients always converge, but two
+  people dragging one node fight over it and the last-ordered frame decides. (A delete no longer
+  loses that race — see rule 4 under
+  [Concurrent-edit resolution](#concurrent-edit-resolution-what-converges-and-what-does-not).)
 - **A peer's edge (context link / note link) is deleted by your next save.** Edges are not synced but
   they *are* persisted, in the same whole-file write. See item 5 of
   [What Stage 3 changed](#what-stage-3-changed-relative-to-this-spec).
