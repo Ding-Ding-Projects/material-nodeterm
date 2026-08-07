@@ -22,9 +22,9 @@
 // Pure + DOM-free (vitest runs in the node environment): only setTimeout, no React, no window.
 
 import { stripSharedNodeExec } from './node-exec'
-import { diffToMutations } from './canvas-mutations'
-import { mutationNodeId } from './canvas-order'
-import type { CanvasMutation, CanvasNodeState } from './types'
+import { asScene, diffToMutations, type CanvasScene } from './canvas-mutations'
+import { mutationKey } from './canvas-order'
+import type { BridgeLink, CanvasMutation, CanvasNodeState } from './types'
 
 /** ~20 Hz while dragging — the same budget the presence cursor stream uses. */
 export const PUBLISH_INTERVAL_MS = 50
@@ -42,7 +42,10 @@ export const PUBLISH_INTERVAL_MS = 50
  * immutable array per change, so `() => serialize(nodes)` satisfies this): the publisher may
  * resolve it later — at the trailing edge of a throttle window, or when the first peer arrives.
  */
-export type CanvasSnapshot = CanvasNodeState[] | (() => CanvasNodeState[])
+export type CanvasSnapshot =
+  | CanvasScene
+  | CanvasNodeState[]
+  | (() => CanvasScene | CanvasNodeState[])
 
 export interface CanvasPublisher {
   /** Diff `next` against the last published snapshot and send the mutations.
@@ -70,16 +73,17 @@ export interface CanvasPublisher {
  * A refused node that had no previous entry is simply left OUT of the baseline (so it re-diffs as an
  * add); a refused `remove` keeps its node in the baseline (so the remove is re-emitted).
  */
-function rebaseRefused(
-  prev: CanvasNodeState[],
-  next: CanvasNodeState[],
-  refused: Set<string>
-): CanvasNodeState[] {
+function rebaseList<T extends { id: string }>(
+  prev: T[],
+  next: T[],
+  refused: Set<string>,
+  prefix: string
+): T[] {
   const prevById = new Map(prev.map((n) => [n.id, n]))
   const nextIds = new Set(next.map((n) => n.id))
-  const out: CanvasNodeState[] = []
+  const out: T[] = []
   for (const n of next) {
-    if (!refused.has(n.id)) {
+    if (!refused.has(prefix + n.id)) {
       out.push(n)
       continue
     }
@@ -87,10 +91,23 @@ function rebaseRefused(
     if (before) out.push(before)
   }
   for (const n of prev) {
-    if (refused.has(n.id) && !nextIds.has(n.id)) out.push(n) // a refused remove: still owed
+    if (refused.has(prefix + n.id) && !nextIds.has(n.id)) out.push(n) // a refused remove: still owed
   }
   return out
 }
+
+/** The refusal rebase, over the whole scene. `refused` holds `mutationKey`s, so the two edge lists
+ *  share the `e:` prefix — an edge id is one edge whichever list it is in (see mutationKey). */
+function rebaseRefused(prev: CanvasScene, next: CanvasScene, refused: Set<string>): CanvasScene {
+  return {
+    nodes: rebaseList(prev.nodes, next.nodes, refused, 'n:'),
+    bridges: rebaseList(prev.bridges, next.bridges, refused, 'e:'),
+    ropes: rebaseList(prev.ropes, next.ropes, refused, 'e:')
+  }
+}
+
+/** The empty baseline — a scene, so the first diff after mount is against a real shape. */
+const EMPTY_SCENE: CanvasScene = { nodes: [], bridges: [], ropes: [] }
 
 /**
  * @param send        casts one mutation (already stamped with `src`). Returning `false` means the
@@ -120,15 +137,16 @@ export function createCanvasPublisher(
   const intervalMs = opts.intervalMs ?? PUBLISH_INTERVAL_MS
   const shouldPublish = opts.shouldPublish ?? (() => true)
   /** The baseline, held EITHER resolved (`last`) or unresolved (`lastLazy`) — never both. */
-  let last: CanvasNodeState[] = []
-  let lastLazy: (() => CanvasNodeState[]) | null = null
+  let last: CanvasScene = EMPTY_SCENE
+  let lastLazy: (() => CanvasScene) | null = null
   let pending: CanvasSnapshot | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
 
-  const resolve = (s: CanvasSnapshot): CanvasNodeState[] => (typeof s === 'function' ? s() : s)
+  const resolve = (s: CanvasSnapshot): CanvasScene =>
+    asScene(typeof s === 'function' ? s() : s)
 
   /** The baseline to diff against, resolving a deferred one exactly once. */
-  const baseline = (): CanvasNodeState[] => {
+  const baseline = (): CanvasScene => {
     if (lastLazy) {
       last = lastLazy()
       lastLazy = null
@@ -140,9 +158,9 @@ export function createCanvasPublisher(
    *  and, for a solo user, nothing ever will. */
   const setBaseline = (s: CanvasSnapshot): void => {
     if (typeof s === 'function') {
-      lastLazy = s
+      lastLazy = () => asScene(s())
     } else {
-      last = s
+      last = asScene(s)
       lastLazy = null
     }
   }
@@ -157,7 +175,7 @@ export function createCanvasPublisher(
     const mutations = diffToMutations(prev, next)
     const refused = new Set<string>()
     for (const m of mutations) {
-      if (send(opts.src ? { ...m, src: opts.src } : m) === false) refused.add(mutationNodeId(m))
+      if (send(opts.src ? { ...m, src: opts.src } : m) === false) refused.add(mutationKey(m))
     }
     last = refused.size ? rebaseRefused(prev, next, refused) : next
     lastLazy = null
@@ -230,6 +248,28 @@ export function createCanvasPublisher(
  */
 export function isEphemeralNodeId(id: string, ephemeralIds: ReadonlySet<string>): boolean {
   return ephemeralIds.has(id) || id.startsWith('loop-')
+}
+
+/**
+ * The whole canvas as it may go on the wire: publishable nodes (above) plus the two PERSISTED edge
+ * lists, with every edge whose endpoint is an ephemeral card dropped.
+ *
+ * That last filter is the edge half of the same rule. The ephemeral subagent / loop cards are
+ * derived per client from the `agent:status` stream, so an edge pointing at one addresses a node id
+ * that exists on the peer with a DIFFERENT lifetime (or not at all yet) — and unlike a node, an
+ * edge is not visibly duplicated by the mistake, it just gets pruned on the peer at a moment we do
+ * not control and then re-published back at us. The ephemeral edges Canvas draws to those cards are
+ * built and merged at the `<ReactFlow>` prop and are not in these lists at all; this is the guard
+ * for a PERSISTED edge that happens to name one.
+ */
+export function publishableScene(
+  scene: CanvasScene,
+  ephemeralIds: ReadonlySet<string>
+): CanvasScene {
+  const nodes = publishableStates(scene.nodes, ephemeralIds)
+  const live = new Set(nodes.map((n) => n.id))
+  const keep = (e: BridgeLink): boolean => live.has(e.source) && live.has(e.target)
+  return { nodes, bridges: scene.bridges.filter(keep), ropes: scene.ropes.filter(keep) }
 }
 
 /** The node states that may go on the wire: everything except the ephemeral cards. */

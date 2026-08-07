@@ -3,8 +3,10 @@ import {
   createCanvasPublisher,
   isEphemeralNodeId,
   publishableStates,
-  PUBLISH_INTERVAL_MS
+  PUBLISH_INTERVAL_MS,
+  publishableScene
 } from './canvas-publish'
+import { mutationNodeId } from './canvas-order'
 import type { CanvasMutation, CanvasNodeState } from './types'
 
 const node = (id: string, x = 0): CanvasNodeState =>
@@ -131,7 +133,7 @@ describe('a refused cast (send → false)', () => {
     const sent: CanvasMutation[] = []
     const send = (m: CanvasMutation): boolean => {
       tried.push(m)
-      const id = m.op === 'remove' ? m.id : m.node.id
+      const id = mutationNodeId(m)
       if (id === bad) return false
       sent.push(m)
       return true
@@ -153,7 +155,7 @@ describe('a refused cast (send → false)', () => {
     let bad = 'a'
     const sent: CanvasMutation[] = []
     const p = createCanvasPublisher((m) => {
-      const id = m.op === 'remove' ? m.id : m.node.id
+      const id = mutationNodeId(m)
       if (id === bad) return false
       sent.push(m)
       return true
@@ -333,5 +335,44 @@ describe('ephemeral nodes are never published', () => {
     const moved = [node('n1'), node('sub-123', 99), node('loop-n1', 99)]
     p.publish(publishableStates(moved, eph))
     expect(c.sent).toHaveLength(1)
+  })
+})
+
+describe('publishableScene', () => {
+  const link = (id: string, source: string, target: string) => ({ id, source, target })
+
+  it('carries the nodes and both edge lists', () => {
+    const scene = {
+      nodes: [node('a'), node('b')],
+      bridges: [link('e1', 'a', 'b')],
+      ropes: [link('ctrl-1', 'a', 'b')]
+    }
+    const out = publishableScene(scene, new Set())
+    expect(out.nodes.map((n) => n.id)).toEqual(['a', 'b'])
+    expect(out.bridges).toEqual(scene.bridges)
+    expect(out.ropes).toEqual(scene.ropes)
+  })
+
+  // The edge half of the ephemeral rule. A subagent / loop card is DERIVED per client from the
+  // agent:status stream, so an edge naming one addresses a node with a different lifetime on the
+  // peer — it would be pruned there at a moment we do not control and re-published back at us.
+  it('drops an edge whose endpoint is an ephemeral card', () => {
+    const scene = {
+      nodes: [node('a'), node('sub-1'), node('loop-a')],
+      bridges: [link('e1', 'a', 'sub-1'), link('e2', 'a', 'a')],
+      ropes: [link('ctrl-1', 'loop-a', 'a')]
+    }
+    const out = publishableScene(scene, new Set(['sub-1']))
+    expect(out.nodes.map((n) => n.id)).toEqual(['a'])
+    expect(out.bridges).toEqual([link('e2', 'a', 'a')])
+    expect(out.ropes).toEqual([])
+  })
+
+  it('drops an edge whose endpoint is not on the canvas at all (a dangling link)', () => {
+    const out = publishableScene(
+      { nodes: [node('a')], bridges: [link('e1', 'a', 'ghost')], ropes: [] },
+      new Set()
+    )
+    expect(out.bridges).toEqual([])
   })
 })

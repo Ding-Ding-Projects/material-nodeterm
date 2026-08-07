@@ -127,8 +127,10 @@ export function carryLocalNodeExec(
   return out
 }
 
-/** `sanitizeInboundNode` for a whole mutation (the stamps — `src`, `seq` — are preserved). */
-export function sanitizeInboundMutation<T extends { op: 'upsert' | 'remove' }>(m: T): T {
+/** `sanitizeInboundNode` for a whole mutation (the stamps — `src`, `seq`, `seen` — are preserved).
+ *  Only `upsert` carries a node; every other op (`remove`, and the edge ops, which carry nothing
+ *  but ids) passes through untouched. */
+export function sanitizeInboundMutation<T extends { op: string }>(m: T): T {
   if (m.op !== 'upsert') return m
   const up = m as unknown as { node: CanvasNodeState }
   const node = sanitizeInboundNode(up.node)

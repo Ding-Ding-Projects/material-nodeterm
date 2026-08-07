@@ -342,6 +342,7 @@ import { useEntitlement } from '../state/entitlement'
 import type { SshServer, SshConnection } from '@shared/ssh'
 import { sshHostKey } from '@shared/ssh'
 import type {
+  BridgeLink,
   CanvasNodeState,
   Project,
   ProjectKanban,
@@ -360,11 +361,16 @@ import { isKanbanOpen, useViewMode, viewFor } from '../state/viewMode'
 import {
   createCanvasPublisher,
   isEphemeralNodeId,
-  publishableStates,
+  publishableScene,
   type CanvasPublisher
 } from '@shared/canvas-publish'
 import { createCanvasOrder, createReconnectWatch, type CanvasOrder } from '@shared/canvas-order'
-import { createMutationGuard } from '@shared/canvas-mutations'
+import {
+  applyEdgeMutation,
+  createMutationGuard,
+  isEdgeMutation,
+  type CanvasScene
+} from '@shared/canvas-mutations'
 import { chordHeld, isHoldChord, isModifierEventKey, matchesShortcut } from '@shared/shortcut'
 import { dispatchDestructiveControl } from '../lib/controlDestructive'
 import { canvasSyncTarget } from './collab-sync'
@@ -607,6 +613,9 @@ const ropeEdge = (id: string, source: string, target: string, color: string): Ed
   markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 }
 })
 
+/** A React Flow edge reduced to what is PERSISTED (and what goes on the wire). The decoration —
+ *  color, markers, handles — is re-derived on every client from its own nodes, so it never travels. */
+const toBridgeLink = (e: Edge): BridgeLink => ({ id: e.id, source: e.source, target: e.target })
 
 const minimapNodeColor = (n: Node): string =>
   (n.data as { color?: string })?.color ?? '#0a84ff'
@@ -2059,10 +2068,34 @@ export function Canvas() {
   // once per drag FRAME — so handing over an array meant a solo user paid the whole cost of a
   // feature the publisher's own solo gate then declined to use. What must NOT be deferred is the
   // ephemeral-id set: it is read from a live store, so it is captured here, as of this call.
-  const publishableLater = useCallback((flow: CanvasNode[]): (() => CanvasNodeState[]) => {
-    const ephIds = new Set(Object.keys(useAgentNodes.getState().byId))
-    return () => publishableStates(flowToNodeStates(flow), ephIds)
-  }, [])
+  //
+  // The two PERSISTED edge lists ride along, because they ride the same whole-file save and were
+  // the one thing canvas sync did not carry: an edge you drew never reached your teammate, and
+  // their next save — of a canvas that never had it — DELETED it. They are read from the refs
+  // LAZILY (inside the thunk), so the solo gate still skips the whole cost; `override` is for the
+  // one caller that has just computed the next edges and cannot wait for the ref to catch up (the
+  // refs are assigned during render, so immediately after a setLinkEdges they still hold the
+  // previous array).
+  const publishableLater = useCallback(
+    (
+      flow: CanvasNode[],
+      override?: { bridges?: Edge[]; ropes?: Edge[] }
+    ): (() => CanvasScene) => {
+      const ephIds = new Set(Object.keys(useAgentNodes.getState().byId))
+      const overrideBridges = override?.bridges
+      const overrideRopes = override?.ropes
+      return () =>
+        publishableScene(
+          {
+            nodes: flowToNodeStates(flow),
+            bridges: (overrideBridges ?? linkEdgesRef.current).map(toBridgeLink),
+            ropes: (overrideRopes ?? controlEdgesRef.current).map(toBridgeLink)
+          },
+          ephIds
+        )
+    },
+    []
+  )
 
   // ---- persistence helpers ----
   const commitActiveToStore = useCallback(() => {
@@ -2078,8 +2111,8 @@ export function Canvas() {
           id,
           flowToNodeStates(nodesRef.current),
           viewportRef.current,
-          linkEdgesRef.current.map((e) => ({ id: e.id, source: e.source, target: e.target })),
-          controlEdgesRef.current.map((e) => ({ id: e.id, source: e.source, target: e.target }))
+          linkEdgesRef.current.map(toBridgeLink),
+          controlEdgesRef.current.map(toBridgeLink)
         )
   }, [])
 
@@ -2363,7 +2396,12 @@ export function Canvas() {
       return
     }
     pub.publish(states, { throttle: draggingRef.current })
-  }, [nodes, publishableLater])
+    // Edges are in the deps for the same reason the publisher diffs them: drawing (or deleting) a
+    // context link / rope never touches `nodes`, so without this the edit would never be published
+    // — and the peer's next whole-file save would delete it. React Flow also re-creates these
+    // arrays on a mere SELECTION change; that costs one diff which yields no mutation (the diff
+    // compares id/source/target only), and a solo user does not even pay that (the solo gate).
+  }, [nodes, linkEdges, controlEdges, publishableLater])
 
   // Receiving side: apply an incoming mutation. Deliberately separate from the relay
   // `remoteHost.onApplyMutation` effect above — that one is host↔client, this one is peer↔peer.
@@ -2394,6 +2432,56 @@ export function Canvas() {
     return activeSession.api.canvas.onMutation((projectId, mutation) => {
       hasPeersRef.current = true // proof of a peer, whatever the presence table says
       if (!orderRef.current?.accept(mutation)) return
+      // ---- edges (context links + "spawned by" ropes) ----
+      // They live outside React Flow's `nodes` array, in their own state, so they take their own
+      // apply path — but everything around it is the node path's contract, unchanged: the ordering
+      // gate above has already decided this mutation wins, `adopt` is still the loop guard, and a
+      // background project is still patched in the store so our next save cannot delete the edge.
+      if (isEdgeMutation(mutation)) {
+        if (projectId !== useProjects.getState().activeProjectId) {
+          if (useProjects.getState().applyEdgeMutation(projectId, mutation)) markDirty()
+          return
+        }
+        // Rebuilt EDGE-BY-EDGE, reusing the existing object whenever its three ids are unchanged —
+        // the same discipline `applyMutationToFlow` follows for nodes, and for the same reason: a
+        // freshly built object loses `selected`, so re-creating the whole list would wipe the
+        // user's edge selection every time a teammate touched any OTHER edge.
+        const keep = <T extends Edge>(prev: T[], link: BridgeLink): T | undefined => {
+          const e = prev.find((x) => x.id === link.id)
+          return e && e.source === link.source && e.target === link.target ? e : undefined
+        }
+        if (mutation.kind === 'bridge') {
+          const next = applyEdgeMutation(linkEdgesRef.current.map(toBridgeLink), 'bridge', mutation)
+          const edges = next.map(
+            (b) =>
+              keep(linkEdgesRef.current, b) ?? {
+                id: b.id,
+                source: b.source,
+                target: b.target,
+                type: 'default'
+              }
+          )
+          linkEdgesRef.current = edges
+          setLinkEdges(edges)
+          publisherRef.current?.adopt(publishableLater(nodesRef.current, { bridges: edges }))
+        } else {
+          const next = applyEdgeMutation(controlEdgesRef.current.map(toBridgeLink), 'rope', mutation)
+          // The rope's COLOR is local: it comes from the source node's agent, which every client
+          // resolves from its own copy of that node. Nothing about it travels on the wire.
+          const edges = next.map((r) => {
+            const kept = keep(controlEdgesRef.current, r)
+            if (kept) return kept
+            const srcNode = nodesRef.current.find((nd) => nd.id === r.source)
+            const color = agentConfig((srcNode?.data.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+            return ropeEdge(r.id, r.source, r.target, color)
+          })
+          controlEdgesRef.current = edges
+          setControlEdges(edges)
+          publisherRef.current?.adopt(publishableLater(nodesRef.current, { ropes: edges }))
+        }
+        markDirty()
+        return
+      }
       if (projectId !== useProjects.getState().activeProjectId) {
         // Not on screen (a parked / background project): no terminal is mounted, but one may be
         // PARKED from a recent project switch — dispose it, as an active-project remove does.
@@ -2429,7 +2517,7 @@ export function Canvas() {
       setNodes(flow)
       markDirty()
     })
-  }, [activeSession.api, setNodes, markDirty, publishableLater])
+  }, [activeSession.api, setNodes, setLinkEdges, setControlEdges, markDirty, publishableLater])
 
   // Record an undo snapshot when the canvas settles (debounced; skips drag frames/loads).
   useEffect(() => {

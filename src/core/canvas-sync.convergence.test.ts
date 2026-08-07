@@ -20,11 +20,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { initPlatform, resetPlatformForTests, type CorePlatform } from './platform'
 import { initCanvasSync, MUTATION_MAX_BYTES } from './canvas-sync'
-import { applyCanvasMutation, isCanvasMutation } from '../shared/canvas-mutations'
+import {
+  applyCanvasMutation,
+  applyEdgeMutation,
+  isCanvasMutation,
+  type CanvasScene
+} from '../shared/canvas-mutations'
 import { createCanvasOrder, createReconnectWatch, PENDING_TTL_MS } from '../shared/canvas-order'
-import { createCanvasPublisher, publishableStates } from '../shared/canvas-publish'
+import { createCanvasPublisher, publishableScene } from '../shared/canvas-publish'
 import { IPC } from '../shared/ipc'
-import type { CanvasMutation, CanvasNodeState } from '../shared/types'
+import type { BridgeLink, CanvasMutation, CanvasNodeState } from '../shared/types'
 
 const node = (id: string, x: number, title = 't', color = '#fff'): CanvasNodeState =>
   ({
@@ -139,6 +144,10 @@ class Bus {
  *  mutation ask the ordering state whether to apply it, then adopt (never re-publish) the result. */
 class Client {
   states: CanvasNodeState[] = []
+  /** The two PERSISTED edge lists, alongside the nodes — they ride the same whole-file save, so
+   *  they are part of what has to converge (see the edge tests at the bottom). */
+  bridges: BridgeLink[] = []
+  ropes: BridgeLink[] = []
   /** Ephemeral cards (subagent / loop) this client renders — derived locally, never published. */
   ephemeral = new Set<string>()
   /** Mutations APPLIED from the wire (an own echo, or one the order supersedes, is not applied). */
@@ -185,17 +194,30 @@ class Client {
       if (!this.order.accept(m)) return
       this.applied++
       this.states = applyCanvasMutation(this.states, m)
+      this.bridges = applyEdgeMutation(this.bridges, 'bridge', m)
+      this.ropes = applyEdgeMutation(this.ropes, 'rope', m)
       this.pub.adopt(this.publishable()) // loop guard — never re-publish someone else's change
     })
   }
 
-  private publishable(): CanvasNodeState[] {
-    return publishableStates(this.states, this.ephemeral)
+  private publishable(): CanvasScene {
+    return publishableScene(
+      { nodes: this.states, bridges: this.bridges, ropes: this.ropes },
+      this.ephemeral
+    )
   }
 
   /** A local edit: take the new node list, then publish the diff (what the Canvas effect does). */
   edit(next: CanvasNodeState[]): void {
     this.states = next
+    this.pub.publish(this.publishable())
+  }
+
+  /** A local EDGE edit — drawing or deleting a context link / rope. Same effect, same publisher:
+   *  the Canvas publish effect has the edge arrays in its deps for exactly this. */
+  editEdges(next: { bridges?: BridgeLink[]; ropes?: BridgeLink[] }): void {
+    if (next.bridges) this.bridges = next.bridges
+    if (next.ropes) this.ropes = next.ropes
     this.pub.publish(this.publishable())
   }
 
@@ -214,7 +236,7 @@ class Client {
 
   /** The node set that would be written by this client's workspace.save (ephemeral cards excluded,
    *  as flowToNodeStates already excludes them). */
-  persisted(): CanvasNodeState[] {
+  persisted(): CanvasScene {
     return this.publishable()
   }
 
@@ -238,7 +260,7 @@ class Client {
  * such in docs/team-presence.md; use this helper wherever a resurrection can happen.
  */
 const canon = (c: Client): CanvasNodeState[] =>
-  [...c.persisted()].sort((x, y) => x.id.localeCompare(y.id))
+  [...c.persisted().nodes].sort((x, y) => x.id.localeCompare(y.id))
 
 let bus: Bus
 let a: Client
@@ -331,6 +353,109 @@ describe('canvas convergence (async bus)', () => {
   // A stale frame from a client whose socket was stalled must not resurrect the node either — this
   // is the "disconnected peer erases / revives what everyone else settled" hazard, and it is the one
   // a TIME-based delete-wins window would get wrong (the frame arrives long after any window).
+  // ── Edges ──────────────────────────────────────────────────────────────────────────────────────
+  // The sharpest data-loss shape this stage had left open, and it was WORSE than a cosmetic gap:
+  // edges were not in the mutation vocabulary but they ARE in the whole-file save, so an edge you
+  // drew never reached your teammate — and their next save, of a canvas that never had it, deleted
+  // it for everyone. (Same in reverse.)
+  describe('edges converge like nodes', () => {
+    it("a link A draws reaches B — and B's save no longer deletes it", () => {
+      a.edit([node('n1', 0), node('n2', 0)])
+      bus.settle()
+
+      a.editEdges({ bridges: [{ id: 'b1', source: 'n1', target: 'n2' }] })
+      bus.settle()
+
+      expect(b.bridges).toEqual([{ id: 'b1', source: 'n1', target: 'n2' }])
+      // THE assertion: B's whole-file save now writes A's edge, instead of erasing it.
+      expect(b.persisted().bridges).toEqual(a.persisted().bridges)
+
+      // …and an unrelated edit by B does not lose it either (the publisher's baseline carries it).
+      b.edit([...b.states, node('n3', 0)])
+      bus.settle()
+      expect(b.persisted().bridges).toEqual(a.persisted().bridges)
+    })
+
+    it('a deleted link stays deleted on both', () => {
+      a.edit([node('n1', 0), node('n2', 0)])
+      a.editEdges({ bridges: [{ id: 'b1', source: 'n1', target: 'n2' }] })
+      bus.settle()
+
+      b.editEdges({ bridges: [] })
+      bus.settle()
+
+      expect(a.bridges).toEqual([])
+      expect(a.persisted()).toEqual(b.persisted())
+    })
+
+    it('bridges and ropes are two lists, and a mutation only touches its own kind', () => {
+      a.edit([node('n1', 0), node('n2', 0)])
+      a.editEdges({ ropes: [{ id: 'ctrl-1', source: 'n1', target: 'n2' }] })
+      bus.settle()
+
+      expect(b.ropes).toEqual([{ id: 'ctrl-1', source: 'n1', target: 'n2' }])
+      expect(b.bridges).toEqual([])
+    })
+
+    it('a peer edge is applied once and re-published NEVER (the adopt loop guard covers edges)', () => {
+      a.edit([node('n1', 0), node('n2', 0)])
+      bus.settle()
+      const before = bus.castCount
+
+      a.editEdges({ bridges: [{ id: 'b1', source: 'n1', target: 'n2' }] })
+      bus.settle()
+
+      expect(bus.castCount - before).toBe(1) // one local edit, one cast, no counter-cast from B
+    })
+
+    // Both edges survive on both clients. Compared as a SET, not as an array: each client appended
+    // the peer's edge to its own, so the two arrays hold the same edges in different SLOTS — the
+    // same array-order caveat docs/team-presence.md already names for nodes, and it matters even
+    // less here (edges are rendered as a set; nothing lists them in order).
+    it('two clients drawing edges at the same time keep BOTH', () => {
+      a.edit([node('n1', 0), node('n2', 0), node('n3', 0)])
+      bus.settle()
+
+      a.editEdges({ bridges: [{ id: 'b1', source: 'n1', target: 'n2' }] })
+      b.editEdges({ bridges: [{ id: 'b2', source: 'n2', target: 'n3' }] })
+      bus.settle()
+
+      const byId = (es: BridgeLink[]) => [...es].sort((x, y) => x.id.localeCompare(y.id))
+      expect(byId(a.persisted().bridges)).toEqual(byId(b.persisted().bridges))
+      expect(a.bridges.map((e) => e.id).sort()).toEqual(['b1', 'b2'])
+    })
+
+    // Rule 4 is keyed on `mutationKey`, so it covers an edge exactly as it covers a node: a client
+    // re-pointing an edge in ignorance of its delete must not bring it back.
+    it('a stale edge frame cannot resurrect a deleted edge', () => {
+      a.edit([node('n1', 0), node('n2', 0)])
+      a.editEdges({ bridges: [{ id: 'b1', source: 'n1', target: 'n2' }] })
+      bus.settle()
+
+      b.editEdges({ bridges: [{ id: 'b1', source: 'n1', target: 'n1' }] }) // B re-points it…
+      a.editEdges({ bridges: [] }) // …while A deletes it
+      bus.settle()
+
+      expect(a.bridges).toEqual([])
+      expect(b.bridges).toEqual([])
+    })
+
+    // An edge whose endpoint is an ephemeral card (a subagent / loop node) must not go on the wire
+    // for the same reason the card itself must not: the peer derives that node independently.
+    it('an edge to an ephemeral card is never published', () => {
+      a.ephemeral.add('sub-1')
+      a.edit([node('n1', 0), node('sub-1', 0)])
+      bus.settle()
+      const before = bus.castCount
+
+      a.editEdges({ bridges: [{ id: 'b1', source: 'n1', target: 'sub-1' }] })
+      bus.settle()
+
+      expect(bus.castCount - before).toBe(0)
+      expect(b.bridges).toEqual([])
+    })
+  })
+
   it('a very late drag frame from a stalled client cannot revive the deleted node', () => {
     a.edit([node('n1', 0), node('n2', 0)])
     bus.settle()
@@ -645,7 +770,7 @@ describe('canvas convergence (async bus)', () => {
 
     // A's canvas — the one that would be written by ITS next whole-file workspace.save — no longer
     // carries n1. Before Stage 3, A's save would have written the deleted node straight back.
-    expect(a.persisted().map((n) => n.id)).toEqual(['n2'])
+    expect(a.persisted().nodes.map((n) => n.id)).toEqual(['n2'])
     expect(a.persisted()).toEqual(b.persisted())
 
     // And A's subsequent edit does not reintroduce it either.
