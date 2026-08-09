@@ -8,6 +8,33 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws'
 
 const SAFE_NODE_ID = /^[A-Za-z0-9._-]+$/
 const THREAD_METHODS = new Set(['thread/start', 'thread/resume', 'thread/fork'])
+type JsonRpcRequest = { id?: unknown; method?: unknown; params?: unknown }
+
+function parseRequest(raw: RawData): { input: Buffer; request: JsonRpcRequest | null } {
+  const input = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer)
+  try {
+    const value = JSON.parse(input.toString('utf8'))
+    return { input, request: value && typeof value === 'object' ? (value as JsonRpcRequest) : null }
+  } catch {
+    return { input, request: null }
+  }
+}
+
+function requestKey(id: unknown): string | null {
+  return typeof id === 'string' || typeof id === 'number' ? `${typeof id}:${id}` : null
+}
+
+function responseThreadId(raw: RawData): { key: string; threadId: string } | null {
+  const { request: response } = parseRequest(raw)
+  if (!response) return null
+  const key = requestKey(response.id)
+  const result = (response as { result?: unknown }).result
+  if (!key || !result || typeof result !== 'object') return null
+  const thread = (result as { thread?: unknown }).thread
+  if (!thread || typeof thread !== 'object') return null
+  const threadId = (thread as { id?: unknown }).id
+  return typeof threadId === 'string' ? { key, threadId } : null
+}
 
 function closePeer(peer: WebSocket, code: number, reason: Buffer): void {
   if (peer.readyState !== WebSocket.OPEN && peer.readyState !== WebSocket.CONNECTING) return
@@ -32,9 +59,10 @@ export function installCodexLauncher(): string {
   writeFileSync(
     file,
     `#!/bin/sh\n` +
-      `case "\${NODETERM_NODE_ID-}:\${NODETERM_CODEX_PROXY_SOCKET-}" in\n` +
-      `  *[!A-Za-z0-9._:/-]*|:*|*:) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;;\n` +
-      `esac\n` +
+      `case "\${NODETERM_NODE_ID-}" in ''|*[!A-Za-z0-9._-]*) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
+      `case "\${NODETERM_CODEX_PROXY_SOCKET-}" in /*) ;; *) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
+      `case "\${NODETERM_CODEX_PROXY_SOCKET}" in *[!A-Za-z0-9._/-]*) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
+      `[ -S "\${NODETERM_CODEX_PROXY_SOCKET}" ] || { echo "NodeTerm Codex identity unavailable" >&2; exit 64; }\n` +
       `exec codex --remote "unix://\${NODETERM_CODEX_PROXY_SOCKET}" "$@"\n`,
     { encoding: 'utf8', mode: 0o700 }
   )
@@ -43,15 +71,8 @@ export function installCodexLauncher(): string {
 }
 
 export function injectCodexIdentity(raw: RawData, identity: CodexNodeIdentity): Buffer {
-  const input = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer)
-  let message: unknown
-  try {
-    message = JSON.parse(input.toString('utf8'))
-  } catch {
-    return input
-  }
-  if (!message || typeof message !== 'object') return input
-  const request = message as { method?: unknown; params?: unknown }
+  const { input, request } = parseRequest(raw)
+  if (!request) return input
   if (typeof request.method !== 'string' || !THREAD_METHODS.has(request.method)) return input
   const params = request.params && typeof request.params === 'object' ? request.params : {}
   const existingConfig = (params as { config?: unknown }).config
@@ -75,7 +96,8 @@ export class CodexIdentityProxy {
   constructor(
     readonly socketPath: string,
     private readonly upstreamSocketPath: string,
-    private readonly identity: CodexNodeIdentity
+    private readonly identity: CodexNodeIdentity,
+    private readonly claimThread: (threadId: string, nodeId: string) => boolean
   ) {}
 
   async start(): Promise<void> {
@@ -88,7 +110,31 @@ export class CodexIdentityProxy {
         createConnection: () => createConnection(this.upstreamSocketPath)
       })
       const pending: Array<{ data: RawData; binary: boolean }> = []
+      const resultOwners = new Map<string, 'thread/start' | 'thread/fork'>()
       client.on('message', (data, binary) => {
+        const { request } = parseRequest(data)
+        if (request?.method === 'thread/resume' || request?.method === 'thread/fork') {
+          const params = request.params && typeof request.params === 'object' ? request.params : null
+          const threadId = params && (params as { threadId?: unknown }).threadId
+          if (typeof threadId === 'string' && !this.claimThread(threadId, this.identity.NODETERM_NODE_ID)) {
+            if (request.id !== undefined && client.readyState === WebSocket.OPEN) {
+              client.send(
+                JSON.stringify({
+                  id: request.id,
+                  error: {
+                    code: -32001,
+                    message: 'Codex thread is already owned by another NodeTerm node'
+                  }
+                })
+              )
+            }
+            return
+          }
+        }
+        if (request?.method === 'thread/start' || request?.method === 'thread/fork') {
+          const key = requestKey(request.id)
+          if (key) resultOwners.set(key, request.method)
+        }
         if (upstream.readyState === WebSocket.OPEN) {
           upstream.send(injectCodexIdentity(data, this.identity), { binary })
         } else {
@@ -102,6 +148,12 @@ export class CodexIdentityProxy {
         pending.length = 0
       })
       upstream.on('message', (data, binary) => {
+        const result = responseThreadId(data)
+        if (result && resultOwners.delete(result.key)) {
+          // A started/forked thread is already loaded with this node's injected environment.
+          // Record the returned id before any other node can resume it through this router.
+          this.claimThread(result.threadId, this.identity.NODETERM_NODE_ID)
+        }
         if (client.readyState === WebSocket.OPEN) client.send(data, { binary })
       })
       upstream.on('close', (code, reason) => closePeer(client, code, reason))
@@ -131,6 +183,7 @@ export class CodexIdentityProxy {
 
 export class CodexIdentityProxyManager {
   private readonly proxies = new Map<string, CodexIdentityProxy>()
+  private readonly threadOwners = new Map<string, string>()
   private readonly prefix: string
 
   constructor(
@@ -146,7 +199,12 @@ export class CodexIdentityProxyManager {
     const existing = this.proxies.get(nodeId)
     if (existing) return existing.socketPath
     const nodeKey = createHash('sha256').update(nodeId).digest('hex').slice(0, 16)
-    const proxy = new CodexIdentityProxy(`${this.prefix}-${nodeKey}.sock`, this.upstreamSocketPath, identity)
+    const proxy = new CodexIdentityProxy(
+      `${this.prefix}-${nodeKey}.sock`,
+      this.upstreamSocketPath,
+      identity,
+      (threadId, ownerNodeId) => this.claimThread(threadId, ownerNodeId)
+    )
     await proxy.start()
     this.proxies.set(nodeId, proxy)
     return proxy.socketPath
@@ -156,9 +214,17 @@ export class CodexIdentityProxyManager {
     return this.proxies.get(nodeId)?.socketPath ?? null
   }
 
+  private claimThread(threadId: string, nodeId: string): boolean {
+    const owner = this.threadOwners.get(threadId)
+    if (owner && owner !== nodeId) return false
+    this.threadOwners.set(threadId, nodeId)
+    return true
+  }
+
   stop(): void {
     for (const proxy of this.proxies.values()) proxy.stop()
     this.proxies.clear()
+    this.threadOwners.clear()
   }
 }
 

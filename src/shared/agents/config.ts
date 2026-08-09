@@ -275,13 +275,13 @@ export function withSessionId(cmd: string, id: AgentId, sessionId: string): stri
  * gone, so the conversation must be reconstructed via the agent CLI's own `--resume`.
  * Returns null for non-resumable/custom agents or an unsafe/empty session id.
  */
-export function resumeCommand(id: AgentId, sessionId: string): string | null {
+export function resumeCommand(id: AgentId, sessionId: string, nativeCodex = false): string | null {
   if (!canResume(id)) return null
   const sid = sessionId.trim()
   if (!sid || !SAFE_SESSION_ID.test(sid)) return null
   switch (id) {
     case 'codex':
-      return `${codexRemoteCommand()} resume ${sid}`
+      return `${nativeCodex ? 'codex' : codexRemoteCommand()} resume ${sid}`
     case 'opencode':
       return `opencode --session ${sid}`
     case 'claude':

@@ -2,6 +2,7 @@ import os from 'os'
 import fs from 'fs'
 import path from 'path'
 import { execFile, execFileSync } from 'child_process'
+import { createHash } from 'crypto'
 import { promisify } from 'util'
 import { platform } from './platform'
 import * as pty from 'node-pty'
@@ -43,7 +44,7 @@ import { claudeConfigDirFor } from './claude-config-dir'
 import { findExecutableSync, findInPathString, resolveShellPath, shellPathNow } from './exec-path'
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { presenceHub } from './presence/hub'
-import { codexIdentityProxyManager, codexLauncherDir } from '../main/codex-identity-proxy'
+import { codexIdentityProxyManager, codexLauncherDir, installCodexLauncher } from '../main/codex-identity-proxy'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
 // kills the tmux server) can still replay recent output on cold restart. A final snapshot also
@@ -345,6 +346,8 @@ interface Session {
    * degrade rather than an honest one. This field is unconditional, so it has no such hole.
    */
   nodeId?: string
+  /** Agent process expected inside this pane; used for Codex's controlled cold-resume on shutdown. */
+  agentId?: string
   /** The node id this session is CO-ATTACH-INDEXED under (`byPersistKey`) — set only for a session
    *  a second client may join, i.e. NOT for a relay-served (detached) pty, which is deliberately
    *  not indexed. See `nodeId` above for the plain "which node is this". */
@@ -1018,6 +1021,9 @@ export class PtyManager {
     if (options.requireRemote && !(options.sshRemote && options.persistKey && findSsh())) {
       return { sessionId: '', fresh: false, unavailable: 'ssh' }
     }
+    if ((options.agentId ?? 'claude') === 'codex' && options.persistKey && !options.sshRemote) {
+      await this.consumeCodexColdResumeMarker(options.persistKey)
+    }
     // A tmux-backed session is "fresh" (cold start) when no live session exists to reattach to
     // — i.e. first open, or after a machine reboot killed the tmux server. Plain (non-tmux)
     // sessions are always fresh: they have no cross-restart continuity. The renderer uses this
@@ -1041,6 +1047,7 @@ export class PtyManager {
     // so the session env below picks it up — awaiting keeps the event loop free either way.
     await resolveShellPath()
     if ((options.agentId ?? 'claude') === 'codex' && options.persistKey && !options.sshRemote) {
+      installCodexLauncher()
       const identity = hookServer.buildPtyEnv(options.persistKey, 'codex')
       if (
         identity.NODETERM_NODE_ID === options.persistKey &&
@@ -1117,6 +1124,30 @@ export class PtyManager {
       // not, and cold-restoring on it would type into a live session.
       return !probeSaysAbsent(e)
     }
+  }
+
+  private codexColdResumeMarker(persistKey: string): string {
+    const key = createHash('sha256').update(persistKey).digest('hex')
+    return path.join(platform().userDataDir, 'codex-cold-resume', `${key}.marker`)
+  }
+
+  /** A quit may be force-capped before tmux confirms the Codex pane ended. The marker makes that
+   *  uncertainty durable: next launch removes any surviving pane and refuses to attach while its
+   *  absence cannot be proven, so a dead remote client is never mistaken for a warm session. */
+  private async consumeCodexColdResumeMarker(persistKey: string): Promise<void> {
+    const marker = this.codexColdResumeMarker(persistKey)
+    if (!fs.existsSync(marker)) return
+    if (this.tmuxPath) {
+      try {
+        await runAsync(this.tmuxPath, ['-L', TMUX_SOCKET, 'kill-session', '-t', sessionName(persistKey)])
+      } catch {
+        // Absence is success; any other failure is checked by the authoritative probe below.
+      }
+      if (await this.tmuxSessionExists(persistKey)) {
+        throw new Error('Codex session recovery is pending; unable to end the stale tmux session')
+      }
+    }
+    fs.unlinkSync(marker)
   }
 
   /**
@@ -1468,6 +1499,7 @@ export class PtyManager {
       // exactly as before, because its sink never reports a size at create time.
       appliedSize: clientId === null ? undefined : spawnSize,
       nodeId: options.persistKey,
+      agentId: options.agentId,
       indexKey: options.persistKey && !sinks ? options.persistKey : undefined,
       onData: sinks?.onData,
       onExit: sinks?.onExit,
@@ -2379,6 +2411,23 @@ export class PtyManager {
       // no output since the last periodic capture (unchanged pane content).
       if (session.persistKey && session.outputSinceSnapshot)
         finals.push(this.snapshotScrollback(session.persistKey, session.sshRemote))
+      // A local Codex remote client exits when its per-node proxy disappears. Leaving the tmux
+      // shell alive would look like a warm attach on restart, so no conversation resume would be
+      // issued. End only these panes; the saved session id drives the normal cold-resume path.
+      if (session.agentId === 'codex' && session.persistKey && !session.sshRemote && this.tmuxPath) {
+        const marker = this.codexColdResumeMarker(session.persistKey)
+        fs.mkdirSync(path.dirname(marker), { recursive: true })
+        fs.writeFileSync(marker, '')
+        finals.push(
+          runAsync(this.tmuxPath, ['-L', TMUX_SOCKET, 'kill-session', '-t', sessionName(session.persistKey)])
+            .then(() => {
+              // A forced process exit can occur before this continuation; in that case the marker
+              // deliberately remains for next launch to consume.
+              if (fs.existsSync(marker)) fs.unlinkSync(marker)
+            })
+            .catch(() => undefined)
+        )
+      }
       releasePty(session.proc as ReleasablePty)
     }
     this.sessions.clear()
@@ -2392,6 +2441,10 @@ export class PtyManager {
     // everything else — a later create would then co-attach to a session we already let go.
     this.inflight.clear()
     return Promise.all(finals).then(() => undefined)
+  }
+
+  stopCodexIdentityProxy(): void {
+    codexIdentityProxyManager(platform().userDataDir).stop()
   }
 
   /** Variadic so a payload-less event (`pty:recycled`) sends no argument at all, rather than an

@@ -2350,7 +2350,9 @@ export function TerminalNode({
           // relaunched empty while their transcripts sat on disk, unreachable.
           const st = useAgentStatus.getState().byId[id]
           const priorId = st?.sessionId || data.agentSessionId
-          const base = (priorId && resumeCommand(agentId, priorId)) || agentConfig(agentId)?.launchCmd
+          const base =
+            (priorId && resumeCommand(agentId, priorId, !!sshProjectId)) ||
+            (agentId === 'codex' && sshProjectId ? 'codex' : agentConfig(agentId)?.launchCmd)
           // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
           // a persisted property of the node, so the current setting wins after a reboot. `base`
           // is always freshly built here — never a command string read back from node data — so
@@ -2423,7 +2425,7 @@ export function TerminalNode({
         // in acceptEdits/plan would come back from a restart in the default mode, silently.
         // Re-resolved at call time for the same reason as there: the mode is a property of how a
         // session is launched, not of the node.
-        const base = resumeCommand(agentId, agentSessionId)
+        const base = resumeCommand(agentId, agentSessionId, !!sshProjectId)
         const command = base
           ? withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
           : undefined

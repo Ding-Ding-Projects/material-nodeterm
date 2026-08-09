@@ -35,6 +35,10 @@ describe('resumeCommand', () => {
     expect(resumeCommand('codex', 'abc-123')).toBe(`${codexRemoteCommand()} resume abc-123`)
   })
 
+  it('keeps SSH Codex resumes on the remote host native', () => {
+    expect(resumeCommand('codex', 'abc-123', true)).toBe('codex resume abc-123')
+  })
+
   it('builds gemini resume', () => {
     expect(resumeCommand('gemini', 'abc-123')).toBe('gemini --resume abc-123')
   })

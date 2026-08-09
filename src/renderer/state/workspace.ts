@@ -338,7 +338,7 @@ export function createAgentNode(
   permissionMode?: AgentPermissionMode
 ): CanvasNode {
   const { label, color, launchCmd } = resolveAgent(agentId)
-  const baseCmd = agentId === 'claude' ? claudeLaunchCommand() : launchCmd
+  const baseCmd = agentId === 'claude' ? claudeLaunchCommand() : agentId === 'codex' && ssh ? 'codex' : launchCmd
   // A flag-prompt agent (opencode) takes the initial prompt via its flag — a bare positional
   // would be misread (opencode treats it as a project path). Everything else keeps the
   // historical argv append, INCLUDING stdin-after-start agents (gemini has always launched

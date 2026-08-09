@@ -514,6 +514,12 @@ describe('createAgentNode permission mode', () => {
     const codex = createAgentNode('codex', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
     expect(codex.data.initialCommand).toBe(codexRemoteCommand())
   })
+
+  it('uses native codex for an SSH project node', () => {
+    const ssh = { server: { host: 'example.test', user: 'tester' } } as any
+    const node = createAgentNode('codex', 0, undefined, undefined, undefined, ssh)
+    expect(node.data.initialCommand).toBe('codex')
+  })
 })
 
 describe('createAgentNode prompt injection', () => {

@@ -474,6 +474,7 @@ export async function startServer(
         // Same native hazard as the desktop app: a whisper transcribe still running when the
         // node env is torn down aborts the process. See SpeechService.shutdown.
         await speechService.shutdown()
+        ptyManager.stopCodexIdentityProxy()
         hookServer.stop()
       }
     }
@@ -521,6 +522,7 @@ export async function startServer(
       // Same native hazard as the desktop app: a whisper transcribe still running when the node
       // env is torn down aborts the process. See SpeechService.shutdown.
       await speechService.shutdown()
+      ptyManager.stopCodexIdentityProxy()
       // Close the loopback hook-server listener (it would otherwise die with the process anyway).
       hookServer.stop()
       await new Promise<void>((resolve, reject) => {

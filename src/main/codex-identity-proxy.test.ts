@@ -25,21 +25,31 @@ function openClient(socket: string): Promise<WebSocket> {
   })
 }
 
+function nextJson(ws: WebSocket): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => ws.once('message', (data) => resolve(JSON.parse(data.toString()))))
+}
+
 describe('CodexIdentityProxy', () => {
   let upstreamServer: Server
   let upstreamWss: WebSocketServer
   let proxy: CodexIdentityProxyManager
   let upstreamSocket: string
   let requests: Array<Record<string, unknown>>
+  let upstreamByRequestId: Map<unknown, WebSocket>
 
   beforeEach(async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-proxy-test-'))
     upstreamSocket = path.join(dir, 'upstream.sock')
     requests = []
+    upstreamByRequestId = new Map()
     upstreamServer = createServer()
     upstreamWss = new WebSocketServer({ server: upstreamServer })
     upstreamWss.on('connection', (ws) => {
-      ws.on('message', (data) => requests.push(JSON.parse(data.toString())))
+      ws.on('message', (data) => {
+        const request = JSON.parse(data.toString())
+        requests.push(request)
+        upstreamByRequestId.set(request.id, ws)
+      })
     })
     await new Promise<void>((resolve, reject) => {
       upstreamServer.once('error', reject)
@@ -84,6 +94,49 @@ describe('CodexIdentityProxy', () => {
     })
     expect(JSON.stringify(byId[1])).not.toContain('node-b')
     expect(JSON.stringify(byId[2])).not.toContain('node-a')
+    a.close()
+    b.close()
+  })
+
+  it('rejects two nodes resuming the same loaded thread', async () => {
+    const [socketA, socketB] = await Promise.all([
+      proxy.ensureNode('node-a', identity('node-a')),
+      proxy.ensureNode('node-b', identity('node-b'))
+    ])
+    const [a, b] = await Promise.all([openClient(socketA!), openClient(socketB!)])
+    a.send(JSON.stringify({ id: 1, method: 'thread/resume', params: { threadId: 'shared-thread' } }))
+    await expect.poll(() => requests.length).toBe(1)
+
+    const rejection = nextJson(b)
+    b.send(JSON.stringify({ id: 2, method: 'thread/resume', params: { threadId: 'shared-thread' } }))
+    await expect(rejection).resolves.toMatchObject({
+      id: 2,
+      error: { code: -32001, message: expect.stringContaining('another NodeTerm node') }
+    })
+    expect(requests).toHaveLength(1)
+    expect(JSON.stringify(requests[0])).toContain('node-a')
+    a.close()
+    b.close()
+  })
+
+  it.each([
+    ['thread/start', {}],
+    ['thread/fork', { threadId: 'source-thread' }]
+  ])('owns the thread id returned by %s before another node can resume it', async (method, params) => {
+    const [socketA, socketB] = await Promise.all([
+      proxy.ensureNode('node-a', identity('node-a')),
+      proxy.ensureNode('node-b', identity('node-b'))
+    ])
+    const [a, b] = await Promise.all([openClient(socketA!), openClient(socketB!)])
+    a.send(JSON.stringify({ id: 10, method, params }))
+    await expect.poll(() => requests.length).toBe(1)
+    upstreamByRequestId.get(10)!.send(JSON.stringify({ id: 10, result: { thread: { id: 'result-thread' } } }))
+    await nextJson(a)
+
+    const rejection = nextJson(b)
+    b.send(JSON.stringify({ id: 11, method: 'thread/resume', params: { threadId: 'result-thread' } }))
+    await expect(rejection).resolves.toMatchObject({ id: 11, error: { code: -32001 } })
+    expect(requests).toHaveLength(1)
     a.close()
     b.close()
   })
