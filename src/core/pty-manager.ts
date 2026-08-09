@@ -43,6 +43,7 @@ import { claudeConfigDirFor } from './claude-config-dir'
 import { findExecutableSync, findInPathString, resolveShellPath, shellPathNow } from './exec-path'
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { presenceHub } from './presence/hub'
+import { codexIdentityProxyManager, codexLauncherDir } from '../main/codex-identity-proxy'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
 // kills the tmux server) can still replay recent output on cold restart. A final snapshot also
@@ -1039,6 +1040,20 @@ export class PtyManager {
     // Ensure the login-shell PATH is resolved (prewarmed in init(); usually already settled)
     // so the session env below picks it up — awaiting keeps the event loop free either way.
     await resolveShellPath()
+    if ((options.agentId ?? 'claude') === 'codex' && options.persistKey && !options.sshRemote) {
+      const identity = hookServer.buildPtyEnv(options.persistKey, 'codex')
+      if (
+        identity.NODETERM_NODE_ID === options.persistKey &&
+        identity.NODETERM_HOOK_ENDPOINT &&
+        identity.NODETERM_CANVAS_CONTROL === '1'
+      ) {
+        await codexIdentityProxyManager(platform().userDataDir).ensureNode(options.persistKey, {
+          NODETERM_NODE_ID: identity.NODETERM_NODE_ID,
+          NODETERM_HOOK_ENDPOINT: identity.NODETERM_HOOK_ENDPOINT,
+          NODETERM_CANVAS_CONTROL: identity.NODETERM_CANVAS_CONTROL
+        })
+      }
+    }
     const sessionId = this.spawnSession(options, clientId, undefined)
     // Surface a missing-account-dir fallback so the renderer can flag the node's account chip.
     const accountFallback = this.sessions.get(sessionId)?.accountFallback
@@ -1213,6 +1228,15 @@ export class PtyManager {
         ? hookServer.buildPtyEnv(options.persistKey, options.agentId ?? 'claude', permWaitSecs)
         : {}
     for (const [k, v] of Object.entries(hookEnv)) env[k] = v
+    if ((options.agentId ?? 'claude') === 'codex') {
+      env.PATH = `${codexLauncherDir()}${path.delimiter}${env.PATH ?? ''}`
+      if (options.persistKey) {
+        const proxySocket = codexIdentityProxyManager(platform().userDataDir).socketForNode(
+          options.persistKey
+        )
+        if (proxySocket) env.NODETERM_CODEX_PROXY_SOCKET = proxySocket
+      }
+    }
 
     // Managed Claude account: the whole session runs under the account's private config
     // dir. The claude CLI then reads/writes credentials + transcripts there. Also strip

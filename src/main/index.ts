@@ -118,6 +118,7 @@ import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { initClaudeAccounts } from './claude-accounts'
+import { codexIdentityProxyManager, installCodexLauncher } from './codex-identity-proxy'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
 import { claudeConfigDirFor } from '../core/claude-config-dir'
 import {
@@ -877,6 +878,13 @@ app.whenReady().then(async () => {
   // listeners (setListener/setRawListener/setControlHandler) attach later, which the server
   // tolerates — early hook POSTs are simply dropped, never mis-routed.
   await hookServer.start()
+  try {
+    installCodexLauncher()
+  } catch (e) {
+    console.error('[codex-identity] launcher install failed:', e)
+  }
+  const codexIdentityProxy = codexIdentityProxyManager(app.getPath('userData'))
+  app.once('will-quit', () => codexIdentityProxy.stop())
   // SSH_ASKPASS relay (ssh-project.ts): lets the ControlMaster, which has no tty, route a
   // passphrase-protected identity file's prompt back through the app instead of failing auth.
   // MUST NOT be fatal: binding a unix socket under ~/.nodeterm can fail for filesystem reasons

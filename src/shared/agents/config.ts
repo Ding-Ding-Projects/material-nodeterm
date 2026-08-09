@@ -30,33 +30,8 @@ export interface AgentConfig {
   expectedProcess: string
 }
 
-const CODEX_IDENTITY_ERROR = 'NodeTerm Codex identity unavailable'
-
-/**
- * A remote Codex TUI is only the client of the persistent app-server. Shell tools and managed
- * hooks are spawned by that shared server, so they do not inherit the client PTY's per-node env.
- * Carry the three values required by canvas-control/context-link through Codex's thread-scoped
- * shell environment policy instead. The shell function keeps positional prompts and `resume`
- * arguments attached to one reusable command while leaving the parent shell alive after Codex
- * exits.
- *
- * Fail closed before connecting when the PTY did not provide one unambiguous local node mapping.
- * A static fallback id would cross-wire parallel canvas nodes; an unowned remote session would
- * silently lose both control surfaces again.
- */
 export function codexRemoteCommand(): string {
-  return [
-    'nodeterm_codex(){',
-    `case "\${NODETERM_NODE_ID-}" in ''|*[!A-Za-z0-9._-]*) printf '%s\\n' '${CODEX_IDENTITY_ERROR}' >&2; return 64 ;; esac;`,
-    `case "\${NODETERM_HOOK_ENDPOINT-}" in /*) ;; *) printf '%s\\n' '${CODEX_IDENTITY_ERROR}' >&2; return 64 ;; esac;`,
-    `[ "\${NODETERM_CANVAS_CONTROL-}" = 1 ] || { printf '%s\\n' '${CODEX_IDENTITY_ERROR}' >&2; return 64; };`,
-    'command codex --remote unix:// --dangerously-bypass-approvals-and-sandbox',
-    '-c "shell_environment_policy.set.NODETERM_NODE_ID=$NODETERM_NODE_ID"',
-    '-c "shell_environment_policy.set.NODETERM_HOOK_ENDPOINT=$NODETERM_HOOK_ENDPOINT"',
-    '-c "shell_environment_policy.set.NODETERM_CANVAS_CONTROL=\\"$NODETERM_CANVAS_CONTROL\\""',
-    '"$@";',
-    '}; nodeterm_codex'
-  ].join(' ')
+  return 'nodeterm-codex'
 }
 
 export const BUILTIN_AGENT_IDS: readonly BuiltinAgentId[] = [
