@@ -17,6 +17,7 @@ import {
   ungroupNodes
 } from './workspace'
 import type { CanvasNode } from './workspace'
+import { codexRemoteCommand } from '../../shared/agents/config'
 
 const term = (id: string, pos: { x: number; y: number }, parentId?: string): CanvasNode =>
   ({
@@ -510,6 +511,8 @@ describe('createAgentNode permission mode', () => {
     expect(node.data.initialCommand).toBe('opencode')
     const custom = createAgentNode('custom:x', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
     expect(custom.data.initialCommand).toBe('custom:x')
+    const codex = createAgentNode('codex', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
+    expect(codex.data.initialCommand).toBe(codexRemoteCommand())
   })
 })
 
@@ -523,7 +526,9 @@ describe('createAgentNode prompt injection', () => {
     expect(n.data.initialCommand).toBe("opencode --prompt 'it'\\''s tricky'")
   })
   it('keeps argv injection byte-identical for codex and gemini', () => {
-    expect(createAgentNode('codex', 0, undefined, undefined, 'do X').data.initialCommand).toBe("codex 'do X'")
+    expect(createAgentNode('codex', 0, undefined, undefined, 'do X').data.initialCommand).toBe(
+      `${codexRemoteCommand()} 'do X'`
+    )
     expect(createAgentNode('gemini', 0, undefined, undefined, 'do X').data.initialCommand).toBe("gemini 'do X'")
   })
 })

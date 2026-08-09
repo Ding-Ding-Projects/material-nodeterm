@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resumeCommand, withSessionId } from './config'
+import { codexRemoteCommand, resumeCommand, withSessionId } from './config'
 
 describe('withSessionId', () => {
   it('appends the minted id for claude', () => {
@@ -32,7 +32,7 @@ describe('resumeCommand', () => {
   })
 
   it('builds codex resume (subcommand form)', () => {
-    expect(resumeCommand('codex', 'abc-123')).toBe('codex resume abc-123')
+    expect(resumeCommand('codex', 'abc-123')).toBe(`${codexRemoteCommand()} resume abc-123`)
   })
 
   it('builds gemini resume', () => {
