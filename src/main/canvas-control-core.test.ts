@@ -29,6 +29,22 @@ describe('parseControlRequest', () => {
     })
   })
 
+  it('validates persistent inter-agent message verbs', () => {
+    expect(parseControlRequest('send', { node: 'n2', text: 'hello' })).toEqual({ error: 'send requires --subject' })
+    expect(parseControlRequest('send', { node: 'n2', subject: 'NOTICE', text: 'hello' })).toEqual({
+      verb: 'send', args: { node: 'n2', subject: 'NOTICE', text: 'hello' }
+    })
+    expect(parseControlRequest('reply', { message: 'msg-1' })).toEqual({ error: 'reply requires --text' })
+    expect(parseControlRequest('reply', { message: 'msg-1', text: 'ack' })).toEqual({
+      verb: 'reply', args: { message: 'msg-1', text: 'ack' }
+    })
+    expect(parseControlRequest('status', {})).toEqual({ error: 'status requires --message <id>' })
+    expect(parseControlRequest('status', { message: 'msg-1' })).toEqual({
+      verb: 'status', args: { message: 'msg-1' }
+    })
+    for (const verb of ['send', 'reply', 'status'] as const) expect(isDestructiveVerb(verb)).toBe(false)
+  })
+
   it('requires a source for show verbs', () => {
     expect(parseControlRequest('show-video', {})).toEqual({ error: 'show-video requires --path' })
     expect(parseControlRequest('show-web', {})).toEqual({
@@ -210,13 +226,14 @@ describe('parseControlRequest', () => {
 
   it('instructions cover the verb set and the confirm caveat', () => {
     const body = buildCanvasControlInstructions('/tmp/nodeterm.sh')
-    for (const verb of ['list', 'open-agent', 'spawn-team', 'group', 'ungroup', 'move', 'arrange', 'rename', 'write', 'close', 'board', 'assign']) {
+    for (const verb of ['list', 'open-agent', 'spawn-team', 'group', 'ungroup', 'move', 'arrange', 'rename', 'send', 'reply', 'status', 'write', 'close', 'board', 'assign']) {
       expect(body).toContain(verb)
     }
     expect(body.toLowerCase()).toContain('confirm')
     expect(body).toContain('when an existing session id is known, you MUST pass it with `--resume`')
     expect(body).toContain('prompt-only node plus a renamed title is a new conversation')
     expect(body).toContain('open-agent --agent codex --resume <known-id>')
+    expect(body).toContain('Never use `write` as agent messaging')
 
     const skill = buildCanvasSkillBody('/tmp/nodeterm.sh')
     expect(skill).toContain('when an existing session id is known, you MUST pass it with `--resume`')

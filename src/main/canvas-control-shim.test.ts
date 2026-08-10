@@ -79,6 +79,28 @@ describe('canvas-control shim', () => {
     expect(received.at(-1)?.verb).toBe('list')
   })
 
+  it('re-sources the live endpoint and retries once after an app-restart race', async () => {
+    const endpoint = path.join(dir, 'rotating-hook-endpoint.env')
+    fs.writeFileSync(endpoint, 'NODETERM_HOOK_PORT=9\nNODETERM_HOOK_TOKEN=stale\n')
+    const rewrite = setTimeout(() => {
+      fs.writeFileSync(
+        endpoint,
+        `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\n`
+      )
+    }, 30)
+    try {
+      const { stdout } = await callShim(['list'], {
+        NODETERM_HOOK_PORT: '',
+        NODETERM_HOOK_TOKEN: '',
+        NODETERM_HOOK_ENDPOINT: endpoint
+      })
+      expect(stdout.trim()).toBe('did list')
+      expect(received.at(-1)?.nodeId).toBe('node-1')
+    } finally {
+      clearTimeout(rewrite)
+    }
+  })
+
   // The reason this transport is form-urlencoded rather than JSON: these values reach curl as
   // ordinary argv and must survive verbatim. Hand-rolled JSON quoting in sh broke on every one.
   it('carries values containing quotes, newlines, $ and backslashes verbatim', async () => {
@@ -100,6 +122,17 @@ describe('canvas-control shim', () => {
       resume: 'thread-a',
       account: 'system'
     })
+  })
+
+  it('carries inter-agent send, reply and status envelopes unchanged', async () => {
+    await callShim(['send', '--node', 'node-2', '--subject', 'MCP NOTICE', '--text', 'line one\nline two'])
+    expect(received.at(-1)).toMatchObject({
+      verb: 'send', args: { node: 'node-2', subject: 'MCP NOTICE', text: 'line one\nline two' }
+    })
+    await callShim(['reply', '--message', 'msg-1', '--text', 'ACK'])
+    expect(received.at(-1)).toMatchObject({ verb: 'reply', args: { message: 'msg-1', text: 'ACK' } })
+    await callShim(['status', '--message', 'msg-1'])
+    expect(received.at(-1)).toMatchObject({ verb: 'status', args: { message: 'msg-1' } })
   })
 
   it('maps the bare positional to --path / --node per verb', async () => {

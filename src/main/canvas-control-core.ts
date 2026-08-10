@@ -25,6 +25,9 @@ export type ControlVerb =
   | 'close-worktree'
   | 'branch'
   | 'rename'
+  | 'send'
+  | 'reply'
+  | 'status'
   | 'write'
   | 'close'
   | 'board'
@@ -56,6 +59,9 @@ const VERBS: ControlVerb[] = [
   'close-worktree',
   'branch',
   'rename',
+  'send',
+  'reply',
+  'status',
   'write',
   'close',
   'board',
@@ -78,6 +84,12 @@ export function parseControlRequest(
   if (v === 'close' && !args.node) return { error: 'close requires --node <id>' }
   if (v === 'write' && !args.node) return { error: 'write requires --node <id>' }
   if (v === 'write' && !args.text) return { error: 'write requires --text' }
+  if (v === 'send' && !args.node) return { error: 'send requires --node <id>' }
+  if (v === 'send' && !args.subject) return { error: 'send requires --subject' }
+  if (v === 'send' && !args.text) return { error: 'send requires --text' }
+  if (v === 'reply' && !args.message) return { error: 'reply requires --message <id>' }
+  if (v === 'reply' && !args.text) return { error: 'reply requires --text' }
+  if (v === 'status' && !args.message) return { error: 'status requires --message <id>' }
   if ((v === 'show-image' || v === 'show-video') && !args.path) {
     return { error: `${v} requires --path` }
   }
@@ -199,8 +211,13 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  the user to confirm deletion.',
     '- `branch --node <id>` — branch a Claude node\'s conversation (Claude nodes only).',
     '- `rename --node <id> --title "New Name"` — rename any node (terminals, groups, stickies…).',
+    '- `send --node <id> --subject "LABEL" --text "..."` — send a persistent inter-agent message.',
+    '  NodeTerm generates timestamp, exact current sender/recipient titles, authenticated addresses',
+    '  and message id. Busy recipients receive it at the next safe turn boundary.',
+    '- `reply --message <id> --text "..."` — reply over the authenticated return route.',
+    '  `status --message <id>` reports `queued` or `delivered`. Never guess ids from mutable titles.',
     '- `write --node <id> --text "..."` / `close --node <id>` — type into / close a node.',
-    '  Both ask the user to confirm a dialog and may be denied.',
+    '  Both ask the user to confirm a dialog and may be denied. Never use `write` as agent messaging.',
     '- `board` — the project\'s kanban board: every column (id + title) and the session cards in each,',
     '  plus the virtual Ungrouped column. Start here when you need a column id or want the board state.',
     '- `assign --node <id> [--column <id|title>] [--before <nodeId>]` — move a session card to a column',
@@ -286,19 +303,39 @@ while [ "$nt_i" -lt "$nt_count" ]; do
 done
 
 nt_out=$(mktemp 2>/dev/null || echo "/tmp/nodeterm-control.$$")
-if [ -n "$NODETERM_HOOK_SOCK" ]; then
-  nt_code=$(curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
-    --unix-socket "$NODETERM_HOOK_SOCK" "http://localhost/control/$nt_verb" \\
-    -H "Accept: text/plain" \\
-    -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
-    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null)
-elif [ -n "$NODETERM_HOOK_PORT" ]; then
-  nt_code=$(curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
-    "http://127.0.0.1:\${NODETERM_HOOK_PORT}/control/$nt_verb" \\
-    -H "Accept: text/plain" \\
-    -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
-    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null)
-else
+nt_post() {
+  if [ -n "$NODETERM_HOOK_SOCK" ]; then
+    curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
+      --unix-socket "$NODETERM_HOOK_SOCK" "http://localhost/control/$nt_verb" \\
+      -H "Accept: text/plain" \\
+      -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
+      --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
+  elif [ -n "$NODETERM_HOOK_PORT" ]; then
+    curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
+      "http://127.0.0.1:\${NODETERM_HOOK_PORT}/control/$nt_verb" \\
+      -H "Accept: text/plain" \\
+      -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
+      --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
+  else
+    return 1
+  fi
+}
+
+nt_code=$(nt_post "$@")
+# A long-lived tmux agent may race an app restart. Re-source the same authenticated endpoint and
+# retry exactly once; never scan for or guess another project's control endpoint.
+if [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; then
+  if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then
+    sleep 0.1
+    NODETERM_HOOK_SOCK=""
+    NODETERM_HOOK_PORT=""
+    NODETERM_HOOK_TOKEN=""
+    . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || :
+    nt_code=$(nt_post "$@")
+  fi
+fi
+
+if [ -z "$NODETERM_HOOK_SOCK$NODETERM_HOOK_PORT" ]; then
   rm -f "$nt_out"
   echo "nodeterm control endpoint unavailable." >&2
   exit 1
@@ -409,7 +446,12 @@ Verbs:
 - \`branch --node <id>\` — branch a Claude node's conversation: the node stays on the new
   branch and a new node opens resuming the original. Target must be a Claude agent node.
 - \`rename --node <id> --title "New Name"\` — rename any node (terminals, groups, stickies…).
-- \`write --node <id> --text "..."\` — type text into a terminal node. (Asks the user to confirm.)
+- \`send --node <id> --subject "LABEL" --text "..."\` — send a persistent inter-agent message.
+  NodeTerm generates timestamp, current Node Chroma titles, authenticated addresses and id.
+  Busy recipients are queued until a safe turn boundary.
+- \`reply --message <id> --text "..."\` — reply over the authenticated return route.
+  \`status --message <id>\` reports delivery state. Never guess an id from a mutable title.
+- \`write --node <id> --text "..."\` — raw terminal control, not agent messaging. (Asks the user to confirm.)
 - \`close --node <id>\` — close a node. (Asks the user to confirm.)
 - \`board\` — read the project's kanban board: every column (id + title) and the session cards
   filed in each, plus the virtual Ungrouped column (unfiled sessions). Start here when you need

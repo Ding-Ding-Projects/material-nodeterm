@@ -179,6 +179,12 @@ import { opensInEditor } from '../lib/openTarget'
 import { newEntryPath, parentDir } from '../lib/explorerCreate'
 import { useProjects } from '../state/projects'
 import { useAgentStatus } from '../state/agentStatus'
+import {
+  agentMailbox,
+  renderAgentMessage,
+  type AgentMessage,
+  type AgentMessageEndpoint
+} from '../state/agentMailbox'
 import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
 import { SubagentNode } from '../nodes/SubagentNode'
@@ -6044,6 +6050,50 @@ export function Canvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Persistent inter-agent mailbox delivery. Store first, then inject only at a safe turn
+  // boundary. The in-flight set prevents a startup flush and a status edge from delivering the
+  // same queued message twice.
+  const mailboxDeliveryInFlightRef = useRef(new Set<string>())
+  const deliverMailboxMessage = useCallback(
+    async (message: AgentMessage): Promise<boolean> => {
+      if (message.status !== 'queued') return message.status === 'delivered'
+      if (message.recipient.projectId !== useProjects.getState().activeProjectId) return false
+      const target = nodesRef.current.find((node) => node.id === message.recipient.nodeId)
+      if (!target || target.type !== 'terminal') return false
+      const state = useAgentStatus.getState().byId[target.id]?.state
+      if (state === 'working' || state === 'blocked' || state === 'waiting') return false
+      const inFlight = mailboxDeliveryInFlightRef.current
+      if (inFlight.has(message.id)) return false
+      inFlight.add(message.id)
+      try {
+        const ok = await api.pty.sendText(target.id, renderAgentMessage(message))
+        if (ok) agentMailbox().markDelivered(message.id)
+        return ok
+      } catch {
+        return false
+      } finally {
+        inFlight.delete(message.id)
+      }
+    },
+    [api]
+  )
+  const flushMailbox = useCallback(
+    async (nodeId?: string): Promise<void> => {
+      const projectId = useProjects.getState().activeProjectId
+      for (const message of agentMailbox().queued(projectId)) {
+        if (!nodeId || message.recipient.nodeId === nodeId) await deliverMailboxMessage(message)
+      }
+    },
+    [deliverMailboxMessage]
+  )
+  const mailboxNodeSig = useMemo(
+    () => nodes.filter((node) => node.type === 'terminal').map((node) => node.id).sort().join('|'),
+    [nodes]
+  )
+  useEffect(() => {
+    void flushMailbox()
+  }, [activeProjectId, mailboxNodeSig, flushMailbox])
+
   // Apply canvas-control commands issued by a control-capable agent's `nodeterm` CLI. Reads the
   // LATEST nodes via nodesRef (so the effect deps stay []), validates the source as the real
   // authorization boundary, then applies the verb. Non-destructive verbs (list/open-*/show-*)
@@ -6111,6 +6161,16 @@ export function Canvas() {
         const st = useProjects.getState()
         return st.getProject(st.activeProjectId ?? '')
       })()
+      const endpointFor = (node: CanvasNode): AgentMessageEndpoint => {
+        const status = useAgentStatus.getState().byId[node.id]
+        return {
+          projectId: ctlProject?.id ?? useProjects.getState().activeProjectId,
+          nodeId: node.id,
+          title: ((node.data.title as string) || node.id).replace(/\s+/g, ' ').trim(),
+          agentId: (node.data.agentId as AgentId | undefined) ?? status?.agentId,
+          sessionId: status?.sessionId
+        }
+      }
       const ctlSsh = ctlProject?.ssh
       const sshFor = (cwd?: string) => nodeSshFor(ctlSsh, cwd)
       // Place opened nodes BELOW the source and rope them to it (source flow-out → target
@@ -7058,6 +7118,91 @@ export function Canvas() {
             reply({ ok: true, message: `renamed ${id} to "${title}"` })
             return
           }
+          case 'send': {
+            const target = nodesRef.current.find((node) => node.id === args.node)
+            const targetAgent = target && endpointFor(target).agentId
+            if (!target || target.type !== 'terminal' || !targetAgent || !canControlCanvas(targetAgent)) {
+              reply({ ok: false, error: `send: target is not an addressable agent node (${args.node ?? 'missing'})` })
+              return
+            }
+            try {
+              const message = agentMailbox().create({
+                id: `msg-${crypto.randomUUID()}`,
+                sender: endpointFor(src),
+                recipient: endpointFor(target),
+                subject: args.subject ?? '',
+                body: args.text ?? ''
+              })
+              const delivered = await deliverMailboxMessage(message)
+              reply({
+                ok: true,
+                message: `${delivered ? 'delivered' : 'queued'} ${message.id}`,
+                result: { id: message.id, status: delivered ? 'delivered' : 'queued' }
+              })
+            } catch (error) {
+              reply({ ok: false, error: `send: ${String(error)}` })
+            }
+            return
+          }
+          case 'reply': {
+            const original = agentMailbox().get(args.message ?? '')
+            if (!original) {
+              reply({ ok: false, error: `reply: unknown message (${args.message ?? 'missing'})` })
+              return
+            }
+            if (
+              original.recipient.projectId !== (ctlProject?.id ?? useProjects.getState().activeProjectId) ||
+              original.recipient.nodeId !== sourceNodeId
+            ) {
+              reply({ ok: false, error: 'reply: this node is not the authenticated recipient' })
+              return
+            }
+            const target = nodesRef.current.find((node) => node.id === original.sender.nodeId)
+            if (!target || target.type !== 'terminal') {
+              reply({ ok: false, error: 'reply: original sender node is unavailable' })
+              return
+            }
+            try {
+              const message = agentMailbox().create({
+                id: `msg-${crypto.randomUUID()}`,
+                conversationId: original.conversationId,
+                replyTo: original.id,
+                sender: endpointFor(src),
+                recipient: endpointFor(target),
+                subject: `RE: ${original.subject}`,
+                body: args.text ?? ''
+              })
+              const delivered = await deliverMailboxMessage(message)
+              reply({
+                ok: true,
+                message: `${delivered ? 'delivered' : 'queued'} ${message.id}`,
+                result: { id: message.id, status: delivered ? 'delivered' : 'queued' }
+              })
+            } catch (error) {
+              reply({ ok: false, error: `reply: ${String(error)}` })
+            }
+            return
+          }
+          case 'status': {
+            const message = agentMailbox().get(args.message ?? '')
+            if (!message) {
+              reply({ ok: false, error: `status: unknown message (${args.message ?? 'missing'})` })
+              return
+            }
+            const projectId = ctlProject?.id ?? useProjects.getState().activeProjectId
+            const isSender = message.sender.projectId === projectId && message.sender.nodeId === sourceNodeId
+            const isRecipient = message.recipient.projectId === projectId && message.recipient.nodeId === sourceNodeId
+            if (!isSender && !isRecipient) {
+              reply({ ok: false, error: 'status: this node is not a participant' })
+              return
+            }
+            reply({
+              ok: true,
+              message: `${message.status} ${message.id}`,
+              result: { id: message.id, status: message.status, deliveredAt: message.deliveredAt }
+            })
+            return
+          }
           case 'write': {
             if (!args.node) {
               reply({ ok: false, error: 'write requires --node' })
@@ -7620,8 +7765,12 @@ export function Canvas() {
           }
           break
       }
+      const nextState = cs.byId[e.nodeId]?.state
+      if (nextState !== 'working' && nextState !== 'blocked' && nextState !== 'waiting') {
+        void flushMailbox(e.nodeId)
+      }
     })
-  }, [])
+  }, [api, flushMailbox])
 
   // Safety net for a lost Stop POST / crashed CLI: decay working entries that saw no hook
   // event at all for STALE_WORKING_MS (the sweep itself is cheap; see agentStatus.ts).
