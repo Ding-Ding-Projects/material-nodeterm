@@ -16,11 +16,7 @@ import {
   migrateLegacyCodexAccountHome,
   migrateLegacyCodexAccountHomes
 } from '../core/codex-accounts-core'
-import {
-  forkCodexThreadFromPathAt,
-  readCodexAccountAt,
-  readCodexThreadAt
-} from '../core/codex-session-name'
+import { readCodexAccountAt, readCodexThreadAt } from '../core/codex-session-name'
 import { platform } from '../core/platform'
 import { findInLoginPath } from '../core/pty-manager'
 
@@ -162,7 +158,7 @@ export function initCodexAccounts(): void {
   ipcMain.handle(IPC.codexAccountsSystemIdentity, () => accountIdentity())
 
   ipcMain.handle(
-    IPC.codexAccountsForkThread,
+    IPC.codexAccountsSwitchThread,
     async (
       _event,
       threadId: string,
@@ -180,12 +176,9 @@ export function initCodexAccounts(): void {
       await ensureCodexAccountDaemon(targetAccountId)
       const source = await readCodexThreadAt(localCodexSocket(sourceAccountId), threadId, 5000)
       if (!source?.path) throw new Error('Source Codex conversation is unavailable')
-      return forkCodexThreadFromPathAt(
-        localCodexSocket(targetAccountId),
-        source.path,
-        cwd,
-        10_000
-      )
+      // The relay resumes this exact rollout by path on the target account's app-server. Codex
+      // keeps the rollout's existing thread id; account selection changes credentials, not history.
+      return threadId
     }
   )
 }

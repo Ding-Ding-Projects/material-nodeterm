@@ -431,9 +431,9 @@ const api: NodeTerminalApi = {
     remove: (id) => ipcRenderer.invoke(IPC.codexAccountsRemove, id),
     identity: (id) => ipcRenderer.invoke(IPC.codexAccountsIdentity, id),
     systemIdentity: () => ipcRenderer.invoke(IPC.codexAccountsSystemIdentity),
-    forkThread: (threadId, cwd, sourceAccountId, targetAccountId) =>
+    switchThread: (threadId, cwd, sourceAccountId, targetAccountId) =>
       ipcRenderer.invoke(
-        IPC.codexAccountsForkThread,
+        IPC.codexAccountsSwitchThread,
         threadId,
         cwd,
         sourceAccountId,

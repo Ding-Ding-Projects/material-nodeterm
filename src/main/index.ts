@@ -1002,14 +1002,13 @@ app.whenReady().then(async () => {
   })
   hookServer.setCodexThreadAuthorizeHandler(async ({ nodeId, threadId, accountId }) => {
     await ensureCodexAccountDaemon(accountId)
-    if (!(await readCodexThreadAt(localCodexSocket(accountId), threadId))) {
-      throw new Error('Codex thread does not belong to the selected account')
-    }
+    // The relay freshly verifies a foreign rollout against a configured source socket before
+    // path-resume. The target app-server cannot read that id until after the resume succeeds.
+    // Authorization therefore owns concurrency only; bind/observed revalidate the target server.
     if (codexThreadIdentityHasLiveConflict(
       threadId,
       nodeId,
-      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
-      accountId
+      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined
     )) throw new Error('Codex thread is already bound to another live node')
   })
   hookServer.setCodexThreadCatalogHandler(async () => {
@@ -1021,12 +1020,10 @@ app.whenReady().then(async () => {
     ]
     const accounts: Array<{ accountId?: string; socketPath: string }> = []
     for (const accountId of accountIds) {
-      try {
-        await ensureCodexAccountDaemon(accountId)
-        accounts.push({ accountId, socketPath: localCodexSocket(accountId) })
-      } catch {
-        // One unavailable login must not hide sessions from the remaining accounts.
-      }
+      // Catalog completeness is a correctness boundary: omitting an unavailable account could
+      // make a duplicate thread id look unique and route a resume to the wrong credential store.
+      await ensureCodexAccountDaemon(accountId)
+      accounts.push({ accountId, socketPath: localCodexSocket(accountId) })
     }
     return accounts
   })

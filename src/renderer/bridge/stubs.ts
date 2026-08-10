@@ -267,7 +267,7 @@ export function buildStubApi(): Omit<
       remove: U('codexAccounts.remove'),
       identity: U('codexAccounts.identity'),
       systemIdentity: U('codexAccounts.systemIdentity'),
-      forkThread: U('codexAccounts.forkThread')
+      switchThread: U('codexAccounts.switchThread')
     },
     transcripts: {
       search: U('transcripts.search')

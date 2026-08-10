@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { WebSocketServer } from 'ws'
 import {
   codexUnixWebSocketUrl,
-  forkCodexThreadFromPathAt,
   readCodexAccountAt,
   readCodexSessionNameAt,
   relayedCodexSessionName,
@@ -195,27 +194,6 @@ describe('Codex shared app-server session names', () => {
     writeFileSync(path.join(dir, 'resumed-thread'), 'Resumed task title\n')
     expect(relayedCodexSessionName(socket, 'resumed-thread', home)).toBe('Resumed task title')
     expect(relayedCodexSessionName(socket, 'missing-thread', home)).toBeNull()
-  })
-
-  it('forks an idle rollout into another account app-server', async () => {
-    await expect(
-      forkCodexThreadFromPathAt(socket, '/isolated/source-thread.jsonl', '/isolated/worktree')
-    ).resolves.toBe('thread-forked')
-    expect(requests[0]).toEqual({
-      id: 1,
-      method: 'initialize',
-      params: {
-        clientInfo: { name: 'nodeterm', version: '1' },
-        capabilities: { experimentalApi: true }
-      }
-    })
-    expect(requests.find((request) => request.method === 'thread/fork')).toMatchObject({
-      params: {
-        threadId: '',
-        path: '/isolated/source-thread.jsonl',
-        cwd: '/isolated/worktree'
-      }
-    })
   })
 
   it.each(['/tmp/socket:bad', '/tmp/socket with-space', 'relative.sock'])(

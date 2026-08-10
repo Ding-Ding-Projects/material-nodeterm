@@ -4518,7 +4518,7 @@ export function Canvas() {
       }
       codexAccountSwitchInFlight.current.add(nodeId)
       try {
-        const threadId = await window.nodeTerminal.codexAccounts.forkThread(
+        const threadId = await window.nodeTerminal.codexAccounts.switchThread(
           status.sessionId,
           cwd,
           sourceAccountId,
@@ -4541,8 +4541,8 @@ export function Canvas() {
           return
         }
         // A provider account is part of the process environment, not a mutable TUI preference.
-        // Recycle the one node's tmux session, then resume the fork under the target CODEX_HOME.
-        // The source conversation remains untouched in its original account.
+        // Recycle the one node's tmux session, then resume the same rollout under the target
+        // CODEX_HOME. Account identity changes; conversation identity does not.
         transport.recycle(nodeId)
         setNodes((nodes) =>
           nodes.map((candidate) =>
@@ -5103,7 +5103,7 @@ export function Canvas() {
                 ? gate.reason === 'working'
                   ? 'Finish the current turn before switching accounts.'
                   : 'Nothing to switch yet — this node has no conversation id.'
-                : 'Forks the conversation into this account, then restarts only this node.',
+                : 'Continues this conversation with the selected account, then restarts only this node.',
               onClick: () => void switchCodexAccount(node.id, target)
             })
             const currentAccount = current

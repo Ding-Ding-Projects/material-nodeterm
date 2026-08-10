@@ -1695,8 +1695,8 @@ export interface CodexAccountsApi {
   identity(id: string): Promise<{ email: string | null } | null>
   /** Identity of the system ~/.codex account, read through account/read. */
   systemIdentity(): Promise<{ email: string | null } | null>
-  /** Fork an idle conversation into another account home; source history remains untouched. */
-  forkThread(
+  /** Rebind an idle conversation to another login without changing its thread identity. */
+  switchThread(
     threadId: string,
     cwd: string,
     sourceAccountId?: string,

@@ -34,7 +34,7 @@ export const IPC = {
   codexAccountsRemove: 'codex-accounts:remove',
   codexAccountsIdentity: 'codex-accounts:identity',
   codexAccountsSystemIdentity: 'codex-accounts:system-identity',
-  codexAccountsForkThread: 'codex-accounts:fork-thread',
+  codexAccountsSwitchThread: 'codex-accounts:switch-thread',
   claudeCliCaps: 'claude-cli:caps',
   transcriptSearch: 'transcript:search',
   appToggleMarkdown: 'app:toggle-markdown',

@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 import { promisify } from 'util'
@@ -135,7 +135,7 @@ describe('NodeTerm Codex remote launcher', () => {
     ])
   })
 
-  it('routes a new node through the persistent shared relay when its runtime is available', async () => {
+  it('routes a resume through the relay before the target account can bind that thread', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-relay-'))
     const bin = path.join(root, 'bin')
     const endpoint = path.join(root, 'hook-endpoint.env')
@@ -144,7 +144,9 @@ describe('NodeTerm Codex remote launcher', () => {
     const script = path.join(root, 'codex-relay.js')
     await run('/bin/mkdir', ['-p', bin])
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
-    writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 0\n', { mode: 0o700 })
+    // A cross-account target does not know the thread yet. Any pre-relay bind attempt would fail
+    // here and prevent Codex from reaching the path-resume that materializes it.
+    writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 22\n', { mode: 0o700 })
     writeFileSync(
       path.join(bin, 'codex'),
       '#!/bin/sh\nnode -e \'require("fs").writeFileSync(process.env.CAPTURE, JSON.stringify(process.argv.slice(1)))\' -- "$@"\n',
@@ -258,7 +260,16 @@ describe('NodeTerm Codex remote launcher', () => {
     expect(codexThreadIdentityHasLiveConflict('../invalid', 'node-b', () => false)).toBe(true)
   })
 
-  it('keeps an equal thread id isolated across two account app-servers', () => {
+  it('treats a malformed account mapping as a fail-closed ownership conflict', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-malformed-binding-'))
+    vi.stubEnv('HOME', root)
+    const dir = path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(path.join(dir, 'thread-a'), 'accountId=wrong\nnodeId=../bad\nendpoint=relative\n')
+    expect(codexThreadIdentityHasLiveConflict('thread-a', 'node-a', () => false)).toBe(true)
+  })
+
+  it('moves one thread id across accounts but rejects a second live node owner', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-account-binding-'))
     vi.stubEnv('HOME', root)
     bindCodexThreadIdentity(
@@ -268,25 +279,30 @@ describe('NodeTerm Codex remote launcher', () => {
       () => false,
       'account-a'
     )
-    bindCodexThreadIdentity(
+    expect(() => bindCodexThreadIdentity(
       'same-thread',
       'node-b',
+      '/isolated/hook.env',
+      (nodeId) => nodeId === 'node-a',
+      'account-b'
+    )).toThrow('already bound')
+    bindCodexThreadIdentity(
+      'same-thread',
+      'node-a',
       '/isolated/hook.env',
       () => true,
       'account-b'
     )
-    expect(
-      readFileSync(
-        path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a', 'same-thread'),
-        'utf8'
-      )
-    ).toContain('nodeId=node-a')
+    expect(() => readFileSync(
+      path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a', 'same-thread'),
+      'utf8'
+    )).toThrow()
     expect(
       readFileSync(
         path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-b', 'same-thread'),
         'utf8'
       )
-    ).toContain('nodeId=node-b')
+    ).toContain('nodeId=node-a')
   })
 
   it('releases the old owner only after the target account binds successfully', () => {
@@ -299,6 +315,30 @@ describe('NodeTerm Codex remote launcher', () => {
     bindCodexThreadIdentity('thread-a', 'node-new', '/isolated/hook.env', () => true, 'account-a')
     expect(resolveCodexThreadNodeIdentity('thread-a')).toBe('node-new')
     expect(resolveCodexThreadNodeIdentity('thread-b')).toBe('node-a')
+  })
+
+  it('restores the source mapping when transfer cleanup cannot validate every mapping', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-transfer-rollback-'))
+    vi.stubEnv('HOME', root)
+    bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false, 'account-a')
+    const malformedDir = path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-x')
+    mkdirSync(malformedDir, { recursive: true })
+    writeFileSync(path.join(malformedDir, 'other-thread'), 'malformed\n')
+    expect(() => bindCodexThreadIdentity(
+      'thread-a',
+      'node-a',
+      '/isolated/hook.env',
+      () => true,
+      'account-b'
+    )).toThrow('atomically transfer')
+    expect(readFileSync(
+      path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a', 'thread-a'),
+      'utf8'
+    )).toContain('nodeId=node-a')
+    expect(() => readFileSync(
+      path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-b', 'thread-a'),
+      'utf8'
+    )).toThrow()
   })
 
   it.each([

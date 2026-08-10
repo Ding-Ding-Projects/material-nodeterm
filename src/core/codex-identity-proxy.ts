@@ -33,6 +33,38 @@ function identityFile(threadId: string, accountId?: string): string {
   )
 }
 
+function identityCandidates(threadId: string): Array<{ file: string; scope?: string }> {
+  const root = path.join(homedir(), '.nodeterm', 'codex-thread-nodes')
+  const candidates: Array<{ file: string; scope?: string }> = [{ file: path.join(root, threadId) }]
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
+      candidates.push({ file: path.join(root, entry.name, threadId), scope: entry.name })
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  return candidates
+}
+
+function readIdentityCandidate(
+  candidate: { file: string; scope?: string }
+): ReturnType<typeof parseCodexThreadIdentity> | undefined {
+  try {
+    const identity = parseCodexThreadIdentity(readFileSync(candidate.file, 'utf8'))
+    if (candidate.scope ? identity.accountId !== candidate.scope : !!identity.accountId) {
+      throw new Error('Codex thread account binding is invalid')
+    }
+    if (!validCodexIdentity(identity.nodeId, identity.hookEndpoint)) {
+      throw new Error('Codex thread identity is invalid')
+    }
+    return identity
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+}
+
 /**
  * Recover a persisted Codex thread owner after the Electron main process restarts.
  * Browser-use requests carry the Codex thread/session id but no account id, so an equal
@@ -59,7 +91,8 @@ export function resolveCodexThreadNodeIdentity(
   const owners = new Set<string>()
   for (const candidate of candidates) {
     try {
-      const identity = parseCodexThreadIdentity(readFileSync(candidate.file, 'utf8'))
+      const identity = readIdentityCandidate(candidate)
+      if (!identity) continue
       if (candidate.scope && identity.accountId !== candidate.scope) continue
       if (!candidate.scope && identity.accountId) continue
       if (!validCodexIdentity(identity.nodeId, identity.hookEndpoint)) continue
@@ -86,14 +119,19 @@ export function writeCodexThreadIdentity(
   const tmp = path.join(dir, `.${threadId}.${process.pid}.${Date.now()}`)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   let renamed = false
+  let quarantined: Array<{ source: string; quarantine: string }> = []
   try {
     writeFileSync(tmp, `accountId=${scope}\nnodeId=${nodeId}\nendpoint=${hookEndpoint}\n`, {
       encoding: 'utf8',
       mode: 0o600
     })
+    quarantined = quarantineOtherCodexThreadIdentities(nodeId, threadId, scope, tmp)
     renameSync(tmp, file)
     renamed = true
-    removeOtherCodexThreadIdentities(nodeId, threadId, scope)
+    discardQuarantinedCodexThreadIdentities(quarantined)
+  } catch (error) {
+    restoreQuarantinedCodexThreadIdentities(quarantined)
+    throw error
   } finally {
     if (!renamed) {
       try {
@@ -115,29 +153,24 @@ export function bindCodexThreadIdentity(
   if (!SAFE_THREAD_ID.test(threadId) || !validCodexIdentity(nodeId, hookEndpoint)) {
     throw new Error('Invalid NodeTerm Codex thread identity')
   }
-  const scope = accountScope(accountId)
   const scopedFile = identityFile(threadId, accountId)
-  // System-account sessions created by the previous NodeTerm build used the unscoped legacy file.
-  // Inspect it for duplicate ownership, but never consult it for a managed account.
-  const files = accountId
-    ? [scopedFile]
-    : [scopedFile, path.join(homedir(), '.nodeterm', 'codex-thread-nodes', threadId)]
-  for (const file of files) {
-    try {
-      const existing = parseCodexThreadIdentity(readFileSync(file, 'utf8'))
-      if (file === scopedFile && existing.accountId !== scope) {
-        throw new Error('Codex thread account binding is invalid')
-      }
-      if (existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint) {
-        removeOtherCodexThreadIdentities(nodeId, threadId, scope)
-        return
-      }
-      if (existing.nodeId && isNodeLive(existing.nodeId)) {
-        throw new Error('Codex thread is already bound to another live node')
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  let targetMatches = false
+  for (const candidate of identityCandidates(threadId)) {
+    const existing = readIdentityCandidate(candidate)
+    if (!existing) continue
+    if (candidate.file === scopedFile &&
+        existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint) {
+      targetMatches = true
     }
+    if (existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) {
+      throw new Error('Codex thread is already bound to another live node')
+    }
+  }
+  if (targetMatches) {
+    discardQuarantinedCodexThreadIdentities(
+      quarantineOtherCodexThreadIdentities(nodeId, threadId, accountScope(accountId))
+    )
+    return
   }
   writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, accountId)
 }
@@ -147,35 +180,29 @@ export function bindCodexThreadIdentity(
 export function codexThreadIdentityHasLiveConflict(
   threadId: string,
   nodeId: string,
-  isNodeLive: (nodeId: string) => boolean,
-  accountId?: string
+  isNodeLive: (nodeId: string) => boolean
 ): boolean {
   if (!SAFE_THREAD_ID.test(threadId) || !SAFE_NODE_ID.test(nodeId)) return true
-  const scopedFile = identityFile(threadId, accountId)
-  const files = accountId
-    ? [scopedFile]
-    : [scopedFile, path.join(homedir(), '.nodeterm', 'codex-thread-nodes', threadId)]
-  for (const file of files) {
-    try {
-      const existing = parseCodexThreadIdentity(readFileSync(file, 'utf8'))
-      if (file === scopedFile && existing.accountId !== accountScope(accountId)) return true
-      if (existing.nodeId && existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) return true
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return true
+  try {
+    for (const candidate of identityCandidates(threadId)) {
+      const existing = readIdentityCandidate(candidate)
+      if (existing && existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) return true
     }
+  } catch {
+    return true
   }
   return false
 }
 
 /** One canvas node owns one current Codex conversation. A successful replacement binding is the
- * atomic lifecycle boundary: only then remove older mappings for that same node. This leaves the
- * source mapping intact if a cross-account fork or target launch fails, but releases it as soon as
- * the target launcher binds successfully. */
-function removeOtherCodexThreadIdentities(
+ * atomic lifecycle boundary: only then remove older mappings for that node and transferred thread.
+ * The source mapping remains intact if target launch fails. */
+function quarantineOtherCodexThreadIdentities(
   nodeId: string,
   keepThreadId: string,
-  keepScope: string
-): void {
+  keepScope: string,
+  excludeFile?: string
+): Array<{ source: string; quarantine: string }> {
   const root = path.join(homedir(), '.nodeterm', 'codex-thread-nodes')
   const candidates: Array<{ file: string; scope: string }> = []
   try {
@@ -191,17 +218,44 @@ function removeOtherCodexThreadIdentities(
         }
       }
     }
-  } catch {
-    return
+  } catch (error) {
+    throw new Error('Could not enumerate Codex thread identity mappings', { cause: error })
   }
-  for (const candidate of candidates) {
-    if (candidate.scope === keepScope && path.basename(candidate.file) === keepThreadId) continue
-    try {
-      const identity = parseCodexThreadIdentity(readFileSync(candidate.file, 'utf8'))
-      if (identity.nodeId === nodeId) unlinkSync(candidate.file)
-    } catch {
-      // A concurrent external cleanup or malformed legacy record is not ours to remove.
+  const quarantined: Array<{ source: string; quarantine: string }> = []
+  try {
+    for (const [index, candidate] of candidates.entries()) {
+      if (candidate.file === excludeFile) continue
+      if (candidate.scope === keepScope && path.basename(candidate.file) === keepThreadId) continue
+      const identity = readIdentityCandidate(candidate)
+      if (!identity) continue
+      if (identity.nodeId === nodeId || path.basename(candidate.file) === keepThreadId) {
+        const quarantine = `${candidate.file}.transfer-${process.pid}-${Date.now()}-${index}`
+        renameSync(candidate.file, quarantine)
+        quarantined.push({ source: candidate.file, quarantine })
+      }
     }
+  } catch (error) {
+    for (const item of quarantined.reverse()) {
+      try { renameSync(item.quarantine, item.source) } catch {}
+    }
+    throw new Error('Could not atomically transfer Codex thread identity', { cause: error })
+  }
+  return quarantined
+}
+
+function restoreQuarantinedCodexThreadIdentities(
+  quarantined: Array<{ source: string; quarantine: string }>
+): void {
+  for (const item of [...quarantined].reverse()) renameSync(item.quarantine, item.source)
+}
+
+function discardQuarantinedCodexThreadIdentities(
+  quarantined: Array<{ source: string; quarantine: string }>
+): void {
+  // Active mappings were removed by rename. Hidden quarantine unlink is storage cleanup only;
+  // failure cannot reintroduce an owner or make exact thread-id resolution ambiguous.
+  for (const item of quarantined) {
+    try { unlinkSync(item.quarantine) } catch {}
   }
 }
 
@@ -268,16 +322,18 @@ export function installCodexLauncher(): string {
       `  export NODETERM_CODEX_RELAY_TOKEN\n` +
       `}\n` +
       `if [ "\${1-}" = resume ]; then\n` +
+      `  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
+      `    nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
+      `    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
+      `  fi\n` +
+      `  # Legacy direct-unix resumes bind before launch. Relay resumes authorize globally and\n` +
+      `  # bind only after the target app-server confirms the unchanged thread id.\n` +
       `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN"; } |\n` +
       `  curl --silent --show-error --fail --config - --request POST \\\n` +
       `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
       `    --data-urlencode "threadId=$nt_thread" \\\n` +
       `    --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
       `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/bind" >/dev/null || { echo "NodeTerm Codex thread already in use or broker unavailable" >&2; exit 69; }\n` +
-      `  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
-      `    nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
-      `    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
-      `  fi\n` +
       `  exec codex --remote unix:// "$@"\n` +
       `fi\n` +
       `nt_thread=$(\n` +

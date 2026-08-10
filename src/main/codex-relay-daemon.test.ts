@@ -6,13 +6,13 @@ import path from 'path'
 import { WebSocketServer } from 'ws'
 import {
   acquireProcessLock,
-  forkForeignThreadAt,
   listThreadsAt,
   mergeRelayThreadLists,
   readThreadAt,
   relayControlPost,
-  relaySourceReservationKey,
-  retargetRelayResume,
+  relayThreadReservationKey,
+  resolveForeignThreadAt,
+  retargetRelayResumeByPath,
   resolveRelayThreadResponse,
   trackRelayThreadRequest,
   type RelayThreadRequest
@@ -57,20 +57,22 @@ describe('Codex shared relay thread observation', () => {
     expect(
       resolveRelayThreadResponse(a, {
         id: 7,
-        result: { thread: { id: 'active-a' } }
+        result: { thread: { id: 'source-a' } }
       })
     ).toEqual({
-      threadId: 'active-a',
+      ok: true,
+      threadId: 'source-a',
       source: 'source-a',
       name: undefined
     })
     expect(
       resolveRelayThreadResponse(b, {
         id: 7,
-        result: { thread: { id: 'active-b', name: 'B' } }
+        result: { thread: { id: 'source-b', name: 'B' } }
       })
     ).toEqual({
-      threadId: 'active-b',
+      ok: true,
+      threadId: 'source-b',
       source: 'source-b',
       name: 'B'
     })
@@ -94,7 +96,7 @@ describe('Codex shared relay thread observation', () => {
         id: 2,
         result: { thread: { id: '../wrong' } }
       })
-    ).toBeUndefined()
+    ).toEqual({ ok: false })
     expect(pending.size).toBe(0)
   })
 
@@ -103,8 +105,21 @@ describe('Codex shared relay thread observation', () => {
     trackRelayThreadRequest(pending, { id: 3, method: 'thread/resume', params: { threadId: 'source' } })
     expect(resolveRelayThreadResponse(pending, {
       id: 3,
-      result: { thread: { id: 'active', name: '   ' } }
-    })).toEqual({ threadId: 'active', source: 'source', name: undefined })
+      result: { thread: { id: 'source', name: '   ' } }
+    })).toEqual({ ok: true, threadId: 'source', source: 'source', name: undefined })
+  })
+
+  it('rejects a path-resume response that changes the conversation id', () => {
+    const pending = new Map<string, RelayThreadRequest>()
+    trackRelayThreadRequest(pending, {
+      id: 4,
+      method: 'thread/resume',
+      params: { threadId: 'source' }
+    })
+    expect(resolveRelayThreadResponse(pending, {
+      id: 4,
+      result: { thread: { id: 'forked' } }
+    })).toEqual({ ok: false, unexpectedThreadId: 'forked' })
   })
 
   it('keeps two account catalogs visible while preserving the selected account as duplicate owner', () => {
@@ -188,25 +203,26 @@ describe('Codex shared relay thread observation', () => {
     expect(merged.foreignThreads.size).toBe(0)
   })
 
-  it('carries a foreign title through the imported resume response', () => {
+  it('carries a foreign title through the path-resumed response', () => {
     const pending = new Map<string, RelayThreadRequest>()
     trackRelayThreadRequest(pending, {
       id: 8,
       method: 'thread/resume',
-      params: { threadId: 'imported-id' }
+      params: { threadId: 'foreign-id' }
     }, 'Foreign title')
     expect(resolveRelayThreadResponse(pending, {
       id: 8,
-      result: { thread: { id: 'imported-id', name: null } }
+      result: { thread: { id: 'foreign-id', name: null } }
     })).toEqual({
-      threadId: 'imported-id',
-      source: 'imported-id',
+      ok: true,
+      threadId: 'foreign-id',
+      source: 'foreign-id',
       name: 'Foreign title'
     })
   })
 
-  it('resumes only the imported target id even when the picker repeats source path/history', () => {
-    expect(retargetRelayResume({
+  it('resumes the verified foreign path without changing the conversation id', () => {
+    expect(retargetRelayResumeByPath({
       id: 9,
       method: 'thread/resume',
       params: {
@@ -215,25 +231,23 @@ describe('Codex shared relay thread observation', () => {
         history: [{ role: 'user' }],
         cwd: '/repo'
       }
-    }, 'imported-id')).toEqual({
+    }, 'foreign-id', '/verified/rollout.jsonl', '/repo')).toEqual({
       id: 9,
       method: 'thread/resume',
-      params: { threadId: 'imported-id', cwd: '/repo' }
+      params: { threadId: 'foreign-id', path: '/verified/rollout.jsonl', cwd: '/repo' }
     })
   })
 
-  it('serializes duplicate imports per target account without blocking another target account', () => {
-    const a = relaySourceReservationKey('/target/a.sock', '/source.sock', 'thread-1')
-    expect(relaySourceReservationKey('/target/a.sock', '/source.sock', 'thread-1')).toBe(a)
-    expect(relaySourceReservationKey('/target/b.sock', '/source.sock', 'thread-1')).not.toBe(a)
+  it('uses one global reservation for a thread across every source and target account', () => {
+    const key = relayThreadReservationKey('thread-1')
+    expect(relayThreadReservationKey('thread-1')).toBe(key)
+    expect(relayThreadReservationKey('thread-2')).not.toBe(key)
   })
 
-  it('lists a paginated foreign fixture and imports it through the target app-server', async () => {
+  it('lists and freshly verifies a paginated foreign fixture before path resume', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-accounts-'))
     const sourceSocket = path.join(dir, 'source.sock')
-    const targetSocket = path.join(dir, 'target.sock')
     const sourceRequests: any[] = []
-    const targetRequests: any[] = []
     const stopSource = await fakeCodexServer(sourceSocket, (message) => {
       sourceRequests.push(message)
       if (message.id === 1) return { id: 1, result: {} }
@@ -258,32 +272,159 @@ describe('Codex shared relay thread observation', () => {
         }
       }
     })
-    const stopTarget = await fakeCodexServer(targetSocket, (message) => {
-      targetRequests.push(message)
-      if (message.id === 1) return { id: 1, result: {} }
-      if (message.id === 2) return { id: 2, result: { thread: { id: 'imported-target-id' } } }
-    })
     try {
       await expect(listThreadsAt(sourceSocket, { cwd: '/repo' })).resolves.toHaveLength(2)
       await expect(readThreadAt(sourceSocket, 'foreign-a')).resolves.toMatchObject({
         id: 'foreign-a',
         path: '/fixtures/a-fresh.jsonl'
       })
-      await expect(forkForeignThreadAt(
-        targetSocket,
-        '/fixtures/a.jsonl',
-        '/repo'
-      )).resolves.toBe('imported-target-id')
       expect(sourceRequests.filter((message) => message.method === 'thread/list').map((message) =>
         message.params.cursor
       )).toEqual([null, 'page-2'])
-      expect(targetRequests).toContainEqual({
-        id: 2,
-        method: 'thread/fork',
-        params: { threadId: '', path: '/fixtures/a.jsonl', cwd: '/repo' }
+    } finally {
+      await stopSource()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('resolves a direct resume to exactly one foreign account without picker state', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-direct-resume-'))
+    const currentSocket = path.join(dir, 'current.sock')
+    const foreignSocket = path.join(dir, 'foreign.sock')
+    const stopCurrent = await fakeCodexServer(currentSocket, (message) => {
+      if (message.id === 1) return { id: 1, result: {} }
+      if (message.method === 'thread/read') return {
+        id: message.id,
+        error: { code: -32600, message: 'no rollout found for thread id thread-a' }
+      }
+    })
+    const stopForeign = await fakeCodexServer(foreignSocket, (message) => {
+      if (message.id === 1) return { id: 1, result: {} }
+      if (message.method === 'thread/read') return {
+        id: message.id,
+        result: {
+          thread: {
+            id: 'thread-a',
+            path: '/foreign/thread-a.jsonl',
+            cwd: '/repo',
+            name: 'Existing conversation'
+          }
+        }
+      }
+    })
+    try {
+      await expect(resolveForeignThreadAt(
+        currentSocket,
+        [currentSocket, foreignSocket],
+        'thread-a'
+      )).resolves.toEqual({
+        kind: 'foreign',
+        thread: {
+          socketPath: foreignSocket,
+          path: '/foreign/thread-a.jsonl',
+          cwd: '/repo',
+          name: 'Existing conversation'
+        }
       })
     } finally {
-      await Promise.all([stopSource(), stopTarget()])
+      await Promise.all([stopCurrent(), stopForeign()])
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('distinguishes a native thread from an unavailable id', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-native-resume-'))
+    const currentSocket = path.join(dir, 'current.sock')
+    const stop = await fakeCodexServer(currentSocket, (message) => {
+      if (message.id === 1) return { id: 1, result: {} }
+      if (message.method === 'thread/read' && message.params.threadId === 'native-id') return {
+        id: message.id,
+        result: {
+          thread: { id: 'native-id', path: '/current/native.jsonl', cwd: '/repo' }
+        }
+      }
+      if (message.method === 'thread/read') return {
+        id: message.id,
+        error: { code: -32600, message: `no rollout found for thread id ${message.params.threadId}` }
+      }
+    })
+    try {
+      await expect(resolveForeignThreadAt(
+        currentSocket,
+        [currentSocket],
+        'native-id'
+      )).resolves.toEqual({ kind: 'native' })
+      await expect(resolveForeignThreadAt(
+        currentSocket,
+        [currentSocket],
+        'missing-id'
+      )).resolves.toEqual({ kind: 'unavailable' })
+    } finally {
+      await stop()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps direct resume fail-closed when two foreign accounts expose the same id', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-ambiguous-resume-'))
+    const currentSocket = path.join(dir, 'current.sock')
+    const foreignA = path.join(dir, 'foreign-a.sock')
+    const foreignB = path.join(dir, 'foreign-b.sock')
+    const server = (socketPath: string, rolloutPath?: string) => fakeCodexServer(socketPath, (message) => {
+      if (message.id === 1) return { id: 1, result: {} }
+      if (message.method === 'thread/read' && rolloutPath) return {
+        id: message.id,
+        result: { thread: { id: 'same-id', path: rolloutPath, cwd: '/repo' } }
+      }
+      if (message.method === 'thread/read') return {
+        id: message.id,
+        error: { code: -32600, message: `no rollout found for thread id ${message.params.threadId}` }
+      }
+    })
+    const stops = await Promise.all([
+      server(currentSocket),
+      server(foreignA, '/foreign-a/thread.jsonl'),
+      server(foreignB, '/foreign-b/thread.jsonl')
+    ])
+    try {
+      await expect(resolveForeignThreadAt(
+        currentSocket,
+        [currentSocket, foreignA, foreignB],
+        'same-id'
+      )).resolves.toEqual({ kind: 'ambiguous' })
+    } finally {
+      await Promise.all(stops.map((stop) => stop()))
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('fails closed when one foreign account matches but another account is unavailable', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-partial-catalog-'))
+    const currentSocket = path.join(dir, 'current.sock')
+    const foreignSocket = path.join(dir, 'foreign.sock')
+    const unavailableSocket = path.join(dir, 'unavailable.sock')
+    const stopCurrent = await fakeCodexServer(currentSocket, (message) => {
+      if (message.id === 1) return { id: 1, result: {} }
+      if (message.method === 'thread/read') return {
+        id: message.id,
+        error: { code: -32600, message: 'no rollout found for thread id same-id' }
+      }
+    })
+    const stopForeign = await fakeCodexServer(foreignSocket, (message) => {
+      if (message.id === 1) return { id: 1, result: {} }
+      if (message.method === 'thread/read') return {
+        id: message.id,
+        result: { thread: { id: 'same-id', path: '/foreign/thread.jsonl', cwd: '/repo' } }
+      }
+    })
+    try {
+      await expect(resolveForeignThreadAt(
+        currentSocket,
+        [currentSocket, foreignSocket, unavailableSocket],
+        'same-id'
+      )).resolves.toEqual({ kind: 'unavailable' })
+    } finally {
+      await Promise.all([stopCurrent(), stopForeign()])
       rmSync(dir, { recursive: true, force: true })
     }
   })
