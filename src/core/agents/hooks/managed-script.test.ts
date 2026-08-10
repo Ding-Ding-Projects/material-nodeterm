@@ -18,6 +18,42 @@ describe('buildManagedScript', () => {
   it('still no-ops without node id / endpoint', () => {
     expect(s).toContain('NODETERM_NODE_ID')
   })
+  it('recovers shared Codex identity from CODEX_THREAD_ID mapping before the node-id gate', () => {
+    const codex = buildManagedScript('codex')
+    expect(codex).toContain('$HOME/.nodeterm/codex-thread-nodes/$CODEX_THREAD_ID')
+    expect(codex.indexOf('nt_codex_map=')).toBeLessThan(
+      codex.indexOf('if [ -z "$NODETERM_NODE_ID" ]; then\n  exit 0')
+    )
+  })
+  it('posts a mapped resumed Codex hook under its own node id', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-map-'))
+    const bin = join(root, 'bin')
+    const maps = join(root, '.nodeterm', 'codex-thread-nodes')
+    const endpoint = join(root, 'hook.env')
+    const capture = join(root, 'curl-args')
+    const script = join(root, 'hook.sh')
+    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    writeFileSync(
+      join(bin, 'curl'),
+      '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n',
+      { mode: 0o700 }
+    )
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
+    writeFileSync(join(maps, 'thread-a'), `nodeId=node-a\nendpoint=${endpoint}\n`)
+    writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
+    const result = spawnSync('/bin/sh', [script], {
+      input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: root,
+        CODEX_THREAD_ID: 'thread-a',
+        CAPTURE: capture
+      }
+    })
+    expect(result.status).toBe(0)
+    expect(readFileSync(capture, 'utf8')).toContain('nodeId=node-a')
+    rmSync(root, { recursive: true, force: true })
+  })
   it('gates the hook body on the NODE ID only (not the token) so an empty-endpoint session self-heals', () => {
     // A phone-spawned session created before any host process existed has a node id but no token
     // (its baked NODETERM_HOOK_ENDPOINT resolved empty). The gate must exit on a MISSING NODE ID,

@@ -44,17 +44,34 @@ describe('NodeTerm Codex remote launcher', () => {
     ])
     const argsA = JSON.parse(readFileSync(outA, 'utf8'))
     const argsB = JSON.parse(readFileSync(outB, 'utf8'))
-    expect(argsA).toEqual([
-      '--remote', 'unix://',
-      '-c', 'shell_environment_policy.set.NODETERM_NODE_ID="node-a"',
-      '-c', 'shell_environment_policy.set.NODETERM_HOOK_ENDPOINT="/isolated/node-a/hook.env"',
-      '-c', 'shell_environment_policy.set.NODETERM_CANVAS_CONTROL="1"',
-      'resume', 'thread-a'
-    ])
-    expect(JSON.stringify(argsA)).not.toContain('node-b')
-    expect(JSON.stringify(argsB)).not.toContain('node-a')
-    expect(argsB).toContain('shell_environment_policy.set.NODETERM_NODE_ID="node-b"')
+    expect(argsA).toEqual(['--remote', 'unix://', 'resume', 'thread-a'])
+    expect(argsB).toEqual(['--remote', 'unix://', 'resume', 'thread-b'])
     expect(argsA.slice(0, 2)).toEqual(argsB.slice(0, 2))
+    const maps = path.join(root, '.nodeterm', 'codex-thread-nodes')
+    expect(readFileSync(path.join(maps, 'thread-a'), 'utf8')).toBe(
+      'nodeId=node-a\nendpoint=/isolated/node-a/hook.env\n'
+    )
+    expect(readFileSync(path.join(maps, 'thread-b'), 'utf8')).toBe(
+      'nodeId=node-b\nendpoint=/isolated/node-b/hook.env\n'
+    )
+  })
+
+  it('fails closed before launch for a missing or invalid resume-thread mapping key', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-invalid-'))
+    const bin = path.join(root, 'bin')
+    await run('/bin/mkdir', ['-p', bin])
+    writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\nexit 99\n', { mode: 0o700 })
+    vi.stubEnv('HOME', root)
+    const launcher = installCodexLauncher()
+    const env = {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      NODETERM_CANVAS_CONTROL: '1',
+      NODETERM_NODE_ID: 'node-a',
+      NODETERM_HOOK_ENDPOINT: '/isolated/node-a/hook.env'
+    }
+    await expect(run(launcher, ['resume'], { env })).rejects.toMatchObject({ code: 64 })
+    await expect(run(launcher, ['resume', '../other'], { env })).rejects.toMatchObject({ code: 64 })
   })
 
   it.each([

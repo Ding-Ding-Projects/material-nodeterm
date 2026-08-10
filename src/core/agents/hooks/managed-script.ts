@@ -47,9 +47,12 @@
 // NEEDS YOU badge flips to working immediately rather than lingering until the agent's next hook. The
 // whole branch is a NO-OP when the env var is absent (a user's own terminals, older
 // nodeterm, non-claude agents), so behavior is bit-for-bit legacy there.
+import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from '../../codex-thread-identity-sh'
+
 export function buildManagedScript(agentId: string): string {
   return [
     '#!/bin/sh',
+    CODEX_THREAD_IDENTITY_RESOLVER_SH,
     'if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then',
     '  . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',

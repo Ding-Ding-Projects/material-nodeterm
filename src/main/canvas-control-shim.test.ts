@@ -134,6 +134,35 @@ describe('canvas-control shim', () => {
     expect(received.length).toBe(before)
   })
 
+  it('recovers a resumed shared-Codex node from CODEX_THREAD_ID mapping', async () => {
+    const home = path.join(dir, 'codex-home')
+    const maps = path.join(home, '.nodeterm', 'codex-thread-nodes')
+    fs.mkdirSync(maps, { recursive: true })
+    const endpoint = path.join(dir, 'hook-endpoint.env')
+    fs.writeFileSync(
+      endpoint,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\n`
+    )
+    fs.writeFileSync(path.join(maps, 'thread-a'), `nodeId=node-from-map\nendpoint=${endpoint}\n`)
+    const { stdout } = await run('/bin/sh', [shim, 'list'], {
+      env: { PATH: process.env.PATH ?? '', HOME: home, CODEX_THREAD_ID: 'thread-a' }
+    })
+    expect(stdout.trim()).toBe('did list')
+    expect(received.at(-1)?.nodeId).toBe('node-from-map')
+  })
+
+  it('fails closed for an invalid shared-Codex mapping', async () => {
+    const home = path.join(dir, 'bad-codex-home')
+    const maps = path.join(home, '.nodeterm', 'codex-thread-nodes')
+    fs.mkdirSync(maps, { recursive: true })
+    fs.writeFileSync(path.join(maps, 'thread-b'), 'nodeId=../other\nendpoint=relative\n')
+    await expect(
+      run('/bin/sh', [shim, 'list'], {
+        env: { PATH: process.env.PATH ?? '', HOME: home, CODEX_THREAD_ID: 'thread-b' }
+      })
+    ).rejects.toMatchObject({ stderr: expect.stringContaining('not a nodeterm agent node') })
+  })
+
   it('rejects a wrong token (the server answers 403, the shim exits non-zero)', async () => {
     await expect(callShim(['list'], { NODETERM_HOOK_TOKEN: 'wrong' })).rejects.toMatchObject({
       code: 1

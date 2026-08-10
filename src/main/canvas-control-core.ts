@@ -1,6 +1,7 @@
 // Pure core for agent canvas control: the verb model, request validation, and the standalone
 // CLI source. No electron imports, so this module + CONTROL_CLI_SCRIPT are unit-testable.
 // Electron/ipc/server wiring lives in canvas-control.ts + index.ts + hook-server.ts.
+import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from '../core/codex-thread-identity-sh'
 
 export type ControlVerb =
   | 'list'
@@ -216,6 +217,8 @@ export function buildCanvasControlInstructions(shimPath: string): string {
 // could not be made safe.
 export const CONTROL_SHIM_SCRIPT = `#!/bin/sh
 # nodeterm canvas-control CLI (auto-generated — do not edit).
+
+${CODEX_THREAD_IDENTITY_RESOLVER_SH}
 
 if [ -z "$NODETERM_CANVAS_CONTROL" ]; then
   echo "Canvas control is not available in this session (not a nodeterm agent node)." >&2
