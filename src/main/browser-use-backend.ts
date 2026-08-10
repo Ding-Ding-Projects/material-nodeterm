@@ -1,6 +1,7 @@
 import fs from 'fs'
 import net from 'net'
 import path from 'path'
+import { randomUUID } from 'crypto'
 import { webContents } from 'electron'
 import {
   BrowserUseNotification,
@@ -40,22 +41,10 @@ export class NodeTermBrowserUseBackend {
       process.platform === 'win32' ? undefined : '/tmp/codex-browser-use'
     if (!directory) return
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 })
-    for (const entry of fs.readdirSync(directory)) {
-      const match = /^nodeterm-(\d+)\.sock$/.exec(entry)
-      if (!match || Number(match[1]) === process.pid) continue
-      try {
-        process.kill(Number(match[1]), 0)
-        continue
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') continue
-      }
-      try {
-        fs.unlinkSync(path.join(directory, entry))
-      } catch {
-        // Another process may have replaced or removed it after the liveness check.
-      }
-    }
-    const socketPath = path.join(directory, `nodeterm-${process.pid}.sock`)
+    // The privileged Browser Plugin native-pipe bridge accepts UUID socket basenames only.
+    // A descriptive/pid-based name is reachable with net.connect but intentionally omitted from
+    // browser discovery, making a seemingly healthy backend invisible to Codex.
+    const socketPath = path.join(directory, `${randomUUID()}.sock`)
     try {
       fs.unlinkSync(socketPath)
     } catch (error) {
