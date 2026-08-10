@@ -150,7 +150,7 @@ describe('NodeTerm Codex remote launcher', () => {
       '#!/bin/sh\nnode -e \'require("fs").writeFileSync(process.env.CAPTURE, JSON.stringify(process.argv.slice(1)))\' -- "$@"\n',
       { mode: 0o700 }
     )
-    writeFileSync(runtime, '#!/bin/sh\nprintf "ws://127.0.0.1:4321/relay/route-a\\nrelay-token\\n"\n', { mode: 0o700 })
+    writeFileSync(runtime, '#!/bin/sh\nprintf "ws://127.0.0.1:4321\\nroute-token-a\\n"\n', { mode: 0o700 })
     writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
     vi.stubEnv('HOME', root)
     const launcher = installCodexLauncher()
@@ -168,7 +168,7 @@ describe('NodeTerm Codex remote launcher', () => {
     })
     expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual([
       '--remote',
-      'ws://127.0.0.1:4321/relay/route-a',
+      'ws://127.0.0.1:4321',
       '--remote-auth-token-env',
       'NODETERM_CODEX_RELAY_TOKEN',
       'resume',

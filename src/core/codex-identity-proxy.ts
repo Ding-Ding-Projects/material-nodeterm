@@ -263,7 +263,7 @@ export function installCodexLauncher(): string {
       `  [ -n "$nt_relay_info" ] || return 1\n` +
       `  nt_relay_url=$(printf '%s\\n' "$nt_relay_info" | sed -n '1p')\n` +
       `  NODETERM_CODEX_RELAY_TOKEN=$(printf '%s\\n' "$nt_relay_info" | sed -n '2p')\n` +
-      `  case "$nt_relay_url" in ws://127.0.0.1:*/relay/*) ;; *) return 1 ;; esac\n` +
+      `  case "$nt_relay_url" in ws://127.0.0.1:*/*) return 1 ;; ws://127.0.0.1:*) ;; *) return 1 ;; esac\n` +
       `  [ -n "$NODETERM_CODEX_RELAY_TOKEN" ] || return 1\n` +
       `  export NODETERM_CODEX_RELAY_TOKEN\n` +
       `}\n` +

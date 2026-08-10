@@ -9,7 +9,9 @@ import path from 'path'
 import { spawn } from 'child_process'
 import { WebSocket, WebSocketServer } from 'ws'
 
-const VERSION = '1'
+// Protocol v2 routes the bare ws://host:port accepted by Codex through a per-node Bearer token.
+// Keep v1 on its own state file so already-connected legacy nodes may drain without being killed.
+const VERSION = '2'
 const SAFE = /^[A-Za-z0-9._-]+$/
 const root = path.join(homedir(), '.nodeterm')
 const statePath = path.join(root, `codex-relay-v${VERSION}.json`)
@@ -122,6 +124,10 @@ function authOk(raw: string | undefined, token: string): boolean {
   const a = Buffer.from(raw.slice(7))
   const b = Buffer.from(token)
   return a.length === b.length && timingSafeEqual(a, b)
+}
+
+function bearerToken(raw: string | undefined): string {
+  return raw?.startsWith('Bearer ') ? raw.slice(7) : ''
 }
 
 export function relayControlPost(port: number, token: string, pathname: string, body: unknown): Promise<string> {
@@ -407,15 +413,18 @@ function serve(): void {
     })
   })
   server.on('upgrade', (req, socket, head) => {
-    const match = /^\/relay\/([A-Za-z0-9-]+)$/.exec(req.url ?? '')
-    const registered = match && routes.get(match[1])
-    if (!registered || !authOk(req.headers.authorization, token)) {
+    // Codex 0.147 deliberately accepts only `ws://host:port` as --remote; URL paths are rejected
+    // before a connection is attempted. Use the already-required per-connection Bearer token as
+    // the one-shot route capability while every node still shares this single listener.
+    const routeKey = bearerToken(req.headers.authorization)
+    const registered = routeKey && routes.get(routeKey)
+    if (!registered || !authOk(req.headers.authorization, routeKey)) {
       socket.destroy()
       return
     }
     const route = registered.route
     clearTimeout(registered.timer)
-    routes.delete(match[1])
+    routes.delete(routeKey)
     wss.handleUpgrade(req, socket, head, (down) => {
       const up = new WebSocket(`ws+unix://${route.socketPath}:/rpc`, {
         perMessageDeflate: false
@@ -569,7 +578,7 @@ async function register(): Promise<void> {
     socketPath,
     hookEndpoint
   })
-  process.stdout.write(`ws://127.0.0.1:${state.port}/relay/${key}\n${state.token}\n`)
+  process.stdout.write(`ws://127.0.0.1:${state.port}\n${key}\n`)
 }
 
 if (process.argv[2] === 'serve') serve()
