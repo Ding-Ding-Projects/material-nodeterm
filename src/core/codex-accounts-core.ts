@@ -36,6 +36,12 @@ export function codexSessionEnv(
   }
 }
 
+/** Codex agents need an explicit system-or-managed scope; a plain login terminal needs it when
+ * it carries a managed account id. Sharing this predicate keeps tmux and plain PTYs aligned. */
+export function needsCodexAccountScope(agentId?: string, accountId?: string): boolean {
+  return agentId === 'codex' || !!accountId
+}
+
 /** tmux has a shared server env, so both values must be set explicitly per new Codex session. */
 export function codexTmuxEnvArgs(userDataDir: string, accountId?: string): string[] {
   return Object.entries(codexSessionEnv(userDataDir, accountId)).flatMap(([key, value]) => [

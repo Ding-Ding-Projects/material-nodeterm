@@ -44,7 +44,12 @@ import { findExecutableSync, findInPathString, resolveShellPath, shellPathNow } 
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { presenceHub } from './presence/hub'
 import { codexLauncherDir, installCodexLauncher } from './codex-identity-proxy'
-import { codexAccountHome, codexSessionEnv, codexTmuxEnvArgs } from './codex-accounts-core'
+import {
+  codexAccountHome,
+  codexSessionEnv,
+  codexTmuxEnvArgs,
+  needsCodexAccountScope
+} from './codex-accounts-core'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
 // kills the tmux server) can still replay recent output on cold restart. A final snapshot also
@@ -1021,8 +1026,11 @@ export class PtyManager {
     if (options.requireRemote && !(options.sshRemote && options.persistKey && findSsh())) {
       return { sessionId: '', fresh: false, unavailable: 'ssh' }
     }
+    // Account-login nodes are intentionally plain terminals, not agent nodes. The selected
+    // Codex account is therefore identified by codexAccountId itself — never by agentId.
+    // Otherwise a login terminal silently falls through to the system CODEX_HOME and overwrites
+    // that account's credentials.
     if (
-      (options.agentId ?? 'claude') === 'codex' &&
       options.codexAccountId &&
       !options.sshRemote &&
       !fs.existsSync(codexAccountHome(platform().userDataDir, options.codexAccountId))
@@ -1239,7 +1247,7 @@ export class PtyManager {
     // (no accountId) are untouched. Remote (ssh) sessions get their account env via the
     // remote tmux `-e` list instead (the local ssh client process doesn't need it).
     let accountFallback = false
-    if ((options.agentId ?? 'claude') === 'codex' && !options.sshRemote) {
+    if (needsCodexAccountScope(options.agentId, options.codexAccountId) && !options.sshRemote) {
       if (
         options.codexAccountId &&
         !fs.existsSync(codexAccountHome(platform().userDataDir, options.codexAccountId))
@@ -1371,10 +1379,9 @@ export class PtyManager {
       // The account config dir must ride `-e` like the hook env: the tmux server is shared
       // and long-lived, so session env comes from creation args, not client inheritance.
       const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
-      const codexEnvArgs =
-        (options.agentId ?? 'claude') === 'codex'
-          ? codexTmuxEnvArgs(platform().userDataDir, options.codexAccountId)
-          : []
+      const codexEnvArgs = needsCodexAccountScope(options.agentId, options.codexAccountId)
+        ? codexTmuxEnvArgs(platform().userDataDir, options.codexAccountId)
+        : []
       const attachFlags = tmuxAttachFlags(!!sinks)
       args = [
         '-L',

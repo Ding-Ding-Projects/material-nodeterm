@@ -4,15 +4,15 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IPC } from '../shared/ipc'
 import type { PtyCreateOptions, PtyCreateResult } from '../shared/types'
-import { codexAccountHome } from './codex-accounts-core'
+import { codexAccountHome, needsCodexAccountScope } from './codex-accounts-core'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform, type FakePlatform } from './platform-fake'
 
-const spawned: Array<{ env: Record<string, string> }> = []
+const spawned: Array<{ args: string[]; env: Record<string, string> }> = []
 
 vi.mock('node-pty', () => ({
-  spawn: (_file: string, _args: string[], options: { env: Record<string, string> }) => {
-    spawned.push({ env: options.env })
+  spawn: (_file: string, args: string[], options: { env: Record<string, string> }) => {
+    spawned.push({ args, env: options.env })
     return {
       onData: () => {},
       onExit: () => {},
@@ -79,5 +79,24 @@ describe('PTY Codex account isolation', () => {
       CODEX_HOME: home,
       NODETERM_CODEX_ACCOUNT_ID: 'account-a'
     })
+  })
+
+  it('scopes a plain account-login terminal to its managed home', async () => {
+    const home = codexAccountHome(userDataDir, 'account-a')
+    fs.mkdirSync(home, { recursive: true })
+    const result = await create({ agentId: undefined, codexAccountId: 'account-a' })
+    expect(result.unavailable).toBeUndefined()
+    expect(spawned).toHaveLength(1)
+    expect(spawned[0].env).toMatchObject({
+      CODEX_HOME: home,
+      NODETERM_CODEX_ACCOUNT_ID: 'account-a'
+    })
+    expect(needsCodexAccountScope(undefined, 'account-a')).toBe(true)
+  })
+
+  it('fails a plain account-login terminal closed when its home is missing', async () => {
+    const result = await create({ agentId: undefined, codexAccountId: 'account-a' })
+    expect(result).toMatchObject({ sessionId: '', fresh: false, unavailable: 'codex-account' })
+    expect(spawned).toHaveLength(0)
   })
 })
