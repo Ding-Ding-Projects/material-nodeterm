@@ -31,6 +31,8 @@
   "build": {
     "appId": "com.nodeterm.app",
     "productName": "nodeterm",
+    "beforePack": "./scripts/before-pack.cjs",
+    "afterPack": "./scripts/after-pack.cjs",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -49,7 +51,7 @@
         "to": "icon.png"
       },
       {
-        "from": "out/main/codex-relay.js",
+        "from": "dist/.pack-resources/codex-relay.js",
         "to": "codex-relay.js"
       },
       {
