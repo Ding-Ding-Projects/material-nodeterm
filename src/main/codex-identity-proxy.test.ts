@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   bindCodexThreadIdentity,
   installCodexLauncher,
+  resolveCodexThreadNodeIdentity,
   validCodexIdentity
 } from '../core/codex-identity-proxy'
 
@@ -201,6 +202,18 @@ describe('NodeTerm Codex remote launcher', () => {
         'utf8'
       )
     ).toContain('nodeId=node-b')
+  })
+
+  it('releases the old owner only after the target account binds successfully', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-release-binding-'))
+    vi.stubEnv('HOME', root)
+    bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false, 'account-a')
+    expect(resolveCodexThreadNodeIdentity('thread-a')).toBe('node-a')
+    bindCodexThreadIdentity('thread-b', 'node-a', '/isolated/hook.env', () => true, 'account-b')
+    expect(resolveCodexThreadNodeIdentity('thread-a')).toBeUndefined()
+    bindCodexThreadIdentity('thread-a', 'node-new', '/isolated/hook.env', () => true, 'account-a')
+    expect(resolveCodexThreadNodeIdentity('thread-a')).toBe('node-new')
+    expect(resolveCodexThreadNodeIdentity('thread-b')).toBe('node-a')
   })
 
   it.each([

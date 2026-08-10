@@ -200,10 +200,16 @@ export function readCodexAccountAt(
 }
 
 /**
- * Create one new thread on the shared authenticated app-server and return its exact identity.
- * NodeTerm does this before launching the remote TUI, then resumes this thread. That makes the
- * client↔canvas binding deterministic even when multiple nodes start concurrently: no process-
- * global node id, creation-time matching, or per-node app-server is involved.
+ * Create one new, immediately resumable thread on the shared authenticated app-server and return
+ * its exact identity.
+ *
+ * `thread/start` alone only creates app-server metadata. It deliberately does not materialize the
+ * rollout file, while a second client doing `thread/resume` loads that file and fails with
+ * "no rollout found". Materialize the server-owned format through one empty turn, interrupt it as
+ * soon as the server announces it, then fork immediately before that turn and delete the seed.
+ * The result has zero user turns but a valid rollout, without relying on the deprecated rollback
+ * API. This stays entirely inside the one account-scoped app-server and keeps concurrent node
+ * identity deterministic.
  */
 export function startCodexThreadAt(
   socketPath: string,
@@ -245,10 +251,46 @@ export function startCodexThreadAt(
         JSON.stringify({
           id: 1,
           method: 'initialize',
-          params: { clientInfo: { name: 'nodeterm', version: '1' } }
+          params: {
+            clientInfo: { name: 'nodeterm', version: '1' },
+            capabilities: { experimentalApi: true }
+          }
         })
       )
     })
+    let threadId = ''
+    let bootstrapTurnId = ''
+    let announcedBootstrapTurnId = ''
+    let announcedCompletedTurnId = ''
+    let bootstrapStarted = false
+    let interruptSent = false
+    let interruptAcknowledged = false
+    let bootstrapCompleted = false
+    let cleanupForkSent = false
+    const maybeInterrupt = (): void => {
+      if (!bootstrapTurnId || !bootstrapStarted || bootstrapCompleted || interruptSent) return
+      interruptSent = true
+      ws.send(JSON.stringify({
+        id: 4,
+        method: 'turn/interrupt',
+        params: { threadId, turnId: bootstrapTurnId }
+      }))
+    }
+    const maybeCreateCleanThread = (): void => {
+      if (!bootstrapCompleted || cleanupForkSent) return
+      if (interruptSent && !interruptAcknowledged) return
+      cleanupForkSent = true
+      ws.send(JSON.stringify({
+        id: 5,
+        method: 'thread/fork',
+        params: {
+          threadId,
+          beforeTurnId: bootstrapTurnId,
+          cwd,
+          ephemeral: false
+        }
+      }))
+    }
     ws.on('message', (raw) => {
       let message: Record<string, any>
       try {
@@ -264,9 +306,71 @@ export function startCodexThreadAt(
         ws.send(JSON.stringify({ method: 'initialized' }))
         ws.send(JSON.stringify({ id: 2, method: 'thread/start', params: { cwd } }))
       } else if (message.id === 2) {
-        const threadId = message.result?.thread?.id
-        if (message.error || typeof threadId !== 'string' || !SAFE_THREAD_ID.test(threadId)) {
+        const startedThreadId = message.result?.thread?.id
+        if (message.error || typeof startedThreadId !== 'string' ||
+            !SAFE_THREAD_ID.test(startedThreadId)) {
           finish(new Error('Codex app-server returned no valid thread identity'))
+          return
+        }
+        threadId = startedThreadId
+        ws.send(JSON.stringify({
+          id: 3,
+          method: 'turn/start',
+          params: { threadId, input: [] }
+        }))
+      } else if (message.id === 3) {
+        const turnId = message.result?.turn?.id
+        if (message.error || typeof turnId !== 'string' || !SAFE_THREAD_ID.test(turnId)) {
+          finish(new Error('Codex app-server could not materialize the new thread'))
+          return
+        }
+        bootstrapTurnId = turnId
+        if (announcedBootstrapTurnId === turnId) bootstrapStarted = true
+        if (announcedCompletedTurnId === turnId) bootstrapCompleted = true
+        maybeInterrupt()
+        maybeCreateCleanThread()
+      } else if (message.method === 'turn/started') {
+        const turnId = message.params?.turn?.id
+        if (typeof turnId === 'string') {
+          announcedBootstrapTurnId = turnId
+          if (turnId === bootstrapTurnId) {
+            bootstrapStarted = true
+            maybeInterrupt()
+          }
+        }
+      } else if (message.id === 4) {
+        if (message.error) {
+          finish(new Error('Codex app-server could not interrupt thread materialization'))
+          return
+        }
+        interruptAcknowledged = true
+        maybeCreateCleanThread()
+      } else if (message.method === 'turn/completed') {
+        const turnId = message.params?.turn?.id
+        if (typeof turnId === 'string') {
+          announcedCompletedTurnId = turnId
+          if (turnId === bootstrapTurnId) {
+            bootstrapCompleted = true
+            maybeCreateCleanThread()
+          }
+        }
+      } else if (message.id === 5) {
+        const readyThreadId = message.result?.thread?.id
+        if (message.error || typeof readyThreadId !== 'string' ||
+            !SAFE_THREAD_ID.test(readyThreadId)) {
+          finish(new Error('Codex app-server could not clean up thread materialization'))
+          return
+        }
+        const seedThreadId = threadId
+        threadId = readyThreadId
+        ws.send(JSON.stringify({
+          id: 6,
+          method: 'thread/delete',
+          params: { threadId: seedThreadId }
+        }))
+      } else if (message.id === 6) {
+        if (message.error) {
+          finish(new Error('Codex app-server could not remove thread materialization seed'))
           return
         }
         finish(null, threadId)
@@ -314,7 +418,13 @@ export function forkCodexThreadFromPathAt(
       ws.send(JSON.stringify({
         id: 1,
         method: 'initialize',
-        params: { clientInfo: { name: 'nodeterm', version: '1' } }
+        // Cross-account switching must fork by rollout path because the target app-server cannot
+        // resolve a source account's thread id. Codex gates path forks behind this negotiated
+        // capability even though the field is present in its generated protocol schema.
+        params: {
+          clientInfo: { name: 'nodeterm', version: '1' },
+          capabilities: { experimentalApi: true }
+        }
       }))
     })
     ws.on('message', (raw) => {
@@ -323,7 +433,16 @@ export function forkCodexThreadFromPathAt(
       if (message.id === 1) {
         if (message.error) return finish(new Error('Codex app-server initialization failed'))
         ws.send(JSON.stringify({ method: 'initialized' }))
-        ws.send(JSON.stringify({ id: 2, method: 'thread/fork', params: { path: sourcePath, cwd } }))
+        // Codex 0.147 treats the optional `threadId` field as a required string wire field when
+        // forking by path. Omitting it passes the generated schema but the live server rejects the
+        // request with "missing field `threadId`", and null is rejected too. A path fork
+        // intentionally has no source id in the target account, so send the documented empty
+        // sentinel; the server then uses `path`.
+        ws.send(JSON.stringify({
+          id: 2,
+          method: 'thread/fork',
+          params: { threadId: '', path: sourcePath, cwd }
+        }))
       } else if (message.id === 2) {
         const threadId = message.result?.thread?.id
         if (message.error || typeof threadId !== 'string' || !SAFE_THREAD_ID.test(threadId)) {

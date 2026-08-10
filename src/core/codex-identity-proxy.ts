@@ -93,6 +93,7 @@ export function writeCodexThreadIdentity(
     })
     renameSync(tmp, file)
     renamed = true
+    removeOtherCodexThreadIdentities(nodeId, threadId, scope)
   } finally {
     if (!renamed) {
       try {
@@ -127,7 +128,10 @@ export function bindCodexThreadIdentity(
       if (file === scopedFile && existing.accountId !== scope) {
         throw new Error('Codex thread account binding is invalid')
       }
-      if (existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint) return
+      if (existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint) {
+        removeOtherCodexThreadIdentities(nodeId, threadId, scope)
+        return
+      }
       if (existing.nodeId && isNodeLive(existing.nodeId)) {
         throw new Error('Codex thread is already bound to another live node')
       }
@@ -136,6 +140,44 @@ export function bindCodexThreadIdentity(
     }
   }
   writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, accountId)
+}
+
+/** One canvas node owns one current Codex conversation. A successful replacement binding is the
+ * atomic lifecycle boundary: only then remove older mappings for that same node. This leaves the
+ * source mapping intact if a cross-account fork or target launch fails, but releases it as soon as
+ * the target launcher binds successfully. */
+function removeOtherCodexThreadIdentities(
+  nodeId: string,
+  keepThreadId: string,
+  keepScope: string
+): void {
+  const root = path.join(homedir(), '.nodeterm', 'codex-thread-nodes')
+  const candidates: Array<{ file: string; scope: string }> = []
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (entry.isFile() && SAFE_THREAD_ID.test(entry.name)) {
+        candidates.push({ file: path.join(root, entry.name), scope: SYSTEM_ACCOUNT_SCOPE })
+        continue
+      }
+      if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
+      for (const thread of readdirSync(path.join(root, entry.name), { withFileTypes: true })) {
+        if (thread.isFile() && SAFE_THREAD_ID.test(thread.name)) {
+          candidates.push({ file: path.join(root, entry.name, thread.name), scope: entry.name })
+        }
+      }
+    }
+  } catch {
+    return
+  }
+  for (const candidate of candidates) {
+    if (candidate.scope === keepScope && path.basename(candidate.file) === keepThreadId) continue
+    try {
+      const identity = parseCodexThreadIdentity(readFileSync(candidate.file, 'utf8'))
+      if (identity.nodeId === nodeId) unlinkSync(candidate.file)
+    } catch {
+      // A concurrent external cleanup or malformed legacy record is not ours to remove.
+    }
+  }
 }
 
 function parseCodexThreadIdentity(raw: string): {

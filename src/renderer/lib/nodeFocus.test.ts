@@ -3,6 +3,7 @@ import { getViewportForBounds } from '@xyflow/system'
 import {
   FIT_NODE_OPTIONS,
   absolutePosition,
+  doubleClickNodeCamera,
   isMeasured,
   nodeFitRect,
   viewportForRect
@@ -145,6 +146,31 @@ describe('viewportForRect', () => {
 
   it('refuses to compute against a container it cannot size', () => {
     expect(viewportForRect({ x: 0, y: 0, width: 600, height: 400 }, 0, 0)).toBeNull()
+  })
+})
+
+describe('doubleClickNodeCamera', () => {
+  it('stops at the width limit against an imaginary 102% node', () => {
+    const camera = doubleClickNodeCamera(
+      { x: 100, y: 200, width: 1000, height: 200 },
+      1020,
+      900
+    )
+    expect(camera).toEqual({ x: 600, y: 300, zoom: 1 })
+  })
+
+  it('stops at the height limit or max zoom, whichever comes first', () => {
+    expect(
+      doubleClickNodeCamera({ x: 0, y: 0, width: 100, height: 500 }, 1200, 510)?.zoom
+    ).toBe(1)
+    expect(
+      doubleClickNodeCamera({ x: 0, y: 0, width: 100, height: 100 }, 1200, 900)?.zoom
+    ).toBe(2)
+  })
+
+  it('refuses unknown node or viewport geometry', () => {
+    expect(doubleClickNodeCamera({ x: 0, y: 0, width: 0, height: 100 }, 1200, 900)).toBeNull()
+    expect(doubleClickNodeCamera({ x: 0, y: 0, width: 100, height: 100 }, 0, 900)).toBeNull()
   })
 })
 

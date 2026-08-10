@@ -10,8 +10,14 @@ import {
 function fakeContents(
   id: number,
   url: string
-): BrowserContentsLike & { sendCommand: ReturnType<typeof vi.fn> } {
+): BrowserContentsLike & {
+  destroy(): void
+  emitDebugger(method: string): void
+  sendCommand: ReturnType<typeof vi.fn>
+} {
   let attached = false
+  let destroyed = false
+  let listener: Parameters<BrowserDebuggerLike['on']>[1] | undefined
   const sendCommand = vi.fn(async () => ({}))
   const debuggerApi: BrowserDebuggerLike = {
     isAttached: () => attached,
@@ -22,8 +28,12 @@ function fakeContents(
       attached = false
     },
     sendCommand,
-    on: vi.fn(),
-    removeListener: vi.fn()
+    on: vi.fn((_event, next) => {
+      listener = next
+    }),
+    removeListener: vi.fn((_event, current) => {
+      if (listener === current) listener = undefined
+    })
   }
   return {
     id,
@@ -31,7 +41,11 @@ function fakeContents(
     focus: vi.fn(),
     getTitle: () => `Tab ${id}`,
     getURL: () => url,
-    isDestroyed: () => false,
+    isDestroyed: () => destroyed,
+    destroy: () => {
+      destroyed = true
+    },
+    emitDebugger: (method) => listener?.({}, method, {}),
     sendCommand
   }
 }
@@ -131,6 +145,94 @@ describe('NodeTerm Browser Plugin backend', () => {
     expect(contents.sendCommand).toHaveBeenCalledWith(
       'Runtime.evaluate',
       { expression: 'document.title' },
+      undefined
+    )
+  })
+
+  it('hands one browser node event stream from the old Codex session to the new one', async () => {
+    const contents = fakeContents(55, 'https://handoff.test')
+    const notify = vi.fn()
+    const router = new NodeTermBrowserUseRouter(
+      (sessionId) => (sessionId === 'session-a' || sessionId === 'session-b' ? 'agent' : undefined),
+      notify
+    )
+    router.register({ contents, nodeId: 'browser', ownerNodeId: 'agent' })
+    const execute = (sessionId: string) => router.dispatch('executeCdp', {
+      session_id: sessionId,
+      turn_id: `turn-${sessionId}`,
+      target: { tabId: 55 },
+      method: 'Runtime.enable',
+      commandParams: {}
+    })
+
+    await execute('session-a')
+    contents.emitDebugger('Runtime.consoleAPICalled')
+    await execute('session-b')
+    contents.emitDebugger('Runtime.exceptionThrown')
+
+    expect(notify.mock.calls.map(([sessionId]) => sessionId)).toEqual([
+      'session-a',
+      'session-b'
+    ])
+    expect(contents.debugger.removeListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('unregisters a loaded browser node after Electron destroyed its webContents', async () => {
+    const contents = fakeContents(66, 'https://loaded.test')
+    const router = new NodeTermBrowserUseRouter(
+      (sessionId) => (sessionId === 'session' ? 'agent' : undefined),
+      vi.fn()
+    )
+    router.register({ contents, nodeId: 'browser', ownerNodeId: 'agent' })
+    await router.dispatch('attach', {
+      session_id: 'session',
+      turn_id: 'turn',
+      tabId: 66
+    })
+    contents.destroy()
+
+    expect(() => router.unregister(66)).not.toThrow()
+    await expect(
+      router.dispatch('getTabs', {
+        session_id: 'session',
+        turn_id: 'next-turn'
+      })
+    ).resolves.toEqual([])
+  })
+
+  it('does not reuse child-target sessions after an explicit debugger detach', async () => {
+    const contents = fakeContents(77, 'https://targets.test')
+    contents.sendCommand.mockImplementation(async (method: string) =>
+      method === 'Target.attachToTarget' ? { sessionId: 'child-session' } : {}
+    )
+    const router = new NodeTermBrowserUseRouter(
+      (sessionId) => (sessionId === 'session' ? 'agent' : undefined),
+      vi.fn()
+    )
+    router.register({ contents, nodeId: 'browser', ownerNodeId: 'agent' })
+    await router.dispatch('attachTarget', {
+      session_id: 'session',
+      turn_id: 'turn',
+      tabId: 77,
+      targetId: 'child-target'
+    })
+    await router.dispatch('detach', {
+      session_id: 'session',
+      turn_id: 'turn',
+      tabId: 77
+    })
+
+    await router.dispatch('executeCdp', {
+      session_id: 'session',
+      turn_id: 'next-turn',
+      target: { tabId: 77, targetId: 'child-target' },
+      method: 'Runtime.enable',
+      commandParams: {}
+    })
+
+    expect(contents.sendCommand).toHaveBeenLastCalledWith(
+      'Runtime.enable',
+      {},
       undefined
     )
   })

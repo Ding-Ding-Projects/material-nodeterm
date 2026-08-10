@@ -32,6 +32,7 @@ import {
 import { solveFitPadding } from './fit-view'
 import { MacWheelGestureRouter } from './wheel-gesture'
 import { selectedLocalFilePaths } from './canvas-file-copy'
+import { codexAccountSwitchStillEligible } from './codex-account-switch'
 import {
   canvasImagePasteArmedAfterKey,
   guardedCanvasImagePlacements,
@@ -153,6 +154,7 @@ import {
 import {
   FIT_NODE_OPTIONS,
   absolutePosition,
+  doubleClickNodeCamera,
   isMeasured,
   nodeFitRect,
   viewportForRect,
@@ -1182,6 +1184,7 @@ export function Canvas() {
   // succeeded — clearing `pendingLaunch` is a state update that can lag a re-render, and this
   // action is irreversible, so the set (not the node data) is what guarantees exactly-once.
   const launchInFlight = useRef<Set<string>>(new Set())
+  const codexAccountSwitchInFlight = useRef<Set<string>>(new Set())
   const launchAttempts = useRef<Map<string, number>>(new Map())
   // Fire armed nodes whose upstream stations have all gone idle. This is the edge that makes
   // the canvas a graph rather than a fan-out: the dependent starts itself, with no orchestrator
@@ -4503,6 +4506,17 @@ export function Canvas() {
         setNotice({ kind: 'error', text: 'This Codex node has no project directory to resume in.' })
         return
       }
+      if (codexAccountSwitchInFlight.current.has(nodeId)) {
+        setNotice({ kind: 'error', text: 'This Codex node is already switching accounts.' })
+        return
+      }
+      const expected = {
+        accountId: sourceAccountId,
+        agentId: 'codex' as const,
+        cwd,
+        sessionId: status.sessionId
+      }
+      codexAccountSwitchInFlight.current.add(nodeId)
       try {
         const threadId = await window.nodeTerminal.codexAccounts.forkThread(
           status.sessionId,
@@ -4510,6 +4524,22 @@ export function Canvas() {
           sourceAccountId,
           targetAccountId
         )
+        const currentNode = nodesRef.current.find((candidate) => candidate.id === nodeId)
+        const currentStatus = useAgentStatus.getState().byId[nodeId]
+        if (!currentNode || !codexAccountSwitchStillEligible(expected, {
+          accountId: currentNode.data.codexAccountId as string | undefined,
+          agentId: restartAgentIdOf(currentNode),
+          cwd: currentNode.data.cwd as string | undefined,
+          sessionId: currentStatus?.sessionId,
+          ssh: !!currentNode.data.ssh,
+          state: currentStatus?.state
+        })) {
+          setNotice({
+            kind: 'error',
+            text: 'Account switch cancelled because this Codex session changed or became busy.'
+          })
+          return
+        }
         // A provider account is part of the process environment, not a mutable TUI preference.
         // Recycle the one node's tmux session, then resume the fork under the target CODEX_HOME.
         // The source conversation remains untouched in its original account.
@@ -4535,6 +4565,8 @@ export function Canvas() {
           kind: 'error',
           text: 'Could not switch this Codex conversation. The original node was left running.'
         })
+      } finally {
+        codexAccountSwitchInFlight.current.delete(nodeId)
       }
     },
     [setNodes, markDirty]
@@ -4840,9 +4872,17 @@ export function Canvas() {
 
   const onNodeDoubleClick = useCallback(
     (_e: React.MouseEvent, node: Node) => {
-      if (useSettings.getState().settings.doubleClickFocus) goToNode(node)
+      if (!useSettings.getState().settings.doubleClickFocus) return
+      const rect = nodeFitRect(node as FocusableNode, nodesRef.current as FocusableNode[])
+      const viewport = flowWrapRef.current?.getBoundingClientRect()
+      const camera = rect && viewport
+        ? doubleClickNodeCamera(rect, viewport.width, viewport.height)
+        : null
+      if (camera) {
+        void setCenter(camera.x, camera.y, { zoom: camera.zoom, duration: 300 })
+      }
     },
-    [goToNode]
+    [setCenter]
   )
 
   // Cmd/Ctrl+K toggles the command palette; Cmd/Ctrl+, opens settings.

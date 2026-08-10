@@ -131,10 +131,10 @@ function requiredTabId(value: unknown): number {
  */
 export class NodeTermBrowserUseRouter {
   private readonly guests = new Map<number, BrowserGuestRegistration>()
-  private readonly debuggerListeners = new Map<
-    number,
-    Parameters<BrowserDebuggerLike['on']>[1]
-  >()
+  private readonly debuggerListeners = new Map<number, {
+    listener: Parameters<BrowserDebuggerLike['on']>[1]
+    sessionId: string
+  }>()
   private readonly targetSessions = new Map<number, Map<string, string>>()
 
   constructor(
@@ -153,9 +153,9 @@ export class NodeTermBrowserUseRouter {
 
   unregister(webContentsId: number): void {
     const registration = this.guests.get(webContentsId)
-    if (registration) this.detachDebugger(registration.contents)
     this.guests.delete(webContentsId)
     this.targetSessions.delete(webContentsId)
+    if (registration) this.detachDebugger(webContentsId, registration.contents)
   }
 
   async dispatch(method: string, rawParams: unknown): Promise<unknown> {
@@ -198,9 +198,13 @@ export class NodeTermBrowserUseRouter {
         )
         return null
       case 'detach':
-        this.detachDebugger(
-          this.requireTab(sessionId, requiredTabId(params.tabId)).contents
-        )
+        {
+          const contents = this.requireTab(
+            sessionId,
+            requiredTabId(params.tabId)
+          ).contents
+          this.detachDebugger(contents.id, contents)
+        }
         return null
       case 'attachTarget':
         return this.attachTarget(sessionId, params)
@@ -274,7 +278,14 @@ export class NodeTermBrowserUseRouter {
     contents: BrowserContentsLike
   ): void {
     if (!contents.debugger.isAttached()) contents.debugger.attach('1.3')
-    if (this.debuggerListeners.has(contents.id)) return
+    const existing = this.debuggerListeners.get(contents.id)
+    if (existing?.sessionId === sessionId) return
+    if (existing) {
+      contents.debugger.removeListener('message', existing.listener)
+      // Target CDP session ids belong to the previous controlling Codex session. Reusing them
+      // after a handoff would let the new session address stale subtargets.
+      this.targetSessions.delete(contents.id)
+    }
     const listener: Parameters<BrowserDebuggerLike['on']>[1] = (
       _event,
       method,
@@ -295,13 +306,21 @@ export class NodeTermBrowserUseRouter {
       })
     }
     contents.debugger.on('message', listener)
-    this.debuggerListeners.set(contents.id, listener)
+    this.debuggerListeners.set(contents.id, { listener, sessionId })
   }
 
-  private detachDebugger(contents: BrowserContentsLike): void {
-    const listener = this.debuggerListeners.get(contents.id)
-    if (listener) contents.debugger.removeListener('message', listener)
-    this.debuggerListeners.delete(contents.id)
+  private detachDebugger(
+    webContentsId: number,
+    contents: BrowserContentsLike
+  ): void {
+    const registration = this.debuggerListeners.get(webContentsId)
+    this.debuggerListeners.delete(webContentsId)
+    // CDP child-session ids are scoped to the debugger attachment. They are invalid after
+    // either an explicit detach or webContents teardown and must never survive a reattach.
+    this.targetSessions.delete(webContentsId)
+    if (contents.isDestroyed()) return
+    if (registration)
+      contents.debugger.removeListener('message', registration.listener)
     if (contents.debugger.isAttached()) contents.debugger.detach()
   }
 
