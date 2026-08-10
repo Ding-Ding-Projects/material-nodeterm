@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { codexRemoteCommand, resumeCommand, withSessionId } from './config'
+import {
+  codexRemoteCommand,
+  explicitCodexResumeSession,
+  resumeCommand,
+  withSessionId
+} from './config'
 
 describe('withSessionId', () => {
   it('appends the minted id for claude', () => {
@@ -64,6 +69,26 @@ describe('resumeCommand', () => {
   })
   it('rejects an unsafe opencode session id', () => {
     expect(resumeCommand('opencode', 'x; rm -rf /')).toBeNull()
+  })
+})
+
+describe('explicitCodexResumeSession', () => {
+  it('recognizes only a plain exact Codex resume command', () => {
+    expect(explicitCodexResumeSession('codex resume thread-a')).toBe('thread-a')
+    expect(explicitCodexResumeSession('nodeterm-codex resume thread_b')).toBe('thread_b')
+    expect(explicitCodexResumeSession('$HOME/.nodeterm/bin/nodeterm-codex resume 019f.abc')).toBe(
+      '019f.abc'
+    )
+  })
+
+  it('leaves general shell commands and unsafe ids as plain terminals', () => {
+    expect(explicitCodexResumeSession('codex')).toBeNull()
+    expect(explicitCodexResumeSession('codex resume thread-a --flag')).toBeNull()
+    expect(explicitCodexResumeSession('codex resume thread-a; echo owned')).toBeNull()
+    expect(explicitCodexResumeSession('env X=1 codex resume thread-a')).toBeNull()
+    expect(explicitCodexResumeSession('codex\nresume thread-a')).toBeNull()
+    expect(explicitCodexResumeSession('codex resume\nthread-a')).toBeNull()
+    expect(explicitCodexResumeSession(undefined)).toBeNull()
   })
 })
 

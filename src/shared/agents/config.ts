@@ -269,6 +269,22 @@ export function withSessionId(cmd: string, id: AgentId, sessionId: string): stri
 }
 
 /**
+ * Recognize the narrow legacy shape produced when an older canvas agent uses
+ * `open-terminal --cmd "codex resume <id>"` instead of `open-agent --resume <id>`.
+ *
+ * This is deliberately not a shell parser. Only one plain argv-equivalent command is promoted;
+ * flags, quoting, redirections, command chaining and substitutions remain ordinary terminal
+ * commands. That keeps arbitrary shell intent untouched while preventing an exact Codex resume
+ * from losing its durable agent/account metadata and NodeTerm launcher.
+ */
+export function explicitCodexResumeSession(command: string | undefined): string | null {
+  const match = command?.trim().match(
+    /^(?:codex|nodeterm-codex|\$HOME\/\.nodeterm\/bin\/nodeterm-codex)[ \t]+resume[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*)$/
+  )
+  return match?.[1] ?? null
+}
+
+/**
  * The command that resumes a resumable agent's prior conversation by its provider session id.
  * Used on a cold restart (machine reboot) where the tmux session — and the live agent — are
  * gone, so the conversation must be reconstructed via the agent CLI's own `--resume`.

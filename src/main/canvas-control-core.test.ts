@@ -108,6 +108,27 @@ describe('parseControlRequest', () => {
     expect(isDestructiveVerb('open-agent')).toBe(false)
   })
 
+  it('prevents a legacy direct Codex resume from opening duplicate agent nodes', () => {
+    expect(parseControlRequest('open-terminal', {
+      cmd: 'codex resume thread-a', count: '2'
+    })).toEqual({ error: 'open-terminal Codex resume opens exactly one agent session' })
+    expect(parseControlRequest('open-terminal', {
+      cmd: 'codex resume thread-a', count: '1'
+    })).toEqual({
+      verb: 'open-terminal', args: { cmd: 'codex resume thread-a', count: '1' }
+    })
+    expect(parseControlRequest('open-terminal', {
+      cmd: 'echo codex resume thread-a', count: '2'
+    })).toEqual({
+      verb: 'open-terminal', args: { cmd: 'echo codex resume thread-a', count: '2' }
+    })
+    expect(parseControlRequest('open-terminal', {
+      cmd: 'codex resume\nthread-a', count: '2'
+    })).toEqual({
+      verb: 'open-terminal', args: { cmd: 'codex resume\nthread-a', count: '2' }
+    })
+  })
+
   it('open-worktree requires --branch, close-worktree requires --group; neither destructive', () => {
     expect(parseControlRequest('open-worktree', {})).toEqual({ error: 'open-worktree requires --branch <name>' })
     expect(parseControlRequest('open-worktree', { branch: 'feat/x' })).toEqual({

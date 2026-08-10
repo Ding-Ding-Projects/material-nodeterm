@@ -218,6 +218,7 @@ import {
   canTransferFrom,
   canContextLink,
   createdAgentId,
+  explicitCodexResumeSession,
   resumeCommand,
   AGENT_CONFIG,
   BUILTIN_AGENT_IDS,
@@ -300,6 +301,7 @@ import {
   isCodexAccountLoginNode,
   systemAccountDisplay,
   createAgentNode,
+  createCanvasControlTerminalNode,
   createBrowserNode,
   createDinoNode,
   createDiffNode,
@@ -6208,7 +6210,13 @@ export function Canvas() {
             return
           }
           case 'open-terminal': {
-            const count = Math.max(1, Math.min(8, parseInt(args.count || '1', 10) || 1))
+            // Backward compatibility: older/stale agent instructions sometimes issued an exact
+            // `open-terminal --cmd "codex resume <id>"`. Treat that one narrow shape as the agent
+            // resume it semantically is, so it gets hooks, account identity and agent menus.
+            const promotedResume = explicitCodexResumeSession(args.cmd)
+            const count = promotedResume
+              ? 1
+              : Math.max(1, Math.min(8, parseInt(args.count || '1', 10) || 1))
             const intoGroupId = resolveIntoGroup()
             if (intoGroupId === null) return // bad --group, already replied
             const groupCwd = intoGroupId
@@ -6217,24 +6225,44 @@ export function Canvas() {
             const after = resolveAfter()
             if (after === null) return // bad --after, already replied
             const termCwd = args.cwd || groupCwd || srcCwd
-            const make = (i: number): CanvasNode =>
-              armAfter(
-                createTerminalNode(
-                  nodesRef.current.length + i,
-                  termCwd,
-                  placeBelow(i),
-                  args.cmd,
-                  sshFor(termCwd)
-                ),
-                after ?? []
+            const termSsh = sshFor(termCwd)
+            const inheritedCodexAccount = src.data.codexAccountId as string | undefined
+            if (promotedResume && inheritedCodexAccount && termSsh) {
+              reply({
+                ok: false,
+                error: 'open-terminal: managed Codex accounts are unavailable on SSH projects'
+              })
+              return
+            }
+            const make = (i: number): CanvasNode => {
+              const node = createCanvasControlTerminalNode(
+                nodesRef.current.length + i,
+                termCwd,
+                placeBelow(i),
+                args.cmd,
+                termSsh,
+                inheritedCodexAccount,
+                activePermissionMode('codex')
               )
+              return armAfter(node, after ?? [])
+            }
             const ids = intoGroupId
               ? addGrouped(intoGroupId, count, make)
               : Array.from({ length: count }, (_, i) => addAndConnect(make(i)))
+            const bridged = promotedResume
+              ? bridgeTo(sourceNodeId, ids, (id) =>
+                  id === sourceNodeId
+                    ? linkEndpointOf(id)
+                    : ids.includes(id)
+                      ? { kind: 'terminal', contextCapable: true }
+                      : linkEndpointOf(id)
+                ).linked
+              : false
             reply({
               ok: true,
               message:
-                `opened ${count} terminal(s): ${ids.join(', ')}` +
+                `opened ${count} ${promotedResume ? 'codex session(s)' : 'terminal(s)'}: ${ids.join(', ')}` +
+                (bridged ? `\ncontext-linked to you: ${ids.join(', ')}` : '') +
                 (after?.length ? `\nwaiting for ${after.join(', ')} before running` : ''),
               result: { ids, id: ids[0], after: after ?? [] }
             })

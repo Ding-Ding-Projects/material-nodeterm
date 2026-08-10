@@ -1,7 +1,13 @@
 import type { Node } from '@xyflow/react'
 import type { CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
-import { agentConfig, mintsSessionId, withSessionId } from '@shared/agents/config'
+import {
+  agentConfig,
+  explicitCodexResumeSession,
+  mintsSessionId,
+  resumeCommand,
+  withSessionId
+} from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { uuid } from '@renderer/lib/uuid'
 import { claudeCliCapsNow } from './permissionMode'
@@ -427,6 +433,42 @@ export function createAgentNode(
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
   }
+}
+
+/**
+ * Canvas-control compatibility for older agents that invoke an exact Codex resume through
+ * `open-terminal --cmd`. Promote only that narrow command to a real agent node, replace the raw
+ * system Codex binary with NodeTerm's account-aware launcher, and retain ordinary terminal
+ * behavior for every other command.
+ */
+export function createCanvasControlTerminalNode(
+  index: number,
+  cwd?: string,
+  center?: { x: number; y: number },
+  initialCommand?: string,
+  ssh?: Project['ssh'],
+  selectedCodexAccountId?: string,
+  permissionMode?: AgentPermissionMode
+): CanvasNode {
+  const sessionId = explicitCodexResumeSession(initialCommand)
+  if (!sessionId) return createTerminalNode(index, cwd, center, initialCommand, ssh)
+
+  const node = createAgentNode(
+    'codex',
+    index,
+    cwd,
+    center,
+    undefined,
+    ssh,
+    ssh ? undefined : selectedCodexAccountId,
+    permissionMode
+  )
+  const command = resumeCommand('codex', sessionId, !!ssh)
+  if (!command) return createTerminalNode(index, cwd, center, initialCommand, ssh)
+  node.data.initialCommand = permissionMode
+    ? withPermissionMode(command, 'codex', permissionMode)
+    : command
+  return node
 }
 
 /**

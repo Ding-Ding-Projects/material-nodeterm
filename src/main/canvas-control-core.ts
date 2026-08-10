@@ -2,6 +2,7 @@
 // CLI source. No electron imports, so this module + CONTROL_CLI_SCRIPT are unit-testable.
 // Electron/ipc/server wiring lives in canvas-control.ts + index.ts + hook-server.ts.
 import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from '../core/codex-thread-identity-sh'
+import { explicitCodexResumeSession } from '../shared/agents/config'
 
 export type ControlVerb =
   | 'list'
@@ -90,6 +91,14 @@ export function parseControlRequest(
   }
   if (v === 'open-agent' && args.resume && args.count && args.count !== '1') {
     return { error: 'open-agent --resume opens exactly one session' }
+  }
+  if (
+    v === 'open-terminal' &&
+    explicitCodexResumeSession(args.cmd) &&
+    args.count &&
+    args.count !== '1'
+  ) {
+    return { error: 'open-terminal Codex resume opens exactly one agent session' }
   }
   if ((v === 'group' || v === 'arrange') && !args.nodes) return { error: `${v} requires --nodes <id,id>` }
   if (v === 'ungroup' && !args.group) return { error: 'ungroup requires --group <id>' }

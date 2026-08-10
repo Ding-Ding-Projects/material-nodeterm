@@ -6,6 +6,7 @@ import {
   createAccountLoginNode,
   createCodexAccountLoginNode,
   createAgentNode,
+  createCanvasControlTerminalNode,
   createDinoNode,
   fitGroupToChildren,
   flowToNodeStates,
@@ -336,6 +337,39 @@ describe('Codex account node factories', () => {
     })
     expect(node.data.initialCommand).toMatch(/^cd \"\$HOME\" && codex /)
     expect(node.data.initialCommand).toContain('login --device-auth')
+  })
+})
+
+describe('canvas-control terminal compatibility', () => {
+  it('promotes an exact direct Codex resume to an account-aware agent node', () => {
+    const node = createCanvasControlTerminalNode(
+      0,
+      '/repo',
+      undefined,
+      'codex resume thread-a',
+      undefined,
+      'codex-a'
+    )
+    expect(node.data).toMatchObject({
+      agentId: 'codex',
+      codexAccountId: 'codex-a',
+      cwd: '/repo',
+      initialCommand: `${codexRemoteCommand()} resume thread-a`
+    })
+  })
+
+  it('keeps non-exact commands as plain terminal nodes', () => {
+    const node = createCanvasControlTerminalNode(
+      0,
+      '/repo',
+      undefined,
+      'codex resume thread-a; echo done',
+      undefined,
+      'codex-a'
+    )
+    expect(node.data.agentId).toBeUndefined()
+    expect(node.data.codexAccountId).toBeUndefined()
+    expect(node.data.initialCommand).toBe('codex resume thread-a; echo done')
   })
 })
 
