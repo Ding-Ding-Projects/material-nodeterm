@@ -98,6 +98,8 @@ class HookServer {
     ((req: { nodeId: string; threadId: string; hookEndpoint: string; accountId?: string; name?: string }) => Promise<void>) | null = null
   private codexThreadAuthorizeHandler:
     ((req: { nodeId: string; threadId: string; accountId?: string }) => Promise<void>) | null = null
+  private codexThreadCatalogHandler:
+    (() => Promise<Array<{ accountId?: string; socketPath: string }>>) | null = null
   private codexRelayRuntime: { executable: string; script: string } | null = null
   private endpointPath = ''
 
@@ -148,6 +150,10 @@ class HookServer {
 
   setCodexThreadAuthorizeHandler(cb: NonNullable<HookServer['codexThreadAuthorizeHandler']>): void {
     this.codexThreadAuthorizeHandler = cb
+  }
+
+  setCodexThreadCatalogHandler(cb: NonNullable<HookServer['codexThreadCatalogHandler']>): void {
+    this.codexThreadCatalogHandler = cb
   }
 
   setCodexRelayRuntime(executable: string, script: string): void {
@@ -278,6 +284,18 @@ class HookServer {
             res.end()
           } catch {
             res.writeHead(409)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/catalog') {
+          try {
+            if (!this.codexThreadCatalogHandler) throw new Error('catalog handler unavailable')
+            const accounts = await this.codexThreadCatalogHandler()
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ accounts }))
+          } catch {
+            res.writeHead(503)
             res.end()
           }
           return

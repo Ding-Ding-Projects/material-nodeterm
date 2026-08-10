@@ -43,6 +43,10 @@ beforeAll(async () => {
     authorizeCalls.push(request)
     if (request.threadId === 'thread-conflict') throw new Error('already bound')
   })
+  hookServer.setCodexThreadCatalogHandler(async () => [
+    { socketPath: '/isolated/system.sock' },
+    { accountId: 'account-a', socketPath: '/isolated/account-a.sock' }
+  ])
   // buildPtyEnv returns {} until the server has a port and a token.
   await hookServer.start()
 })
@@ -177,5 +181,24 @@ describe('hookServer Codex thread broker', () => {
       threadId: 'thread-resume',
       accountId: 'account-a'
     })
+  })
+
+  it('returns the isolated account socket catalog only to the authenticated relay', async () => {
+    const url = `http://127.0.0.1:${hookServer.getPort()}/codex-thread/catalog`
+    const [accepted, rejected] = await Promise.all([
+      fetch(url, {
+        method: 'POST',
+        headers: { 'x-nodeterm-hook-token': hookServer.getToken() }
+      }),
+      fetch(url, { method: 'POST' })
+    ])
+    expect(accepted.status).toBe(200)
+    await expect(accepted.json()).resolves.toEqual({
+      accounts: [
+        { socketPath: '/isolated/system.sock' },
+        { accountId: 'account-a', socketPath: '/isolated/account-a.sock' }
+      ]
+    })
+    expect(rejected.status).toBe(403)
   })
 })

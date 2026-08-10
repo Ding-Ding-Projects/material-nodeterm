@@ -9,10 +9,10 @@ import path from 'path'
 import { spawn } from 'child_process'
 import { WebSocket, WebSocketServer } from 'ws'
 
-// Protocol v3 routes the bare ws://host:port accepted by Codex through a per-node Bearer token and
-// permits the session-picker/main WebSockets of one Codex TUI invocation to reuse that capability.
+// Protocol v4 additionally merges the account-isolated thread catalogs and imports a selected
+// foreign rollout through Codex's own fork API before resuming it in the chosen account.
 // Keep earlier versions on their own state files so already-connected nodes may drain safely.
-const VERSION = '3'
+const VERSION = '4'
 const SAFE = /^[A-Za-z0-9._-]+$/
 const root = path.join(homedir(), '.nodeterm')
 const statePath = path.join(root, `codex-relay-v${VERSION}.json`)
@@ -24,13 +24,28 @@ type Route = {
   socketPath: string
   hookEndpoint: string
 }
-type RegisteredRoute = { route: Route; timer: NodeJS.Timeout; active: number }
+export type RelayForeignThread = {
+  socketPath: string
+  path: string
+  cwd: string
+  name?: string
+}
+type RegisteredRoute = {
+  route: Route
+  timer: NodeJS.Timeout
+  active: number
+  foreignThreads: Map<string, RelayForeignThread>
+}
 
-export type RelayThreadRequest = { method: string; source?: string }
+export type RelayThreadRequest = { method: string; source?: string; sourceName?: string }
 
 /** Per-connection JSON-RPC tracking. Equal request ids in parallel node connections remain
  * isolated because every connection supplies its own map. */
-export function trackRelayThreadRequest(pending: Map<string, RelayThreadRequest>, message: unknown): void {
+export function trackRelayThreadRequest(
+  pending: Map<string, RelayThreadRequest>,
+  message: unknown,
+  sourceName?: string
+): void {
   const m = message as {
     id?: unknown
     method?: unknown
@@ -39,7 +54,8 @@ export function trackRelayThreadRequest(pending: Map<string, RelayThreadRequest>
   if (m?.id === undefined || typeof m.method !== 'string' || !/^thread\/(?:resume|start|fork)$/.test(m.method)) return
   pending.set(String(m.id), {
     method: m.method,
-    source: typeof m.params?.threadId === 'string' ? m.params.threadId : undefined
+    source: typeof m.params?.threadId === 'string' ? m.params.threadId : undefined,
+    sourceName
   })
 }
 
@@ -61,8 +77,146 @@ export function resolveRelayThreadResponse(
   return {
     threadId,
     source: tracked.source,
-    name: rawName || undefined
+    name: rawName || tracked.sourceName
   }
+}
+
+type RelayThread = Record<string, any> & {
+  id: string
+  path?: string | null
+  cwd: string
+  name?: string | null
+  createdAt?: number
+  updatedAt?: number
+  recencyAt?: number | null
+}
+
+type RelayThreadSource = { socketPath: string; threads: RelayThread[] }
+
+type RelayCursor = { key: string; direction: 1 | -1; value: number; id: string }
+
+function decodeRelayCursor(cursor: unknown): RelayCursor | null {
+  if (typeof cursor !== 'string' || !cursor.startsWith('nodeterm:')) return null
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor.slice(9), 'base64url').toString()) as RelayCursor
+    return typeof parsed.key === 'string' && (parsed.direction === 1 || parsed.direction === -1) &&
+      Number.isFinite(parsed.value) && typeof parsed.id === 'string' && SAFE.test(parsed.id)
+      ? parsed
+      : null
+  } catch {
+    return null
+  }
+}
+
+function encodeRelayCursor(cursor: RelayCursor): string {
+  return `nodeterm:${Buffer.from(JSON.stringify(cursor)).toString('base64url')}`
+}
+
+/** Merge already server-filtered account pages without ever sharing their state databases. The
+ * selected account wins an equal thread id. Foreign entries without an absolute rollout path are
+ * omitted because they cannot be safely imported into the selected account. */
+export function mergeRelayThreadLists(
+  sources: RelayThreadSource[],
+  currentSocketPath: string,
+  params: Record<string, any>
+): {
+  result: { data: RelayThread[]; nextCursor: string | null; backwardsCursor: string | null }
+  foreignThreads: Map<string, RelayForeignThread>
+} {
+  const ordered = [...sources].sort((a, b) =>
+    a.socketPath === currentSocketPath ? -1 : b.socketPath === currentSocketPath ? 1 : 0
+  )
+  const byId = new Map<string, { thread: RelayThread; socketPath: string } | null>()
+  for (const source of ordered) {
+    for (const thread of source.threads) {
+      if (!thread || typeof thread.id !== 'string' || !SAFE.test(thread.id)) continue
+      if (source.socketPath !== currentSocketPath &&
+          (typeof thread.path !== 'string' || !path.isAbsolute(thread.path))) continue
+      const existing = byId.get(thread.id)
+      if (source.socketPath === currentSocketPath) {
+        byId.set(thread.id, { thread, socketPath: source.socketPath })
+        continue
+      }
+      if (existing === null || (existing && existing.socketPath !== currentSocketPath)) {
+        // Equal ids in two foreign account stores are ambiguous. Never pick one by catalog order.
+        byId.set(thread.id, null)
+        continue
+      }
+      if (existing) continue
+      byId.set(thread.id, { thread, socketPath: source.socketPath })
+    }
+  }
+  const sortKey = params.sortKey === 'updated_at'
+    ? 'updatedAt'
+    : params.sortKey === 'recency_at'
+      ? 'recencyAt'
+      : 'createdAt'
+  const direction = params.sortDirection === 'asc' ? 1 : -1
+  const valueOf = (thread: RelayThread): number =>
+    Number(thread[sortKey] ?? thread.updatedAt ?? thread.createdAt ?? 0)
+  const compare = (
+    a: { thread: RelayThread },
+    b: { thread: RelayThread }
+  ): number => {
+    const av = valueOf(a.thread)
+    const bv = valueOf(b.thread)
+    return av === bv ? a.thread.id.localeCompare(b.thread.id) : (av - bv) * direction
+  }
+  const all = [...byId.values()].filter(
+    (entry): entry is { thread: RelayThread; socketPath: string } => entry !== null
+  ).sort(compare)
+  const cursor = decodeRelayCursor(params.cursor)
+  let offset = 0
+  if (cursor && cursor.key === sortKey && cursor.direction === direction) {
+    offset = all.findIndex((entry) => compare(entry, {
+      thread: { id: cursor.id, cwd: '', [sortKey]: cursor.value }
+    }) > 0)
+    if (offset < 0) offset = all.length
+  }
+  const requestedLimit = Number(params.limit)
+  const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(requestedLimit, 1000)
+    : 50
+  const page = all.slice(offset, offset + limit)
+  const foreignThreads = new Map<string, RelayForeignThread>()
+  for (const { thread, socketPath } of page) {
+    if (socketPath === currentSocketPath || typeof thread.path !== 'string') continue
+    foreignThreads.set(thread.id, {
+      socketPath,
+      path: thread.path,
+      cwd: thread.cwd,
+      name: typeof thread.name === 'string' && thread.name.trim() ? thread.name.trim() : undefined
+    })
+  }
+  const next = offset + page.length
+  const last = page.at(-1)?.thread
+  return {
+    result: {
+      data: page.map((entry) => entry.thread),
+      nextCursor: next < all.length && last
+        ? encodeRelayCursor({ key: sortKey, direction, value: valueOf(last), id: last.id })
+        : null,
+      backwardsCursor: null
+    },
+    foreignThreads
+  }
+}
+
+export function retargetRelayResume(message: Record<string, any>, importedThreadId: string): Record<string, any> {
+  const params = { ...(message.params ?? {}), threadId: importedThreadId }
+  // Resume precedence is history > path > id. Keeping picker-supplied source fields would reopen
+  // the foreign rollout instead of the target-account fork.
+  delete params.path
+  delete params.history
+  return { ...message, params }
+}
+
+export function relaySourceReservationKey(
+  targetSocketPath: string,
+  sourceSocketPath: string,
+  threadId: string
+): string {
+  return `${targetSocketPath}\0${sourceSocketPath}\0${threadId}`
 }
 
 function readState(): State | null {
@@ -336,6 +490,290 @@ function hookRequest(
   })
 }
 
+function hookJsonRequest<T>(route: Route, pathname: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let env: Record<string, string>
+    try {
+      env = Object.fromEntries(
+        readFileSync(route.hookEndpoint, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => {
+            const separator = line.indexOf('=')
+            return separator > 0
+              ? [line.slice(0, separator), line.slice(separator + 1)]
+              : ['', '']
+          })
+      )
+    } catch (error) {
+      reject(error)
+      return
+    }
+    const port = Number(env.NODETERM_HOOK_PORT)
+    const token = env.NODETERM_HOOK_TOKEN
+    if (!port || !token) {
+      reject(new Error('NodeTerm hook endpoint unavailable'))
+      return
+    }
+    const req = request({
+      hostname: '127.0.0.1',
+      port,
+      path: pathname,
+      method: 'POST',
+      headers: {
+        'x-nodeterm-hook-token': token,
+        'content-length': '0'
+      }
+    }, (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          reject(new Error('NodeTerm hook request failed'))
+          return
+        }
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks).toString()) as T)
+        } catch {
+          reject(new Error('NodeTerm hook returned invalid JSON'))
+        }
+      })
+    })
+    req.on('error', reject)
+    req.setTimeout(10_000, () => req.destroy(new Error('NodeTerm hook request timed out')))
+    req.end()
+  })
+}
+
+export function listThreadsAt(
+  socketPath: string,
+  requestedParams: Record<string, any>,
+  timeoutMs = 10_000
+): Promise<RelayThread[]> {
+  return new Promise((resolve, reject) => {
+    let ws: WebSocket
+    let settled = false
+    let requestId = 2
+    const threads: RelayThread[] = []
+    const seenCursors = new Set<string>()
+    const finish = (error?: Error): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { ws.close() } catch {}
+      if (error) reject(error)
+      else resolve(threads)
+    }
+    const timer = setTimeout(() => finish(new Error('Codex thread catalog timed out')), timeoutMs)
+    timer.unref?.()
+    try {
+      ws = new WebSocket(`ws+unix://${socketPath}:/rpc`, { perMessageDeflate: false })
+    } catch {
+      clearTimeout(timer)
+      reject(new Error('Codex app-server is unavailable'))
+      return
+    }
+    const requestPage = (cursor?: string): void => {
+      const params = { ...requestedParams, cursor: cursor ?? null, limit: 1000 }
+      ws.send(JSON.stringify({ id: requestId, method: 'thread/list', params }))
+    }
+    ws.once('open', () => ws.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: {
+        clientInfo: { name: 'nodeterm-relay', version: VERSION },
+        capabilities: { experimentalApi: true }
+      }
+    })))
+    ws.on('message', (raw) => {
+      let message: Record<string, any>
+      try { message = JSON.parse(raw.toString()) } catch { return }
+      if (message.id === 1) {
+        if (message.error) return finish(new Error('Codex app-server initialization failed'))
+        ws.send(JSON.stringify({ method: 'initialized' }))
+        requestPage()
+        return
+      }
+      if (message.id !== requestId) return
+      if (message.error || !Array.isArray(message.result?.data)) {
+        finish(new Error('Codex thread catalog failed'))
+        return
+      }
+      threads.push(...message.result.data)
+      const cursor = message.result.nextCursor
+      if (typeof cursor !== 'string' || !cursor || seenCursors.has(cursor) || threads.length >= 10_000) {
+        finish()
+        return
+      }
+      seenCursors.add(cursor)
+      requestId += 1
+      requestPage(cursor)
+    })
+    ws.once('error', () => finish(new Error('Codex app-server is unavailable')))
+    ws.once('close', () => finish(new Error('Codex app-server closed during thread listing')))
+  })
+}
+
+export function readThreadAt(
+  socketPath: string,
+  threadId: string,
+  timeoutMs = 5_000
+): Promise<RelayThread> {
+  if (!SAFE.test(threadId)) return Promise.reject(new Error('Invalid Codex thread identity'))
+  return new Promise((resolve, reject) => {
+    let ws: WebSocket
+    let settled = false
+    const finish = (error?: Error, thread?: RelayThread): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { ws.close() } catch {}
+      if (error) reject(error)
+      else resolve(thread as RelayThread)
+    }
+    const timer = setTimeout(() => finish(new Error('Codex thread verification timed out')), timeoutMs)
+    timer.unref?.()
+    try {
+      ws = new WebSocket(`ws+unix://${socketPath}:/rpc`, { perMessageDeflate: false })
+    } catch {
+      clearTimeout(timer)
+      reject(new Error('Codex app-server is unavailable'))
+      return
+    }
+    ws.once('open', () => ws.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'nodeterm-relay', version: VERSION } }
+    })))
+    ws.on('message', (raw) => {
+      let message: Record<string, any>
+      try { message = JSON.parse(raw.toString()) } catch { return }
+      if (message.id === 1) {
+        if (message.error) return finish(new Error('Codex app-server initialization failed'))
+        ws.send(JSON.stringify({ method: 'initialized' }))
+        ws.send(JSON.stringify({
+          id: 2,
+          method: 'thread/read',
+          params: { threadId, includeTurns: false }
+        }))
+      } else if (message.id === 2) {
+        const thread = message.result?.thread as RelayThread | undefined
+        if (message.error || !thread || thread.id !== threadId ||
+            typeof thread.path !== 'string' || !path.isAbsolute(thread.path) ||
+            typeof thread.cwd !== 'string' || !path.isAbsolute(thread.cwd)) {
+          finish(new Error('Codex source thread is unavailable'))
+          return
+        }
+        finish(undefined, thread)
+      }
+    })
+    ws.once('error', () => finish(new Error('Codex app-server is unavailable')))
+    ws.once('close', () => finish(new Error('Codex app-server closed during thread verification')))
+  })
+}
+
+export function forkForeignThreadAt(
+  socketPath: string,
+  sourcePath: string,
+  cwd: string,
+  timeoutMs = 10_000
+): Promise<string> {
+  if (!path.isAbsolute(sourcePath) || !path.isAbsolute(cwd)) {
+    return Promise.reject(new Error('Unsupported Codex thread import'))
+  }
+  return new Promise((resolve, reject) => {
+    let ws: WebSocket
+    let settled = false
+    const finish = (error?: Error, threadId?: string): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { ws.close() } catch {}
+      if (error) reject(error)
+      else resolve(threadId as string)
+    }
+    const timer = setTimeout(() => finish(new Error('Codex thread import timed out')), timeoutMs)
+    timer.unref?.()
+    try {
+      ws = new WebSocket(`ws+unix://${socketPath}:/rpc`, { perMessageDeflate: false })
+    } catch {
+      clearTimeout(timer)
+      reject(new Error('Codex app-server is unavailable'))
+      return
+    }
+    ws.once('open', () => ws.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: {
+        clientInfo: { name: 'nodeterm-relay', version: VERSION },
+        capabilities: { experimentalApi: true }
+      }
+    })))
+    ws.on('message', (raw) => {
+      let message: Record<string, any>
+      try { message = JSON.parse(raw.toString()) } catch { return }
+      if (message.id === 1) {
+        if (message.error) return finish(new Error('Codex app-server initialization failed'))
+        ws.send(JSON.stringify({ method: 'initialized' }))
+        ws.send(JSON.stringify({
+          id: 2,
+          method: 'thread/fork',
+          params: { threadId: '', path: sourcePath, cwd }
+        }))
+      } else if (message.id === 2) {
+        const threadId = message.result?.thread?.id
+        if (message.error || typeof threadId !== 'string' || !SAFE.test(threadId)) {
+          finish(new Error('Codex thread import failed'))
+          return
+        }
+        finish(undefined, threadId)
+      }
+    })
+    ws.once('error', () => finish(new Error('Codex app-server is unavailable')))
+    ws.once('close', () => finish(new Error('Codex app-server closed during thread import')))
+  })
+}
+
+function deleteThreadAt(socketPath: string, threadId: string, timeoutMs = 5_000): Promise<void> {
+  if (!SAFE.test(threadId)) return Promise.resolve()
+  return new Promise((resolve) => {
+    let ws: WebSocket
+    let settled = false
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { ws.close() } catch {}
+      resolve()
+    }
+    const timer = setTimeout(finish, timeoutMs)
+    timer.unref?.()
+    try {
+      ws = new WebSocket(`ws+unix://${socketPath}:/rpc`, { perMessageDeflate: false })
+    } catch {
+      clearTimeout(timer)
+      resolve()
+      return
+    }
+    ws.once('open', () => ws.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'nodeterm-relay', version: VERSION } }
+    })))
+    ws.on('message', (raw) => {
+      let message: Record<string, any>
+      try { message = JSON.parse(raw.toString()) } catch { return }
+      if (message.id === 1) {
+        if (message.error) return finish()
+        ws.send(JSON.stringify({ method: 'initialized' }))
+        ws.send(JSON.stringify({ id: 2, method: 'thread/delete', params: { threadId } }))
+      } else if (message.id === 2) finish()
+    })
+    ws.once('error', finish)
+    ws.once('close', finish)
+  })
+}
+
 async function authorizeResume(route: Route, threadId: string): Promise<boolean> {
   const owner = conflictingOwner(route, threadId)
   if (owner === '' || owner === route.nodeId) return true
@@ -405,7 +843,7 @@ function serve(): void {
         const key = randomUUID()
         const timer = setTimeout(() => routes.delete(key), 60_000)
         timer.unref?.()
-        routes.set(key, { route, timer, active: 0 })
+        routes.set(key, { route, timer, active: 0, foreignThreads: new Map() })
         res.writeHead(200, { 'content-type': 'text/plain' })
         res.end(key)
       } catch {
@@ -437,20 +875,132 @@ function serve(): void {
       const pending = new Map<string, RelayThreadRequest>()
       const reservationOwner = Symbol(route.nodeId)
       const requestReservations = new Map<string, string>()
+      const requestImportedThreads = new Map<string, string>()
       down.on('message', async (data, binary) => {
-        const buf = Buffer.from(data as any)
+        let buf = Buffer.from(data as any)
         let message: any
+        let importedName: string | undefined
+        let importedThreadId: string | undefined
         try {
           message = JSON.parse(buf.toString())
+          if (message.method === 'thread/list' && message.id !== undefined) {
+            try {
+              const catalog = await hookJsonRequest<{
+                accounts: Array<{ accountId?: string; socketPath: string }>
+              }>(route, '/codex-thread/catalog')
+              const socketPaths = [...new Set([
+                route.socketPath,
+                ...catalog.accounts
+                  .map((account) => account.socketPath)
+                  .filter((socketPath) => path.isAbsolute(socketPath))
+              ])]
+              if (socketPaths.length > 1) {
+                const params = message.params && typeof message.params === 'object'
+                  ? message.params
+                  : {}
+                const sourceParams = { ...params }
+                delete sourceParams.cursor
+                const sources = (await Promise.all(socketPaths.map(async (socketPath) => {
+                  try {
+                    return { socketPath, threads: await listThreadsAt(socketPath, sourceParams) }
+                  } catch {
+                    return null
+                  }
+                }))).filter((source): source is RelayThreadSource => source !== null)
+                if (sources.some((source) => source.socketPath === route.socketPath)) {
+                  const merged = mergeRelayThreadLists(sources, route.socketPath, params)
+                  if (!decodeRelayCursor(params.cursor)) registered.foreignThreads.clear()
+                  for (const [threadId, foreign] of merged.foreignThreads) {
+                    registered.foreignThreads.set(threadId, foreign)
+                  }
+                  if (down.readyState === WebSocket.OPEN) {
+                    down.send(JSON.stringify({ id: message.id, result: merged.result }))
+                  }
+                  return
+                }
+              }
+            } catch {
+              // Electron may be restarting. Fall through to the selected account's native list.
+            }
+          }
+          if (message.method === 'thread/resume') {
+            const selectedThreadId = message.params?.threadId
+            const foreign = typeof selectedThreadId === 'string'
+              ? registered.foreignThreads.get(selectedThreadId)
+              : undefined
+            if (foreign) {
+              const requestId = message.id === undefined ? '' : String(message.id)
+              const sourceReservationKey = relaySourceReservationKey(
+                route.socketPath,
+                foreign.socketPath,
+                selectedThreadId
+              )
+              // Reserve the SOURCE before forking. Reserving only the not-yet-known imported id
+              // allows two nodes to create duplicate target threads in the same event-loop turn.
+              if (!requestId || requestReservations.has(requestId) || reservations.has(sourceReservationKey)) {
+                if (message.id !== undefined && down.readyState === WebSocket.OPEN) {
+                  down.send(JSON.stringify({
+                    id: message.id,
+                    error: { code: -32001, message: 'Codex thread is already open in another NodeTerm node' }
+                  }))
+                }
+                return
+              }
+              reservations.set(sourceReservationKey, reservationOwner)
+              requestReservations.set(requestId, sourceReservationKey)
+              try {
+                // The picker entry is only a display cache. Re-read the exact id from the source
+                // account immediately before import so a stale route can never redirect by path.
+                const fresh = await readThreadAt(foreign.socketPath, selectedThreadId)
+                if (reservations.get(sourceReservationKey) !== reservationOwner ||
+                    down.readyState !== WebSocket.OPEN) return
+                const cwd = typeof message.params?.cwd === 'string' && path.isAbsolute(message.params.cwd)
+                  ? message.params.cwd
+                  : fresh.cwd
+                importedThreadId = await forkForeignThreadAt(
+                  route.socketPath,
+                  fresh.path as string,
+                  cwd
+                )
+                if (reservations.get(sourceReservationKey) !== reservationOwner ||
+                    down.readyState !== WebSocket.OPEN) {
+                  // The picker disconnected while Codex was creating the target fork. Remove that
+                  // now-unreachable import; close() already released the source reservation.
+                  await deleteThreadAt(route.socketPath, importedThreadId)
+                  return
+                }
+                importedName = (typeof fresh.name === 'string' && fresh.name.trim()
+                  ? fresh.name.trim()
+                  : foreign.name) ?? indexedName(foreign.socketPath, selectedThreadId)
+                message = retargetRelayResume(message, importedThreadId)
+                buf = Buffer.from(JSON.stringify(message))
+              } catch {
+                if (reservations.get(sourceReservationKey) === reservationOwner) {
+                  reservations.delete(sourceReservationKey)
+                }
+                requestReservations.delete(requestId)
+                if (importedThreadId) await deleteThreadAt(route.socketPath, importedThreadId)
+                if (message.id !== undefined && down.readyState === WebSocket.OPEN) {
+                  down.send(JSON.stringify({
+                    id: message.id,
+                    error: { code: -32003, message: 'NodeTerm could not import this Codex session into the selected account' }
+                  }))
+                }
+                return
+              }
+            }
+          }
           if (message.method === 'thread/resume' || message.method === 'thread/fork') {
             const threadId = message.params?.threadId
             const requestId = message.id === undefined ? '' : String(message.id)
-            const reservationKey = typeof threadId === 'string'
+            const heldReservationKey = requestReservations.get(requestId)
+            const reservationKey = heldReservationKey ?? (typeof threadId === 'string'
               ? `${route.socketPath}\0${threadId}`
-              : ''
+              : '')
             // Set synchronously BEFORE authorizeResume's first await. Two connections arriving in
             // the same event-loop turn therefore cannot both pass and reach the shared app-server.
-            if (!requestId || !reservationKey || reservations.has(reservationKey)) {
+            if (!requestId || !reservationKey ||
+                (!heldReservationKey && reservations.has(reservationKey))) {
               if (message.id !== undefined && down.readyState === WebSocket.OPEN) {
                 down.send(JSON.stringify({
                   id: message.id,
@@ -459,15 +1009,21 @@ function serve(): void {
               }
               return
             }
-            reservations.set(reservationKey, reservationOwner)
-            requestReservations.set(requestId, reservationKey)
+            if (!heldReservationKey) {
+              reservations.set(reservationKey, reservationOwner)
+              requestReservations.set(requestId, reservationKey)
+            }
             const authorized = await authorizeResume(route, threadId)
             // Close may have run while authorization was pending. It released this reservation;
             // never resurrect it or forward a queued resume after its owning connection is gone.
-            if (reservations.get(reservationKey) !== reservationOwner || down.readyState !== WebSocket.OPEN) return
+            if (reservations.get(reservationKey) !== reservationOwner || down.readyState !== WebSocket.OPEN) {
+              if (importedThreadId) await deleteThreadAt(route.socketPath, importedThreadId)
+              return
+            }
             if (!authorized) {
               if (reservations.get(reservationKey) === reservationOwner) reservations.delete(reservationKey)
               requestReservations.delete(requestId)
+              if (importedThreadId) await deleteThreadAt(route.socketPath, importedThreadId)
               if (down.readyState === WebSocket.OPEN) {
               down.send(JSON.stringify({
                 id: message.id,
@@ -476,8 +1032,9 @@ function serve(): void {
               }
               return
             }
+            if (importedThreadId) requestImportedThreads.set(requestId, importedThreadId)
           }
-          trackRelayThreadRequest(pending, message)
+          trackRelayThreadRequest(pending, message, importedName)
         } catch {}
         if (up.readyState === WebSocket.OPEN) up.send(buf, { binary })
         else queued.push({ data: buf, binary })
@@ -495,11 +1052,16 @@ function serve(): void {
         let outbound = buf
         let reservationKey: string | undefined
         let responseId = ''
+        let importedResponseThreadId: string | undefined
         try {
           const message = JSON.parse(buf.toString())
           if (message?.id !== undefined) {
             responseId = String(message.id)
             reservationKey = requestReservations.get(responseId)
+            importedResponseThreadId = requestImportedThreads.get(responseId)
+            // Once the target app-server answered, the response handler owns cleanup. A concurrent
+            // downstream close must not race it and delete a thread whose bind is committing.
+            requestImportedThreads.delete(responseId)
           }
           const observed = resolveRelayThreadResponse(pending, message)
           const committed = observed
@@ -515,6 +1077,9 @@ function serve(): void {
               error: { code: -32002, message: 'NodeTerm could not commit Codex thread ownership' }
             }))
           }
+          if (importedResponseThreadId && (message.error || !observed || !committed)) {
+            await deleteThreadAt(route.socketPath, importedResponseThreadId)
+          }
         } catch {}
         if (reservationKey) {
           requestReservations.delete(responseId)
@@ -529,6 +1094,9 @@ function serve(): void {
         for (const key of requestReservations.values())
           if (reservations.get(key) === reservationOwner) reservations.delete(key)
         requestReservations.clear()
+        const orphanImports = [...requestImportedThreads.values()]
+        requestImportedThreads.clear()
+        for (const threadId of orphanImports) void deleteThreadAt(route.socketPath, threadId)
         queued.length = 0
         try {
           down.close()

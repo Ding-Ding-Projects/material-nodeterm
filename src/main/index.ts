@@ -1012,6 +1012,24 @@ app.whenReady().then(async () => {
       accountId
     )) throw new Error('Codex thread is already bound to another live node')
   })
+  hookServer.setCodexThreadCatalogHandler(async () => {
+    const accountIds: Array<string | undefined> = [
+      undefined,
+      ...(settingsStore.get().codexAccounts ?? [])
+        .filter((account) => !account.pending)
+        .map((account) => account.id)
+    ]
+    const accounts: Array<{ accountId?: string; socketPath: string }> = []
+    for (const accountId of accountIds) {
+      try {
+        await ensureCodexAccountDaemon(accountId)
+        accounts.push({ accountId, socketPath: localCodexSocket(accountId) })
+      } catch {
+        // One unavailable login must not hide sessions from the remaining accounts.
+      }
+    }
+    return accounts
+  })
   await hookServer.start()
   // SSH_ASKPASS relay (ssh-project.ts): lets the ControlMaster, which has no tty, route a
   // passphrase-protected identity file's prompt back through the app instead of failing auth.

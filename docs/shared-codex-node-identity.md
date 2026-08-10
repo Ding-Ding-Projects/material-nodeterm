@@ -83,7 +83,14 @@ Focused tests cover:
 - persisted Codex account identity across workspace serialization and board co-attach;
 - invalid/missing node, cwd, endpoint, and thread identities;
 - shared-app-server thread creation and `Thread.name` reads;
+- merged native session-picker results across isolated Codex accounts, including paginated lists
+  and a server-owned `thread/fork(path)` import before a foreign session is resumed;
 - mapping recovery in hooks, canvas control, and linked context.
+
+Codex credentials, state databases, and app-server processes remain isolated per account. NodeTerm
+never symlinks or concurrently opens another account's SQLite database. Cross-account resume keeps
+the source rollout unchanged and creates a new target-account thread through Codex's app-server
+protocol, after which normal account-scoped node ownership applies.
 
 Before a local candidate handoff, run the node TypeScript check, focused tests, production build,
 and a packaged-app smoke. NodeTerm local installation is not a production deployment and must not
