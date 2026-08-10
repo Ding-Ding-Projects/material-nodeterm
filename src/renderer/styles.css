@@ -4920,7 +4920,17 @@ body,
   border: 1.5px dashed;
   border-radius: 14px;
   box-sizing: border-box;
-  cursor: grab;
+}
+
+/* A group is a background container, not a giant drag target. Its body passes pointer input to
+   React Flow's pane; the label/header, actions and resize controls explicitly opt back in. */
+.react-flow__node-group {
+  pointer-events: none !important;
+}
+.react-flow__node-group .group-node__label,
+.react-flow__node-group .group-node__actions,
+.react-flow__node-group .react-flow__resize-control {
+  pointer-events: auto;
 }
 
 /* Bound to a git worktree: a checkout, not a loose grouping. Solid, thicker border (the tint is
@@ -4957,7 +4967,9 @@ body,
   border: 1px solid var(--border);
   border-radius: 999px;
   user-select: none;
+  cursor: grab;
 }
+.group-node__label:active { cursor: grabbing; }
 
 /* Zoomed far out (boost ≥ 2, toggled in Canvas.setGroupLabelBoost), the pill keeps only the
    dot + name: the worktree chip (branch + counters + Merge/Unbind) is unreadable at that

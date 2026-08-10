@@ -300,6 +300,11 @@ describe('nested group persistence order', () => {
       hydrated.findIndex((node) => node.id === 'leaf')
     )
   })
+
+  it('hydrates groups with the label-only drag handle', () => {
+    const [group] = nodeStatesToFlow(flowToNodeStates([grp('outer', { x: 0, y: 0 })]))
+    expect(group.dragHandle).toBe('.group-node__label')
+  })
 })
 
 describe('reorderNodeBefore', () => {

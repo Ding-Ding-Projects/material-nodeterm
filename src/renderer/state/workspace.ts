@@ -759,6 +759,7 @@ export function createGroupNode(
   return {
     id: nextId('group'),
     type: 'group',
+    dragHandle: '.group-node__label',
     position,
     width: size.width,
     height: size.height,
@@ -1172,6 +1173,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
       id: n.id,
       // Default to 'terminal' for nodes saved before the kind field existed.
       type: n.kind ?? 'terminal',
+      ...((n.kind ?? 'terminal') === 'group'
+        ? { dragHandle: '.group-node__label' }
+        : {}),
       position: n.position,
       width: n.size.width,
       height,
