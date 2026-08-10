@@ -10,6 +10,7 @@ if [ -z "$NODETERM_NODE_ID" ] && [ -n "$CODEX_THREAD_ID" ]; then
       nt_codex_scope=""
       nt_codex_map=""
       nt_codex_matches=0
+      nt_codex_scan=0
       nt_codex_account_env="\${NODETERM_CODEX_ACCOUNT_ID+x}"
       if [ -n "$nt_codex_account_env" ]; then
         nt_codex_scope="\${NODETERM_CODEX_ACCOUNT_ID:-system}"
@@ -25,9 +26,15 @@ if [ -z "$NODETERM_NODE_ID" ] && [ -n "$CODEX_THREAD_ID" ]; then
         nt_codex_map="$HOME/.nodeterm/codex-thread-nodes/$nt_codex_scope/$CODEX_THREAD_ID"
       fi
       # Native tool shells spawned by the shared app-server may preserve CODEX_THREAD_ID while
-      # dropping the TUI's account env. Resolve only a unique scoped owner; equal thread ids in
-      # parallel account daemons deliberately fail closed instead of crossing account boundaries.
-      if [ -z "$nt_codex_account_env" ]; then
+      # dropping the TUI's account env. They can also preserve an explicitly empty account value
+      # from an older/system TUI after a cross-account import. Only for missing/empty account env,
+      # resolve a unique owner across every scope; explicit account scopes never cross boundaries.
+      if [ -z "$nt_codex_account_env" ] || [ -z "\${NODETERM_CODEX_ACCOUNT_ID:-}" ]; then
+        nt_codex_scan=1
+      fi
+      if [ "$nt_codex_scan" -eq 1 ]; then
+        nt_codex_map=""
+        nt_codex_matches=0
         for nt_codex_candidate in "$HOME/.nodeterm/codex-thread-nodes"/*/"$CODEX_THREAD_ID"; do
           if [ -r "$nt_codex_candidate" ]; then
             nt_codex_matches=$((nt_codex_matches + 1))
@@ -46,6 +53,13 @@ if [ -z "$NODETERM_NODE_ID" ] && [ -n "$CODEX_THREAD_ID" ]; then
             nt_codex_scope="\${nt_codex_map%/*}"
             nt_codex_scope="\${nt_codex_scope##*/}"
           fi
+          case "$nt_codex_scope" in
+            [A-Za-z0-9]*) ;;
+            *) nt_codex_scope=""; nt_codex_map="" ;;
+          esac
+          case "$nt_codex_scope" in
+            ''|*[!A-Za-z0-9._-]*) nt_codex_scope=""; nt_codex_map="" ;;
+          esac
         else
           nt_codex_map=""
           nt_codex_scope=""
