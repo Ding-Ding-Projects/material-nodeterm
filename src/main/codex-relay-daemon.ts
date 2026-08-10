@@ -9,9 +9,10 @@ import path from 'path'
 import { spawn } from 'child_process'
 import { WebSocket, WebSocketServer } from 'ws'
 
-// Protocol v2 routes the bare ws://host:port accepted by Codex through a per-node Bearer token.
-// Keep v1 on its own state file so already-connected legacy nodes may drain without being killed.
-const VERSION = '2'
+// Protocol v3 routes the bare ws://host:port accepted by Codex through a per-node Bearer token and
+// permits the session-picker/main WebSockets of one Codex TUI invocation to reuse that capability.
+// Keep earlier versions on their own state files so already-connected nodes may drain safely.
+const VERSION = '3'
 const SAFE = /^[A-Za-z0-9._-]+$/
 const root = path.join(homedir(), '.nodeterm')
 const statePath = path.join(root, `codex-relay-v${VERSION}.json`)
@@ -23,7 +24,7 @@ type Route = {
   socketPath: string
   hookEndpoint: string
 }
-type RegisteredRoute = { route: Route; timer: NodeJS.Timeout }
+type RegisteredRoute = { route: Route; timer: NodeJS.Timeout; active: number }
 
 export type RelayThreadRequest = { method: string; source?: string }
 
@@ -404,7 +405,7 @@ function serve(): void {
         const key = randomUUID()
         const timer = setTimeout(() => routes.delete(key), 60_000)
         timer.unref?.()
-        routes.set(key, { route, timer })
+        routes.set(key, { route, timer, active: 0 })
         res.writeHead(200, { 'content-type': 'text/plain' })
         res.end(key)
       } catch {
@@ -424,7 +425,10 @@ function serve(): void {
     }
     const route = registered.route
     clearTimeout(registered.timer)
-    routes.delete(routeKey)
+    // Codex TUI opens more than one WebSocket for one invocation (session picker/bootstrap and
+    // the main session). The random capability remains scoped to this exact node route while any
+    // connection is live, then expires shortly after the final disconnect to allow reconnects.
+    registered.active += 1
     wss.handleUpgrade(req, socket, head, (down) => {
       const up = new WebSocket(`ws+unix://${route.socketPath}:/rpc`, {
         perMessageDeflate: false
@@ -518,7 +522,10 @@ function serve(): void {
         }
         if (down.readyState === WebSocket.OPEN) down.send(outbound, { binary })
       })
+      let closed = false
       const close = () => {
+        if (closed) return
+        closed = true
         for (const key of requestReservations.values())
           if (reservations.get(key) === reservationOwner) reservations.delete(key)
         requestReservations.clear()
@@ -529,6 +536,13 @@ function serve(): void {
         try {
           up.close()
         } catch {}
+        registered.active = Math.max(0, registered.active - 1)
+        if (registered.active === 0) {
+          registered.timer = setTimeout(() => {
+            if (routes.get(routeKey) === registered && registered.active === 0) routes.delete(routeKey)
+          }, 5 * 60_000)
+          registered.timer.unref?.()
+        }
       }
       down.on('close', close)
       down.on('error', close)
