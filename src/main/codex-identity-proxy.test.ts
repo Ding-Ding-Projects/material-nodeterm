@@ -1,11 +1,15 @@
 import { createServer, type Server } from 'http'
 import { mkdtempSync } from 'fs'
-import { createConnection } from 'net'
 import { tmpdir } from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { WebSocket, WebSocketServer } from 'ws'
-import { CodexIdentityProxyManager, type CodexNodeIdentity } from './codex-identity-proxy'
+import { readCodexSessionName } from '../core/codex-session-name'
+import {
+  codexUnixWebSocketUrl,
+  CodexIdentityProxyManager,
+  type CodexNodeIdentity
+} from '../core/codex-identity-proxy'
 
 function identity(nodeId: string): CodexNodeIdentity {
   return {
@@ -17,9 +21,7 @@ function identity(nodeId: string): CodexNodeIdentity {
 
 function openClient(socket: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket('ws://localhost/rpc', {
-      createConnection: () => createConnection(socket)
-    })
+    const ws = new WebSocket(codexUnixWebSocketUrl(socket), { perMessageDeflate: false })
     ws.once('open', () => resolve(ws))
     ws.once('error', reject)
   })
@@ -150,4 +152,33 @@ describe('CodexIdentityProxy', () => {
     expect(await proxy.ensureNode('node-a', identity('node-b'))).toBeNull()
     expect(requests).toEqual([])
   })
+
+  it('records Thread.name from lifecycle responses and rename notifications', async () => {
+    const socket = await proxy.ensureNode('node-a', identity('node-a'))
+    const client = await openClient(socket!)
+    client.send(JSON.stringify({ id: 20, method: 'thread/resume', params: { threadId: 'named-thread' } }))
+    await expect.poll(() => requests.length).toBe(1)
+    upstreamByRequestId
+      .get(20)!
+      .send(JSON.stringify({ id: 20, result: { thread: { id: 'named-thread', name: 'Initial task' } } }))
+    await nextJson(client)
+    await expect(readCodexSessionName('named-thread')).resolves.toBe('Initial task')
+
+    upstreamByRequestId.get(20)!.send(
+      JSON.stringify({
+        method: 'thread/name/updated',
+        params: { threadId: 'named-thread', threadName: 'Renamed task' }
+      })
+    )
+    await nextJson(client)
+    await expect.poll(() => readCodexSessionName('named-thread')).toBe('Renamed task')
+    client.close()
+  })
+
+  it.each(['/tmp/socket:bad', '/tmp/socket with-space', 'relative.sock'])(
+    'rejects an ambiguous upstream socket path %s',
+    (socketPath) => {
+      expect(() => codexUnixWebSocketUrl(socketPath)).toThrow('Unsupported Codex app-server socket path')
+    }
+  )
 })

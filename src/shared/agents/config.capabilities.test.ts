@@ -8,6 +8,7 @@ import {
   canControlCanvas,
   canReadTitle,
   canRecur,
+  canReadSessionName,
   canRename,
   canResume,
   canSubagent,
@@ -70,6 +71,13 @@ describe('createdAgentId', () => {
     // node data is deserialized JSON: nothing guarantees these types at runtime.
     expect(createdAgentId({ agentId: 42 })).toBeUndefined()
     expect(createdAgentId({ tags: 'claude' })).toBeUndefined()
+  })
+})
+
+describe('session-name capabilities', () => {
+  it('reads Codex task names without claiming two-way rename support', () => {
+    expect(canReadSessionName('codex')).toBe(true)
+    expect(canRename('codex')).toBe(false)
   })
 })
 

@@ -1,10 +1,10 @@
 import { createHash } from 'crypto'
 import { chmodSync, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs'
 import { createServer, type Server } from 'http'
-import { createConnection } from 'net'
 import { homedir, tmpdir } from 'os'
 import path from 'path'
 import { WebSocket, WebSocketServer, type RawData } from 'ws'
+import { forgetCodexSessionNames, rememberCodexSessionName } from './codex-session-name'
 
 const SAFE_NODE_ID = /^[A-Za-z0-9._-]+$/
 const THREAD_METHODS = new Set(['thread/start', 'thread/resume', 'thread/fork'])
@@ -24,7 +24,7 @@ function requestKey(id: unknown): string | null {
   return typeof id === 'string' || typeof id === 'number' ? `${typeof id}:${id}` : null
 }
 
-function responseThreadId(raw: RawData): { key: string; threadId: string } | null {
+function responseThread(raw: RawData): { key: string; threadId: string; name?: unknown } | null {
   const { request: response } = parseRequest(raw)
   if (!response) return null
   const key = requestKey(response.id)
@@ -33,7 +33,28 @@ function responseThreadId(raw: RawData): { key: string; threadId: string } | nul
   const thread = (result as { thread?: unknown }).thread
   if (!thread || typeof thread !== 'object') return null
   const threadId = (thread as { id?: unknown }).id
-  return typeof threadId === 'string' ? { key, threadId } : null
+  return typeof threadId === 'string'
+    ? { key, threadId, name: (thread as { name?: unknown }).name }
+    : null
+}
+
+function rememberThreadNameNotification(raw: RawData): void {
+  const { request: notification } = parseRequest(raw)
+  if (notification?.method !== 'thread/name/updated') return
+  const params = notification.params && typeof notification.params === 'object' ? notification.params : null
+  const threadId = params && (params as { threadId?: unknown }).threadId
+  if (typeof threadId === 'string') {
+    rememberCodexSessionName(threadId, (params as { threadName?: unknown }).threadName ?? null)
+  }
+}
+
+export function codexUnixWebSocketUrl(socketPath: string): string {
+  // ws implements Codex's Unix-WebSocket transport as ws+unix://<socket>:/rpc. Its parser does
+  // not URL-decode the socket path, so reject ambiguous paths instead of connecting elsewhere.
+  if (!path.isAbsolute(socketPath) || /[\s:%?#]/.test(socketPath)) {
+    throw new Error('Unsupported Codex app-server socket path')
+  }
+  return `ws+unix://${socketPath}:/rpc`
 }
 
 function closePeer(peer: WebSocket, code: number, reason: Buffer): void {
@@ -102,12 +123,15 @@ export class CodexIdentityProxy {
 
   async start(): Promise<void> {
     if (this.server) return
+    const upstreamUrl = codexUnixWebSocketUrl(this.upstreamSocketPath)
     if (existsSync(this.socketPath)) unlinkSync(this.socketPath)
     const server = createServer()
     const wss = new WebSocketServer({ server, maxPayload: 128 << 20 })
     wss.on('connection', (client) => {
-      const upstream = new WebSocket('ws://localhost/rpc', {
-        createConnection: () => createConnection(this.upstreamSocketPath)
+      // Codex app-server speaks WebSocket frames over its Unix control socket. `ws://localhost`
+      // plus a custom createConnection hook does not survive ws's HTTP handshake normalization.
+      const upstream = new WebSocket(upstreamUrl, {
+        perMessageDeflate: false
       })
       const pending: Array<{ data: RawData; binary: boolean }> = []
       const resultOwners = new Map<string, 'thread/start' | 'thread/fork'>()
@@ -148,7 +172,9 @@ export class CodexIdentityProxy {
         pending.length = 0
       })
       upstream.on('message', (data, binary) => {
-        const result = responseThreadId(data)
+        const result = responseThread(data)
+        if (result) rememberCodexSessionName(result.threadId, result.name)
+        else rememberThreadNameNotification(data)
         if (result && resultOwners.delete(result.key)) {
           // A started/forked thread is already loaded with this node's injected environment.
           // Record the returned id before any other node can resume it through this router.
@@ -225,6 +251,7 @@ export class CodexIdentityProxyManager {
     for (const proxy of this.proxies.values()) proxy.stop()
     this.proxies.clear()
     this.threadOwners.clear()
+    forgetCodexSessionNames()
   }
 }
 

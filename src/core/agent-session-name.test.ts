@@ -6,6 +6,7 @@ import { tmpdir } from 'os'
 import path from 'path'
 import { readAgentSessionName } from './agent-session-name'
 import { rememberGrokSessionDir, forgetGrokSession } from './grok-session'
+import { rememberCodexSessionName } from './codex-session-name'
 
 const root = mkdtempSync(path.join(tmpdir(), 'agent-session-name-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -22,13 +23,17 @@ describe('readAgentSessionName', () => {
     forgetGrokSession('gs1')
   })
 
-  it('sends everything else to the claude transcript reader', async () => {
+  it('routes codex to the shared app-server thread-name cache', async () => {
+    rememberCodexSessionName('codex-thread', 'Top Tips')
+    expect(await readAgentSessionName('codex-thread', undefined, 'codex')).toBe('Top Tips')
+  })
+
+  it('sends unnamed and claude agents to the claude transcript reader', async () => {
     // No transcript exists for this id under any root, so the honest answer is null — the assertion
     // that matters is that it did NOT come back with the grok session's name below.
     rememberGrokSessionDir('shared-id', path.join(root, 'gs1'))
     expect(await readAgentSessionName('shared-id', undefined, 'claude')).toBeNull()
     expect(await readAgentSessionName('shared-id')).toBeNull()
-    expect(await readAgentSessionName('shared-id', undefined, 'codex')).toBeNull()
     forgetGrokSession('shared-id')
   })
 

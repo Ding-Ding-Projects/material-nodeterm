@@ -71,7 +71,7 @@ vi.mock('node-pty', () => ({
   }
 }))
 
-vi.mock('../main/codex-identity-proxy', () => ({
+vi.mock('./codex-identity-proxy', () => ({
   installCodexLauncher: () => '/isolated/.nodeterm/bin/nodeterm-codex',
   codexLauncherDir: () => '/isolated/.nodeterm/bin',
   codexIdentityProxyManager: () => ({

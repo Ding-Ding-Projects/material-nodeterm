@@ -44,7 +44,7 @@ import { claudeConfigDirFor } from './claude-config-dir'
 import { findExecutableSync, findInPathString, resolveShellPath, shellPathNow } from './exec-path'
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { presenceHub } from './presence/hub'
-import { codexIdentityProxyManager, codexLauncherDir, installCodexLauncher } from '../main/codex-identity-proxy'
+import { codexIdentityProxyManager, codexLauncherDir, installCodexLauncher } from './codex-identity-proxy'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
 // kills the tmux server) can still replay recent output on cold restart. A final snapshot also

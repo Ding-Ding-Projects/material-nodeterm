@@ -151,9 +151,8 @@ export const RENAME_CAPABLE = ['claude', 'grok'] as const
 // INVARIANT (pinned in config.capabilities.test.ts): every RENAME_CAPABLE agent is also here. The
 // write leg pushes a name and the read leg is what confirms it settled.
 //
-// codex is in NEITHER: its slash-command set could not be enumerated from the CLI, so neither leg
-// has a measured basis — and a guess here costs a wrong node title, not a missing one.
-export const TITLE_READ_CAPABLE = ['claude', 'grok', 'gemini'] as const
+// Codex exposes Thread.name through its shared app-server, but NodeTerm does not push it back yet.
+export const TITLE_READ_CAPABLE = ['claude', 'codex', 'grok', 'gemini'] as const
 // Agents allowed to drive the canvas via the `nodeterm` CLI (open/show/write/close).
 // Discovery differs per agent: claude gets the manage-nodeterm-canvas skill; codex/gemini/
 // opencode a marker block in ~/.codex/AGENTS.md / ~/.gemini/GEMINI.md /
