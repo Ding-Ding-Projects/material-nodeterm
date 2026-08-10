@@ -1110,6 +1110,34 @@ export function reparentNode(
 }
 
 /**
+ * Adds the selected root objects to an existing group. When both an ancestor and one of its
+ * descendants are selected, only the ancestor moves; its subtree follows automatically.
+ */
+export function addSelectionToGroup(
+  nodes: CanvasNode[],
+  selectedIds: string[],
+  groupId: string
+): CanvasNode[] {
+  if (!nodes.some((node) => node.id === groupId && node.type === 'group')) return nodes
+  const selected = new Set(selectedIds)
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const roots = nodes.filter((node) => {
+    if (node.id === groupId || !selected.has(node.id)) return false
+    const seen = new Set<string>()
+    let parentId = node.parentId
+    while (parentId && !seen.has(parentId)) {
+      if (selected.has(parentId)) return false
+      seen.add(parentId)
+      parentId = byId.get(parentId)?.parentId
+    }
+    return true
+  })
+  let next = nodes
+  for (const root of roots) next = reparentNode(next, root.id, groupId)
+  return next
+}
+
+/**
  * Moves `draggedId` to sit immediately before `beforeId` in the array (sidebar order follows
  * array order). The dragged node also joins `beforeId`'s container (same reposition math) so a
  * drop both reorders within a group and can move across groups. No-op when either node is

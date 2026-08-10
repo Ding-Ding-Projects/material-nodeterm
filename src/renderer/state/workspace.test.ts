@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   alignNodes,
+  addSelectionToGroup,
   arrangeNodes,
   commonParentId,
   createAccountLoginNode,
@@ -100,6 +101,41 @@ describe('reparentNode', () => {
     const nodes = [grp('outer', { x: 0, y: 0 }), grp('inner', { x: 20, y: 20 }, 'outer')]
     expect(reparentNode(nodes, 'outer', 'outer')).toBe(nodes)
     expect(reparentNode(nodes, 'outer', 'inner')).toBe(nodes)
+  })
+})
+
+describe('addSelectionToGroup', () => {
+  it('adds selected sibling objects to the already selected group', () => {
+    const nodes = [
+      grp('target', { x: 100, y: 80 }),
+      term('a', { x: 500, y: 200 }),
+      term('b', { x: 700, y: 300 })
+    ]
+    const out = addSelectionToGroup(nodes, ['target', 'a', 'b'], 'target')
+    expect(out.find((node) => node.id === 'a')).toMatchObject({
+      parentId: 'target',
+      position: { x: 400, y: 120 }
+    })
+    expect(out.find((node) => node.id === 'b')!.parentId).toBe('target')
+  })
+
+  it('moves only a selected subtree root and rejects cycles through reparenting', () => {
+    const nodes = [
+      grp('target', { x: 500, y: 200 }),
+      grp('outer', { x: 100, y: 80 }),
+      term('leaf', { x: 10, y: 12 }, 'outer')
+    ]
+    const out = addSelectionToGroup(nodes, ['target', 'outer', 'leaf'], 'target')
+    expect(out.find((node) => node.id === 'outer')!.parentId).toBe('target')
+    expect(out.find((node) => node.id === 'leaf')!.parentId).toBe('outer')
+    const nested = [grp('outer', { x: 0, y: 0 }), grp('target', { x: 20, y: 20 }, 'outer')]
+    expect(addSelectionToGroup(nested, ['outer', 'target'], 'target')).toBe(nested)
+  })
+
+  it('is a no-op without a valid target or movable selected object', () => {
+    const nodes = [grp('target', { x: 0, y: 0 }), term('inside', { x: 10, y: 10 }, 'target')]
+    expect(addSelectionToGroup(nodes, ['target', 'inside'], 'target')).toBe(nodes)
+    expect(addSelectionToGroup(nodes, ['target'], 'missing')).toBe(nodes)
   })
 })
 

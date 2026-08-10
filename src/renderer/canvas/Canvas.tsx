@@ -317,6 +317,7 @@ import {
   isVideoFile,
   duplicateNode,
   flowToNodeStates,
+  addSelectionToGroup,
   groupSelectedNodes,
   NODE_COLORS,
   nodeStatesToFlow,
@@ -3857,6 +3858,14 @@ export function Canvas() {
     [setNodes, markDirty]
   )
 
+  const addToExistingGroup = useCallback(
+    (ids: string[], groupId: string) => {
+      setNodes((nodes) => addSelectionToGroup(nodes as CanvasNode[], ids, groupId))
+      markDirty()
+    },
+    [setNodes, markDirty]
+  )
+
   // Detach single nodes from their group frame (the frame and its other children stay).
   // Counterpart of drag-into-group / `ungroup` (which dissolves the whole frame).
   const removeFromGroup = useCallback(
@@ -5050,10 +5059,22 @@ export function Canvas() {
           selectedNodes.length > 0 &&
           new Set(selectedNodes.map((node) => node.parentId ?? null)).size === 1 &&
           !hasSelectedAncestor
+        const selectedGroups = selectedNodes.filter((node) => node.type === 'group')
+        const targetGroup = selectedGroups.length === 1 ? selectedGroups[0] : undefined
+        const canAddToGroup =
+          !!targetGroup &&
+          addSelectionToGroup(nodesRef.current as CanvasNode[], ids, targetGroup.id) !==
+            nodesRef.current
         const parented = ids.some(
           (nid) => !!nodesRef.current.find((nd) => nd.id === nid)?.parentId
         )
         const items: MenuItem[] = []
+        if (canAddToGroup && !isHidden('group', hidden))
+          items.push({
+            label: `Add selection to ${targetGroup.data.title || 'group'}`,
+            icon: <IconGroup />,
+            onClick: () => addToExistingGroup(ids, targetGroup.id)
+          })
         if (groupable && !isHidden('group', hidden))
           items.push({
             label: ids.length > 1 ? 'Group selection' : 'Group node',
@@ -5248,6 +5269,7 @@ export function Canvas() {
     ])
   }, [
     groupSelection,
+    addToExistingGroup,
     removeFromGroup,
     setNodesColor,
     duplicateNodes,
@@ -5373,11 +5395,25 @@ export function Canvas() {
   )
 
   const groupItems = useCallback(
-    (groupId: string, at?: { x: number; y: number }): MenuItem[] =>
+    (groupId: string, at?: { x: number; y: number }): MenuItem[] => {
+      const selectedIds = nodesRef.current.filter((node) => node.selected).map((node) => node.id)
+      const canAddSelection =
+        selectedIds.includes(groupId) &&
+        addSelectionToGroup(nodesRef.current as CanvasNode[], selectedIds, groupId) !==
+          nodesRef.current
       // The group frame has its own colors strip; it answers to the same "Colors" toggle as the
       // node menu, so hiding it in Settings hides it everywhere a right-click can reach it.
-      tidySeparators([
+      return tidySeparators([
         { type: 'label', label: 'Group' },
+        ...(canAddSelection && !isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
+          ? [
+              {
+                label: 'Add selected objects to group',
+                icon: <IconGroup />,
+                onClick: () => addToExistingGroup(selectedIds, groupId)
+              } as MenuItem
+            ]
+          : []),
         {
           label: 'New terminal',
           icon: <IconTerminal />,
@@ -5410,7 +5446,8 @@ export function Canvas() {
           danger: true,
           onClick: () => ungroup(groupId)
         }
-      ]),
+      ])
+    },
     [
       setNodesColor,
       ungroup,
@@ -5419,7 +5456,8 @@ export function Canvas() {
       isSshProject,
       addTerminal,
       agentCreationItems,
-      addSticky
+      addSticky,
+      addToExistingGroup
     ]
   )
 
@@ -8500,6 +8538,7 @@ export function Canvas() {
           // Figma-style default: left-drag rubber-band selects, pan is middle-drag/scroll.
           selectionOnDrag={!spacePan && settings.canvasDragMode !== 'pan'}
           selectionMode={SelectionMode.Partial}
+          multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
           // The lock freezes the CAMERA only (pan/zoom) — nodes stay draggable, resizable and
           // connectable: the point is "stop the map sliding under me", not "freeze my work".
           panOnDrag={
