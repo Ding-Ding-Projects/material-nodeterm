@@ -32,7 +32,11 @@ import {
 import { solveFitPadding } from './fit-view'
 import { isMacTrackpadPan } from './wheel-gesture'
 import { selectedLocalFilePaths } from './canvas-file-copy'
-import { guardedCanvasImagePlacements, isCanvasImageDropTarget } from './canvas-image-import'
+import {
+  canvasImagePasteArmedAfterKey,
+  guardedCanvasImagePlacements,
+  isCanvasImageDropTarget
+} from './canvas-image-import'
 import {
   SharedGlyphLayer,
   flushOpaqueNodeIds,
@@ -2948,6 +2952,12 @@ export function Canvas() {
     const onPointerDown = (event: PointerEvent) => {
       canvasImagePasteArmedRef.current = isCanvasImageDropTarget(event.target, wrap)
     }
+    const onKeyDown = (event: KeyboardEvent) => {
+      canvasImagePasteArmedRef.current = canvasImagePasteArmedAfterKey(
+        canvasImagePasteArmedRef.current,
+        event
+      )
+    }
     const onDragOver = (event: DragEvent) => {
       if (!isCanvasImageDropTarget(event.target, wrap)) return
       if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return
@@ -2987,11 +2997,13 @@ export function Canvas() {
       })
     }
     window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('dragover', onDragOver)
     window.addEventListener('drop', onDrop)
     window.addEventListener('paste', onPaste)
     return () => {
       window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('dragover', onDragOver)
       window.removeEventListener('drop', onDrop)
       window.removeEventListener('paste', onPaste)

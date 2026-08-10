@@ -14,6 +14,21 @@ export interface CanvasImagePlacement {
   center: { x: number; y: number }
 }
 
+/**
+ * Keyboard-opened UI must revoke a prior canvas click. Modifier keydown events are part of the
+ * normal Cmd+V sequence, so only they and the actual paste chord preserve the armed state.
+ */
+export function canvasImagePasteArmedAfterKey(
+  armed: boolean,
+  event: { key: string; metaKey: boolean; ctrlKey: boolean }
+): boolean {
+  if (!armed) return false
+  if (event.key === 'Meta' || event.key === 'Control' || event.key === 'Alt' || event.key === 'Shift') {
+    return true
+  }
+  return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v'
+}
+
 /** Resolve image files asynchronously, but abandon them if their originating project changed. */
 export async function guardedCanvasImagePlacements(
   resolvePaths: () => Promise<string[]>,

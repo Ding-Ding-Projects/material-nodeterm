@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { guardedCanvasImagePlacements, isCanvasImageDropTarget } from './canvas-image-import'
+import {
+  canvasImagePasteArmedAfterKey,
+  guardedCanvasImagePlacements,
+  isCanvasImageDropTarget
+} from './canvas-image-import'
 
 describe('isCanvasImageDropTarget', () => {
   it('accepts the real pane and rejects flow-wrap overlays and nodes', () => {
@@ -58,5 +62,18 @@ describe('guardedCanvasImagePlacements', () => {
     active = 'project-b'
     release(['/tmp/a.png'])
     await expect(placements).resolves.toEqual([])
+  })
+})
+
+describe('canvasImagePasteArmedAfterKey', () => {
+  it('preserves a real Cmd+V sequence but revokes arming for a keyboard-opened overlay', () => {
+    const meta = { key: 'Meta', metaKey: true, ctrlKey: false }
+    const paste = { key: 'v', metaKey: true, ctrlKey: false }
+    const openSettings = { key: ',', metaKey: true, ctrlKey: false }
+
+    expect(canvasImagePasteArmedAfterKey(true, meta)).toBe(true)
+    expect(canvasImagePasteArmedAfterKey(true, paste)).toBe(true)
+    expect(canvasImagePasteArmedAfterKey(true, openSettings)).toBe(false)
+    expect(canvasImagePasteArmedAfterKey(false, paste)).toBe(false)
   })
 })
