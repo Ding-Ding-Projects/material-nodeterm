@@ -1,6 +1,8 @@
 import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
+import { startCodexThread } from '../core/codex-session-name'
+import { bindCodexThreadIdentity, writeCodexThreadIdentity } from '../core/codex-identity-proxy'
 import { statSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { homedir, hostname } from 'os'
@@ -498,6 +500,12 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
+  // A fresh shared-Codex thread is created before its remote TUI attaches. Codex may emit its own
+  // SessionStart hook before NodeTerm has the returned thread id available to write the mapping,
+  // so publish one identity-only session event ourselves after the mapping is durable. During the
+  // narrow boot window before the renderer/mirror fan-out is wired, retain those events in order.
+  const pendingCodexIdentityEvents: NormalizedAgentEvent[] = []
+  let emitAgentStatus: ((event: NormalizedAgentEvent) => void) | undefined
   if (!gotSingleInstanceLock) return // losing second instance — quitting; don't touch tmux
 
   // Harden every <webview> guest (WebNode runs its page in its own webContents, so the main
@@ -885,6 +893,34 @@ app.whenReady().then(async () => {
   // hook POST dies against a dead port with zero symptoms beyond "statuses stay idle". The
   // listeners (setListener/setRawListener/setControlHandler) attach later, which the server
   // tolerates — early hook POSTs are simply dropped, never mis-routed.
+  hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, hookEndpoint }) => {
+    const threadId = await startCodexThread(cwd)
+    writeCodexThreadIdentity(threadId, nodeId, hookEndpoint)
+    const identityEvent: NormalizedAgentEvent = {
+      nodeId,
+      agentId: 'codex',
+      sessionId: threadId,
+      kind: 'session',
+      sessionPhase: 'start'
+    }
+    if (emitAgentStatus) emitAgentStatus(identityEvent)
+    else pendingCodexIdentityEvents.push(identityEvent)
+    return threadId
+  })
+  hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId, hookEndpoint }) => {
+    bindCodexThreadIdentity(threadId, nodeId, hookEndpoint, (ownerNodeId) => {
+      return workspaceStore.getNode(ownerNodeId) !== undefined
+    })
+    const identityEvent: NormalizedAgentEvent = {
+      nodeId,
+      agentId: 'codex',
+      sessionId: threadId,
+      kind: 'session',
+      sessionPhase: 'start'
+    }
+    if (emitAgentStatus) emitAgentStatus(identityEvent)
+    else pendingCodexIdentityEvents.push(identityEvent)
+  })
   await hookServer.start()
   // SSH_ASKPASS relay (ssh-project.ts): lets the ControlMaster, which has no tty, route a
   // passphrase-protected identity file's prompt back through the app instead of failing auth.
@@ -1477,7 +1513,7 @@ app.whenReady().then(async () => {
   // Fan a normalized agent event to BOTH consumers: the renderer's agentStatus store (canvas badge)
   // and the mobile-facing mirror. Named so the deterministic-approval answer handler below can reuse
   // it for the optimistic flip.
-  const emitAgentStatus = (e: NormalizedAgentEvent): void => {
+  emitAgentStatus = (e: NormalizedAgentEvent): void => {
     // Record FIRST: recordAgentEvent computes the stash-priority classification and returns the
     // event ENRICHED for a needs-you edge (a question strips its pendingId), so the canvas keys off
     // the same single source of truth as the mirror/phone. Then broadcast the enriched event.
@@ -1487,6 +1523,7 @@ app.whenReady().then(async () => {
     notchHudOnAgentEvent(enriched)
   }
   hookServer.setListener(emitAgentStatus)
+  for (const event of pendingCodexIdentityEvents.splice(0)) emitAgentStatus(event)
   // Deterministic hook-reply approvals (docs/hook-reply-approvals.md): the canvas Approve/Deny
   // buttons (and any relay client) answer a held Claude permission hook here. Route by the node's
   // project: an SSH project's hook runs on the REMOTE host (write over its ControlMaster), a local

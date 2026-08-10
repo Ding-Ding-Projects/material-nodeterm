@@ -4,7 +4,11 @@ import { tmpdir } from 'os'
 import path from 'path'
 import { promisify } from 'util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { installCodexLauncher, validCodexIdentity } from '../core/codex-identity-proxy'
+import {
+  bindCodexThreadIdentity,
+  installCodexLauncher,
+  validCodexIdentity
+} from '../core/codex-identity-proxy'
 
 const run = promisify(execFile)
 
@@ -21,9 +25,21 @@ describe('NodeTerm Codex remote launcher', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-'))
     const bin = path.join(root, 'bin')
     const fakeCodex = path.join(bin, 'codex')
+    const fakeCurl = path.join(bin, 'curl')
+    const endpoint = path.join(root, 'hook-endpoint.env')
     const outA = path.join(root, 'a.json')
     const outB = path.join(root, 'b.json')
+    const bindA = path.join(root, 'bind-a.txt')
+    const bindB = path.join(root, 'bind-b.txt')
     await run('/bin/mkdir', ['-p', bin])
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', {
+      mode: 0o600
+    })
+    writeFileSync(
+      fakeCurl,
+      '#!/bin/sh\ncat >/dev/null\nprintf \'%s\\n\' "$@" > "$CAPTURE_BIND"\n',
+      { mode: 0o700 }
+    )
     writeFileSync(
       fakeCodex,
       '#!/bin/sh\nprintf \'[\' > "$CAPTURE"\nfirst=1\nfor arg in "$@"; do [ "$first" = 1 ] || printf \',\' >> "$CAPTURE"; first=0; node -e \'process.stdout.write(JSON.stringify(process.argv[1]))\' -- "$arg" >> "$CAPTURE"; done\nprintf \']\' >> "$CAPTURE"\n',
@@ -31,15 +47,19 @@ describe('NodeTerm Codex remote launcher', () => {
     )
     vi.stubEnv('HOME', root)
     const launcher = installCodexLauncher()
-    const base = { PATH: `${bin}:${process.env.PATH ?? ''}`, NODETERM_CANVAS_CONTROL: '1' }
+    const base = {
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      NODETERM_CANVAS_CONTROL: '1',
+      NODETERM_HOOK_ENDPOINT: endpoint
+    }
     await Promise.all([
       run(launcher, ['resume', 'thread-a'], { env: {
         ...process.env, ...base, CAPTURE: outA,
-        NODETERM_NODE_ID: 'node-a', NODETERM_HOOK_ENDPOINT: '/isolated/node-a/hook.env'
+        NODETERM_NODE_ID: 'node-a', CAPTURE_BIND: bindA
       }}),
       run(launcher, ['resume', 'thread-b'], { env: {
         ...process.env, ...base, CAPTURE: outB,
-        NODETERM_NODE_ID: 'node-b', NODETERM_HOOK_ENDPOINT: '/isolated/node-b/hook.env'
+        NODETERM_NODE_ID: 'node-b', CAPTURE_BIND: bindB
       }})
     ])
     const argsA = JSON.parse(readFileSync(outA, 'utf8'))
@@ -47,13 +67,68 @@ describe('NodeTerm Codex remote launcher', () => {
     expect(argsA).toEqual(['--remote', 'unix://', 'resume', 'thread-a'])
     expect(argsB).toEqual(['--remote', 'unix://', 'resume', 'thread-b'])
     expect(argsA.slice(0, 2)).toEqual(argsB.slice(0, 2))
-    const maps = path.join(root, '.nodeterm', 'codex-thread-nodes')
-    expect(readFileSync(path.join(maps, 'thread-a'), 'utf8')).toBe(
-      'nodeId=node-a\nendpoint=/isolated/node-a/hook.env\n'
+    expect(readFileSync(bindA, 'utf8')).toContain('nodeId=node-a\n')
+    expect(readFileSync(bindA, 'utf8')).toContain('threadId=thread-a\n')
+    expect(readFileSync(bindB, 'utf8')).toContain('nodeId=node-b\n')
+    expect(readFileSync(bindB, 'utf8')).toContain('threadId=thread-b\n')
+  })
+
+  it('pre-creates and binds two fresh sessions independently on the shared app-server', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-fresh-'))
+    const bin = path.join(root, 'bin')
+    const fakeCodex = path.join(bin, 'codex')
+    const fakeCurl = path.join(bin, 'curl')
+    const endpoint = path.join(root, 'hook-endpoint.env')
+    const outA = path.join(root, 'a.json')
+    const outB = path.join(root, 'b.json')
+    await run('/bin/mkdir', ['-p', bin])
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', {
+      mode: 0o600
+    })
+    writeFileSync(
+      fakeCurl,
+      '#!/bin/sh\ncat >/dev/null\nfor arg in "$@"; do case "$arg" in nodeId=node-a) printf thread-new-a; exit 0 ;; nodeId=node-b) printf thread-new-b; exit 0 ;; esac; done\nexit 22\n',
+      { mode: 0o700 }
     )
-    expect(readFileSync(path.join(maps, 'thread-b'), 'utf8')).toBe(
-      'nodeId=node-b\nendpoint=/isolated/node-b/hook.env\n'
+    writeFileSync(
+      fakeCodex,
+      '#!/bin/sh\nprintf \'[\' > "$CAPTURE"\nfirst=1\nfor arg in "$@"; do [ "$first" = 1 ] || printf \',\' >> "$CAPTURE"; first=0; node -e \'process.stdout.write(JSON.stringify(process.argv[1]))\' -- "$arg" >> "$CAPTURE"; done\nprintf \']\' >> "$CAPTURE"\n',
+      { mode: 0o700 }
     )
+    vi.stubEnv('HOME', root)
+    const launcher = installCodexLauncher()
+    const base = {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      NODETERM_CANVAS_CONTROL: '1',
+      NODETERM_HOOK_ENDPOINT: endpoint
+    }
+
+    await Promise.all([
+      run(launcher, ['prompt a'], {
+        cwd: '/tmp',
+        env: { ...base, CAPTURE: outA, NODETERM_NODE_ID: 'node-a' }
+      }),
+      run(launcher, ['prompt b'], {
+        cwd: '/tmp',
+        env: { ...base, CAPTURE: outB, NODETERM_NODE_ID: 'node-b' }
+      })
+    ])
+
+    expect(JSON.parse(readFileSync(outA, 'utf8'))).toEqual([
+      '--remote',
+      'unix://',
+      'resume',
+      'thread-new-a',
+      'prompt a'
+    ])
+    expect(JSON.parse(readFileSync(outB, 'utf8'))).toEqual([
+      '--remote',
+      'unix://',
+      'resume',
+      'thread-new-b',
+      'prompt b'
+    ])
   })
 
   it('fails closed before launch for a missing or invalid resume-thread mapping key', async () => {
@@ -72,6 +147,19 @@ describe('NodeTerm Codex remote launcher', () => {
     }
     await expect(run(launcher, ['resume'], { env })).rejects.toMatchObject({ code: 64 })
     await expect(run(launcher, ['resume', '../other'], { env })).rejects.toMatchObject({ code: 64 })
+  })
+
+  it('rejects a live duplicate owner but permits replacing a stale node binding', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-binding-'))
+    vi.stubEnv('HOME', root)
+    bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false)
+    expect(() =>
+      bindCodexThreadIdentity('thread-a', 'node-b', '/isolated/hook.env', (nodeId) => nodeId === 'node-a')
+    ).toThrow('already bound')
+    bindCodexThreadIdentity('thread-a', 'node-b', '/isolated/hook.env', () => false)
+    expect(
+      readFileSync(path.join(root, '.nodeterm', 'codex-thread-nodes', 'thread-a'), 'utf8')
+    ).toBe('nodeId=node-b\nendpoint=/isolated/hook.env\n')
   })
 
   it.each([

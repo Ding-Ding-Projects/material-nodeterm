@@ -90,6 +90,10 @@ class HookServer {
   private contextLinkHandler:
     | ((req: { verb: string; nodeId: string; args: Record<string, string> }) => Promise<string>)
     | null = null
+  private codexThreadStartHandler:
+    ((req: { nodeId: string; cwd: string; hookEndpoint: string }) => Promise<string>) | null = null
+  private codexThreadBindHandler:
+    ((req: { nodeId: string; threadId: string; hookEndpoint: string }) => Promise<void>) | null = null
   private endpointPath = ''
 
   endpointFilePath(): string {
@@ -125,6 +129,14 @@ class HookServer {
     this.contextLinkHandler = cb
   }
 
+  setCodexThreadStartHandler(cb: NonNullable<HookServer['codexThreadStartHandler']>): void {
+    this.codexThreadStartHandler = cb
+  }
+
+  setCodexThreadBindHandler(cb: NonNullable<HookServer['codexThreadBindHandler']>): void {
+    this.codexThreadBindHandler = cb
+  }
+
   async start(): Promise<void> {
     if (this.server) return
     this.token = randomUUID()
@@ -143,6 +155,58 @@ class HookServer {
         }
         req.setTimeout(SLOWLORIS_MS, () => req.destroy())
         const reqUrl = new URL(req.url ?? '/', 'http://127.0.0.1')
+        if (reqUrl.pathname === '/codex-thread/start') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const cwd = form.cwd ?? ''
+          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !path.isAbsolute(cwd)) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          try {
+            const threadId = this.codexThreadStartHandler
+              ? await this.codexThreadStartHandler({
+                  nodeId,
+                  cwd,
+                  hookEndpoint: this.endpointFilePath()
+                })
+              : ''
+            if (!/^[A-Za-z0-9._-]+$/.test(threadId)) throw new Error('invalid thread id')
+            res.writeHead(200, {
+              'content-type': 'text/plain; charset=utf-8'
+            })
+            res.end(`${threadId}\n`)
+          } catch {
+            res.writeHead(503)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/bind') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const threadId = form.threadId ?? ''
+          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId)) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadBindHandler) throw new Error('bind handler unavailable')
+            await this.codexThreadBindHandler({
+              nodeId,
+              threadId,
+              hookEndpoint: this.endpointFilePath()
+            })
+            res.writeHead(204)
+            res.end()
+          } catch {
+            res.writeHead(409)
+            res.end()
+          }
+          return
+        }
         if (reqUrl.pathname.startsWith('/control/')) {
           const verb = decodeURIComponent(reqUrl.pathname.replace(/^\/control\//, ''))
           const { nodeId, args } = parseControlBody(

@@ -10,6 +10,10 @@ const REQUEST_TIMEOUT_MS = 2_000
 const names = new Map<string, { name: string | null; at: number }>()
 const inflight = new Map<string, Promise<string | null>>()
 
+function connectCodexAppServer(socketPath: string): WebSocket {
+  return new WebSocket(codexUnixWebSocketUrl(socketPath), { perMessageDeflate: false })
+}
+
 export function defaultCodexAppServerSocket(): string {
   const configuredHome = process.env.CODEX_HOME
   const codexHome = configuredHome && path.isAbsolute(configuredHome)
@@ -50,7 +54,7 @@ export function readCodexSessionNameAt(
     const timer = setTimeout(() => finish(null), timeoutMs)
     timer.unref?.()
     try {
-      ws = new WebSocket(codexUnixWebSocketUrl(socketPath), { perMessageDeflate: false })
+      ws = connectCodexAppServer(socketPath)
     } catch {
       clearTimeout(timer)
       resolve(null)
@@ -81,6 +85,88 @@ export function readCodexSessionNameAt(
     ws.once('error', () => finish(null))
     ws.once('close', () => finish(null))
   })
+}
+
+/**
+ * Create one new thread on the shared authenticated app-server and return its exact identity.
+ * NodeTerm does this before launching the remote TUI, then resumes this thread. That makes the
+ * client↔canvas binding deterministic even when multiple nodes start concurrently: no process-
+ * global node id, creation-time matching, or per-node app-server is involved.
+ */
+export function startCodexThreadAt(
+  socketPath: string,
+  cwd: string,
+  timeoutMs = REQUEST_TIMEOUT_MS
+): Promise<string> {
+  if (!path.isAbsolute(cwd) || cwd.includes('\0')) {
+    return Promise.reject(new Error('Unsupported Codex thread cwd'))
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let ws: WebSocket
+    const finish = (error: Error | null, threadId?: string): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try {
+        ws.close()
+      } catch {
+        /* connection may never have opened */
+      }
+      if (error) reject(error)
+      else resolve(threadId as string)
+    }
+    const timer = setTimeout(
+      () => finish(new Error('Codex app-server thread start timed out')),
+      timeoutMs
+    )
+    timer.unref?.()
+    try {
+      ws = connectCodexAppServer(socketPath)
+    } catch {
+      clearTimeout(timer)
+      reject(new Error('Codex app-server is unavailable'))
+      return
+    }
+    ws.once('open', () => {
+      ws.send(
+        JSON.stringify({
+          id: 1,
+          method: 'initialize',
+          params: { clientInfo: { name: 'nodeterm', version: '1' } }
+        })
+      )
+    })
+    ws.on('message', (raw) => {
+      let message: Record<string, any>
+      try {
+        message = JSON.parse(raw.toString())
+      } catch {
+        return
+      }
+      if (message.id === 1) {
+        if (message.error) {
+          finish(new Error('Codex app-server initialization failed'))
+          return
+        }
+        ws.send(JSON.stringify({ method: 'initialized' }))
+        ws.send(JSON.stringify({ id: 2, method: 'thread/start', params: { cwd } }))
+      } else if (message.id === 2) {
+        const threadId = message.result?.thread?.id
+        if (message.error || typeof threadId !== 'string' || !SAFE_THREAD_ID.test(threadId)) {
+          finish(new Error('Codex app-server returned no valid thread identity'))
+          return
+        }
+        finish(null, threadId)
+      }
+    })
+    ws.once('error', () => finish(new Error('Codex app-server is unavailable')))
+    ws.once('close', () => finish(new Error('Codex app-server closed before thread start')))
+  })
+}
+
+export function startCodexThread(cwd: string): Promise<string> {
+  return startCodexThreadAt(defaultCodexAppServerSocket(), cwd)
 }
 
 export function readCodexSessionName(threadId: string): Promise<string | null> {
