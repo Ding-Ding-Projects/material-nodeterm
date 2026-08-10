@@ -65,6 +65,27 @@ describe('AgentMailbox', () => {
     expect(JSON.parse(storage.getItem(AGENT_MAILBOX_KEY) ?? '[]')).toHaveLength(1)
   })
 
+  it('renders a native Loop sender without an unusable reply command', () => {
+    const mailbox = new AgentMailbox(memoryStorage())
+    const message = mailbox.create({
+      id: 'msg-loop',
+      sender: { projectId: 'project-1', nodeId: 'scheduler-1', title: 'Loop: Daily status' },
+      recipient: {
+        projectId: 'project-1',
+        nodeId: 'term-1',
+        title: 'Agent',
+        agentId: 'codex'
+      },
+      subject: 'LOOP: Daily status',
+      body: 'Check status',
+      now: new Date('2026-08-11T08:00:00Z')
+    })
+
+    const rendered = renderAgentMessage(message)
+    expect(rendered).toContain('Automatischer NodeTerm Loop')
+    expect(rendered).not.toContain('reply --message')
+  })
+
   it('survives recreation, queues once, and persists delivery', () => {
     const storage = memoryStorage()
     const first = new AgentMailbox(storage)

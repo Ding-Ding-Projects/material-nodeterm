@@ -19,7 +19,7 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const schedule = (data.loopSchedule as string) || ''
   const task = (data.loopTask as string) || ''
   const kind = (data.loopKind as string) || 'loop'
-  const label = kind.charAt(0).toUpperCase() + kind.slice(1)
+  const label = `Claude ${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
   const expanded = !!data.ephExpanded
   const bodyRef = useRef<HTMLDivElement>(null)
   const toggle = () => useAgentNodes.getState().toggleExpanded(id)

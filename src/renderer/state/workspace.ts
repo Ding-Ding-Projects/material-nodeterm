@@ -44,6 +44,7 @@ const DINO_SIZE = { width: 600, height: 200 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
+const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 
 /** Height of a node when collapsed (header only). */
 export const COLLAPSED_HEIGHT = 40
@@ -61,6 +62,13 @@ export interface NodeData {
   group: string | null
   tags?: string[]
   collapsed?: boolean
+  /** Native persisted Loop node fields (type='scheduler'). */
+  loopTask?: string
+  loopIntervalMs?: number
+  loopEnabled?: boolean
+  loopNextRunAt?: number
+  loopLastRunAt?: number
+  loopTargetIds?: string[]
   /** Expanded height to restore when un-collapsing (kept out of the persisted size). */
   expandedHeight?: number
   /** One-shot command run once when the terminal first opens (not persisted). */
@@ -728,6 +736,27 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
   }
 }
 
+/** Creates a user-owned Loop scheduler. It has no PTY; outgoing schedule handles target agents. */
+export function createNativeLoopNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('scheduler'),
+    type: 'scheduler',
+    position: placeAt(center, index, NATIVE_LOOP_SIZE.width, NATIVE_LOOP_SIZE.height),
+    width: NATIVE_LOOP_SIZE.width,
+    height: NATIVE_LOOP_SIZE.height,
+    style: { width: NATIVE_LOOP_SIZE.width, height: NATIVE_LOOP_SIZE.height },
+    data: {
+      title: 'Loop',
+      color: '#ffb340',
+      group: null,
+      loopTask: '',
+      loopIntervalMs: 15 * 60_000,
+      loopEnabled: false,
+      loopTargetIds: []
+    }
+  }
+}
+
 /** Creates a new dino (T-Rex Runner) game node, seeded with the project's record. */
 export function createDinoNode(
   index: number,
@@ -1278,6 +1307,12 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         tags: n.tags,
         collapsed,
         expandedHeight: n.size.height,
+        loopTask: n.loopTask,
+        loopIntervalMs: n.loopIntervalMs,
+        loopEnabled: n.loopEnabled,
+        loopNextRunAt: n.loopNextRunAt,
+        loopLastRunAt: n.loopLastRunAt,
+        loopTargetIds: n.loopTargetIds,
         shell: n.shell,
         cwd: n.cwd,
         text: n.text,
@@ -1319,9 +1354,11 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
                 ? BROWSER_SIZE
                 : kind === 'web'
                   ? WEB_SIZE
-                  : kind === 'dino'
-                    ? DINO_SIZE
-                    : TERMINAL_SIZE
+                  : kind === 'scheduler'
+                    ? NATIVE_LOOP_SIZE
+                    : kind === 'dino'
+                      ? DINO_SIZE
+                      : TERMINAL_SIZE
   return nodes
     .map((n) => {
       const kind: NodeKind = (n.type as NodeKind) ?? 'terminal'
@@ -1343,6 +1380,12 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         group: n.data.group,
         tags: n.data.tags,
         collapsed: n.data.collapsed,
+        loopTask: n.data.loopTask,
+        loopIntervalMs: n.data.loopIntervalMs,
+        loopEnabled: n.data.loopEnabled,
+        loopNextRunAt: n.data.loopNextRunAt,
+        loopLastRunAt: n.data.loopLastRunAt,
+        loopTargetIds: n.data.loopTargetIds,
         parentId: n.parentId,
         shell: n.data.shell,
         cwd: n.data.cwd,

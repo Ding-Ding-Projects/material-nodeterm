@@ -111,7 +111,7 @@ export function agentEndpointAddress(endpoint: AgentMessageEndpoint): string {
 export function renderAgentMessage(message: AgentMessage): string {
   const senderTitle = oneLine(message.sender.title)
   const recipientTitle = oneLine(message.recipient.title)
-  return [
+  const lines = [
     `Zeitstempel: ${message.timestamp}`,
     `Absender: ${senderTitle} (${agentEndpointAddress(message.sender)})`,
     `Empfänger: ${recipientTitle} (${agentEndpointAddress(message.recipient)})`,
@@ -119,9 +119,14 @@ export function renderAgentMessage(message: AgentMessage): string {
     '',
     message.body.trim(),
     '',
-    `NodeTerm-Nachrichten-ID: ${message.id}`,
-    `Antwort: NodeTerm-Canvas-Tool reply --message ${message.id} --text "<Antwort>"`
-  ].join('\n')
+    `NodeTerm-Nachrichten-ID: ${message.id}`
+  ]
+  if (message.sender.agentId) {
+    lines.push(`Antwort: NodeTerm-Canvas-Tool reply --message ${message.id} --text "<Antwort>"`)
+  } else {
+    lines.push('Automatischer NodeTerm Loop — keine Antwort an den Absender erforderlich.')
+  }
+  return lines.join('\n')
 }
 
 export class AgentMailbox {

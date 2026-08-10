@@ -159,7 +159,9 @@ export interface RecycledInfo {
 }
 
 // 'subagent' and 'loop' are render-only (ephemeral hook-driven viz) and never persisted.
-export type NodeKind = 'terminal' | 'sticky' | 'group' | 'editor' | 'diff' | 'video' | 'web' | 'browser' | 'subagent' | 'loop' | 'dino'
+// 'scheduler' is the user-created, persisted NodeTerm Loop; the internal name avoids colliding
+// with the existing derived agent card.
+export type NodeKind = 'terminal' | 'sticky' | 'group' | 'editor' | 'diff' | 'video' | 'web' | 'browser' | 'subagent' | 'loop' | 'scheduler' | 'dino'
 
 /** Persisted state of a single canvas node (terminal, sticky note, group frame, or editor). */
 /**
@@ -202,6 +204,17 @@ export interface CanvasNodeState {
   tags?: string[]
   /** When true the node body is hidden (header-only). */
   collapsed?: boolean
+  /** scheduler-only: prompt delivered through the persistent inter-agent mailbox. */
+  loopTask?: string
+  /** scheduler-only: fixed cadence in milliseconds. */
+  loopIntervalMs?: number
+  /** scheduler-only: paused=false/running=true. */
+  loopEnabled?: boolean
+  /** scheduler-only: absolute local wall-clock instants. */
+  loopNextRunAt?: number
+  loopLastRunAt?: number
+  /** scheduler-only: exact agent node ids receiving each fire. */
+  loopTargetIds?: string[]
   /** Parent group node id, if this node belongs to a group frame. */
   parentId?: string
   // terminal-only

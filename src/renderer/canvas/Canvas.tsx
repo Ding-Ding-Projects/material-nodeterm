@@ -67,6 +67,13 @@ import BrowserNode from '../nodes/BrowserNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
+import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
+import {
+  loopMessageId,
+  loopRunDue,
+  nextLoopRun,
+  validLoopInterval
+} from '../lib/nativeLoop'
 import { withNodeBoundary } from '../components/NodeBoundary'
 import { Dock } from '../components/Dock'
 import { TabBar } from '../components/TabBar'
@@ -313,6 +320,7 @@ import {
   createDiffNode,
   createEditorNode,
   createGroupNode,
+  createNativeLoopNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createStickyNode,
@@ -1147,6 +1155,7 @@ export function Canvas() {
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
+      scheduler: withNodeBoundary(NativeLoopNode),
       dino: withNodeBoundary(DinoNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
@@ -1414,6 +1423,57 @@ export function Canvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- depEdgeSig IS the ref's signature
     [depEdgeSig]
   )
+  // Native Loop delivery edges are derived from each persisted scheduler node's target ids.
+  // Reducing to a primitive signature keeps drag frames from rebuilding every edge object.
+  const schedulePairsRef = useRef<Array<{ id: string; source: string; target: string; enabled: boolean }>>([])
+  const scheduleEdgeSig = useMemo(() => {
+    const ids = new Set(nodes.map((node) => node.id))
+    const pairs: Array<{ id: string; source: string; target: string; enabled: boolean }> = []
+    for (const node of nodes) {
+      if (node.type !== 'scheduler') continue
+      for (const target of (node.data.loopTargetIds as string[] | undefined) ?? []) {
+        if (!ids.has(target)) continue
+        pairs.push({
+          id: `schedule-${node.id}-${target}`,
+          source: node.id,
+          target,
+          enabled: !!node.data.loopEnabled
+        })
+      }
+    }
+    schedulePairsRef.current = pairs
+    return pairs.map((pair) => `${pair.id}:${pair.enabled ? 1 : 0}`).join('|')
+  }, [nodes])
+  const scheduleEdges = useMemo(
+    () =>
+      schedulePairsRef.current.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: 'schedule-out',
+        targetHandle: 'link-in',
+        type: 'default' as const,
+        selectable: false,
+        label: edge.enabled ? '↻ Loop' : '↻ paused',
+        labelStyle: { fill: edge.enabled ? '#ffb340' : '#8e8e93', fontSize: 11, fontWeight: 700 },
+        labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.9 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 5,
+        style: {
+          stroke: edge.enabled ? '#ffb340' : '#636366',
+          strokeWidth: 2,
+          strokeDasharray: '8 5'
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: edge.enabled ? '#ffb340' : '#636366',
+          width: 14,
+          height: 14
+        }
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scheduleEdgeSig signs the ref
+    [scheduleEdgeSig]
+  )
   const displayEdges = useMemo(() => {
     const stickyIds = new Set(stickySig ? stickySig.split('|') : [])
     // ONE edge per pair. A node an agent opens gets both a rope (lineage) and a context bridge
@@ -1472,11 +1532,11 @@ export function Canvas() {
     // durable relation and stays. Built above (depEdges), keyed on the dependency signature so a
     // drag frame does not rebuild it.
     const extra =
-      ephemeralEdges.length || ropes.length || depEdges.length
-        ? [...ephemeralEdges, ...ropes, ...depEdges]
+      ephemeralEdges.length || ropes.length || depEdges.length || scheduleEdges.length
+        ? [...scheduleEdges, ...ephemeralEdges, ...ropes, ...depEdges]
         : []
     return extra.length ? [...decorated, ...extra] : decorated
-  }, [linkEdges, ephemeralEdges, controlEdges, accent, stickySig, depEdges])
+  }, [linkEdges, ephemeralEdges, controlEdges, accent, stickySig, depEdges, scheduleEdges])
 
   // Header pin button (and ⌘⇧L): toggle the persisted pin preference. Clears the transient
   // dismiss so (re)pinning shows the docked panel; unpinning collapses it to hover-peek.
@@ -2350,6 +2410,27 @@ export function Canvas() {
   const onConnect = useCallback(
     (c: Connection) => {
       if (!c.source || !c.target || c.source === c.target) return
+      const sourceNode = nodesRef.current.find((node) => node.id === c.source)
+      const targetNode = nodesRef.current.find((node) => node.id === c.target)
+      // Native Loop → agent: store the exact target on the Loop node. The visible schedule edge
+      // is derived from that persisted list; it is deliberately not a context link.
+      if (sourceNode?.type === 'scheduler') {
+        if (targetNode?.type !== 'terminal' || !createdAgentId(targetNode.data)) return
+        const targets = (sourceNode.data.loopTargetIds as string[] | undefined) ?? []
+        if (targets.includes(c.target)) return
+        setNodes((current) =>
+          current.map((node) =>
+            node.id === c.source
+              ? {
+                  ...node,
+                  data: { ...node.data, loopTargetIds: [...targets, c.target!] }
+                }
+              : node
+          )
+        )
+        markDirty()
+        return
+      }
       const se = linkEndpointOf(c.source)
       const te = linkEndpointOf(c.target)
       if (!se || !te) return
@@ -2401,12 +2482,31 @@ export function Canvas() {
       )
       if (msg) void api.pty.sendText(target, msg)
     },
-    [linkEndpointOf, agentIdOf, setLinkEdges, markDirty, nodes]
+    [linkEndpointOf, agentIdOf, setLinkEdges, setNodes, markDirty, nodes]
   )
 
   // Double-click a context link to remove it (ephemeral subagent/loop edges are left alone).
   const onEdgeDoubleClick = useCallback(
     (_e: React.MouseEvent, edge: Edge) => {
+      if (edge.id.startsWith('schedule-')) {
+        setNodes((current) =>
+          current.map((node) =>
+            node.id === edge.source
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    loopTargetIds: ((node.data.loopTargetIds as string[] | undefined) ?? []).filter(
+                      (target) => target !== edge.target
+                    )
+                  }
+                }
+              : node
+          )
+        )
+        markDirty()
+        return
+      }
       // Control ropes are removable the same way as context links (ephemeral edges are not).
       if (controlEdgesRef.current.some((b) => b.id === edge.id)) {
         // A rope may be the only DRAWN edge for a pair that also has a context bridge (see
@@ -2424,7 +2524,7 @@ export function Canvas() {
       setLinkEdges((es) => es.filter((b) => b.id !== edge.id))
       markDirty()
     },
-    [setLinkEdges, markDirty]
+    [setLinkEdges, setNodes, markDirty]
   )
 
   // Route edge changes (selection) to the right store: `ctrl-` ids are control ropes (local
@@ -2452,6 +2552,24 @@ export function Canvas() {
       return valid.length === es.length ? es : valid
     })
   }, [nodes])
+
+  // A deleted target cannot remain a hidden scheduler recipient. Prune stale ids from the Loop
+  // node itself (the persistence source), not merely from the derived edge list.
+  useEffect(() => {
+    const ids = new Set(nodes.map((node) => node.id))
+    let changed = false
+    const next = nodes.map((node) => {
+      if (node.type !== 'scheduler') return node
+      const targets = (node.data.loopTargetIds as string[] | undefined) ?? []
+      const valid = targets.filter((target) => ids.has(target))
+      if (valid.length === targets.length) return node
+      changed = true
+      return { ...node, data: { ...node.data, loopTargetIds: valid } }
+    })
+    if (!changed) return
+    setNodes(next)
+    markDirty()
+  }, [nodes, setNodes, markDirty])
 
   // Rewrite link files when a linked node's session starts/changes: main resolves
   // codex/gemini transcripts by sessionId, so a session that appears after the edge was
@@ -3268,6 +3386,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createStickyNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addNativeLoop = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createNativeLoopNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -5450,6 +5579,7 @@ export function Canvas() {
         },
         ...agentCreationItems(at, groupId),
         { label: 'New sticky note', icon: <IconNote />, onClick: () => addSticky(at, groupId) },
+        { label: 'New Loop', icon: <IconReload />, onClick: () => addNativeLoop(at, groupId) },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -5486,6 +5616,7 @@ export function Canvas() {
       addTerminal,
       agentCreationItems,
       addSticky,
+      addNativeLoop,
       addToExistingGroup,
       groupSelection
     ]
@@ -5499,7 +5630,7 @@ export function Canvas() {
     const st = useAgentNodes.getState()
     const isLoop = id.startsWith('loop-')
     return [
-      { type: 'label', label: isLoop ? 'Loop card' : 'Subagent card' },
+      { type: 'label', label: isLoop ? 'Claude Loop card' : 'Subagent card' },
       {
         label: st.expanded[id] ? 'Collapse' : 'Expand',
         icon: <IconCollapse />,
@@ -5551,6 +5682,7 @@ export function Canvas() {
           // Content nodes.
           { label: 'New browser', icon: <IconRemote />, onClick: () => addBrowser(at) },
           { label: 'New sticky note', icon: <IconNote />, onClick: () => addSticky(at) },
+          { label: 'New Loop', icon: <IconReload />, onClick: () => addNativeLoop(at) },
           { label: 'New dino game', icon: <IconDino />, onClick: () => addDino(at) },
           { label: 'Open file…', icon: <IconEditor />, onClick: () => void openFileDialog(at) },
           ...(hasCwd
@@ -5591,6 +5723,7 @@ export function Canvas() {
       addTerminal,
       agentCreationItems,
       addSticky,
+      addNativeLoop,
       addDino,
       addBrowser,
       openFileDialog,
@@ -6060,7 +6193,15 @@ export function Canvas() {
       if (message.recipient.projectId !== useProjects.getState().activeProjectId) return false
       const target = nodesRef.current.find((node) => node.id === message.recipient.nodeId)
       if (!target || target.type !== 'terminal') return false
-      const state = useAgentStatus.getState().byId[target.id]?.state
+      const configuredAgent = createdAgentId(target.data)
+      const live = useAgentStatus.getState().byId[target.id]
+      // A terminal shell accepting bytes is not proof that an agent turn received them. Only
+      // created agent nodes whose expected CLI currently owns the pane may advance to delivered.
+      if (!configuredAgent || live?.agentId !== configuredAgent) return false
+      const expectedProcess = agentConfig(configuredAgent)?.expectedProcess
+      const paneProcess = (await api.pty.paneCommand(target.id))?.split('/').pop()
+      if (!expectedProcess || paneProcess !== expectedProcess) return false
+      const state = live.state
       if (state === 'working' || state === 'blocked' || state === 'waiting') return false
       const inFlight = mailboxDeliveryInFlightRef.current
       if (inFlight.has(message.id)) return false
@@ -6086,6 +6227,123 @@ export function Canvas() {
     },
     [deliverMailboxMessage]
   )
+
+  const fireNativeLoop = useCallback(
+    async (loopId: string, scheduledAt: number): Promise<number> => {
+      const projectId = useProjects.getState().activeProjectId
+      if (!projectId) return 0
+      const loop = nodesRef.current.find((node) => node.id === loopId && node.type === 'scheduler')
+      const body = String(loop?.data.loopTask ?? '').trim()
+      if (!loop || !body) return 0
+      const title = String(loop.data.title || 'Loop').trim() || 'Loop'
+      const targets = [...new Set((loop.data.loopTargetIds as string[] | undefined) ?? [])]
+      let queued = 0
+      for (const targetId of targets) {
+        const target = nodesRef.current.find((node) => node.id === targetId)
+        if (!target || target.type !== 'terminal') continue
+        const agentId = createdAgentId(target.data)
+        if (!agentId) continue
+        const id = loopMessageId(loopId, targetId, scheduledAt)
+        let message = agentMailbox().get(id)
+        if (!message) {
+          const status = useAgentStatus.getState().byId[targetId]
+          message = agentMailbox().create({
+            id,
+            sender: { projectId, nodeId: loopId, title },
+            recipient: {
+              projectId,
+              nodeId: targetId,
+              title: String(target.data.title || agentConfig(agentId)?.label || agentId),
+              agentId,
+              sessionId: status?.sessionId
+            },
+            subject: `LOOP: ${title}`,
+            body,
+            now: new Date(scheduledAt)
+          })
+        }
+        queued += 1
+        void deliverMailboxMessage(message)
+      }
+      return queued
+    },
+    [deliverMailboxMessage]
+  )
+
+  const loopRunsInFlightRef = useRef(new Set<string>())
+  useEffect(
+    () =>
+      setNativeLoopRunHandler((loopId) => {
+        const now = Date.now()
+        void fireNativeLoop(loopId, now).then((count) => {
+          if (!count) return
+          setNodes((current) =>
+            current.map((node) =>
+              node.id === loopId
+                ? { ...node, data: { ...node.data, loopLastRunAt: now } }
+                : node
+            )
+          )
+          markDirty()
+        })
+      }),
+    [fireNativeLoop, markDirty, setNodes]
+  )
+
+  useEffect(() => {
+    const tick = (): void => {
+      const now = Date.now()
+      for (const node of nodesRef.current) {
+        if (node.type !== 'scheduler' || !node.data.loopEnabled) continue
+        const intervalMs = validLoopInterval(node.data.loopIntervalMs)
+        const targets = (node.data.loopTargetIds as string[] | undefined) ?? []
+        if (!String(node.data.loopTask ?? '').trim() || targets.length === 0) continue
+        if (!loopRunDue(now, node.data.loopNextRunAt)) {
+          if (typeof node.data.loopNextRunAt === 'number') continue
+          setNodes((current) =>
+            current.map((candidate) =>
+              candidate.id === node.id
+                ? {
+                    ...candidate,
+                    data: { ...candidate.data, loopNextRunAt: nextLoopRun(now, intervalMs) }
+                  }
+                : candidate
+            )
+          )
+          markDirty()
+          continue
+        }
+        const scheduledAt = node.data.loopNextRunAt
+        const runKey = `${node.id}:${scheduledAt}`
+        if (loopRunsInFlightRef.current.has(runKey)) continue
+        loopRunsInFlightRef.current.add(runKey)
+        // Advance before awaiting delivery. A restart or a slow/busy target cannot replay this
+        // due instant; a missed interval produces one catch-up message, never a burst.
+        setNodes((current) =>
+          current.map((candidate) =>
+            candidate.id === node.id
+              ? {
+                  ...candidate,
+                  data: {
+                    ...candidate.data,
+                    loopLastRunAt: scheduledAt,
+                    loopNextRunAt: nextLoopRun(now, intervalMs, scheduledAt)
+                  }
+                }
+              : candidate
+          )
+        )
+        markDirty()
+        void fireNativeLoop(node.id, scheduledAt).finally(() => {
+          loopRunsInFlightRef.current.delete(runKey)
+        })
+      }
+    }
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [activeProjectId, fireNativeLoop, markDirty, setNodes])
+
   const mailboxNodeSig = useMemo(
     () => nodes.filter((node) => node.type === 'terminal').map((node) => node.id).sort().join('|'),
     [nodes]
@@ -8239,6 +8497,7 @@ export function Canvas() {
           })
         ),
       { id: 'new-sticky', label: 'New sticky note', icon: <IconNote />, run: () => addSticky() },
+      { id: 'new-loop', label: 'New Loop', icon: <IconReload />, run: () => addNativeLoop() },
       { id: 'new-dino', label: 'New dino game', icon: <IconDino />, run: () => addDino() },
       { id: 'open-file', label: 'Open file…', icon: <IconEditor />, run: () => void openFileDialog() },
       // "New file…" needs a project folder to create into — hidden when the project has no cwd.
@@ -8364,6 +8623,7 @@ export function Canvas() {
     addTerminal,
     addAgentNode,
     addSticky,
+    addNativeLoop,
     addDino,
     addWebView,
     addBrowser,
@@ -9168,6 +9428,7 @@ export function Canvas() {
         onRedo={redo}
         onAddTerminal={addTerminal}
         onAddSticky={addSticky}
+        onAddLoop={addNativeLoop}
         onAddDino={addDino}
         onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
         onOpenFile={() => void openFileDialog()}
