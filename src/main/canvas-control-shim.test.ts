@@ -213,6 +213,95 @@ describe('canvas-control shim', () => {
     expect(received.at(-1)?.nodeId).toBe('node-account-b')
   })
 
+  it('recovers a unique managed mapping when a native tool shell drops account env', async () => {
+    const home = path.join(dir, 'unique-managed-codex-home')
+    const maps = path.join(home, '.nodeterm', 'codex-thread-nodes')
+    const endpoint = path.join(dir, 'hook-endpoint.env')
+    fs.mkdirSync(path.join(maps, 'account-a'), { recursive: true })
+    fs.writeFileSync(
+      path.join(maps, 'account-a', 'managed-thread'),
+      `accountId=account-a\nnodeId=node-account-a\nendpoint=${endpoint}\n`
+    )
+    fs.writeFileSync(
+      endpoint,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\n`
+    )
+
+    const { stdout } = await run('/bin/sh', [shim, 'list'], {
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: home,
+        CODEX_THREAD_ID: 'managed-thread'
+      }
+    })
+
+    expect(stdout.trim()).toBe('did list')
+    expect(received.at(-1)?.nodeId).toBe('node-account-a')
+  })
+
+  it('fails closed when missing account env leaves the same thread in two scopes', async () => {
+    const home = path.join(dir, 'ambiguous-managed-codex-home')
+    const maps = path.join(home, '.nodeterm', 'codex-thread-nodes')
+    const endpoint = path.join(dir, 'hook-endpoint.env')
+    for (const [scope, nodeId] of [
+      ['system', 'node-system'],
+      ['account-a', 'node-account-a']
+    ]) {
+      fs.mkdirSync(path.join(maps, scope), { recursive: true })
+      fs.writeFileSync(
+        path.join(maps, scope, 'same-thread'),
+        `accountId=${scope}\nnodeId=${nodeId}\nendpoint=${endpoint}\n`
+      )
+    }
+    fs.writeFileSync(
+      endpoint,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\n`
+    )
+
+    await expect(
+      run('/bin/sh', [shim, 'list'], {
+        env: {
+          PATH: process.env.PATH ?? '',
+          HOME: home,
+          CODEX_THREAD_ID: 'same-thread'
+        }
+      })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining('not a nodeterm agent node')
+    })
+  })
+
+  it('fails closed when a managed mapping collides with a global legacy system mapping', async () => {
+    const home = path.join(dir, 'legacy-ambiguous-codex-home')
+    const maps = path.join(home, '.nodeterm', 'codex-thread-nodes')
+    const endpoint = path.join(dir, 'hook-endpoint.env')
+    fs.mkdirSync(path.join(maps, 'account-a'), { recursive: true })
+    fs.writeFileSync(
+      path.join(maps, 'account-a', 'same-thread'),
+      `accountId=account-a\nnodeId=node-account-a\nendpoint=${endpoint}\n`
+    )
+    fs.writeFileSync(
+      path.join(maps, 'same-thread'),
+      `nodeId=node-legacy-system\nendpoint=${endpoint}\n`
+    )
+    fs.writeFileSync(
+      endpoint,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\n`
+    )
+
+    await expect(
+      run('/bin/sh', [shim, 'list'], {
+        env: {
+          PATH: process.env.PATH ?? '',
+          HOME: home,
+          CODEX_THREAD_ID: 'same-thread'
+        }
+      })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining('not a nodeterm agent node')
+    })
+  })
+
   it('rejects a wrong token (the server answers 403, the shim exits non-zero)', async () => {
     await expect(callShim(['list'], { NODETERM_HOOK_TOKEN: 'wrong' })).rejects.toMatchObject({
       code: 1

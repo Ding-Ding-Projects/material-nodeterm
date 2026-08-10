@@ -7,21 +7,54 @@ if [ -z "$NODETERM_NODE_ID" ] && [ -n "$CODEX_THREAD_ID" ]; then
   case "$CODEX_THREAD_ID" in
     *[!A-Za-z0-9._-]*) ;;
     *)
-      nt_codex_scope="\${NODETERM_CODEX_ACCOUNT_ID:-system}"
-      case "$nt_codex_scope" in
-        [A-Za-z0-9]*) ;;
-        *) nt_codex_scope="" ;;
-      esac
-      case "$nt_codex_scope" in
-        ''|*[!A-Za-z0-9._-]*) nt_codex_scope="" ;;
-      esac
+      nt_codex_scope=""
       nt_codex_map=""
-      if [ -n "$nt_codex_scope" ]; then
+      nt_codex_matches=0
+      nt_codex_account_env="\${NODETERM_CODEX_ACCOUNT_ID+x}"
+      if [ -n "$nt_codex_account_env" ]; then
+        nt_codex_scope="\${NODETERM_CODEX_ACCOUNT_ID:-system}"
+        case "$nt_codex_scope" in
+          [A-Za-z0-9]*) ;;
+          *) nt_codex_scope="" ;;
+        esac
+        case "$nt_codex_scope" in
+          ''|*[!A-Za-z0-9._-]*) nt_codex_scope="" ;;
+        esac
+      fi
+      if [ -n "$nt_codex_account_env" ] && [ -n "$nt_codex_scope" ]; then
         nt_codex_map="$HOME/.nodeterm/codex-thread-nodes/$nt_codex_scope/$CODEX_THREAD_ID"
+      fi
+      # Native tool shells spawned by the shared app-server may preserve CODEX_THREAD_ID while
+      # dropping the TUI's account env. Resolve only a unique scoped owner; equal thread ids in
+      # parallel account daemons deliberately fail closed instead of crossing account boundaries.
+      if [ -z "$nt_codex_account_env" ]; then
+        for nt_codex_candidate in "$HOME/.nodeterm/codex-thread-nodes"/*/"$CODEX_THREAD_ID"; do
+          if [ -r "$nt_codex_candidate" ]; then
+            nt_codex_matches=$((nt_codex_matches + 1))
+            nt_codex_map="$nt_codex_candidate"
+          fi
+        done
+        nt_codex_legacy_map="$HOME/.nodeterm/codex-thread-nodes/$CODEX_THREAD_ID"
+        if [ -r "$nt_codex_legacy_map" ]; then
+          nt_codex_matches=$((nt_codex_matches + 1))
+          nt_codex_map="$nt_codex_legacy_map"
+        fi
+        if [ "$nt_codex_matches" -eq 1 ]; then
+          if [ "$nt_codex_map" = "$nt_codex_legacy_map" ]; then
+            nt_codex_scope=system
+          else
+            nt_codex_scope="\${nt_codex_map%/*}"
+            nt_codex_scope="\${nt_codex_scope##*/}"
+          fi
+        else
+          nt_codex_map=""
+          nt_codex_scope=""
+        fi
       fi
       # Pre-multi-account system sessions used the global file. Managed accounts must NEVER use
       # that fallback: an equal thread id in another account would resolve to the wrong node.
-      if [ "$nt_codex_scope" = system ] && [ ! -r "$nt_codex_map" ]; then
+      if [ -n "$nt_codex_account_env" ] && [ "$nt_codex_scope" = system ] &&
+         [ ! -r "$nt_codex_map" ]; then
         nt_codex_map="$HOME/.nodeterm/codex-thread-nodes/$CODEX_THREAD_ID"
       fi
       if [ -n "$nt_codex_map" ] && [ -r "$nt_codex_map" ]; then
