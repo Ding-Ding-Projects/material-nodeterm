@@ -9,7 +9,8 @@ import {
   codexThreadIdentityHasLiveConflict,
   installCodexLauncher,
   resolveCodexThreadNodeIdentity,
-  validCodexIdentity
+  validCodexIdentity,
+  writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
 
 const run = promisify(execFile)
@@ -245,6 +246,28 @@ describe('NodeTerm Codex remote launcher', () => {
         'utf8'
       )
     ).toBe('accountId=system\nnodeId=node-b\nendpoint=/isolated/hook.env\n')
+  })
+
+  it('creates a managed identity while an unscoped legacy system mapping exists', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-legacy-managed-'))
+    const mappings = path.join(root, '.nodeterm', 'codex-thread-nodes')
+    mkdirSync(mappings, { recursive: true })
+    writeFileSync(
+      path.join(mappings, 'legacy-thread'),
+      'nodeId=legacy-node\nendpoint=/isolated/hook.env\n'
+    )
+    vi.stubEnv('HOME', root)
+
+    expect(() => writeCodexThreadIdentity(
+      'managed-thread',
+      'managed-node',
+      '/isolated/hook.env',
+      'account-a'
+    )).not.toThrow()
+    expect(readFileSync(
+      path.join(mappings, 'account-a', 'managed-thread'),
+      'utf8'
+    )).toBe('accountId=account-a\nnodeId=managed-node\nendpoint=/isolated/hook.env\n')
   })
 
   it('preflights duplicate ownership without stealing a live thread', () => {

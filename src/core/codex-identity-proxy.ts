@@ -204,11 +204,14 @@ function quarantineOtherCodexThreadIdentities(
   excludeFile?: string
 ): Array<{ source: string; quarantine: string }> {
   const root = path.join(homedir(), '.nodeterm', 'codex-thread-nodes')
-  const candidates: Array<{ file: string; scope: string }> = []
+  const candidates: Array<{ file: string; scope?: string }> = []
   try {
     for (const entry of readdirSync(root, { withFileTypes: true })) {
       if (entry.isFile() && SAFE_THREAD_ID.test(entry.name)) {
-        candidates.push({ file: path.join(root, entry.name), scope: SYSTEM_ACCOUNT_SCOPE })
+        // Pre-account builds persisted system mappings directly under the root and omitted the
+        // accountId field. Keep that storage shape unscoped during validation; treating it as a
+        // modern `system` record rejects every subsequent identity write with HTTP 503.
+        candidates.push({ file: path.join(root, entry.name) })
         continue
       }
       if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
@@ -225,7 +228,8 @@ function quarantineOtherCodexThreadIdentities(
   try {
     for (const [index, candidate] of candidates.entries()) {
       if (candidate.file === excludeFile) continue
-      if (candidate.scope === keepScope && path.basename(candidate.file) === keepThreadId) continue
+      if ((candidate.scope ?? SYSTEM_ACCOUNT_SCOPE) === keepScope &&
+          path.basename(candidate.file) === keepThreadId) continue
       const identity = readIdentityCandidate(candidate)
       if (!identity) continue
       if (identity.nodeId === nodeId || path.basename(candidate.file) === keepThreadId) {
