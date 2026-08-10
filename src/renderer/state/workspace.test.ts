@@ -334,6 +334,7 @@ describe('Codex account node factories', () => {
       title: 'Codex login',
       codexAccountId: 'codex-a'
     })
+    expect(node.data.initialCommand).toMatch(/^cd \"\$HOME\" && codex /)
     expect(node.data.initialCommand).toContain('login --device-auth')
   })
 })

@@ -504,7 +504,12 @@ export function createCodexAccountLoginNode(
     ...node.data,
     title: 'Codex login',
     codexAccountId: accountId,
-    initialCommand: `codex -c cli_auth_credentials_store=\"file\" login --device-auth`
+    // Account login has no relationship to the active project. In particular, keeping the
+    // project's cwd here makes macOS evaluate Documents/Desktop TCC before Codex can even show
+    // its device-flow URL. A denied project directory then looks like a broken account home.
+    // Move to the user's neutral home first; the selected CODEX_HOME still comes from the node's
+    // codexAccountId and remains fully isolated.
+    initialCommand: `cd \"$HOME\" && codex -c cli_auth_credentials_store=\"file\" login --device-auth`
   }
   return node
 }
