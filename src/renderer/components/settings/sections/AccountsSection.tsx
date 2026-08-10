@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { ClaudeAccount } from '@shared/types'
+import type { ClaudeAccount, CodexAccount } from '@shared/types'
 import { sshHostKey } from '@shared/ssh'
 import { useSettings } from '../../../state/settings'
 import { useSystemAccount } from '../../../state/systemAccount'
-import { isAccountLoginNode } from '../../../state/workspace'
+import { useSystemCodexAccount } from '../../../state/systemCodexAccount'
+import { isAccountLoginNode, isCodexAccountLoginNode } from '../../../state/workspace'
 import { useProjects } from '../../../state/projects'
 import { useSshConn } from '../../../state/sshConn'
 import { ConfirmDialog } from '../../ConfirmDialog'
@@ -16,6 +17,10 @@ const ROWS = {
   accounts: {
     title: 'Claude accounts',
     keywords: ['account', 'claude', 'login', 'isolated', 'multi', 'email']
+  },
+  codexAccounts: {
+    title: 'Codex accounts',
+    keywords: ['account', 'codex', 'openai', 'chatgpt', 'login', 'email', 'usage']
   }
 }
 const ENTRIES = Object.values(ROWS)
@@ -40,6 +45,11 @@ function applyAccounts(fn: (accs: ClaudeAccount[]) => ClaudeAccount[]): void {
   s.update({ claudeAccounts: fn(s.settings.claudeAccounts) })
 }
 
+function applyCodexAccounts(fn: (accs: CodexAccount[]) => CodexAccount[]): void {
+  const s = useSettings.getState()
+  s.update({ codexAccounts: fn(s.settings.codexAccounts) })
+}
+
 /** Counts nodes bound to an account across every project's SERIALIZED nodes. The active
  *  project's live React Flow edits since the last commit aren't reflected here, so the count
  *  can be slightly stale for the active canvas — acceptable for a confirmation warning. */
@@ -54,9 +64,13 @@ function countNodesUsing(accountId: string): number {
 
 export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const accounts = useSettings((s) => s.settings.claudeAccounts)
+  const codexAccounts = useSettings((s) => s.settings.codexAccounts)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
+  const systemCodexLabelSetting = useSettings((s) => s.settings.systemCodexAccountLabel)
   const systemEmail = useSystemAccount((s) => s.email)
+  const systemCodexEmail = useSystemCodexAccount((s) => s.email)
   useEffect(() => useSystemAccount.getState().ensure(), [])
+  useEffect(() => useSystemCodexAccount.getState().ensure(), [])
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const activeProject = useProjects((s) => s.projects.find((p) => p.id === activeProjectId))
   // The active project's SSH host key (`user@host`), when it's a connected SSH project. Present →
@@ -67,6 +81,9 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   const sshByProject = useSshConn((s) => s.byProject)
   const [versionWarning, setVersionWarning] = useState(false)
   const [pendingRemove, setPendingRemove] = useState<ClaudeAccount | null>(null)
+  const [pendingCodexRemove, setPendingCodexRemove] = useState<CodexAccount | null>(null)
+  const [addingCodex, setAddingCodex] = useState(false)
+  const [codexAddError, setCodexAddError] = useState<string | null>(null)
   /**
    * Which "Add account" button is mid-setup: the host key, or LOCAL_TARGET for this machine.
    * Minting a REMOTE account is 10–15 s of real work on the host — mkdir, merging the status hook
@@ -79,6 +96,94 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
 
   const setLabel = (id: string, label: string): void =>
     applyAccounts((accs) => accs.map((a) => (a.id === id ? { ...a, label } : a)))
+
+  const setCodexLabel = (id: string, label: string): void =>
+    applyCodexAccounts((accs) => accs.map((a) => (a.id === id ? { ...a, label } : a)))
+
+  const runCodexLogin = async (account: Pick<CodexAccount, 'id'>): Promise<void> => {
+    window.dispatchEvent(
+      new CustomEvent('nodeterm:add-codex-account-login', { detail: { accountId: account.id } })
+    )
+    const captured = await window.nodeTerminal.codexAccounts.waitLogin(account.id)
+    if (!captured) return
+    applyCodexAccounts((accs) =>
+      accs.map((a) =>
+        a.id === account.id
+          ? {
+              ...a,
+              label: a.label === 'New Codex account' && captured.email ? captured.email : a.label,
+              email: captured.email ?? undefined,
+              pending: false
+            }
+          : a
+      )
+    )
+  }
+
+  const onAddCodexAccount = async (): Promise<void> => {
+    if (addingCodex) return
+    setAddingCodex(true)
+    setCodexAddError(null)
+    try {
+      const added = await window.nodeTerminal.codexAccounts.add()
+      const account: CodexAccount = {
+        id: added.id,
+        label: 'New Codex account',
+        pending: true,
+        createdAt: Date.now()
+      }
+      applyCodexAccounts((accs) => [...accs, account])
+      await runCodexLogin(account)
+    } catch {
+      setCodexAddError('Could not set up the Codex account.')
+    } finally {
+      setAddingCodex(false)
+    }
+  }
+
+  const confirmRemoveCodex = async (account: CodexAccount): Promise<void> => {
+    setPendingCodexRemove(null)
+    // The active canvas can be newer than its debounced workspace snapshot. Query its live
+    // nodes synchronously, then use persisted states only for the inactive projects. Otherwise a
+    // node created immediately before opening Settings could be missed and its live CODEX_HOME
+    // deleted underneath it.
+    const live = { accountId: account.id, count: 0 }
+    window.dispatchEvent(new CustomEvent('nodeterm:query-live-codex-account-use', { detail: live }))
+    const inactiveNodeCount = useProjects
+      .getState()
+      .projects.filter((project) => project.id !== activeProjectId).reduce(
+        (count, project) =>
+          count +
+          project.nodes.filter(
+            (node) =>
+              node.codexAccountId === account.id && !isCodexAccountLoginNode(node)
+          ).length,
+        0
+      )
+    const activeNodeCount = live.count + inactiveNodeCount
+    if (activeNodeCount > 0) {
+      setCodexAddError(
+        `Switch or remove the ${activeNodeCount} Codex node${activeNodeCount === 1 ? '' : 's'} using this account first.`
+      )
+      return
+    }
+    if (account.pending) await window.nodeTerminal.codexAccounts.cancelWaitLogin(account.id)
+    await window.nodeTerminal.codexAccounts.remove(account.id)
+    applyCodexAccounts((accs) => accs.filter((a) => a.id !== account.id))
+    useProjects.setState((s) => ({
+      projects: s.projects.map((p) => ({
+        ...p,
+        nodes: p.nodes
+          .filter((n) => !(n.codexAccountId === account.id && isCodexAccountLoginNode(n)))
+          .map((n) =>
+            n.codexAccountId === account.id ? { ...n, codexAccountId: undefined } : n
+          )
+      }))
+    }))
+    window.dispatchEvent(
+      new CustomEvent('nodeterm:codex-account-removed', { detail: { accountId: account.id } })
+    )
+  }
 
   // The open project whose SSH host matches a remote account (needed for the ssh context of
   // waitLogin / remove). Undefined for local accounts, or when no such project is open.
@@ -206,7 +311,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     <SettingsSection
       id="accounts"
       title="Accounts"
-      description="Isolated Claude logins. Each account has its own config dir, credentials, and transcripts; a node keeps the account it was created with for life."
+      description="Isolated Claude and Codex logins. Codex accounts each reuse one shared app-server across their nodes."
       isActive={isActive}
       searchEntries={ENTRIES}
     >
@@ -383,12 +488,97 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
         </div>
       </SearchableRow>
 
+      <SearchableRow {...ROWS.codexAccounts}>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <Input
+                  className="w-56"
+                  placeholder="System Codex account"
+                  value={systemCodexLabelSetting}
+                  onChange={(e) =>
+                    useSettings.getState().update({ systemCodexAccountLabel: e.target.value })
+                  }
+                />
+                <span className="rounded-full bg-fill-weak px-2 py-0.5 text-[11px] font-medium text-muted">
+                  system
+                </span>
+              </div>
+              {systemCodexEmail ? <p className="text-[12px] text-muted">{systemCodexEmail}</p> : null}
+            </div>
+          </div>
+
+          {codexAccounts.map((account) => (
+            <div
+              key={account.id}
+              className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
+            >
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center gap-2">
+                  <Input
+                    className="w-56"
+                    placeholder="Codex account label"
+                    value={account.label}
+                    onChange={(e) => setCodexLabel(account.id, e.target.value)}
+                  />
+                  {account.pending ? (
+                    <span className="rounded-full bg-[color:var(--warn)]/15 px-2 py-0.5 text-[11px] font-medium text-[color:var(--warn)]">
+                      pending
+                    </span>
+                  ) : null}
+                </div>
+                {account.email ? <p className="text-[12px] text-muted">{account.email}</p> : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {account.pending ? (
+                  <Button onClick={() => void runCodexLogin(account)}>Retry login</Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  aria-label="Remove Codex account"
+                  onClick={() => setPendingCodexRemove(account)}
+                >
+                  ×
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          <div className="space-y-2">
+            <Button
+              variant="primary"
+              disabled={addingCodex}
+              onClick={() => void onAddCodexAccount()}
+            >
+              {addingCodex ? <AddingLabel where="this Mac" /> : 'Add Codex account'}
+            </Button>
+            {codexAddError ? (
+              <p className="text-[12px] text-[color:var(--danger)]">{codexAddError}</p>
+            ) : null}
+          </div>
+
+          <p className="text-[12px] leading-relaxed text-muted">
+            Each login has its own credentials and one shared Codex app-server. New Codex nodes
+            choose an account from the canvas menu; usage is shown separately by email.
+          </p>
+        </div>
+      </SearchableRow>
+
       {pendingRemove ? (
         <ConfirmDialog
           message={removeMessage(pendingRemove)}
           confirmLabel="Remove"
           onConfirm={() => void confirmRemove(pendingRemove)}
           onCancel={() => setPendingRemove(null)}
+        />
+      ) : null}
+      {pendingCodexRemove ? (
+        <ConfirmDialog
+          message={`Remove Codex account "${pendingCodexRemove.label}"? Its credentials and account-local conversations will be deleted.`}
+          confirmLabel="Remove"
+          onConfirm={() => void confirmRemoveCodex(pendingCodexRemove)}
+          onCancel={() => setPendingCodexRemove(null)}
         />
       ) : null}
     </SettingsSection>

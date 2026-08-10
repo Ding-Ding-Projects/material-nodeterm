@@ -1,15 +1,22 @@
 // The ROUTER, tested against both real readers — the point being that neither one is ever asked
 // about the other's storage. See the provenance note in grok-session.test.ts for the fixture story.
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 import { readAgentSessionName } from './agent-session-name'
 import { rememberGrokSessionDir, forgetGrokSession } from './grok-session'
 import { rememberCodexSessionName } from './codex-session-name'
+import { codexSocketForAccount } from './codex-accounts-core'
+import { initPlatform, resetPlatformForTests } from './platform'
+import { fakePlatform } from './platform-fake'
 
 const root = mkdtempSync(path.join(tmpdir(), 'agent-session-name-'))
-afterAll(() => rmSync(root, { recursive: true, force: true }))
+beforeAll(() => initPlatform(fakePlatform({ userDataDir: root })))
+afterAll(() => {
+  resetPlatformForTests()
+  rmSync(root, { recursive: true, force: true })
+})
 
 describe('readAgentSessionName', () => {
   it("routes grok to grok's session metadata", async () => {
@@ -24,7 +31,11 @@ describe('readAgentSessionName', () => {
   })
 
   it('routes codex to the shared app-server thread-name cache', async () => {
-    rememberCodexSessionName('codex-thread', 'Top Tips')
+    rememberCodexSessionName(
+      'codex-thread',
+      'Top Tips',
+      codexSocketForAccount(root)
+    )
     expect(await readAgentSessionName('codex-thread', undefined, 'codex')).toBe('Top Tips')
   })
 

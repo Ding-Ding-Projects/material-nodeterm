@@ -105,6 +105,8 @@ export interface NodeData {
    * inside the CLI, and this field only remembers the id we chose at first launch.
    */
   agentSessionId?: string
+  /** Codex nodes only: managed CODEX_HOME. Undefined = system ~/.codex account. */
+  codexAccountId?: string
   /** group-only: the git worktree this group is bound to (single source of truth). */
   worktree?: import('@shared/worktree').GroupWorktree
   /**
@@ -334,7 +336,7 @@ export function createAgentNode(
   center?: { x: number; y: number },
   initialPrompt?: string,
   ssh?: Project['ssh'],
-  accountId?: string,
+  selectedAccountId?: string,
   permissionMode?: AgentPermissionMode
 ): CanvasNode {
   const { label, color, launchCmd } = resolveAgent(agentId)
@@ -411,11 +413,13 @@ export function createAgentNode(
       group: null,
       tags: [],
       agentId,
-      // Accounts are inherently Claude-only — never stamp one onto another agent's node.
-      ...(accountId && agentId === 'claude' ? { accountId } : {}),
+      ...(selectedAccountId && agentId === 'claude' ? { accountId: selectedAccountId } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
+      ...(selectedAccountId && agentId === 'codex'
+        ? { codexAccountId: selectedAccountId }
+        : {}),
       cwd: ssh ? ssh.remoteCwd : cwd,
       initialCommand,
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
@@ -488,6 +492,28 @@ export function createAccountLoginNode(
  */
 export function isAccountLoginNode(data: { title?: string; initialCommand?: string }): boolean {
   return data.title === 'Claude login' || (data.initialCommand ?? '').startsWith('claude /login')
+}
+
+export function createCodexAccountLoginNode(
+  accountId: string,
+  index: number,
+  center?: { x: number; y: number }
+): CanvasNode {
+  const node = createTerminalNode(index, undefined, center)
+  node.data = {
+    ...node.data,
+    title: 'Codex login',
+    codexAccountId: accountId,
+    initialCommand: `codex -c cli_auth_credentials_store=\"file\" login --device-auth`
+  }
+  return node
+}
+
+export function isCodexAccountLoginNode(data: {
+  title?: string
+  initialCommand?: string
+}): boolean {
+  return data.title === 'Codex login' || (data.initialCommand ?? '').includes('login --device-auth')
 }
 
 /**
@@ -1074,6 +1100,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         agentId,
         accountId: n.accountId,
         agentSessionId: n.agentSessionId,
+        codexAccountId: n.codexAccountId,
         pendingLaunch: n.pendingLaunch,
         ssh: n.ssh,
         sshRemoteTmux: n.sshRemoteTmux,
@@ -1138,6 +1165,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         agentId: n.data.agentId,
         accountId: n.data.accountId,
         agentSessionId: n.data.agentSessionId,
+        codexAccountId: n.data.codexAccountId,
         pendingLaunch: n.data.pendingLaunch,
         ssh: n.data.ssh,
         sshRemoteTmux: n.data.sshRemoteTmux,

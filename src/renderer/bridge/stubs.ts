@@ -260,6 +260,14 @@ export function buildStubApi(): Omit<
       cancelWaitLogin: U('claudeAccounts.cancelWaitLogin'),
       remove: U('claudeAccounts.remove')
     },
+    codexAccounts: {
+      add: U('codexAccounts.add'),
+      waitLogin: U('codexAccounts.waitLogin'),
+      cancelWaitLogin: U('codexAccounts.cancelWaitLogin'),
+      remove: U('codexAccounts.remove'),
+      systemIdentity: U('codexAccounts.systemIdentity'),
+      forkThread: U('codexAccounts.forkThread')
+    },
     transcripts: {
       search: U('transcripts.search')
     },

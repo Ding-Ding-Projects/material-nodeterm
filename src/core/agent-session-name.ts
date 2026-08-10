@@ -18,6 +18,8 @@ import { readSessionName, readSmallTail, TITLE_TAIL_BYTES } from './transcript-r
 import { readGrokSessionName } from './grok-session'
 import { pickGeminiTitle } from './gemini-session'
 import { readCodexSessionName } from './codex-session-name'
+import { codexSocketForAccount } from './codex-accounts-core'
+import { platform } from './platform'
 
 /**
  * Per-agent associations this router cannot own itself, injected by the shell.
@@ -71,6 +73,11 @@ export function readAgentSessionName(
   if (!sessionId) return Promise.resolve(null)
   if (agentId === 'grok') return readGrokSessionName(sessionId)
   if (agentId === 'gemini') return readGeminiSessionName(sessionId, deps?.geminiPathFor)
-  if (agentId === 'codex') return readCodexSessionName(sessionId)
+  if (agentId === 'codex') {
+    return readCodexSessionName(
+      sessionId,
+      codexSocketForAccount(platform().userDataDir, accountId)
+    )
+  }
   return readSessionName(sessionId, accountId)
 }

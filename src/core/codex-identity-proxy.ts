@@ -5,22 +5,43 @@ import path from 'path'
 const SAFE_NODE_ID = /^[A-Za-z0-9._-]+$/
 const SAFE_ENDPOINT = /^\/[A-Za-z0-9._/ -]+$/
 const SAFE_THREAD_ID = /^[A-Za-z0-9._-]+$/
+const SAFE_ACCOUNT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+const SYSTEM_ACCOUNT_SCOPE = 'system'
+
+function accountScope(accountId?: string): string {
+  if (!accountId) return SYSTEM_ACCOUNT_SCOPE
+  if (!SAFE_ACCOUNT_ID.test(accountId)) throw new Error('Invalid NodeTerm Codex account identity')
+  return accountId
+}
+
+function identityFile(threadId: string, accountId?: string): string {
+  if (!SAFE_THREAD_ID.test(threadId)) throw new Error('Invalid NodeTerm Codex thread identity')
+  return path.join(
+    homedir(),
+    '.nodeterm',
+    'codex-thread-nodes',
+    accountScope(accountId),
+    threadId
+  )
+}
 
 export function writeCodexThreadIdentity(
   threadId: string,
   nodeId: string,
-  hookEndpoint: string
+  hookEndpoint: string,
+  accountId?: string
 ): void {
   if (!SAFE_THREAD_ID.test(threadId) || !validCodexIdentity(nodeId, hookEndpoint)) {
     throw new Error('Invalid NodeTerm Codex thread identity')
   }
-  const dir = path.join(homedir(), '.nodeterm', 'codex-thread-nodes')
-  const file = path.join(dir, threadId)
+  const scope = accountScope(accountId)
+  const file = identityFile(threadId, accountId)
+  const dir = path.dirname(file)
   const tmp = path.join(dir, `.${threadId}.${process.pid}.${Date.now()}`)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   let renamed = false
   try {
-    writeFileSync(tmp, `nodeId=${nodeId}\nendpoint=${hookEndpoint}\n`, {
+    writeFileSync(tmp, `accountId=${scope}\nnodeId=${nodeId}\nendpoint=${hookEndpoint}\n`, {
       encoding: 'utf8',
       mode: 0o600
     })
@@ -41,25 +62,41 @@ export function bindCodexThreadIdentity(
   threadId: string,
   nodeId: string,
   hookEndpoint: string,
-  isNodeLive: (nodeId: string) => boolean
+  isNodeLive: (nodeId: string) => boolean,
+  accountId?: string
 ): void {
   if (!SAFE_THREAD_ID.test(threadId) || !validCodexIdentity(nodeId, hookEndpoint)) {
     throw new Error('Invalid NodeTerm Codex thread identity')
   }
-  const file = path.join(homedir(), '.nodeterm', 'codex-thread-nodes', threadId)
-  try {
-    const existing = parseCodexThreadIdentity(readFileSync(file, 'utf8'))
-    if (existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint) return
-    if (existing.nodeId && isNodeLive(existing.nodeId)) {
-      throw new Error('Codex thread is already bound to another live node')
+  const scope = accountScope(accountId)
+  const scopedFile = identityFile(threadId, accountId)
+  // System-account sessions created by the previous NodeTerm build used the unscoped legacy file.
+  // Inspect it for duplicate ownership, but never consult it for a managed account.
+  const files = accountId
+    ? [scopedFile]
+    : [scopedFile, path.join(homedir(), '.nodeterm', 'codex-thread-nodes', threadId)]
+  for (const file of files) {
+    try {
+      const existing = parseCodexThreadIdentity(readFileSync(file, 'utf8'))
+      if (file === scopedFile && existing.accountId !== scope) {
+        throw new Error('Codex thread account binding is invalid')
+      }
+      if (existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint) return
+      if (existing.nodeId && isNodeLive(existing.nodeId)) {
+        throw new Error('Codex thread is already bound to another live node')
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
-  writeCodexThreadIdentity(threadId, nodeId, hookEndpoint)
+  writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, accountId)
 }
 
-function parseCodexThreadIdentity(raw: string): { nodeId: string; hookEndpoint: string } {
+function parseCodexThreadIdentity(raw: string): {
+  accountId: string
+  nodeId: string
+  hookEndpoint: string
+} {
   const values = Object.fromEntries(
     raw
       .split('\n')
@@ -69,7 +106,11 @@ function parseCodexThreadIdentity(raw: string): { nodeId: string; hookEndpoint: 
         return separator < 1 ? ['', ''] : [line.slice(0, separator), line.slice(separator + 1)]
       })
   )
-  return { nodeId: values.nodeId ?? '', hookEndpoint: values.endpoint ?? '' }
+  return {
+    accountId: values.accountId ?? '',
+    nodeId: values.nodeId ?? '',
+    hookEndpoint: values.endpoint ?? ''
+  }
 }
 
 export function codexLauncherDir(): string {
@@ -86,6 +127,8 @@ export function installCodexLauncher(): string {
       `case "\${NODETERM_NODE_ID-}" in ''|*[!A-Za-z0-9._-]*) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
       `case "\${NODETERM_HOOK_ENDPOINT-}" in /*) ;; *) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
       `case "\${NODETERM_HOOK_ENDPOINT}" in *[!A-Za-z0-9._/\\ -]*) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
+      `case "\${NODETERM_CODEX_ACCOUNT_ID-}" in *[!A-Za-z0-9._-]*) echo "NodeTerm Codex account identity unavailable" >&2; exit 64 ;; esac\n` +
+      `case "\${NODETERM_CODEX_ACCOUNT_ID-}" in ''|[A-Za-z0-9]*) ;; *) echo "NodeTerm Codex account identity unavailable" >&2; exit 64 ;; esac\n` +
       `[ "\${NODETERM_CANVAS_CONTROL-}" = 1 ] || { echo "NodeTerm Codex identity unavailable" >&2; exit 64; }\n` +
       `if [ "\${1-}" = resume ]; then\n` +
       `  nt_thread="\${2-}"\n` +
@@ -94,11 +137,13 @@ export function installCodexLauncher(): string {
       `. "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
       `case "\${NODETERM_HOOK_PORT-}" in ''|*[!0-9]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
       `case "\${NODETERM_HOOK_TOKEN-}" in ''|*[!A-Za-z0-9-]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
+      `codex app-server daemon start >/dev/null 2>&1 || { echo "NodeTerm Codex app-server unavailable" >&2; exit 69; }\n` +
       `if [ "\${1-}" = resume ]; then\n` +
       `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN"; } |\n` +
       `  curl --silent --show-error --fail --config - --request POST \\\n` +
       `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
       `    --data-urlencode "threadId=$nt_thread" \\\n` +
+      `    --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
       `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/bind" >/dev/null || { echo "NodeTerm Codex thread already in use or broker unavailable" >&2; exit 69; }\n` +
       `  exec codex --remote unix:// "$@"\n` +
       `fi\n` +
@@ -107,6 +152,7 @@ export function installCodexLauncher(): string {
       `  curl --silent --show-error --fail --config - --request POST \\\n` +
       `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
       `    --data-urlencode "cwd=$PWD" \\\n` +
+      `    --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
       `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/start"\n` +
       `) || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
       `nt_thread=$(printf %s "$nt_thread" | tr -d '\\r\\n')\n` +

@@ -44,6 +44,7 @@ import { findExecutableSync, findInPathString, resolveShellPath, shellPathNow } 
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { presenceHub } from './presence/hub'
 import { codexLauncherDir, installCodexLauncher } from './codex-identity-proxy'
+import { codexAccountHome, codexSessionEnv, codexTmuxEnvArgs } from './codex-accounts-core'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
 // kills the tmux server) can still replay recent output on cold restart. A final snapshot also
@@ -1020,6 +1021,14 @@ export class PtyManager {
     if (options.requireRemote && !(options.sshRemote && options.persistKey && findSsh())) {
       return { sessionId: '', fresh: false, unavailable: 'ssh' }
     }
+    if (
+      (options.agentId ?? 'claude') === 'codex' &&
+      options.codexAccountId &&
+      !options.sshRemote &&
+      !fs.existsSync(codexAccountHome(platform().userDataDir, options.codexAccountId))
+    ) {
+      return { sessionId: '', fresh: false, unavailable: 'codex-account' }
+    }
     // A tmux-backed session is "fresh" (cold start) when no live session exists to reattach to
     // — i.e. first open, or after a machine reboot killed the tmux server. Plain (non-tmux)
     // sessions are always fresh: they have no cross-restart continuity. The renderer uses this
@@ -1046,7 +1055,7 @@ export class PtyManager {
       installCodexLauncher()
     }
     const sessionId = this.spawnSession(options, clientId, undefined)
-    // Surface a missing-account-dir fallback so the renderer can flag the node's account chip.
+    // Surface Claude's legacy missing-account-dir fallback so the renderer can flag its chip.
     const accountFallback = this.sessions.get(sessionId)?.accountFallback
     return accountFallback ? { sessionId, fresh, accountFallback } : { sessionId, fresh }
   }
@@ -1229,12 +1238,22 @@ export class PtyManager {
     // ANTHROPIC_API_KEY wins over CLAUDE_CONFIG_DIR credentials). System-default nodes
     // (no accountId) are untouched. Remote (ssh) sessions get their account env via the
     // remote tmux `-e` list instead (the local ssh client process doesn't need it).
+    let accountFallback = false
+    if ((options.agentId ?? 'claude') === 'codex' && !options.sshRemote) {
+      if (
+        options.codexAccountId &&
+        !fs.existsSync(codexAccountHome(platform().userDataDir, options.codexAccountId))
+      ) {
+        throw new Error('Managed Codex account home is unavailable')
+      }
+      Object.assign(env, codexSessionEnv(platform().userDataDir, options.codexAccountId))
+    }
+
     let accountDir =
       options.accountId && !options.sshRemote ? claudeConfigDirFor(options.accountId) : null
     // Missing/deleted account dir (spec: error handling) → fall back to system default
     // instead of pointing claude at a dead dir; the node then behaves like an unbound one.
     // `accountFallback` is surfaced to the renderer (warning chip) via the create() result.
-    let accountFallback = false
     if (accountDir && !fs.existsSync(accountDir)) {
       console.warn(`[accounts] config dir missing for ${options.accountId}, using system default`)
       accountDir = null
@@ -1352,6 +1371,10 @@ export class PtyManager {
       // The account config dir must ride `-e` like the hook env: the tmux server is shared
       // and long-lived, so session env comes from creation args, not client inheritance.
       const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
+      const codexEnvArgs =
+        (options.agentId ?? 'claude') === 'codex'
+          ? codexTmuxEnvArgs(platform().userDataDir, options.codexAccountId)
+          : []
       const attachFlags = tmuxAttachFlags(!!sinks)
       args = [
         '-L',
@@ -1364,6 +1387,7 @@ export class PtyManager {
         ...pathEnvArgs,
         ...langEnvArgs,
         ...accountEnvArgs,
+        ...codexEnvArgs,
         '-c',
         cwd,
         '-s',

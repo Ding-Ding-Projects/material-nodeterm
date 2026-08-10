@@ -111,6 +111,7 @@ import { useProjects } from '../state/projects'
 import { useViewMode, viewFor } from '../state/viewMode'
 import { useSshConn } from '../state/sshConn'
 import { useWorktrees } from '../state/worktrees'
+import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { isRemoteSessionNode } from '@shared/worktree'
 import { useSession, useActiveSessionPresence } from '../session/session'
 import { accountChipLabel, COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
@@ -711,11 +712,13 @@ export function TerminalNode({
   // One shallow-compared subscription for the whole appearance slice — see useXtermVisualSettings.
   const visual = useXtermVisualSettings()
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
+  const codexAccounts = useSettings((s) => s.settings.codexAccounts)
+  const systemCodexLabel = useSettings((s) => s.settings.systemCodexAccountLabel)
+  const systemCodexEmail = useSystemCodexAccount((s) => s.email)
   // Header buttons the user chose to hide (Settings). A selector, so toggling one re-renders every
   // mounted node right away instead of waiting for a remount. Search, Close and the worktree-move
   // button are absent from `isHidden`'s inventory and stay put whatever the list says.
   const hiddenHeaderButtons = useSettings((s) => s.settings.hiddenHeaderButtons)
-  const accountChip = accountChipLabel(data.accountId, claudeAccounts)
   const bodyRef = useRef<HTMLDivElement>(null)
   /** Where a press on the hover guard started, for the click-vs-drag test in `onGuardUp`. */
   const guardDownAt = useRef<{ x: number; y: number } | null>(null)
@@ -924,6 +927,17 @@ export function TerminalNode({
   // offer this node's in-place restart from the SAME derivation, and a second copy drifting from
   // this one yields a row whose closure refuses every click.
   const agentId = createdAgentId(data)
+  const accountChip = agentId === 'codex'
+    ? (data.codexAccountId
+        ? accountChipLabel(data.codexAccountId as string, codexAccounts)
+        : {
+            short: 'system',
+            tooltip: systemCodexEmail || systemCodexLabel || 'System Codex account'
+          })
+    : accountChipLabel(data.accountId, claudeAccounts)
+  useEffect(() => {
+    if (agentId === 'codex') useSystemCodexAccount.getState().ensure()
+  }, [agentId])
   // Gate each former `isClaude` site by the capability it actually represents.
   const showStatus = !!agentId && hasHooks(agentId) // status badge + session-title capture
   const showLoop = !!agentId && canRecur(agentId) // /loop · /schedule · /cron chrome
@@ -2028,6 +2042,7 @@ export function TerminalNode({
           persistKey: id,
           agentId: data.agentId,
           accountId: data.accountId,
+          codexAccountId: data.codexAccountId as string | undefined,
           sshRemote,
           // Belt AND braces: the guard above cannot see a `ssh` executable that has gone missing,
           // which is core's other route into the local branch.
@@ -2050,7 +2065,11 @@ export function TerminalNode({
         if (unavailable) {
           setCo(termKey, { offline: true })
           if (!disposed)
-            term.write('\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n')
+            term.write(
+              unavailable === 'codex-account'
+                ? '\r\n\x1b[90m[Codex account unavailable — nothing was started; open Settings → Accounts]\x1b[0m\r\n'
+                : '\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n'
+            )
           if (sshProjectId) reportSshDrop(sshProjectId, id)
           return
         }
@@ -3226,7 +3245,10 @@ export function TerminalNode({
     let timer: ReturnType<typeof setTimeout> | undefined
     const sync = async () => {
       if (!titleAutoRef.current || editingTitleRef.current) return
-      const name = await api.pty.readSessionName(sid, data.accountId, agentId)
+      const accountScope = agentId === 'codex'
+        ? (data.codexAccountId as string | undefined)
+        : data.accountId
+      const name = await api.pty.readSessionName(sid, accountScope, agentId)
       if (cancelled) return
       if (name) delayMs = 15000
       if (

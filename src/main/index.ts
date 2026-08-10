@@ -1,7 +1,7 @@
 import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { startCodexThread } from '../core/codex-session-name'
+import { readCodexThreadAt, startCodexThreadAt } from '../core/codex-session-name'
 import { bindCodexThreadIdentity, writeCodexThreadIdentity } from '../core/codex-identity-proxy'
 import { statSync } from 'fs'
 import { readFile } from 'fs/promises'
@@ -122,6 +122,12 @@ import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { initClaudeAccounts } from './claude-accounts'
+import {
+  ensureCodexAccountDaemon,
+  initCodexAccounts,
+  localCodexAccountHome,
+  localCodexSocket
+} from './codex-accounts'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
 import { claudeConfigDirFor } from '../core/claude-config-dir'
 import {
@@ -893,9 +899,10 @@ app.whenReady().then(async () => {
   // hook POST dies against a dead port with zero symptoms beyond "statuses stay idle". The
   // listeners (setListener/setRawListener/setControlHandler) attach later, which the server
   // tolerates — early hook POSTs are simply dropped, never mis-routed.
-  hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, hookEndpoint }) => {
-    const threadId = await startCodexThread(cwd)
-    writeCodexThreadIdentity(threadId, nodeId, hookEndpoint)
+  hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, hookEndpoint, accountId }) => {
+    await ensureCodexAccountDaemon(accountId)
+    const threadId = await startCodexThreadAt(localCodexSocket(accountId), cwd)
+    writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, accountId)
     const identityEvent: NormalizedAgentEvent = {
       nodeId,
       agentId: 'codex',
@@ -907,10 +914,18 @@ app.whenReady().then(async () => {
     else pendingCodexIdentityEvents.push(identityEvent)
     return threadId
   })
-  hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId, hookEndpoint }) => {
-    bindCodexThreadIdentity(threadId, nodeId, hookEndpoint, (ownerNodeId) => {
-      return workspaceStore.getNode(ownerNodeId) !== undefined
-    })
+  hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId, hookEndpoint, accountId }) => {
+    await ensureCodexAccountDaemon(accountId)
+    if (!(await readCodexThreadAt(localCodexSocket(accountId), threadId))) {
+      throw new Error('Codex thread does not belong to the selected account')
+    }
+    bindCodexThreadIdentity(
+      threadId,
+      nodeId,
+      hookEndpoint,
+      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
+      accountId
+    )
     const identityEvent: NormalizedAgentEvent = {
       nodeId,
       agentId: 'codex',
@@ -964,7 +979,12 @@ app.whenReady().then(async () => {
     entries: sessionNameSweepEntries,
     node: (nodeId) => {
       const n = workspaceStore.getNode(nodeId)
-      return n ? { accountId: n.accountId, titleAuto: n.titleAuto } : undefined
+      return n
+        ? {
+            accountId: n.agentId === 'codex' ? n.codexAccountId : n.accountId,
+            titleAuto: n.titleAuto
+          }
+        : undefined
     },
     // Same router the IPC handler above uses — the sweep sees every TITLE_READ_CAPABLE agent, so
     // resolving a grok or gemini node through claude's reader would scan ~/.claude/projects once a
@@ -1936,6 +1956,15 @@ app.whenReady().then(async () => {
     (settingsStore.get().claudeAccounts ?? []).filter((a) => !a.host && !a.pending).map((a) => a.id)
   const usageService = initClaudeUsage(win, {
     localAccounts: localClaudeAccountIds,
+    codexAccounts: () =>
+      (settingsStore.get().codexAccounts ?? [])
+        .filter((account) => !account.pending)
+        .map((account) => ({
+          id: account.id,
+          home: localCodexAccountHome(account.id),
+          label: account.label,
+          email: account.email
+        })),
     onCacheUpdate: () => {
       void flushAgentStatusMirror()
     },
@@ -1972,6 +2001,7 @@ app.whenReady().then(async () => {
   // Lazy getter: sshProjectManager is created just below, so a remote account op (which only runs
   // after the user has connected an SSH project) always sees the live manager.
   initClaudeAccounts(() => sshProjectManager)
+  initCodexAccounts()
   // The jailed core bridge both phone hosts serve: typed git verbs against the real GitService
   // (cwd-jailed to the shared canvas roots inside the handlers) and phone node registration
   // through the workspace store (written as an outside edit, so the watcher broadcasts it and

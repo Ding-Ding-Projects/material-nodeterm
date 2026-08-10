@@ -252,6 +252,7 @@ import { useSessionNaming } from '../state/sessionNaming'
 import { useSshServers } from '../state/sshServers'
 import { useSshConn } from '../state/sshConn'
 import { useSystemAccount } from '../state/systemAccount'
+import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { useEntitlement } from '../state/entitlement'
 import type { SshServer, SshConnection } from '@shared/ssh'
 import { sshHostKey } from '@shared/ssh'
@@ -292,7 +293,9 @@ import {
   commonParentId,
   fitGroupToChildren,
   createAccountLoginNode,
+  createCodexAccountLoginNode,
   isAccountLoginNode,
+  isCodexAccountLoginNode,
   systemAccountDisplay,
   createAgentNode,
   createBrowserNode,
@@ -549,6 +552,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
       cwd: n.data.cwd as string | undefined,
       agentId: n.data.agentId as string | undefined,
       accountId: n.data.accountId as string | undefined,
+      codexAccountId: n.data.codexAccountId as string | undefined,
       ssh: n.data.ssh as SshConnection | undefined,
       sshRemoteTmux: !!n.data.sshRemoteTmux
     }
@@ -3300,9 +3304,25 @@ export function Canvas() {
     // Resolves the ssh binding by host at fire time (reads stores directly), so no project dep.
   }, [setNodes, markDirty, viewCenter])
 
+  useEffect(() => {
+    const onAddCodexAccountLogin = (ev: Event): void => {
+      const accountId = (ev as CustomEvent<{ accountId: string }>).detail?.accountId
+      if (!accountId) return
+      setNodes((ns) => [
+        ...ns.map((n) => ({ ...n, selected: false })),
+        { ...createCodexAccountLoginNode(accountId, ns.length, viewCenter()), selected: true }
+      ])
+      markDirty()
+      setSettingsOpen(false)
+    }
+    window.addEventListener('nodeterm:add-codex-account-login', onAddCodexAccountLogin)
+    return () => window.removeEventListener('nodeterm:add-codex-account-login', onAddCodexAccountLogin)
+  }, [setNodes, markDirty, viewCenter])
+
   // Resolve the system account's email once, so context menus (built via getState) can label
   // the "System account" entry with it.
   useEffect(() => useSystemAccount.getState().ensure(), [])
+  useEffect(() => useSystemCodexAccount.getState().ensure(), [])
 
   const addAgentNode = useCallback(
     (agentId: AgentId, center?: { x: number; y: number }, groupId?: string, accountId?: string) => {
@@ -3310,11 +3330,12 @@ export function Canvas() {
       const cwd = cwdForNewNodeIn(groupId) ?? project?.cwd
       // Funnel through resolveNewNodeAccount so the project default applies even without an
       // explicit pick. The factory drops the account for non-claude agents.
-      const account = resolveNewNodeAccount(
-        accountId,
-        project,
-        useSettings.getState().settings.claudeAccounts
-      )
+      const settings = useSettings.getState().settings
+      const account = agentId === 'claude'
+        ? resolveNewNodeAccount(accountId, project, settings.claudeAccounts)
+        : agentId === 'codex' && accountId && settings.codexAccounts.some((a) => a.id === accountId && !a.pending)
+          ? accountId
+          : undefined
       setNodes((ns) => {
         const node = createAgentNode(
           agentId,
@@ -3695,6 +3716,42 @@ export function Canvas() {
     window.addEventListener('nodeterm:account-removed', onAccountRemoved)
     return () => window.removeEventListener('nodeterm:account-removed', onAccountRemoved)
   }, [setNodes, markDirty, deleteNodes])
+
+  useEffect(() => {
+    const onCodexAccountRemoved = (ev: Event): void => {
+      const accountId = (ev as CustomEvent<{ accountId: string }>).detail?.accountId
+      if (!accountId) return
+      const loginIds = nodesRef.current
+        .filter((n) => n.data.codexAccountId === accountId && isCodexAccountLoginNode(n.data))
+        .map((n) => n.id)
+      if (loginIds.length) deleteNodes(loginIds)
+      setNodes((ns) =>
+        ns.some((n) => n.data.codexAccountId === accountId)
+          ? ns.map((n) =>
+              n.data.codexAccountId === accountId
+                ? { ...n, data: { ...n.data, codexAccountId: undefined } }
+                : n
+            )
+          : ns
+      )
+      markDirty()
+    }
+    window.addEventListener('nodeterm:codex-account-removed', onCodexAccountRemoved)
+    return () => window.removeEventListener('nodeterm:codex-account-removed', onCodexAccountRemoved)
+  }, [setNodes, markDirty, deleteNodes])
+
+  useEffect(() => {
+    const onQueryUse = (ev: Event): void => {
+      const detail = (ev as CustomEvent<{ accountId: string; count: number }>).detail
+      if (!detail?.accountId) return
+      detail.count += nodesRef.current.filter(
+        (node) =>
+          node.data.codexAccountId === detail.accountId && !isCodexAccountLoginNode(node.data)
+      ).length
+    }
+    window.addEventListener('nodeterm:query-live-codex-account-use', onQueryUse)
+    return () => window.removeEventListener('nodeterm:query-live-codex-account-use', onQueryUse)
+  }, [])
 
   // Delete / Backspace asks for confirmation, then deletes the selected nodes.
   useEffect(() => {
@@ -4423,6 +4480,66 @@ export function Canvas() {
     )
   }, [])
 
+  const switchCodexAccount = useCallback(
+    async (nodeId: string, targetAccountId?: string) => {
+      const node = nodesRef.current.find((n) => n.id === nodeId)
+      if (!node || restartAgentIdOf(node) !== 'codex' || node.data.ssh) return
+      const status = useAgentStatus.getState().byId[nodeId]
+      const gate = restartEligibility('codex', status?.state, status?.sessionId)
+      if (!gate.ok || !status?.sessionId) {
+        const reason = gate.ok ? 'no-session' : gate.reason
+        setNotice({
+          kind: 'error',
+          text: reason === 'working'
+            ? 'Finish the current Codex turn before switching accounts.'
+            : 'This Codex node has no conversation to move yet.'
+        })
+        return
+      }
+      const sourceAccountId = node.data.codexAccountId as string | undefined
+      if (sourceAccountId === targetAccountId) return
+      const cwd = node.data.cwd as string | undefined
+      if (!cwd) {
+        setNotice({ kind: 'error', text: 'This Codex node has no project directory to resume in.' })
+        return
+      }
+      try {
+        const threadId = await window.nodeTerminal.codexAccounts.forkThread(
+          status.sessionId,
+          cwd,
+          sourceAccountId,
+          targetAccountId
+        )
+        // A provider account is part of the process environment, not a mutable TUI preference.
+        // Recycle the one node's tmux session, then resume the fork under the target CODEX_HOME.
+        // The source conversation remains untouched in its original account.
+        transport.recycle(nodeId)
+        setNodes((nodes) =>
+          nodes.map((candidate) =>
+            candidate.id === nodeId
+              ? {
+                  ...candidate,
+                  data: {
+                    ...candidate.data,
+                    codexAccountId: targetAccountId,
+                    initialCommand: `nodeterm-codex resume ${threadId}`,
+                    respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
+                  }
+                }
+              : candidate
+          )
+        )
+        markDirty()
+      } catch {
+        setNotice({
+          kind: 'error',
+          text: 'Could not switch this Codex conversation. The original node was left running.'
+        })
+      }
+    },
+    [setNodes, markDirty]
+  )
+
   // Who the bulk restart would act on, right now: the ACTIVE project's canvas (nodesRef holds
   // exactly that). Read fresh at every call — agent state and session ids arrive asynchronously.
   const bulkRestartPlan = useCallback((): BulkRestartPlan => {
@@ -4925,6 +5042,54 @@ export function Canvas() {
                 ])
           ] as MenuItem[])
         : []),
+      ...(ids.length === 1
+        ? (() => {
+            const node = nodesRef.current.find((candidate) => candidate.id === ids[0])
+            const accounts = useSettings.getState().settings.codexAccounts.filter((a) => !a.pending)
+            if (!node || restartAgentIdOf(node) !== 'codex' || node.data.ssh || accounts.length === 0) {
+              return []
+            }
+            const current = node.data.codexAccountId as string | undefined
+            const status = useAgentStatus.getState().byId[node.id]
+            const gate = restartEligibility('codex', status?.state, status?.sessionId)
+            const systemIdentity =
+              useSystemCodexAccount.getState().email ||
+              useSettings.getState().settings.systemCodexAccountLabel ||
+              'System Codex account'
+            const item = (label: string, target?: string): MenuItem => ({
+              label: `${label}${current === target ? ' ✓' : ''}`,
+              disabled: current === target || !gate.ok,
+              hint: !gate.ok
+                ? gate.reason === 'working'
+                  ? 'Finish the current turn before switching accounts.'
+                  : 'Nothing to switch yet — this node has no conversation id.'
+                : 'Forks the conversation into this account, then restarts only this node.',
+              onClick: () => void switchCodexAccount(node.id, target)
+            })
+            const currentAccount = current
+              ? accounts.find((account) => account.id === current)
+              : undefined
+            const currentLabel = current
+              ? currentAccount?.email || currentAccount?.label || 'Unknown Codex account'
+              : systemIdentity
+            return [
+              {
+                type: 'submenu',
+                label: `Codex account: ${currentLabel}`,
+                icon: <AgentIcon agentId="codex" />,
+                children: [
+                  item(systemIdentity),
+                  ...accounts.map((account) =>
+                    item(
+                      account.email ? `${account.label} (${account.email})` : account.label,
+                      account.id
+                    )
+                  )
+                ]
+              }
+            ] as MenuItem[]
+          })()
+        : []),
       // Restart the agent CLI itself (single selection): quit it and relaunch with `--resume`, so a
       // newly released model appears in its model list with the conversation intact. Unlike "Reload
       // terminal" above (which re-attaches the pane and leaves the CLI running) this one types into
@@ -4979,6 +5144,7 @@ export function Canvas() {
     toggleCollapseNodes,
     toggleMarkdown,
     reloadTerminals,
+    switchCodexAccount,
     restartAgentNode,
     deleteNodes
   ])
@@ -4987,16 +5153,22 @@ export function Canvas() {
    *  `at` is the flow position to create at; with `groupId` the node is parented into that group. */
   const agentCreationItems = useCallback(
     (at?: { x: number; y: number }, groupId?: string): MenuItem[] => {
-      const disabled = useSettings.getState().settings.disabledAgents
+      const settings = useSettings.getState().settings
+      const disabled = settings.disabledAgents
       // Accounts selectable in the active project: local accounts for a local project, or this
       // host's accounts for an SSH project (pending logins always excluded).
       const project = useProjects.getState().getProject(activeProjectId)
-      const accounts = accountsForProject(useSettings.getState().settings.claudeAccounts, project)
+      const accounts = accountsForProject(settings.claudeAccounts, project)
+      const codexAccounts = project?.ssh ? [] : settings.codexAccounts.filter((a) => !a.pending)
       // The system entry shows the user's custom label / detected email so it stays
       // distinguishable from managed accounts (falls back to "System account").
       const systemLabel = systemAccountDisplay(
-        useSettings.getState().settings.systemAccountLabel,
+        settings.systemAccountLabel,
         useSystemAccount.getState().email
+      )
+      const systemCodexLabel = systemAccountDisplay(
+        settings.systemCodexAccountLabel,
+        useSystemCodexAccount.getState().email
       )
       // ✓ marks what a bare "New Claude" resolves to: the project default while it still
       // exists, else the system account (mirrors resolveNewNodeAccount's stale-id guard).
@@ -5041,6 +5213,27 @@ export function Canvas() {
                       } satisfies MenuItem
                     ]
                   : [])
+              ]
+            }
+          }
+          if (aid === 'codex' && codexAccounts.length > 0) {
+            return {
+              type: 'submenu',
+              label: `New ${AGENT_CONFIG[aid].label}`,
+              icon: <AgentIcon agentId={aid} />,
+              children: [
+                {
+                  label: systemCodexLabel,
+                  icon: <AgentIcon agentId="codex" />,
+                  onClick: () => addAgentNode('codex', at, groupId)
+                },
+                ...codexAccounts.map(
+                  (a): MenuItem => ({
+                    label: a.email ? `${a.label} (${a.email})` : a.label,
+                    icon: <AgentIcon agentId="codex" />,
+                    onClick: () => addAgentNode('codex', at, groupId, a.id)
+                  })
+                )
               ]
             }
           }

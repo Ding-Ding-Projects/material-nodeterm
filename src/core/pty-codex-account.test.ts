@@ -1,0 +1,83 @@
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IPC } from '../shared/ipc'
+import type { PtyCreateOptions, PtyCreateResult } from '../shared/types'
+import { codexAccountHome } from './codex-accounts-core'
+import { initPlatform, resetPlatformForTests } from './platform'
+import { fakePlatform, type FakePlatform } from './platform-fake'
+
+const spawned: Array<{ env: Record<string, string> }> = []
+
+vi.mock('node-pty', () => ({
+  spawn: (_file: string, _args: string[], options: { env: Record<string, string> }) => {
+    spawned.push({ env: options.env })
+    return {
+      onData: () => {},
+      onExit: () => {},
+      write: () => {},
+      resize: () => {},
+      pause: () => {},
+      resume: () => {},
+      kill: () => {},
+      pid: 4321
+    }
+  }
+}))
+
+describe('PTY Codex account isolation', () => {
+  let platform: FakePlatform
+  let userDataDir: string
+
+  beforeEach(async () => {
+    spawned.length = 0
+    userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-codex-pty-'))
+    platform = fakePlatform({ userDataDir })
+    initPlatform(platform)
+    const { PtyManager } = await import('./pty-manager')
+    new PtyManager().registerIpc()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    resetPlatformForTests()
+    fs.rmSync(userDataDir, { recursive: true, force: true })
+  })
+
+  const create = (options: Partial<PtyCreateOptions>): Promise<PtyCreateResult> =>
+    platform.handlers[IPC.ptyCreate](1, {
+      cols: 80,
+      rows: 24,
+      persistKey: `node-${Math.random()}`,
+      agentId: 'codex',
+      ...options
+    }) as Promise<PtyCreateResult>
+
+  it('fails closed without spawning when an explicitly selected account home is missing', async () => {
+    const result = await create({ codexAccountId: 'account-a' })
+    expect(result).toMatchObject({ sessionId: '', fresh: false, unavailable: 'codex-account' })
+    expect(spawned).toHaveLength(0)
+  })
+
+  it('uses explicit system scope instead of an inherited managed scope', async () => {
+    vi.stubEnv('NODETERM_CODEX_ACCOUNT_ID', 'inherited-wrong-account')
+    const result = await create({})
+    expect(result.unavailable).toBeUndefined()
+    expect(spawned).toHaveLength(1)
+    expect(spawned[0].env.NODETERM_CODEX_ACCOUNT_ID).toBe('')
+    expect(path.isAbsolute(spawned[0].env.CODEX_HOME)).toBe(true)
+  })
+
+  it('spawns against only the selected managed home', async () => {
+    const home = codexAccountHome(userDataDir, 'account-a')
+    fs.mkdirSync(home, { recursive: true })
+    const result = await create({ codexAccountId: 'account-a' })
+    expect(result.unavailable).toBeUndefined()
+    expect(spawned).toHaveLength(1)
+    expect(spawned[0].env).toMatchObject({
+      CODEX_HOME: home,
+      NODETERM_CODEX_ACCOUNT_ID: 'account-a'
+    })
+  })
+})

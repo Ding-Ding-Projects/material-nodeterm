@@ -4,6 +4,7 @@ import {
   arrangeNodes,
   commonParentId,
   createAccountLoginNode,
+  createCodexAccountLoginNode,
   createAgentNode,
   createDinoNode,
   fitGroupToChildren,
@@ -318,10 +319,22 @@ describe('accountId on Claude node factories', () => {
   it('does not stamp accountId onto a non-Claude agent node', () => {
     const node = createAgentNode('codex', 0, undefined, undefined, undefined, undefined, 'a1')
     expect(node.data.accountId).toBeUndefined()
+    expect(node.data.codexAccountId).toBe('a1')
   })
   it('omits accountId when none is given', () => {
     const node = createAgentNode('claude', 0)
     expect(node.data.accountId).toBeUndefined()
+  })
+})
+
+describe('Codex account node factories', () => {
+  it('creates a login terminal inside only the selected CODEX_HOME', () => {
+    const node = createCodexAccountLoginNode('codex-a', 0)
+    expect(node.data).toMatchObject({
+      title: 'Codex login',
+      codexAccountId: 'codex-a'
+    })
+    expect(node.data.initialCommand).toContain('login --device-auth')
   })
 })
 
@@ -339,6 +352,26 @@ describe('accountId serialization', () => {
     expect(states[0].accountId).toBe('a1')
     const back = nodeStatesToFlow(states)
     expect(back[0].data.accountId).toBe('a1')
+  })
+  it('round-trips data.codexAccountId on a Codex terminal node', () => {
+    const node = {
+      id: 'codex-term-1',
+      type: 'terminal',
+      position: { x: 0, y: 0 },
+      width: 600,
+      height: 400,
+      data: {
+        title: 'Codex',
+        color: '#888',
+        group: null,
+        agentId: 'codex',
+        codexAccountId: 'codex-a'
+      }
+    } as unknown as CanvasNode
+    const states = flowToNodeStates([node])
+    expect(states[0].codexAccountId).toBe('codex-a')
+    const back = nodeStatesToFlow(states)
+    expect(back[0].data.codexAccountId).toBe('codex-a')
   })
   it('leaves accountId undefined when unset', () => {
     const node = {

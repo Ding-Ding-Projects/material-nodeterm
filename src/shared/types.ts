@@ -28,6 +28,8 @@ export interface PtyCreateOptions {
   agentId?: AgentId
   /** Managed Claude account: inject CLAUDE_CONFIG_DIR for this account into the session env. */
   accountId?: string
+  /** Managed Codex account: run this node against that account's shared CODEX_HOME app-server. */
+  codexAccountId?: string
   /**
    * Which VIEW of the session this is, WITHIN one connection. A second view in the same renderer
    * (the kanban card modal) passes its own id so it co-attaches as an independently-detachable
@@ -73,8 +75,7 @@ export interface PaneCursor {
 export interface PtyCreateResult {
   sessionId: string
   fresh: boolean
-  /** Set when the node's `accountId` had no config dir at spawn, so the session fell back to the
-   *  system account. The renderer flags the account chip (folder-missing warning) when true. */
+  /** Claude-only: selected config dir missing, so that legacy path fell back to the system account. */
   accountFallback?: boolean
   /**
    * The CURRENT SCREEN of a session this create JOINED (co-attach), captured from tmux — write it
@@ -147,7 +148,7 @@ export interface PtyCreateResult {
    * node id still joins (the session is already running wherever it runs), so a second view of a
    * healthy remote terminal is unaffected.
    */
-  unavailable?: 'ssh'
+  unavailable?: 'ssh' | 'codex-account'
 }
 
 /** Payload of `pty:recycled` — see IPC.ptyRecycled and `recycleAction` in the renderer. */
@@ -224,6 +225,8 @@ export interface CanvasNodeState {
    * The hook-fed id still wins when known: `/clear` and `--fork-session` mint a new one in-CLI.
    */
   agentSessionId?: string
+  /** Codex-only managed account. Undefined uses the system ~/.codex account. */
+  codexAccountId?: string
   /** When set, the terminal runs `ssh` to this host on the local PTY; persisted (auto-reconnects). */
   ssh?: import('./ssh').SshConnection
   /** When true (SSH-project terminals), the node runs in REMOTE tmux on `ssh` rather than `ssh`-on-local-PTY. */
@@ -731,6 +734,16 @@ export interface ClaudeAccount {
   createdAt: number
 }
 
+/** A managed Codex/ChatGPT login with its own CODEX_HOME and one shared app-server. */
+export interface CodexAccount {
+  id: string
+  label: string
+  email?: string
+  /** True until the official `codex login --device-auth` flow completes. */
+  pending?: boolean
+  createdAt: number
+}
+
 export interface SpeechSettings {
   engine: 'whisper' | 'cloud'
   /** WhisperModelInfo id — meaningful while engine === 'whisper'. */
@@ -884,9 +897,13 @@ export interface Settings {
   customAgents: CustomAgent[]
   /** Managed Claude accounts (config-dir isolated). See ClaudeAccount. */
   claudeAccounts: ClaudeAccount[]
+  /** Managed Codex accounts (CODEX_HOME/app-server isolated). See CodexAccount. */
+  codexAccounts: CodexAccount[]
   /** Custom display label for the SYSTEM Claude account (~/.claude) in pickers/settings.
    *  Empty = unset → fall back to the detected login email, else "System account". */
   systemAccountLabel: string
+  /** Display label for the system Codex account (~/.codex). */
+  systemCodexAccountLabel: string
   /** Agent ids hidden from the Add menus. */
   disabledAgents: AgentId[]
   /** Usage providers hidden from the pill + popover (Settings → Usage toggles). Hiding is a
@@ -1006,7 +1023,9 @@ export const DEFAULT_SETTINGS: Settings = {
   soundVolume: 0.5,
   customAgents: [],
   claudeAccounts: [],
+  codexAccounts: [],
   systemAccountLabel: '',
+  systemCodexAccountLabel: '',
   // All three builtin agents (Claude/Codex/Gemini) show in the Add menus out of the box.
   // Existing users keep whatever they've saved (their persisted disabledAgents overrides this).
   disabledAgents: [],
@@ -1470,6 +1489,8 @@ export interface ProviderUsage {
   limits: UsageLimit[]
   /** Signed-in identity, when the provider exposes one cheaply (email / account label). */
   account: string | null
+  /** Managed provider account id; null/undefined means that provider's system account. */
+  accountId?: string | null
   updatedAt: number
   /**
    * 'unavailable' = not signed in / no subscription to report → hide this provider entirely.
@@ -1660,6 +1681,25 @@ export interface ClaudeAccountsApi {
   cancelWaitLogin(id: string): Promise<void>
   /** Delete a managed account's config dir (recursive). With an SSH `ctx`, `rm -rf` on the host. */
   remove(id: string, ctx?: AccountSshCtx): Promise<void>
+}
+
+export interface CodexAccountsApi {
+  /** Create an isolated local CODEX_HOME. Credentials are written only by the official CLI. */
+  add(): Promise<{ id: string; home: string }>
+  /** Wait for official login completion and return app-server-confirmed identity metadata. */
+  waitLogin(id: string): Promise<{ email: string | null } | null>
+  cancelWaitLogin(id: string): Promise<void>
+  /** Stop that account's shared daemon and remove its profile after explicit UI confirmation. */
+  remove(id: string): Promise<void>
+  /** Identity of the system ~/.codex account, read through account/read. */
+  systemIdentity(): Promise<{ email: string | null } | null>
+  /** Fork an idle conversation into another account home; source history remains untouched. */
+  forkThread(
+    threadId: string,
+    cwd: string,
+    sourceAccountId?: string,
+    targetAccountId?: string
+  ): Promise<string>
 }
 
 /** One ranked search hit across all on-disk Claude session transcripts. */
@@ -1981,6 +2021,7 @@ export interface NodeTerminalApi {
   claude: ClaudeApi
   chat: ChatApi
   claudeAccounts: ClaudeAccountsApi
+  codexAccounts: CodexAccountsApi
   transcripts: TranscriptsApi
   remoteHost: RemoteHostApi
   relayHost: RelayHostApi

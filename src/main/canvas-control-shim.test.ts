@@ -163,6 +163,56 @@ describe('canvas-control shim', () => {
     ).rejects.toMatchObject({ stderr: expect.stringContaining('not a nodeterm agent node') })
   })
 
+  it('never falls back to a global mapping for an invalid managed account scope', async () => {
+    const home = path.join(dir, 'invalid-account-codex-home')
+    const maps = path.join(home, '.nodeterm', 'codex-thread-nodes')
+    fs.mkdirSync(maps, { recursive: true })
+    fs.writeFileSync(
+      path.join(maps, 'same-thread'),
+      'nodeId=wrong-node\nendpoint=/isolated/hook.env\n'
+    )
+    await expect(
+      run('/bin/sh', [shim, 'list'], {
+        env: {
+          PATH: process.env.PATH ?? '',
+          HOME: home,
+          CODEX_THREAD_ID: 'same-thread',
+          NODETERM_CODEX_ACCOUNT_ID: '..'
+        }
+      })
+    ).rejects.toMatchObject({ stderr: expect.stringContaining('not a nodeterm agent node') })
+  })
+
+  it('selects the account-scoped mapping when two app-servers reuse a thread id', async () => {
+    const home = path.join(dir, 'multi-account-codex-home')
+    const maps = path.join(home, '.nodeterm', 'codex-thread-nodes')
+    const endpoint = path.join(dir, 'hook-endpoint.env')
+    fs.writeFileSync(
+      endpoint,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\n`
+    )
+    fs.mkdirSync(path.join(maps, 'account-a'), { recursive: true })
+    fs.mkdirSync(path.join(maps, 'account-b'), { recursive: true })
+    fs.writeFileSync(
+      path.join(maps, 'account-a', 'same-thread'),
+      `accountId=account-a\nnodeId=node-account-a\nendpoint=${endpoint}\n`
+    )
+    fs.writeFileSync(
+      path.join(maps, 'account-b', 'same-thread'),
+      `accountId=account-b\nnodeId=node-account-b\nendpoint=${endpoint}\n`
+    )
+    const { stdout } = await run('/bin/sh', [shim, 'list'], {
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: home,
+        CODEX_THREAD_ID: 'same-thread',
+        NODETERM_CODEX_ACCOUNT_ID: 'account-b'
+      }
+    })
+    expect(stdout.trim()).toBe('did list')
+    expect(received.at(-1)?.nodeId).toBe('node-account-b')
+  })
+
   it('rejects a wrong token (the server answers 403, the shim exits non-zero)', async () => {
     await expect(callShim(['list'], { NODETERM_HOOK_TOKEN: 'wrong' })).rejects.toMatchObject({
       code: 1

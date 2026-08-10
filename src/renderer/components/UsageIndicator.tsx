@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ClaudeUsage, ProviderUsage, RemoteAccountUsage, UsageLimit } from '@shared/types'
 import { AGENT_CONFIG } from '@shared/agents/config'
 import { useSettings } from '../state/settings'
+import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { useProjects } from '../state/projects'
 import { useSshConn } from '../state/sshConn'
 import { scopeFromKey, scopeUsage, usageScopeKey } from '../lib/usageScope'
@@ -121,13 +122,23 @@ function labelFor(provider: string): string {
   return providerLabel(provider, agentLabel)
 }
 
-function ProviderBlock({ u, mode }: { u: ProviderUsage; mode: 'used' | 'remaining' }) {
+function ProviderBlock({
+  u,
+  mode,
+  identity
+}: {
+  u: ProviderUsage
+  mode: 'used' | 'remaining'
+  identity?: string | null
+}) {
   if (u.status === 'unavailable') return null
   const label = labelFor(u.provider)
   return (
     <div className="usage-account">
       <div className="usage-account__label">{label}</div>
-      {u.account && <div className="usage-account__email">{u.account}</div>}
+      {(identity || u.account) && (
+        <div className="usage-account__email">{identity || u.account}</div>
+      )}
       {u.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
@@ -157,6 +168,9 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   const closeTimerRef = useRef<number | null>(null)
 
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
+  const codexAccounts = useSettings((s) => s.settings.codexAccounts)
+  const systemCodexLabel = useSettings((s) => s.settings.systemCodexAccountLabel)
+  const systemCodexEmail = useSystemCodexAccount((s) => s.email)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
   const hiddenProviders = useSettings((s) => s.settings.hiddenUsageProviders)
   const percentMode = useSettings((s) => s.settings.usagePercentMode)
@@ -165,6 +179,7 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
     () => claudeAccounts.filter((a) => !a.pending && !a.host),
     [claudeAccounts]
   )
+  useEffect(() => useSystemCodexAccount.getState().ensure(), [])
 
   // The indicator follows the ACTIVE project: on a local project it is this machine, on an SSH
   // project it is that host and nothing else. Showing every source at once is what made the panel
@@ -308,7 +323,12 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
             .catch((): RemoteAccountUsage[] => [])
         )
       } else {
-        setUsage(await window.nodeTerminal.usage.refresh())
+        const [nextUsage, nextProviders] = await Promise.all([
+          window.nodeTerminal.usage.refresh(),
+          window.nodeTerminal.usage.providers(true)
+        ])
+        setUsage(nextUsage)
+        setProviders(nextProviders)
       }
     } finally {
       setRefreshing(false)
@@ -348,7 +368,7 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
           const worst = primaryLimit(p.limits)
           if (!worst) return null
           return (
-            <span key={p.provider} className="usage-pill__provider">
+            <span key={`${p.provider}:${p.accountId ?? 'system'}`} className="usage-pill__provider">
               {(limits.length > 0 || i > 0) && <span className="usage-pill__sep">·</span>}
               <span className="usage-pill__num">
                 {percentNumber(worst.usedPercent, percentMode)}% {labelFor(p.provider)}
@@ -425,7 +445,19 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
             </div>
           )}
           {visibleProviders.map((p) => (
-            <ProviderBlock key={p.provider} u={p} mode={percentMode} />
+            <ProviderBlock
+              key={`${p.provider}:${p.accountId ?? 'system'}`}
+              u={p}
+              mode={percentMode}
+              identity={
+                p.provider !== 'codex'
+                  ? p.account
+                  : p.accountId
+                    ? codexAccounts.find((a) => a.id === p.accountId)?.email ||
+                      codexAccounts.find((a) => a.id === p.accountId)?.label
+                    : systemCodexEmail || systemCodexLabel || 'System Codex account'
+              }
+            />
           ))}
         </div>
       )}

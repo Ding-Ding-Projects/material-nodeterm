@@ -20,7 +20,9 @@ describe('buildManagedScript', () => {
   })
   it('recovers shared Codex identity from CODEX_THREAD_ID mapping before the node-id gate', () => {
     const codex = buildManagedScript('codex')
-    expect(codex).toContain('$HOME/.nodeterm/codex-thread-nodes/$CODEX_THREAD_ID')
+    expect(codex).toContain(
+      '$HOME/.nodeterm/codex-thread-nodes/$nt_codex_scope/$CODEX_THREAD_ID'
+    )
     expect(codex.indexOf('nt_codex_map=')).toBeLessThan(
       codex.indexOf('if [ -z "$NODETERM_NODE_ID" ]; then\n  exit 0')
     )

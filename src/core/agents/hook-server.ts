@@ -91,9 +91,9 @@ class HookServer {
     | ((req: { verb: string; nodeId: string; args: Record<string, string> }) => Promise<string>)
     | null = null
   private codexThreadStartHandler:
-    ((req: { nodeId: string; cwd: string; hookEndpoint: string }) => Promise<string>) | null = null
+    ((req: { nodeId: string; cwd: string; hookEndpoint: string; accountId?: string }) => Promise<string>) | null = null
   private codexThreadBindHandler:
-    ((req: { nodeId: string; threadId: string; hookEndpoint: string }) => Promise<void>) | null = null
+    ((req: { nodeId: string; threadId: string; hookEndpoint: string; accountId?: string }) => Promise<void>) | null = null
   private endpointPath = ''
 
   endpointFilePath(): string {
@@ -159,7 +159,9 @@ class HookServer {
           const form = parseForm(await readBody(req))
           const nodeId = form.nodeId ?? ''
           const cwd = form.cwd ?? ''
-          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !path.isAbsolute(cwd)) {
+          const accountId = form.accountId || undefined
+          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !path.isAbsolute(cwd) ||
+              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
             res.writeHead(400)
             res.end()
             return
@@ -169,7 +171,8 @@ class HookServer {
               ? await this.codexThreadStartHandler({
                   nodeId,
                   cwd,
-                  hookEndpoint: this.endpointFilePath()
+                  hookEndpoint: this.endpointFilePath(),
+                  accountId
                 })
               : ''
             if (!/^[A-Za-z0-9._-]+$/.test(threadId)) throw new Error('invalid thread id')
@@ -187,7 +190,9 @@ class HookServer {
           const form = parseForm(await readBody(req))
           const nodeId = form.nodeId ?? ''
           const threadId = form.threadId ?? ''
-          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId)) {
+          const accountId = form.accountId || undefined
+          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
+              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
             res.writeHead(400)
             res.end()
             return
@@ -197,7 +202,8 @@ class HookServer {
             await this.codexThreadBindHandler({
               nodeId,
               threadId,
-              hookEndpoint: this.endpointFilePath()
+              hookEndpoint: this.endpointFilePath(),
+              accountId
             })
             res.writeHead(204)
             res.end()

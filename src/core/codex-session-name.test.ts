@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { WebSocketServer } from 'ws'
 import {
   codexUnixWebSocketUrl,
+  forkCodexThreadFromPathAt,
+  readCodexAccountAt,
   readCodexSessionNameAt,
   startCodexThreadAt
 } from './codex-session-name'
@@ -33,7 +35,8 @@ describe('Codex shared app-server session names', () => {
               result: {
                 thread: {
                   id: request.params.threadId,
-                  name: 'Shared task title'
+                  name: 'Shared task title',
+                  path: '/isolated/source-thread.jsonl'
                 }
               }
             })
@@ -48,6 +51,15 @@ describe('Codex shared app-server session names', () => {
               }
             })
           )
+        }
+        if (request.method === 'thread/fork') {
+          ws.send(JSON.stringify({ id: request.id, result: { thread: { id: 'thread-forked' } } }))
+        }
+        if (request.method === 'account/read') {
+          ws.send(JSON.stringify({
+            id: request.id,
+            result: { account: { type: 'chatgpt', email: 'account@example.com', planType: 'pro' } }
+          }))
         }
       })
     })
@@ -104,6 +116,19 @@ describe('Codex shared app-server session names', () => {
       'Unsupported Codex thread cwd'
     )
     expect(requests).toEqual([])
+  })
+
+  it('reads account email through app-server without exposing credentials', async () => {
+    await expect(readCodexAccountAt(socket)).resolves.toEqual({ email: 'account@example.com' })
+  })
+
+  it('forks an idle rollout into another account app-server', async () => {
+    await expect(
+      forkCodexThreadFromPathAt(socket, '/isolated/source-thread.jsonl', '/isolated/worktree')
+    ).resolves.toBe('thread-forked')
+    expect(requests.find((request) => request.method === 'thread/fork')).toMatchObject({
+      params: { path: '/isolated/source-thread.jsonl', cwd: '/isolated/worktree' }
+    })
   })
 
   it.each(['/tmp/socket:bad', '/tmp/socket with-space', 'relative.sock'])(

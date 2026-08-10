@@ -17,8 +17,14 @@ const brokerCalls: Array<{
   nodeId: string
   cwd: string
   hookEndpoint: string
+  accountId?: string
 }> = []
-const bindCalls: Array<{ nodeId: string; threadId: string; hookEndpoint: string }> = []
+const bindCalls: Array<{
+  nodeId: string
+  threadId: string
+  hookEndpoint: string
+  accountId?: string
+}> = []
 
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-hookenv-'))
@@ -63,14 +69,14 @@ describe('hookServer.buildPtyEnv — canvas control gate', () => {
 })
 
 describe('hookServer Codex thread broker', () => {
-  const request = (nodeId: string, cwd: string) =>
+  const request = (nodeId: string, cwd: string, accountId?: string) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/start`, {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
         'x-nodeterm-hook-token': hookServer.getToken()
       },
-      body: new URLSearchParams({ nodeId, cwd })
+      body: new URLSearchParams({ nodeId, cwd, ...(accountId ? { accountId } : {}) })
     })
   const bind = (nodeId: string, threadId: string) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/bind`, {
@@ -109,12 +115,26 @@ describe('hookServer Codex thread broker', () => {
 
   it('rejects missing or invalid node/cwd identity before the broker', async () => {
     const before = brokerCalls.length
-    const [missing, traversal] = await Promise.all([
+    const [missing, traversal, invalidAccount] = await Promise.all([
       request('', '/isolated/node'),
-      request('node-c', '../other')
+      request('node-c', '../other'),
+      request('node-d', '/isolated/node', '..')
     ])
-    expect([missing.status, traversal.status]).toEqual([400, 400])
+    expect([missing.status, traversal.status, invalidAccount.status]).toEqual([400, 400, 400])
     expect(brokerCalls).toHaveLength(before)
+  })
+
+  it('routes two parallel accounts to distinct broker identities', async () => {
+    const before = brokerCalls.length
+    const [a, b] = await Promise.all([
+      request('node-account-a', '/isolated/a', 'account-a'),
+      request('node-account-b', '/isolated/b', 'account-b')
+    ])
+    expect([a.status, b.status]).toEqual([200, 200])
+    expect(brokerCalls.slice(before)).toEqual([
+      expect.objectContaining({ nodeId: 'node-account-a', accountId: 'account-a' }),
+      expect.objectContaining({ nodeId: 'node-account-b', accountId: 'account-b' })
+    ])
   })
 
   it('binds explicit resumes and fails closed on invalid or conflicting ownership', async () => {

@@ -55,11 +55,11 @@ describe('NodeTerm Codex remote launcher', () => {
     await Promise.all([
       run(launcher, ['resume', 'thread-a'], { env: {
         ...process.env, ...base, CAPTURE: outA,
-        NODETERM_NODE_ID: 'node-a', CAPTURE_BIND: bindA
+        NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_ACCOUNT_ID: 'account-a', CAPTURE_BIND: bindA
       }}),
       run(launcher, ['resume', 'thread-b'], { env: {
         ...process.env, ...base, CAPTURE: outB,
-        NODETERM_NODE_ID: 'node-b', CAPTURE_BIND: bindB
+        NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_ACCOUNT_ID: 'account-b', CAPTURE_BIND: bindB
       }})
     ])
     const argsA = JSON.parse(readFileSync(outA, 'utf8'))
@@ -69,8 +69,10 @@ describe('NodeTerm Codex remote launcher', () => {
     expect(argsA.slice(0, 2)).toEqual(argsB.slice(0, 2))
     expect(readFileSync(bindA, 'utf8')).toContain('nodeId=node-a\n')
     expect(readFileSync(bindA, 'utf8')).toContain('threadId=thread-a\n')
+    expect(readFileSync(bindA, 'utf8')).toContain('accountId=account-a\n')
     expect(readFileSync(bindB, 'utf8')).toContain('nodeId=node-b\n')
     expect(readFileSync(bindB, 'utf8')).toContain('threadId=thread-b\n')
+    expect(readFileSync(bindB, 'utf8')).toContain('accountId=account-b\n')
   })
 
   it('pre-creates and binds two fresh sessions independently on the shared app-server', async () => {
@@ -147,6 +149,11 @@ describe('NodeTerm Codex remote launcher', () => {
     }
     await expect(run(launcher, ['resume'], { env })).rejects.toMatchObject({ code: 64 })
     await expect(run(launcher, ['resume', '../other'], { env })).rejects.toMatchObject({ code: 64 })
+    await expect(
+      run(launcher, ['resume', 'thread-a'], {
+        env: { ...env, NODETERM_CODEX_ACCOUNT_ID: '..' }
+      })
+    ).rejects.toMatchObject({ code: 64 })
   })
 
   it('rejects a live duplicate owner but permits replacing a stale node binding', () => {
@@ -158,8 +165,42 @@ describe('NodeTerm Codex remote launcher', () => {
     ).toThrow('already bound')
     bindCodexThreadIdentity('thread-a', 'node-b', '/isolated/hook.env', () => false)
     expect(
-      readFileSync(path.join(root, '.nodeterm', 'codex-thread-nodes', 'thread-a'), 'utf8')
-    ).toBe('nodeId=node-b\nendpoint=/isolated/hook.env\n')
+      readFileSync(
+        path.join(root, '.nodeterm', 'codex-thread-nodes', 'system', 'thread-a'),
+        'utf8'
+      )
+    ).toBe('accountId=system\nnodeId=node-b\nendpoint=/isolated/hook.env\n')
+  })
+
+  it('keeps an equal thread id isolated across two account app-servers', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-account-binding-'))
+    vi.stubEnv('HOME', root)
+    bindCodexThreadIdentity(
+      'same-thread',
+      'node-a',
+      '/isolated/hook.env',
+      () => false,
+      'account-a'
+    )
+    bindCodexThreadIdentity(
+      'same-thread',
+      'node-b',
+      '/isolated/hook.env',
+      () => true,
+      'account-b'
+    )
+    expect(
+      readFileSync(
+        path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a', 'same-thread'),
+        'utf8'
+      )
+    ).toContain('nodeId=node-a')
+    expect(
+      readFileSync(
+        path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-b', 'same-thread'),
+        'utf8'
+      )
+    ).toContain('nodeId=node-b')
   })
 
   it.each([
@@ -169,5 +210,17 @@ describe('NodeTerm Codex remote launcher', () => {
     ['node-a', '/isolated/evil"value']
   ])('fails closed for invalid identity node=%s endpoint=%s', (nodeId, endpoint) => {
     expect(validCodexIdentity(nodeId, endpoint)).toBe(false)
+  })
+
+  it('rejects an account scope that could escape the mapping directory', () => {
+    expect(() =>
+      bindCodexThreadIdentity(
+        'thread-a',
+        'node-a',
+        '/isolated/hook.env',
+        () => false,
+        '..'
+      )
+    ).toThrow('Invalid NodeTerm Codex account identity')
   })
 })
