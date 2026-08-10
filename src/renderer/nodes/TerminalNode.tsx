@@ -3685,6 +3685,7 @@ export function TerminalNode({
       >
         <div
           className={`term-node__xterm nodrag nowheel${co.letterbox ? ' letterboxed' : ''}`}
+          data-canvas-trackpad-pan
           ref={bodyRef}
         />
         {uploadNote && (

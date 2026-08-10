@@ -267,7 +267,10 @@ export function buildStubApi(): Omit<
       remove: U('codexAccounts.remove'),
       identity: U('codexAccounts.identity'),
       systemIdentity: U('codexAccounts.systemIdentity'),
-      switchThread: U('codexAccounts.switchThread')
+      switchThread: U('codexAccounts.switchThread'),
+      commitSwitch: U('codexAccounts.commitSwitch'),
+      finishSwitch: U('codexAccounts.finishSwitch'),
+      rollbackSwitch: U('codexAccounts.rollbackSwitch')
     },
     transcripts: {
       search: U('transcripts.search')

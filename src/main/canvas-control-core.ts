@@ -85,6 +85,12 @@ export function parseControlRequest(
   }
   if (v === 'open-browser' && !args.url) return { error: 'open-browser requires --url' }
   if (v === 'open-agent' && !args.agent) return { error: 'open-agent requires --agent <id>' }
+  if (v === 'open-agent' && args.resume && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(args.resume)) {
+    return { error: 'open-agent --resume requires a safe session id' }
+  }
+  if (v === 'open-agent' && args.resume && args.count && args.count !== '1') {
+    return { error: 'open-agent --resume opens exactly one session' }
+  }
   if ((v === 'group' || v === 'arrange') && !args.nodes) return { error: `${v} requires --nodes <id,id>` }
   if (v === 'ungroup' && !args.group) return { error: 'ungroup requires --group <id>' }
   if (v === 'move' && !args.nodes) return { error: 'move requires --nodes <id,id>' }
@@ -142,13 +148,16 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '- `list` — current nodes (id, kind, title). Start here when you need a node id.',
     '- `open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>]` — open N plain terminals.',
     '- `open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]` — open N Claude sessions.',
-    '- `open-agent --agent claude|codex|gemini|opencode|<custom-id> [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]` — open',
+    '- `open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]` — open',
     '  any agent CLI. `--group` parents the node(s) into a group frame; a worktree-bound group also',
     '  hands its worktree path down as the cwd. `--after <id,id>` opens the node ARMED: it does not',
     '  start until every listed station has gone idle, and is context-linked to them so it can read',
     '  their work when it wakes — use it for "B needs what A produced" instead of polling. Only',
     '  status-reporting agent nodes (claude/codex/gemini) may be waited on; a plain terminal never',
     '  reports finishing, so waiting on one is refused.',
+    '  `--resume` opens exactly one existing session through the agent\'s native resume command.',
+    '  For Codex, `--account system|<id>` selects the login; otherwise the opener\'s Codex account is inherited.',
+    '  In Codex TUI use this shell verb; Desktop dynamic tool calls are not available there.',
     '- `show-image <path>` / `show-video <path>` — open a media file as a node.',
     '- `show-web (--url U | --file P.html | --html "<...>")` — open a web viewer.',
     '- `open-browser --url U` — open a navigable browser node. In Codex, control that exact node',
@@ -320,7 +329,10 @@ Verbs:
 - \`list\` — list current nodes (id, kind, title). Start here when you need a node id.
 - \`open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>]\` — open N plain terminals (default 1).
 - \`open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N Claude sessions (default 1).
-- \`open-agent --agent claude|codex|gemini|opencode|<custom-id> [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N sessions of any agent CLI.
+- \`open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N sessions of any agent CLI.
+  \`--resume\` opens exactly one existing session with the agent's native resume command. For Codex,
+  \`--account system|<id>\` selects the login; otherwise the opener's Codex account is inherited.
+  In Codex TUI use this shell verb; Desktop dynamic tool calls are not available there.
   \`--group\` parents the node(s) into an existing group frame; a worktree-bound group also
   hands its worktree path down as the cwd.
   \`--after <id,id>\` opens the node **armed**: it does NOT start yet, and launches itself once

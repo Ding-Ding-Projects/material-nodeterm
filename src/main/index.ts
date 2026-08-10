@@ -8,7 +8,12 @@ import {
   resolveCodexThreadNodeIdentity,
   writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
-import { codexUsageAccounts } from '../core/codex-accounts-core'
+import {
+  codexHomeForAccount,
+  codexUsageAccounts,
+  commitCodexRolloutExposure,
+  planCodexRolloutExposure
+} from '../core/codex-accounts-core'
 import { statSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { homedir, hostname } from 'os'
@@ -136,6 +141,7 @@ import {
   localCodexAccountHome,
   localCodexSocket
 } from './codex-accounts'
+import { resolveForeignThreadAt } from './codex-relay-daemon'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
 import { claudeConfigDirFor } from '../core/claude-config-dir'
 import {
@@ -172,7 +178,7 @@ import {
   allowMediaPath,
   writeAgentHtml
 } from './media-protocol'
-import { initPlatform } from '../core/platform'
+import { initPlatform, platform } from '../core/platform'
 import { electronPlatform } from './platform-electron'
 import { wirePeerRegistry } from './peer-registry'
 import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
@@ -1010,6 +1016,41 @@ app.whenReady().then(async () => {
       nodeId,
       (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined
     )) throw new Error('Codex thread is already bound to another live node')
+  })
+  hookServer.setCodexThreadExposeHandler(async ({ threadId, accountId }) => {
+    const configuredAccountIds = (settingsStore.get().codexAccounts ?? [])
+      .filter((account) => !account.pending)
+      .map((account) => account.id)
+    if (accountId && !configuredAccountIds.includes(accountId)) {
+      throw new Error('Selected Codex account is unavailable')
+    }
+    const accountIds: Array<string | undefined> = [undefined, ...configuredAccountIds]
+    for (const candidateAccountId of accountIds) {
+      await ensureCodexAccountDaemon(candidateAccountId)
+    }
+    const socketEntries = accountIds.map((candidateAccountId) => ({
+      accountId: candidateAccountId,
+      socketPath: localCodexSocket(candidateAccountId)
+    }))
+    const targetSocket = localCodexSocket(accountId)
+    const resolved = await resolveForeignThreadAt(
+      targetSocket,
+      socketEntries.map((entry) => entry.socketPath),
+      threadId
+    )
+    if (resolved.kind === 'native') return
+    if (resolved.kind !== 'foreign') {
+      throw new Error('Codex session id is unavailable or ambiguous')
+    }
+    const source = socketEntries.find((entry) => entry.socketPath === resolved.thread.socketPath)
+    if (!source) throw new Error('Codex session source account is unavailable')
+    const exposure = planCodexRolloutExposure(
+      codexHomeForAccount(platform().userDataDir, source.accountId),
+      codexHomeForAccount(platform().userDataDir, accountId),
+      resolved.thread.path,
+      threadId
+    )
+    commitCodexRolloutExposure(exposure)
   })
   hookServer.setCodexThreadCatalogHandler(async () => {
     const accountIds: Array<string | undefined> = [

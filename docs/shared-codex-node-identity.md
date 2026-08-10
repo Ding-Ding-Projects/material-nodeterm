@@ -50,10 +50,10 @@ distinct.
   and usage lookup.
 - The Usage popover renders one Codex section per identity, with its email or explicit label.
 - An idle Codex node can switch accounts from its context menu. Codex authentication is process
-  state, so this is not an in-place credential mutation: NodeTerm reads the source thread's rollout
-  path, forks it into the target account, and resumes the new thread after recycling only that
-  node. The source thread remains intact. A working node or a node without a thread id cannot be
-  switched.
+  state, so NodeTerm recycles only that node. The conversation remains account-agnostic: NodeTerm
+  exposes the verified source rollout in the target CODEX_HOME as an atomic hardlink to the same
+  inode, then resumes the same thread id through the target account's shared app-server. It does
+  not copy or fork the conversation. A working node or a node without a thread id cannot be switched.
 - A managed account cannot be removed while any non-login canvas node still uses it. Nodes must be
   switched or removed first, preventing a live process from falling back to the system identity.
 

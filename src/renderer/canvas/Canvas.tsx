@@ -2539,10 +2539,10 @@ export function Canvas() {
   // zoom to the cursor. React Flow's own zoomOnPinch / zoomActivationKeyCode are disabled so
   // this is the single source of zoom (no double-zoom on the open canvas).
   //
-  // With settings.wheelZoom on, a PLAIN mouse wheel zooms too (mouse-first workflow) — except
-  // macOS pixel gestures, which are two-finger trackpad panning, and inside a `nowheel` node body (focused
-  // xterm scrollback, Monaco, markdown/chat panes), which keeps its own scrolling. The hover
-  // guard overlay is NOT nowheel, so an unfocused terminal still zooms under the cursor.
+  // With settings.wheelZoom on, a PLAIN mouse wheel zooms too (mouse-first workflow). macOS
+  // pixel gestures pan the canvas; over focused xterm they use the manual path, while Monaco,
+  // markdown/chat and other `nowheel` surfaces retain native scrolling. The hover guard overlay
+  // is NOT nowheel, so an unfocused terminal still zooms under the cursor.
   const wheelZoom = settings.wheelZoom
   useEffect(() => {
     const wrap = flowWrapRef.current
@@ -2551,10 +2551,22 @@ export function Canvas() {
     const onWheel = (e: WheelEvent) => {
       if (canvasLocked) return
       if (!e.ctrlKey && !e.metaKey) {
-        if ((e.target as HTMLElement | null)?.closest('.nowheel')) return
+        const target = e.target as HTMLElement | null
+        const overNativeScrollable = !!target?.closest('.nowheel')
+        const overTerminalSurface = !!target?.closest('[data-canvas-trackpad-pan]')
         // Chromium represents a macOS trackpad's two-finger scroll as an unmodified pixel-wheel;
-        // let React Flow pan it. Pinch arrives with ctrlKey and stays on the zoom path above.
-        if (wheelRouting.shouldPan(e, isMac)) return
+        // let React Flow pan it. The xterm surface blocks React Flow, so pan manually there;
+        // other `.nowheel` editors and documents retain their native scroll contract.
+        const destination = wheelRouting.destination(e, isMac, overTerminalSurface)
+        if (destination === 'flow-pan') return
+        if (destination === 'manual-pan') {
+          e.preventDefault()
+          e.stopPropagation()
+          const { x, y, zoom } = getViewport()
+          setViewport({ x: x - e.deltaX, y: y - e.deltaY, zoom })
+          return
+        }
+        if (overNativeScrollable) return
         // Cmd/Ctrl+scroll always zooms; an ordinary mouse wheel only when opted in.
         if (!wheelZoom) return
       }
@@ -4517,13 +4529,15 @@ export function Canvas() {
         sessionId: status.sessionId
       }
       codexAccountSwitchInFlight.current.add(nodeId)
+      let rollbackToken: string | undefined
       try {
-        const threadId = await window.nodeTerminal.codexAccounts.switchThread(
+        const switched = await window.nodeTerminal.codexAccounts.switchThread(
           status.sessionId,
           cwd,
           sourceAccountId,
           targetAccountId
         )
+        rollbackToken = switched.rollbackToken
         const currentNode = nodesRef.current.find((candidate) => candidate.id === nodeId)
         const currentStatus = useAgentStatus.getState().byId[nodeId]
         if (!currentNode || !codexAccountSwitchStillEligible(expected, {
@@ -4534,33 +4548,56 @@ export function Canvas() {
           ssh: !!currentNode.data.ssh,
           state: currentStatus?.state
         })) {
+          if (rollbackToken) {
+            await window.nodeTerminal.codexAccounts.rollbackSwitch(rollbackToken)
+            rollbackToken = undefined
+          }
           setNotice({
             kind: 'error',
             text: 'Account switch cancelled because this Codex session changed or became busy.'
           })
           return
         }
+        if (rollbackToken) {
+          await window.nodeTerminal.codexAccounts.commitSwitch(rollbackToken)
+        }
         // A provider account is part of the process environment, not a mutable TUI preference.
         // Recycle the one node's tmux session, then resume the same rollout under the target
         // CODEX_HOME. Account identity changes; conversation identity does not.
         transport.recycle(nodeId)
-        setNodes((nodes) =>
-          nodes.map((candidate) =>
+        const nextNodes = nodesRef.current.map((candidate) =>
             candidate.id === nodeId
               ? {
                   ...candidate,
                   data: {
                     ...candidate.data,
                     codexAccountId: targetAccountId,
-                    initialCommand: `nodeterm-codex resume ${threadId}`,
+                    initialCommand: `nodeterm-codex resume ${switched.threadId}`,
                     respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
                   }
                 }
               : candidate
           )
-        )
+        // Account removal queries nodesRef synchronously. Publish outside React's scheduled state
+        // updater before releasing the Main reservation, then render that exact snapshot.
+        nodesRef.current = nextNodes
+        setNodes(nextNodes)
         markDirty()
+        if (rollbackToken) {
+          const token = rollbackToken
+          try {
+            await window.nodeTerminal.codexAccounts.finishSwitch(token)
+          } catch {
+            // Both operations only release the Main-process reservation after commit; the
+            // verified hardlink and switched node remain valid either way.
+            await window.nodeTerminal.codexAccounts.rollbackSwitch(token)
+          }
+          rollbackToken = undefined
+        }
       } catch {
+        if (rollbackToken) {
+          await window.nodeTerminal.codexAccounts.rollbackSwitch(rollbackToken)
+        }
         setNotice({
           kind: 'error',
           text: 'Could not switch this Codex conversation. The original node was left running.'
@@ -6208,7 +6245,7 @@ export function Canvas() {
             // open-claude is the legacy fixed-agent form; open-agent takes any builtin
             // (claude/codex/gemini) or custom agent id — resolveAgent falls back for the rest.
             const agentId = (verb === 'open-agent' ? args.agent : 'claude') as AgentId
-            const count = Math.max(1, Math.min(5, parseInt(args.count || '1', 10) || 1))
+            const count = args.resume ? 1 : Math.max(1, Math.min(5, parseInt(args.count || '1', 10) || 1))
             // --group parents the new node(s) into an existing group frame; a worktree-bound
             // group also hands its worktree path down as the cwd (same inheritance as
             // UI-created nodes — cwdForNewNodeIn is the one resolver for that).
@@ -6217,31 +6254,55 @@ export function Canvas() {
             const groupCwd = intoGroupId
               ? worktreeControlRef.current.cwdForNewNodeIn(intoGroupId)
               : undefined
-            // Inherit the source node's managed account, else the project default, else system —
-            // the same funnel as addAgentNode (the factory drops accounts on non-claude agents).
+            // Account inheritance is provider-specific. A managed Codex opener must never pass
+            // through the Claude account list (which previously downgraded its children to system).
             const projStore = useProjects.getState()
-            const account = resolveNewNodeAccount(
-              src.data.accountId as string | undefined,
-              projStore.getProject(projStore.activeProjectId ?? ''),
-              useSettings.getState().settings.claudeAccounts
-            )
+            const settings = useSettings.getState().settings
+            const requestedAccount = args.account === 'system' ? undefined : args.account
+            if (args.account && agentId !== 'codex') {
+              reply({ ok: false, error: 'open-agent --account is supported only for Codex' })
+              return
+            }
+            if (requestedAccount && !settings.codexAccounts.some((a) => a.id === requestedAccount && !a.pending)) {
+              reply({ ok: false, error: 'open-agent: unknown or unavailable Codex account' })
+              return
+            }
+            const account = agentId === 'codex'
+              ? (args.account ? requestedAccount : src.data.codexAccountId as string | undefined)
+              : resolveNewNodeAccount(
+                  src.data.accountId as string | undefined,
+                  projStore.getProject(projStore.activeProjectId ?? ''),
+                  settings.claudeAccounts
+                )
             const after = resolveAfter()
             if (after === null) return // bad --after, already replied
             const agentCwd = args.cwd || groupCwd || srcCwd
-            const make = (i: number): CanvasNode =>
-              armAfter(
-                createAgentNode(
+            const agentSsh = sshFor(agentCwd)
+            if (agentId === 'codex' && account && agentSsh) {
+              reply({ ok: false, error: 'open-agent: managed Codex accounts are unavailable on SSH projects' })
+              return
+            }
+            const make = (i: number): CanvasNode => {
+              const node = createAgentNode(
                   agentId,
                   nodesRef.current.length + i,
                   agentCwd,
                   placeBelow(i),
                   args.prompt,
-                  sshFor(agentCwd),
+                  agentSsh,
                   account,
                   activePermissionMode(agentId)
-                ),
-                after ?? []
-              )
+                )
+              if (args.resume) {
+                const resume = resumeCommand(agentId, args.resume, !!node.data.ssh)
+                if (!resume) throw new Error('Agent does not support session resume')
+                node.data = {
+                  ...node.data,
+                  initialCommand: withPermissionMode(resume, agentId, activePermissionMode(agentId))
+                }
+              }
+              return armAfter(node, after ?? [])
+            }
             const ids = intoGroupId
               ? addGrouped(intoGroupId, count, make)
               : Array.from({ length: count }, (_, i) => addAndConnect(make(i)))

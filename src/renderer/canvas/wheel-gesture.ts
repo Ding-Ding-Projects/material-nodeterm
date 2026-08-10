@@ -2,6 +2,8 @@ type WheelGesture = Pick<WheelEvent, 'ctrlKey' | 'metaKey' | 'deltaMode' | 'delt
   wheelDeltaY?: number
 }
 
+export type MacWheelDestination = 'manual-pan' | 'flow-pan' | 'native'
+
 const TRACKPAD_SEQUENCE_MS = 250
 const MOUSE_WHEEL_NOTCH = 120
 const LARGE_PIXEL_DELTA = 40
@@ -29,5 +31,15 @@ export class MacWheelGestureRouter {
       return true
     }
     return false
+  }
+
+  destination(
+    event: WheelGesture,
+    mac: boolean,
+    overTerminalSurface: boolean,
+    now = performance.now()
+  ): MacWheelDestination {
+    if (!this.shouldPan(event, mac, now)) return 'native'
+    return overTerminalSurface ? 'manual-pan' : 'flow-pan'
   }
 }

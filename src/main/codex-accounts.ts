@@ -4,17 +4,21 @@ import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { promisify } from 'util'
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import { IPC } from '../shared/ipc'
 import {
   assertCodexAccountId,
+  commitCodexRolloutExposure,
   codexAccountHome,
+  codexHomeForAccount,
   codexSessionEnv,
   codexSocketForAccount,
   ensureSharedCodexDaemon,
   legacyCodexAccountHome,
   migrateLegacyCodexAccountHome,
-  migrateLegacyCodexAccountHomes
+  migrateLegacyCodexAccountHomes,
+  planCodexRolloutExposure,
+  type CodexRolloutExposurePlan
 } from '../core/codex-accounts-core'
 import { readCodexAccountAt, readCodexThreadAt } from '../core/codex-session-name'
 import { platform } from '../core/platform'
@@ -24,7 +28,27 @@ const execFileP = promisify(execFile)
 const LOGIN_POLL_MS = 2000
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 const SHARED_ENTRIES = ['config.toml', 'AGENTS.md', 'skills', 'plugins', 'packages', 'rules', 'hooks.json']
+const SWITCH_RESERVATION_TTL_MS = 60_000
 const waiters = new Map<string, { cancelled: boolean }>()
+type PendingSwitchExposure = {
+  exposure?: CodexRolloutExposurePlan
+  sourceAccountId?: string
+  targetAccountId?: string
+  committed: boolean
+  owner: WebContents
+  ownerDestroyed: () => void
+  timer: ReturnType<typeof setTimeout>
+}
+const pendingSwitchExposures = new Map<string, PendingSwitchExposure>()
+const removingCodexAccounts = new Set<string>()
+
+function releasePendingSwitch(token: string): void {
+  const pending = pendingSwitchExposures.get(token)
+  if (!pending) return
+  pendingSwitchExposures.delete(token)
+  clearTimeout(pending.timer)
+  if (!pending.owner.isDestroyed()) pending.owner.removeListener('destroyed', pending.ownerDestroyed)
+}
 
 export function localCodexAccountHome(accountId: string): string {
   return codexAccountHome(platform().userDataDir, accountId)
@@ -134,33 +158,65 @@ export function initCodexAccounts(): void {
 
   ipcMain.handle(IPC.codexAccountsRemove, async (_event, id: string) => {
     assertCodexAccountId(id)
-    const waiter = waiters.get(id)
-    if (waiter) waiter.cancelled = true
-    try {
-      const codex = await findInLoginPath('codex')
-      if (codex) {
-        await execFileP(codex, ['app-server', 'daemon', 'stop'], {
-          cwd: os.homedir(),
-          env: { ...process.env, CODEX_HOME: localCodexAccountHome(id) },
-          timeout: 10_000,
-          maxBuffer: 1024 * 1024
-        })
-      }
-    } catch {
-      // A stopped/missing daemon is already the desired state.
+    if ([...pendingSwitchExposures.values()].some((pending) =>
+      pending.sourceAccountId === id || pending.targetAccountId === id)) {
+      throw new Error('Codex account is reserved by an account switch')
     }
-    const home = localCodexAccountHome(id)
-    const legacy = legacyCodexAccountHome(platform().userDataDir, id)
-    await fs.rm(home, { recursive: true, force: true })
-    if (legacy !== home) await fs.rm(legacy, { recursive: true, force: true })
+    if (removingCodexAccounts.has(id)) throw new Error('Codex account removal is already in progress')
+    removingCodexAccounts.add(id)
+    try {
+      const waiter = waiters.get(id)
+      if (waiter) waiter.cancelled = true
+      try {
+        const codex = await findInLoginPath('codex')
+        if (codex) {
+          await execFileP(codex, ['app-server', 'daemon', 'stop'], {
+            cwd: os.homedir(),
+            env: { ...process.env, CODEX_HOME: localCodexAccountHome(id) },
+            timeout: 10_000,
+            maxBuffer: 1024 * 1024
+          })
+        }
+      } catch {
+        // A stopped/missing daemon is already the desired state.
+      }
+      const home = localCodexAccountHome(id)
+      const legacy = legacyCodexAccountHome(platform().userDataDir, id)
+      await fs.rm(home, { recursive: true, force: true })
+      if (legacy !== home) await fs.rm(legacy, { recursive: true, force: true })
+    } finally {
+      removingCodexAccounts.delete(id)
+    }
   })
 
   ipcMain.handle(IPC.codexAccountsSystemIdentity, () => accountIdentity())
 
+  ipcMain.handle(IPC.codexAccountsCommitSwitch, (event, token: string) => {
+    const pending = pendingSwitchExposures.get(token)
+    if (!pending?.exposure || pending.owner.id !== event.sender.id) {
+      throw new Error('Codex account switch preparation expired')
+    }
+    commitCodexRolloutExposure(pending.exposure)
+    pending.committed = true
+  })
+
+  ipcMain.handle(IPC.codexAccountsFinishSwitch, (event, token: string) => {
+    const pending = pendingSwitchExposures.get(token)
+    if (!pending?.committed || pending.owner.id !== event.sender.id) {
+      throw new Error('Codex account switch was not committed')
+    }
+    releasePendingSwitch(token)
+  })
+
+  ipcMain.handle(IPC.codexAccountsRollbackSwitch, (event, token: string) => {
+    const pending = pendingSwitchExposures.get(token)
+    if (pending?.owner.id === event.sender.id) releasePendingSwitch(token)
+  })
+
   ipcMain.handle(
     IPC.codexAccountsSwitchThread,
     async (
-      _event,
+      event,
       threadId: string,
       cwd: string,
       sourceAccountId?: string,
@@ -171,14 +227,43 @@ export function initCodexAccounts(): void {
       }
       if (sourceAccountId) assertCodexAccountId(sourceAccountId)
       if (targetAccountId) assertCodexAccountId(targetAccountId)
-      if (sourceAccountId === targetAccountId) return threadId
-      await ensureCodexAccountDaemon(sourceAccountId)
-      await ensureCodexAccountDaemon(targetAccountId)
-      const source = await readCodexThreadAt(localCodexSocket(sourceAccountId), threadId, 5000)
-      if (!source?.path) throw new Error('Source Codex conversation is unavailable')
-      // The relay resumes this exact rollout by path on the target account's app-server. Codex
-      // keeps the rollout's existing thread id; account selection changes credentials, not history.
-      return threadId
+      if (sourceAccountId === targetAccountId) return { threadId }
+      if ((sourceAccountId && removingCodexAccounts.has(sourceAccountId)) ||
+          (targetAccountId && removingCodexAccounts.has(targetAccountId))) {
+        throw new Error('Codex account removal is in progress')
+      }
+      const rollbackToken = randomUUID()
+      const ownerDestroyed = (): void => releasePendingSwitch(rollbackToken)
+      const timer = setTimeout(() => releasePendingSwitch(rollbackToken), SWITCH_RESERVATION_TTL_MS)
+      timer.unref?.()
+      event.sender.once('destroyed', ownerDestroyed)
+      pendingSwitchExposures.set(rollbackToken, {
+        sourceAccountId,
+        targetAccountId,
+        committed: false,
+        owner: event.sender,
+        ownerDestroyed,
+        timer
+      })
+      try {
+        await ensureCodexAccountDaemon(sourceAccountId)
+        await ensureCodexAccountDaemon(targetAccountId)
+        const source = await readCodexThreadAt(localCodexSocket(sourceAccountId), threadId, 5000)
+        if (!source?.path) throw new Error('Source Codex conversation is unavailable')
+        const exposure = planCodexRolloutExposure(
+          codexHomeForAccount(platform().userDataDir, sourceAccountId),
+          codexHomeForAccount(platform().userDataDir, targetAccountId),
+          source.path,
+          threadId
+        )
+        const pending = pendingSwitchExposures.get(rollbackToken)
+        if (!pending) throw new Error('Codex account switch preparation expired')
+        pending.exposure = exposure
+        return { threadId, rollbackToken }
+      } catch (error) {
+        releasePendingSwitch(rollbackToken)
+        throw error
+      }
     }
   )
 }

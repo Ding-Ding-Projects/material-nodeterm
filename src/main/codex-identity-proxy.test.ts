@@ -136,18 +136,21 @@ describe('NodeTerm Codex remote launcher', () => {
     ])
   })
 
-  it('routes a resume through the relay before the target account can bind that thread', async () => {
+  it('exposes the exact resume id before routing it through the selected account relay', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-relay-'))
     const bin = path.join(root, 'bin')
     const endpoint = path.join(root, 'hook-endpoint.env')
     const capture = path.join(root, 'args.json')
+    const exposeCapture = path.join(root, 'expose.txt')
     const runtime = path.join(root, 'relay-runtime')
     const script = path.join(root, 'codex-relay.js')
     await run('/bin/mkdir', ['-p', bin])
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
-    // A cross-account target does not know the thread yet. Any pre-relay bind attempt would fail
-    // here and prevent Codex from reaching the path-resume that materializes it.
-    writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 22\n', { mode: 0o700 })
+    writeFileSync(
+      path.join(bin, 'curl'),
+      '#!/bin/sh\ncat >/dev/null\nprintf \'%s\\n\' "$@" > "$CAPTURE_EXPOSE"\n',
+      { mode: 0o700 }
+    )
     writeFileSync(
       path.join(bin, 'codex'),
       '#!/bin/sh\nnode -e \'require("fs").writeFileSync(process.env.CAPTURE, JSON.stringify(process.argv.slice(1)))\' -- "$@"\n',
@@ -158,6 +161,54 @@ describe('NodeTerm Codex remote launcher', () => {
     vi.stubEnv('HOME', root)
     const launcher = installCodexLauncher()
     await run(launcher, ['resume', 'thread-a'], {
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        CAPTURE: capture,
+        CAPTURE_EXPOSE: exposeCapture,
+        NODETERM_CANVAS_CONTROL: '1',
+        NODETERM_NODE_ID: 'node-a',
+        NODETERM_HOOK_ENDPOINT: endpoint,
+        NODETERM_CODEX_RELAY_RUNTIME: runtime,
+        NODETERM_CODEX_RELAY_SCRIPT: script
+      }
+    })
+    expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual([
+      '--remote',
+      'ws://127.0.0.1:4321',
+      '--remote-auth-token-env',
+      'NODETERM_CODEX_RELAY_TOKEN',
+      'resume',
+      'thread-a'
+    ])
+    const exposeArgs = readFileSync(exposeCapture, 'utf8')
+    expect(exposeArgs).toContain('threadId=thread-a\n')
+    expect(exposeArgs).toContain('accountId=\n')
+    expect(exposeArgs).toContain('/codex-thread/expose\n')
+  })
+
+  it('lets the relay create a fresh thread directly without a broker seed fork', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-relay-fresh-'))
+    const bin = path.join(root, 'bin')
+    const endpoint = path.join(root, 'hook-endpoint.env')
+    const capture = path.join(root, 'args.json')
+    const runtime = path.join(root, 'relay-runtime')
+    const script = path.join(root, 'codex-relay.js')
+    await run('/bin/mkdir', ['-p', bin])
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
+    writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 22\n', { mode: 0o700 })
+    writeFileSync(
+      path.join(bin, 'codex'),
+      '#!/bin/sh\nnode -e \'require("fs").writeFileSync(process.env.CAPTURE, JSON.stringify(process.argv.slice(1)))\' -- "$@"\n',
+      { mode: 0o700 }
+    )
+    writeFileSync(runtime, '#!/bin/sh\nprintf "ws://127.0.0.1:4321\\nroute-token-a\\n"\n', { mode: 0o700 })
+    writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
+    vi.stubEnv('HOME', root)
+    const launcher = installCodexLauncher()
+
+    await run(launcher, ['new prompt'], {
+      cwd: '/tmp',
       env: {
         ...process.env,
         PATH: `${bin}:${process.env.PATH ?? ''}`,
@@ -174,8 +225,7 @@ describe('NodeTerm Codex remote launcher', () => {
       'ws://127.0.0.1:4321',
       '--remote-auth-token-env',
       'NODETERM_CODEX_RELAY_TOKEN',
-      'resume',
-      'thread-a'
+      'new prompt'
     ])
   })
 

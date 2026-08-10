@@ -327,6 +327,13 @@ export function installCodexLauncher(): string {
       `}\n` +
       `if [ "\${1-}" = resume ]; then\n` +
       `  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
+      `    # Codex validates the selected CODEX_HOME before opening the remote relay. Expose the\n` +
+      `    # exact caller-supplied id there first; this never lists, copies, or forks sessions.\n` +
+      `    { printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN"; } |\n` +
+      `    curl --silent --show-error --fail --config - --request POST \\\n` +
+      `      --data-urlencode "threadId=$nt_thread" \\\n` +
+      `      --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
+      `      "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/expose" >/dev/null || { echo "NodeTerm Codex session unavailable" >&2; exit 69; }\n` +
       `    nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
       `    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
       `  fi\n` +
@@ -340,6 +347,12 @@ export function installCodexLauncher(): string {
       `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/bind" >/dev/null || { echo "NodeTerm Codex thread already in use or broker unavailable" >&2; exit 69; }\n` +
       `  exec codex --remote unix:// "$@"\n` +
       `fi\n` +
+      `if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
+      `  # Let Codex create a fresh thread on its selected account. The relay observes the native\n` +
+      `  # thread/start response and binds that exact id; no seed turn, fork, or resume artifact.\n` +
+      `  nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
+      `  exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
+      `fi\n` +
       `nt_thread=$(\n` +
       `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN"; } |\n` +
       `  curl --silent --show-error --fail --config - --request POST \\\n` +
@@ -349,10 +362,6 @@ export function installCodexLauncher(): string {
       `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/start"\n` +
       `) || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
       `nt_thread=$(printf %s "$nt_thread" | tr -d '\\r\\n')\n` +
-      `if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
-      `  nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
-      `  exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN resume "$nt_thread" "$@"\n` +
-      `fi\n` +
       `exec codex --remote unix:// resume "$nt_thread" "$@"\n`,
     { encoding: 'utf8', mode: 0o700 }
   )

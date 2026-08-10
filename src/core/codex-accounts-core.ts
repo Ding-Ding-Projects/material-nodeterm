@@ -1,5 +1,5 @@
-import { createHash } from 'crypto'
-import { existsSync, mkdirSync, readdirSync, renameSync } from 'fs'
+import { createHash, randomUUID } from 'crypto'
+import { existsSync, linkSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync } from 'fs'
 import os from 'os'
 import path from 'path'
 
@@ -80,6 +80,129 @@ export function codexHomeForAccount(userDataDir: string, accountId?: string): st
 
 export function codexSocketForAccount(userDataDir: string, accountId?: string): string {
   return path.join(codexHomeForAccount(userDataDir, accountId), 'app-server-control', 'app-server-control.sock')
+}
+
+function containedRelativePath(root: string, candidate: string): string | null {
+  const relative = path.relative(root, candidate)
+  return relative && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative)
+    ? relative
+    : null
+}
+
+export interface CodexRolloutExposurePlan {
+  sourcePath: string
+  targetSessionsRoot: string
+  targetRelativePath: string
+  targetPath: string
+  sourceDev: number
+  sourceIno: number
+}
+
+/** Validate a cross-account rollout before the renderer's second idle check. No files mutate. */
+export function planCodexRolloutExposure(
+  sourceHome: string,
+  targetHome: string,
+  sourcePath: string,
+  threadId: string
+): CodexRolloutExposurePlan {
+  if (!path.isAbsolute(sourceHome) || !path.isAbsolute(targetHome) || !path.isAbsolute(sourcePath) ||
+      !ACCOUNT_ID_RE.test(threadId) || !path.basename(sourcePath).endsWith(`${threadId}.jsonl`)) {
+    throw new Error('Invalid Codex rollout exposure request')
+  }
+  if (!lstatSync(sourcePath).isFile()) throw new Error('Source Codex rollout is not a regular file')
+  const sourceSessions = realpathSync(path.join(sourceHome, 'sessions'))
+  const canonicalSource = realpathSync(sourcePath)
+  const relative = containedRelativePath(sourceSessions, canonicalSource)
+  if (!relative) throw new Error('Source Codex rollout is outside its account home')
+  const sourceStat = statSync(canonicalSource)
+  const targetSessionsRoot = path.join(realpathSync(targetHome), 'sessions')
+  return {
+    sourcePath: canonicalSource,
+    targetSessionsRoot,
+    targetRelativePath: relative,
+    targetPath: path.join(targetSessionsRoot, relative),
+    sourceDev: sourceStat.dev,
+    sourceIno: sourceStat.ino
+  }
+}
+
+/** Commit after the renderer revalidates idle/session state. Hardlinks are atomic and survive
+ * deletion of either account home because every link names the same inode independently. */
+export function commitCodexRolloutExposure(
+  plan: CodexRolloutExposurePlan,
+  linkFile: typeof linkSync = linkSync
+): void {
+  const isVerifiedRollout = (candidate: string): boolean => {
+    try {
+      const entry = lstatSync(candidate)
+      const linked = statSync(candidate)
+      return entry.isFile() && !entry.isSymbolicLink() &&
+        linked.dev === plan.sourceDev && linked.ino === plan.sourceIno
+    } catch {
+      return false
+    }
+  }
+  const sourceEntry = lstatSync(plan.sourcePath)
+  if (!sourceEntry.isFile() || sourceEntry.isSymbolicLink()) {
+    throw new Error('Source Codex rollout changed before account switch commit')
+  }
+  const current = statSync(plan.sourcePath)
+  if (current.dev !== plan.sourceDev || current.ino !== plan.sourceIno) {
+    throw new Error('Source Codex rollout changed before account switch commit')
+  }
+  const segments = path.dirname(plan.targetRelativePath).split(path.sep).filter(Boolean)
+  let currentDir = plan.targetSessionsRoot
+  for (const segment of ['', ...segments]) {
+    if (segment) currentDir = path.join(currentDir, segment)
+    if (!existsSync(currentDir)) mkdirSync(currentDir, { mode: 0o700 })
+    const entry = lstatSync(currentDir)
+    if (!entry.isDirectory() || entry.isSymbolicLink()) {
+      throw new Error('Target Codex rollout path contains an unsafe directory')
+    }
+  }
+  if (existsSync(plan.targetPath)) {
+    if (!isVerifiedRollout(plan.targetPath)) {
+      throw new Error('Target Codex account already has a different rollout for this thread')
+    }
+    return
+  }
+  const temporaryPath = path.join(
+    path.dirname(plan.targetPath),
+    `.${path.basename(plan.targetPath)}.${randomUUID()}.nodeterm-link`
+  )
+  linkFile(plan.sourcePath, temporaryPath)
+  const createdTemporary = lstatSync(temporaryPath)
+  const temporaryStillOurs = (): boolean => {
+    try {
+      const currentTemporary = lstatSync(temporaryPath)
+      return currentTemporary.dev === createdTemporary.dev &&
+        currentTemporary.ino === createdTemporary.ino
+    } catch {
+      return false
+    }
+  }
+  try {
+    if (!isVerifiedRollout(temporaryPath)) {
+      throw new Error('Temporary Codex rollout did not preserve the verified source inode')
+    }
+    try {
+      // link(2) is no-overwrite. Publishing from the verified private name prevents cleanup from
+      // ever deleting an unrelated entry raced into the final pathname.
+      linkFile(temporaryPath, plan.targetPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' ||
+          !isVerifiedRollout(plan.targetPath)) throw error
+    }
+    if (!isVerifiedRollout(plan.targetPath)) {
+      throw new Error('Target Codex rollout did not preserve the verified source inode')
+    }
+  } finally {
+    // The private pathname may itself have been replaced. Delete it only while it still names
+    // the exact inode created by our link(2), even when a source race made that inode invalid.
+    if (temporaryStillOurs()) {
+      try { unlinkSync(temporaryPath) } catch {}
+    }
+  }
 }
 
 /** Explicit per-session env. The empty account id means system and overwrites inherited scope. */

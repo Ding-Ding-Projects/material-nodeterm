@@ -93,6 +93,17 @@ describe('parseControlRequest', () => {
       verb: 'open-agent',
       args: { agent: 'codex' }
     })
+    expect(parseControlRequest('open-agent', { agent: 'codex', resume: '../bad' })).toEqual({
+      error: 'open-agent --resume requires a safe session id'
+    })
+    expect(parseControlRequest('open-agent', { agent: 'codex', resume: 'thread-a', count: '2' })).toEqual({
+      error: 'open-agent --resume opens exactly one session'
+    })
+    expect(parseControlRequest('open-agent', {
+      agent: 'codex', resume: 'thread-a', account: 'system'
+    })).toEqual({
+      verb: 'open-agent', args: { agent: 'codex', resume: 'thread-a', account: 'system' }
+    })
     expect(isDestructiveVerb('open-agent')).toBe(false)
   })
 

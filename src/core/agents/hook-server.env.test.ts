@@ -26,6 +26,7 @@ const bindCalls: Array<{
   accountId?: string
 }> = []
 const authorizeCalls: Array<{ nodeId: string; threadId: string; accountId?: string }> = []
+const exposeCalls: Array<{ threadId: string; accountId?: string }> = []
 
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-hookenv-'))
@@ -42,6 +43,10 @@ beforeAll(async () => {
   hookServer.setCodexThreadAuthorizeHandler(async (request) => {
     authorizeCalls.push(request)
     if (request.threadId === 'thread-conflict') throw new Error('already bound')
+  })
+  hookServer.setCodexThreadExposeHandler(async (request) => {
+    exposeCalls.push(request)
+    if (request.threadId === 'thread-conflict') throw new Error('ambiguous')
   })
   hookServer.setCodexThreadCatalogHandler(async () => [
     { socketPath: '/isolated/system.sock' },
@@ -104,6 +109,15 @@ describe('hookServer Codex thread broker', () => {
         'x-nodeterm-hook-token': hookServer.getToken()
       },
       body: new URLSearchParams({ nodeId, threadId, ...(accountId ? { accountId } : {}) })
+    })
+  const expose = (threadId: string, accountId?: string) =>
+    fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/expose`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-nodeterm-hook-token': hookServer.getToken()
+      },
+      body: new URLSearchParams({ threadId, ...(accountId ? { accountId } : {}) })
     })
 
   it('keeps two parallel session creations bound to their requesting nodes', async () => {
@@ -181,6 +195,16 @@ describe('hookServer Codex thread broker', () => {
       threadId: 'thread-resume',
       accountId: 'account-a'
     })
+  })
+
+  it('exposes only the exact caller-supplied id to the selected account', async () => {
+    const [accepted, invalid, conflict] = await Promise.all([
+      expose('thread-resume', 'account-a'),
+      expose('../invalid'),
+      expose('thread-conflict', 'account-b')
+    ])
+    expect([accepted.status, invalid.status, conflict.status]).toEqual([204, 400, 409])
+    expect(exposeCalls).toContainEqual({ threadId: 'thread-resume', accountId: 'account-a' })
   })
 
   it('returns the isolated account socket catalog only to the authenticated relay', async () => {

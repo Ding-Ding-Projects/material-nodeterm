@@ -115,6 +115,16 @@ type RelayThreadSource = { socketPath: string; threads: RelayThread[] }
 
 type RelayCursor = { key: string; direction: 1 | -1; value: number; id: string }
 
+function rolloutIdentity(rolloutPath: unknown): string | null {
+  if (typeof rolloutPath !== 'string' || !path.isAbsolute(rolloutPath)) return null
+  try {
+    const stat = statSync(rolloutPath)
+    return stat.isFile() ? `${stat.dev}:${stat.ino}` : null
+  } catch {
+    return null
+  }
+}
+
 function decodeRelayCursor(cursor: unknown): RelayCursor | null {
   if (typeof cursor !== 'string' || !cursor.startsWith('nodeterm:')) return null
   try {
@@ -158,8 +168,12 @@ export function mergeRelayThreadLists(
         continue
       }
       if (existing === null || (existing && existing.socketPath !== currentSocketPath)) {
-        // Equal ids in two foreign account stores are ambiguous. Never pick one by catalog order.
-        byId.set(thread.id, null)
+        const sameRollout = existing &&
+          rolloutIdentity(existing.thread.path) !== null &&
+          rolloutIdentity(existing.thread.path) === rolloutIdentity(thread.path)
+        // Hardlinks in multiple account homes are one conversation. Different/unreadable inodes
+        // remain ambiguous; never pick one by catalog order.
+        if (!sameRollout) byId.set(thread.id, null)
         continue
       }
       if (existing) continue
@@ -668,10 +682,12 @@ export function listThreadsAt(
   })
 }
 
-function isExplicitThreadAbsent(error: unknown): boolean {
+function isExplicitThreadAbsent(error: unknown, threadId: string): boolean {
   if (!error || typeof error !== 'object') return false
-  const message = (error as { message?: unknown }).message
-  return typeof message === 'string' && /no rollout found for thread id/i.test(message)
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  if (code !== -32600 || typeof message !== 'string') return false
+  return message === `thread not loaded: ${threadId}` ||
+    message === `no rollout found for thread id ${threadId}`
 }
 
 export function readThreadOutcomeAt(
@@ -719,7 +735,9 @@ export function readThreadOutcomeAt(
         }))
       } else if (message.id === 2) {
         if (message.error) {
-          finish(isExplicitThreadAbsent(message.error) ? { kind: 'absent' } : { kind: 'unavailable' })
+          finish(isExplicitThreadAbsent(message.error, threadId)
+            ? { kind: 'absent' }
+            : { kind: 'unavailable' })
           return
         }
         const thread = message.result?.thread as RelayThread | undefined
@@ -782,8 +800,15 @@ export async function resolveForeignThreadAt(
   const matches = outcomes
     .filter((outcome): outcome is { kind: 'found'; thread: RelayForeignThread } => outcome.kind === 'found')
     .map((outcome) => outcome.thread)
-  if (matches.length === 1) return { kind: 'foreign', thread: matches[0] }
-  return matches.length > 1 ? { kind: 'ambiguous' } : { kind: 'unavailable' }
+  if (matches.length === 0) return { kind: 'unavailable' }
+  const canonical = new Map<string, RelayForeignThread>()
+  for (const match of matches) {
+    const rollout = rolloutIdentity(match.path)
+    if (!rollout) return { kind: 'unavailable' }
+    canonical.set(rollout, canonical.get(rollout) ?? match)
+  }
+  if (canonical.size === 1) return { kind: 'foreign', thread: [...canonical.values()][0] }
+  return { kind: 'ambiguous' }
 }
 
 async function authorizeResume(route: Route, threadId: string): Promise<boolean> {

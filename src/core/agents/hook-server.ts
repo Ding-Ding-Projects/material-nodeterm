@@ -98,6 +98,8 @@ class HookServer {
     ((req: { nodeId: string; threadId: string; hookEndpoint: string; accountId?: string; name?: string }) => Promise<void>) | null = null
   private codexThreadAuthorizeHandler:
     ((req: { nodeId: string; threadId: string; accountId?: string }) => Promise<void>) | null = null
+  private codexThreadExposeHandler:
+    ((req: { threadId: string; accountId?: string }) => Promise<void>) | null = null
   private codexThreadCatalogHandler:
     (() => Promise<Array<{ accountId?: string; socketPath: string }>>) | null = null
   private codexRelayRuntime: { executable: string; script: string } | null = null
@@ -150,6 +152,10 @@ class HookServer {
 
   setCodexThreadAuthorizeHandler(cb: NonNullable<HookServer['codexThreadAuthorizeHandler']>): void {
     this.codexThreadAuthorizeHandler = cb
+  }
+
+  setCodexThreadExposeHandler(cb: NonNullable<HookServer['codexThreadExposeHandler']>): void {
+    this.codexThreadExposeHandler = cb
   }
 
   setCodexThreadCatalogHandler(cb: NonNullable<HookServer['codexThreadCatalogHandler']>): void {
@@ -280,6 +286,27 @@ class HookServer {
           try {
             if (!this.codexThreadAuthorizeHandler) throw new Error('authorize handler unavailable')
             await this.codexThreadAuthorizeHandler({ nodeId, threadId, accountId })
+            res.writeHead(204)
+            res.end()
+          } catch {
+            res.writeHead(409)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/expose') {
+          const form = parseForm(await readBody(req))
+          const threadId = form.threadId ?? ''
+          const accountId = form.accountId || undefined
+          if (!/^[A-Za-z0-9._-]+$/.test(threadId) ||
+              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadExposeHandler) throw new Error('expose handler unavailable')
+            await this.codexThreadExposeHandler({ threadId, accountId })
             res.writeHead(204)
             res.end()
           } catch {

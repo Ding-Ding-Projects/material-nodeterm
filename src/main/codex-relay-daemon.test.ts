@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createServer } from 'http'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 import { WebSocketServer } from 'ws'
@@ -40,6 +40,15 @@ async function fakeCodexServer(
 }
 
 describe('Codex shared relay thread observation', () => {
+  it('binds the exact native thread/start response without a seed resume or fork', () => {
+    const pending = new Map<string, RelayThreadRequest>()
+    trackRelayThreadRequest(pending, { id: 6, method: 'thread/start', params: { cwd: '/tmp' } })
+    expect(resolveRelayThreadResponse(pending, {
+      id: 6,
+      result: { thread: { id: 'new-thread', name: 'Fresh' } }
+    })).toEqual({ ok: true, threadId: 'new-thread', source: undefined, name: 'Fresh' })
+  })
+
   it('keeps equal JSON-RPC ids isolated between two parallel node connections', () => {
     const a = new Map<string, RelayThreadRequest>()
     const b = new Map<string, RelayThreadRequest>()
@@ -203,6 +212,23 @@ describe('Codex shared relay thread observation', () => {
     expect(merged.foreignThreads.size).toBe(0)
   })
 
+  it('keeps one hardlinked rollout visible once when two foreign accounts expose it', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-picker-hardlink-'))
+    const rolloutA = path.join(dir, 'a.jsonl')
+    const rolloutB = path.join(dir, 'b.jsonl')
+    writeFileSync(rolloutA, 'one inode')
+    linkSync(rolloutA, rolloutB)
+    const current = path.join(dir, 'current.sock')
+    const merged = mergeRelayThreadLists([
+      { socketPath: current, threads: [] },
+      { socketPath: path.join(dir, 'a.sock'), threads: [{ id: 'shared', path: rolloutA, cwd: '/repo' }] },
+      { socketPath: path.join(dir, 'b.sock'), threads: [{ id: 'shared', path: rolloutB, cwd: '/repo' }] }
+    ], current, {})
+    expect(merged.result.data.map((thread) => thread.id)).toEqual(['shared'])
+    expect(merged.foreignThreads.get('shared')?.path).toBe(rolloutA)
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   it('carries a foreign title through the path-resumed response', () => {
     const pending = new Map<string, RelayThreadRequest>()
     trackRelayThreadRequest(pending, {
@@ -291,11 +317,13 @@ describe('Codex shared relay thread observation', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-direct-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignSocket = path.join(dir, 'foreign.sock')
+    const foreignRollout = path.join(dir, 'foreign-thread-a.jsonl')
+    writeFileSync(foreignRollout, 'fixture')
     const stopCurrent = await fakeCodexServer(currentSocket, (message) => {
       if (message.id === 1) return { id: 1, result: {} }
       if (message.method === 'thread/read') return {
         id: message.id,
-        error: { code: -32600, message: 'no rollout found for thread id thread-a' }
+        error: { code: -32600, message: 'thread not loaded: thread-a' }
       }
     })
     const stopForeign = await fakeCodexServer(foreignSocket, (message) => {
@@ -305,7 +333,7 @@ describe('Codex shared relay thread observation', () => {
         result: {
           thread: {
             id: 'thread-a',
-            path: '/foreign/thread-a.jsonl',
+            path: foreignRollout,
             cwd: '/repo',
             name: 'Existing conversation'
           }
@@ -321,7 +349,7 @@ describe('Codex shared relay thread observation', () => {
         kind: 'foreign',
         thread: {
           socketPath: foreignSocket,
-          path: '/foreign/thread-a.jsonl',
+          path: foreignRollout,
           cwd: '/repo',
           name: 'Existing conversation'
         }
@@ -370,6 +398,10 @@ describe('Codex shared relay thread observation', () => {
     const currentSocket = path.join(dir, 'current.sock')
     const foreignA = path.join(dir, 'foreign-a.sock')
     const foreignB = path.join(dir, 'foreign-b.sock')
+    const rolloutA = path.join(dir, 'foreign-a.jsonl')
+    const rolloutB = path.join(dir, 'foreign-b.jsonl')
+    writeFileSync(rolloutA, 'a')
+    writeFileSync(rolloutB, 'b')
     const server = (socketPath: string, rolloutPath?: string) => fakeCodexServer(socketPath, (message) => {
       if (message.id === 1) return { id: 1, result: {} }
       if (message.method === 'thread/read' && rolloutPath) return {
@@ -383,8 +415,8 @@ describe('Codex shared relay thread observation', () => {
     })
     const stops = await Promise.all([
       server(currentSocket),
-      server(foreignA, '/foreign-a/thread.jsonl'),
-      server(foreignB, '/foreign-b/thread.jsonl')
+      server(foreignA, rolloutA),
+      server(foreignB, rolloutB)
     ])
     try {
       await expect(resolveForeignThreadAt(
@@ -392,6 +424,45 @@ describe('Codex shared relay thread observation', () => {
         [currentSocket, foreignA, foreignB],
         'same-id'
       )).resolves.toEqual({ kind: 'ambiguous' })
+    } finally {
+      await Promise.all(stops.map((stop) => stop()))
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('deduplicates the same account-neutral rollout exposed by two foreign accounts', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-shared-resume-'))
+    const currentSocket = path.join(dir, 'current.sock')
+    const foreignA = path.join(dir, 'foreign-a.sock')
+    const foreignB = path.join(dir, 'foreign-b.sock')
+    const rollout = path.join(dir, 'shared.jsonl')
+    const aliasA = path.join(dir, 'a.jsonl')
+    const aliasB = path.join(dir, 'b.jsonl')
+    writeFileSync(rollout, 'shared')
+    symlinkSync(rollout, aliasA)
+    symlinkSync(rollout, aliasB)
+    const server = (socketPath: string, rolloutPath?: string) => fakeCodexServer(socketPath, (message) => {
+      if (message.id === 1) return { id: 1, result: {} }
+      if (message.method === 'thread/read' && rolloutPath) return {
+        id: message.id,
+        result: { thread: { id: 'same-id', path: rolloutPath, cwd: '/repo' } }
+      }
+      if (message.method === 'thread/read') return {
+        id: message.id,
+        error: { code: -32600, message: `no rollout found for thread id ${message.params.threadId}` }
+      }
+    })
+    const stops = await Promise.all([
+      server(currentSocket),
+      server(foreignA, aliasA),
+      server(foreignB, aliasB)
+    ])
+    try {
+      await expect(resolveForeignThreadAt(
+        currentSocket,
+        [currentSocket, foreignA, foreignB],
+        'same-id'
+      )).resolves.toMatchObject({ kind: 'foreign', thread: { path: aliasA } })
     } finally {
       await Promise.all(stops.map((stop) => stop()))
       rmSync(dir, { recursive: true, force: true })

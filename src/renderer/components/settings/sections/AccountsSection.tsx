@@ -209,7 +209,12 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
       return
     }
     if (account.pending) await window.nodeTerminal.codexAccounts.cancelWaitLogin(account.id)
-    await window.nodeTerminal.codexAccounts.remove(account.id)
+    try {
+      await window.nodeTerminal.codexAccounts.remove(account.id)
+    } catch {
+      setCodexAddError('Could not remove this Codex account. An account switch may still be in progress.')
+      return
+    }
     applyCodexAccounts((accs) => accs.filter((a) => a.id !== account.id))
     useProjects.setState((s) => ({
       projects: s.projects.map((p) => ({

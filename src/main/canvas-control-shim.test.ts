@@ -93,6 +93,15 @@ describe('canvas-control shim', () => {
     expect(received.at(-1)?.args.team).toBe(team)
   })
 
+  it('carries native agent resume and account selection through unchanged', async () => {
+    await callShim(['open-agent', '--agent', 'codex', '--resume', 'thread-a', '--account', 'system'])
+    expect(received.at(-1)?.args).toEqual({
+      agent: 'codex',
+      resume: 'thread-a',
+      account: 'system'
+    })
+  })
+
   it('maps the bare positional to --path / --node per verb', async () => {
     await callShim(['show-image', '/tmp/a b.png'])
     expect(received.at(-1)?.args).toEqual({ path: '/tmp/a b.png' })

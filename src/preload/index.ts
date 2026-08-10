@@ -438,7 +438,10 @@ const api: NodeTerminalApi = {
         cwd,
         sourceAccountId,
         targetAccountId
-      )
+      ),
+    commitSwitch: (rollbackToken) => ipcRenderer.invoke(IPC.codexAccountsCommitSwitch, rollbackToken),
+    finishSwitch: (rollbackToken) => ipcRenderer.invoke(IPC.codexAccountsFinishSwitch, rollbackToken),
+    rollbackSwitch: (rollbackToken) => ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, rollbackToken)
   },
   transcripts: {
     search: (query: string) => ipcRenderer.invoke(IPC.transcriptSearch, query)

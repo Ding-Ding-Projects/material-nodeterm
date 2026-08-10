@@ -1701,7 +1701,10 @@ export interface CodexAccountsApi {
     cwd: string,
     sourceAccountId?: string,
     targetAccountId?: string
-  ): Promise<string>
+  ): Promise<{ threadId: string; rollbackToken?: string }>
+  commitSwitch(rollbackToken: string): Promise<void>
+  finishSwitch(rollbackToken: string): Promise<void>
+  rollbackSwitch(rollbackToken: string): Promise<void>
 }
 
 /** One ranked search hit across all on-disk Claude session transcripts. */
