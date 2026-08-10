@@ -156,6 +156,9 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  status-reporting agent nodes (claude/codex/gemini) may be waited on; a plain terminal never',
     '  reports finishing, so waiting on one is refused.',
     '  `--resume` opens exactly one existing session through the agent\'s native resume command.',
+    '  RESTORE RULE: when an existing session id is known, you MUST pass it with `--resume`.',
+    '  A prompt-only node plus a renamed title is a new conversation, never a restored session.',
+    '  Example: `open-agent --agent codex --resume <known-id> --cwd <project>`.',
     '  For Codex, `--account system|<id>` selects the login; otherwise the opener\'s Codex account is inherited.',
     '  In Codex TUI use this shell verb; Desktop dynamic tool calls are not available there.',
     '- `show-image <path>` / `show-video <path>` — open a media file as a node.',
@@ -330,8 +333,11 @@ Verbs:
 - \`open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>]\` — open N plain terminals (default 1).
 - \`open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N Claude sessions (default 1).
 - \`open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N sessions of any agent CLI.
-  \`--resume\` opens exactly one existing session with the agent's native resume command. For Codex,
-  \`--account system|<id>\` selects the login; otherwise the opener's Codex account is inherited.
+  \`--resume\` opens exactly one existing session with the agent's native resume command.
+  **Restore rule:** when an existing session id is known, you MUST pass it with \`--resume\`.
+  A prompt-only node plus a renamed title is a new conversation, never a restored session.
+  Example: \`open-agent --agent codex --resume <known-id> --cwd <project>\`.
+  For Codex, \`--account system|<id>\` selects the login; otherwise the opener's Codex account is inherited.
   In Codex TUI use this shell verb; Desktop dynamic tool calls are not available there.
   \`--group\` parents the node(s) into an existing group frame; a worktree-bound group also
   hands its worktree path down as the cwd.

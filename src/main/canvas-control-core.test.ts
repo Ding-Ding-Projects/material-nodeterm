@@ -3,7 +3,8 @@ import {
   parseControlRequest,
   isDestructiveVerb,
   mergeCanvasControlBlock,
-  buildCanvasControlInstructions
+  buildCanvasControlInstructions,
+  buildCanvasSkillBody
 } from './canvas-control-core'
 
 describe('parseControlRequest', () => {
@@ -192,6 +193,16 @@ describe('parseControlRequest', () => {
       expect(body).toContain(verb)
     }
     expect(body.toLowerCase()).toContain('confirm')
+    expect(body).toContain('when an existing session id is known, you MUST pass it with `--resume`')
+    expect(body).toContain('prompt-only node plus a renamed title is a new conversation')
+    expect(body).toContain('open-agent --agent codex --resume <known-id>')
+
+    const skill = buildCanvasSkillBody('/tmp/nodeterm.sh')
+    expect(skill).toContain('when an existing session id is known, you MUST pass it with `--resume`')
+    expect(skill).toContain('prompt-only node plus a renamed title is a new conversation')
+    expect(skill).toContain('open-agent --agent codex --resume <known-id>')
+    expect(skill).toContain('For Codex, `--account system|<id>`')
+    expect(skill).not.toContain("command. For Codex,\n  **Restore rule:**")
   })
 
   it('spawn-team requires --team and none of the layout verbs are destructive', () => {
