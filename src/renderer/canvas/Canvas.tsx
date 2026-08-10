@@ -30,6 +30,7 @@ import {
   disposeAllParkedTerminals
 } from '../nodes/TerminalNode'
 import { solveFitPadding } from './fit-view'
+import { isMacTrackpadPan } from './wheel-gesture'
 import {
   SharedGlyphLayer,
   flushOpaqueNodeIds,
@@ -192,6 +193,13 @@ import {
 import { normWorktreePath, type BoundGroup } from '@shared/worktree-reconcile'
 import { boundGroups, scmScopes, defaultScmScope, selectedScmGroupId } from '@shared/scm-scope'
 import { hintLabel } from '@shared/platform-utils'
+import {
+  canvasImageFiles,
+  clipboardImages,
+  localPathsForFiles,
+  pasteHasText,
+  pastedFiles
+} from '../terminal/file-drop'
 import { useWorktrees } from '../state/worktrees'
 import { activeSessionApi } from '../session/session'
 import {
@@ -2516,8 +2524,8 @@ export function Canvas() {
   // zoom to the cursor. React Flow's own zoomOnPinch / zoomActivationKeyCode are disabled so
   // this is the single source of zoom (no double-zoom on the open canvas).
   //
-  // With settings.wheelZoom on, a PLAIN wheel zooms too (mouse-first workflow; scroll-to-pan
-  // is disabled on <ReactFlow> in that mode) — except inside a `nowheel` node body (focused
+  // With settings.wheelZoom on, a PLAIN mouse wheel zooms too (mouse-first workflow) — except
+  // macOS pixel gestures, which are two-finger trackpad panning, and inside a `nowheel` node body (focused
   // xterm scrollback, Monaco, markdown/chat panes), which keeps its own scrolling. The hover
   // guard overlay is NOT nowheel, so an unfocused terminal still zooms under the cursor.
   const wheelZoom = settings.wheelZoom
@@ -2527,9 +2535,12 @@ export function Canvas() {
     const onWheel = (e: WheelEvent) => {
       if (canvasLocked) return
       if (!e.ctrlKey && !e.metaKey) {
-        // pinch (ctrl+wheel) / Cmd/Ctrl+scroll always zoom; plain wheel only when opted in
-        if (!wheelZoom) return
         if ((e.target as HTMLElement | null)?.closest('.nowheel')) return
+        // Chromium represents a macOS trackpad's two-finger scroll as an unmodified pixel-wheel;
+        // let React Flow pan it. Pinch arrives with ctrlKey and stays on the zoom path above.
+        if (isMacTrackpadPan(e, isMac)) return
+        // Cmd/Ctrl+scroll always zooms; an ordinary mouse wheel only when opted in.
+        if (!wheelZoom) return
       }
       e.preventDefault()
       e.stopPropagation()
@@ -2902,6 +2913,82 @@ export function Canvas() {
     },
     [setNodes, markDirty, viewCenter]
   )
+
+  // Reuse the same path resolver as terminal file paste/drop, then feed the existing Open-file
+  // node path. Desktop Finder drops retain their real path; clipboard/browser blobs are saved in
+  // NodeTerm's managed upload directory first. Multiple images fan out diagonally from the cursor.
+  const placeCanvasImages = useCallback(
+    async (files: File[], center: { x: number; y: number }) => {
+      const images = canvasImageFiles(files)
+      if (!images.length) return
+      const paths = await localPathsForFiles(images)
+      paths.forEach((filePath, index) =>
+        openFile(filePath, { x: center.x + index * 36, y: center.y + index * 36 })
+      )
+    },
+    [openFile]
+  )
+
+  useEffect(() => {
+    const wrap = flowWrapRef.current
+    if (!wrap) return
+    const isCanvasSurface = (target: EventTarget | null): boolean => {
+      const element = target instanceof Element ? target : null
+      return !!(
+        element &&
+        wrap.contains(element) &&
+        !element.closest('.react-flow__node, .react-flow__controls, .react-flow__minimap')
+      )
+    }
+    const editableTarget = (target: EventTarget | null): boolean => {
+      const element = target instanceof Element ? target : null
+      return !!element?.closest(
+        'input, textarea, select, button, [contenteditable], [role="dialog"], .monaco-editor, .xterm, .react-flow__node'
+      )
+    }
+    const onDragOver = (event: DragEvent) => {
+      if (!isCanvasSurface(event.target)) return
+      if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const onDrop = (event: DragEvent) => {
+      if (!isCanvasSurface(event.target)) return
+      const images = canvasImageFiles(Array.from(event.dataTransfer?.files ?? []))
+      if (!images.length) return
+      event.preventDefault()
+      event.stopPropagation()
+      const center = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      void placeCanvasImages(images, center)
+    }
+    const onPaste = (event: ClipboardEvent) => {
+      if (editableTarget(event.target)) return
+      const files = canvasImageFiles(pastedFiles(event.clipboardData))
+      if (files.length) {
+        const center = viewCenter()
+        if (!center) return
+        event.preventDefault()
+        event.stopPropagation()
+        void placeCanvasImages(files, center)
+        return
+      }
+      // A screenshot can arrive with an empty clipboardData when Chromium filters the paste
+      // target. Ordinary text must remain untouched; only the image-only case uses async read().
+      if (pasteHasText(event.clipboardData)) return
+      void clipboardImages().then((images) => {
+        const center = viewCenter()
+        if (center && images.length) void placeCanvasImages(images, center)
+      })
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    window.addEventListener('paste', onPaste)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+      window.removeEventListener('paste', onPaste)
+    }
+  }, [placeCanvasImages, screenToFlowPosition, viewCenter])
 
   // Load the quick-open file index when the palette opens.
   useEffect(() => {
@@ -8003,7 +8090,7 @@ export function Canvas() {
                 ? [0, 1]
                 : [1]
           }
-          panOnScroll={canvasLocked ? false : !wheelZoom}
+          panOnScroll={canvasLocked ? false : isMac || !wheelZoom}
           zoomOnScroll={false}
           zoomOnPinch={false}
           // Off: a pane double-click is the overview-zoom gesture (see PANE_OVERVIEW_ZOOM) and a
