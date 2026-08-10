@@ -627,6 +627,8 @@ export interface DialogApi {
 
 export interface ClipboardApi {
   writeText(text: string): void
+  /** Copy local files so Finder and other file-aware macOS apps can paste them. */
+  writeFiles(paths: string[]): Promise<boolean>
 }
 
 export interface ShellApi {
