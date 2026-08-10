@@ -2,7 +2,11 @@ import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
 import { readCodexThreadAt, startCodexThreadAt } from '../core/codex-session-name'
-import { bindCodexThreadIdentity, writeCodexThreadIdentity } from '../core/codex-identity-proxy'
+import {
+  bindCodexThreadIdentity,
+  resolveCodexThreadNodeIdentity,
+  writeCodexThreadIdentity
+} from '../core/codex-identity-proxy'
 import { codexUsageAccounts } from '../core/codex-accounts-core'
 import { statSync } from 'fs'
 import { readFile } from 'fs/promises'
@@ -331,7 +335,7 @@ const browserUseBackend = new NodeTermBrowserUseBackend((sessionId) => {
   for (const [nodeId, mappedSessionId] of nodeContextSession) {
     if (mappedSessionId === sessionId) return nodeId
   }
-  return undefined
+  return resolveCodexThreadNodeIdentity(sessionId)
 })
 
 // Enforce a single instance. A second instance would re-attach every node's tmux session

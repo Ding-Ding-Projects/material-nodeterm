@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync
+} from 'fs'
 import { homedir } from 'os'
 import path from 'path'
 
@@ -23,6 +31,44 @@ function identityFile(threadId: string, accountId?: string): string {
     accountScope(accountId),
     threadId
   )
+}
+
+/**
+ * Recover a persisted Codex thread owner after the Electron main process restarts.
+ * Browser-use requests carry the Codex thread/session id but no account id, so an equal
+ * thread id in multiple account scopes is deliberately treated as ambiguous. Duplicate
+ * legacy + scoped-system records for the same node remain safe and resolve to that node.
+ */
+export function resolveCodexThreadNodeIdentity(
+  threadId: string,
+  root = path.join(homedir(), '.nodeterm', 'codex-thread-nodes')
+): string | undefined {
+  if (!SAFE_THREAD_ID.test(threadId)) return undefined
+  const candidates: Array<{ file: string; scope?: string }> = [
+    { file: path.join(root, threadId) }
+  ]
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
+      candidates.push({ file: path.join(root, entry.name, threadId), scope: entry.name })
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return undefined
+  }
+
+  const owners = new Set<string>()
+  for (const candidate of candidates) {
+    try {
+      const identity = parseCodexThreadIdentity(readFileSync(candidate.file, 'utf8'))
+      if (candidate.scope && identity.accountId !== candidate.scope) continue
+      if (!candidate.scope && identity.accountId) continue
+      if (!validCodexIdentity(identity.nodeId, identity.hookEndpoint)) continue
+      owners.add(identity.nodeId)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') continue
+    }
+  }
+  return owners.size === 1 ? owners.values().next().value : undefined
 }
 
 export function writeCodexThreadIdentity(
