@@ -818,8 +818,8 @@ export interface Settings {
    * tmux's buffer, and it never reached the browser.
    */
   terminalMiddleClickPaste: boolean
-  /** Plain mouse wheel zooms the canvas (no Cmd/Ctrl needed). Trades away scroll-to-pan,
-   *  so it's opt-in — best for mouse users; trackpads keep two-finger pan when off. */
+  /** Plain mouse wheel zooms the canvas (no Cmd/Ctrl needed). Two-finger trackpad scroll keeps
+   *  panning independently, so mouse and trackpad can coexist. */
   wheelZoom: boolean
   /** What a left-drag on EMPTY canvas does. 'select' (default) rubber-band selects, like
    *  Figma's move tool — pan stays on middle-drag / two-finger scroll. 'pan' drags the map

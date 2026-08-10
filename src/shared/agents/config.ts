@@ -31,7 +31,7 @@ export interface AgentConfig {
 }
 
 export function codexRemoteCommand(): string {
-  return 'nodeterm-codex'
+  return '$HOME/.nodeterm/bin/nodeterm-codex'
 }
 
 export const BUILTIN_AGENT_IDS: readonly BuiltinAgentId[] = [

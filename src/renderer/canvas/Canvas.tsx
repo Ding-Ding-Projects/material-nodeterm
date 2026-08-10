@@ -30,7 +30,7 @@ import {
   disposeAllParkedTerminals
 } from '../nodes/TerminalNode'
 import { solveFitPadding } from './fit-view'
-import { isMacTrackpadPan } from './wheel-gesture'
+import { MacWheelGestureRouter } from './wheel-gesture'
 import { selectedLocalFilePaths } from './canvas-file-copy'
 import {
   canvasImagePasteArmedAfterKey,
@@ -2540,13 +2540,14 @@ export function Canvas() {
   useEffect(() => {
     const wrap = flowWrapRef.current
     if (!wrap) return
+    const wheelRouting = new MacWheelGestureRouter()
     const onWheel = (e: WheelEvent) => {
       if (canvasLocked) return
       if (!e.ctrlKey && !e.metaKey) {
         if ((e.target as HTMLElement | null)?.closest('.nowheel')) return
         // Chromium represents a macOS trackpad's two-finger scroll as an unmodified pixel-wheel;
         // let React Flow pan it. Pinch arrives with ctrlKey and stays on the zoom path above.
-        if (isMacTrackpadPan(e, isMac)) return
+        if (wheelRouting.shouldPan(e, isMac)) return
         // Cmd/Ctrl+scroll always zooms; an ordinary mouse wheel only when opted in.
         if (!wheelZoom) return
       }

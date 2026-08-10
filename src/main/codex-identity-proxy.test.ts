@@ -1,184 +1,68 @@
-import { createServer, type Server } from 'http'
-import { mkdtempSync } from 'fs'
+import { execFile } from 'child_process'
+import { mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { WebSocket, WebSocketServer } from 'ws'
-import { readCodexSessionName } from '../core/codex-session-name'
-import {
-  codexUnixWebSocketUrl,
-  CodexIdentityProxyManager,
-  type CodexNodeIdentity
-} from '../core/codex-identity-proxy'
+import { promisify } from 'util'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { installCodexLauncher, validCodexIdentity } from '../core/codex-identity-proxy'
 
-function identity(nodeId: string): CodexNodeIdentity {
-  return {
-    NODETERM_NODE_ID: nodeId,
-    NODETERM_HOOK_ENDPOINT: `/isolated/${nodeId}/hook.env`,
-    NODETERM_CANVAS_CONTROL: '1'
-  }
-}
+const run = promisify(execFile)
 
-function openClient(socket: string): Promise<WebSocket> {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(codexUnixWebSocketUrl(socket), { perMessageDeflate: false })
-    ws.once('open', () => resolve(ws))
-    ws.once('error', reject)
-  })
-}
-
-function nextJson(ws: WebSocket): Promise<Record<string, unknown>> {
-  return new Promise((resolve) => ws.once('message', (data) => resolve(JSON.parse(data.toString()))))
-}
-
-describe('CodexIdentityProxy', () => {
-  let upstreamServer: Server
-  let upstreamWss: WebSocketServer
-  let proxy: CodexIdentityProxyManager
-  let upstreamSocket: string
-  let requests: Array<Record<string, unknown>>
-  let upstreamByRequestId: Map<unknown, WebSocket>
-
-  beforeEach(async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-proxy-test-'))
-    upstreamSocket = path.join(dir, 'upstream.sock')
-    requests = []
-    upstreamByRequestId = new Map()
-    upstreamServer = createServer()
-    upstreamWss = new WebSocketServer({ server: upstreamServer })
-    upstreamWss.on('connection', (ws) => {
-      ws.on('message', (data) => {
-        const request = JSON.parse(data.toString())
-        requests.push(request)
-        upstreamByRequestId.set(request.id, ws)
-      })
-    })
-    await new Promise<void>((resolve, reject) => {
-      upstreamServer.once('error', reject)
-      upstreamServer.listen(upstreamSocket, resolve)
-    })
-    proxy = new CodexIdentityProxyManager(dir, upstreamSocket)
-  })
+describe('NodeTerm Codex remote launcher', () => {
+  const oldHome = process.env.HOME
 
   afterEach(() => {
-    proxy.stop()
-    upstreamWss.close()
-    upstreamServer.close()
+    vi.unstubAllEnvs()
+    if (oldHome === undefined) delete process.env.HOME
+    else process.env.HOME = oldHome
   })
 
-  it('keeps two parallel thread start/resume mappings isolated', async () => {
-    const [socketA, socketB] = await Promise.all([
-      proxy.ensureNode('node-a', identity('node-a')),
-      proxy.ensureNode('node-b', identity('node-b'))
+  it('keeps two parallel node identities isolated on one shared remote endpoint', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-'))
+    const bin = path.join(root, 'bin')
+    const fakeCodex = path.join(bin, 'codex')
+    const outA = path.join(root, 'a.json')
+    const outB = path.join(root, 'b.json')
+    await run('/bin/mkdir', ['-p', bin])
+    writeFileSync(
+      fakeCodex,
+      '#!/bin/sh\nprintf \'[\' > "$CAPTURE"\nfirst=1\nfor arg in "$@"; do [ "$first" = 1 ] || printf \',\' >> "$CAPTURE"; first=0; node -e \'process.stdout.write(JSON.stringify(process.argv[1]))\' -- "$arg" >> "$CAPTURE"; done\nprintf \']\' >> "$CAPTURE"\n',
+      { mode: 0o700 }
+    )
+    vi.stubEnv('HOME', root)
+    const launcher = installCodexLauncher()
+    const base = { PATH: `${bin}:${process.env.PATH ?? ''}`, NODETERM_CANVAS_CONTROL: '1' }
+    await Promise.all([
+      run(launcher, ['resume', 'thread-a'], { env: {
+        ...process.env, ...base, CAPTURE: outA,
+        NODETERM_NODE_ID: 'node-a', NODETERM_HOOK_ENDPOINT: '/isolated/node-a/hook.env'
+      }}),
+      run(launcher, ['resume', 'thread-b'], { env: {
+        ...process.env, ...base, CAPTURE: outB,
+        NODETERM_NODE_ID: 'node-b', NODETERM_HOOK_ENDPOINT: '/isolated/node-b/hook.env'
+      }})
     ])
-    expect(socketA).toBeTruthy()
-    expect(socketB).toBeTruthy()
-    expect(socketA).not.toBe(socketB)
-    const [a, b] = await Promise.all([openClient(socketA!), openClient(socketB!)])
-    a.send(JSON.stringify({ id: 1, method: 'thread/start', params: { config: { personality: 'none' } } }))
-    b.send(JSON.stringify({ id: 2, method: 'thread/resume', params: { threadId: 'thread-b' } }))
-
-    await expect.poll(() => requests.length).toBe(2)
-    const byId = Object.fromEntries(requests.map((request) => [request.id, request])) as Record<
-      string,
-      { params: { config: Record<string, unknown> } }
-    >
-    expect(byId[1].params.config).toMatchObject({
-      personality: 'none',
-      'shell_environment_policy.set.NODETERM_NODE_ID': 'node-a',
-      'shell_environment_policy.set.NODETERM_HOOK_ENDPOINT': '/isolated/node-a/hook.env',
-      'shell_environment_policy.set.NODETERM_CANVAS_CONTROL': '1'
-    })
-    expect(byId[2].params.config).toMatchObject({
-      'shell_environment_policy.set.NODETERM_NODE_ID': 'node-b',
-      'shell_environment_policy.set.NODETERM_HOOK_ENDPOINT': '/isolated/node-b/hook.env',
-      'shell_environment_policy.set.NODETERM_CANVAS_CONTROL': '1'
-    })
-    expect(JSON.stringify(byId[1])).not.toContain('node-b')
-    expect(JSON.stringify(byId[2])).not.toContain('node-a')
-    a.close()
-    b.close()
-  })
-
-  it('rejects two nodes resuming the same loaded thread', async () => {
-    const [socketA, socketB] = await Promise.all([
-      proxy.ensureNode('node-a', identity('node-a')),
-      proxy.ensureNode('node-b', identity('node-b'))
+    const argsA = JSON.parse(readFileSync(outA, 'utf8'))
+    const argsB = JSON.parse(readFileSync(outB, 'utf8'))
+    expect(argsA).toEqual([
+      '--remote', 'unix://',
+      '-c', 'shell_environment_policy.set.NODETERM_NODE_ID="node-a"',
+      '-c', 'shell_environment_policy.set.NODETERM_HOOK_ENDPOINT="/isolated/node-a/hook.env"',
+      '-c', 'shell_environment_policy.set.NODETERM_CANVAS_CONTROL="1"',
+      'resume', 'thread-a'
     ])
-    const [a, b] = await Promise.all([openClient(socketA!), openClient(socketB!)])
-    a.send(JSON.stringify({ id: 1, method: 'thread/resume', params: { threadId: 'shared-thread' } }))
-    await expect.poll(() => requests.length).toBe(1)
-
-    const rejection = nextJson(b)
-    b.send(JSON.stringify({ id: 2, method: 'thread/resume', params: { threadId: 'shared-thread' } }))
-    await expect(rejection).resolves.toMatchObject({
-      id: 2,
-      error: { code: -32001, message: expect.stringContaining('another NodeTerm node') }
-    })
-    expect(requests).toHaveLength(1)
-    expect(JSON.stringify(requests[0])).toContain('node-a')
-    a.close()
-    b.close()
+    expect(JSON.stringify(argsA)).not.toContain('node-b')
+    expect(JSON.stringify(argsB)).not.toContain('node-a')
+    expect(argsB).toContain('shell_environment_policy.set.NODETERM_NODE_ID="node-b"')
+    expect(argsA.slice(0, 2)).toEqual(argsB.slice(0, 2))
   })
 
   it.each([
-    ['thread/start', {}],
-    ['thread/fork', { threadId: 'source-thread' }]
-  ])('owns the thread id returned by %s before another node can resume it', async (method, params) => {
-    const [socketA, socketB] = await Promise.all([
-      proxy.ensureNode('node-a', identity('node-a')),
-      proxy.ensureNode('node-b', identity('node-b'))
-    ])
-    const [a, b] = await Promise.all([openClient(socketA!), openClient(socketB!)])
-    a.send(JSON.stringify({ id: 10, method, params }))
-    await expect.poll(() => requests.length).toBe(1)
-    upstreamByRequestId.get(10)!.send(JSON.stringify({ id: 10, result: { thread: { id: 'result-thread' } } }))
-    await nextJson(a)
-
-    const rejection = nextJson(b)
-    b.send(JSON.stringify({ id: 11, method: 'thread/resume', params: { threadId: 'result-thread' } }))
-    await expect(rejection).resolves.toMatchObject({ id: 11, error: { code: -32001 } })
-    expect(requests).toHaveLength(1)
-    a.close()
-    b.close()
+    ['', '/isolated/hook.env'],
+    ['../invalid', '/isolated/hook.env'],
+    ['node-a', 'relative.env'],
+    ['node-a', '/isolated/evil"value']
+  ])('fails closed for invalid identity node=%s endpoint=%s', (nodeId, endpoint) => {
+    expect(validCodexIdentity(nodeId, endpoint)).toBe(false)
   })
-
-  it.each(['', '../invalid'])('fails closed for invalid node id %s', async (nodeId) => {
-    expect(await proxy.ensureNode(nodeId, identity(nodeId))).toBeNull()
-    expect(requests).toEqual([])
-  })
-
-  it('fails closed when the requested node and identity disagree', async () => {
-    expect(await proxy.ensureNode('node-a', identity('node-b'))).toBeNull()
-    expect(requests).toEqual([])
-  })
-
-  it('records Thread.name from lifecycle responses and rename notifications', async () => {
-    const socket = await proxy.ensureNode('node-a', identity('node-a'))
-    const client = await openClient(socket!)
-    client.send(JSON.stringify({ id: 20, method: 'thread/resume', params: { threadId: 'named-thread' } }))
-    await expect.poll(() => requests.length).toBe(1)
-    upstreamByRequestId
-      .get(20)!
-      .send(JSON.stringify({ id: 20, result: { thread: { id: 'named-thread', name: 'Initial task' } } }))
-    await nextJson(client)
-    await expect(readCodexSessionName('named-thread')).resolves.toBe('Initial task')
-
-    upstreamByRequestId.get(20)!.send(
-      JSON.stringify({
-        method: 'thread/name/updated',
-        params: { threadId: 'named-thread', threadName: 'Renamed task' }
-      })
-    )
-    await nextJson(client)
-    await expect.poll(() => readCodexSessionName('named-thread')).toBe('Renamed task')
-    client.close()
-  })
-
-  it.each(['/tmp/socket:bad', '/tmp/socket with-space', 'relative.sock'])(
-    'rejects an ambiguous upstream socket path %s',
-    (socketPath) => {
-      expect(() => codexUnixWebSocketUrl(socketPath)).toThrow('Unsupported Codex app-server socket path')
-    }
-  )
 })

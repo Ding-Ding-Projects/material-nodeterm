@@ -149,7 +149,7 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
       <SearchableRow {...ROWS.wheelZoom}>
         <FieldRow
           label="Scroll wheel zooms"
-          description={hintLabel('Zoom with a plain mouse wheel (no ⌘). Turns off scroll-to-pan — pan by dragging.')}
+          description={hintLabel('Zoom with a plain mouse wheel (no ⌘). Two-finger trackpad scroll still pans.')}
           control={
             <Switch
               checked={settings.wheelZoom}

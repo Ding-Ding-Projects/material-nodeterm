@@ -1,24 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { isMacTrackpadPan } from './wheel-gesture'
+import { MacWheelGestureRouter } from './wheel-gesture'
 
-const gesture = (deltaMode: number, ctrlKey = false, metaKey = false) => ({
-  deltaMode,
-  ctrlKey,
-  metaKey
+const gesture = (deltaY: number, o: Partial<{
+  deltaX: number; deltaMode: number; ctrlKey: boolean; metaKey: boolean; wheelDeltaY: number
+}> = {}) => ({
+  deltaY, deltaX: o.deltaX ?? 0, deltaMode: o.deltaMode ?? 0,
+  ctrlKey: o.ctrlKey ?? false, metaKey: o.metaKey ?? false, wheelDeltaY: o.wheelDeltaY
 })
 
-describe('isMacTrackpadPan', () => {
-  it('routes an unmodified macOS pixel gesture to canvas panning', () => {
-    expect(isMacTrackpadPan(gesture(0), true)).toBe(true)
+describe('MacWheelGestureRouter', () => {
+  it('keeps a notched macOS mouse wheel on the user-configured zoom path', () => {
+    const router = new MacWheelGestureRouter()
+    expect(router.shouldPan(gesture(100, { wheelDeltaY: -120 }), true, 1000)).toBe(false)
+    expect(router.shouldPan(gesture(-100, { wheelDeltaY: 120 }), true, 1100)).toBe(false)
   })
 
-  it('keeps pinch/Cmd-wheel and line-mode mouse wheels on the zoom path', () => {
-    expect(isMacTrackpadPan(gesture(0, true), true)).toBe(false)
-    expect(isMacTrackpadPan(gesture(0, false, true), true)).toBe(false)
-    expect(isMacTrackpadPan(gesture(1), true)).toBe(false)
+  it('routes smooth two-finger trackpad scroll and its momentum to panning', () => {
+    const router = new MacWheelGestureRouter()
+    expect(router.shouldPan(gesture(6.25), true, 1000)).toBe(true)
+    expect(router.shouldPan(gesture(75), true, 1080)).toBe(true)
+    expect(router.shouldPan(gesture(75), true, 1400)).toBe(false)
   })
 
-  it('does not change wheel routing on other platforms', () => {
-    expect(isMacTrackpadPan(gesture(0), false)).toBe(false)
+  it('keeps pinch, Cmd-wheel, line-mode wheel and other platforms off the override', () => {
+    const router = new MacWheelGestureRouter()
+    expect(router.shouldPan(gesture(5, { ctrlKey: true }), true, 1000)).toBe(false)
+    expect(router.shouldPan(gesture(5, { metaKey: true }), true, 1000)).toBe(false)
+    expect(router.shouldPan(gesture(3, { deltaMode: 1 }), true, 1000)).toBe(false)
+    expect(router.shouldPan(gesture(5), false, 1000)).toBe(false)
   })
 })
