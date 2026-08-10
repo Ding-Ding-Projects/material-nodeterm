@@ -89,7 +89,6 @@ vi.mock('./codex-identity-proxy', () => ({
  */
 const execCalls: Array<{ file: string; args: string[] }> = []
 const liveTmuxSessions = new Set<string>()
-let failKillSession = false
 
 vi.mock('child_process', () => {
   type Cb = (err: Error | null, res?: { stdout: string; stderr: string }) => void
@@ -110,11 +109,8 @@ vi.mock('child_process', () => {
       ok('PANE SNAPSHOT')
     } else if (args.includes('kill-session')) {
       const target = args[args.indexOf('-t') + 1]
-      if (failKillSession) cb?.(Object.assign(new Error('tmux unavailable'), { code: 'EIO' }))
-      else {
-        liveTmuxSessions.delete(target)
-        ok('')
-      }
+      liveTmuxSessions.delete(target)
+      ok('')
     } else {
       ok('')
     }
@@ -131,7 +127,6 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
 
   beforeEach(() => {
     spawned.length = 0
-    failKillSession = false
     liveTmuxSessions.clear()
     spawnArgs.length = 0
     execCalls.length = 0
@@ -378,29 +373,16 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     expect(tmuxCalls('kill-session')).toEqual([])
   })
 
-  it('killAll ends a local Codex tmux pane so restart takes the cold-resume path', async () => {
-    const m = await tmuxManager()
-    await create(80, 24, 'codex-node', { agentId: 'codex' })
-    execCalls.length = 0
-    await m.killAll()
-    const kills = tmuxCalls('kill-session')
-    expect(kills).toHaveLength(1)
-    expect(kills[0].args[kills[0].args.indexOf('-t') + 1]).toBe(sessionName('codex-node'))
-  })
-
-  it('persists failed Codex shutdown and consumes it before the next attach', async () => {
+  it('killAll preserves a local shared-app-server Codex pane across Electron restart', async () => {
     const m = await tmuxManager()
     liveTmuxSessions.add(sessionName('codex-node'))
-    const first = await create(80, 24, 'codex-node', { agentId: 'codex' })
-    expect(first.fresh).toBe(false)
-    failKillSession = true
+    const before = await create(80, 24, 'codex-node', { agentId: 'codex' })
+    expect(before.fresh).toBe(false)
+    execCalls.length = 0
     await m.killAll()
-    expect(fs.readdirSync(path.join(userDataDir, 'codex-cold-resume'))).toHaveLength(1)
-
-    failKillSession = false
-    const recovered = await create(80, 24, 'codex-node', { agentId: 'codex' })
-    expect(recovered.fresh).toBe(true)
-    expect(fs.readdirSync(path.join(userDataDir, 'codex-cold-resume'))).toHaveLength(0)
+    expect(tmuxCalls('kill-session')).toEqual([])
+    const after = await create(80, 24, 'codex-node', { agentId: 'codex' })
+    expect(after.fresh).toBe(false)
   })
 
   it('destroy (the × button) DOES kill the tmux session', async () => {
