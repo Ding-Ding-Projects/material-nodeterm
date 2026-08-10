@@ -135,13 +135,13 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
       </SearchableRow>
       <SearchableRow {...ROWS.sidebarCollapse}>
         <FieldRow
-          label="Sidebar: focus active project"
-          description="Collapse inactive projects in the sessions sidebar when switching projects. Off: everything stays as you left it."
+          label="Sidebar: collapse inactive by default"
+          description="Projects without an explicit choice start collapsed when inactive. Your project and group chevron choices are remembered."
           control={
             <Switch
               checked={settings.sidebarAutoCollapse}
               onChange={(v) => update({ sidebarAutoCollapse: v })}
-              ariaLabel="Sidebar: focus active project"
+              ariaLabel="Sidebar: collapse inactive by default"
             />
           }
         />

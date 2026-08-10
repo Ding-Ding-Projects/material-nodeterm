@@ -32,14 +32,15 @@ const term = (id: string, pos: { x: number; y: number }, parentId?: string): Can
     ...(parentId ? { parentId, extent: 'parent' as const } : {})
   }) as unknown as CanvasNode
 
-const grp = (id: string, pos: { x: number; y: number }): CanvasNode =>
+const grp = (id: string, pos: { x: number; y: number }, parentId?: string): CanvasNode =>
   ({
     id,
     type: 'group',
     position: pos,
     width: 400,
     height: 300,
-    data: { title: id, color: '#fff', group: null }
+    data: { title: id, color: '#fff', group: null },
+    ...(parentId ? { parentId, extent: 'parent' as const } : {})
   }) as unknown as CanvasNode
 
 describe('reparentNode', () => {
@@ -76,6 +77,29 @@ describe('reparentNode', () => {
     const nodes = [grp('g1', { x: 50, y: 50 }), term('t1', { x: 10, y: 10 })]
     expect(reparentNode(nodes, 'nope', 'g1')).toBe(nodes)
     expect(reparentNode(nodes, 't1', 't1')).toBe(nodes) // target is a terminal, not a group
+  })
+
+  it('moves a whole group subtree between nested containers without moving it in root space', () => {
+    const nodes = [
+      grp('outer', { x: 100, y: 80 }),
+      grp('inner', { x: 30, y: 40 }, 'outer'),
+      term('leaf', { x: 10, y: 12 }, 'inner'),
+      grp('target', { x: 500, y: 200 })
+    ]
+    const out = reparentNode(nodes, 'inner', 'target')
+    const inner = out.find((node) => node.id === 'inner')!
+    expect(inner.parentId).toBe('target')
+    expect(inner.position).toEqual({ x: -370, y: -80 })
+    expect(out.find((node) => node.id === 'leaf')!.position).toEqual({ x: 10, y: 12 })
+    expect(out.findIndex((node) => node.id === 'target')).toBeLessThan(
+      out.findIndex((node) => node.id === 'inner')
+    )
+  })
+
+  it('rejects parenting a group into itself or one of its descendants', () => {
+    const nodes = [grp('outer', { x: 0, y: 0 }), grp('inner', { x: 20, y: 20 }, 'outer')]
+    expect(reparentNode(nodes, 'outer', 'outer')).toBe(nodes)
+    expect(reparentNode(nodes, 'outer', 'inner')).toBe(nodes)
   })
 })
 
@@ -191,9 +215,36 @@ describe('groupSelectedNodes', () => {
     expect(out.find((n) => n.id === 't1')!.parentId).toBe(out[0].id)
   })
 
-  it('skips already-grouped children and group frames; all-skipped is a no-op', () => {
+  it('refuses an ancestor together with its descendant', () => {
     const nodes = [grp('g1', { x: 0, y: 0 }), term('t1', { x: 10, y: 10 }, 'g1')]
     expect(groupSelectedNodes(nodes, ['g1', 't1'], 1)).toBe(nodes)
+  })
+
+  it('wraps sibling groups in a nested group while preserving root-space positions', () => {
+    const nodes = [grp('a', { x: 100, y: 120 }), grp('b', { x: 600, y: 180 })]
+    const out = groupSelectedNodes(nodes, ['a', 'b'], 2)
+    const wrapper = out.find((node) => !nodes.some((old) => old.id === node.id))!
+    const a = out.find((node) => node.id === 'a')!
+    expect(wrapper.type).toBe('group')
+    expect(a.parentId).toBe(wrapper.id)
+    expect(wrapper.position.x + a.position.x).toBe(100)
+    expect(wrapper.position.y + a.position.y).toBe(120)
+    expect(out.indexOf(wrapper)).toBeLessThan(out.indexOf(a))
+  })
+
+  it('creates the wrapper inside the siblings\' existing parent', () => {
+    const nodes = [
+      grp('outer', { x: 100, y: 80 }),
+      grp('a', { x: 20, y: 30 }, 'outer'),
+      grp('b', { x: 500, y: 60 }, 'outer')
+    ]
+    const out = groupSelectedNodes(nodes, ['a', 'b'], 3)
+    const wrapper = out.find((node) => !nodes.some((old) => old.id === node.id))!
+    const a = out.find((node) => node.id === 'a')!
+    expect(wrapper.parentId).toBe('outer')
+    expect(a.parentId).toBe(wrapper.id)
+    expect(100 + wrapper.position.x + a.position.x).toBe(120)
+    expect(80 + wrapper.position.y + a.position.y).toBe(110)
   })
 })
 
@@ -216,9 +267,38 @@ describe('ungroupNodes', () => {
     expect(out.find((n) => n.id === 't2')!.position).toEqual({ x: 500, y: 300 })
   })
 
+  it('promotes direct children into the removed group\'s parent without moving them', () => {
+    const nodes = [
+      grp('outer', { x: 100, y: 80 }),
+      grp('inner', { x: 30, y: 40 }, 'outer'),
+      term('leaf', { x: 10, y: 12 }, 'inner')
+    ]
+    const out = ungroupNodes(nodes, 'inner')
+    const leaf = out.find((node) => node.id === 'leaf')!
+    expect(leaf.parentId).toBe('outer')
+    expect(leaf.position).toEqual({ x: 40, y: 52 })
+  })
+
   it('is a no-op when the group is missing', () => {
     const nodes = [term('t1', { x: 0, y: 0 })]
     expect(ungroupNodes(nodes, 'nope')).toBe(nodes)
+  })
+})
+
+describe('nested group persistence order', () => {
+  it('hydrates every parent group before its descendants even from reversed persisted order', () => {
+    const live = [
+      grp('outer', { x: 100, y: 80 }),
+      grp('inner', { x: 30, y: 40 }, 'outer'),
+      term('leaf', { x: 10, y: 12 }, 'inner')
+    ]
+    const hydrated = nodeStatesToFlow(flowToNodeStates(live).reverse())
+    expect(hydrated.findIndex((node) => node.id === 'outer')).toBeLessThan(
+      hydrated.findIndex((node) => node.id === 'inner')
+    )
+    expect(hydrated.findIndex((node) => node.id === 'inner')).toBeLessThan(
+      hydrated.findIndex((node) => node.id === 'leaf')
+    )
   })
 })
 

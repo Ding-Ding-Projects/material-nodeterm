@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildSessionList,
+  groupSessionCount,
+  groupSessionRows,
   sessionStatusKind,
   isGroupCollapsed,
   projectSignalCounts,
@@ -104,6 +106,7 @@ describe('buildSessionList', () => {
     expect(p1.groups).toHaveLength(1)
     expect(p1.groups[0]).toMatchObject({ id: 'g1', title: 'Frontend', color: '#abc' })
     expect(p1.groups[0].sessions.map((s) => s.id)).toEqual(['t1', 't2'])
+    expect(p1.groups[0].children).toEqual([])
     expect(p1.ungrouped.map((s) => s.id)).toEqual(['t3', 't4'])
   })
 
@@ -136,6 +139,60 @@ describe('buildSessionList', () => {
 
     const unfiltered = buildSessionList(projects(), null, 'p1', {}, '')
     expect(unfiltered.length).toBe(2) // both projects kept when no filter
+  })
+
+  it('builds nested canvas groups as a recursive tree and preserves ancestors when filtering', () => {
+    const proj: ProjectInput[] = [
+      {
+        id: 'p1',
+        name: 'Alpha',
+        color: '#111',
+        nodes: [
+          node('outer', { kind: 'group', title: 'Outer' }),
+          node('inner', { kind: 'group', title: 'Inner', parentId: 'outer' }),
+          node('deep', { kind: 'group', title: 'Deep', parentId: 'inner' }),
+          node('direct', { parentId: 'outer' }),
+          node('target', { title: 'Needle session', parentId: 'deep' })
+        ]
+      }
+    ]
+    const [all] = buildSessionList(
+      proj,
+      null,
+      'p1',
+      { target: { unread: false, state: 'waiting' } },
+      ''
+    )
+    const outer = all.groups[0]
+    expect(outer.children[0].children[0].id).toBe('deep')
+    expect(groupSessionRows(outer).map((row) => row.id)).toEqual(['direct', 'target'])
+    expect(groupSessionCount(outer)).toBe(2)
+    expect(projectSignalCounts(all)).toEqual({ attention: 1, unread: 0 })
+
+    const [filtered] = buildSessionList(proj, null, 'p1', {}, 'needle')
+    expect(filtered.groups[0].id).toBe('outer')
+    expect(filtered.groups[0].children[0].children[0].sessions.map((row) => row.id)).toEqual([
+      'target'
+    ])
+  })
+
+  it('promotes groups with dangling or cyclic parents to a reachable root', () => {
+    const proj: ProjectInput[] = [
+      {
+        id: 'p1',
+        name: 'Alpha',
+        color: '#111',
+        nodes: [
+          node('dangling', { kind: 'group', parentId: 'missing' }),
+          node('a', { kind: 'group', parentId: 'b' }),
+          node('b', { kind: 'group', parentId: 'a' })
+        ]
+      }
+    ]
+    const [group] = buildSessionList(proj, null, 'p1', {}, '')
+    expect(new Set(group.groups.map((bucket) => bucket.id))).toEqual(
+      new Set(['dangling', 'a', 'b'])
+    )
   })
 })
 

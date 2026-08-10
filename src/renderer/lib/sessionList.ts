@@ -59,7 +59,7 @@ export function isGroupCollapsed(
 export function projectSignalCounts(group: SessionGroup): { attention: number; unread: number } {
   let attention = 0
   let unread = 0
-  for (const s of [...group.ungrouped, ...group.groups.flatMap((b) => b.sessions)]) {
+  for (const s of [...group.ungrouped, ...group.groups.flatMap(groupSessionRows)]) {
     if (s.statusKind === 'attention') attention++
     else if (s.unread && s.statusKind !== 'working') unread++
   }
@@ -103,6 +103,7 @@ export interface GroupBucket {
   title: string
   color: string
   sessions: SessionRowVM[]
+  children: GroupBucket[]
 }
 
 export interface SessionGroup {
@@ -142,6 +143,14 @@ function matches(row: SessionRowVM, needle: string): boolean {
   return hay.includes(needle)
 }
 
+export function groupSessionRows(group: GroupBucket): SessionRowVM[] {
+  return [...group.sessions, ...group.children.flatMap(groupSessionRows)]
+}
+
+export function groupSessionCount(group: GroupBucket): number {
+  return group.sessions.length + group.children.reduce((sum, child) => sum + groupSessionCount(child), 0)
+}
+
 export function buildSessionList(
   projects: ProjectInput[],
   liveActiveNodes: SessionNodeInput[] | null,
@@ -156,21 +165,47 @@ export function buildSessionList(
     const isActive = p.id === activeProjectId
     const source = isActive && liveActiveNodes ? liveActiveNodes : p.nodes
     const groupNodes = source.filter((n) => n.kind === 'group')
-    const groupIds = new Set(groupNodes.map((n) => n.id))
+    const groupById = new Map(groupNodes.map((n) => [n.id, n]))
     const terminals = source.filter((n) => n.kind === 'terminal')
 
-    const buckets: GroupBucket[] = groupNodes.map((gn) => ({
-      id: gn.id,
-      title: gn.title,
-      color: gn.color,
-      sessions: terminals
+    const parentFor = (group: SessionNodeInput): string | undefined => {
+      if (!group.parentId || !groupById.has(group.parentId) || group.parentId === group.id) return undefined
+      const seen = new Set<string>([group.id])
+      let parentId: string | undefined = group.parentId
+      while (parentId) {
+        if (seen.has(parentId)) return undefined
+        seen.add(parentId)
+        parentId = groupById.get(parentId)?.parentId
+      }
+      return group.parentId
+    }
+    const childGroups = new Map<string, SessionNodeInput[]>()
+    for (const group of groupNodes) {
+      const parentId = parentFor(group)
+      if (!parentId) continue
+      const children = childGroups.get(parentId) ?? []
+      children.push(group)
+      childGroups.set(parentId, children)
+    }
+    const buildBucket = (gn: SessionNodeInput): GroupBucket | null => {
+      const sessions = terminals
         .filter((n) => n.parentId === gn.id)
         .map((n) => toRow(n, statusById[n.id]))
         .filter(keep)
-    }))
+      const children = (childGroups.get(gn.id) ?? [])
+        .map(buildBucket)
+        .filter((bucket): bucket is GroupBucket => bucket !== null)
+      const groupMatches = !!needle && gn.title.toLowerCase().includes(needle)
+      if (needle && !groupMatches && sessions.length === 0 && children.length === 0) return null
+      return { id: gn.id, title: gn.title, color: gn.color, sessions, children }
+    }
+    const buckets = groupNodes
+      .filter((group) => !parentFor(group))
+      .map(buildBucket)
+      .filter((bucket): bucket is GroupBucket => bucket !== null)
 
     const ungrouped = terminals
-      .filter((n) => !n.parentId || !groupIds.has(n.parentId))
+      .filter((n) => !n.parentId || !groupById.has(n.parentId))
       .map((n) => toRow(n, statusById[n.id]))
       .filter(keep)
 
@@ -182,7 +217,7 @@ export function buildSessionList(
       isActive,
       // When filtering, hide groups whose sessions all filtered out; otherwise keep empty
       // groups so they remain visible drop targets.
-      groups: needle ? buckets.filter((b) => b.sessions.length > 0) : buckets,
+      groups: buckets,
       ungrouped
     }
   })

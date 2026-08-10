@@ -2695,13 +2695,36 @@ export function Canvas() {
   // since both decide by comparing against what this returns.
   const cwdForNewNodeIn = useCallback(
     (parentId: string | undefined): string | undefined => {
-      if (!parentId) return undefined
-      const parent = nodesRef.current.find((n) => n.id === parentId)
-      const stale = useWorktrees.getState().staleGroupIds.includes(parentId)
-      if (parent?.data.worktree && !stale && !isSshProject) return parent.data.worktree.path
-      return parent?.data.cwd || undefined
+      const seen = new Set<string>()
+      let currentId = parentId
+      while (currentId && !seen.has(currentId)) {
+        seen.add(currentId)
+        const parent = nodesRef.current.find((n) => n.id === currentId)
+        if (!parent) return undefined
+        const stale = useWorktrees.getState().staleGroupIds.includes(currentId)
+        if (parent.data.worktree && !stale && !isSshProject) return parent.data.worktree.path
+        if (parent.data.cwd) return parent.data.cwd
+        currentId = parent.parentId
+      }
+      return undefined
     },
     [isSshProject]
+  )
+
+  const worktreeForGroupChain = useCallback(
+    (parentId: string | undefined): { groupId: string; path: string } | undefined => {
+      const seen = new Set<string>()
+      let currentId = parentId
+      while (currentId && !seen.has(currentId)) {
+        seen.add(currentId)
+        const group = nodesRef.current.find((node) => node.id === currentId)
+        const path = group?.data.worktree?.path as string | undefined
+        if (path) return { groupId: currentId, path }
+        currentId = group?.parentId
+      }
+      return undefined
+    },
+    []
   )
 
   // Reparent a freshly-created node into a group (parentId + extent 'parent', position made
@@ -2709,11 +2732,15 @@ export function Canvas() {
   const parentInto = useCallback((node: CanvasNode, groupId: string): CanvasNode => {
     const group = nodesRef.current.find((n) => n.id === groupId)
     if (!group) return node
+    const groupPosition = absolutePosition(
+      group as FocusableNode,
+      nodesRef.current as FocusableNode[]
+    )
     return {
       ...node,
       parentId: groupId,
       extent: 'parent' as const,
-      position: { x: node.position.x - group.position.x, y: node.position.y - group.position.y }
+      position: { x: node.position.x - groupPosition.x, y: node.position.y - groupPosition.y }
     }
   }, [])
 
@@ -2749,9 +2776,6 @@ export function Canvas() {
   const placeSpawned = useCallback(
     (node: CanvasNode, pos: { x: number; y: number }): CanvasNode => {
       const placed = { ...node, position: pos, parentId: undefined, extent: undefined }
-      // A group frame is never nested into another (the model is one level deep — see
-      // groupSelectedNodes/ungroupNodes); it just lands where it was dropped.
-      if (placed.type === 'group') return placed
       const groupId = groupAtPoint(pos)
       return groupId ? parentInto(placed, groupId) : placed
     },
@@ -4283,9 +4307,7 @@ export function Canvas() {
     (nodeId: string) => {
       const node = nodesRef.current.find((n) => n.id === nodeId)
       const parentId = node?.parentId
-      const wtPath = nodesRef.current.find((p) => p.id === parentId)?.data.worktree?.path as
-        | string
-        | undefined
+      const wtPath = worktreeForGroupChain(parentId)?.path
       if (!wtPath) return
       // Never open the confirm for a session that does not live on this machine (see the confirm).
       if (isSshProject || isRemoteSessionNode(node?.data)) {
@@ -4302,7 +4324,7 @@ export function Canvas() {
       }
       setMoveTarget(nodeId)
     },
-    [cwdForNewNodeIn, isSshProject]
+    [cwdForNewNodeIn, isSshProject, worktreeForGroupChain]
   )
 
   const confirmMoveIntoWorktree = useCallback(async () => {
@@ -4310,8 +4332,7 @@ export function Canvas() {
     setMoveTarget(null)
     if (!id) return
     const node = nodesRef.current.find((n) => n.id === id)
-    const parent = nodesRef.current.find((p) => p.id === node?.parentId)
-    const wtPath = parent?.data.worktree?.path as string | undefined
+    const wtPath = worktreeForGroupChain(node?.parentId)?.path
     if (!node || !wtPath || node.data.cwd === wtPath) return
     // A session that runs on another machine must never be moved into a LOCAL worktree: `destroy`
     // would end its REMOTE tmux session (running processes and all) and respawn it in a directory
@@ -4374,7 +4395,7 @@ export function Canvas() {
       )
     )
     markDirty()
-  }, [moveTarget, setNodes, markDirty, cwdForNewNodeIn, isSshProject])
+  }, [moveTarget, setNodes, markDirty, cwdForNewNodeIn, isSshProject, worktreeForGroupChain])
 
   // Bridge the move-into-worktree handler to TerminalNode (React Flow owns the instances).
   useEffect(() => {
@@ -5008,13 +5029,27 @@ export function Canvas() {
     return tidySeparators([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
       ...((): MenuItem[] => {
-        // "Group …" only when something is actually groupable (top-level, not itself a group —
-        // groupSelectedNodes silently skips the rest, so the item would otherwise no-op);
+        // "Group …" wraps sibling nodes in their current container. Existing group frames are
+        // valid members too; mixed containers and ancestor+descendant selections are refused.
         // "Remove from group" only when a target is inside a group frame (the frame stays).
-        const groupable = ids.some((nid) => {
-          const n = nodesRef.current.find((nd) => nd.id === nid)
-          return !!n && !n.parentId && n.type !== 'group'
+        const selectedNodes = ids
+          .map((nid) => nodesRef.current.find((node) => node.id === nid))
+          .filter((node): node is CanvasNode => !!node)
+        const selectedIds = new Set(selectedNodes.map((node) => node.id))
+        const hasSelectedAncestor = selectedNodes.some((node) => {
+          const seen = new Set<string>()
+          let parentId = node.parentId
+          while (parentId && !seen.has(parentId)) {
+            if (selectedIds.has(parentId)) return true
+            seen.add(parentId)
+            parentId = nodesRef.current.find((candidate) => candidate.id === parentId)?.parentId
+          }
+          return false
         })
+        const groupable =
+          selectedNodes.length > 0 &&
+          new Set(selectedNodes.map((node) => node.parentId ?? null)).size === 1 &&
+          !hasSelectedAncestor
         const parented = ids.some(
           (nid) => !!nodesRef.current.find((nd) => nd.id === nid)?.parentId
         )
@@ -6440,14 +6475,19 @@ export function Canvas() {
           case 'group': {
             const ids = (args.nodes ?? '').split(',').map((s) => s.trim()).filter(Boolean)
             const live = nodesRef.current as CanvasNode[]
-            const resolvable = ids.filter((gid) => live.some((nd) => nd.id === gid && !nd.parentId && nd.type !== 'group'))
+            const resolvable = ids.filter((id) => live.some((node) => node.id === id))
             if (resolvable.length === 0) {
-              reply({ ok: false, error: 'group: none of the given node ids are groupable (top-level, non-group)' })
+              reply({ ok: false, error: 'group: none of the given node ids exist' })
               return
             }
             const groupCount = live.filter((nd) => nd.type === 'group').length
             let grouped = groupSelectedNodes(live, resolvable, groupCount)
-            const groupNode = grouped[0] // groupSelectedNodes returns the new group first
+            const oldIds = new Set(live.map((node) => node.id))
+            const groupNode = grouped.find((node) => !oldIds.has(node.id) && node.type === 'group')
+            if (!groupNode) {
+              reply({ ok: false, error: 'group: nodes must be siblings in one container and may not include an ancestor with its descendant' })
+              return
+            }
             if (args.label) {
               grouped = grouped.map((nd) =>
                 nd.id === groupNode.id ? { ...nd, data: { ...nd.data, title: args.label } } : nd
@@ -6455,11 +6495,9 @@ export function Canvas() {
             }
             setNodes(grouped)
             markDirty()
-            // Nodes already inside another frame are skipped (group only wraps loose nodes) — say
-            // so, and point at `move`, so the agent isn't left wondering why a node stayed put.
             const skippedGrouped = ids.length - resolvable.length
             const groupNote = skippedGrouped > 0
-              ? ` (${skippedGrouped} already in a frame were skipped — use \`move --group ${groupNode.id}\` for those)`
+              ? ` (${skippedGrouped} unknown id(s) skipped)`
               : ''
             reply({
               ok: true,
@@ -6483,9 +6521,8 @@ export function Canvas() {
             return
           }
           case 'move': {
-            // Reparent nodes INTO an existing frame (or out to the top level) — the one way to
-            // move a node OUT of its current frame, which `group` deliberately won't do. `reparentNode`
-            // keeps each node fixed on the canvas via absolute↔relative conversion.
+            // Reparent nodes or whole group subtrees into an existing frame (or to top level).
+            // `reparentNode` keeps the root-space position fixed and rejects cycles.
             const ids = (args.nodes ?? '').split(',').map((s) => s.trim()).filter(Boolean)
             const live = nodesRef.current as CanvasNode[]
             const rawTarget = (args.group ?? '').trim().toLowerCase()
@@ -6500,12 +6537,11 @@ export function Canvas() {
             for (const id of ids) {
               const before = next
               const nd = next.find((n) => n.id === id)
-              // Skip a group id, an unknown id, or a node already in the requested container.
-              if (nd && nd.type !== 'group') next = reparentNode(next, id, targetGroup)
+              if (nd) next = reparentNode(next, id, targetGroup)
               if (next !== before) moved.push(id)
             }
             if (moved.length === 0) {
-              reply({ ok: false, error: 'move: nothing moved (unknown ids, group ids, or already there)' })
+              reply({ ok: false, error: 'move: nothing moved (unknown ids, already there, or invalid group cycle)' })
               return
             }
             // The source frame(s) the nodes LEFT, and the destination, may now be the wrong size —
@@ -6690,8 +6726,13 @@ export function Canvas() {
             let next: CanvasNode[] = [...live, ...reviewers, ...(judge ? [judge] : [])]
             next = arrangeNodes(next, panelIds, { layout: 'grid', origin: placeBelow(0) })
             const vGroupCount = next.filter((nd) => nd.type === 'group').length
+            const existingGroupIds = new Set(
+              next.filter((node) => node.type === 'group').map((node) => node.id)
+            )
             next = groupSelectedNodes(next, panelIds, vGroupCount)
-            const vGroup = next[0]
+            const vGroup = next.find(
+              (node) => node.type === 'group' && !existingGroupIds.has(node.id)
+            )!
             next = next.map((nd) =>
               nd.id === vGroup.id
                 ? { ...nd, data: { ...nd.data, title: args.label || `Verify: ${targetTitle}` } }
@@ -6770,8 +6811,13 @@ export function Canvas() {
             let next: CanvasNode[] = [...live, ...members]
             next = arrangeNodes(next, memberIds, { layout: 'grid', origin: placeBelow(0) })
             const groupCount = next.filter((nd) => nd.type === 'group').length
+            const existingGroupIds = new Set(
+              next.filter((node) => node.type === 'group').map((node) => node.id)
+            )
             next = groupSelectedNodes(next, memberIds, groupCount)
-            const teamGroup = next[0]
+            const teamGroup = next.find(
+              (node) => node.type === 'group' && !existingGroupIds.has(node.id)
+            )!
             next = next.map((nd) =>
               nd.id === teamGroup.id ? { ...nd, data: { ...nd.data, title: args.label || 'Team' } } : nd
             )
@@ -8688,6 +8734,7 @@ export function Canvas() {
           setSessionsDismissed(true)
         }}
         onFocusNode={focusNodeById}
+        onFocusProject={switchProject}
         onCloseSession={closeSession}
         onRenameSession={renameSession}
         onReorderProject={reorderProject}

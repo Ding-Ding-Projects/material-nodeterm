@@ -6050,7 +6050,21 @@ body,
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
   flex: 0 0 auto;
 }
-.ss-group__chev { font-size: 9px; color: var(--muted); width: 10px; }
+.ss-group__chev {
+  width: 14px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.ss-group__chev:hover { background: rgba(var(--tint-rgb), 0.09); color: var(--text); }
 .ss-group__dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .ss-group__name { font-size: 12px; font-weight: 600; color: var(--text); }
 .ss-group.is-active .ss-group__name { color: var(--accent); }

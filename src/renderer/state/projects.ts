@@ -112,26 +112,59 @@ interface ProjectsState {
   toWorkspace(): Workspace
 }
 
+function rootStatePosition(
+  node: CanvasNodeState,
+  nodes: CanvasNodeState[]
+): { x: number; y: number } {
+  const byId = new Map(nodes.map((candidate) => [candidate.id, candidate]))
+  const seen = new Set<string>([node.id])
+  let x = node.position.x
+  let y = node.position.y
+  let parentId = node.parentId
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId)
+    const parent = byId.get(parentId)
+    if (!parent) break
+    x += parent.position.x
+    y += parent.position.y
+    parentId = parent.parentId
+  }
+  return { x, y }
+}
+
+function stateIsDescendant(
+  nodes: CanvasNodeState[],
+  candidateId: string,
+  ancestorId: string
+): boolean {
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const seen = new Set<string>()
+  let current = byId.get(candidateId)
+  while (current?.parentId && !seen.has(current.parentId)) {
+    if (current.parentId === ancestorId) return true
+    seen.add(current.parentId)
+    current = byId.get(current.parentId)
+  }
+  return false
+}
+
 /** Returns `node` repositioned for a new parent (groupId, or null for top level), keeping its
- *  on-canvas position fixed (one-level absolute↔relative). Unchanged if the target is not a
- *  group. `extent` is omitted — nodeStatesToFlow re-derives it from parentId on load. */
+ *  root-space position fixed across arbitrary nesting. Unchanged if the target is not a group.
+ *  `extent` is omitted — nodeStatesToFlow re-derives it from parentId on load. */
 function repositionState(
   node: CanvasNodeState,
   groupId: string | null,
   nodes: CanvasNodeState[]
 ): CanvasNodeState {
-  const oldParent = node.parentId ? nodes.find((n) => n.id === node.parentId) : undefined
-  const abs = {
-    x: node.position.x + (oldParent?.position.x ?? 0),
-    y: node.position.y + (oldParent?.position.y ?? 0)
-  }
+  const abs = rootStatePosition(node, nodes)
   if (groupId === null) return { ...node, parentId: undefined, position: abs }
   const group = nodes.find((n) => n.id === groupId)
   if (!group || group.kind !== 'group') return node
+  const groupAbs = rootStatePosition(group, nodes)
   return {
     ...node,
     parentId: group.id,
-    position: { x: abs.x - group.position.x, y: abs.y - group.position.y }
+    position: { x: abs.x - groupAbs.x, y: abs.y - groupAbs.y }
   }
 }
 
@@ -330,8 +363,11 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const node = nodes.find((n) => n.id === nodeId)
-        if (!node || node.kind === 'group') return nodes
+        if (!node) return nodes
         if ((node.parentId ?? null) === groupId) return nodes
+        if (groupId === nodeId || (groupId && stateIsDescendant(nodes, groupId, nodeId))) {
+          return nodes
+        }
         const next = repositionState(node, groupId, nodes)
         if (next === node) return nodes // target group missing / not a group
         return nodes.map((n) => (n.id === nodeId ? next : n))
