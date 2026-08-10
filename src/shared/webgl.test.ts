@@ -5,11 +5,10 @@ import { resolveTerminalRenderer } from './webgl'
 // resolution is what every user who never touched the setting is on — so each answer below is
 // pinned, and moving one is a deliberate act with device evidence behind it (see webgl.ts).
 describe('resolveTerminalRenderer', () => {
-  it("'auto' is the SHARED renderer on macOS — the promotion", () => {
-    // Was 'dom' until 2026-08-05: per-terminal WebGL composited black on macOS, so the default
-    // avoided the GPU entirely. One canvas-wide context does not create that pressure, and the
-    // device checklist + ≥30-minute soak on this branch found no flicker or black node.
-    expect(resolveTerminalRenderer('auto', true)).toBe('shared')
+  it("'auto' is the DOM renderer on macOS — stable sharpness without compositor pressure", () => {
+    // Shared contradicted text-parity evidence on 2026-08-10: drag switched to xterm-sharp,
+    // drop switched back to Shared-soft. Keep Shared explicit rather than changing on gesture.
+    expect(resolveTerminalRenderer('auto', true)).toBe('dom')
   })
 
   it("'auto' is unchanged off macOS — per-terminal WebGL", () => {
@@ -50,9 +49,9 @@ describe('resolveTerminalRenderer', () => {
     expect(resolveTerminalRenderer(true, true)).toBe('webgl')
     expect(resolveTerminalRenderer(false, false)).toBe('dom')
     expect(resolveTerminalRenderer(false, true)).toBe('dom')
-    expect(resolveTerminalRenderer(undefined, true)).toBe('shared')
+    expect(resolveTerminalRenderer(undefined, true)).toBe('dom')
     expect(resolveTerminalRenderer(undefined, false)).toBe('webgl')
-    expect(resolveTerminalRenderer('warp-speed' as 'auto', true)).toBe('shared')
+    expect(resolveTerminalRenderer('warp-speed' as 'auto', true)).toBe('dom')
     expect(resolveTerminalRenderer('warp-speed' as 'auto', false)).toBe('webgl')
   })
 })

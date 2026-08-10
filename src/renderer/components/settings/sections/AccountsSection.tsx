@@ -118,14 +118,31 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   useEffect(() => {
     if (!isActive) return
     let cancelled = false
-    for (const account of codexAccounts) {
-      if (!account.pending) continue
-      void window.nodeTerminal.codexAccounts.identity(account.id).then((captured) => {
-        if (!cancelled && captured) captureCodexIdentity(account.id, captured)
-      })
+    let retryTimer: number | null = null
+    const reconcile = async (): Promise<void> => {
+      const pending = codexAccounts.filter((account) => account.pending)
+      if (pending.length === 0) return
+      const captured = await Promise.all(
+        pending.map(async (account) => ({
+          account,
+          identity: await window.nodeTerminal.codexAccounts.identity(account.id).catch(() => null)
+        }))
+      )
+      if (cancelled) return
+      let resolved = false
+      for (const result of captured) {
+        if (!result.identity) continue
+        resolved = true
+        captureCodexIdentity(result.account.id, result.identity)
+      }
+      // A daemon can still be coming up when Settings opens. Keep healing the persisted pending
+      // marker while the section is visible; a successful capture changes settings and reruns us.
+      if (!resolved) retryTimer = window.setTimeout(() => void reconcile(), 2000)
     }
+    void reconcile()
     return () => {
       cancelled = true
+      if (retryTimer !== null) window.clearTimeout(retryTimer)
     }
   }, [isActive, codexAccounts])
 

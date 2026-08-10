@@ -10,7 +10,8 @@ import {
   assertCodexAccountId,
   codexAccountHome,
   codexSessionEnv,
-  codexSocketForAccount
+  codexSocketForAccount,
+  ensureSharedCodexDaemon
 } from '../core/codex-accounts-core'
 import {
   forkCodexThreadFromPathAt,
@@ -36,13 +37,20 @@ export function localCodexSocket(accountId?: string): string {
 
 export async function ensureCodexAccountDaemon(accountId?: string): Promise<void> {
   if (accountId) assertCodexAccountId(accountId)
-  const codex = await findInLoginPath('codex')
-  if (!codex) throw new Error('Codex CLI unavailable')
-  await execFileP(codex, ['app-server', 'daemon', 'start'], {
-    env: { ...process.env, ...codexSessionEnv(platform().userDataDir, accountId) },
-    timeout: 15_000,
-    maxBuffer: 1024 * 1024
-  })
+  const socket = localCodexSocket(accountId)
+  await ensureSharedCodexDaemon(
+    async () => (await readCodexAccountAt(socket, 1000)) !== null,
+    async () => {
+      const codex = await findInLoginPath('codex')
+      if (!codex) throw new Error('Codex CLI unavailable')
+      await execFileP(codex, ['app-server', 'daemon', 'start'], {
+        cwd: os.homedir(),
+        env: { ...process.env, ...codexSessionEnv(platform().userDataDir, accountId) },
+        timeout: 15_000,
+        maxBuffer: 1024 * 1024
+      })
+    }
+  )
 }
 
 async function initializeAccountHome(id: string): Promise<string> {
@@ -126,6 +134,7 @@ export function initCodexAccounts(): void {
       const codex = await findInLoginPath('codex')
       if (codex) {
         await execFileP(codex, ['app-server', 'daemon', 'stop'], {
+          cwd: os.homedir(),
           env: { ...process.env, CODEX_HOME: localCodexAccountHome(id) },
           timeout: 10_000,
           maxBuffer: 1024 * 1024

@@ -302,11 +302,18 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   const hasData = limits.length > 0 || enabled.length > 0
   const fetching = refreshing
   const isError = status === 'error'
-  // The pill leads with whatever is closest to biting, so a scoped model cap that is nearly
-  // exhausted can't hide behind a comfortable 5h window. Considers every enabled provider, not
-  // just Claude, so an exhausted Codex window drives the bar too.
-  const primary = primaryLimit([...limits, ...enabled.flatMap((p) => p.limits)])
+  // Each account owns its own compact row and minibar. A single global minibar made two Codex
+  // accounts look like one account followed by two unrelated percentages.
+  const claudePrimary = primaryLimit(limits)
   const updatedAt = claudeUsage?.updatedAt ?? visibleRemote[0]?.usage.updatedAt ?? null
+
+  const providerIdentity = (p: ProviderUsage): string | null | undefined =>
+    p.provider !== 'codex'
+      ? p.account
+      : p.accountId
+        ? codexAccounts.find((a) => a.id === p.accountId)?.email ||
+          codexAccounts.find((a) => a.id === p.accountId)?.label
+        : systemCodexEmail || systemCodexLabel || 'System Codex account'
 
   const refresh = async (e: React.MouseEvent): Promise<void> => {
     e.stopPropagation()
@@ -342,42 +349,61 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
     pillBody = <span className="usage-pill__dim">⚠</span>
   } else {
     pillBody = (
-      <>
-        {primary && (
-          <span className="usage-pill__minibar" aria-hidden>
-            <span
-              className="usage-pill__minibar-fill"
-              style={{
-                width: `${100 - primary.usedPercent}%`,
-                background: severityColor(primary.severity, 100 - primary.usedPercent)
-              }}
-            />
-          </span>
-        )}
-        {limits.map((l, i) => (
-          <span key={limitKey(l)}>
-            {i > 0 && <span className="usage-pill__sep">·</span>}
-            <span className="usage-pill__num">
-              {percentNumber(l.usedPercent, percentMode)}% {limitShortLabel(l.kind, l.scopeLabel)}
+      <span className="usage-pill__rows">
+        {claudePrimary && (
+          <span className="usage-pill__account-row">
+            <span className="usage-pill__minibar" aria-hidden>
+              <span
+                className="usage-pill__minibar-fill"
+                style={{
+                  width: `${100 - claudePrimary.usedPercent}%`,
+                  background: severityColor(
+                    claudePrimary.severity,
+                    100 - claudePrimary.usedPercent
+                  )
+                }}
+              />
+            </span>
+            <span className="usage-pill__values">
+              {limits.map((l, i) => (
+                <span key={limitKey(l)}>
+                  {i > 0 && <span className="usage-pill__sep">·</span>}
+                  <span className="usage-pill__num">
+                    {percentNumber(l.usedPercent, percentMode)}%{' '}
+                    {limitShortLabel(l.kind, l.scopeLabel)}
+                  </span>
+                </span>
+              ))}
             </span>
           </span>
-        ))}
-        {/* One segment per enabled provider, carrying only its worst limit — a provider's full
-            breakdown belongs in the popover, not in a pill that has to fit beside the canvas. */}
-        {enabled.map((p, i) => {
+        )}
+        {/* One ROW per enabled provider account, carrying its own bar and worst limit. */}
+        {enabled.map((p) => {
           const worst = primaryLimit(p.limits)
           if (!worst) return null
+          const identity = providerIdentity(p)
           return (
-            <span key={`${p.provider}:${p.accountId ?? 'system'}`} className="usage-pill__provider">
-              {(limits.length > 0 || i > 0) && <span className="usage-pill__sep">·</span>}
+            <span
+              key={`${p.provider}:${p.accountId ?? 'system'}`}
+              className="usage-pill__account-row usage-pill__provider"
+            >
+              <span className="usage-pill__minibar" aria-hidden>
+                <span
+                  className="usage-pill__minibar-fill"
+                  style={{
+                    width: `${100 - worst.usedPercent}%`,
+                    background: severityColor(worst.severity, 100 - worst.usedPercent)
+                  }}
+                />
+              </span>
               <span className="usage-pill__num">
-                {percentNumber(worst.usedPercent, percentMode)}% {labelFor(p.provider)}
+                {percentNumber(worst.usedPercent, percentMode)}% {identity || labelFor(p.provider)}
               </span>
             </span>
           )
         })}
         {isError && hasData && <span className="usage-pill__dim">⚠</span>}
-      </>
+      </span>
     )
   }
 
@@ -449,14 +475,7 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
               key={`${p.provider}:${p.accountId ?? 'system'}`}
               u={p}
               mode={percentMode}
-              identity={
-                p.provider !== 'codex'
-                  ? p.account
-                  : p.accountId
-                    ? codexAccounts.find((a) => a.id === p.accountId)?.email ||
-                      codexAccounts.find((a) => a.id === p.accountId)?.label
-                    : systemCodexEmail || systemCodexLabel || 'System Codex account'
-              }
+              identity={providerIdentity(p)}
             />
           ))}
         </div>

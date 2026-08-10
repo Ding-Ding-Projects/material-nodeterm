@@ -5502,8 +5502,8 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
-  padding: 0 9px;
+  min-height: 26px;
+  padding: 4px 9px;
   border-radius: 13px;
   background: rgba(var(--card-rgb), 0.92);
   border: 1px solid rgba(var(--tint-rgb), 0.08);
@@ -5514,6 +5514,24 @@ body,
 }
 .usage-pill:hover { background: rgba(44, 44, 46, 0.95); }
 .usage-pill__icon { color: #d97757; font-size: 13px; }
+.usage-pill__rows {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.usage-pill__account-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 12px;
+  white-space: nowrap;
+}
+.usage-pill__values {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .usage-pill__minibar {
   display: inline-block;
   width: 42px;
@@ -5525,8 +5543,7 @@ body,
 .usage-pill__minibar-fill { display: block; height: 100%; border-radius: 3px; }
 .usage-pill__num { color: var(--text-strong); }
 .usage-pill__sep { color: rgba(var(--tint-rgb), 0.4); }
-/* Non-Claude provider segments read one step quieter than the Claude numbers, so a long pill
-   still scans as "Claude first, others after" without needing separate icons per provider. */
+/* Non-Claude provider rows read one step quieter than Claude without losing account identity. */
 .usage-pill__provider .usage-pill__num { color: rgba(var(--tint-rgb), 0.75); font-size: 11px; }
 .usage-pill__dim { color: rgba(var(--tint-rgb), 0.5); }
 .usage-pill__pulse { animation: usage-pulse 1.2s ease-in-out infinite; }

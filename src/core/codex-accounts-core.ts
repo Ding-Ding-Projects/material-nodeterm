@@ -69,3 +69,12 @@ export function codexTmuxEnvArgs(userDataDir: string, accountId?: string): strin
     `${key}=${value}`
   ])
 }
+
+/** Reuse a healthy account-scoped daemon; start one only when its control RPC is unavailable. */
+export async function ensureSharedCodexDaemon(
+  probe: () => Promise<boolean>,
+  start: () => Promise<void>
+): Promise<void> {
+  if (await probe()) return
+  await start()
+}

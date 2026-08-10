@@ -1,9 +1,10 @@
 import path from 'path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   codexAccountHome,
   codexHomeForAccount,
   codexSessionEnv,
+  ensureSharedCodexDaemon,
   codexTmuxEnvArgs,
   codexSocketForAccount
 } from './codex-accounts-core'
@@ -40,5 +41,23 @@ describe('managed Codex account paths', () => {
       '-e',
       'NODETERM_CODEX_ACCOUNT_ID=account-a'
     ])
+  })
+})
+
+describe('shared Codex daemon readiness', () => {
+  it('reuses a reachable daemon without starting another process', async () => {
+    const start = vi.fn(async () => {})
+
+    await ensureSharedCodexDaemon(async () => true, start)
+
+    expect(start).not.toHaveBeenCalled()
+  })
+
+  it('starts exactly once when the account daemon is unavailable', async () => {
+    const start = vi.fn(async () => {})
+
+    await ensureSharedCodexDaemon(async () => false, start)
+
+    expect(start).toHaveBeenCalledTimes(1)
   })
 })
