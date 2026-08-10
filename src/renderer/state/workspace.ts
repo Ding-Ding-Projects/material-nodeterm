@@ -945,6 +945,26 @@ function isDescendant(nodes: CanvasNode[], candidateId: string, ancestorId: stri
   return false
 }
 
+/** Returns only selected subtree roots. Box-selection often includes a group and its children;
+ *  structural actions must move/group that subtree once, through its selected ancestor. */
+export function selectedRootIds(nodes: CanvasNode[], ids: string[]): string[] {
+  const selected = new Set(ids)
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  return ids.filter((id) => {
+    let node = byId.get(id)
+    if (!node) return false
+    const seen = new Set<string>()
+    while (node.parentId && !seen.has(node.parentId)) {
+      if (selected.has(node.parentId)) return false
+      seen.add(node.parentId)
+      const parent = byId.get(node.parentId)
+      if (!parent) break
+      node = parent
+    }
+    return true
+  })
+}
+
 /**
  * Wraps nodes that share one container in a new group frame. The members may themselves be
  * groups; the new frame is created beside them in their current parent and every root-space

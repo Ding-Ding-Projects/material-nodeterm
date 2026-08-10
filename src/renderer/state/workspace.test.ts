@@ -18,6 +18,7 @@ import {
   reorderNodeBefore,
   reparentNode,
   resolveNewNodeAccount,
+  selectedRootIds,
   ungroupNodes
 } from './workspace'
 import type { CanvasNode } from './workspace'
@@ -137,6 +138,26 @@ describe('addSelectionToGroup', () => {
     const nodes = [grp('target', { x: 0, y: 0 }), term('inside', { x: 10, y: 10 }, 'target')]
     expect(addSelectionToGroup(nodes, ['target', 'inside'], 'target')).toBe(nodes)
     expect(addSelectionToGroup(nodes, ['target'], 'missing')).toBe(nodes)
+  })
+})
+
+describe('selectedRootIds', () => {
+  it('normalizes box-selected group subtrees to their selected roots', () => {
+    const nodes = [
+      grp('outer', { x: 0, y: 0 }),
+      grp('inner', { x: 10, y: 10 }, 'outer'),
+      term('leaf', { x: 5, y: 5 }, 'inner'),
+      grp('sibling', { x: 500, y: 0 })
+    ]
+    expect(selectedRootIds(nodes, ['outer', 'inner', 'leaf', 'sibling'])).toEqual([
+      'outer',
+      'sibling'
+    ])
+  })
+
+  it('drops unknown ids and preserves independent selection order', () => {
+    const nodes = [term('a', { x: 0, y: 0 }), term('b', { x: 10, y: 10 })]
+    expect(selectedRootIds(nodes, ['missing', 'b', 'a'])).toEqual(['b', 'a'])
   })
 })
 

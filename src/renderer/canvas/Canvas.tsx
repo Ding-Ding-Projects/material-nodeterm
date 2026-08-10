@@ -324,6 +324,7 @@ import {
   reorderGroupWithinParent,
   reorderNodeBefore,
   reparentNode,
+  selectedRootIds,
   resolveNewNodeAccount,
   accountsForProject,
   sshAccountsHint,
@@ -5045,42 +5046,47 @@ export function Canvas() {
         const selectedNodes = ids
           .map((nid) => nodesRef.current.find((node) => node.id === nid))
           .filter((node): node is CanvasNode => !!node)
-        const selectedIds = new Set(selectedNodes.map((node) => node.id))
-        const hasSelectedAncestor = selectedNodes.some((node) => {
-          const seen = new Set<string>()
-          let parentId = node.parentId
-          while (parentId && !seen.has(parentId)) {
-            if (selectedIds.has(parentId)) return true
-            seen.add(parentId)
-            parentId = nodesRef.current.find((candidate) => candidate.id === parentId)?.parentId
-          }
-          return false
-        })
+        const rootIds = selectedRootIds(nodesRef.current as CanvasNode[], ids)
+        const rootSet = new Set(rootIds)
+        const rootNodes = selectedNodes.filter((node) => rootSet.has(node.id))
         const groupable =
-          selectedNodes.length > 0 &&
-          new Set(selectedNodes.map((node) => node.parentId ?? null)).size === 1 &&
-          !hasSelectedAncestor
+          rootNodes.length > 0 &&
+          (ids.length === 1 || rootNodes.length > 1) &&
+          new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
         const selectedGroups = selectedNodes.filter((node) => node.type === 'group')
-        const targetGroup = selectedGroups.length === 1 ? selectedGroups[0] : undefined
-        const canAddToGroup =
-          !!targetGroup &&
-          addSelectionToGroup(nodesRef.current as CanvasNode[], ids, targetGroup.id) !==
+        const targetGroups = selectedGroups.filter(
+          (group) =>
+            addSelectionToGroup(nodesRef.current as CanvasNode[], ids, group.id) !==
             nodesRef.current
+        )
         const parented = ids.some(
           (nid) => !!nodesRef.current.find((nd) => nd.id === nid)?.parentId
         )
         const items: MenuItem[] = []
-        if (canAddToGroup && !isHidden('group', hidden))
+        if (targetGroups.length === 1 && !isHidden('group', hidden)) {
+          const targetGroup = targetGroups[0]
           items.push({
             label: `Add selection to ${targetGroup.data.title || 'group'}`,
             icon: <IconGroup />,
             onClick: () => addToExistingGroup(ids, targetGroup.id)
           })
+        } else if (targetGroups.length > 1 && !isHidden('group', hidden)) {
+          items.push({
+            type: 'submenu',
+            label: 'Add selection to group',
+            icon: <IconGroup />,
+            children: targetGroups.map((targetGroup) => ({
+              label: targetGroup.data.title || 'Group',
+              icon: <IconGroup />,
+              onClick: () => addToExistingGroup(ids, targetGroup.id)
+            }))
+          })
+        }
         if (groupable && !isHidden('group', hidden))
           items.push({
-            label: ids.length > 1 ? 'Group selection' : 'Group node',
+            label: rootIds.length > 1 ? 'Group selection' : 'Group node',
             icon: <IconGroup />,
-            onClick: () => groupSelection(ids)
+            onClick: () => groupSelection(rootIds)
           })
         if (parented && !isHidden('remove-from-group', hidden))
           items.push({
@@ -5398,6 +5404,13 @@ export function Canvas() {
   const groupItems = useCallback(
     (groupId: string, at?: { x: number; y: number }): MenuItem[] => {
       const selectedIds = nodesRef.current.filter((node) => node.selected).map((node) => node.id)
+      const rootIds = selectedRootIds(nodesRef.current as CanvasNode[], selectedIds)
+      const rootSet = new Set(rootIds)
+      const rootNodes = nodesRef.current.filter((node) => rootSet.has(node.id))
+      const canWrapSelection =
+        selectedIds.includes(groupId) &&
+        rootNodes.length > 1 &&
+        new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
       const canAddSelection =
         selectedIds.includes(groupId) &&
         addSelectionToGroup(nodesRef.current as CanvasNode[], selectedIds, groupId) !==
@@ -5412,6 +5425,15 @@ export function Canvas() {
                 label: 'Add selected objects to group',
                 icon: <IconGroup />,
                 onClick: () => addToExistingGroup(selectedIds, groupId)
+              } as MenuItem
+            ]
+          : []),
+        ...(canWrapSelection && !isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
+          ? [
+              {
+                label: 'Wrap selection in new group',
+                icon: <IconGroup />,
+                onClick: () => groupSelection(rootIds)
               } as MenuItem
             ]
           : []),
@@ -5458,7 +5480,8 @@ export function Canvas() {
       addTerminal,
       agentCreationItems,
       addSticky,
-      addToExistingGroup
+      addToExistingGroup,
+      groupSelection
     ]
   )
 
