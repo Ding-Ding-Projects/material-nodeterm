@@ -203,4 +203,19 @@ describe('settings:save atomic write', () => {
     // …and the save's observers must not be told about a save that never landed.
     expect(fired).toEqual([])
   })
+
+  it('writes settings.json owner-only, like every other store this app persists', async () => {
+    // The temp is created with an explicit restrictive mode BEFORE any bytes land, and the rename
+    // carries that mode onto settings.json. Without it the file lands at the umask default (0644):
+    // group/world-readable, and created under a predictable `<file>.<pid>.<seq>.tmp` name that a
+    // same-uid process could pre-create as a symlink for the write to follow. Every other writer
+    // in this store family already passes 0o600; this one was the outlier.
+    const store = new SettingsStore()
+    store.registerIpc()
+
+    await fake.handlers[IPC.settingsSave]({ ...DEFAULT_SETTINGS, fontSize: 19 })
+
+    const mode = (await fs.stat(path.join(dir, 'settings.json'))).mode & 0o777
+    expect(mode).toBe(0o600)
+  })
 })

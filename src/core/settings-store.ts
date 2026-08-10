@@ -86,7 +86,12 @@ export class SettingsStore {
       // both start at 0.
       const tmp = `${this.filePath}.${process.pid}.${++writeSeq}.tmp`
       try {
-        await fs.writeFile(tmp, JSON.stringify(this.cache, null, 2), 'utf-8')
+        // 0600 at open(2), before any bytes land, and the rename carries it onto settings.json.
+        // Two reasons: the temp name is predictable (`<file>.<pid>.<seq>.tmp`), so a same-uid
+        // process could pre-create it as a symlink for this write to follow; and every other
+        // writer in this family already creates owner-only — this one was the outlier, which is
+        // exactly what CodeQL's js/insecure-temporary-file was pointing at.
+        await fs.writeFile(tmp, JSON.stringify(this.cache, null, 2), { encoding: 'utf-8', mode: 0o600 })
         await fs.rename(tmp, this.filePath)
       } catch (e) {
         // A unique name never self-heals the way the fixed one did (the next save just reused it),
