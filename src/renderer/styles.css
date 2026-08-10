@@ -6099,6 +6099,11 @@ body,
   padding-left: 6px;
   border-left: 1px solid rgba(var(--tint-rgb), 0.08);
 }
+.ss-subgroup__reorder-zone,
+.ss-subgroup__reorder-end { position: relative; height: 5px; }
+.ss-subgroup__reorder-end--root { margin-left: 15px; }
+.ss-subgroup__reorder-zone.is-drop-before::before,
+.ss-subgroup__reorder-end.is-drop-before::before { content: ''; position: absolute; top: 1px; left: 2px; right: 6px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
 .ss-subgroup__head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; }
 .ss-subgroup__head:hover { background: var(--panel-header); }
 .ss-subgroup__dot { width: 7px; height: 7px; border-radius: 2px; flex: 0 0 auto; }

@@ -14,6 +14,7 @@ import {
   groupSelectedNodes,
   nodeStatesToFlow,
   nodeSshFor,
+  reorderGroupWithinParent,
   reorderNodeBefore,
   reparentNode,
   resolveNewNodeAccount,
@@ -378,6 +379,49 @@ describe('reorderNodeBefore', () => {
     expect(reorderNodeBefore(nodes, 'g1', 'a')).toBe(nodes) // can't drag a group row
     const out = reorderNodeBefore(nodes, 'b', 'a')
     expect(out[0].id).toBe('g1')
+  })
+})
+
+describe('reorderGroupWithinParent', () => {
+  it('moves a nested group subtree before a sibling without changing geometry or parenting', () => {
+    const nodes = [
+      grp('outer', { x: 0, y: 0 }),
+      grp('a', { x: 10, y: 10 }, 'outer'),
+      grp('a-child', { x: 5, y: 5 }, 'a'),
+      grp('b', { x: 20, y: 20 }, 'outer'),
+      term('inside-a', { x: 2, y: 3 }, 'a')
+    ]
+    const out = reorderGroupWithinParent(nodes, 'b', 'outer', 'a')
+    expect(out.map((node) => node.id)).toEqual(['outer', 'b', 'a', 'a-child', 'inside-a'])
+    expect(out.find((node) => node.id === 'b')).toMatchObject({
+      parentId: 'outer',
+      position: { x: 20, y: 20 }
+    })
+  })
+
+  it('appends a whole group subtree after its last sibling', () => {
+    const nodes = [
+      grp('a', { x: 0, y: 0 }),
+      grp('a-child', { x: 0, y: 0 }, 'a'),
+      grp('b', { x: 0, y: 0 }),
+      term('inside-a', { x: 0, y: 0 }, 'a')
+    ]
+    expect(reorderGroupWithinParent(nodes, 'a', null, null).map((node) => node.id)).toEqual([
+      'b',
+      'a',
+      'a-child',
+      'inside-a'
+    ])
+  })
+
+  it('rejects cross-parent and invalid-target reorders', () => {
+    const nodes = [
+      grp('outer', { x: 0, y: 0 }),
+      grp('a', { x: 0, y: 0 }, 'outer'),
+      grp('b', { x: 0, y: 0 })
+    ]
+    expect(reorderGroupWithinParent(nodes, 'a', null, 'b')).toBe(nodes)
+    expect(reorderGroupWithinParent(nodes, 'a', 'outer', 'missing')).toBe(nodes)
   })
 })
 

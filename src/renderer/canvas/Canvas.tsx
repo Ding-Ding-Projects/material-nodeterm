@@ -321,6 +321,7 @@ import {
   groupSelectedNodes,
   NODE_COLORS,
   nodeStatesToFlow,
+  reorderGroupWithinParent,
   reorderNodeBefore,
   reparentNode,
   resolveNewNodeAccount,
@@ -7372,6 +7373,19 @@ export function Canvas() {
     [activeProjectId, setNodes, markDirty, writeDisk]
   )
 
+  const reorderSidebarGroup = useCallback(
+    (projectId: string, draggedId: string, parentId: string | null, beforeId: string | null) => {
+      if (projectId === activeProjectId) {
+        setNodes((ns) => reorderGroupWithinParent(ns, draggedId, parentId, beforeId))
+        markDirty()
+      } else {
+        useProjects.getState().reorderGroup(projectId, draggedId, parentId, beforeId)
+        void writeDisk()
+      }
+    },
+    [activeProjectId, setNodes, markDirty, writeDisk]
+  )
+
   const onRowContextMenu = useCallback(
     (e: React.MouseEvent, projectId: string, id: string) => {
       e.preventDefault()
@@ -8781,6 +8795,7 @@ export function Canvas() {
         onAiNameGroup={aiNameGroup}
         onMoveToGroup={moveSessionToGroup}
         onReorder={reorderSession}
+        onReorderGroup={reorderSidebarGroup}
         onRowContextMenu={onRowContextMenu}
         onProjectContextMenu={onProjectContextMenu}
         onAddToProject={addToProject}

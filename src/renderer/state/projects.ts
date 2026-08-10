@@ -9,7 +9,7 @@ import type {
   Viewport,
   Workspace
 } from '@shared/types'
-import { applyCanvasMutation, createProject } from './workspace'
+import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 
 interface ProjectsState {
   projects: Project[]
@@ -98,6 +98,13 @@ interface ProjectsState {
   /** Reorders a node to sit immediately before another (sidebar order = array order),
    *  joining the target's container if they differ. */
   reorderNode(projectId: string, draggedId: string, beforeId: string): void
+  /** Reorders a group subtree among siblings without changing its parent. */
+  reorderGroup(
+    projectId: string,
+    draggedId: string,
+    parentId: string | null,
+    beforeId: string | null
+  ): void
   /** Reorders a project to sit immediately before another (tab bar + sidebar order = array
    *  order), or to the end with beforeId = null. Closed projects keep their slots. */
   reorderProject(draggedId: string, beforeId: string | null): void
@@ -390,6 +397,17 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         const without = nodes.filter((n) => n.id !== draggedId)
         const idx = without.findIndex((n) => n.id === beforeId)
         return [...without.slice(0, idx), moved, ...without.slice(idx)]
+      })
+    }))
+  },
+
+  reorderGroup(projectId, draggedId, parentId, beforeId) {
+    set((s) => ({
+      projects: mapProjectNodes(s.projects, projectId, (nodes) => {
+        const dragged = nodes.find((node) => node.id === draggedId)
+        const before = beforeId ? nodes.find((node) => node.id === beforeId) : undefined
+        if (!dragged || dragged.kind !== 'group' || (beforeId && before?.kind !== 'group')) return nodes
+        return reorderGroupWithinParent(nodes, draggedId, parentId, beforeId)
       })
     }))
   },

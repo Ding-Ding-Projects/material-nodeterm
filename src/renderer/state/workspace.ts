@@ -1138,10 +1138,49 @@ export function addSelectionToGroup(
 }
 
 /**
+ * Reorders one group subtree among its siblings without changing its parent or canvas geometry.
+ * `beforeId = null` appends it after the last sibling. Descendants travel with their group so the
+ * persisted parent-before-child order remains coherent.
+ */
+export function reorderGroupWithinParent<T extends { id: string; parentId?: string }>(
+  nodes: T[],
+  draggedId: string,
+  parentId: string | null,
+  beforeId: string | null
+): T[] {
+  if (draggedId === beforeId) return nodes
+  const dragged = nodes.find((node) => node.id === draggedId)
+  if (!dragged || (dragged.parentId ?? null) !== parentId) return nodes
+  const before = beforeId ? nodes.find((node) => node.id === beforeId) : undefined
+  if (beforeId && (!before || (before.parentId ?? null) !== parentId)) return nodes
+
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const belongsToDraggedSubtree = (node: T): boolean => {
+    if (node.id === draggedId) return true
+    const seen = new Set<string>()
+    let current = node
+    while (current.parentId && !seen.has(current.parentId)) {
+      if (current.parentId === draggedId) return true
+      seen.add(current.parentId)
+      const next = byId.get(current.parentId)
+      if (!next) return false
+      current = next
+    }
+    return false
+  }
+  const subtree = nodes.filter(belongsToDraggedSubtree)
+  const without = nodes.filter((node) => !belongsToDraggedSubtree(node))
+  const at = beforeId ? without.findIndex((node) => node.id === beforeId) : without.length
+  if (at < 0) return nodes
+  return [...without.slice(0, at), ...subtree, ...without.slice(at)]
+}
+
+/**
  * Moves `draggedId` to sit immediately before `beforeId` in the array (sidebar order follows
  * array order). The dragged node also joins `beforeId`'s container (same reposition math) so a
  * drop both reorders within a group and can move across groups. No-op when either node is
- * missing, they are the same, or the dragged node is a group.
+ * missing, they are the same, or the dragged node is a group (groups use
+ * `reorderGroupWithinParent`, which keeps their whole subtree together).
  */
 export function reorderNodeBefore(
   nodes: CanvasNode[],

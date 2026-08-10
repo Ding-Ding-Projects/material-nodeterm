@@ -37,6 +37,13 @@ export interface SessionsSidebarProps {
   onAiNameGroup(projectId: string, groupId: string, memberIds: string[], cwd?: string): void | Promise<void>
   /** Reorder a session to sit immediately before another (within/across containers). */
   onReorder(projectId: string, draggedId: string, beforeId: string): void
+  /** Reorder a group among siblings. null beforeId appends within that parent. */
+  onReorderGroup(
+    projectId: string,
+    draggedId: string,
+    parentGroupId: string | null,
+    beforeId: string | null
+  ): void
   /** Reorder a project to sit before another (null = to the end). Shared order with the
    *  tab bar: both render the projects array, so one drag updates both surfaces. */
   onReorderProject(draggedId: string, beforeId: string | null): void
@@ -58,7 +65,12 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   const [filter, setFilter] = useState('')
   const [branches, setBranches] = useState<Record<string, string>>({})
   // Drag-to-group: the session being dragged, and the current drop target for highlighting.
-  const [drag, setDrag] = useState<{ projectId: string; nodeId: string } | null>(null)
+  const [drag, setDrag] = useState<{
+    projectId: string
+    nodeId: string
+    kind: 'session' | 'group'
+    parentGroupId?: string | null
+  } | null>(null)
   const [dropKey, setDropKey] = useState<string | null>(null)
   // Project reorder: the project being dragged (by its header) + the project it would land
   // before ('' = end of the list). Distinct from the session drag above — one at a time.
@@ -194,7 +206,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           onRename={(title) => props.onRenameSession(projectId, row.id, title)}
           onAiName={() => props.onAiNameSession(projectId, row.id, row.cwd)}
           onContextMenu={(e) => props.onRowContextMenu(e, projectId, row.id)}
-          onDragStart={() => setDrag({ projectId, nodeId: row.id })}
+          onDragStart={() => setDrag({ projectId, nodeId: row.id, kind: 'session' })}
           onDragEnd={() => {
             setDrag(null)
             setDropKey(null)
@@ -207,13 +219,37 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   const renderBucket = (
     projectId: string,
     projectCwd: string | undefined,
-    bucket: GroupBucket
+    bucket: GroupBucket,
+    parentGroupId: string | null
   ): JSX.Element => {
     const collapseKey = `project:${projectId}:group:${bucket.id}`
     const collapsed = filter ? false : (collapsedItems[collapseKey] ?? false)
     const members = groupSessionRows(bucket)
     return (
       <div key={bucket.id} className="ss-subgroup">
+        <div
+          className={`ss-subgroup__reorder-zone${dropKey === `group-before:${bucket.id}` ? ' is-drop-before' : ''}`}
+          onDragOver={(e) => {
+            if (
+              !drag ||
+              drag.kind !== 'group' ||
+              drag.projectId !== projectId ||
+              drag.parentGroupId !== parentGroupId ||
+              drag.nodeId === bucket.id
+            ) return
+            e.preventDefault()
+            e.stopPropagation()
+            setDropKey(`group-before:${bucket.id}`)
+          }}
+          onDrop={(e) => {
+            if (!drag || drag.kind !== 'group' || drag.parentGroupId !== parentGroupId) return
+            e.preventDefault()
+            e.stopPropagation()
+            props.onReorderGroup(projectId, drag.nodeId, parentGroupId, bucket.id)
+            setDrag(null)
+            setDropKey(null)
+          }}
+        />
         <div
           className={`ss-subgroup__head${dropClass(projectId, bucket.id)}`}
           title="Click to show the group on the canvas"
@@ -223,7 +259,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           onDragStart={(e) => {
             e.stopPropagation()
             e.dataTransfer.effectAllowed = 'move'
-            setDrag({ projectId, nodeId: bucket.id })
+            setDrag({ projectId, nodeId: bucket.id, kind: 'group', parentGroupId })
           }}
           onDragEnd={() => {
             setDrag(null)
@@ -298,7 +334,31 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         </div>
         {!collapsed && (
           <>
-            {bucket.children.map((child) => renderBucket(projectId, projectCwd, child))}
+            {bucket.children.map((child) => renderBucket(projectId, projectCwd, child, bucket.id))}
+            {bucket.children.length > 0 && (
+              <div
+                className={`ss-subgroup__reorder-end${dropKey === `group-end:${bucket.id}` ? ' is-drop-before' : ''}`}
+                onDragOver={(e) => {
+                  if (
+                    !drag ||
+                    drag.kind !== 'group' ||
+                    drag.projectId !== projectId ||
+                    drag.parentGroupId !== bucket.id
+                  ) return
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setDropKey(`group-end:${bucket.id}`)
+                }}
+                onDrop={(e) => {
+                  if (!drag || drag.kind !== 'group' || drag.parentGroupId !== bucket.id) return
+                  e.preventDefault()
+                  e.stopPropagation()
+                  props.onReorderGroup(projectId, drag.nodeId, bucket.id, null)
+                  setDrag(null)
+                  setDropKey(null)
+                }}
+              />
+            )}
             {bucket.sessions.length === 0 && bucket.children.length === 0 ? (
               <div className="ss-group__empty">Drop a node or group here</div>
             ) : (
@@ -437,7 +497,31 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
               </div>
               {!isCollapsed && (
                 <>
-                  {g.groups.map((bucket) => renderBucket(g.projectId, g.cwd, bucket))}
+                  {g.groups.map((bucket) => renderBucket(g.projectId, g.cwd, bucket, null))}
+                  {g.groups.length > 0 && (
+                    <div
+                      className={`ss-subgroup__reorder-end ss-subgroup__reorder-end--root${dropKey === `group-end:${g.projectId}` ? ' is-drop-before' : ''}`}
+                      onDragOver={(e) => {
+                        if (
+                          !drag ||
+                          drag.kind !== 'group' ||
+                          drag.projectId !== g.projectId ||
+                          drag.parentGroupId !== null
+                        ) return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setDropKey(`group-end:${g.projectId}`)
+                      }}
+                      onDrop={(e) => {
+                        if (!drag || drag.kind !== 'group' || drag.parentGroupId !== null) return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        props.onReorderGroup(g.projectId, drag.nodeId, null, null)
+                        setDrag(null)
+                        setDropKey(null)
+                      }}
+                    />
+                  )}
                   {g.ungrouped.length === 0 && g.groups.length === 0 ? (
                     <div className="ss-group__empty">No sessions</div>
                   ) : (
