@@ -62,6 +62,27 @@ describe('NodeTerm Browser Plugin backend', () => {
     ])
   })
 
+  it('advertises the production Codex Browser flavor for the requesting session', async () => {
+    const router = new NodeTermBrowserUseRouter(
+      (sessionId) => (sessionId === 'session-a' ? 'agent-a' : undefined),
+      vi.fn()
+    )
+
+    await expect(
+      router.dispatch('getInfo', {
+        session_id: 'session-a',
+        turn_id: 'turn-a'
+      })
+    ).resolves.toMatchObject({
+      metadata: {
+        codexAppBuildFlavor: 'prod',
+        codexSessionId: 'session-a'
+      },
+      name: 'NodeTerm Browser',
+      type: 'iab'
+    })
+  })
+
   it('keeps two simultaneous Codex sessions scoped to their own browser nodes', async () => {
     const nodeBySession = new Map([
       ['session-a', 'agent-a'],
@@ -145,6 +166,44 @@ describe('NodeTerm Browser Plugin backend', () => {
     expect(contents.sendCommand).toHaveBeenCalledWith(
       'Runtime.evaluate',
       { expression: 'document.title' },
+      undefined
+    )
+  })
+
+  it('translates Codex synthetic scroll gestures into Electron webview wheel input', async () => {
+    const contents = fakeContents(45, 'https://scroll.test')
+    const router = new NodeTermBrowserUseRouter(
+      (sessionId) => (sessionId === 'session' ? 'agent' : undefined),
+      vi.fn()
+    )
+    router.register({ contents, nodeId: 'browser', ownerNodeId: 'agent' })
+
+    await router.dispatch('executeCdp', {
+      session_id: 'session',
+      turn_id: 'turn',
+      target: { tabId: 45 },
+      method: 'Input.synthesizeScrollGesture',
+      commandParams: {
+        gestureSourceType: 'mouse',
+        preventFling: true,
+        speed: 8000,
+        x: 400,
+        xDistance: 25,
+        y: 245,
+        yDistance: -500
+      }
+    })
+
+    expect(contents.sendCommand).toHaveBeenCalledWith(
+      'Input.dispatchMouseEvent',
+      {
+        type: 'mouseWheel',
+        x: 400,
+        y: 245,
+        deltaX: -25,
+        deltaY: 500,
+        modifiers: 0
+      },
       undefined
     )
   })

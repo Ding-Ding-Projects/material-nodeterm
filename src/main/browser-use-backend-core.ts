@@ -124,6 +124,10 @@ function requiredTabId(value: unknown): number {
   return value as number
 }
 
+function finiteNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 /**
  * Session-scoped bridge from the bundled Codex Browser client to Electron webview guests.
  * A browser node is visible only to the agent node that created it. Session-to-node resolution
@@ -178,7 +182,13 @@ export class NodeTermBrowserUseRouter {
             'Tabs.finalize': true
           },
           capabilities: { browser: [], tab: [] },
-          metadata: { codexSessionId: sessionId },
+          // The bundled Codex Browser client rejects IAB backends whose build flavor does
+          // not match its own. CLI/node_repl sessions use the production Browser bundle,
+          // even when their visible browser surface is supplied by NodeTerm.
+          metadata: {
+            codexAppBuildFlavor: 'prod',
+            codexSessionId: sessionId
+          },
           name: 'NodeTerm Browser',
           type: 'iab',
           version: '1.0.0'
@@ -331,8 +341,22 @@ export class NodeTermBrowserUseRouter {
     const target = object(params.target)
     const tabId = requiredTabId(target.tabId)
     const guest = this.requireTab(sessionId, tabId)
-    const method = requiredString(params.method, 'CDP method')
-    const commandParams = object(params.commandParams)
+    let method = requiredString(params.method, 'CDP method')
+    let commandParams = object(params.commandParams)
+    // Electron acknowledges Chromium's synthetic mouse gesture without scrolling a webview.
+    // The official Codex IAB client emits this command for cua.scroll; a real wheel event has
+    // the same requested deltas and is handled by the guest renderer.
+    if (method === 'Input.synthesizeScrollGesture') {
+      method = 'Input.dispatchMouseEvent'
+      commandParams = {
+        type: 'mouseWheel',
+        x: finiteNumber(commandParams.x),
+        y: finiteNumber(commandParams.y),
+        deltaX: -finiteNumber(commandParams.xDistance),
+        deltaY: -finiteNumber(commandParams.yDistance),
+        modifiers: finiteNumber(commandParams.modifiers)
+      }
+    }
     this.attachDebugger(sessionId, guest.contents)
     let cdpSessionId =
       typeof target.sessionId === 'string' ? target.sessionId : undefined

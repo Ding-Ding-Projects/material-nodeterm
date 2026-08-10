@@ -11,7 +11,10 @@ import {
   codexAccountHome,
   codexSessionEnv,
   codexSocketForAccount,
-  ensureSharedCodexDaemon
+  ensureSharedCodexDaemon,
+  legacyCodexAccountHome,
+  migrateLegacyCodexAccountHome,
+  migrateLegacyCodexAccountHomes
 } from '../core/codex-accounts-core'
 import {
   forkCodexThreadFromPathAt,
@@ -36,7 +39,7 @@ export function localCodexSocket(accountId?: string): string {
 }
 
 export async function ensureCodexAccountDaemon(accountId?: string): Promise<void> {
-  if (accountId) assertCodexAccountId(accountId)
+  if (accountId) migrateLegacyCodexAccountHome(platform().userDataDir, accountId)
   const socket = localCodexSocket(accountId)
   await ensureSharedCodexDaemon(
     async () => (await readCodexAccountAt(socket, 1000)) !== null,
@@ -54,6 +57,7 @@ export async function ensureCodexAccountDaemon(accountId?: string): Promise<void
 }
 
 async function initializeAccountHome(id: string): Promise<string> {
+  migrateLegacyCodexAccountHome(platform().userDataDir, id)
   const home = localCodexAccountHome(id)
   await fs.mkdir(home, { recursive: true, mode: 0o700 })
   await fs.chmod(home, 0o700)
@@ -80,6 +84,7 @@ async function accountIdentity(accountId?: string): Promise<{ email: string | nu
 async function existingManagedIdentity(id: string): Promise<{ email: string | null } | null> {
   assertCodexAccountId(id)
   try {
+    migrateLegacyCodexAccountHome(platform().userDataDir, id)
     const auth = await fs.lstat(path.join(localCodexAccountHome(id), 'auth.json'))
     if (!auth.isFile() || auth.isSymbolicLink()) return null
     return await accountIdentity(id)
@@ -89,6 +94,11 @@ async function existingManagedIdentity(id: string): Promise<{ email: string | nu
 }
 
 export function initCodexAccounts(): void {
+  // Synchronous before renderer hydration/PTY restore: legacy long CODEX_HOMEs cannot host the
+  // app-server Unix socket, and an already persisted managed node must see its migrated home on
+  // its very first spawn.
+  migrateLegacyCodexAccountHomes(platform().userDataDir)
+
   ipcMain.handle(IPC.codexAccountsAdd, async () => {
     const id = randomUUID()
     return { id, home: await initializeAccountHome(id) }
@@ -143,7 +153,10 @@ export function initCodexAccounts(): void {
     } catch {
       // A stopped/missing daemon is already the desired state.
     }
-    await fs.rm(localCodexAccountHome(id), { recursive: true, force: true })
+    const home = localCodexAccountHome(id)
+    const legacy = legacyCodexAccountHome(platform().userDataDir, id)
+    await fs.rm(home, { recursive: true, force: true })
+    if (legacy !== home) await fs.rm(legacy, { recursive: true, force: true })
   })
 
   ipcMain.handle(IPC.codexAccountsSystemIdentity, () => accountIdentity())
