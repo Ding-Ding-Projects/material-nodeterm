@@ -1,17 +1,32 @@
-// Session budget: reap long-idle DETACHED nt- tmux sessions under memory pressure (or past a
-// count cap), so abandoned agent sessions can't accumulate until the host swaps itself to death
-// (field report: 95 sessions / 34 GB of idle claude processes on one host).
+// Session budget: reap long-idle nt- tmux sessions under memory pressure (or past a count cap),
+// so abandoned agent sessions can't accumulate until the host swaps itself to death (field report:
+// 95 sessions / 34 GB of idle claude processes on one host).
 //
 // This is the tmux counterpart of the renderer's WebGL budget (`terminal/webgl-budget.ts`), and it
 // deliberately reuses that design's rules rather than inventing an expiry policy:
 //   - a bounded budget, enforced only when exceeded — never a calendar-based expiry;
 //   - eviction picks the LEAST-RECENTLY-ACTIVE holder;
-//   - an ATTACHED session (someone is looking at it) is never evicted, exactly like a visible
-//     WebGL holder; a recently-active one is protected by a grace window (the release delay);
+//   - a recently-active session is protected by a grace window (the WebGL release delay);
 //   - reaping is gradual (per-sweep batch), so one sweep can never mass-kill its way past the
 //     target — the next sweep re-evaluates.
 //
-// Killing a detached session is safe BECAUSE of the cold-restore contract: to the node, a reap is
+// ATTACHMENT IS NOT PART OF THAT ANALOGY, and used to be — the rule was "an attached session is
+// never evicted, exactly like a visible WebGL holder". It made the reaper a structural no-op:
+// measured on the multi-tenant host, 54 of 54 nt- sessions reported attached=1 and `planReap`
+// returned [] on every sweep it had ever run. The analogy breaks because the two words mean
+// different things. WebGL "visible" is a live attention signal — the terminal is inside the
+// viewport at this instant. tmux "attached" only means a mounted node exists somewhere, which is
+// true for every node on every project's canvas whether or not the user is looking at that
+// project, and whether or not it has been touched in a week. The honest analogue of "visible"
+// (node is in the ACTIVE project's viewport) is renderer state the host-side reaper cannot see.
+//
+// So activity staleness is the only signal left, and it carries the protection alone: the grace
+// window is now the whole guard, which is why it defaults to a day rather than the 6 h that was
+// safe back when attachment was also required. Measured on the same host: over a 3-minute sample,
+// 5 of 53 attached sessions advanced their activity and 48 did not — attachment separates nothing,
+// activity separates cleanly.
+//
+// Killing an idle session is safe BECAUSE of the cold-restore contract: to the node, a reap is
 // indistinguishable from a machine reboot. On next open `tmux has-session` fails → fresh=true →
 // the renderer replays the scrollback snapshot and re-launches a resumable agent
 // (`claude --resume …`). For that to hold, the reaper must kill ONLY the tmux session: it must
@@ -48,9 +63,9 @@ export interface SessionBudgetConfig {
   disabled: boolean
   /** Watermark: reap only while host available memory is BELOW this (primary trigger). */
   minAvailableMb: number
-  /** Backstop: max detached nt- sessions across sockets; excess is reaped even without pressure. */
-  maxDetached: number
-  /** A session with activity newer than this is never reaped (protects same-day project switches). */
+  /** Backstop: max idle-past-grace nt- sessions across sockets; excess is reaped without pressure. */
+  maxIdle: number
+  /** A session with activity newer than this is never reaped. Sole guard — see the header. */
   graceSec: number
   /** Max kills per sweep — convergence is gradual and re-evaluated each sweep. */
   batchMax: number
@@ -64,17 +79,26 @@ function envInt(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
 /**
  * Defaults, overridable per host via env (systemd `Environment=` lines):
  *   NODETERM_SESSION_MIN_AVAILABLE_MB  (default: 10% of total RAM, floor 1 GB)
- *   NODETERM_SESSION_MAX_DETACHED     (default: 48)
- *   NODETERM_SESSION_GRACE_HOURS      (default: 6)
- *   NODETERM_SESSION_REAP_BATCH       (default: 8)
- *   NODETERM_SESSION_REAP_DISABLED=1  (kill switch)
+ *   NODETERM_SESSION_MAX_IDLE          (default: 48)
+ *   NODETERM_SESSION_GRACE_HOURS       (default: 24)
+ *   NODETERM_SESSION_REAP_BATCH        (default: 8)
+ *   NODETERM_SESSION_REAP_DISABLED=1   (kill switch)
+ *
+ * `NODETERM_SESSION_MAX_DETACHED` is still read as a fallback: the cap it names counts a different
+ * population now (idle rather than detached), but an operator who set it meant "do not let more
+ * than N of these pile up", and that intent survives the rename. Dropping it would silently
+ * restore the default on hosts that had deliberately tuned it.
+ *
+ * The grace default is 24 h, not the original 6 h, because attachment no longer gates eligibility
+ * (see the header): grace is the only thing standing between a session someone left open over
+ * lunch and a sweep that happens to run while memory is tight.
  */
 export function sessionBudgetConfig(env: NodeJS.ProcessEnv, totalMb: number): SessionBudgetConfig {
   return {
     disabled: env.NODETERM_SESSION_REAP_DISABLED === '1' || env.NODETERM_SESSION_REAP_DISABLED === 'true',
     minAvailableMb: envInt(env, 'NODETERM_SESSION_MIN_AVAILABLE_MB', Math.max(1024, Math.round(totalMb * 0.1))),
-    maxDetached: envInt(env, 'NODETERM_SESSION_MAX_DETACHED', 48),
-    graceSec: envInt(env, 'NODETERM_SESSION_GRACE_HOURS', 6) * 3600,
+    maxIdle: envInt(env, 'NODETERM_SESSION_MAX_IDLE', envInt(env, 'NODETERM_SESSION_MAX_DETACHED', 48)),
+    graceSec: envInt(env, 'NODETERM_SESSION_GRACE_HOURS', 24) * 3600,
     batchMax: envInt(env, 'NODETERM_SESSION_REAP_BATCH', 8)
   }
 }
@@ -82,11 +106,16 @@ export function sessionBudgetConfig(env: NodeJS.ProcessEnv, totalMb: number): Se
 /**
  * Pure policy: which sessions to kill this sweep, least-recently-active first.
  *
- * Eligible = named `nt-*` AND detached AND idle past the grace window. Then:
+ * Eligible = named `nt-*` AND idle past the grace window. Attachment is deliberately NOT consulted
+ * — see the header for why it separated nothing on a canvas app. Then:
  *   - memory below the watermark → up to `batchMax` (a failed memory read — `mem === null` — is
  *     NOT pressure: absence of evidence never triggers the primary path);
- *   - detached count over `maxDetached` → the excess, even with healthy memory;
+ *   - idle count over `maxIdle` → the excess, even with healthy memory;
  * combined take is bounded by `batchMax`.
+ *
+ * The cap counts the ELIGIBLE population, not every nt- session: a host where fifty sessions are
+ * all in active use is not accumulating anything, and a cap that fired on it would reap sessions
+ * out from under people who are working. What the backstop is meant to bound is the idle pile.
  */
 export function planReap(
   sessions: SessionInfo[],
@@ -95,14 +124,13 @@ export function planReap(
   cfg: SessionBudgetConfig
 ): string[] {
   if (cfg.disabled) return []
-  const nt = sessions.filter((s) => s.name.startsWith('nt-'))
-  const detached = nt.filter((s) => !s.attached)
-  const eligible = detached
+  const eligible = sessions
+    .filter((s) => s.name.startsWith('nt-'))
     .filter((s) => nowSec - s.activitySec >= cfg.graceSec)
     .sort((a, b) => a.activitySec - b.activitySec)
 
   const pressure = mem !== null && mem.availableMb < cfg.minAvailableMb ? cfg.batchMax : 0
-  const overCap = Math.max(0, detached.length - cfg.maxDetached)
+  const overCap = Math.max(0, eligible.length - cfg.maxIdle)
   const take = Math.min(cfg.batchMax, Math.max(pressure, overCap))
   return eligible.slice(0, take).map((s) => s.name)
 }
@@ -217,17 +245,24 @@ export function createSessionReaper(opts: SessionReaperOpts): SessionReaper {
     for (const [socket, listed] of bySocket) {
       const names = listed.filter((s) => plan.has(s.name)).map((s) => s.name)
       if (names.length === 0) continue
-      // Kill-time re-verify on a FRESH list: only sessions still present and still detached die.
+      // Kill-time re-verify on a FRESH list: only sessions still present and STILL IDLE die. This
+      // used to re-check attachment; it now re-checks the same rule that made the session eligible,
+      // so a session that woke up between planning and killing is spared on the signal that
+      // actually means it woke up. A sweep can take seconds across sockets, and the whole point of
+      // re-verifying is that the world may have moved in between.
       const fresh = await listSocket(bin, socket)
       if (!fresh) continue
-      const stillDetached = new Set(fresh.filter((s) => !s.attached).map((s) => s.name))
+      const now = nowSec()
+      const stillIdle = new Set(
+        fresh.filter((s) => now - s.activitySec >= cfg.graceSec).map((s) => s.name)
+      )
       for (const name of names) {
-        if (!stillDetached.has(name)) continue
+        if (!stillIdle.has(name)) continue
         try {
           // `=` forces an exact target match — never tmux's prefix matching.
           await exec(bin, ['-L', socket, 'kill-session', '-t', `=${name}`])
           killed++
-          log(`[session-budget] reaped idle detached session ${name} (socket ${socket})`)
+          log(`[session-budget] reaped idle session ${name} (socket ${socket})`)
         } catch {
           // A vanished-in-between session or a kill failure changes nothing; next sweep re-plans.
         }
