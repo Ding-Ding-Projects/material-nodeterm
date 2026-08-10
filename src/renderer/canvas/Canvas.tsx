@@ -5851,10 +5851,15 @@ export function Canvas() {
       // coords, then join the opener's group (parentInto converts back) so the popup node stays
       // inside the frame and moves with it.
       const srcGroup = src.parentId ? nodesRef.current.find((n) => n.id === src.parentId) : undefined
-      const node = createBrowserNode(nodesRef.current.length, url, {
-        x: src.position.x + (srcGroup?.position.x ?? 0) + srcW / 2 + 40,
-        y: src.position.y + (srcGroup?.position.y ?? 0) + srcH + 80 + 280
-      })
+      const node = createBrowserNode(
+        nodesRef.current.length,
+        url,
+        {
+          x: src.position.x + (srcGroup?.position.x ?? 0) + srcW / 2 + 40,
+          y: src.position.y + (srcGroup?.position.y ?? 0) + srcH + 80 + 280
+        },
+        src.data.browserOwnerNodeId as string | undefined
+      )
       const placed = src.parentId ? parentInto(node, src.parentId) : node
       setNodes((ns) => [...ns, placed])
       setControlEdges((es) => [...es, ropeEdge(`ctrl-${sourceNodeId}-${placed.id}`, sourceNodeId, placed.id, '#0a84ff')])
@@ -6297,7 +6302,9 @@ export function Canvas() {
               reply({ ok: false, error: 'open-browser requires a valid http(s) --url' })
               return
             }
-            const id = addAndConnect(createBrowserNode(nodesRef.current.length, browserUrl, placeBelow()))
+            const id = addAndConnect(
+              createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), sourceNodeId)
+            )
             reply({ ok: true, message: `opened browser ${id}`, result: { id } })
             return
           }

@@ -86,6 +86,8 @@ export interface NodeData {
   fileMissing?: boolean
   /** web-only: live URL to load in the web (webview) node. */
   url?: string
+  /** Browser-only: agent node allowed to control this tab through the Browser Plugin. */
+  browserOwnerNodeId?: string
   diffStaged?: boolean
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
@@ -617,7 +619,8 @@ export function createWebNode(
 export function createBrowserNode(
   index: number,
   url: string,
-  center?: { x: number; y: number }
+  center?: { x: number; y: number },
+  ownerNodeId?: string
 ): CanvasNode {
   const title = url ? url.replace(/^https?:\/\//, '').slice(0, 40) : 'Browser'
   return {
@@ -631,7 +634,8 @@ export function createBrowserNode(
       title,
       color: '#0a84ff',
       group: null,
-      ...(url ? { url } : {})
+      ...(url ? { url } : {}),
+      ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {})
     }
   }
 }

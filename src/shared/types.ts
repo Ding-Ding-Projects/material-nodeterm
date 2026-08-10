@@ -700,7 +700,7 @@ export interface MediaApi {
 
 export interface BrowserApi {
   /** Map a browser node's <webview> guest to its node id (for new-window capture). */
-  register(webContentsId: number, nodeId: string): void
+  register(webContentsId: number, nodeId: string, ownerNodeId?: string): void
   unregister(webContentsId: number): void
   /** Fires when a browser guest requested a new window; the renderer opens another browser node. */
   onBrowserNewWindow(listener: (e: { url: string; sourceNodeId: string }) => void): () => void

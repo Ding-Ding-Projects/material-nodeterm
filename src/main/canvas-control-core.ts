@@ -151,7 +151,8 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  reports finishing, so waiting on one is refused.',
     '- `show-image <path>` / `show-video <path>` — open a media file as a node.',
     '- `show-web (--url U | --file P.html | --html "<...>")` — open a web viewer.',
-    '- `open-browser --url U` — open a navigable browser node.',
+    '- `open-browser --url U` — open a navigable browser node. In Codex, control that exact node',
+    '  through the bundled Browser Plugin; NodeTerm exposes only tabs opened by your agent session.',
     '- `group --nodes <id,id> [--label L]` — wrap TOP-LEVEL nodes in a new labeled frame (nodes already',
     '  inside another frame are skipped — use `move` for those). `ungroup --group <id>` dissolves a frame,',
     '  freeing its nodes to the top level. `move --nodes <id,id> [--group <id>]` reparents nodes INTO an',
@@ -333,7 +334,9 @@ Verbs:
 - \`show-image <path>\` — open an image file as a node.
 - \`show-video <path>\` — open a video file as a player node.
 - \`show-web (--url U | --file P.html | --html "<...>")\` — open a web viewer (live URL or local HTML you wrote).
-- \`open-browser --url U\` — open a navigable browser (back/forward/address bar) at a URL.
+- \`open-browser --url U\` — open a navigable browser (back/forward/address bar) at a URL. Codex
+  controls that exact node through the bundled Browser Plugin; only tabs opened by this agent
+  session are exposed.
   In an SSH project, nodes you open run on the HOST (same machine as you). The media viewers
   render on the DESKTOP: \`show-image\` and \`show-video\` still work with a host path (the
   file is read/fetched back over the connection), but \`show-web --file/--html\` is refused —

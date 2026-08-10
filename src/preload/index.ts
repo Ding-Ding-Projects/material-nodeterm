@@ -307,8 +307,8 @@ const api: NodeTerminalApi = {
     writeHtml: (html: string) => ipcRenderer.invoke(IPC.mediaWriteHtml, html)
   },
   browser: {
-    register: (webContentsId: number, nodeId: string) =>
-      ipcRenderer.send(IPC.browserRegister, webContentsId, nodeId),
+    register: (webContentsId: number, nodeId: string, ownerNodeId?: string) =>
+      ipcRenderer.send(IPC.browserRegister, webContentsId, nodeId, ownerNodeId),
     unregister: (webContentsId: number) => ipcRenderer.send(IPC.browserUnregister, webContentsId),
     onBrowserNewWindow: (listener) => {
       const handler = (_e: unknown, ev: { url: string; sourceNodeId: string }) => listener(ev)

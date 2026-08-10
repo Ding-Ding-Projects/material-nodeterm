@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, powerMonitor, safeStorage, shell, systemPreferences } from 'electron'
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
+import { NodeTermBrowserUseBackend } from './browser-use-backend'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import type { RemoteLogExec } from '../core/board-log'
@@ -326,6 +327,12 @@ const browserGuests = new Map<number, string>()
 // since the grok branch in the raw listener, grok's).
 const nodeContextSession = new Map<string, string>()
 const nodeSubagents = new Map<string, Set<string>>() // nodeId → active subagent tool_use_ids
+const browserUseBackend = new NodeTermBrowserUseBackend((sessionId) => {
+  for (const [nodeId, mappedSessionId] of nodeContextSession) {
+    if (mappedSessionId === sessionId) return nodeId
+  }
+  return undefined
+})
 
 // Enforce a single instance. A second instance would re-attach every node's tmux session
 // (`new-session -A -D`), whose `-D` detaches the first instance's clients — leaving
@@ -515,6 +522,10 @@ app.whenReady().then(async () => {
   let emitAgentStatus: ((event: NormalizedAgentEvent) => void) | undefined
   if (!gotSingleInstanceLock) return // losing second instance — quitting; don't touch tmux
 
+  await browserUseBackend.start().catch((error) => {
+    console.error('[browser-use] backend start failed', error)
+  })
+
   // Harden every <webview> guest (WebNode runs its page in its own webContents, so the main
   // window's setWindowOpenHandler / will-navigate above don't cover it). Registered once at
   // startup for all current and future guests.
@@ -579,11 +590,16 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.mediaAllow, (_e, absPath: string) => allowMediaPath(absPath))
   ipcMain.handle(IPC.mediaWriteHtml, (_e, html: string) => writeAgentHtml(html))
 
-  ipcMain.on(IPC.browserRegister, (_e, webContentsId: number, nodeId: string) => {
-    browserGuests.set(webContentsId, nodeId)
-  })
+  ipcMain.on(
+    IPC.browserRegister,
+    (_e, webContentsId: number, nodeId: string, ownerNodeId?: string) => {
+      browserGuests.set(webContentsId, nodeId)
+      browserUseBackend.register(webContentsId, nodeId, ownerNodeId)
+    }
+  )
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
     browserGuests.delete(webContentsId)
+    browserUseBackend.unregister(webContentsId)
   })
 
   // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS
@@ -2247,6 +2263,7 @@ app.on('before-quit', (e) => {
     // And the askpass relay's socket file: close() is what unlinks a unix socket (process exit
     // does not), and a lingering file is one more thing the next start() has to clear.
     askpassServer.stop()
+    void browserUseBackend.stop()
     // A SIGTERM quit (dev runners, `kill`, logout) arrives through Chromium's shutdown
     // detector, and this pass's re-issued app.quit() cannot resume the OS-initiated
     // termination the first pass preventDefault'ed: both passes run, but will-quit never
