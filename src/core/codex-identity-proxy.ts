@@ -142,6 +142,31 @@ export function bindCodexThreadIdentity(
   writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, accountId)
 }
 
+/** Read-only preflight for an in-TUI resume. A stale owner may be replaced after the app-server
+ * succeeds; a different LIVE owner must block before the request reaches that server. */
+export function codexThreadIdentityHasLiveConflict(
+  threadId: string,
+  nodeId: string,
+  isNodeLive: (nodeId: string) => boolean,
+  accountId?: string
+): boolean {
+  if (!SAFE_THREAD_ID.test(threadId) || !SAFE_NODE_ID.test(nodeId)) return true
+  const scopedFile = identityFile(threadId, accountId)
+  const files = accountId
+    ? [scopedFile]
+    : [scopedFile, path.join(homedir(), '.nodeterm', 'codex-thread-nodes', threadId)]
+  for (const file of files) {
+    try {
+      const existing = parseCodexThreadIdentity(readFileSync(file, 'utf8'))
+      if (file === scopedFile && existing.accountId !== accountScope(accountId)) return true
+      if (existing.nodeId && existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return true
+    }
+  }
+  return false
+}
+
 /** One canvas node owns one current Codex conversation. A successful replacement binding is the
  * atomic lifecycle boundary: only then remove older mappings for that same node. This leaves the
  * source mapping intact if a cross-account fork or target launch fails, but releases it as soon as
@@ -226,6 +251,22 @@ export function installCodexLauncher(): string {
       `case "\${NODETERM_HOOK_PORT-}" in ''|*[!0-9]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
       `case "\${NODETERM_HOOK_TOKEN-}" in ''|*[!A-Za-z0-9-]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
       `codex app-server daemon start >/dev/null 2>&1 || { echo "NodeTerm Codex app-server unavailable" >&2; exit 69; }\n` +
+      `nt_register_relay() {\n` +
+      `  case "\${NODETERM_CODEX_RELAY_RUNTIME-}" in /*) ;; *) return 1 ;; esac\n` +
+      `  case "\${NODETERM_CODEX_RELAY_SCRIPT-}" in /*) ;; *) return 1 ;; esac\n` +
+      `  [ -x "$NODETERM_CODEX_RELAY_RUNTIME" ] && [ -r "$NODETERM_CODEX_RELAY_SCRIPT" ] || return 1\n` +
+      `  nt_relay_info=\n` +
+      `  for nt_relay_attempt in 1 2 3; do\n` +
+      `    nt_relay_info=$(ELECTRON_RUN_AS_NODE=1 "$NODETERM_CODEX_RELAY_RUNTIME" "$NODETERM_CODEX_RELAY_SCRIPT" register "$NODETERM_NODE_ID" "\${NODETERM_CODEX_ACCOUNT_ID-}" "$CODEX_HOME/app-server-control/app-server-control.sock" "$NODETERM_HOOK_ENDPOINT") && break\n` +
+      `    sleep 0.2\n` +
+      `  done\n` +
+      `  [ -n "$nt_relay_info" ] || return 1\n` +
+      `  nt_relay_url=$(printf '%s\\n' "$nt_relay_info" | sed -n '1p')\n` +
+      `  NODETERM_CODEX_RELAY_TOKEN=$(printf '%s\\n' "$nt_relay_info" | sed -n '2p')\n` +
+      `  case "$nt_relay_url" in ws://127.0.0.1:*/relay/*) ;; *) return 1 ;; esac\n` +
+      `  [ -n "$NODETERM_CODEX_RELAY_TOKEN" ] || return 1\n` +
+      `  export NODETERM_CODEX_RELAY_TOKEN\n` +
+      `}\n` +
       `if [ "\${1-}" = resume ]; then\n` +
       `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN"; } |\n` +
       `  curl --silent --show-error --fail --config - --request POST \\\n` +
@@ -233,6 +274,10 @@ export function installCodexLauncher(): string {
       `    --data-urlencode "threadId=$nt_thread" \\\n` +
       `    --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
       `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/bind" >/dev/null || { echo "NodeTerm Codex thread already in use or broker unavailable" >&2; exit 69; }\n` +
+      `  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
+      `    nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
+      `    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
+      `  fi\n` +
       `  exec codex --remote unix:// "$@"\n` +
       `fi\n` +
       `nt_thread=$(\n` +
@@ -244,6 +289,10 @@ export function installCodexLauncher(): string {
       `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/start"\n` +
       `) || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
       `nt_thread=$(printf %s "$nt_thread" | tr -d '\\r\\n')\n` +
+      `if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
+      `  nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
+      `  exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN resume "$nt_thread" "$@"\n` +
+      `fi\n` +
       `exec codex --remote unix:// resume "$nt_thread" "$@"\n`,
     { encoding: 'utf8', mode: 0o700 }
   )

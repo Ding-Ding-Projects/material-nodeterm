@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'http'
-import { mkdtempSync } from 'fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs'
+import { createHash } from 'crypto'
 import { tmpdir } from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -9,6 +10,7 @@ import {
   forkCodexThreadFromPathAt,
   readCodexAccountAt,
   readCodexSessionNameAt,
+  relayedCodexSessionName,
   startCodexThreadAt
 } from './codex-session-name'
 
@@ -183,6 +185,16 @@ describe('Codex shared app-server session names', () => {
 
   it('reads account email through app-server without exposing credentials', async () => {
     await expect(readCodexAccountAt(socket)).resolves.toEqual({ email: 'account@example.com' })
+  })
+
+  it('reads a relay-preserved resume title from the socket-scoped isolated store', () => {
+    const home = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-relay-name-'))
+    const scope = createHash('sha256').update(socket).digest('hex').slice(0, 16)
+    const dir = path.join(home, '.nodeterm', 'codex-thread-names', scope)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(path.join(dir, 'resumed-thread'), 'Resumed task title\n')
+    expect(relayedCodexSessionName(socket, 'resumed-thread', home)).toBe('Resumed task title')
+    expect(relayedCodexSessionName(socket, 'missing-thread', home)).toBeNull()
   })
 
   it('forks an idle rollout into another account app-server', async () => {

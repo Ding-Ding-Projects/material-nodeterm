@@ -47,6 +47,14 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "out/main/codex-relay.js",
+        "to": "codex-relay.js"
+      },
+      {
+        "from": "node_modules/ws",
+        "to": "node_modules/ws"
       }
     ],
     "linux": {

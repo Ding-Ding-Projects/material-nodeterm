@@ -1,9 +1,10 @@
 import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { readCodexThreadAt, startCodexThreadAt } from '../core/codex-session-name'
+import { readCodexThreadAt, rememberCodexSessionName, startCodexThreadAt } from '../core/codex-session-name'
 import {
   bindCodexThreadIdentity,
+  codexThreadIdentityHasLiveConflict,
   resolveCodexThreadNodeIdentity,
   writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
@@ -12,6 +13,7 @@ import { statSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
+import { spawn } from 'child_process'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, powerMonitor, safeStorage, shell, systemPreferences } from 'electron'
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
@@ -220,6 +222,21 @@ function isSafeExternalUrl(url: unknown): url is string {
 const settingsStore = new SettingsStore()
 const sshStore = new SshStore()
 const ptyManager = new PtyManager()
+// One tiny detached relay is shared by every Codex node/account. Keeping it outside Electron
+// preserves live TUI connections across app restarts while the authenticated app-server remains
+// shared per account.
+const codexRelayScript = app.isPackaged
+  ? join(process.resourcesPath, 'codex-relay.js')
+  : join(__dirname, 'codex-relay.js')
+hookServer.setCodexRelayRuntime(process.execPath, codexRelayScript)
+// Start/ensure the one persistent relay before the renderer can create a Codex node. The daemon's
+// exclusive lock makes concurrent app starts harmless; detached + unref keeps it alive on Cmd+Q.
+const codexRelayProcess = spawn(process.execPath, [codexRelayScript, 'serve'], {
+  detached: true,
+  stdio: 'ignore',
+  env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+})
+codexRelayProcess.unref()
 // Dictation: local whisper.cpp models live under userData, one dir per install (same convention
 // as the tmux config / scrollback-store). onProgress pushes { id, pct } to the renderer the same
 // way agent-status events do (sendToMain — resolves the live window at send time).
@@ -956,6 +973,44 @@ app.whenReady().then(async () => {
     }
     if (emitAgentStatus) emitAgentStatus(identityEvent)
     else pendingCodexIdentityEvents.push(identityEvent)
+  })
+  hookServer.setCodexThreadObservedHandler(async ({ nodeId, threadId, hookEndpoint, accountId, name }) => {
+    await ensureCodexAccountDaemon(accountId)
+    if (!(await readCodexThreadAt(localCodexSocket(accountId), threadId))) {
+      throw new Error('Observed Codex thread does not belong to the selected account')
+    }
+    bindCodexThreadIdentity(
+      threadId,
+      nodeId,
+      hookEndpoint,
+      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
+      accountId
+    )
+    if (name) {
+      rememberCodexSessionName(threadId, name, localCodexSocket(accountId))
+      setNodeSessionName(nodeId, name)
+    }
+    const identityEvent: NormalizedAgentEvent = {
+      nodeId,
+      agentId: 'codex',
+      sessionId: threadId,
+      kind: 'session',
+      sessionPhase: 'start'
+    }
+    if (emitAgentStatus) emitAgentStatus(identityEvent)
+    else pendingCodexIdentityEvents.push(identityEvent)
+  })
+  hookServer.setCodexThreadAuthorizeHandler(async ({ nodeId, threadId, accountId }) => {
+    await ensureCodexAccountDaemon(accountId)
+    if (!(await readCodexThreadAt(localCodexSocket(accountId), threadId))) {
+      throw new Error('Codex thread does not belong to the selected account')
+    }
+    if (codexThreadIdentityHasLiveConflict(
+      threadId,
+      nodeId,
+      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
+      accountId
+    )) throw new Error('Codex thread is already bound to another live node')
   })
   await hookServer.start()
   // SSH_ASKPASS relay (ssh-project.ts): lets the ControlMaster, which has no tty, route a

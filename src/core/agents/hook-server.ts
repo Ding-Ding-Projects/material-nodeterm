@@ -94,6 +94,11 @@ class HookServer {
     ((req: { nodeId: string; cwd: string; hookEndpoint: string; accountId?: string }) => Promise<string>) | null = null
   private codexThreadBindHandler:
     ((req: { nodeId: string; threadId: string; hookEndpoint: string; accountId?: string }) => Promise<void>) | null = null
+  private codexThreadObservedHandler:
+    ((req: { nodeId: string; threadId: string; hookEndpoint: string; accountId?: string; name?: string }) => Promise<void>) | null = null
+  private codexThreadAuthorizeHandler:
+    ((req: { nodeId: string; threadId: string; accountId?: string }) => Promise<void>) | null = null
+  private codexRelayRuntime: { executable: string; script: string } | null = null
   private endpointPath = ''
 
   endpointFilePath(): string {
@@ -135,6 +140,18 @@ class HookServer {
 
   setCodexThreadBindHandler(cb: NonNullable<HookServer['codexThreadBindHandler']>): void {
     this.codexThreadBindHandler = cb
+  }
+
+  setCodexThreadObservedHandler(cb: NonNullable<HookServer['codexThreadObservedHandler']>): void {
+    this.codexThreadObservedHandler = cb
+  }
+
+  setCodexThreadAuthorizeHandler(cb: NonNullable<HookServer['codexThreadAuthorizeHandler']>): void {
+    this.codexThreadAuthorizeHandler = cb
+  }
+
+  setCodexRelayRuntime(executable: string, script: string): void {
+    this.codexRelayRuntime = { executable, script }
   }
 
   async start(): Promise<void> {
@@ -205,6 +222,58 @@ class HookServer {
               hookEndpoint: this.endpointFilePath(),
               accountId
             })
+            res.writeHead(204)
+            res.end()
+          } catch {
+            res.writeHead(409)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/observed') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const threadId = form.threadId ?? ''
+          const accountId = form.accountId || undefined
+          const name = form.name?.trim() || undefined
+          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
+              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId)) ||
+              (name?.length ?? 0) > 500) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadObservedHandler) throw new Error('observed handler unavailable')
+            await this.codexThreadObservedHandler({
+              nodeId,
+              threadId,
+              hookEndpoint: this.endpointFilePath(),
+              accountId,
+              name
+            })
+            res.writeHead(204)
+            res.end()
+          } catch {
+            res.writeHead(409)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/authorize') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const threadId = form.threadId ?? ''
+          const accountId = form.accountId || undefined
+          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
+              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadAuthorizeHandler) throw new Error('authorize handler unavailable')
+            await this.codexThreadAuthorizeHandler({ nodeId, threadId, accountId })
             res.writeHead(204)
             res.end()
           } catch {
@@ -342,7 +411,13 @@ class HookServer {
       NODETERM_NODE_ID: nodeId,
       NODETERM_AGENT_ID: agentId,
       ...(permWaitSecs > 0 ? { NODETERM_PERM_WAIT_SECS: String(permWaitSecs) } : {}),
-      ...(canControlCanvas(agentId) ? { NODETERM_CANVAS_CONTROL: '1' } : {})
+      ...(canControlCanvas(agentId) ? { NODETERM_CANVAS_CONTROL: '1' } : {}),
+      ...(agentId === 'codex' && this.codexRelayRuntime
+        ? {
+            NODETERM_CODEX_RELAY_RUNTIME: this.codexRelayRuntime.executable,
+            NODETERM_CODEX_RELAY_SCRIPT: this.codexRelayRuntime.script
+          }
+        : {})
     }
   }
 

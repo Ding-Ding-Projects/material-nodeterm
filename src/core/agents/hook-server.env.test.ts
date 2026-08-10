@@ -25,6 +25,7 @@ const bindCalls: Array<{
   hookEndpoint: string
   accountId?: string
 }> = []
+const authorizeCalls: Array<{ nodeId: string; threadId: string; accountId?: string }> = []
 
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-hookenv-'))
@@ -36,6 +37,10 @@ beforeAll(async () => {
   })
   hookServer.setCodexThreadBindHandler(async (request) => {
     bindCalls.push(request)
+    if (request.threadId === 'thread-conflict') throw new Error('already bound')
+  })
+  hookServer.setCodexThreadAuthorizeHandler(async (request) => {
+    authorizeCalls.push(request)
     if (request.threadId === 'thread-conflict') throw new Error('already bound')
   })
   // buildPtyEnv returns {} until the server has a port and a token.
@@ -86,6 +91,15 @@ describe('hookServer Codex thread broker', () => {
         'x-nodeterm-hook-token': hookServer.getToken()
       },
       body: new URLSearchParams({ nodeId, threadId })
+    })
+  const authorize = (nodeId: string, threadId: string, accountId?: string) =>
+    fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/authorize`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-nodeterm-hook-token': hookServer.getToken()
+      },
+      body: new URLSearchParams({ nodeId, threadId, ...(accountId ? { accountId } : {}) })
     })
 
   it('keeps two parallel session creations bound to their requesting nodes', async () => {
@@ -148,6 +162,20 @@ describe('hookServer Codex thread broker', () => {
       nodeId: 'node-resume',
       threadId: 'thread-resume',
       hookEndpoint: path.join(dir, 'hook-endpoint.env')
+    })
+  })
+
+  it('authorizes a relay resume only through the account-scoped ownership preflight', async () => {
+    const [accepted, invalid, conflict] = await Promise.all([
+      authorize('node-resume', 'thread-resume', 'account-a'),
+      authorize('node-resume', '../invalid'),
+      authorize('node-other', 'thread-conflict')
+    ])
+    expect([accepted.status, invalid.status, conflict.status]).toEqual([204, 400, 409])
+    expect(authorizeCalls).toContainEqual({
+      nodeId: 'node-resume',
+      threadId: 'thread-resume',
+      accountId: 'account-a'
     })
   })
 })

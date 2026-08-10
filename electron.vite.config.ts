@@ -14,7 +14,10 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/main/index.ts') },
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'codex-relay': resolve(__dirname, 'src/main/codex-relay-daemon.ts')
+        },
         // 'electron' is a devDependency, so externalizeDepsPlugin (which reads
         // dependencies) does not externalize it — the npm wrapper at
         // node_modules/electron/index.js would get bundled in, making the app

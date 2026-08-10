@@ -6,6 +6,7 @@ import { promisify } from 'util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   bindCodexThreadIdentity,
+  codexThreadIdentityHasLiveConflict,
   installCodexLauncher,
   resolveCodexThreadNodeIdentity,
   validCodexIdentity
@@ -134,6 +135,77 @@ describe('NodeTerm Codex remote launcher', () => {
     ])
   })
 
+  it('routes a new node through the persistent shared relay when its runtime is available', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-relay-'))
+    const bin = path.join(root, 'bin')
+    const endpoint = path.join(root, 'hook-endpoint.env')
+    const capture = path.join(root, 'args.json')
+    const runtime = path.join(root, 'relay-runtime')
+    const script = path.join(root, 'codex-relay.js')
+    await run('/bin/mkdir', ['-p', bin])
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
+    writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 0\n', { mode: 0o700 })
+    writeFileSync(
+      path.join(bin, 'codex'),
+      '#!/bin/sh\nnode -e \'require("fs").writeFileSync(process.env.CAPTURE, JSON.stringify(process.argv.slice(1)))\' -- "$@"\n',
+      { mode: 0o700 }
+    )
+    writeFileSync(runtime, '#!/bin/sh\nprintf "ws://127.0.0.1:4321/relay/route-a\\nrelay-token\\n"\n', { mode: 0o700 })
+    writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
+    vi.stubEnv('HOME', root)
+    const launcher = installCodexLauncher()
+    await run(launcher, ['resume', 'thread-a'], {
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        CAPTURE: capture,
+        NODETERM_CANVAS_CONTROL: '1',
+        NODETERM_NODE_ID: 'node-a',
+        NODETERM_HOOK_ENDPOINT: endpoint,
+        NODETERM_CODEX_RELAY_RUNTIME: runtime,
+        NODETERM_CODEX_RELAY_SCRIPT: script
+      }
+    })
+    expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual([
+      '--remote',
+      'ws://127.0.0.1:4321/relay/route-a',
+      '--remote-auth-token-env',
+      'NODETERM_CODEX_RELAY_TOKEN',
+      'resume',
+      'thread-a'
+    ])
+  })
+
+  it('fails closed after bounded retries when a configured relay is unavailable', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-relay-fail-'))
+    const bin = path.join(root, 'bin')
+    const endpoint = path.join(root, 'hook-endpoint.env')
+    const runtime = path.join(root, 'relay-runtime')
+    const script = path.join(root, 'codex-relay.js')
+    const codexCapture = path.join(root, 'codex-args')
+    await run('/bin/mkdir', ['-p', bin])
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
+    writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 0\n', { mode: 0o700 })
+    writeFileSync(path.join(bin, 'codex'), `#!/bin/sh\nprintf '%s\\n' "$*" >> ${codexCapture}\n`, { mode: 0o700 })
+    writeFileSync(runtime, '#!/bin/sh\nexit 1\n', { mode: 0o700 })
+    writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
+    vi.stubEnv('HOME', root)
+    const launcher = installCodexLauncher()
+
+    await expect(run(launcher, ['resume', 'thread-a'], {
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        NODETERM_CANVAS_CONTROL: '1',
+        NODETERM_NODE_ID: 'node-a',
+        NODETERM_HOOK_ENDPOINT: endpoint,
+        NODETERM_CODEX_RELAY_RUNTIME: runtime,
+        NODETERM_CODEX_RELAY_SCRIPT: script
+      }
+    })).rejects.toMatchObject({ code: 69 })
+    expect(readFileSync(codexCapture, 'utf8').trim()).toBe('app-server daemon start')
+  })
+
   it('fails closed before launch for a missing or invalid resume-thread mapping key', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-invalid-'))
     const bin = path.join(root, 'bin')
@@ -171,6 +243,19 @@ describe('NodeTerm Codex remote launcher', () => {
         'utf8'
       )
     ).toBe('accountId=system\nnodeId=node-b\nendpoint=/isolated/hook.env\n')
+  })
+
+  it('preflights duplicate ownership without stealing a live thread', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-preflight-'))
+    vi.stubEnv('HOME', root)
+    bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false)
+
+    expect(
+      codexThreadIdentityHasLiveConflict('thread-a', 'node-b', (nodeId) => nodeId === 'node-a')
+    ).toBe(true)
+    expect(codexThreadIdentityHasLiveConflict('thread-a', 'node-b', () => false)).toBe(false)
+    expect(codexThreadIdentityHasLiveConflict('thread-a', 'node-a', () => true)).toBe(false)
+    expect(codexThreadIdentityHasLiveConflict('../invalid', 'node-b', () => false)).toBe(true)
   })
 
   it('keeps an equal thread id isolated across two account app-servers', () => {

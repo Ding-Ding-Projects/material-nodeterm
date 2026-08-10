@@ -1,5 +1,7 @@
 import { homedir } from 'os'
 import path from 'path'
+import { createHash } from 'crypto'
+import { readFileSync } from 'fs'
 import { WebSocket } from 'ws'
 
 // Thread.name belongs to the one shared authenticated Codex app-server. Read it directly instead
@@ -9,6 +11,23 @@ const CACHE_MS = 3_000
 const REQUEST_TIMEOUT_MS = 2_000
 const names = new Map<string, { name: string | null; at: number }>()
 const inflight = new Map<string, Promise<string | null>>()
+
+export function relayedCodexSessionName(
+  socketPath: string,
+  threadId: string,
+  home = homedir()
+): string | null {
+  try {
+    const scope = createHash('sha256').update(socketPath).digest('hex').slice(0, 16)
+    const value = readFileSync(
+      path.join(home, '.nodeterm', 'codex-thread-names', scope, threadId),
+      'utf8'
+    ).trim()
+    return value ? value.slice(0, 500) : null
+  } catch {
+    return null
+  }
+}
 
 function connectCodexAppServer(socketPath: string): WebSocket {
   return new WebSocket(codexUnixWebSocketUrl(socketPath), { perMessageDeflate: false })
@@ -472,7 +491,11 @@ export function readCodexSessionName(
   const running = inflight.get(key)
   if (running) return running
   const request = readCodexSessionNameAt(socketPath, threadId).then(
-    (name) => {
+    (serverName) => {
+      // A native in-TUI /resume can fork a cloud conversation into a local app-server thread whose
+      // Thread.name is null. The persistent shared relay observed the source id and copied its
+      // session_index title here; a later real Thread.name always wins.
+      const name = serverName ?? relayedCodexSessionName(socketPath, threadId)
       names.set(key, { name, at: Date.now() })
       inflight.delete(key)
       return name
