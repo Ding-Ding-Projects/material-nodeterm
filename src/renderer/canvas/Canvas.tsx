@@ -32,6 +32,7 @@ import {
 import { solveFitPadding } from './fit-view'
 import { isMacTrackpadPan } from './wheel-gesture'
 import { selectedLocalFilePaths } from './canvas-file-copy'
+import { guardedCanvasImagePlacements, isCanvasImageDropTarget } from './canvas-image-import'
 import {
   SharedGlyphLayer,
   flushOpaqueNodeIds,
@@ -669,9 +670,8 @@ export function Canvas() {
   // told here rather than being left with a note their teammates never see. Dismissible; re-armed
   // by the next refused cast (the publisher keeps retrying that node, so it syncs once trimmed).
   const [syncNote, setSyncNote] = useState<string | null>(null)
-  // Copy-to-clipboard failure (browser build only): the bridge clipboard stub dispatches
-  // `nodeterm:toast` when neither the Clipboard API nor execCommand can copy — typically a
-  // non-secure context (plain http over a LAN). It must be seen, not swallowed.
+  // Copy-to-clipboard failure: browser text-copy errors and desktop file-copy errors share this
+  // visible strip. A clipboard refusal must be seen, not swallowed.
   const [copyError, setCopyError] = useState<string | null>(null)
   // Result of a worktree operation (merge / remove). These used to be `window.alert`s — a modal
   // that blocks the whole app to say "Merged feat into main." Shown as a strip in the existing
@@ -689,6 +689,9 @@ export function Canvas() {
   // Flow's own lock convention. Transient by design: a lock that survives restart reads as
   // "the app is frozen" to whoever opens it next.
   const [canvasLocked, setCanvasLocked] = useState(false)
+  // Paste is a canvas action only after the user's last pointer interaction landed on the real
+  // React Flow pane. Prevents a global paste listener from hijacking Welcome/Usage/sidebar UI.
+  const canvasImagePasteArmedRef = useRef(false)
   /** SPACE is held: a left-drag pans instead of box-selecting, Figma-style (issue #86). */
   const [spacePan, setSpacePan] = useState(false)
 
@@ -2919,13 +2922,16 @@ export function Canvas() {
   // node path. Desktop Finder drops retain their real path; clipboard/browser blobs are saved in
   // NodeTerm's managed upload directory first. Multiple images fan out diagonally from the cursor.
   const placeCanvasImages = useCallback(
-    async (files: File[], center: { x: number; y: number }) => {
+    async (files: File[], center: { x: number; y: number }, projectId: string) => {
       const images = canvasImageFiles(files)
       if (!images.length) return
-      const paths = await localPathsForFiles(images)
-      paths.forEach((filePath, index) =>
-        openFile(filePath, { x: center.x + index * 36, y: center.y + index * 36 })
+      const placements = await guardedCanvasImagePlacements(
+        () => localPathsForFiles(images),
+        projectId,
+        () => useProjects.getState().activeProjectId,
+        center
       )
+      placements.forEach(({ filePath, center: placement }) => openFile(filePath, placement))
     },
     [openFile]
   )
@@ -2933,63 +2939,64 @@ export function Canvas() {
   useEffect(() => {
     const wrap = flowWrapRef.current
     if (!wrap) return
-    const isCanvasSurface = (target: EventTarget | null): boolean => {
-      const element = target instanceof Element ? target : null
-      return !!(
-        element &&
-        wrap.contains(element) &&
-        !element.closest('.react-flow__node, .react-flow__controls, .react-flow__minimap')
-      )
-    }
     const editableTarget = (target: EventTarget | null): boolean => {
       const element = target instanceof Element ? target : null
       return !!element?.closest(
         'input, textarea, select, button, [contenteditable], [role="dialog"], .monaco-editor, .xterm, .react-flow__node'
       )
     }
+    const onPointerDown = (event: PointerEvent) => {
+      canvasImagePasteArmedRef.current = isCanvasImageDropTarget(event.target, wrap)
+    }
     const onDragOver = (event: DragEvent) => {
-      if (!isCanvasSurface(event.target)) return
+      if (!isCanvasImageDropTarget(event.target, wrap)) return
       if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return
       event.preventDefault()
       if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
     }
     const onDrop = (event: DragEvent) => {
-      if (!isCanvasSurface(event.target)) return
+      if (!isCanvasImageDropTarget(event.target, wrap)) return
       const images = canvasImageFiles(Array.from(event.dataTransfer?.files ?? []))
       if (!images.length) return
       event.preventDefault()
       event.stopPropagation()
       const center = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      void placeCanvasImages(images, center)
+      const projectId = useProjects.getState().activeProjectId
+      if (projectId) void placeCanvasImages(images, center, projectId)
     }
     const onPaste = (event: ClipboardEvent) => {
+      if (!canvasImagePasteArmedRef.current || !hasProjects || welcomeOpen || kanbanOpen) return
+      if (document.querySelector('[role="dialog"], .usage-popover')) return
       if (editableTarget(event.target)) return
+      const projectId = useProjects.getState().activeProjectId
+      if (!projectId) return
+      const center = viewCenter()
+      if (!center) return
       const files = canvasImageFiles(pastedFiles(event.clipboardData))
       if (files.length) {
-        const center = viewCenter()
-        if (!center) return
         event.preventDefault()
         event.stopPropagation()
-        void placeCanvasImages(files, center)
+        void placeCanvasImages(files, center, projectId)
         return
       }
       // A screenshot can arrive with an empty clipboardData when Chromium filters the paste
       // target. Ordinary text must remain untouched; only the image-only case uses async read().
       if (pasteHasText(event.clipboardData)) return
       void clipboardImages().then((images) => {
-        const center = viewCenter()
-        if (center && images.length) void placeCanvasImages(images, center)
+        if (images.length) void placeCanvasImages(images, center, projectId)
       })
     }
+    window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('dragover', onDragOver)
     window.addEventListener('drop', onDrop)
     window.addEventListener('paste', onPaste)
     return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
       window.removeEventListener('dragover', onDragOver)
       window.removeEventListener('drop', onDrop)
       window.removeEventListener('paste', onPaste)
     }
-  }, [placeCanvasImages, screenToFlowPosition, viewCenter])
+  }, [hasProjects, kanbanOpen, placeCanvasImages, screenToFlowPosition, viewCenter, welcomeOpen])
 
   // Load the quick-open file index when the palette opens.
   useEffect(() => {
