@@ -265,6 +265,7 @@ export function buildStubApi(): Omit<
       waitLogin: U('codexAccounts.waitLogin'),
       cancelWaitLogin: U('codexAccounts.cancelWaitLogin'),
       remove: U('codexAccounts.remove'),
+      identity: U('codexAccounts.identity'),
       systemIdentity: U('codexAccounts.systemIdentity'),
       forkThread: U('codexAccounts.forkThread')
     },

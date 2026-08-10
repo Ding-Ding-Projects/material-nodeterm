@@ -42,6 +42,26 @@ export function needsCodexAccountScope(agentId?: string, accountId?: string): bo
   return agentId === 'codex' || !!accountId
 }
 
+/** Usage discovery follows actual account homes, not the renderer's eventually-consistent
+ * `pending` marker. A completed auth file can exist after a restart before settings reconciles;
+ * the provider itself safely reports `unavailable` when the home is not logged in yet. */
+export function codexUsageAccounts(
+  accounts: ReadonlyArray<{
+    id: string
+    label: string
+    email?: string | null
+    pending?: boolean
+  }>,
+  homeFor: (accountId: string) => string
+): Array<{ id: string; home: string; label: string; email?: string | null }> {
+  return accounts.map((account) => ({
+    id: account.id,
+    home: homeFor(account.id),
+    label: account.label,
+    email: account.email
+  }))
+}
+
 /** tmux has a shared server env, so both values must be set explicitly per new Codex session. */
 export function codexTmuxEnvArgs(userDataDir: string, accountId?: string): string[] {
   return Object.entries(codexSessionEnv(userDataDir, accountId)).flatMap(([key, value]) => [

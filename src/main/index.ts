@@ -3,6 +3,7 @@ import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sw
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
 import { readCodexThreadAt, startCodexThreadAt } from '../core/codex-session-name'
 import { bindCodexThreadIdentity, writeCodexThreadIdentity } from '../core/codex-identity-proxy'
+import { codexUsageAccounts } from '../core/codex-accounts-core'
 import { statSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { homedir, hostname } from 'os'
@@ -1957,14 +1958,7 @@ app.whenReady().then(async () => {
   const usageService = initClaudeUsage(win, {
     localAccounts: localClaudeAccountIds,
     codexAccounts: () =>
-      (settingsStore.get().codexAccounts ?? [])
-        .filter((account) => !account.pending)
-        .map((account) => ({
-          id: account.id,
-          home: localCodexAccountHome(account.id),
-          label: account.label,
-          email: account.email
-        })),
+      codexUsageAccounts(settingsStore.get().codexAccounts ?? [], localCodexAccountHome),
     onCacheUpdate: () => {
       void flushAgentStatusMirror()
     },

@@ -1691,6 +1691,8 @@ export interface CodexAccountsApi {
   cancelWaitLogin(id: string): Promise<void>
   /** Stop that account's shared daemon and remove its profile after explicit UI confirmation. */
   remove(id: string): Promise<void>
+  /** Return identity only when this managed home already contains a completed file login. */
+  identity(id: string): Promise<{ email: string | null } | null>
   /** Identity of the system ~/.codex account, read through account/read. */
   systemIdentity(): Promise<{ email: string | null } | null>
   /** Fork an idle conversation into another account home; source history remains untouched. */

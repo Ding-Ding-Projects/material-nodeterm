@@ -32,6 +32,7 @@ export const IPC = {
   codexAccountsWaitLogin: 'codex-accounts:wait-login',
   codexAccountsCancelWait: 'codex-accounts:cancel-wait',
   codexAccountsRemove: 'codex-accounts:remove',
+  codexAccountsIdentity: 'codex-accounts:identity',
   codexAccountsSystemIdentity: 'codex-accounts:system-identity',
   codexAccountsForkThread: 'codex-accounts:fork-thread',
   claudeCliCaps: 'claude-cli:caps',

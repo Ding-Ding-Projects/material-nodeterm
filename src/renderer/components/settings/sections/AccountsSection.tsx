@@ -50,6 +50,24 @@ function applyCodexAccounts(fn: (accs: CodexAccount[]) => CodexAccount[]): void 
   s.update({ codexAccounts: fn(s.settings.codexAccounts) })
 }
 
+function captureCodexIdentity(
+  id: string,
+  captured: { email: string | null }
+): void {
+  applyCodexAccounts((accs) =>
+    accs.map((a) =>
+      a.id === id
+        ? {
+            ...a,
+            label: a.label === 'New Codex account' && captured.email ? captured.email : a.label,
+            email: captured.email ?? undefined,
+            pending: false
+          }
+        : a
+    )
+  )
+}
+
 /** Counts nodes bound to an account across every project's SERIALIZED nodes. The active
  *  project's live React Flow edits since the last commit aren't reflected here, so the count
  *  can be slightly stale for the active canvas — acceptable for a confirmation warning. */
@@ -94,6 +112,23 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   const [addingOn, setAddingOn] = useState<string | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
 
+  // A login may finish just before an app restart, or its terminal may close before the settings
+  // waiter updates the row. Reconcile only credential files that already exist and whose
+  // account/read succeeds; no login UI and no five-minute poll are started here.
+  useEffect(() => {
+    if (!isActive) return
+    let cancelled = false
+    for (const account of codexAccounts) {
+      if (!account.pending) continue
+      void window.nodeTerminal.codexAccounts.identity(account.id).then((captured) => {
+        if (!cancelled && captured) captureCodexIdentity(account.id, captured)
+      })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [isActive, codexAccounts])
+
   const setLabel = (id: string, label: string): void =>
     applyAccounts((accs) => accs.map((a) => (a.id === id ? { ...a, label } : a)))
 
@@ -106,18 +141,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     )
     const captured = await window.nodeTerminal.codexAccounts.waitLogin(account.id)
     if (!captured) return
-    applyCodexAccounts((accs) =>
-      accs.map((a) =>
-        a.id === account.id
-          ? {
-              ...a,
-              label: a.label === 'New Codex account' && captured.email ? captured.email : a.label,
-              email: captured.email ?? undefined,
-              pending: false
-            }
-          : a
-      )
-    )
+    captureCodexIdentity(account.id, captured)
   }
 
   const onAddCodexAccount = async (): Promise<void> => {

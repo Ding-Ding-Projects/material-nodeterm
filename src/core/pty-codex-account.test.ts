@@ -4,7 +4,11 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IPC } from '../shared/ipc'
 import type { PtyCreateOptions, PtyCreateResult } from '../shared/types'
-import { codexAccountHome, needsCodexAccountScope } from './codex-accounts-core'
+import {
+  codexAccountHome,
+  codexUsageAccounts,
+  needsCodexAccountScope
+} from './codex-accounts-core'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform, type FakePlatform } from './platform-fake'
 
@@ -98,5 +102,21 @@ describe('PTY Codex account isolation', () => {
     const result = await create({ agentId: undefined, codexAccountId: 'account-a' })
     expect(result).toMatchObject({ sessionId: '', fresh: false, unavailable: 'codex-account' })
     expect(spawned).toHaveLength(0)
+  })
+
+  it('keeps an authenticated home discoverable while its UI marker is still pending', () => {
+    expect(
+      codexUsageAccounts(
+        [{ id: 'account-a', label: 'Pending row', pending: true }],
+        (id) => codexAccountHome(userDataDir, id)
+      )
+    ).toEqual([
+      {
+        id: 'account-a',
+        home: codexAccountHome(userDataDir, 'account-a'),
+        label: 'Pending row',
+        email: undefined
+      }
+    ])
   })
 })

@@ -69,6 +69,17 @@ async function accountIdentity(accountId?: string): Promise<{ email: string | nu
   return readCodexAccountAt(localCodexSocket(accountId), 5000)
 }
 
+async function existingManagedIdentity(id: string): Promise<{ email: string | null } | null> {
+  assertCodexAccountId(id)
+  try {
+    const auth = await fs.lstat(path.join(localCodexAccountHome(id), 'auth.json'))
+    if (!auth.isFile() || auth.isSymbolicLink()) return null
+    return await accountIdentity(id)
+  } catch {
+    return null
+  }
+}
+
 export function initCodexAccounts(): void {
   ipcMain.handle(IPC.codexAccountsAdd, async () => {
     const id = randomUUID()
@@ -104,6 +115,8 @@ export function initCodexAccounts(): void {
     const waiter = waiters.get(id)
     if (waiter) waiter.cancelled = true
   })
+
+  ipcMain.handle(IPC.codexAccountsIdentity, (_event, id: string) => existingManagedIdentity(id))
 
   ipcMain.handle(IPC.codexAccountsRemove, async (_event, id: string) => {
     assertCodexAccountId(id)
