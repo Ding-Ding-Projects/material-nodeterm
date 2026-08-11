@@ -9,12 +9,47 @@ import {
 } from 'fs'
 import { homedir } from 'os'
 import path from 'path'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 const SAFE_NODE_ID = /^[A-Za-z0-9._-]+$/
 const SAFE_ENDPOINT = /^\/[A-Za-z0-9._/ -]+$/
 const SAFE_THREAD_ID = /^[A-Za-z0-9._-]+$/
 const SAFE_ACCOUNT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const SYSTEM_ACCOUNT_SCOPE = 'system'
+let identityAuthSecret: Buffer | null = null
+
+export function setCodexThreadIdentityAuthSecret(secret: Uint8Array): void {
+  if (secret.byteLength < 32) throw new Error('Invalid NodeTerm Codex identity-auth secret')
+  identityAuthSecret = Buffer.from(secret)
+}
+
+function identitySignature(
+  threadId: string,
+  accountId: string,
+  nodeId: string,
+  hookEndpoint: string
+): string {
+  if (!identityAuthSecret) throw new Error('NodeTerm Codex identity authentication is unavailable')
+  return createHmac('sha256', identityAuthSecret)
+    .update(`${threadId}\0${accountId}\0${nodeId}\0${hookEndpoint}`)
+    .digest('base64url')
+}
+
+function identitySignatureMatches(
+  threadId: string,
+  identity: ReturnType<typeof parseCodexThreadIdentity>
+): boolean {
+  if (!identity.signature || !identityAuthSecret) return false
+  const expected = identitySignature(
+    threadId,
+    identity.accountId || SYSTEM_ACCOUNT_SCOPE,
+    identity.nodeId,
+    identity.hookEndpoint
+  )
+  const actual = Buffer.from(identity.signature)
+  const wanted = Buffer.from(expected)
+  return actual.length === wanted.length && timingSafeEqual(actual, wanted)
+}
 
 function accountScope(accountId?: string): string {
   if (!accountId) return SYSTEM_ACCOUNT_SCOPE
@@ -48,7 +83,8 @@ function identityCandidates(threadId: string): Array<{ file: string; scope?: str
 }
 
 function readIdentityCandidate(
-  candidate: { file: string; scope?: string }
+  candidate: { file: string; scope?: string },
+  requireSignature = false
 ): ReturnType<typeof parseCodexThreadIdentity> | undefined {
   try {
     const identity = parseCodexThreadIdentity(readFileSync(candidate.file, 'utf8'))
@@ -57,6 +93,9 @@ function readIdentityCandidate(
     }
     if (!validCodexIdentity(identity.nodeId, identity.hookEndpoint)) {
       throw new Error('Codex thread identity is invalid')
+    }
+    if (requireSignature && !identitySignatureMatches(path.basename(candidate.file), identity)) {
+      throw new Error('Codex thread identity signature is invalid')
     }
     return identity
   } catch (error) {
@@ -91,7 +130,7 @@ export function resolveCodexThreadNodeIdentity(
   const owners = new Set<string>()
   for (const candidate of candidates) {
     try {
-      const identity = readIdentityCandidate(candidate)
+      const identity = readIdentityCandidate(candidate, true)
       if (!identity) continue
       if (candidate.scope && identity.accountId !== candidate.scope) continue
       if (!candidate.scope && identity.accountId) continue
@@ -114,6 +153,7 @@ export function writeCodexThreadIdentity(
     throw new Error('Invalid NodeTerm Codex thread identity')
   }
   const scope = accountScope(accountId)
+  const signature = identitySignature(threadId, scope, nodeId, hookEndpoint)
   const file = identityFile(threadId, accountId)
   const dir = path.dirname(file)
   const tmp = path.join(dir, `.${threadId}.${process.pid}.${Date.now()}`)
@@ -121,10 +161,11 @@ export function writeCodexThreadIdentity(
   let renamed = false
   let quarantined: Array<{ source: string; quarantine: string }> = []
   try {
-    writeFileSync(tmp, `accountId=${scope}\nnodeId=${nodeId}\nendpoint=${hookEndpoint}\n`, {
-      encoding: 'utf8',
-      mode: 0o600
-    })
+    writeFileSync(
+      tmp,
+      `accountId=${scope}\nnodeId=${nodeId}\nendpoint=${hookEndpoint}\nsignature=${signature}\n`,
+      { encoding: 'utf8', mode: 0o600 }
+    )
     quarantined = quarantineOtherCodexThreadIdentities(nodeId, threadId, scope, tmp)
     renameSync(tmp, file)
     renamed = true
@@ -159,7 +200,8 @@ export function bindCodexThreadIdentity(
     const existing = readIdentityCandidate(candidate)
     if (!existing) continue
     if (candidate.file === scopedFile &&
-        existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint) {
+        existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint &&
+        identitySignatureMatches(threadId, existing)) {
       targetMatches = true
     }
     if (existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) {
@@ -267,6 +309,7 @@ function parseCodexThreadIdentity(raw: string): {
   accountId: string
   nodeId: string
   hookEndpoint: string
+  signature: string
 } {
   const values = Object.fromEntries(
     raw
@@ -280,7 +323,8 @@ function parseCodexThreadIdentity(raw: string): {
   return {
     accountId: values.accountId ?? '',
     nodeId: values.nodeId ?? '',
-    hookEndpoint: values.endpoint ?? ''
+    hookEndpoint: values.endpoint ?? '',
+    signature: values.signature ?? ''
   }
 }
 
@@ -308,6 +352,7 @@ export function installCodexLauncher(): string {
       `. "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
       `case "\${NODETERM_HOOK_PORT-}" in ''|*[!0-9]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
       `case "\${NODETERM_HOOK_TOKEN-}" in ''|*[!A-Za-z0-9-]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
+      `case "\${NODETERM_CODEX_NODE_TOKEN-}" in ''|*[!A-Za-z0-9_-]*) echo "NodeTerm Codex node identity unavailable" >&2; exit 69 ;; esac\n` +
       `codex app-server daemon start >/dev/null 2>&1 || { echo "NodeTerm Codex app-server unavailable" >&2; exit 69; }\n` +
       `nt_register_relay() {\n` +
       `  case "\${NODETERM_CODEX_RELAY_RUNTIME-}" in /*) ;; *) return 1 ;; esac\n` +
@@ -329,8 +374,9 @@ export function installCodexLauncher(): string {
       `  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
       `    # Codex validates the selected CODEX_HOME before opening the remote relay. Expose the\n` +
       `    # exact caller-supplied id there first; this never lists, copies, or forks sessions.\n` +
-      `    { printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN"; } |\n` +
+      `    { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
       `    curl --silent --show-error --fail --config - --request POST \\\n` +
+      `      --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
       `      --data-urlencode "threadId=$nt_thread" \\\n` +
       `      --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
       `      "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/expose" >/dev/null || { echo "NodeTerm Codex session unavailable" >&2; exit 69; }\n` +
@@ -339,7 +385,7 @@ export function installCodexLauncher(): string {
       `  fi\n` +
       `  # Legacy direct-unix resumes bind before launch. Relay resumes authorize globally and\n` +
       `  # bind only after the target app-server confirms the unchanged thread id.\n` +
-      `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN"; } |\n` +
+      `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
       `  curl --silent --show-error --fail --config - --request POST \\\n` +
       `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
       `    --data-urlencode "threadId=$nt_thread" \\\n` +
@@ -354,7 +400,7 @@ export function installCodexLauncher(): string {
       `  exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
       `fi\n` +
       `nt_thread=$(\n` +
-      `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN"; } |\n` +
+      `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
       `  curl --silent --show-error --fail --config - --request POST \\\n` +
       `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
       `    --data-urlencode "cwd=$PWD" \\\n` +

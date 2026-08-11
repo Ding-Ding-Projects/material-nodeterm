@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
-import { randomUUID, timingSafeEqual } from 'crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { writeFileSync, mkdirSync } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
@@ -104,6 +104,7 @@ class HookServer {
     (() => Promise<Array<{ accountId?: string; socketPath: string }>>) | null = null
   private codexRelayRuntime: { executable: string; script: string } | null = null
   private endpointPath = ''
+  private codexNodeAuthSecret: Buffer | null = null
 
   endpointFilePath(): string {
     if (!this.endpointPath) this.endpointPath = path.join(platform().userDataDir, 'hook-endpoint.env')
@@ -118,6 +119,25 @@ class HookServer {
   }
   getVersion(): string {
     return NODETERM_HOOK_PROTOCOL_VERSION
+  }
+
+  /**
+   * Mint the capability a Codex process must present for node-scoped identity operations.
+   * The global hook bearer proves only "this request came from some NodeTerm session"; it cannot
+   * prove WHICH session. Binding a caller-supplied nodeId with that shared bearer made thread
+   * ownership attacker-writable. This capability is stable across app restarts, scoped to one
+   * node id, and never written to the shared endpoint file.
+   */
+  codexNodeAuthToken(nodeId: string): string {
+    if (!/^[A-Za-z0-9._-]+$/.test(nodeId)) return ''
+    if (!this.codexNodeAuthSecret) throw new Error('NodeTerm Codex node authentication is unavailable')
+    return createHmac('sha256', this.codexNodeAuthSecret).update(nodeId).digest('base64url')
+  }
+
+  /** Main injects a keychain-backed, restart-stable secret before any Codex PTY is created. */
+  setCodexNodeAuthSecret(secret: Uint8Array): void {
+    if (secret.byteLength < 32) throw new Error('Invalid NodeTerm Codex node-auth secret')
+    this.codexNodeAuthSecret = Buffer.from(secret)
   }
 
   setListener(cb: (e: NormalizedAgentEvent) => void): void {
@@ -195,6 +215,11 @@ class HookServer {
             res.end()
             return
           }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
           try {
             const threadId = this.codexThreadStartHandler
               ? await this.codexThreadStartHandler({
@@ -223,6 +248,11 @@ class HookServer {
           if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
               (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
             res.writeHead(400)
+            res.end()
+            return
+          }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
             res.end()
             return
           }
@@ -255,6 +285,11 @@ class HookServer {
             res.end()
             return
           }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
           try {
             if (!this.codexThreadObservedHandler) throw new Error('observed handler unavailable')
             await this.codexThreadObservedHandler({
@@ -283,6 +318,11 @@ class HookServer {
             res.end()
             return
           }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
           try {
             if (!this.codexThreadAuthorizeHandler) throw new Error('authorize handler unavailable')
             await this.codexThreadAuthorizeHandler({ nodeId, threadId, accountId })
@@ -296,11 +336,17 @@ class HookServer {
         }
         if (reqUrl.pathname === '/codex-thread/expose') {
           const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
           const threadId = form.threadId ?? ''
           const accountId = form.accountId || undefined
-          if (!/^[A-Za-z0-9._-]+$/.test(threadId) ||
+          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
               (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
             res.writeHead(400)
+            res.end()
+            return
+          }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
             res.end()
             return
           }
@@ -316,6 +362,13 @@ class HookServer {
           return
         }
         if (reqUrl.pathname === '/codex-thread/catalog') {
+          const nodeId = String(req.headers['x-nodeterm-node-id'] ?? '')
+          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) ||
+              !this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
           try {
             if (!this.codexThreadCatalogHandler) throw new Error('catalog handler unavailable')
             const accounts = await this.codexThreadCatalogHandler()
@@ -424,6 +477,19 @@ class HookServer {
     return a.length === b.length && timingSafeEqual(a, b)
   }
 
+  private codexNodeTokenMatches(nodeId: string, provided: string | string[] | undefined): boolean {
+    if (typeof provided !== 'string') return false
+    let expected = ''
+    try {
+      expected = this.codexNodeAuthToken(nodeId)
+    } catch {
+      return false
+    }
+    const a = Buffer.from(provided)
+    const b = Buffer.from(expected)
+    return a.length === b.length && timingSafeEqual(a, b)
+  }
+
   // The managed script sources this file at invocation to get the LIVE port/token.
   // tmux sessions outlive the app, so env-baked coords go stale after a restart.
   private writeEndpointFile(): void {
@@ -457,6 +523,9 @@ class HookServer {
       NODETERM_AGENT_ID: agentId,
       ...(permWaitSecs > 0 ? { NODETERM_PERM_WAIT_SECS: String(permWaitSecs) } : {}),
       ...(canControlCanvas(agentId) ? { NODETERM_CANVAS_CONTROL: '1' } : {}),
+      ...(agentId === 'codex' && this.codexNodeAuthSecret
+        ? { NODETERM_CODEX_NODE_TOKEN: this.codexNodeAuthToken(nodeId) }
+        : {}),
       ...(agentId === 'codex' && this.codexRelayRuntime
         ? {
             NODETERM_CODEX_RELAY_RUNTIME: this.codexRelayRuntime.executable,

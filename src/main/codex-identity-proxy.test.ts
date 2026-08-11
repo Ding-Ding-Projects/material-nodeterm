@@ -3,12 +3,13 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 import { promisify } from 'util'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bindCodexThreadIdentity,
   codexThreadIdentityHasLiveConflict,
   installCodexLauncher,
   resolveCodexThreadNodeIdentity,
+  setCodexThreadIdentityAuthSecret,
   validCodexIdentity,
   writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
@@ -17,6 +18,10 @@ const run = promisify(execFile)
 
 describe('NodeTerm Codex remote launcher', () => {
   const oldHome = process.env.HOME
+  const nodeTokenA = 'A'.repeat(43)
+  const nodeTokenB = 'B'.repeat(43)
+
+  beforeEach(() => setCodexThreadIdentityAuthSecret(Buffer.alloc(32, 9)))
 
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -34,13 +39,15 @@ describe('NodeTerm Codex remote launcher', () => {
     const outB = path.join(root, 'b.json')
     const bindA = path.join(root, 'bind-a.txt')
     const bindB = path.join(root, 'bind-b.txt')
+    const headersA = path.join(root, 'headers-a.txt')
+    const headersB = path.join(root, 'headers-b.txt')
     await run('/bin/mkdir', ['-p', bin])
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', {
       mode: 0o600
     })
     writeFileSync(
       fakeCurl,
-      '#!/bin/sh\ncat >/dev/null\nprintf \'%s\\n\' "$@" > "$CAPTURE_BIND"\n',
+      '#!/bin/sh\ncat > "$CAPTURE_HEADERS"\nprintf \'%s\\n\' "$@" > "$CAPTURE_BIND"\n',
       { mode: 0o700 }
     )
     writeFileSync(
@@ -58,11 +65,13 @@ describe('NodeTerm Codex remote launcher', () => {
     await Promise.all([
       run(launcher, ['resume', 'thread-a'], { env: {
         ...process.env, ...base, CAPTURE: outA,
-        NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_ACCOUNT_ID: 'account-a', CAPTURE_BIND: bindA
+        NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
+        NODETERM_CODEX_ACCOUNT_ID: 'account-a', CAPTURE_BIND: bindA, CAPTURE_HEADERS: headersA
       }}),
       run(launcher, ['resume', 'thread-b'], { env: {
         ...process.env, ...base, CAPTURE: outB,
-        NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_ACCOUNT_ID: 'account-b', CAPTURE_BIND: bindB
+        NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_NODE_TOKEN: nodeTokenB,
+        NODETERM_CODEX_ACCOUNT_ID: 'account-b', CAPTURE_BIND: bindB, CAPTURE_HEADERS: headersB
       }})
     ])
     const argsA = JSON.parse(readFileSync(outA, 'utf8'))
@@ -76,6 +85,8 @@ describe('NodeTerm Codex remote launcher', () => {
     expect(readFileSync(bindB, 'utf8')).toContain('nodeId=node-b\n')
     expect(readFileSync(bindB, 'utf8')).toContain('threadId=thread-b\n')
     expect(readFileSync(bindB, 'utf8')).toContain('accountId=account-b\n')
+    expect(readFileSync(headersA, 'utf8')).toContain(`X-NodeTerm-Node-Token: ${nodeTokenA}`)
+    expect(readFileSync(headersB, 'utf8')).toContain(`X-NodeTerm-Node-Token: ${nodeTokenB}`)
   })
 
   it('pre-creates and binds two fresh sessions independently on the shared app-server', async () => {
@@ -112,11 +123,11 @@ describe('NodeTerm Codex remote launcher', () => {
     await Promise.all([
       run(launcher, ['prompt a'], {
         cwd: '/tmp',
-        env: { ...base, CAPTURE: outA, NODETERM_NODE_ID: 'node-a' }
+        env: { ...base, CAPTURE: outA, NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_NODE_TOKEN: nodeTokenA }
       }),
       run(launcher, ['prompt b'], {
         cwd: '/tmp',
-        env: { ...base, CAPTURE: outB, NODETERM_NODE_ID: 'node-b' }
+        env: { ...base, CAPTURE: outB, NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_NODE_TOKEN: nodeTokenB }
       })
     ])
 
@@ -168,6 +179,7 @@ describe('NodeTerm Codex remote launcher', () => {
         CAPTURE_EXPOSE: exposeCapture,
         NODETERM_CANVAS_CONTROL: '1',
         NODETERM_NODE_ID: 'node-a',
+        NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
         NODETERM_HOOK_ENDPOINT: endpoint,
         NODETERM_CODEX_RELAY_RUNTIME: runtime,
         NODETERM_CODEX_RELAY_SCRIPT: script
@@ -215,6 +227,7 @@ describe('NodeTerm Codex remote launcher', () => {
         CAPTURE: capture,
         NODETERM_CANVAS_CONTROL: '1',
         NODETERM_NODE_ID: 'node-a',
+        NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
         NODETERM_HOOK_ENDPOINT: endpoint,
         NODETERM_CODEX_RELAY_RUNTIME: runtime,
         NODETERM_CODEX_RELAY_SCRIPT: script
@@ -251,6 +264,7 @@ describe('NodeTerm Codex remote launcher', () => {
         PATH: `${bin}:${process.env.PATH ?? ''}`,
         NODETERM_CANVAS_CONTROL: '1',
         NODETERM_NODE_ID: 'node-a',
+        NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
         NODETERM_HOOK_ENDPOINT: endpoint,
         NODETERM_CODEX_RELAY_RUNTIME: runtime,
         NODETERM_CODEX_RELAY_SCRIPT: script
@@ -271,6 +285,7 @@ describe('NodeTerm Codex remote launcher', () => {
       PATH: `${bin}:${process.env.PATH ?? ''}`,
       NODETERM_CANVAS_CONTROL: '1',
       NODETERM_NODE_ID: 'node-a',
+      NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
       NODETERM_HOOK_ENDPOINT: '/isolated/node-a/hook.env'
     }
     await expect(run(launcher, ['resume'], { env })).rejects.toMatchObject({ code: 64 })
@@ -295,7 +310,7 @@ describe('NodeTerm Codex remote launcher', () => {
         path.join(root, '.nodeterm', 'codex-thread-nodes', 'system', 'thread-a'),
         'utf8'
       )
-    ).toBe('accountId=system\nnodeId=node-b\nendpoint=/isolated/hook.env\n')
+    ).toMatch(/^accountId=system\nnodeId=node-b\nendpoint=\/isolated\/hook\.env\nsignature=[A-Za-z0-9_-]{43}\n$/)
   })
 
   it('creates a managed identity while an unscoped legacy system mapping exists', () => {
@@ -317,7 +332,7 @@ describe('NodeTerm Codex remote launcher', () => {
     expect(readFileSync(
       path.join(mappings, 'account-a', 'managed-thread'),
       'utf8'
-    )).toBe('accountId=account-a\nnodeId=managed-node\nendpoint=/isolated/hook.env\n')
+    )).toMatch(/^accountId=account-a\nnodeId=managed-node\nendpoint=\/isolated\/hook\.env\nsignature=[A-Za-z0-9_-]{43}\n$/)
   })
 
   it('preflights duplicate ownership without stealing a live thread', () => {

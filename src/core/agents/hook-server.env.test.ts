@@ -32,6 +32,7 @@ beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-hookenv-'))
   resetPlatformForTests()
   initPlatform(fakePlatform({ userDataDir: dir }))
+  hookServer.setCodexNodeAuthSecret(Buffer.alloc(32, 7))
   hookServer.setCodexThreadStartHandler(async (request) => {
     brokerCalls.push(request)
     return `thread-${request.nodeId}`
@@ -80,24 +81,38 @@ describe('hookServer.buildPtyEnv — canvas control gate', () => {
     expect(hookServer.buildPtyEnv('n1', 'grok').NODETERM_AGENT_ID).toBe('grok')
     expect(hookServer.buildPtyEnv('n1', 'grok').NODETERM_NODE_ID).toBe('n1')
   })
+
+  it('gives each Codex node a stable distinct identity capability outside the shared endpoint', () => {
+    const a = hookServer.buildPtyEnv('node-a', 'codex').NODETERM_CODEX_NODE_TOKEN
+    const b = hookServer.buildPtyEnv('node-b', 'codex').NODETERM_CODEX_NODE_TOKEN
+    expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(b).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(a).not.toBe(b)
+    expect(hookServer.buildPtyEnv('node-a', 'codex').NODETERM_CODEX_NODE_TOKEN).toBe(a)
+    expect(fs.readFileSync(path.join(dir, 'hook-endpoint.env'), 'utf8')).not.toContain(a)
+  })
 })
 
 describe('hookServer Codex thread broker', () => {
+  const nodeToken = (nodeId: string) => hookServer.codexNodeAuthToken(nodeId)
+  const nodeHeaders = (nodeId: string) => ({ 'x-nodeterm-node-token': nodeToken(nodeId) })
   const request = (nodeId: string, cwd: string, accountId?: string) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/start`, {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
-        'x-nodeterm-hook-token': hookServer.getToken()
+        'x-nodeterm-hook-token': hookServer.getToken(),
+        ...nodeHeaders(nodeId)
       },
       body: new URLSearchParams({ nodeId, cwd, ...(accountId ? { accountId } : {}) })
     })
-  const bind = (nodeId: string, threadId: string) =>
+  const bind = (nodeId: string, threadId: string, token = nodeToken(nodeId)) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/bind`, {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
-        'x-nodeterm-hook-token': hookServer.getToken()
+        'x-nodeterm-hook-token': hookServer.getToken(),
+        'x-nodeterm-node-token': token
       },
       body: new URLSearchParams({ nodeId, threadId })
     })
@@ -106,18 +121,20 @@ describe('hookServer Codex thread broker', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
-        'x-nodeterm-hook-token': hookServer.getToken()
+        'x-nodeterm-hook-token': hookServer.getToken(),
+        ...nodeHeaders(nodeId)
       },
       body: new URLSearchParams({ nodeId, threadId, ...(accountId ? { accountId } : {}) })
     })
-  const expose = (threadId: string, accountId?: string) =>
+  const expose = (nodeId: string, threadId: string, accountId?: string) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/expose`, {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
-        'x-nodeterm-hook-token': hookServer.getToken()
+        'x-nodeterm-hook-token': hookServer.getToken(),
+        ...nodeHeaders(nodeId)
       },
-      body: new URLSearchParams({ threadId, ...(accountId ? { accountId } : {}) })
+      body: new URLSearchParams({ nodeId, threadId, ...(accountId ? { accountId } : {}) })
     })
 
   it('keeps two parallel session creations bound to their requesting nodes', async () => {
@@ -183,6 +200,23 @@ describe('hookServer Codex thread broker', () => {
     })
   })
 
+  it('rejects a valid global bearer when its node capability belongs to another node', async () => {
+    const before = bindCalls.length
+    const [forged, missing] = await Promise.all([
+      bind('victim-node', 'victim-thread', nodeToken('attacker-node')),
+      fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/bind`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-nodeterm-hook-token': hookServer.getToken()
+        },
+        body: new URLSearchParams({ nodeId: 'victim-node', threadId: 'victim-thread' })
+      })
+    ])
+    expect([forged.status, missing.status]).toEqual([403, 403])
+    expect(bindCalls).toHaveLength(before)
+  })
+
   it('authorizes a relay resume only through the account-scoped ownership preflight', async () => {
     const [accepted, invalid, conflict] = await Promise.all([
       authorize('node-resume', 'thread-resume', 'account-a'),
@@ -199,9 +233,9 @@ describe('hookServer Codex thread broker', () => {
 
   it('exposes only the exact caller-supplied id to the selected account', async () => {
     const [accepted, invalid, conflict] = await Promise.all([
-      expose('thread-resume', 'account-a'),
-      expose('../invalid'),
-      expose('thread-conflict', 'account-b')
+      expose('node-resume', 'thread-resume', 'account-a'),
+      expose('node-resume', '../invalid'),
+      expose('node-resume', 'thread-conflict', 'account-b')
     ])
     expect([accepted.status, invalid.status, conflict.status]).toEqual([204, 400, 409])
     expect(exposeCalls).toContainEqual({ threadId: 'thread-resume', accountId: 'account-a' })
@@ -212,7 +246,11 @@ describe('hookServer Codex thread broker', () => {
     const [accepted, rejected] = await Promise.all([
       fetch(url, {
         method: 'POST',
-        headers: { 'x-nodeterm-hook-token': hookServer.getToken() }
+        headers: {
+          'x-nodeterm-hook-token': hookServer.getToken(),
+          'x-nodeterm-node-id': 'node-catalog',
+          ...nodeHeaders('node-catalog')
+        }
       }),
       fetch(url, { method: 'POST' })
     ])

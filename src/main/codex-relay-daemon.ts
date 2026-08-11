@@ -9,11 +9,13 @@ import path from 'path'
 import { spawn } from 'child_process'
 import { WebSocket, WebSocketServer } from 'ws'
 
-// Protocol v5 merges account-isolated catalogs and resumes a selected foreign rollout by path in
+// Protocol v6 adds a node-scoped capability to every Electron identity request. It also merges
+// account-isolated catalogs and resumes a selected foreign rollout by path in
 // the chosen account. Codex preserves the rollout's thread id; switching login never forks history.
 // Keep earlier versions on their own state files so already-connected nodes may drain safely.
-const VERSION = '5'
+const VERSION = '6'
 const SAFE = /^[A-Za-z0-9._-]+$/
+const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]{43}$/
 const SAFE_ENDPOINT = /^\/[A-Za-z0-9._/ -]+$/
 const INVALID_OWNER = '__invalid__'
 const root = path.join(homedir(), '.nodeterm')
@@ -22,6 +24,7 @@ const statePath = path.join(root, `codex-relay-v${VERSION}.json`)
 type State = { version: string; pid: number; port: number; token: string }
 type Route = {
   nodeId: string
+  nodeToken: string
   accountId?: string
   socketPath: string
   hookEndpoint: string
@@ -533,7 +536,7 @@ function hookRequest(
     }
     const port = Number(env.NODETERM_HOOK_PORT)
     const token = env.NODETERM_HOOK_TOKEN
-    if (!port || !token) {
+    if (!port || !token || !SAFE_NODE_TOKEN.test(route.nodeToken)) {
       reject(new Error('NodeTerm hook endpoint unavailable'))
       return
     }
@@ -545,6 +548,7 @@ function hookRequest(
       method: 'POST',
       headers: {
         'x-nodeterm-hook-token': token,
+        'x-nodeterm-node-token': route.nodeToken,
         'content-type': 'application/x-www-form-urlencoded',
         'content-length': Buffer.byteLength(body)
       }
@@ -579,7 +583,7 @@ function hookJsonRequest<T>(route: Route, pathname: string): Promise<T> {
     }
     const port = Number(env.NODETERM_HOOK_PORT)
     const token = env.NODETERM_HOOK_TOKEN
-    if (!port || !token) {
+    if (!port || !token || !SAFE_NODE_TOKEN.test(route.nodeToken)) {
       reject(new Error('NodeTerm hook endpoint unavailable'))
       return
     }
@@ -590,6 +594,8 @@ function hookJsonRequest<T>(route: Route, pathname: string): Promise<T> {
       method: 'POST',
       headers: {
         'x-nodeterm-hook-token': token,
+        'x-nodeterm-node-token': route.nodeToken,
+        'x-nodeterm-node-id': route.nodeId,
         'content-length': '0'
       }
     }, (res) => {
@@ -872,6 +878,7 @@ function serve(): void {
         const route = JSON.parse(Buffer.concat(chunks).toString()) as Route
         if (
           !SAFE.test(route.nodeId) ||
+          !SAFE_NODE_TOKEN.test(route.nodeToken) ||
           (route.accountId && !SAFE.test(route.accountId)) ||
           !path.isAbsolute(route.socketPath) ||
           !path.isAbsolute(route.hookEndpoint)
@@ -1165,9 +1172,11 @@ function serve(): void {
 
 async function register(): Promise<void> {
   const [nodeId, accountRaw, socketPath, hookEndpoint] = process.argv.slice(3)
+  const nodeToken = process.env.NODETERM_CODEX_NODE_TOKEN ?? ''
   const accountId = accountRaw || undefined
   if (
     !SAFE.test(nodeId) ||
+    !SAFE_NODE_TOKEN.test(nodeToken) ||
     (accountId && !SAFE.test(accountId)) ||
     !path.isAbsolute(socketPath) ||
     !path.isAbsolute(hookEndpoint)
@@ -1176,6 +1185,7 @@ async function register(): Promise<void> {
   const state = await ensureServer()
   const key = await relayControlPost(state.port, state.token, '/register', {
     nodeId,
+    nodeToken,
     accountId,
     socketPath,
     hookEndpoint

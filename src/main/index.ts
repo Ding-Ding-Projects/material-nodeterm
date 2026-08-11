@@ -6,6 +6,7 @@ import {
   bindCodexThreadIdentity,
   codexThreadIdentityHasLiveConflict,
   resolveCodexThreadNodeIdentity,
+  setCodexThreadIdentityAuthSecret,
   writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
 import {
@@ -41,6 +42,7 @@ import { generateCommitMessage, generateGroupName, generateTerminalName } from '
 import { initUpdater } from './updater'
 import { fetchCheck } from '../core/check'
 import { hookServer } from '../core/agents/hook-server'
+import { loadOrCreateCodexNodeAuthSecret } from './codex-node-auth-secret'
 import { askpassServer, ensureAskpassScript } from './remote-ssh/ssh-askpass'
 import { appSshAgent } from './remote-ssh/ssh-agent'
 import {
@@ -548,6 +550,18 @@ app.whenReady().then(async () => {
   const pendingCodexIdentityEvents: NormalizedAgentEvent[] = []
   let emitAgentStatus: ((event: NormalizedAgentEvent) => void) | undefined
   if (!gotSingleInstanceLock) return // losing second instance — quitting; don't touch tmux
+
+  // A shared hook bearer authenticates only "some NodeTerm process". Thread ownership and browser
+  // routing require a second capability bound to the exact PTY node. Its signing key is encrypted
+  // by the OS keychain; neither the key nor another node's capability enters the shared endpoint.
+  // If secure storage is unavailable, privileged Codex identity control stays fail-closed.
+  try {
+    const codexNodeAuthSecret = await loadOrCreateCodexNodeAuthSecret()
+    hookServer.setCodexNodeAuthSecret(codexNodeAuthSecret)
+    setCodexThreadIdentityAuthSecret(codexNodeAuthSecret)
+  } catch (error) {
+    console.error('[codex-node-auth] unavailable; Codex identity control disabled:', error)
+  }
 
   await browserUseBackend.start().catch((error) => {
     console.error('[browser-use] backend start failed', error)
