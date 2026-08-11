@@ -227,6 +227,7 @@ import {
   agentConfig,
   hasHooks,
   canBranch,
+  canControlCanvas,
   canRename,
   canTransferFrom,
   canContextLink,

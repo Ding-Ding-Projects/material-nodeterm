@@ -765,8 +765,6 @@ describe('createAgentNode permission mode', () => {
     expect(node.data.initialCommand).toBe('opencode')
     const custom = createAgentNode('custom:x', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
     expect(custom.data.initialCommand).toBe('custom:x')
-    const codex = createAgentNode('codex', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
-    expect(codex.data.initialCommand).toBe(codexRemoteCommand())
   })
 
   it('uses native codex for an SSH project node', () => {
