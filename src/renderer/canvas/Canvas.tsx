@@ -280,7 +280,6 @@ import {
 } from '../lib/terminal-profile-actions'
 import {
   defaultTerminalCreationHandler,
-  defaultTerminalShortcutAction,
   profileTerminalCreationHandler,
   terminalProfileCreationActions
 } from '../lib/terminal-creation-surfaces'
@@ -2896,17 +2895,22 @@ export function Canvas() {
     bumpHist((v) => v + 1)
   }, [setNodes, bumpDirty])
 
-  // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y = redo (ignored while typing).
+  // Undo / redo via the configured shortcuts (defaults ⌘Z / ⌘⇧Z; ⌘Y stays as a legacy redo
+  // alias for people who learned it elsewhere — it is not separately configurable).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isKanbanOpen(useProjects.getState().activeProjectId)) return
       if (!(e.metaKey || e.ctrlKey)) return
-      const k = e.key.toLowerCase()
-      if (k !== 'z' && k !== 'y') return
+      const shortcuts = useSettings.getState().settings.shortcuts
+      const isRedo =
+        matchesShortcut(e, shortcuts.redo, isMac) ||
+        (!e.shiftKey && e.key.toLowerCase() === 'y')
+      const isUndo = matchesShortcut(e, shortcuts.undo, isMac)
+      if (!isRedo && !isUndo) return
       const tag = (document.activeElement?.tagName || '').toLowerCase()
       if (tag === 'input' || tag === 'textarea') return
       e.preventDefault()
-      if (k === 'y' || (k === 'z' && e.shiftKey)) redo()
+      if (isRedo) redo()
       else undo()
     }
     window.addEventListener('keydown', onKey)
@@ -4370,17 +4374,22 @@ export function Canvas() {
     setRemotePicker(screenPos)
   }, [])
 
-  // ⌘T = new terminal, ⌘⇧C = new default agent, a KEYED dictation shortcut (e.g. "Cmd+Alt+D") =
-  // toggle dictation (ignored while typing in a field/terminal). A modifier-only shortcut (the
-  // new default, "Cmd+Alt") is hold-to-talk instead — matchesShortcut always returns false for
-  // that shape (its `key` is null), so this effect is naturally a no-op for it; see the
-  // dedicated hold-mode effect below, which is what fires in that case.
+  // New terminal (default ⌘T) / new default agent (default ⌘⇧C), both configurable via
+  // settings.shortcuts (Keyboard Shortcuts section) — read live so a rebind applies on the next
+  // keypress. Terminal creation itself still goes through `defaultTerminalCreationHandler`, the
+  // shared behavioral seam every creation surface (keyboard, sidebar, Dock, command-palette,
+  // canvas-menu, group-menu) funnels through — only the "did this keypress ask for it?" decision
+  // moved from the fixed `defaultTerminalShortcutAction` to the configurable registry.
+  // A KEYED dictation shortcut (e.g. "Cmd+Alt+D") = toggle dictation (ignored while typing in a
+  // field/terminal). A modifier-only shortcut (the new default, "Cmd+Alt") is hold-to-talk
+  // instead — matchesShortcut always returns false for that shape (its `key` is null), so this
+  // effect is naturally a no-op for it; see the dedicated hold-mode effect below, which is what
+  // fires in that case.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const kanbanOpen = isKanbanOpen(useProjects.getState().activeProjectId)
       const tag = (document.activeElement?.tagName || '').toLowerCase()
       const typing = tag === 'input' || tag === 'textarea'
-      const terminalShortcut = defaultTerminalShortcutAction(e, { kanbanOpen, typing })
       if (kanbanOpen) return
       if (!(e.metaKey || e.ctrlKey)) return
       if (typing) return
@@ -4389,11 +4398,11 @@ export function Canvas() {
         toggleDictation()
         return
       }
-      const k = e.key.toLowerCase()
-      if (terminalShortcut) {
+      const shortcuts = useSettings.getState().settings.shortcuts
+      if (matchesShortcut(e, shortcuts.newTerminal, isMac)) {
         e.preventDefault()
         defaultTerminalCreationHandler(addTerminal)()
-      } else if (k === 'c' && e.shiftKey) {
+      } else if (matchesShortcut(e, shortcuts.newAgent, isMac)) {
         e.preventDefault()
         addAgentNode(useSettings.getState().settings.defaultAgent)
       }
@@ -6831,12 +6840,11 @@ export function Canvas() {
     [goToNode]
   )
 
-  // ---- project (tab) actions ----
+  // Command palette, Settings, and the canvas-level toggles. All combos come from
+  // `settings.shortcuts` so Keyboard Shortcuts can rebind them. Read live from the store (not a
+  // closure) so a settings change takes effect on the next keypress without a listener re-run.
   // Declared here (ahead of the keydown effect below, rather than near the other project
-  // actions further down) so the Cmd/Ctrl+digit shortcut can list it as a dependency without
-  // a TDZ violation: `useCallback`/`const` bindings are not hoisted like function declarations,
-  // so referencing switchProject in that effect's deps array before this point would throw
-  // "used before its declaration".
+  // actions further down) so the digit-project-jump can reference it without a TDZ violation.
   const switchProject = useCallback(
     (id: string) => {
       if (id === useProjects.getState().activeProjectId) return
@@ -6853,40 +6861,33 @@ export function Canvas() {
     },
     [commitActiveToStore, writeDisk]
   )
-
-  // Cmd/Ctrl+K toggles the command palette; Cmd/Ctrl+, opens settings.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      const shortcuts = useSettings.getState().settings.shortcuts
+      if (matchesShortcut(e, shortcuts.commandPalette, isMac)) {
         e.preventDefault()
         setPaletteOpen((v) => !v)
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
-        // The discoverable global palette shortcut (alongside ⌘K, which keeps working — existing
-        // muscle memory is never taken away). Chromium reserves Ctrl+Shift+C for its inspector;
-        // Ctrl+Shift+F is free on every platform this app ships to.
-        e.preventDefault()
-        setPaletteOpen((v) => !v)
-      } else if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+      } else if (matchesShortcut(e, shortcuts.settings, isMac)) {
         e.preventDefault()
         setSettingsSection(undefined)
         setSettingsOpen(true)
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
+      } else if (matchesShortcut(e, shortcuts.toggleExplorer, isMac)) {
         e.preventDefault()
         setExplorerOpen((v) => !v)
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
+      } else if (matchesShortcut(e, shortcuts.toggleSourceControl, isMac)) {
         e.preventDefault()
         setScOpen((v) => !v)
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'b') {
+      } else if (matchesShortcut(e, shortcuts.toggleViewMode, isMac)) {
         e.preventDefault()
         const id = useProjects.getState().activeProjectId
         if (id) useViewMode.getState().toggle(id)
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+      } else if (matchesShortcut(e, shortcuts.toggleSessionsPin, isMac)) {
         e.preventDefault()
         toggleSessionsPin()
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+      } else if (matchesShortcut(e, shortcuts.toggleFocusMode, isMac)) {
         e.preventDefault()
         toggleFocusMode()
-      } else if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+      } else if (matchesShortcut(e, shortcuts.shortcutsPanel, isMac)) {
         e.preventDefault()
         setShortcutsOpen((v) => !v)
       } else if (zoomShortcutChord(e) !== null) {
@@ -6912,6 +6913,8 @@ export function Canvas() {
         }
       } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'c') {
         // Native text selection wins (markdown, editor and terminal keep their normal copy path).
+      } else if (matchesShortcut(e, shortcuts.copySelection, isMac)) {
+        // Copy the current page selection (e.g. markdown view) to the clipboard.
         const tag = (document.activeElement?.tagName || '').toLowerCase()
         if (
           tag === 'input' ||

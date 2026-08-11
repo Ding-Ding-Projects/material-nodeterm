@@ -7,6 +7,8 @@ import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
+import type { ShortcutMap } from './shortcuts'
+import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
@@ -1517,6 +1519,9 @@ export interface Settings {
   /** App-logo customization (Settings → Appearance → "App logo"). Presentation only — see
    *  docs/app-logo.md for exactly what this can and cannot change. */
   appLogo: AppLogoSettings
+  /** User-configurable keyboard shortcuts, keyed by action id. Seeded from DEFAULT_SHORTCUTS;
+   *  merged over defaults on load so a new action simply appears with its shipped combo. */
+  shortcuts: ShortcutMap
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -1638,6 +1643,7 @@ export const DEFAULT_SETTINGS: Settings = {
   appearancePresets: [],
   appDisplayName: '',
   appLogo: { selection: 'shipped' },
+  shortcuts: DEFAULT_SHORTCUTS,
 }
 
 export interface SettingsApi {

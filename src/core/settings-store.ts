@@ -27,6 +27,10 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
     merged.defaultTerminalProfileId =
       typeof saved?.defaultShell === 'string' && saved.defaultShell.length > 0 ? 'custom' : 'auto'
   }
+  // `shortcuts` is a nested map seeded from DEFAULT_SHORTCUTS. Merge one level deep so an old
+  // settings.json that predates a newly-added action still picks up its shipped default, exactly
+  // like `speech`. A missing map on old files falls back to the full default map.
+  merged.shortcuts = { ...DEFAULT_SETTINGS.shortcuts, ...saved?.shortcuts }
   // Legacy `terminalGpuRendering` was a boolean whose default (true) was merged into every saved
   // file — so a stored `true` is indistinguishable from "never touched" and maps to the new
   // 'auto' (platform-aware) default, while a stored `false` was always an explicit escape-hatch

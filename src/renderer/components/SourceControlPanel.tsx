@@ -7,6 +7,7 @@ import type { GitHistoryItem, GitHistoryResult } from '@shared/git-history'
 import { promptDialog } from './promptDialog'
 import { useProjects } from '../state/projects'
 import { useSettings } from '../state/settings'
+import { matchesShortcut } from '@shared/shortcut'
 import { useSshConn } from '../state/sshConn'
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
 import { openDestructiveGate } from '../state/destructiveGate'
@@ -57,6 +58,8 @@ function DiffStat({ added, deleted }: { added: number; deleted: number }) {
     </span>
   )
 }
+
+const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 /** Visual Studio-style Source Control: file-level stage/diff/discard + branch switcher. */
 export function SourceControlPanel({
@@ -530,7 +533,8 @@ export function SourceControlPanel({
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') commitAndPush()
+                      const commitShortcut = useSettings.getState().settings.shortcuts.commitStaged
+                      if (matchesShortcut(e, commitShortcut, isMac)) commitAndPush()
                     }}
                   />
                   <button

@@ -15,6 +15,7 @@ import { NotchSection } from './sections/NotchSection'
 import { PhoneSection } from './sections/PhoneSection'
 import { SpeechSection } from './sections/SpeechSection'
 import { ScheduleSection } from './sections/ScheduleSection'
+import { ShortcutsSection } from './sections/ShortcutsSection'
 import { AgentsSection } from './sections/AgentsSection'
 import { UsageSection } from './sections/UsageSection'
 import { AccountsSection } from './sections/AccountsSection'
@@ -128,6 +129,7 @@ export function SettingsPage({
             <SpeechSection isActive={active === 'speech'} />
             {languageFeaturesAllowed && <LanguageSection isActive={active === 'language'} />}
             <ScheduleSection isActive={active === 'schedule'} />
+            <ShortcutsSection isActive={active === 'shortcuts'} />
             <AgentsSection isActive={active === 'agents'} />
             <UsageSection isActive={active === 'usage'} />
             <AccountsSection isActive={active === 'accounts'} />

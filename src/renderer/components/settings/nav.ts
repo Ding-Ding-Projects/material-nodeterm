@@ -9,6 +9,7 @@ export type SettingsSectionId =
   | 'phone'
   | 'speech'
   | 'schedule'
+  | 'shortcuts'
   | 'agents'
   | 'usage'
   | 'accounts'
@@ -85,7 +86,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'language', title: 'Language' },
       { id: 'narrator', title: 'Narrator' },
       { id: 'speech', title: 'Speech' },
-      { id: 'schedule', title: 'Schedule' }
+      { id: 'schedule', title: 'Schedule' },
+      { id: 'shortcuts', title: 'Shortcuts' }
     ]
   },
   {

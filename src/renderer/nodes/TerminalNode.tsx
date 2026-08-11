@@ -152,6 +152,7 @@ import { useSettings } from '../state/settings'
 import { useTerminalProfiles } from '../state/terminal-profiles'
 import { useCodexIdentity, codexSharedIdentity, codexFallbackText } from '../state/codexIdentity'
 import { useAgentStatus, agentStatusForApi, inferInterruptAfterSettle } from '../state/agentStatus'
+import { matchesShortcut } from '@shared/shortcut'
 import type { AgentState } from '@shared/agents/normalize'
 import type { ClientId } from '@shared/presence'
 import { PresenceChips } from '../components/PresenceChips'
@@ -979,6 +980,8 @@ function setCo(key: string, patch: Partial<CoState>): void {
   coStates.set(key, next)
   coSubs.get(key)?.(next)
 }
+
+const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 /**
  * A single terminal node: header (collapse + color + title + close), optional tag chips,
@@ -4577,16 +4580,13 @@ export function TerminalNode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.query, search.mode, search.error, searchOpen])
 
-  // Cmd/Ctrl+F toggles the find-bar while this node is hovered. No main-process interception
-  // needed (the Electron renderer has no native find UI), unlike Cmd+M.
+  // Find-bar toggle (default ⌘F) while this node is hovered. No main-process interception
+  // needed (the Electron renderer has no native find UI), unlike the markdown toggle. Combo is
+  // configurable via settings.shortcuts.findInTerminal.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (
-        (e.metaKey || e.ctrlKey) &&
-        !e.altKey &&
-        e.key.toLowerCase() === 'f' &&
-        hoveredRef.current
-      ) {
+      const findShortcut = useSettings.getState().settings.shortcuts.findInTerminal
+      if (matchesShortcut(e, findShortcut, isMac) && hoveredRef.current) {
         e.preventDefault()
         setSearchOpen((v) => !v)
       }
