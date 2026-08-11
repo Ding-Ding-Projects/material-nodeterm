@@ -135,6 +135,35 @@ describe('canvas-control shim', () => {
     expect(received.at(-1)).toMatchObject({ verb: 'status', args: { message: 'msg-1' } })
   })
 
+  it('carries native Loop creation and exact targets unchanged', async () => {
+    await callShim([
+      'create-loop',
+      '--task',
+      'Check queues',
+      '--every',
+      '15m',
+      '--to',
+      'term-a,term-b',
+      '--title',
+      'Queue Watch',
+      '--start'
+    ])
+    expect(received.at(-1)).toMatchObject({
+      verb: 'create-loop',
+      args: {
+        task: 'Check queues',
+        every: '15m',
+        to: 'term-a,term-b',
+        title: 'Queue Watch',
+        start: ''
+      }
+    })
+    await callShim(['pause-loop', '--node', 'scheduler-1'])
+    expect(received.at(-1)).toMatchObject({
+      verb: 'pause-loop', args: { node: 'scheduler-1' }
+    })
+  })
+
   it('maps the bare positional to --path / --node per verb', async () => {
     await callShim(['show-image', '/tmp/a b.png'])
     expect(received.at(-1)?.args).toEqual({ path: '/tmp/a b.png' })

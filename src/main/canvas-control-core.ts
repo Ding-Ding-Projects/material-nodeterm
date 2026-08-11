@@ -9,6 +9,13 @@ export type ControlVerb =
   | 'open-terminal'
   | 'open-claude'
   | 'open-agent'
+  | 'create-loop'
+  | 'update-loop'
+  | 'start-loop'
+  | 'pause-loop'
+  | 'run-loop'
+  | 'delete-loop'
+  | 'loop-status'
   | 'show-image'
   | 'show-video'
   | 'show-web'
@@ -43,6 +50,13 @@ const VERBS: ControlVerb[] = [
   'open-terminal',
   'open-claude',
   'open-agent',
+  'create-loop',
+  'update-loop',
+  'start-loop',
+  'pause-loop',
+  'run-loop',
+  'delete-loop',
+  'loop-status',
   'show-image',
   'show-video',
   'show-web',
@@ -68,7 +82,7 @@ const VERBS: ControlVerb[] = [
   'assign'
 ]
 
-const DESTRUCTIVE: ReadonlySet<ControlVerb> = new Set(['write', 'close'])
+const DESTRUCTIVE: ReadonlySet<ControlVerb> = new Set(['write', 'close', 'delete-loop'])
 
 export function isDestructiveVerb(verb: ControlVerb): boolean {
   return DESTRUCTIVE.has(verb)
@@ -103,6 +117,31 @@ export function parseControlRequest(
   }
   if (v === 'open-agent' && args.resume && args.count && args.count !== '1') {
     return { error: 'open-agent --resume opens exactly one session' }
+  }
+  if (v === 'create-loop' && !args.task?.trim()) return { error: 'create-loop requires --task' }
+  if (v === 'update-loop' && !args.node) return { error: 'update-loop requires --node <id>' }
+  if (
+    v === 'update-loop' &&
+    !['task', 'title', 'every', 'to'].some((key) => Object.prototype.hasOwnProperty.call(args, key))
+  ) {
+    return { error: 'update-loop requires at least one of --task, --title, --every or --to' }
+  }
+  if (
+    (v === 'create-loop' || v === 'update-loop') &&
+    Object.prototype.hasOwnProperty.call(args, 'every') &&
+    !/^[1-9][0-9]*(?:m|h|d)$/.test(args.every)
+  ) {
+    return { error: `${v} --every must be a positive interval such as 15m, 2h or 1d` }
+  }
+  if (
+    (v === 'start-loop' ||
+      v === 'pause-loop' ||
+      v === 'run-loop' ||
+      v === 'delete-loop' ||
+      v === 'loop-status') &&
+    !args.node
+  ) {
+    return { error: `${v} requires --node <id>` }
   }
   if (
     v === 'open-terminal' &&
@@ -182,6 +221,14 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  Example: `open-agent --agent codex --resume <known-id> --cwd <project>`.',
     '  For Codex, `--account system|<id>` selects the login; otherwise the opener\'s Codex account is inherited.',
     '  In Codex TUI use this shell verb; Desktop dynamic tool calls are not available there.',
+    '- `create-loop --task "..." [--every 15m|2h|1d] [--to <node-id,id>] [--title L] [--start]` — create',
+    '  a visible persistent Loop. Omit `--to` to target yourself. Targets must be exact existing agent',
+    '  node ids from `list`; titles are never addresses. Loops start paused unless `--start` is explicit.',
+    '  Use only for an explicitly recurring user request, never to turn a one-off task into automation.',
+    '- `update-loop --node <id> [--task "..."] [--every 15m] [--to <id,id>] [--title L]` /',
+    '  `start-loop --node <id>` / `pause-loop --node <id>` / `run-loop --node <id>` /',
+    '  `loop-status --node <id>` / `delete-loop --node <id>` — manage visible Loops. `run-loop` queues',
+    '  one immediate mailbox delivery without changing the cadence; `delete-loop` asks the user to confirm.',
     '- `show-image <path>` / `show-video <path>` — open a media file as a node.',
     '- `show-web (--url U | --file P.html | --html "<...>")` — open a web viewer.',
     '- `open-browser --url U` — open a navigable browser node. In Codex, control that exact node',
@@ -395,6 +442,15 @@ Verbs:
   plain terminal never reports finishing and the node would hang forever. Note the semantics:
   "idle" is the end of a station's TURN, not proof its whole job is done — right for a station
   given one self-contained prompt, wrong if you expect a long conversation first.
+- \`create-loop --task "..." [--every 15m|2h|1d] [--to <node-id,id>] [--title L] [--start]\` — create
+  a visible persistent Loop. Omit \`--to\` to target yourself. Every target must be an exact existing
+  agent node id from \`list\`; never address mutable titles. New Loops are paused unless \`--start\`
+  is explicit. Create one only for an explicitly recurring user request, never for a one-off task.
+- \`update-loop --node <id> [--task "..."] [--every 15m] [--to <id,id>] [--title L]\` — update it.
+- \`start-loop --node <id>\` / \`pause-loop --node <id>\` — enable or pause its cadence.
+- \`run-loop --node <id>\` — queue one immediate mailbox delivery without changing its cadence.
+- \`loop-status --node <id>\` — inspect task, cadence, targets and last/next run.
+- \`delete-loop --node <id>\` — delete the visible Loop after user confirmation.
 - \`show-image <path>\` — open an image file as a node.
 - \`show-video <path>\` — open a video file as a player node.
 - \`show-web (--url U | --file P.html | --html "<...>")\` — open a web viewer (live URL or local HTML you wrote).

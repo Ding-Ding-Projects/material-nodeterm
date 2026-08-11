@@ -72,6 +72,7 @@ import {
   loopMessageId,
   loopRunDue,
   nextLoopRun,
+  parseLoopInterval,
   validLoopInterval
 } from '../lib/nativeLoop'
 import { withNodeBoundary } from '../components/NodeBoundary'
@@ -6547,6 +6548,24 @@ export function Canvas() {
         }
         return ids
       }
+      const resolveLoopTargets = (raw: string | undefined): string[] | null => {
+        const ids = [...new Set((raw ?? sourceNodeId).split(',').map((id) => id.trim()).filter(Boolean))]
+        if (!ids.length) {
+          reply({ ok: false, error: `${verb}: --to must contain at least one exact agent node id` })
+          return null
+        }
+        for (const id of ids) {
+          const target = nodesRef.current.find((node) => node.id === id)
+          const targetAgent = target && createdAgentId(target.data)
+          if (!target || target.type !== 'terminal' || !targetAgent || !canControlCanvas(targetAgent)) {
+            reply({ ok: false, error: `${verb}: ${id} is not an addressable agent node` })
+            return null
+          }
+        }
+        return ids
+      }
+      const nativeLoop = (id: string | undefined): CanvasNode | undefined =>
+        nodesRef.current.find((node) => node.id === id && node.type === 'scheduler')
       // Hold a freshly-built node's launch instead of running it on open. The factories already
       // composed the exact command (agent CLI + permission-mode flag + prompt, or --cmd), so it
       // is MOVED rather than rebuilt — a second construction site is how the two drift apart.
@@ -6622,6 +6641,187 @@ export function Canvas() {
               ok: true,
               result: list,
               message: list.map((n) => `${n.id} [${n.kind}] ${n.title}`).join('\n')
+            })
+            return
+          }
+          case 'create-loop': {
+            const targets = resolveLoopTargets(args.to)
+            if (!targets) return
+            const intervalMs = parseLoopInterval(args.every)
+            if (intervalMs === null) {
+              reply({ ok: false, error: 'create-loop: invalid or out-of-range --every interval' })
+              return
+            }
+            const start = Object.prototype.hasOwnProperty.call(args, 'start')
+            const now = Date.now()
+            const node = createNativeLoopNode(nodesRef.current.length, placeBelow(0))
+            node.data = {
+              ...node.data,
+              title: args.title?.trim() || 'Loop',
+              loopTask: args.task?.trim() ?? '',
+              loopIntervalMs: intervalMs,
+              loopEnabled: start,
+              loopNextRunAt: start ? nextLoopRun(now, intervalMs) : undefined,
+              loopTargetIds: targets
+            }
+            const id = addAndConnect(node)
+            reply({
+              ok: true,
+              message: `created ${start ? 'running' : 'paused'} Loop ${id} → ${targets.join(', ')}`,
+              result: { id, enabled: start, intervalMs, targets }
+            })
+            return
+          }
+          case 'update-loop': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({ ok: false, error: `update-loop: no Loop with id ${args.node ?? 'missing'}` })
+              return
+            }
+            const intervalMs = Object.prototype.hasOwnProperty.call(args, 'every')
+              ? parseLoopInterval(args.every)
+              : undefined
+            if (intervalMs === null) {
+              reply({ ok: false, error: 'update-loop: invalid or out-of-range --every interval' })
+              return
+            }
+            const targets = Object.prototype.hasOwnProperty.call(args, 'to')
+              ? resolveLoopTargets(args.to)
+              : undefined
+            if (targets === null) return
+            const now = Date.now()
+            const clearsTask = Object.prototype.hasOwnProperty.call(args, 'task') && !args.task?.trim()
+            setNodes((current) =>
+              current.map((node) =>
+                node.id !== loop.id
+                  ? node
+                  : {
+                      ...node,
+                      data: {
+                        ...node.data,
+                        ...(Object.prototype.hasOwnProperty.call(args, 'title')
+                          ? { title: args.title?.trim() || 'Loop' }
+                          : {}),
+                        ...(Object.prototype.hasOwnProperty.call(args, 'task')
+                          ? { loopTask: args.task?.trim() ?? '' }
+                          : {}),
+                        ...(intervalMs === undefined
+                          ? {}
+                          : {
+                              loopIntervalMs: intervalMs,
+                              loopNextRunAt: node.data.loopEnabled
+                                ? nextLoopRun(now, intervalMs)
+                                : undefined
+                            }),
+                        ...(targets === undefined ? {} : { loopTargetIds: targets }),
+                        ...(clearsTask ? { loopEnabled: false, loopNextRunAt: undefined } : {})
+                      }
+                    }
+              )
+            )
+            markDirty()
+            reply({ ok: true, message: `updated Loop ${loop.id}` })
+            return
+          }
+          case 'start-loop':
+          case 'pause-loop': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({ ok: false, error: `${verb}: no Loop with id ${args.node ?? 'missing'}` })
+              return
+            }
+            const enabled = verb === 'start-loop'
+            const task = String(loop.data.loopTask ?? '').trim()
+            const targets = (loop.data.loopTargetIds as string[] | undefined) ?? []
+            if (enabled && (!task || !targets.length)) {
+              reply({ ok: false, error: 'start-loop: Loop needs a task and at least one target' })
+              return
+            }
+            const intervalMs = validLoopInterval(loop.data.loopIntervalMs)
+            setNodes((current) =>
+              current.map((node) =>
+                node.id === loop.id
+                  ? {
+                      ...node,
+                      data: {
+                        ...node.data,
+                        loopEnabled: enabled,
+                        loopNextRunAt: enabled ? nextLoopRun(Date.now(), intervalMs) : undefined
+                      }
+                    }
+                  : node
+              )
+            )
+            markDirty()
+            reply({ ok: true, message: `${enabled ? 'started' : 'paused'} Loop ${loop.id}` })
+            return
+          }
+          case 'run-loop': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({ ok: false, error: `run-loop: no Loop with id ${args.node ?? 'missing'}` })
+              return
+            }
+            const now = Date.now()
+            const count = await fireNativeLoop(loop.id, now)
+            if (!count) {
+              reply({ ok: false, error: 'run-loop: Loop needs a task and at least one valid target' })
+              return
+            }
+            setNodes((current) =>
+              current.map((node) =>
+                node.id === loop.id
+                  ? { ...node, data: { ...node.data, loopLastRunAt: now } }
+                  : node
+              )
+            )
+            markDirty()
+            reply({
+              ok: true,
+              message: `queued Loop ${loop.id} for ${count} target(s)`,
+              result: { id: loop.id, queued: count }
+            })
+            return
+          }
+          case 'loop-status': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({ ok: false, error: `loop-status: no Loop with id ${args.node ?? 'missing'}` })
+              return
+            }
+            const result = {
+              id: loop.id,
+              title: loop.data.title,
+              task: loop.data.loopTask,
+              intervalMs: validLoopInterval(loop.data.loopIntervalMs),
+              enabled: !!loop.data.loopEnabled,
+              targets: (loop.data.loopTargetIds as string[] | undefined) ?? [],
+              nextRunAt: loop.data.loopNextRunAt,
+              lastRunAt: loop.data.loopLastRunAt
+            }
+            reply({ ok: true, message: JSON.stringify(result), result })
+            return
+          }
+          case 'delete-loop': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({ ok: false, error: `delete-loop: no Loop with id ${args.node ?? 'missing'}` })
+              return
+            }
+            if (confirmBusy()) {
+              reply({ ok: false, error: 'a confirmation is already pending — try again' })
+              return
+            }
+            setConfirm({
+              message: `Agent "${srcTitle}" wants to delete Loop "${String(loop.data.title || loop.id)}".`,
+              confirmLabel: 'Delete Loop',
+              requestedBy: srcTitle,
+              onConfirm: () => {
+                setConfirm(null)
+                deleteNodes([loop.id])
+                reply({ ok: true, message: `deleted Loop ${loop.id}` })
+              },
+              onCancel: () => reply({ ok: false, error: 'denied by user' })
             })
             return
           }

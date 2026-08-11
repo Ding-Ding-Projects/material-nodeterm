@@ -7,6 +7,19 @@ export function validLoopInterval(value: unknown): number {
   return Math.min(LOOP_MAX_INTERVAL_MS, Math.max(LOOP_MIN_INTERVAL_MS, Math.round(value)))
 }
 
+/** Parse the canvas-control cadence grammar. UI values already arrive as milliseconds. */
+export function parseLoopInterval(value: string | undefined): number | null {
+  if (value === undefined) return LOOP_DEFAULT_INTERVAL_MS
+  const match = /^([1-9][0-9]*)(m|h|d)$/.exec(value)
+  if (!match) return null
+  const unit = match[2] === 'd' ? 86_400_000 : match[2] === 'h' ? 3_600_000 : 60_000
+  const raw = Number(match[1]) * unit
+  if (!Number.isSafeInteger(raw) || raw < LOOP_MIN_INTERVAL_MS || raw > LOOP_MAX_INTERVAL_MS) {
+    return null
+  }
+  return raw
+}
+
 /**
  * Keep a future run unchanged. A missing or missed run is scheduled once from now, so waking
  * after several intervals never creates a catch-up burst.

@@ -124,6 +124,35 @@ describe('parseControlRequest', () => {
     expect(isDestructiveVerb('open-agent')).toBe(false)
   })
 
+  it('validates native Loop creation and management verbs', () => {
+    expect(parseControlRequest('create-loop', {})).toEqual({ error: 'create-loop requires --task' })
+    expect(parseControlRequest('create-loop', { task: '   ' })).toEqual({ error: 'create-loop requires --task' })
+    expect(parseControlRequest('create-loop', { task: 'Check queues', every: '15m', start: '' })).toEqual({
+      verb: 'create-loop',
+      args: { task: 'Check queues', every: '15m', start: '' }
+    })
+    expect(parseControlRequest('create-loop', { task: 'x', every: '30s' })).toEqual({
+      error: 'create-loop --every must be a positive interval such as 15m, 2h or 1d'
+    })
+    expect(parseControlRequest('create-loop', { task: 'x', every: '' })).toEqual({
+      error: 'create-loop --every must be a positive interval such as 15m, 2h or 1d'
+    })
+    expect(parseControlRequest('update-loop', { node: 'scheduler-1' })).toEqual({
+      error: 'update-loop requires at least one of --task, --title, --every or --to'
+    })
+    expect(parseControlRequest('update-loop', { node: 'scheduler-1', to: 'term-a,term-b' })).toEqual({
+      verb: 'update-loop', args: { node: 'scheduler-1', to: 'term-a,term-b' }
+    })
+    for (const verb of ['start-loop', 'pause-loop', 'run-loop', 'delete-loop', 'loop-status'] as const) {
+      expect(parseControlRequest(verb, {})).toEqual({ error: `${verb} requires --node <id>` })
+      expect(parseControlRequest(verb, { node: 'scheduler-1' })).toEqual({
+        verb, args: { node: 'scheduler-1' }
+      })
+    }
+    expect(isDestructiveVerb('delete-loop')).toBe(true)
+    expect(isDestructiveVerb('create-loop')).toBe(false)
+  })
+
   it('prevents a legacy direct Codex resume from opening duplicate agent nodes', () => {
     expect(parseControlRequest('open-terminal', {
       cmd: 'codex resume thread-a', count: '2'
@@ -226,7 +255,7 @@ describe('parseControlRequest', () => {
 
   it('instructions cover the verb set and the confirm caveat', () => {
     const body = buildCanvasControlInstructions('/tmp/nodeterm.sh')
-    for (const verb of ['list', 'open-agent', 'spawn-team', 'group', 'ungroup', 'move', 'arrange', 'rename', 'send', 'reply', 'status', 'write', 'close', 'board', 'assign']) {
+    for (const verb of ['list', 'open-agent', 'create-loop', 'update-loop', 'start-loop', 'pause-loop', 'run-loop', 'delete-loop', 'loop-status', 'spawn-team', 'group', 'ungroup', 'move', 'arrange', 'rename', 'send', 'reply', 'status', 'write', 'close', 'board', 'assign']) {
       expect(body).toContain(verb)
     }
     expect(body.toLowerCase()).toContain('confirm')
@@ -234,12 +263,14 @@ describe('parseControlRequest', () => {
     expect(body).toContain('prompt-only node plus a renamed title is a new conversation')
     expect(body).toContain('open-agent --agent codex --resume <known-id>')
     expect(body).toContain('Never use `write` as agent messaging')
+    expect(body).toContain('Loops start paused unless `--start` is explicit')
 
     const skill = buildCanvasSkillBody('/tmp/nodeterm.sh')
     expect(skill).toContain('when an existing session id is known, you MUST pass it with `--resume`')
     expect(skill).toContain('prompt-only node plus a renamed title is a new conversation')
     expect(skill).toContain('open-agent --agent codex --resume <known-id>')
     expect(skill).toContain('For Codex, `--account system|<id>`')
+    expect(skill).toContain('New Loops are paused unless `--start`')
     expect(skill).not.toContain("command. For Codex,\n  **Restore rule:**")
   })
 
