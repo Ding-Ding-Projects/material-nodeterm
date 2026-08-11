@@ -1,5 +1,12 @@
 import type { Node } from '@xyflow/react'
-import type { CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
+import type {
+  CanvasMutation,
+  CanvasNodeState,
+  ClaudeAccount,
+  NodeKind,
+  PendingLaunch,
+  Project
+} from '@shared/types'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import {
   agentConfig,
@@ -163,7 +170,12 @@ function staggeredPosition(index: number) {
 }
 
 /** Top-left position so a node of the given size is centered on `center`. */
-function placeAt(center: { x: number; y: number } | undefined, index: number, w: number, h: number) {
+function placeAt(
+  center: { x: number; y: number } | undefined,
+  index: number,
+  w: number,
+  h: number
+) {
   return center ? { x: center.x - w / 2, y: center.y - h / 2 } : staggeredPosition(index)
 }
 
@@ -289,11 +301,25 @@ const FALLBACK_AGENT_COLOR = '#888888'
  * custom agents are looked up by id in the settings store. Falls back to the id itself for
  * unknown agents so a node still spawns something sensible.
  */
-function resolveAgent(agentId: AgentId): { label: string; color: string; launchCmd: string } {
+function resolveAgent(agentId: AgentId): {
+  label: string
+  color: string
+  launchCmd: string
+} {
   const builtin = agentConfig(agentId)
-  if (builtin) return { label: builtin.label, color: builtin.color, launchCmd: builtin.launchCmd }
+  if (builtin)
+    return {
+      label: builtin.label,
+      color: builtin.color,
+      launchCmd: builtin.launchCmd
+    }
   const custom = useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
-  if (custom) return { label: custom.label, color: FALLBACK_AGENT_COLOR, launchCmd: custom.launchCmd }
+  if (custom)
+    return {
+      label: custom.label,
+      color: FALLBACK_AGENT_COLOR,
+      launchCmd: custom.launchCmd
+    }
   return { label: agentId, color: FALLBACK_AGENT_COLOR, launchCmd: agentId }
 }
 
@@ -304,10 +330,10 @@ function resolveAgent(agentId: AgentId): { label: string; color: string; launchC
  * are always excluded. Keeps a project's add-menus / default-account picker from offering an
  * account that can't run there (a remote account's credentials live on its host's filesystem).
  */
-export function accountsForProject(
-  accounts: ClaudeAccount[],
+export function accountsForProject<T extends Pick<ClaudeAccount, 'pending' | 'host'>>(
+  accounts: T[],
   project: { ssh?: { server: { host: string; user: string } } } | undefined
-): ClaudeAccount[] {
+): T[] {
   const hostKey = project?.ssh ? sshHostKey(project.ssh.server) : undefined
   return accounts.filter((a) => !a.pending && (hostKey ? a.host === hostKey : !a.host))
 }
@@ -356,7 +382,8 @@ export function createAgentNode(
   permissionMode?: AgentPermissionMode
 ): CanvasNode {
   const { label, color, launchCmd } = resolveAgent(agentId)
-  const baseCmd = agentId === 'claude' ? claudeLaunchCommand() : agentId === 'codex' && ssh ? 'codex' : launchCmd
+  const baseCmd =
+    agentId === 'claude' ? claudeLaunchCommand() : agentId === 'codex' && ssh ? 'codex' : launchCmd
   // A flag-prompt agent (opencode) takes the initial prompt via its flag — a bare positional
   // would be misread (opencode treats it as a project path). Everything else keeps the
   // historical argv append, INCLUDING stdin-after-start agents (gemini has always launched
@@ -433,9 +460,7 @@ export function createAgentNode(
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
-      ...(selectedAccountId && agentId === 'codex'
-        ? { codexAccountId: selectedAccountId }
-        : {}),
+      ...(selectedAccountId && agentId === 'codex' ? { codexAccountId: selectedAccountId } : {}),
       cwd: ssh ? ssh.remoteCwd : cwd,
       initialCommand,
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
@@ -506,7 +531,7 @@ export function accountChipLabel(
  * distinguishable once managed accounts exist.
  */
 export function systemAccountDisplay(label: string | undefined, email?: string | null): string {
-  return (label ?? '').trim() || email || 'System account'
+  return (label ?? '').trim() || email || 'Default account'
 }
 
 /**
@@ -549,9 +574,10 @@ export function isAccountLoginNode(data: { title?: string; initialCommand?: stri
 export function createCodexAccountLoginNode(
   accountId: string,
   index: number,
-  center?: { x: number; y: number }
+  center?: { x: number; y: number },
+  ssh?: Parameters<typeof createTerminalNode>[4]
 ): CanvasNode {
-  const node = createTerminalNode(index, undefined, center)
+  const node = createTerminalNode(index, undefined, center, undefined, ssh)
   node.data = {
     ...node.data,
     title: 'Codex login',
@@ -839,7 +865,7 @@ export function commonParentId(nodes: CanvasNode[], ids: string[]): string | nul
   const members = nodes.filter((nd) => set.has(nd.id))
   if (members.length === 0) return undefined
   const parents = new Set(members.map((m) => m.parentId ?? null))
-  return parents.size === 1 ? members[0].parentId ?? null : undefined
+  return parents.size === 1 ? (members[0].parentId ?? null) : undefined
 }
 
 /**
@@ -853,7 +879,12 @@ export function commonParentId(nodes: CanvasNode[], ids: string[]): string | nul
 export function arrangeNodes(
   nodes: CanvasNode[],
   ids: string[],
-  opts?: { layout?: ArrangeLayout; cols?: number; gap?: number; origin?: { x: number; y: number } }
+  opts?: {
+    layout?: ArrangeLayout
+    cols?: number
+    gap?: number
+    origin?: { x: number; y: number }
+  }
 ): CanvasNode[] {
   const set = new Set(ids)
   const members = nodes.filter((nd) => set.has(nd.id))
@@ -866,7 +897,11 @@ export function arrangeNodes(
     y: Math.min(...members.map((m) => m.position.y))
   }
   const cols =
-    layout === 'row' ? members.length : layout === 'column' ? 1 : Math.max(1, opts?.cols ?? Math.ceil(Math.sqrt(members.length)))
+    layout === 'row'
+      ? members.length
+      : layout === 'column'
+        ? 1
+        : Math.max(1, opts?.cols ?? Math.ceil(Math.sqrt(members.length)))
 
   const pos = new Map<string, { x: number; y: number }>()
   let x = origin.x
@@ -1011,9 +1046,7 @@ export function groupSelectedNodes(
   }
   if (
     members.some((member) =>
-      members.some(
-        (other) => other.id !== member.id && isDescendant(nodes, other.id, member.id)
-      )
+      members.some((other) => other.id !== member.id && isDescendant(nodes, other.id, member.id))
     )
   ) {
     return nodes
@@ -1028,7 +1061,10 @@ export function groupSelectedNodes(
   const gy = minY - GROUP_PAD - GROUP_HEADER
   const group = createGroupNode(
     { x: gx, y: gy },
-    { width: maxX - minX + GROUP_PAD * 2, height: maxY - minY + GROUP_PAD * 2 + GROUP_HEADER },
+    {
+      width: maxX - minX + GROUP_PAD * 2,
+      height: maxY - minY + GROUP_PAD * 2 + GROUP_HEADER
+    },
     groupIndex
   )
   const parentId = members[0].parentId
@@ -1053,7 +1089,8 @@ export function groupSelectedNodes(
 
 /** Returns a copy of a node with a fresh id, offset position, and top-level placement. */
 export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
-  const kind: NodeKind = node.type === 'sticky' ? 'sticky' : node.type === 'group' ? 'group' : 'terminal'
+  const kind: NodeKind =
+    node.type === 'sticky' ? 'sticky' : node.type === 'group' ? 'group' : 'terminal'
   const prefix = kind === 'terminal' ? 'term' : kind
   return {
     ...node,
@@ -1091,7 +1128,13 @@ export function fitGroupToChildren(nodes: CanvasNode[], groupId: string): Canvas
   const height = maxY - minY + GROUP_PAD * 2 + GROUP_HEADER
   return nodes.map((n) => {
     if (n.id === groupId) {
-      return { ...n, position: { x: gx, y: gy }, width, height, style: { ...n.style, width, height } }
+      return {
+        ...n,
+        position: { x: gx, y: gy },
+        width,
+        height,
+        style: { ...n.style, width, height }
+      }
     }
     if (n.parentId === groupId) {
       return { ...n, position: { x: absX(n) - gx, y: absY(n) - gy } }
@@ -1271,7 +1314,10 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
       n = {
         ...n,
         kind: 'sticky',
-        position: n.position ?? { x: (n as { x?: number }).x ?? 0, y: (n as { y?: number }).y ?? 0 },
+        position: n.position ?? {
+          x: (n as { x?: number }).x ?? 0,
+          y: (n as { y?: number }).y ?? 0
+        },
         size: n.size ?? {
           width: (n as { width?: number }).width ?? STICKY_SIZE.width,
           height: (n as { height?: number }).height ?? STICKY_SIZE.height
@@ -1289,9 +1335,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
       id: n.id,
       // Default to 'terminal' for nodes saved before the kind field existed.
       type: n.kind ?? 'terminal',
-      ...((n.kind ?? 'terminal') === 'group'
-        ? { dragHandle: '.group-node__label' }
-        : {}),
+      ...((n.kind ?? 'terminal') === 'group' ? { dragHandle: '.group-node__label' } : {}),
       position: n.position,
       width: n.size.width,
       height,
@@ -1359,54 +1403,53 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
                     : kind === 'dino'
                       ? DINO_SIZE
                       : TERMINAL_SIZE
-  return nodes
-    .map((n) => {
-      const kind: NodeKind = (n.type as NodeKind) ?? 'terminal'
-      const collapsed = !!n.data.collapsed
-      return {
-        id: n.id,
-        kind,
-        position: n.position,
-        size: {
-          width: n.measured?.width ?? n.width ?? sizeFor(kind).width,
-          // While collapsed, persist the expanded height, not the shrunk one.
-          height: collapsed
-            ? n.data.expandedHeight ?? sizeFor(kind).height
-            : n.measured?.height ?? n.height ?? sizeFor(kind).height
-        },
-        title: n.data.title,
-        titleAuto: n.data.titleAuto,
-        color: n.data.color,
-        group: n.data.group,
-        tags: n.data.tags,
-        collapsed: n.data.collapsed,
-        loopTask: n.data.loopTask,
-        loopIntervalMs: n.data.loopIntervalMs,
-        loopEnabled: n.data.loopEnabled,
-        loopNextRunAt: n.data.loopNextRunAt,
-        loopLastRunAt: n.data.loopLastRunAt,
-        loopTargetIds: n.data.loopTargetIds,
-        parentId: n.parentId,
-        shell: n.data.shell,
-        cwd: n.data.cwd,
-        text: n.data.text,
-        filePath: n.data.filePath,
-        fileMissing: n.data.fileMissing,
-        url: n.data.url,
-        diffStaged: n.data.diffStaged,
-        commitOid: n.data.commitOid,
-        highScore: n.data.highScore,
-        agentId: n.data.agentId,
-        accountId: n.data.accountId,
-        agentSessionId: n.data.agentSessionId,
-        codexAccountId: n.data.codexAccountId,
-        pendingLaunch: n.data.pendingLaunch,
-        ssh: n.data.ssh,
-        sshRemoteTmux: n.data.sshRemoteTmux,
-        sshFs: n.data.sshFs,
-        worktree: n.data.worktree
-      }
-    })
+  return nodes.map((n) => {
+    const kind: NodeKind = (n.type as NodeKind) ?? 'terminal'
+    const collapsed = !!n.data.collapsed
+    return {
+      id: n.id,
+      kind,
+      position: n.position,
+      size: {
+        width: n.measured?.width ?? n.width ?? sizeFor(kind).width,
+        // While collapsed, persist the expanded height, not the shrunk one.
+        height: collapsed
+          ? (n.data.expandedHeight ?? sizeFor(kind).height)
+          : (n.measured?.height ?? n.height ?? sizeFor(kind).height)
+      },
+      title: n.data.title,
+      titleAuto: n.data.titleAuto,
+      color: n.data.color,
+      group: n.data.group,
+      tags: n.data.tags,
+      collapsed: n.data.collapsed,
+      loopTask: n.data.loopTask,
+      loopIntervalMs: n.data.loopIntervalMs,
+      loopEnabled: n.data.loopEnabled,
+      loopNextRunAt: n.data.loopNextRunAt,
+      loopLastRunAt: n.data.loopLastRunAt,
+      loopTargetIds: n.data.loopTargetIds,
+      parentId: n.parentId,
+      shell: n.data.shell,
+      cwd: n.data.cwd,
+      text: n.data.text,
+      filePath: n.data.filePath,
+      fileMissing: n.data.fileMissing,
+      url: n.data.url,
+      diffStaged: n.data.diffStaged,
+      commitOid: n.data.commitOid,
+      highScore: n.data.highScore,
+      agentId: n.data.agentId,
+      accountId: n.data.accountId,
+      agentSessionId: n.data.agentSessionId,
+      codexAccountId: n.data.codexAccountId,
+      pendingLaunch: n.data.pendingLaunch,
+      ssh: n.data.ssh,
+      sshRemoteTmux: n.data.sshRemoteTmux,
+      sshFs: n.data.sshFs,
+      worktree: n.data.worktree
+    }
+  })
 }
 
 /**

@@ -38,7 +38,9 @@ function parseForm(body: string): Record<string, string> {
   for (const pair of body.split('&')) {
     const i = pair.indexOf('=')
     if (i < 0) continue
-    out[decodeURIComponent(pair.slice(0, i))] = decodeURIComponent(pair.slice(i + 1).replace(/\+/g, ' '))
+    out[decodeURIComponent(pair.slice(0, i))] = decodeURIComponent(
+      pair.slice(i + 1).replace(/\+/g, ' ')
+    )
   }
   return out
 }
@@ -64,7 +66,10 @@ export function parseControlBody(
     return { nodeId: form.nodeId ?? '', args }
   }
   try {
-    const parsed = JSON.parse(raw) as { nodeId?: string; args?: Record<string, string> }
+    const parsed = JSON.parse(raw) as {
+      nodeId?: string
+      args?: Record<string, string>
+    }
     return { nodeId: parsed.nodeId ?? '', args: parsed.args ?? {} }
   } catch {
     return { nodeId: '', args: {} }
@@ -76,7 +81,8 @@ class HookServer {
   private port = 0
   private token = ''
   private listener: ((e: NormalizedAgentEvent) => void) | null = null
-  private rawListener: ((agentId: string, nodeId: string, payload: Record<string, unknown>) => void) | null = null
+  private rawListener:
+    ((agentId: string, nodeId: string, payload: Record<string, unknown>) => void) | null = null
   private controlHandler:
     | ((cmd: { verb: string; nodeId: string; args: Record<string, string> }) => Promise<{
         ok: boolean
@@ -91,23 +97,44 @@ class HookServer {
     | ((req: { verb: string; nodeId: string; args: Record<string, string> }) => Promise<string>)
     | null = null
   private codexThreadStartHandler:
-    ((req: { nodeId: string; cwd: string; hookEndpoint: string; accountId?: string }) => Promise<string>) | null = null
+    | ((req: {
+        nodeId: string
+        cwd: string
+        hookEndpoint: string
+        accountId?: string
+      }) => Promise<string>)
+    | null = null
   private codexThreadBindHandler:
-    ((req: { nodeId: string; threadId: string; hookEndpoint: string; accountId?: string }) => Promise<void>) | null = null
+    | ((req: {
+        nodeId: string
+        threadId: string
+        hookEndpoint: string
+        accountId?: string
+      }) => Promise<void>)
+    | null = null
   private codexThreadObservedHandler:
-    ((req: { nodeId: string; threadId: string; hookEndpoint: string; accountId?: string; name?: string }) => Promise<void>) | null = null
+    | ((req: {
+        nodeId: string
+        threadId: string
+        hookEndpoint: string
+        accountId?: string
+        name?: string
+      }) => Promise<void>)
+    | null = null
   private codexThreadAuthorizeHandler:
     ((req: { nodeId: string; threadId: string; accountId?: string }) => Promise<void>) | null = null
   private codexThreadExposeHandler:
-    ((req: { threadId: string; accountId?: string }) => Promise<void>) | null = null
+    ((req: { nodeId: string; threadId: string; accountId?: string }) => Promise<void>) | null = null
   private codexThreadCatalogHandler:
-    (() => Promise<Array<{ accountId?: string; socketPath: string }>>) | null = null
+    | ((req: { nodeId: string }) => Promise<Array<{ accountId?: string; socketPath: string }>>)
+    | null = null
   private codexRelayRuntime: { executable: string; script: string } | null = null
   private endpointPath = ''
   private codexNodeAuthSecret: Buffer | null = null
 
   endpointFilePath(): string {
-    if (!this.endpointPath) this.endpointPath = path.join(platform().userDataDir, 'hook-endpoint.env')
+    if (!this.endpointPath)
+      this.endpointPath = path.join(platform().userDataDir, 'hook-endpoint.env')
     return this.endpointPath
   }
 
@@ -130,7 +157,8 @@ class HookServer {
    */
   codexNodeAuthToken(nodeId: string): string {
     if (!/^[A-Za-z0-9._-]+$/.test(nodeId)) return ''
-    if (!this.codexNodeAuthSecret) throw new Error('NodeTerm Codex node authentication is unavailable')
+    if (!this.codexNodeAuthSecret)
+      throw new Error('NodeTerm Codex node authentication is unavailable')
     return createHmac('sha256', this.codexNodeAuthSecret).update(nodeId).digest('base64url')
   }
 
@@ -146,7 +174,9 @@ class HookServer {
 
   // Raw payload listener: receives the parsed (un-normalized) hook JSON. Drives the
   // contextTail/subagentTail features, which need transcript_path (not in NormalizedAgentEvent).
-  setRawListener(cb: (agentId: string, nodeId: string, payload: Record<string, unknown>) => void): void {
+  setRawListener(
+    cb: (agentId: string, nodeId: string, payload: Record<string, unknown>) => void
+  ): void {
     this.rawListener = cb
   }
 
@@ -209,8 +239,11 @@ class HookServer {
           const nodeId = form.nodeId ?? ''
           const cwd = form.cwd ?? ''
           const accountId = form.accountId || undefined
-          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !path.isAbsolute(cwd) ||
-              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
+          if (
+            !/^[A-Za-z0-9._-]+$/.test(nodeId) ||
+            !path.isAbsolute(cwd) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))
+          ) {
             res.writeHead(400)
             res.end()
             return
@@ -245,8 +278,11 @@ class HookServer {
           const nodeId = form.nodeId ?? ''
           const threadId = form.threadId ?? ''
           const accountId = form.accountId || undefined
-          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
-              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
+          if (
+            !/^[A-Za-z0-9._-]+$/.test(nodeId) ||
+            !/^[A-Za-z0-9._-]+$/.test(threadId) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))
+          ) {
             res.writeHead(400)
             res.end()
             return
@@ -278,9 +314,12 @@ class HookServer {
           const threadId = form.threadId ?? ''
           const accountId = form.accountId || undefined
           const name = form.name?.trim() || undefined
-          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
-              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId)) ||
-              (name?.length ?? 0) > 500) {
+          if (
+            !/^[A-Za-z0-9._-]+$/.test(nodeId) ||
+            !/^[A-Za-z0-9._-]+$/.test(threadId) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId)) ||
+            (name?.length ?? 0) > 500
+          ) {
             res.writeHead(400)
             res.end()
             return
@@ -312,8 +351,11 @@ class HookServer {
           const nodeId = form.nodeId ?? ''
           const threadId = form.threadId ?? ''
           const accountId = form.accountId || undefined
-          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
-              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
+          if (
+            !/^[A-Za-z0-9._-]+$/.test(nodeId) ||
+            !/^[A-Za-z0-9._-]+$/.test(threadId) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))
+          ) {
             res.writeHead(400)
             res.end()
             return
@@ -325,7 +367,11 @@ class HookServer {
           }
           try {
             if (!this.codexThreadAuthorizeHandler) throw new Error('authorize handler unavailable')
-            await this.codexThreadAuthorizeHandler({ nodeId, threadId, accountId })
+            await this.codexThreadAuthorizeHandler({
+              nodeId,
+              threadId,
+              accountId
+            })
             res.writeHead(204)
             res.end()
           } catch {
@@ -339,8 +385,11 @@ class HookServer {
           const nodeId = form.nodeId ?? ''
           const threadId = form.threadId ?? ''
           const accountId = form.accountId || undefined
-          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) || !/^[A-Za-z0-9._-]+$/.test(threadId) ||
-              (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))) {
+          if (
+            !/^[A-Za-z0-9._-]+$/.test(nodeId) ||
+            !/^[A-Za-z0-9._-]+$/.test(threadId) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))
+          ) {
             res.writeHead(400)
             res.end()
             return
@@ -352,7 +401,11 @@ class HookServer {
           }
           try {
             if (!this.codexThreadExposeHandler) throw new Error('expose handler unavailable')
-            await this.codexThreadExposeHandler({ threadId, accountId })
+            await this.codexThreadExposeHandler({
+              nodeId,
+              threadId,
+              accountId
+            })
             res.writeHead(204)
             res.end()
           } catch {
@@ -363,16 +416,20 @@ class HookServer {
         }
         if (reqUrl.pathname === '/codex-thread/catalog') {
           const nodeId = String(req.headers['x-nodeterm-node-id'] ?? '')
-          if (!/^[A-Za-z0-9._-]+$/.test(nodeId) ||
-              !this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+          if (
+            !/^[A-Za-z0-9._-]+$/.test(nodeId) ||
+            !this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])
+          ) {
             res.writeHead(403)
             res.end()
             return
           }
           try {
             if (!this.codexThreadCatalogHandler) throw new Error('catalog handler unavailable')
-            const accounts = await this.codexThreadCatalogHandler()
-            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+            const accounts = await this.codexThreadCatalogHandler({ nodeId })
+            res.writeHead(200, {
+              'content-type': 'application/json; charset=utf-8'
+            })
             res.end(JSON.stringify({ accounts }))
           } catch {
             res.writeHead(503)
@@ -393,13 +450,17 @@ class HookServer {
           // rendering the Node CLI used to do client-side. Everything else keeps the JSON shape.
           if (String(req.headers.accept ?? '').includes('text/plain')) {
             const text = result.ok
-              ? result.message ?? JSON.stringify(result.result ?? {})
-              : result.error ?? 'control request failed'
-            res.writeHead(result.ok ? 200 : 400, { 'content-type': 'text/plain; charset=utf-8' })
+              ? (result.message ?? JSON.stringify(result.result ?? {}))
+              : (result.error ?? 'control request failed')
+            res.writeHead(result.ok ? 200 : 400, {
+              'content-type': 'text/plain; charset=utf-8'
+            })
             res.end(`${text}\n`)
             return
           }
-          res.writeHead(result.ok ? 200 : 400, { 'content-type': 'application/json' })
+          res.writeHead(result.ok ? 200 : 400, {
+            'content-type': 'application/json'
+          })
           res.end(JSON.stringify(result))
           return
         }
@@ -441,7 +502,11 @@ class HookServer {
           // Raw listener first: it drives the transcript-tailing features (which need
           // transcript_path). Inside the try so a throwing raw listener still ends 204.
           this.rawListener?.(agentId, nodeId, payload)
-          const normalized = normalizeFor(agentId, { nodeId, agentId, payload })
+          const normalized = normalizeFor(agentId, {
+            nodeId,
+            agentId,
+            payload
+          })
           if (normalized && this.listener) this.listener(normalized)
         }
         res.writeHead(204)

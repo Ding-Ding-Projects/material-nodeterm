@@ -59,13 +59,7 @@ function accountScope(accountId?: string): string {
 
 function identityFile(threadId: string, accountId?: string): string {
   if (!SAFE_THREAD_ID.test(threadId)) throw new Error('Invalid NodeTerm Codex thread identity')
-  return path.join(
-    homedir(),
-    '.nodeterm',
-    'codex-thread-nodes',
-    accountScope(accountId),
-    threadId
-  )
+  return path.join(homedir(), '.nodeterm', 'codex-thread-nodes', accountScope(accountId), threadId)
 }
 
 function identityCandidates(threadId: string): Array<{ file: string; scope?: string }> {
@@ -74,7 +68,10 @@ function identityCandidates(threadId: string): Array<{ file: string; scope?: str
   try {
     for (const entry of readdirSync(root, { withFileTypes: true })) {
       if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
-      candidates.push({ file: path.join(root, entry.name, threadId), scope: entry.name })
+      candidates.push({
+        file: path.join(root, entry.name, threadId),
+        scope: entry.name
+      })
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
@@ -115,13 +112,14 @@ export function resolveCodexThreadNodeIdentity(
   root = path.join(homedir(), '.nodeterm', 'codex-thread-nodes')
 ): string | undefined {
   if (!SAFE_THREAD_ID.test(threadId)) return undefined
-  const candidates: Array<{ file: string; scope?: string }> = [
-    { file: path.join(root, threadId) }
-  ]
+  const candidates: Array<{ file: string; scope?: string }> = [{ file: path.join(root, threadId) }]
   try {
     for (const entry of readdirSync(root, { withFileTypes: true })) {
       if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
-      candidates.push({ file: path.join(root, entry.name, threadId), scope: entry.name })
+      candidates.push({
+        file: path.join(root, entry.name, threadId),
+        scope: entry.name
+      })
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return undefined
@@ -199,9 +197,12 @@ export function bindCodexThreadIdentity(
   for (const candidate of identityCandidates(threadId)) {
     const existing = readIdentityCandidate(candidate)
     if (!existing) continue
-    if (candidate.file === scopedFile &&
-        existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint &&
-        identitySignatureMatches(threadId, existing)) {
+    if (
+      candidate.file === scopedFile &&
+      existing.nodeId === nodeId &&
+      existing.hookEndpoint === hookEndpoint &&
+      identitySignatureMatches(threadId, existing)
+    ) {
       targetMatches = true
     }
     if (existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) {
@@ -257,21 +258,31 @@ function quarantineOtherCodexThreadIdentities(
         continue
       }
       if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
-      for (const thread of readdirSync(path.join(root, entry.name), { withFileTypes: true })) {
+      for (const thread of readdirSync(path.join(root, entry.name), {
+        withFileTypes: true
+      })) {
         if (thread.isFile() && SAFE_THREAD_ID.test(thread.name)) {
-          candidates.push({ file: path.join(root, entry.name, thread.name), scope: entry.name })
+          candidates.push({
+            file: path.join(root, entry.name, thread.name),
+            scope: entry.name
+          })
         }
       }
     }
   } catch (error) {
-    throw new Error('Could not enumerate Codex thread identity mappings', { cause: error })
+    throw new Error('Could not enumerate Codex thread identity mappings', {
+      cause: error
+    })
   }
   const quarantined: Array<{ source: string; quarantine: string }> = []
   try {
     for (const [index, candidate] of candidates.entries()) {
       if (candidate.file === excludeFile) continue
-      if ((candidate.scope ?? SYSTEM_ACCOUNT_SCOPE) === keepScope &&
-          path.basename(candidate.file) === keepThreadId) continue
+      if (
+        (candidate.scope ?? SYSTEM_ACCOUNT_SCOPE) === keepScope &&
+        path.basename(candidate.file) === keepThreadId
+      )
+        continue
       const identity = readIdentityCandidate(candidate)
       if (!identity) continue
       if (identity.nodeId === nodeId || path.basename(candidate.file) === keepThreadId) {
@@ -282,9 +293,13 @@ function quarantineOtherCodexThreadIdentities(
     }
   } catch (error) {
     for (const item of quarantined.reverse()) {
-      try { renameSync(item.quarantine, item.source) } catch {}
+      try {
+        renameSync(item.quarantine, item.source)
+      } catch {}
     }
-    throw new Error('Could not atomically transfer Codex thread identity', { cause: error })
+    throw new Error('Could not atomically transfer Codex thread identity', {
+      cause: error
+    })
   }
   return quarantined
 }
@@ -301,7 +316,9 @@ function discardQuarantinedCodexThreadIdentities(
   // Active mappings were removed by rename. Hidden quarantine unlink is storage cleanup only;
   // failure cannot reintroduce an owner or make exact thread-id resolution ambiguous.
   for (const item of quarantined) {
-    try { unlinkSync(item.quarantine) } catch {}
+    try {
+      unlinkSync(item.quarantine)
+    } catch {}
   }
 }
 
@@ -332,85 +349,98 @@ export function codexLauncherDir(): string {
   return path.join(homedir(), '.nodeterm', 'bin')
 }
 
+export function buildCodexLauncherScript(
+  appServerStartCommand = 'codex app-server daemon start >/dev/null 2>&1'
+): string {
+  return (
+    `#!/bin/sh\n` +
+    `case "\${NODETERM_NODE_ID-}" in ''|*[!A-Za-z0-9._-]*) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
+    `case "\${NODETERM_HOOK_ENDPOINT-}" in /*) ;; *) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
+    `case "\${NODETERM_HOOK_ENDPOINT}" in *[!A-Za-z0-9._/\\ -]*) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
+    `case "\${NODETERM_CODEX_ACCOUNT_ID-}" in *[!A-Za-z0-9._-]*) echo "NodeTerm Codex account identity unavailable" >&2; exit 64 ;; esac\n` +
+    `case "\${NODETERM_CODEX_ACCOUNT_ID-}" in ''|[A-Za-z0-9]*) ;; *) echo "NodeTerm Codex account identity unavailable" >&2; exit 64 ;; esac\n` +
+    `[ "\${NODETERM_CANVAS_CONTROL-}" = 1 ] || { echo "NodeTerm Codex identity unavailable" >&2; exit 64; }\n` +
+    `if [ "\${1-}" = resume ]; then\n` +
+    `  nt_thread="\${2-}"\n` +
+    `  case "$nt_thread" in ''|*[!A-Za-z0-9._-]*) echo "NodeTerm Codex thread identity unavailable" >&2; exit 64 ;; esac\n` +
+    `fi\n` +
+    `. "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
+    `if [ -n "\${NODETERM_HOOK_SOCK-}" ]; then\n` +
+    `  case "$NODETERM_HOOK_SOCK" in /*) ;; *) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
+    `  nt_hook_curl() { curl --unix-socket "$NODETERM_HOOK_SOCK" "$@"; }\n` +
+    `else\n` +
+    `  case "\${NODETERM_HOOK_PORT-}" in ''|*[!0-9]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
+    `  nt_hook_curl() { curl "$@"; }\n` +
+    `fi\n` +
+    `case "\${NODETERM_HOOK_TOKEN-}" in ''|*[!A-Za-z0-9-]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
+    `case "\${NODETERM_CODEX_NODE_TOKEN-}" in ''|*[!A-Za-z0-9_-]*) echo "NodeTerm Codex node identity unavailable" >&2; exit 69 ;; esac\n` +
+    `${appServerStartCommand} || { echo "NodeTerm Codex app-server unavailable" >&2; exit 69; }\n` +
+    `nt_register_relay() {\n` +
+    `  case "\${NODETERM_CODEX_RELAY_RUNTIME-}" in /*) ;; *) return 1 ;; esac\n` +
+    `  case "\${NODETERM_CODEX_RELAY_SCRIPT-}" in /*) ;; *) return 1 ;; esac\n` +
+    `  [ -x "$NODETERM_CODEX_RELAY_RUNTIME" ] && [ -r "$NODETERM_CODEX_RELAY_SCRIPT" ] || return 1\n` +
+    `  nt_relay_info=\n` +
+    `  for nt_relay_attempt in 1 2 3; do\n` +
+    `    nt_relay_info=$(ELECTRON_RUN_AS_NODE=1 "$NODETERM_CODEX_RELAY_RUNTIME" "$NODETERM_CODEX_RELAY_SCRIPT" register "$NODETERM_NODE_ID" "\${NODETERM_CODEX_ACCOUNT_ID-}" "$CODEX_HOME/app-server-control/app-server-control.sock" "$NODETERM_HOOK_ENDPOINT") && break\n` +
+    `    sleep 0.2\n` +
+    `  done\n` +
+    `  [ -n "$nt_relay_info" ] || return 1\n` +
+    `  nt_relay_url=$(printf '%s\\n' "$nt_relay_info" | sed -n '1p')\n` +
+    `  NODETERM_CODEX_RELAY_TOKEN=$(printf '%s\\n' "$nt_relay_info" | sed -n '2p')\n` +
+    `  case "$nt_relay_url" in ws://127.0.0.1:*/*) return 1 ;; ws://127.0.0.1:*) ;; *) return 1 ;; esac\n` +
+    `  [ -n "$NODETERM_CODEX_RELAY_TOKEN" ] || return 1\n` +
+    `  export NODETERM_CODEX_RELAY_TOKEN\n` +
+    `}\n` +
+    `if [ "\${1-}" = resume ]; then\n` +
+    `  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
+    `    # Codex validates the selected CODEX_HOME before opening the remote relay. Expose the\n` +
+    `    # exact caller-supplied id there first; this never lists, copies, or forks sessions.\n` +
+    `    { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
+    `    nt_hook_curl --silent --show-error --fail --config - --request POST \\\n` +
+    `      --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
+    `      --data-urlencode "threadId=$nt_thread" \\\n` +
+    `      --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
+    `      "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/expose" >/dev/null || { echo "NodeTerm Codex session unavailable" >&2; exit 69; }\n` +
+    `    nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
+    `    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
+    `  fi\n` +
+    `  # Legacy direct-unix resumes bind before launch. Relay resumes authorize globally and\n` +
+    `  # bind only after the target app-server confirms the unchanged thread id.\n` +
+    `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
+    `  nt_hook_curl --silent --show-error --fail --config - --request POST \\\n` +
+    `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
+    `    --data-urlencode "threadId=$nt_thread" \\\n` +
+    `    --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
+    `    "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/bind" >/dev/null || { echo "NodeTerm Codex thread already in use or broker unavailable" >&2; exit 69; }\n` +
+    `  exec codex --remote unix:// "$@"\n` +
+    `fi\n` +
+    `if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
+    `  # Let Codex create a fresh thread on its selected account. The relay observes the native\n` +
+    `  # thread/start response and binds that exact id; no seed turn, fork, or resume artifact.\n` +
+    `  nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
+    `  exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
+    `fi\n` +
+    `nt_thread=$(\n` +
+    `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
+    `  nt_hook_curl --silent --show-error --fail --config - --request POST \\\n` +
+    `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
+    `    --data-urlencode "cwd=$PWD" \\\n` +
+    `    --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
+    `    "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/start"\n` +
+    `) || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
+    `nt_thread=$(printf %s "$nt_thread" | tr -d '\\r\\n')\n` +
+    `exec codex --remote unix:// resume "$nt_thread" "$@"\n`
+  )
+}
+
 export function installCodexLauncher(): string {
   const dir = codexLauncherDir()
   const file = path.join(dir, 'nodeterm-codex')
   mkdirSync(dir, { recursive: true })
-  writeFileSync(
-    file,
-    `#!/bin/sh\n` +
-      `case "\${NODETERM_NODE_ID-}" in ''|*[!A-Za-z0-9._-]*) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
-      `case "\${NODETERM_HOOK_ENDPOINT-}" in /*) ;; *) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
-      `case "\${NODETERM_HOOK_ENDPOINT}" in *[!A-Za-z0-9._/\\ -]*) echo "NodeTerm Codex identity unavailable" >&2; exit 64 ;; esac\n` +
-      `case "\${NODETERM_CODEX_ACCOUNT_ID-}" in *[!A-Za-z0-9._-]*) echo "NodeTerm Codex account identity unavailable" >&2; exit 64 ;; esac\n` +
-      `case "\${NODETERM_CODEX_ACCOUNT_ID-}" in ''|[A-Za-z0-9]*) ;; *) echo "NodeTerm Codex account identity unavailable" >&2; exit 64 ;; esac\n` +
-      `[ "\${NODETERM_CANVAS_CONTROL-}" = 1 ] || { echo "NodeTerm Codex identity unavailable" >&2; exit 64; }\n` +
-      `if [ "\${1-}" = resume ]; then\n` +
-      `  nt_thread="\${2-}"\n` +
-      `  case "$nt_thread" in ''|*[!A-Za-z0-9._-]*) echo "NodeTerm Codex thread identity unavailable" >&2; exit 64 ;; esac\n` +
-      `fi\n` +
-      `. "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
-      `case "\${NODETERM_HOOK_PORT-}" in ''|*[!0-9]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
-      `case "\${NODETERM_HOOK_TOKEN-}" in ''|*[!A-Za-z0-9-]*) echo "NodeTerm Codex broker unavailable" >&2; exit 69 ;; esac\n` +
-      `case "\${NODETERM_CODEX_NODE_TOKEN-}" in ''|*[!A-Za-z0-9_-]*) echo "NodeTerm Codex node identity unavailable" >&2; exit 69 ;; esac\n` +
-      `codex app-server daemon start >/dev/null 2>&1 || { echo "NodeTerm Codex app-server unavailable" >&2; exit 69; }\n` +
-      `nt_register_relay() {\n` +
-      `  case "\${NODETERM_CODEX_RELAY_RUNTIME-}" in /*) ;; *) return 1 ;; esac\n` +
-      `  case "\${NODETERM_CODEX_RELAY_SCRIPT-}" in /*) ;; *) return 1 ;; esac\n` +
-      `  [ -x "$NODETERM_CODEX_RELAY_RUNTIME" ] && [ -r "$NODETERM_CODEX_RELAY_SCRIPT" ] || return 1\n` +
-      `  nt_relay_info=\n` +
-      `  for nt_relay_attempt in 1 2 3; do\n` +
-      `    nt_relay_info=$(ELECTRON_RUN_AS_NODE=1 "$NODETERM_CODEX_RELAY_RUNTIME" "$NODETERM_CODEX_RELAY_SCRIPT" register "$NODETERM_NODE_ID" "\${NODETERM_CODEX_ACCOUNT_ID-}" "$CODEX_HOME/app-server-control/app-server-control.sock" "$NODETERM_HOOK_ENDPOINT") && break\n` +
-      `    sleep 0.2\n` +
-      `  done\n` +
-      `  [ -n "$nt_relay_info" ] || return 1\n` +
-      `  nt_relay_url=$(printf '%s\\n' "$nt_relay_info" | sed -n '1p')\n` +
-      `  NODETERM_CODEX_RELAY_TOKEN=$(printf '%s\\n' "$nt_relay_info" | sed -n '2p')\n` +
-      `  case "$nt_relay_url" in ws://127.0.0.1:*/*) return 1 ;; ws://127.0.0.1:*) ;; *) return 1 ;; esac\n` +
-      `  [ -n "$NODETERM_CODEX_RELAY_TOKEN" ] || return 1\n` +
-      `  export NODETERM_CODEX_RELAY_TOKEN\n` +
-      `}\n` +
-      `if [ "\${1-}" = resume ]; then\n` +
-      `  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
-      `    # Codex validates the selected CODEX_HOME before opening the remote relay. Expose the\n` +
-      `    # exact caller-supplied id there first; this never lists, copies, or forks sessions.\n` +
-      `    { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
-      `    curl --silent --show-error --fail --config - --request POST \\\n` +
-      `      --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
-      `      --data-urlencode "threadId=$nt_thread" \\\n` +
-      `      --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
-      `      "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/expose" >/dev/null || { echo "NodeTerm Codex session unavailable" >&2; exit 69; }\n` +
-      `    nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
-      `    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
-      `  fi\n` +
-      `  # Legacy direct-unix resumes bind before launch. Relay resumes authorize globally and\n` +
-      `  # bind only after the target app-server confirms the unchanged thread id.\n` +
-      `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
-      `  curl --silent --show-error --fail --config - --request POST \\\n` +
-      `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
-      `    --data-urlencode "threadId=$nt_thread" \\\n` +
-      `    --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
-      `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/bind" >/dev/null || { echo "NodeTerm Codex thread already in use or broker unavailable" >&2; exit 69; }\n` +
-      `  exec codex --remote unix:// "$@"\n` +
-      `fi\n` +
-      `if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then\n` +
-      `  # Let Codex create a fresh thread on its selected account. The relay observes the native\n` +
-      `  # thread/start response and binds that exact id; no seed turn, fork, or resume artifact.\n` +
-      `  nt_register_relay || { echo "NodeTerm Codex relay unavailable" >&2; exit 69; }\n` +
-      `  exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"\n` +
-      `fi\n` +
-      `nt_thread=$(\n` +
-      `  { printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" "$NODETERM_CODEX_NODE_TOKEN"; } |\n` +
-      `  curl --silent --show-error --fail --config - --request POST \\\n` +
-      `    --data-urlencode "nodeId=$NODETERM_NODE_ID" \\\n` +
-      `    --data-urlencode "cwd=$PWD" \\\n` +
-      `    --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\\n` +
-      `    "http://127.0.0.1:$NODETERM_HOOK_PORT/codex-thread/start"\n` +
-      `) || { echo "NodeTerm Codex broker unavailable" >&2; exit 69; }\n` +
-      `nt_thread=$(printf %s "$nt_thread" | tr -d '\\r\\n')\n` +
-      `exec codex --remote unix:// resume "$nt_thread" "$@"\n`,
-    { encoding: 'utf8', mode: 0o700 }
-  )
+  writeFileSync(file, buildCodexLauncherScript(), {
+    encoding: 'utf8',
+    mode: 0o700
+  })
   chmodSync(file, 0o700)
   return file
 }

@@ -7,6 +7,7 @@ import { FieldRow } from '../FieldRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { uuid } from '@renderer/lib/uuid'
+import type { SettingsSectionId } from '../nav'
 
 const ROWS = {
   servers: {
@@ -16,10 +17,18 @@ const ROWS = {
 }
 const ENTRIES = Object.values(ROWS)
 
-export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+export function SshSection({
+  isActive,
+  onNavigate
+}: {
+  isActive: boolean
+  onNavigate: (id: SettingsSectionId) => void
+}): React.JSX.Element {
   const sshServers = useSshServers((s) => s.servers)
   const [sshDraft, setSshDraft] = useState<SshServer | null>(null)
   const [importMsg, setImportMsg] = useState<string | null>(null)
+  const [testMsg, setTestMsg] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
 
   useEffect(() => {
     void useSshServers.getState().hydrate()
@@ -66,16 +75,44 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
   }
 
   const saveDisabled =
-    !sshDraft ||
-    !sshDraft.label.trim() ||
-    !sshDraft.host.trim() ||
-    !sshDraft.user.trim()
+    !sshDraft || !sshDraft.label.trim() || !sshDraft.host.trim() || !sshDraft.user.trim()
+
+  const saveDraft = async (manageAccounts: boolean): Promise<void> => {
+    if (!sshDraft || saveDisabled) return
+    await useSshServers.getState().save({
+      ...sshDraft,
+      remoteCwd: sshDraft.remoteCwd?.trim() || '~'
+    })
+    setSshDraft(null)
+    setTestMsg(null)
+    if (manageAccounts) onNavigate('accounts')
+  }
+
+  const testConnection = async (): Promise<void> => {
+    if (!sshDraft || saveDisabled || testing) return
+    const connectionId = `ssh-settings-test-${sshDraft.id}`
+    setTesting(true)
+    setTestMsg(`Connecting to ${sshDraft.label}…`)
+    try {
+      await window.nodeTerminal.sshProject.connect(
+        connectionId,
+        sshDraft,
+        sshDraft.remoteCwd?.trim() || '~'
+      )
+      setTestMsg('Connection successful. NodeTerm and Codex are available on this machine.')
+    } catch (error) {
+      setTestMsg(`Connection failed: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      await window.nodeTerminal.sshProject.disconnect(connectionId).catch(() => {})
+      setTesting(false)
+    }
+  }
 
   return (
     <SettingsSection
       id="ssh"
-      title="Remote (SSH)"
-      description="Saved SSH servers appear under “New remote”. Opening remote terminals over SSH is free."
+      title="Remote machines (SSH)"
+      description="Add a machine once, then run terminals and isolated Codex accounts on it from any local canvas."
       isActive={isActive}
       searchEntries={ENTRIES}
     >
@@ -86,12 +123,25 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
               key={server.id}
               className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
             >
-              <span className="min-w-0 truncate text-sm text-text">
-                {server.label} — {server.user}@{server.host}
-                {server.port && server.port !== 22 ? `:${server.port}` : ''}
-              </span>
+              <div className="min-w-0">
+                <div className="truncate text-sm text-text">
+                  {server.label} — {server.user}@{server.host}
+                  {server.port && server.port !== 22 ? `:${server.port}` : ''}
+                </div>
+                <div className="truncate text-xs text-muted">
+                  Default folder: {server.remoteCwd || '~'}
+                </div>
+              </div>
               <div className="flex shrink-0 gap-2">
-                <Button onClick={() => setSshDraft(server)}>Edit</Button>
+                <Button onClick={() => onNavigate('accounts')}>Accounts</Button>
+                <Button
+                  onClick={() => {
+                    setTestMsg(null)
+                    setSshDraft(server)
+                  }}
+                >
+                  Edit
+                </Button>
                 <Button
                   variant="ghost"
                   onClick={() => void useSshServers.getState().remove(server.id)}
@@ -151,6 +201,18 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
                 }
               />
               <FieldRow
+                label="Default working directory"
+                description="Folder used by new terminals and Codex nodes on this machine."
+                control={
+                  <Input
+                    className="w-72 font-mono"
+                    placeholder="~/projects/my-project"
+                    value={sshDraft.remoteCwd ?? '~'}
+                    onChange={(e) => setSshDraft({ ...sshDraft, remoteCwd: e.target.value })}
+                  />
+                }
+              />
+              <FieldRow
                 label="Identity file"
                 description="Optional private key passed with -i."
                 control={
@@ -159,9 +221,7 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
                       className="w-56"
                       placeholder="~/.ssh/id_ed25519"
                       value={sshDraft.identityFile ?? ''}
-                      onChange={(e) =>
-                        setSshDraft({ ...sshDraft, identityFile: e.target.value })
-                      }
+                      onChange={(e) => setSshDraft({ ...sshDraft, identityFile: e.target.value })}
                     />
                     <Button
                       onClick={async () => {
@@ -186,19 +246,23 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
                   />
                 }
               />
-              <div className="flex justify-end gap-2 pt-1">
+              {testMsg ? <p className="text-xs text-muted">{testMsg}</p> : null}
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
                 <Button variant="ghost" onClick={() => setSshDraft(null)}>
                   Cancel
+                </Button>
+                <Button disabled={saveDisabled || testing} onClick={() => void testConnection()}>
+                  {testing ? 'Testing…' : 'Test connection'}
+                </Button>
+                <Button disabled={saveDisabled} onClick={() => void saveDraft(false)}>
+                  Save
                 </Button>
                 <Button
                   variant="primary"
                   disabled={saveDisabled}
-                  onClick={async () => {
-                    await useSshServers.getState().save(sshDraft)
-                    setSshDraft(null)
-                  }}
+                  onClick={() => void saveDraft(true)}
                 >
-                  Save
+                  Save &amp; manage accounts
                 </Button>
               </div>
             </div>
@@ -211,7 +275,8 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
                     label: '',
                     host: '',
                     user: '',
-                    port: 22
+                    port: 22,
+                    remoteCwd: '~'
                   })
                 }
               >

@@ -5,12 +5,18 @@ const expected = {
   accountId: 'account-a',
   agentId: 'codex',
   cwd: '/repo',
-  sessionId: 'thread-a'
+  sessionId: 'thread-a',
+  ssh: false
 }
 
 describe('codexAccountSwitchStillEligible', () => {
   it('accepts only the unchanged idle source conversation', () => {
     expect(codexAccountSwitchStillEligible(expected, { ...expected, state: 'done' })).toBe(true)
+  })
+
+  it('accepts an unchanged remote source without pretending it is local', () => {
+    const remote = { ...expected, ssh: true }
+    expect(codexAccountSwitchStillEligible(remote, { ...remote, state: 'done' })).toBe(true)
   })
 
   it.each([

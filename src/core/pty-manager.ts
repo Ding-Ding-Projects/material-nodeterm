@@ -7,6 +7,7 @@ import { platform } from './platform'
 import * as pty from 'node-pty'
 import { IPC } from '../shared/ipc'
 import { safeSessionProgram } from '../shared/node-exec'
+import { posixQuote } from '../shared/ssh'
 import { REF_MAX_LEN } from '../shared/presence'
 import {
   DEFAULT_SETTINGS,
@@ -27,7 +28,8 @@ import {
   remoteTmuxSendKeysArgs,
   remoteCapturePaneArgs,
   remotePaneCommandArgs,
-  remotePaneCursorArgs
+  remotePaneCursorArgs,
+  childArgs
 } from './remote-ssh/control-master'
 import { parsePaneCursor } from './pane-cursor'
 import { readSpawnResources, spawnResourceNote } from './spawn-resources'
@@ -41,13 +43,19 @@ import { machOArch, archMismatch } from './macho-arch'
 import { writeScrollback, readScrollback, deleteScrollback } from './scrollback-store'
 import { claudeConfigDirFor } from './claude-config-dir'
 import { findExecutableSync, findInPathString, resolveShellPath, shellPathNow } from './exec-path'
-import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
+import {
+  AUTH_ENV_STRIP,
+  accountTmuxEnvArgs,
+  remoteAccountConfigDirAbs
+} from './claude-accounts-core'
 import { presenceHub } from './presence/hub'
 import { codexLauncherDir, installCodexLauncher } from './codex-identity-proxy'
 import {
   codexAccountHome,
   codexSessionEnv,
   codexTmuxEnvArgs,
+  remoteCodexHome,
+  remoteCodexTmuxEnvArgs,
   needsCodexAccountScope
 } from './codex-accounts-core'
 
@@ -96,10 +104,14 @@ const PROBE_TIMEOUT_MS = 6_000
  * just as invisible. Callers may still pass their own `timeout` for the rare op that needs longer.
  */
 const runAsync = ((file: string, args: readonly string[], opts?: object) =>
-  execFileAsync(file, args as string[], {
-    timeout: PROC_TIMEOUT_MS,
-    ...(opts ?? {})
-  } as never)) as unknown as typeof execFileAsync
+  execFileAsync(
+    file,
+    args as string[],
+    {
+      timeout: PROC_TIMEOUT_MS,
+      ...(opts ?? {})
+    } as never
+  )) as unknown as typeof execFileAsync
 
 // Minimal tmux config so the user's ~/.tmux.conf never interferes. The tmux server
 // (under our socket) keeps sessions alive while no client is attached, which is what
@@ -210,7 +222,11 @@ function findSsh(): string | null {
   // Subprocess-free (was a sync login-shell `command -v ssh` + an `ssh -V` spawn per fallback,
   // all blocking the main thread). A MISS is only memoized once the async login-shell PATH
   // probe has settled — before that a custom-location ssh would be cached away forever.
-  const found = findExecutableSync('ssh', ['/usr/bin/ssh', '/usr/local/bin/ssh', '/opt/homebrew/bin/ssh'])
+  const found = findExecutableSync('ssh', [
+    '/usr/bin/ssh',
+    '/usr/local/bin/ssh',
+    '/opt/homebrew/bin/ssh'
+  ])
   if (found || shellPathNow() !== undefined) cachedSsh = found
   return found
 }
@@ -502,7 +518,11 @@ export class PtyManager {
    *  spawn the node in its own stale cwd. See `recycleSession`. */
   private pendingRecycle = new Map<
     string,
-    { sessionId: string; clients: Set<ClientId>; timer: ReturnType<typeof setTimeout> }
+    {
+      sessionId: string
+      clients: Set<ClientId>
+      timer: ReturnType<typeof setTimeout>
+    }
   >()
   /**
    * persistKey (node id) → the client that DELETED it. The respawn guard for clients the
@@ -602,7 +622,11 @@ export class PtyManager {
       if (watched) session.unwatchedSince = null
       else session.unwatchedSince ??= now
       const reap = shouldReap(
-        { tmuxBacked: session.tmuxBacked, watched, unwatchedSince: session.unwatchedSince },
+        {
+          tmuxBacked: session.tmuxBacked,
+          watched,
+          unwatchedSince: session.unwatchedSince
+        },
         now
       )
       if (reap) this.releaseClient(sessionId, session)
@@ -748,9 +772,7 @@ export class PtyManager {
     platform().onWithSender(IPC.ptyRecycle, (senderId: number, persistKey: string) =>
       this.endFromClient(senderId, IPC.ptyRecycle, persistKey, 'recycle')
     )
-    platform().handle(IPC.ptyReadScrollback, (persistKey: string) =>
-      readScrollback(persistKey)
-    )
+    platform().handle(IPC.ptyReadScrollback, (persistKey: string) => readScrollback(persistKey))
     platform().handle(IPC.ptySendText, (persistKey: string, text: string, enter?: boolean) =>
       this.sendText(persistKey, text, enter === undefined ? undefined : { enter })
     )
@@ -914,7 +936,8 @@ export class PtyManager {
     // covers a resurrection by its owner). Refuse rather than spawn: see `tombstones`. Checked
     // AFTER the in-flight barrier so a create racing the owner's own respawn joins it instead.
     const tomb = this.liveTombstone(key)
-    if (tomb && tomb.by !== clientId) return { sessionId: '', fresh: false, closed: { by: tomb.by } }
+    if (tomb && tomb.by !== clientId)
+      return { sessionId: '', fresh: false, closed: { by: tomb.by } }
     const spawn = this.spawnNew(clientId, options)
     this.inflight.set(key, spawn)
     // Clear on settle — INCLUDING on failure, or a single failed spawn would leave a rejected
@@ -990,7 +1013,12 @@ export class PtyManager {
     // Rides `base` so it reaches the renderer on BOTH the resized and screen-painted branches.
     const coAttachMouse = existing.persistKey ? true : undefined
     const base: PtyCreateResult = existing.accountFallback
-      ? { sessionId: existingId, fresh: false, accountFallback: true, coAttachMouse }
+      ? {
+          sessionId: existingId,
+          fresh: false,
+          accountFallback: true,
+          coAttachMouse
+        }
       : { sessionId: existingId, fresh: false, coAttachMouse }
     if (resized) return Promise.resolve(base) // tmux is redrawing this client — do not paint twice
     // An empty capture (plain shell — no tmux to capture; a tmux/ssh blip) is OMITTED, never sent
@@ -1037,12 +1065,30 @@ export class PtyManager {
     ) {
       return { sessionId: '', fresh: false, unavailable: 'codex-account' }
     }
+    if (options.codexAccountId && options.sshRemote) {
+      const ssh = findSsh()
+      const remoteHome = options.sshRemote.remoteHome
+      if (!ssh || !remoteHome) return { sessionId: '', fresh: false, unavailable: 'codex-account' }
+      const home = remoteCodexHome(remoteHome, options.codexAccountId)
+      try {
+        await runAsync(
+          ssh,
+          childArgs(
+            options.sshRemote.conn,
+            options.sshRemote.controlPath,
+            `test -d ${posixQuote(home)}`
+          ),
+          { timeout: PROBE_TIMEOUT_MS }
+        )
+      } catch {
+        return { sessionId: '', fresh: false, unavailable: 'codex-account' }
+      }
+    }
     // A tmux-backed session is "fresh" (cold start) when no live session exists to reattach to
     // — i.e. first open, or after a machine reboot killed the tmux server. Plain (non-tmux)
     // sessions are always fresh: they have no cross-restart continuity. The renderer uses this
     // to decide whether to replay the persisted scrollback and re-launch a resumable agent.
-    const tmuxBacked =
-      !!this.tmuxPath && this.getSettings().tmuxEnabled && !!options.persistKey
+    const tmuxBacked = !!this.tmuxPath && this.getSettings().tmuxEnabled && !!options.persistKey
     // For an SSH-project node, "fresh" is decided by the REMOTE tmux server (over the project's
     // ControlMaster), not the local one. The remote `has-session` is a full network round-trip,
     // so it MUST be async (`runAsync`) — a synchronous probe here would freeze every window/IPC
@@ -1079,9 +1125,13 @@ export class PtyManager {
     const ssh = findSsh()
     if (!ssh) return true // can't probe → not evidence of absence; warm attach types nothing
     try {
-      await runAsync(ssh, remoteTmuxHasSessionArgs(sshRemote.conn, sshRemote.controlPath, sessionId), {
-        timeout: PROBE_TIMEOUT_MS
-      })
+      await runAsync(
+        ssh,
+        remoteTmuxHasSessionArgs(sshRemote.conn, sshRemote.controlPath, sessionId),
+        {
+          timeout: PROBE_TIMEOUT_MS
+        }
+      )
       return true
     } catch (e) {
       return !probeSaysAbsent(e)
@@ -1115,9 +1165,13 @@ export class PtyManager {
   private async tmuxSessionExists(persistKey: string): Promise<boolean> {
     if (!this.tmuxPath) return false
     try {
-      await runAsync(this.tmuxPath, ['-L', TMUX_SOCKET, 'has-session', '-t', sessionName(persistKey)], {
-        timeout: PROBE_TIMEOUT_MS
-      })
+      await runAsync(
+        this.tmuxPath,
+        ['-L', TMUX_SOCKET, 'has-session', '-t', sessionName(persistKey)],
+        {
+          timeout: PROBE_TIMEOUT_MS
+        }
+      )
       return true
     } catch (e) {
       // Same discrimination as the remote probe: tmux's exit 1 (no session / no server —
@@ -1287,7 +1341,7 @@ export class PtyManager {
     // never to execution. @shared/node-exec keeps foreign values out of `options.shell` in the
     // first place; this is the second layer.
     const reqShell = safeSessionProgram(options.shell)
-    const program = reqShell === 'ssh' ? findSsh() ?? 'ssh' : reqShell
+    const program = reqShell === 'ssh' ? (findSsh() ?? 'ssh') : reqShell
     const programArgs = options.shellArgs ?? []
 
     // SSH project node: run `ssh -t '<remote tmux attach-or-create>'` as the PTY program. The
@@ -1304,7 +1358,8 @@ export class PtyManager {
       // user with `AddKeysToAgent yes` in their own ~/.ssh/config - load the key into their LOGIN
       // agent permanently, the leak the app agent exists to close. Scoped to the remote branch:
       // local terminals keep the user's own agent.
-      if (process.env.NODETERM_APP_AGENT_SOCK) env.SSH_AUTH_SOCK = process.env.NODETERM_APP_AGENT_SOCK
+      if (process.env.NODETERM_APP_AGENT_SOCK)
+        env.SSH_AUTH_SOCK = process.env.NODETERM_APP_AGENT_SOCK
       // When the project's reverse tunnel + remote endpoint file are set up (Task 2), inject the
       // remote hook env into the remote tmux session so the installed hook script POSTs state back
       // over the unix-socket tunnel. Fail-open: no hookEndpointPath → no hook env (Phase-1 status).
@@ -1314,6 +1369,18 @@ export class PtyManager {
       // NODETERM_NODE_ID = persistKey, and Canvas.tsx onAgentStatus keys agentStatus.byId /
       // selection off that raw id with no `nt-` stripping. Passing the session name here would
       // emit events under `nt-<id>` that match no node → no badge/notification/session/loop.
+      const remoteCodex = (options.agentId ?? 'claude') === 'codex'
+      const remoteCodexScope = needsCodexAccountScope(options.agentId, options.codexAccountId)
+      if (
+        remoteCodex &&
+        (!options.sshRemote.remoteHome ||
+          !options.sshRemote.hookEndpointPath ||
+          !options.sshRemote.codexLauncherPath ||
+          !options.sshRemote.codexRelayScriptPath ||
+          !options.sshRemote.codexRelayRuntimePath)
+      ) {
+        throw new Error('NodeTerm Codex runtime is unavailable on this SSH host')
+      }
       const hookExtraEnv = options.sshRemote.hookEndpointPath
         ? [
             ...remoteHookEnvArgs(
@@ -1327,7 +1394,17 @@ export class PtyManager {
             // Arm the remote permission hook's wait-branch too (deterministic approvals over SSH):
             // the request/answer files live on the REMOTE host; the desktop answers over the
             // ControlMaster. Only when the hook endpoint is set (else no POST → nothing learns the id).
-            ...(permWaitSecs > 0 ? ['-e', `NODETERM_PERM_WAIT_SECS=${permWaitSecs}`] : [])
+            ...(permWaitSecs > 0 ? ['-e', `NODETERM_PERM_WAIT_SECS=${permWaitSecs}`] : []),
+            ...(remoteCodex
+              ? [
+                  '-e',
+                  `NODETERM_CODEX_NODE_TOKEN=${hookServer.codexNodeAuthToken(options.persistKey)}`,
+                  '-e',
+                  `NODETERM_CODEX_RELAY_RUNTIME=${options.sshRemote.codexRelayRuntimePath}`,
+                  '-e',
+                  `NODETERM_CODEX_RELAY_SCRIPT=${options.sshRemote.codexRelayScriptPath}`
+                ]
+              : [])
           ]
         : []
       // Managed REMOTE Claude account (Task 12): inject CLAUDE_CONFIG_DIR into the remote tmux
@@ -1337,7 +1414,13 @@ export class PtyManager {
       // failed on connect) skips the account env and the session runs under the remote `~/.claude`.
       const remoteAccountEnv =
         options.accountId && options.sshRemote.remoteHome
-          ? accountTmuxEnvArgs(remoteAccountConfigDirAbs(options.sshRemote.remoteHome, options.accountId))
+          ? accountTmuxEnvArgs(
+              remoteAccountConfigDirAbs(options.sshRemote.remoteHome, options.accountId)
+            )
+          : []
+      const remoteCodexEnv =
+        remoteCodexScope && options.sshRemote.remoteHome
+          ? remoteCodexTmuxEnvArgs(options.sshRemote.remoteHome, options.codexAccountId)
           : []
       args = remoteTmuxPtyArgs(
         options.sshRemote.conn,
@@ -1350,7 +1433,7 @@ export class PtyManager {
         // place a foreign value is most at home.
         reqShell,
         options.shellArgs,
-        [...hookExtraEnv, ...remoteAccountEnv],
+        [...hookExtraEnv, ...remoteAccountEnv, ...remoteCodexEnv],
         // Source nodeterm's remote tmux.conf via `-f` (written on connect, Task 2) so a cold-start
         // session gets mouse/clipboard/scrollback. Fail-open: undefined → remote tmux host defaults.
         options.sshRemote.tmuxConfPath
@@ -1460,7 +1543,8 @@ export class PtyManager {
     // If ssh is missing, the node fell through to a LOCAL tmux/plain spawn, so it must NOT be
     // marked remote — otherwise destroy/capture would target a remote tmux that was never spawned
     // and silently leak the local session.
-    const remote = options.sshRemote && options.persistKey && remoteSsh ? options.sshRemote : undefined
+    const remote =
+      options.sshRemote && options.persistKey && remoteSsh ? options.sshRemote : undefined
     const tmuxBacked = !!(this.tmuxPath && settings.tmuxEnabled && options.persistKey)
     const persisted = !!options.persistKey && (remote ? true : tmuxBacked)
     const spawnSize = normalizeSize(options.cols, options.rows)
@@ -1954,7 +2038,12 @@ export class PtyManager {
       try {
         const { stdout } = await runAsync(
           ssh,
-          remoteCapturePaneArgs(sshRemote.conn, sshRemote.controlPath, sessionName(persistKey), full),
+          remoteCapturePaneArgs(
+            sshRemote.conn,
+            sshRemote.controlPath,
+            sessionName(persistKey),
+            full
+          ),
           { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }
         )
         return stdout
@@ -1966,7 +2055,16 @@ export class PtyManager {
     try {
       const { stdout } = await runAsync(
         this.tmuxPath,
-        ['-L', TMUX_SOCKET, 'capture-pane', '-p', '-t', sessionName(persistKey), '-S', full ? '-' : '-200'],
+        [
+          '-L',
+          TMUX_SOCKET,
+          'capture-pane',
+          '-p',
+          '-t',
+          sessionName(persistKey),
+          '-S',
+          full ? '-' : '-200'
+        ],
         { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }
       )
       return stdout
@@ -2052,7 +2150,12 @@ export class PtyManager {
       try {
         const { stdout } = await runAsync(
           ssh,
-          remoteCapturePaneArgs(sshRemote.conn, sshRemote.controlPath, sessionName(persistKey), false),
+          remoteCapturePaneArgs(
+            sshRemote.conn,
+            sshRemote.controlPath,
+            sessionName(persistKey),
+            false
+          ),
           { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }
         )
         if (stdout) await writeScrollback(persistKey, stdout)
@@ -2066,7 +2169,17 @@ export class PtyManager {
     try {
       const { stdout } = await runAsync(
         this.tmuxPath,
-        ['-L', TMUX_SOCKET, 'capture-pane', '-p', '-e', '-t', sessionName(persistKey), '-S', '-1500'],
+        [
+          '-L',
+          TMUX_SOCKET,
+          'capture-pane',
+          '-p',
+          '-e',
+          '-t',
+          sessionName(persistKey),
+          '-S',
+          '-1500'
+        ],
         { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }
       )
       if (stdout) await writeScrollback(persistKey, stdout)
@@ -2103,7 +2216,10 @@ export class PtyManager {
       const ssh = findSsh()
       if (!ssh) return false
       try {
-        await runAsync(ssh, remoteTmuxSendKeysArgs(sshRemote.conn, sshRemote.controlPath, target, text, enter))
+        await runAsync(
+          ssh,
+          remoteTmuxSendKeysArgs(sshRemote.conn, sshRemote.controlPath, target, text, enter)
+        )
         return true
       } catch {
         return false
@@ -2352,7 +2468,10 @@ export class PtyManager {
       const ssh = findSsh()
       if (ssh) {
         try {
-          await runAsync(ssh, remoteTmuxKillArgs(sshRemote.conn, sshRemote.controlPath, sessionName(persistKey)))
+          await runAsync(
+            ssh,
+            remoteTmuxKillArgs(sshRemote.conn, sshRemote.controlPath, sessionName(persistKey))
+          )
         } catch {
           // remote session may not exist / master down; ignore
         }
@@ -2367,7 +2486,13 @@ export class PtyManager {
     }
     if (!this.tmuxPath) return
     try {
-      await runAsync(this.tmuxPath, ['-L', TMUX_SOCKET, 'kill-session', '-t', sessionName(persistKey)])
+      await runAsync(this.tmuxPath, [
+        '-L',
+        TMUX_SOCKET,
+        'kill-session',
+        '-t',
+        sessionName(persistKey)
+      ])
     } catch {
       // session may not exist; ignore
     }

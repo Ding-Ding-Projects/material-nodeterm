@@ -58,7 +58,11 @@ import {
   type SessionLife
 } from '../terminal/terminal-config'
 import { useXtermVisualSettings } from '../terminal/useXtermVisualSettings'
-import { loseWebglContexts, registerWebglClient, type WebglClientHandle } from '../terminal/webgl-budget'
+import {
+  loseWebglContexts,
+  registerWebglClient,
+  type WebglClientHandle
+} from '../terminal/webgl-budget'
 import { PARK_MAX, planParkEviction } from '../terminal/park-budget'
 import {
   mayDisposeOffscreen,
@@ -99,6 +103,8 @@ import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
 import { ContextMeter } from '../components/ContextMeter'
+import { AccountIdentityPills } from '../components/AccountIdentityPills'
+import { presentAccount } from '../lib/accountPresentation'
 import { isZoomModifierHeld } from '../lib/zoomModifier'
 import { isHidden } from '../lib/ui-visibility'
 import { readsClaudeTranscript } from '../lib/transcriptGates'
@@ -110,15 +116,35 @@ import { useAgentNodes } from '../state/agentNodes'
 import { useProjects } from '../state/projects'
 import { useViewMode, viewFor } from '../state/viewMode'
 import { useSshConn } from '../state/sshConn'
+import { useSshServers } from '../state/sshServers'
 import { useWorktrees } from '../state/worktrees'
+import { useSystemAccount } from '../state/systemAccount'
 import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { isRemoteSessionNode } from '@shared/worktree'
 import { useSession, useActiveSessionPresence } from '../session/session'
-import { accountChipLabel, COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
-import { hasHooks, canRecur, canContextLink, hasUsage, canChat, canResume, canRename, canReadTitle, createdAgentId, reportsOwnCopy, resumeCommand, agentConfig } from '@shared/agents/config'
+import { COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
+import {
+  hasHooks,
+  canRecur,
+  canContextLink,
+  hasUsage,
+  canChat,
+  canResume,
+  canRename,
+  canReadTitle,
+  createdAgentId,
+  reportsOwnCopy,
+  resumeCommand,
+  agentConfig
+} from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { ensureActivePermissionMode } from '../state/permissionMode'
-import { buildSshArgs, type SshConnection } from '@shared/ssh'
+import {
+  buildSshArgs,
+  sshConnectionIdForProject,
+  sshHostKey,
+  type SshConnection
+} from '@shared/ssh'
 import { hintLabel } from '@shared/platform-utils'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
@@ -157,11 +183,31 @@ export async function resolveSshRemote(
       hookEndpointPath?: string
       tmuxConfPath?: string
       remoteHome?: string
+      codexLauncherPath?: string
+      codexRelayScriptPath?: string
+      codexRelayRuntimePath?: string
     }
   | undefined
 > {
-  const projectId = useProjects.getState().activeProjectId
+  const ownerProjectId = useProjects.getState().activeProjectId
+  const project = useProjects.getState().getProject(ownerProjectId)
+  const projectId = sshConnectionIdForProject(ownerProjectId, conn, project?.ssh?.server)
   let controlPath = useSshConn.getState().getControlPath(projectId)
+  if (!controlPath && projectId !== ownerProjectId) {
+    try {
+      const info = await window.nodeTerminal.sshProject.connect(projectId, conn, cwd || '~')
+      useSshConn.getState().setConn(projectId, {
+        ...info,
+        hostKey: sshHostKey(conn),
+        conn,
+        remoteCwd: cwd || '~',
+        ownerProjectId
+      })
+      controlPath = info.controlPath
+    } catch {
+      return undefined
+    }
+  }
   if (!controlPath) {
     controlPath = await new Promise<string | undefined>((resolve) => {
       let settled = false
@@ -195,7 +241,16 @@ export async function resolveSshRemote(
   // managed remote account (Task 12). Optional (fail-open): absent → the remote account env is
   // skipped and the session runs under the remote system default `~/.claude`.
   const remoteHome = useSshConn.getState().getRemoteHome(projectId)
-  return { controlPath, conn, remoteCwd: cwd || '~', hookEndpointPath, tmuxConfPath, remoteHome }
+  const codexRuntime = useSshConn.getState().getCodexRuntime(projectId)
+  return {
+    controlPath,
+    conn,
+    remoteCwd: cwd || '~',
+    hookEndpointPath,
+    tmuxConfPath,
+    remoteHome,
+    ...codexRuntime
+  }
 }
 
 /**
@@ -338,7 +393,9 @@ export function disposeTerminalOnUnmount(sessionId: string, nodeId: string): voi
 function resizeTerm(term: Terminal, cols: number, rows: number): void {
   if (term.cols === cols && term.rows === rows) return
   try {
-    ;(term as unknown as { _core: { _renderService: { clear(): void } } })._core._renderService.clear()
+    ;(
+      term as unknown as { _core: { _renderService: { clear(): void } } }
+    )._core._renderService.clear()
   } catch {
     // private API moved — the resize below still happens (worst case: a stale row until the next paint)
   }
@@ -457,7 +514,9 @@ function publishCellDebug(id: string, info: Record<string, unknown>): void {
 if (typeof window !== 'undefined') {
   ;(window as unknown as Record<string, unknown>).__glyphgridCells = (): unknown => {
     if (!glyphCellDebugOn()) {
-      return { status: "debug flag off — localStorage.setItem('nodeterm.glyphgridDebug','1') then reload" }
+      return {
+        status: "debug flag off — localStorage.setItem('nodeterm.glyphgridDebug','1') then reload"
+      }
     }
     if (cellDebug.size === 0) {
       return {
@@ -713,8 +772,15 @@ export function TerminalNode({
   const visual = useXtermVisualSettings()
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   const codexAccounts = useSettings((s) => s.settings.codexAccounts)
+  const systemClaudeLabel = useSettings((s) => s.settings.systemAccountLabel)
   const systemCodexLabel = useSettings((s) => s.settings.systemCodexAccountLabel)
+  const remoteSystemClaudeLabels = useSettings((s) => s.settings.remoteSystemAccountLabels)
+  const remoteSystemCodexLabels = useSettings((s) => s.settings.remoteSystemCodexAccountLabels)
+  const systemClaudeEmail = useSystemAccount((s) => s.email)
   const systemCodexEmail = useSystemCodexAccount((s) => s.email)
+  const remoteSystemCodexEmails = useSystemCodexAccount((s) => s.remoteEmails)
+  const sshConnections = useSshConn((s) => s.byProject)
+  const sshServers = useSshServers((s) => s.servers)
   // Header buttons the user chose to hide (Settings). A selector, so toggling one re-renders every
   // mounted node right away instead of waiting for a remount. Search, Close and the worktree-move
   // button are absent from `isHidden`'s inventory and stay put whatever the list says.
@@ -786,11 +852,17 @@ export function TerminalNode({
   const [dropping, setDropping] = useState(false)
   // Overlay while dropped files upload to an SSH host (scp is seconds-long with zero feedback);
   // doubles as a brief "Upload failed" flash when nothing made it.
-  const [uploadNote, setUploadNote] = useState<{ text: string; failed?: boolean } | null>(null)
+  const [uploadNote, setUploadNote] = useState<{
+    text: string
+    failed?: boolean
+  } | null>(null)
   const uploadNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => {
-    if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
+    },
+    []
+  )
   const [naming, setNaming] = useState(false)
   // Is a glyph grid attached RIGHT NOW? Drives the `term-node--glyphgrid` class on the node ROOT,
   // which is what turns the node into a transparent window onto the shared canvas (see styles.css).
@@ -881,10 +953,17 @@ export function TerminalNode({
    *  its client size. Kept apart from `glyphBodyOffsetRef` (which tracks `.xterm-screen`) because
    *  plate and grid are independent rects; the position effect below re-derives the plate's world
    *  origin from this while the node is dragged, without re-measuring the DOM per frame. */
-  const glyphPlateBoxRef = useRef<{ offset: Vec2; w: number; h: number } | null>(null)
+  const glyphPlateBoxRef = useRef<{
+    offset: Vec2
+    w: number
+    h: number
+  } | null>(null)
   // Mutated (never reassigned) so the lifecycle effect's closures read the CURRENT position without
   // re-running; a drag rewrites these two numbers per frame.
-  const nodePosRef = useRef<Vec2>({ x: positionAbsoluteX, y: positionAbsoluteY })
+  const nodePosRef = useRef<Vec2>({
+    x: positionAbsoluteX,
+    y: positionAbsoluteY
+  })
   nodePosRef.current.x = positionAbsoluteX
   nodePosRef.current.y = positionAbsoluteY
   // Re-evaluate this node's participation in the shared canvas (set by the lifecycle effect).
@@ -927,17 +1006,58 @@ export function TerminalNode({
   // offer this node's in-place restart from the SAME derivation, and a second copy drifting from
   // this one yields a row whose closure refuses every click.
   const agentId = createdAgentId(data)
-  const accountChip = agentId === 'codex'
-    ? (data.codexAccountId
-        ? accountChipLabel(data.codexAccountId as string, codexAccounts)
-        : {
-            short: 'system',
-            tooltip: systemCodexEmail || systemCodexLabel || 'System Codex account'
-          })
-    : accountChipLabel(data.accountId, claudeAccounts)
+  const sshConnection = data.ssh as SshConnection | undefined
+  const sshMachineKey = sshConnection ? sshHostKey(sshConnection) : null
+  const machineLabel = sshConnection
+    ? sshServers.find((server) => sshHostKey(server) === sshMachineKey)?.label || sshConnection.host
+    : null
+  const remoteIdentityProjectId = sshMachineKey
+    ? Object.entries(sshConnections).find(
+        ([, connection]) => connection.hostKey === sshMachineKey
+      )?.[0]
+    : undefined
+  const accountRecord =
+    agentId === 'codex'
+      ? codexAccounts.find((account) => account.id === data.codexAccountId)
+      : claudeAccounts.find((account) => account.id === data.accountId)
+  const accountPresentation = agentId
+    ? presentAccount({
+        label:
+          accountRecord?.label ||
+          (agentId === 'codex'
+            ? sshMachineKey
+              ? remoteSystemCodexLabels[sshMachineKey]
+              : systemCodexLabel
+            : sshMachineKey
+              ? remoteSystemClaudeLabels[sshMachineKey]
+              : systemClaudeLabel),
+        email:
+          accountRecord?.email ||
+          (!sshConnection
+            ? agentId === 'codex'
+              ? sshConnection
+                ? remoteSystemCodexEmails[sshMachineKey ?? '']
+                : systemCodexEmail
+              : systemClaudeEmail
+            : undefined),
+        host: sshMachineKey,
+        machineLabel
+      })
+    : null
   useEffect(() => {
     if (agentId === 'codex') useSystemCodexAccount.getState().ensure()
+    if (agentId === 'claude') useSystemAccount.getState().ensure()
   }, [agentId])
+  useEffect(() => {
+    if (agentId === 'codex' && sshMachineKey && remoteIdentityProjectId) {
+      useSystemCodexAccount.getState().ensureRemote(sshMachineKey, remoteIdentityProjectId)
+    }
+  }, [agentId, sshMachineKey, remoteIdentityProjectId])
+  useEffect(() => {
+    if (sshConnection && useSshServers.getState().servers.length === 0) {
+      void useSshServers.getState().hydrate()
+    }
+  }, [sshMachineKey])
   // Gate each former `isClaude` site by the capability it actually represents.
   const showStatus = !!agentId && hasHooks(agentId) // status badge + session-title capture
   const showLoop = !!agentId && canRecur(agentId) // /loop · /schedule · /cron chrome
@@ -1267,7 +1387,10 @@ export function TerminalNode({
         const core = (
           term as unknown as {
             _core?: {
-              _renderService?: { setRenderer(r: unknown): void; handleResize(c: number, r: number): void }
+              _renderService?: {
+                setRenderer(r: unknown): void
+                handleResize(c: number, r: number): void
+              }
               _createRenderer?: () => unknown
             }
           }
@@ -1566,7 +1689,12 @@ export function TerminalNode({
      * — otherwise the plate silently under-covers again, which is precisely the band this whole
      * change removed, and every comment around it would still claim it cannot happen.
      */
-    const measurePlateRect = (): { x: number; y: number; w: number; h: number } | null => {
+    const measurePlateRect = (): {
+      x: number
+      y: number
+      w: number
+      h: number
+    } | null => {
       const offset = offsetInNode(container)
       if (!offset) return null
       // `clientWidth/Height` at the RO tick, the same measurement that positions the grid: LAYOUT
@@ -1729,7 +1857,11 @@ export function TerminalNode({
       // DEBUG-ONLY (see `publishCellDebug`): the CSS cell this grid is registered with, the DEVICE
       // cell the atlas rasterizes into, and the ratio between them. At zoom 1 `css * dpr` must
       // equal `device`; anything else is the factor every glyph is stretched by.
-      publishCellDebug(id, { css: cell, device: deviceCellOf(term), dpr: currentDprForDebug() })
+      publishCellDebug(id, {
+        css: cell,
+        device: deviceCellOf(term),
+        dpr: currentDprForDebug()
+      })
       glyphBodyOffsetRef.current = offset
       const origin = bodyWorldRect(nodePosRef.current, offset)
       // The plate is the BODY rect, measured here so the grid is never registered with a
@@ -1789,7 +1921,10 @@ export function TerminalNode({
         // …and this terminal is painting its own pixels after all, so it goes back to being a
         // budget client. Without this the node would end up with NEITHER renderer coordinated.
         ensureWebglClient()
-        glyphWarn(`${id}:attach`, `node ${id} stays on the DOM renderer: xterm internals not recognised`)
+        glyphWarn(
+          `${id}:attach`,
+          `node ${id} stays on the DOM renderer: xterm internals not recognised`
+        )
         return
       }
       glyphGrid = handle
@@ -1896,13 +2031,18 @@ export function TerminalNode({
       const lookup = makeDirListingLookup(async (dir) => projectFs().fs.list(dir))
       const getCwd = (): string | undefined => (data.cwd as string | undefined) || undefined
       const openFile = (abs: string, isDir: boolean): void => {
-        if (isDir) window.dispatchEvent(new CustomEvent('nodeterm:reveal-file', { detail: { path: abs } }))
+        if (isDir)
+          window.dispatchEvent(new CustomEvent('nodeterm:reveal-file', { detail: { path: abs } }))
         else
           window.dispatchEvent(
-            new CustomEvent('nodeterm:open-file', { detail: { path: abs, ssh: projectFs().ssh } })
+            new CustomEvent('nodeterm:open-file', {
+              detail: { path: abs, ssh: projectFs().ssh }
+            })
           )
       }
-      term.registerLinkProvider(createFileLinkProvider(term, { getCwd, lookup, activate: openFile }))
+      term.registerLinkProvider(
+        createFileLinkProvider(term, { getCwd, lookup, activate: openFile })
+      )
       // Both providers above rely on xterm's own click handling, which
       // tmux/agent mouse-reporting swallows. This capture-phase mouse-up fallback restores
       // Cmd/Ctrl+click for both URLs and file paths in that mode. Attached to `term.element` so
@@ -1987,15 +2127,18 @@ export function TerminalNode({
     // Owning project of an SSH-project terminal, captured at spawn time for the exit-255 drop
     // report below (a node only exists in the active project's React Flow, so the active
     // project is its owner — same assumption as resolveSshRemote).
-    const sshProjectId = sshRemoteTmux ? useProjects.getState().activeProjectId : null
+    const activeProjectId = useProjects.getState().activeProjectId
+    const activeProject = useProjects.getState().getProject(activeProjectId)
+    const sshProjectId =
+      sshRemoteTmux && ssh
+        ? sshConnectionIdForProject(activeProjectId, ssh, activeProject?.ssh?.server)
+        : null
     // Prefetch the persisted scrollback in parallel with the spawn so it's ready to replay the
     // instant the session resolves (a cold restart after a reboot recreates the tmux session
     // empty — see the `fresh` handling below). Cheap no-op ('') when there's no snapshot.
     const noSpawn = !!getCo(termKey).closed || getCo(termKey).ended
     const scrollbackPromise =
-      parked || noSpawn
-        ? Promise.resolve('')
-        : api.pty.readScrollback(id).catch(() => '')
+      parked || noSpawn ? Promise.resolve('') : api.pty.readScrollback(id).catch(() => '')
     // Consume the recycle-restart flag HERE, at the start of the spawn it belongs to — not in the
     // create() continuation, which returns early when the node unmounted mid-spawn and would leave
     // the flag set for some unrelated mount hours later ("session restarted by another user" out of
@@ -2061,356 +2204,374 @@ export function TerminalNode({
           requireRemote: sshRemoteTmux
         })
         .then(
-        async ({
-          sessionId: sid,
-          fresh,
-          accountFallback: fellBack,
-          closed,
-          screen,
-          cursor,
-          coAttachMouse,
-          unavailable
-        }) => {
-        // REFUSED: `requireRemote` and core could not spawn remotely (the master died inside our
-        // round-trip, or `ssh` is missing). Nothing was spawned — land in the same offline state
-        // the near-side guard above produces, retry included.
-        if (unavailable) {
-          setCo(termKey, { offline: true })
-          if (!disposed)
-            term.write(
-              unavailable === 'codex-account'
-                ? '\r\n\x1b[90m[Codex account unavailable — nothing was started; open Settings → Accounts]\x1b[0m\r\n'
-                : '\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n'
-            )
-          if (sshProjectId) reportSshDrop(sshProjectId, id)
-          return
-        }
-        // REFUSED: core's tombstone says another client deleted this node while we weren't
-        // subscribed (our project was closed/inactive, so no `pty:closed` could reach us). Nothing
-        // was spawned — land in the same "closed by <name>" state a subscribed co-viewer gets.
-        // BEFORE `onDisposed()`: there is no session here, so there is nothing to kill or unwire.
-        if (closed) {
-          setCo(termKey, { closed })
-          if (!disposed) term.write('\r\n\x1b[90m[session closed by another user]\x1b[0m\r\n')
-          return
-        }
-        // Disposal while the spawn/seed was in flight is NOT necessarily a teardown: an unmount
-        // with a live session PARKS it (same xterm, same PTY client, same `cleanups` array), and
-        // killing it here would leave the node permanently dead. That holds even if the user
-        // switched straight BACK: the remount adopts the entry and deliberately re-wires nothing —
-        // it relies on this continuation to finish the wiring (gate.open / onExit / onData). So the
-        // question is the closure's `handedOff`, not the (already emptied) parked-terminals map.
-        const onDisposed = (): boolean => {
-          const action = disposalAction({ disposed, handedOff: handedOff?.life })
-          if (action !== 'teardown') return false
-          offData?.()
-          killSession(sid)
-          return true
-        }
-        // Assigned below, once the data listener exists; before that there is nothing to detach.
-        let offData: (() => void) | undefined
-        if (onDisposed()) return
-        sessionId = sid
-        if (fellBack) setAccountFallback(true)
-        // Catch up a size change that landed while the spawn was in flight (applyFit skips the
-        // IPC until sessionId is set, and the observer won't re-fire without another change).
-        applyFit()
-        // The pty is the authority on the grid: it runs at the SMALLEST subscriber's size, so
-        // render exactly that and letterbox the leftover space. With one subscriber the min is our
-        // own proposal, so a solo user is never sent this at all — nothing re-fits, nothing repaints.
-        if (transport.onSize) {
-          cleanups.push(
-            transport.onSize(sid, (size) => {
-              resizeTerm(term, size.cols, size.rows)
-              // Measured against the CURRENT mount's fit (the registry, not a closure): this
-              // listener outlives the mount that wired it — see terminal-config's fittedByNode.
-              setCo(termKey, { letterbox: letterboxFor(id, size) })
-            })
-          )
-        }
-        // Someone else permanently destroyed this node (tmux kill-session): show who, and make sure
-        // this component never respawns the session — see CoState.
-        if (transport.onClosed) {
-          cleanups.push(
-            transport.onClosed(sid, ({ by }) => {
-              setCo(termKey, { closed: { by } })
-              term.write('\r\n\x1b[90m[session closed by another user]\x1b[0m\r\n')
-            })
-          )
-        }
-        // Someone else RECYCLED this node (moved it into a worktree): our session id is dead. If a
-        // replacement is already live under the same node id (`ready`), restart onto it — the node
-        // is still on our canvas and still working, so the closed state above would be a lie, and
-        // parking this now-dead pty would hand a corpse to the next mount. If NO replacement ever
-        // came (the mover's app died mid-move), we must NOT respawn: our options still carry the
-        // node's stale cwd, and spawning it would silently undo the worktree move for everyone —
-        // the terminal ends instead, with a reopen (see CoState.ended / recycleAction).
-        if (transport.onRecycled) {
-          cleanups.push(
-            transport.onRecycled(sid, (info) => {
-              if (recycleAction(info) === 'ended') {
-                disposeParkedTerminal(termKey) // the park holds a dead pty either way
-                setCo(termKey, { ended: true })
-                term.write('\r\n\x1b[90m[session ended — reopen to restart]\x1b[0m\r\n')
-                return
-              }
-              const restart = restartSubs.get(termKey)
-              if (!restart) {
-                disposeParkedTerminal(termKey) // unmounted: drop the park, the next mount creates fresh
-                return
-              }
-              markRecycled(id)
-              restart()
-            })
-          )
-        }
-        // A restart we did not ask for: say why once, before the new session's output lands. (We
-        // JOIN the replacement session, so tmux — which already has a client — does not redraw for
-        // us; the first thing on this screen is whatever the new shell prints next.)
-        if (wasRecycled)
-          term.write(
-            '\r\n\x1b[90m── session restarted by another user (moved to a new folder) ──\x1b[0m\r\n'
-          )
-        // Flow control: track xterm's unprocessed write backlog (bytes handed to
-        // term.write but not yet parsed, plus anything still queued in the gate below). Past a
-        // high watermark we pause the source so a flood can't grow this buffer without bound;
-        // we resume once it drains.
-        let pending = 0
-        let paused = false
-        const HIGH_WATER = 1 << 20 // 1 MB
-        const LOW_WATER = 1 << 18 //  256 KB
-        // Bytes left the backlog (parsed by xterm, or dropped by a resync — see below). Both must
-        // return the flow ticket, or a discarded queue would leave `pending` permanently high and
-        // the source paused forever.
-        // Both callers are DEFERRED (an xterm write callback, or a resync's gate reset), so both
-        // can land after teardown — the write loop still runs the callbacks it holds even though
-        // `cleanups` has unsubscribed everything and the session is killed. `life.dead` (flipped
-        // before the teardown in BOTH paths: the effect cleanup and the park dispose) is the
-        // authority: past it there is no session left to un-pause, and `transport.setFlow` would
-        // address a dead one.
-        const relieve = (bytes: number): void => {
-          if (life.dead) return
-          pending -= bytes
-          if (paused && pending < LOW_WATER) {
-            paused = false
-            transport.setFlow(sid, true)
-          }
-        }
-        const writeChunk = (chunk: string): void => {
-          term.write(chunk, () => relieve(chunk.length))
-        }
-        // Subscribe BEFORE the seed below: main pushes pty data on a timer regardless of
-        // listeners and an IPC event with no listener is dropped, while tmux emits its attach
-        // redraw within tens of ms — i.e. inside the seed's subprocess/ssh round-trip. The gate
-        // queues those chunks until the seed is written, then drains them in order. Queued bytes
-        // still count towards `pending`, so a flood during the gap pauses the source.
-        const gate = createDataGate(writeChunk)
-        offData = transport.onData(sid, (chunk) => {
-          pending += chunk.length
-          if (!paused && pending > HIGH_WATER) {
-            paused = true
-            transport.setFlow(sid, false)
-          }
-          gate.push(chunk)
-        })
-        cleanups.push(offData)
-        // We fell so far behind that the server discarded our queued output and redrew us from
-        // tmux. The capture IS the current screen, so reset the emulator and write it — writing it
-        // on top of a stale buffer would splice two different points in time. An EMPTY payload is
-        // ignored outright (shouldApplyResync): a wrongly cleared screen is unrecoverable, a
-        // skipped repaint is not. The separator mirrors the cold-restore one.
-        //
-        // It must go THROUGH THE GATE, not around it. A resync can land while the seed below is
-        // still awaiting its capture (both are exactly the "this client is slow" case), and the
-        // gate is holding chunks that PREDATE this redraw: draining them on top of it would splice
-        // the stale flood right back over the screen we just repainted, and the pending history
-        // seed would then write an even older screen over that. So the redraw SUPERSEDES both —
-        // `gate.reset()` drops the queue (returning its bytes to the flow accounting) and switches
-        // to pass-through, and `superseded` tells the seed its capture is now stale and to write
-        // nothing (it still wires the rest of the session — see seedPaint). Everything arriving
-        // after the capture streams straight through, in order.
-        //
-        // `repaintResync` sequences the reset behind a write callback: writes already handed to
-        // xterm (up to a megabyte of history seed) are parsed asynchronously, and an inline
-        // `term.reset()` would clear the buffer before they land — see terminal-config. That
-        // deferral outlives teardown, so the repaint is gated on `!life.dead`: this listener is
-        // unsubscribed and the xterm disposed, but a callback already inside xterm's write loop
-        // still fires and would reset/write a disposed core. `life` is the session-scoped record
-        // (shared with the park entry), so a PARK — which keeps the xterm and the PTY alive — does
-        // not trip the guard and a resync arriving at a parked terminal still repaints it.
-        let superseded = false
-        if (transport.onResync) {
-          cleanups.push(
-            transport.onResync(sid, (resyncScreen) => {
-              if (!shouldApplyResync(resyncScreen)) return
-              superseded = true
-              relieve(gate.reset())
-              repaintResync(term, resyncScreen, () => !life.dead)
-            })
-          )
-        }
-        // Seed the (fresh) emulator — but only in the two cases where nothing else will paint it:
-        // a COLD restart (the machine rebooted, the tmux session is gone, so replay the persisted
-        // snapshot) and a co-attach JOINER (no redraw of its own — see below). A plain warm
-        // reattach seeds NOTHING: tmux is attached to this client, redraws it, and owns the
-        // history the wheel scrolls. Parked terminals seed nothing either — their buffer is still
-        // correct and writing to it would duplicate content.
-        // The gate MUST be opened whatever happens in here (`finally`): the data listener already
-        // exists, so a throw between it and `gate.open()` would queue chunks forever — the source
-        // pauses at the high-water mark and the terminal freezes silently and permanently. The
-        // only case that leaves it shut is a real teardown, where the xterm is disposed anyway.
-        let toreDown = false
-        try {
-          const replay = attachReplay({
-            parked: !!parked,
+          async ({
+            sessionId: sid,
             fresh,
-            hasInitialCommand: !!data.initialCommand
-          })
-          if (replay === 'cold-snapshot') {
-            const snapshot = await scrollbackPromise
-            if ((toreDown = onDisposed())) return
-            if (seedPaint({ replay, superseded, snapshot }) === 'snapshot') {
-              // The snapshot comes from `capture-pane -p`: LF-separated, no CR bytes. xterm runs
-              // with convertEol:false, so writing it raw would render as a staircase.
-              term.write(toXtermText(snapshot))
-              term.write('\r\n\x1b[90m── session restored (process ended by a restart) ──\x1b[0m\r\n')
+            accountFallback: fellBack,
+            closed,
+            screen,
+            cursor,
+            coAttachMouse,
+            unavailable
+          }) => {
+            // REFUSED: `requireRemote` and core could not spawn remotely (the master died inside our
+            // round-trip, or `ssh` is missing). Nothing was spawned — land in the same offline state
+            // the near-side guard above produces, retry included.
+            if (unavailable) {
+              setCo(termKey, { offline: true })
+              if (!disposed)
+                term.write(
+                  unavailable === 'codex-account'
+                    ? '\r\n\x1b[90m[Codex account unavailable — nothing was started; open Settings → Accounts]\x1b[0m\r\n'
+                    : '\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n'
+                )
+              if (sshProjectId) reportSshDrop(sshProjectId, id)
+              return
             }
-          } else if (replay === 'warm-attach') {
-            // tmux is attached to this client and paints it: the visible screen on attach, its own
-            // history under the wheel. So there is nothing to hydrate — EXCEPT for a CO-ATTACH
-            // JOINER, whose `screen` was captured inside `create()`: tmux only repaints on SIGWINCH,
-            // and a joiner that did not resize never gets one, so this capture is the only thing
-            // that paints it (see "Painting the joiner" in docs/team-presence.md).
-            // A resync that landed while we awaited the spawn is strictly newer, so `seedPaint` says
-            // 'none' and we write nothing. It is a CONDITION, never a `return`: everything below
-            // this try/finally — the onExit notice, `term.onData` (the KEYBOARD INPUT path) and the
-            // initialCommand / agent-resume — must still be wired, or the terminal streams output,
-            // looks alive, and silently accepts no input forever.
-            if (seedPaint({ replay, superseded, screen }) === 'create-screen') {
-              // Start from a known-clean SGR state; the capture is LF-separated (`capture-pane -p`)
-              // and xterm runs with convertEol:false, so the LFs have to become CRLFs.
-              term.write('\x1b[0m' + toXtermText(stripTrailingNewline(screen as string)))
-              // …and put the cursor back where the PANE has it. The capture is text, so the paint
-              // above left the cursor after its last character — see `cursorPlacementSeq`.
-              term.write(cursorPlacementSeq(cursor))
+            // REFUSED: core's tombstone says another client deleted this node while we weren't
+            // subscribed (our project was closed/inactive, so no `pty:closed` could reach us). Nothing
+            // was spawned — land in the same "closed by <name>" state a subscribed co-viewer gets.
+            // BEFORE `onDisposed()`: there is no session here, so there is nothing to kill or unwire.
+            if (closed) {
+              setCo(termKey, { closed })
+              if (!disposed) term.write('\r\n\x1b[90m[session closed by another user]\x1b[0m\r\n')
+              return
             }
-          }
-          // A CO-ATTACH JOINER (a second window on this node — rare on the canvas, but possible)
-          // missed the mouse-tracking mode tmux only emits at its own attach, so it can't
-          // wheel-scroll tmux history. Enable it (see CO_ATTACH_MOUSE_SEQ). Only ever set on a join,
-          // so this never fires on the solo spawn / warm-reattach-with-own-tmux-client path.
-          if (coAttachMouse) term.write(CO_ATTACH_MOUSE_SEQ)
-        } catch (err) {
-          // Never let a seed failure freeze the terminal: the live stream matters more than the
-          // history. `finally` still opens the gate below.
-          console.error('[terminal] history seed failed', err)
-        } finally {
-          // Seed written — release the PTY output that arrived while it was in flight.
-          if (!toreDown) gate.open()
-        }
-        cleanups.push(
-          transport.onExit(sid, (code) => {
-            term.write(`\r\n\x1b[90m[process exited with code ${code}]\x1b[0m\r\n`)
-            // ssh exiting 255 on an SSH-project terminal is a CONNECTION drop (sleep/wake,
-            // network change, NAT idle) — the remote tmux session survives. Report it so the
-            // reconnect coordinator can re-establish the master and respawn this node.
-            if (code === 255 && sshProjectId) sshDropHandler?.(sshProjectId, id)
-          })
-        )
-        cleanups.push(
-          term.onData((input) => {
-            // Lone Esc / Ctrl-C while the agent works: Claude Code fires NO hook on a user
-            // interrupt, so probe the cancelled turn (still-silent working → done). Exact
-            // match — arrow keys etc. arrive as multi-byte \x1b[… sequences.
-            if (showStatus && (input === '\x1b' || input === '\x03')) inferInterruptAfterSettle(id)
-            transport.write(sid, input)
-          }).dispose
-        )
-        // Deliver a command only after the fresh shell settles, and never blind: zsh's init
-        // (rc files / ZLE setup) resets the tty with a FLUSH that can eat part of a queued
-        // line — a long agent launch line then sat at the prompt mangled (unbalanced quote →
-        // `quote>` on Enter) instead of running. The settle wait below minimizes wasted
-        // attempts; deliverCommand (echo-verify + retry, fail-open) guarantees a mangled
-        // line is never submitted. See command-delivery.ts.
-        const writeWhenShellReady = (cmd: string): void => {
-          let done = false
-          let timer: ReturnType<typeof setTimeout>
-          const fire = (): void => {
-            if (done) return
-            done = true
-            unsub()
-            cleanups.push(
-              deliverCommand(
-                {
-                  write: (d) => transport.write(sid, d),
-                  onData: (cb) => transport.onData(sid, cb)
-                },
-                cmd
+            // Disposal while the spawn/seed was in flight is NOT necessarily a teardown: an unmount
+            // with a live session PARKS it (same xterm, same PTY client, same `cleanups` array), and
+            // killing it here would leave the node permanently dead. That holds even if the user
+            // switched straight BACK: the remount adopts the entry and deliberately re-wires nothing —
+            // it relies on this continuation to finish the wiring (gate.open / onExit / onData). So the
+            // question is the closure's `handedOff`, not the (already emptied) parked-terminals map.
+            const onDisposed = (): boolean => {
+              const action = disposalAction({
+                disposed,
+                handedOff: handedOff?.life
+              })
+              if (action !== 'teardown') return false
+              offData?.()
+              killSession(sid)
+              return true
+            }
+            // Assigned below, once the data listener exists; before that there is nothing to detach.
+            let offData: (() => void) | undefined
+            if (onDisposed()) return
+            sessionId = sid
+            if (fellBack) setAccountFallback(true)
+            // Catch up a size change that landed while the spawn was in flight (applyFit skips the
+            // IPC until sessionId is set, and the observer won't re-fire without another change).
+            applyFit()
+            // The pty is the authority on the grid: it runs at the SMALLEST subscriber's size, so
+            // render exactly that and letterbox the leftover space. With one subscriber the min is our
+            // own proposal, so a solo user is never sent this at all — nothing re-fits, nothing repaints.
+            if (transport.onSize) {
+              cleanups.push(
+                transport.onSize(sid, (size) => {
+                  resizeTerm(term, size.cols, size.rows)
+                  // Measured against the CURRENT mount's fit (the registry, not a closure): this
+                  // listener outlives the mount that wired it — see terminal-config's fittedByNode.
+                  setCo(termKey, { letterbox: letterboxFor(id, size) })
+                })
               )
+            }
+            // Someone else permanently destroyed this node (tmux kill-session): show who, and make sure
+            // this component never respawns the session — see CoState.
+            if (transport.onClosed) {
+              cleanups.push(
+                transport.onClosed(sid, ({ by }) => {
+                  setCo(termKey, { closed: { by } })
+                  term.write('\r\n\x1b[90m[session closed by another user]\x1b[0m\r\n')
+                })
+              )
+            }
+            // Someone else RECYCLED this node (moved it into a worktree): our session id is dead. If a
+            // replacement is already live under the same node id (`ready`), restart onto it — the node
+            // is still on our canvas and still working, so the closed state above would be a lie, and
+            // parking this now-dead pty would hand a corpse to the next mount. If NO replacement ever
+            // came (the mover's app died mid-move), we must NOT respawn: our options still carry the
+            // node's stale cwd, and spawning it would silently undo the worktree move for everyone —
+            // the terminal ends instead, with a reopen (see CoState.ended / recycleAction).
+            if (transport.onRecycled) {
+              cleanups.push(
+                transport.onRecycled(sid, (info) => {
+                  if (recycleAction(info) === 'ended') {
+                    disposeParkedTerminal(termKey) // the park holds a dead pty either way
+                    setCo(termKey, { ended: true })
+                    term.write('\r\n\x1b[90m[session ended — reopen to restart]\x1b[0m\r\n')
+                    return
+                  }
+                  const restart = restartSubs.get(termKey)
+                  if (!restart) {
+                    disposeParkedTerminal(termKey) // unmounted: drop the park, the next mount creates fresh
+                    return
+                  }
+                  markRecycled(id)
+                  restart()
+                })
+              )
+            }
+            // A restart we did not ask for: say why once, before the new session's output lands. (We
+            // JOIN the replacement session, so tmux — which already has a client — does not redraw for
+            // us; the first thing on this screen is whatever the new shell prints next.)
+            if (wasRecycled)
+              term.write(
+                '\r\n\x1b[90m── session restarted by another user (moved to a new folder) ──\x1b[0m\r\n'
+              )
+            // Flow control: track xterm's unprocessed write backlog (bytes handed to
+            // term.write but not yet parsed, plus anything still queued in the gate below). Past a
+            // high watermark we pause the source so a flood can't grow this buffer without bound;
+            // we resume once it drains.
+            let pending = 0
+            let paused = false
+            const HIGH_WATER = 1 << 20 // 1 MB
+            const LOW_WATER = 1 << 18 //  256 KB
+            // Bytes left the backlog (parsed by xterm, or dropped by a resync — see below). Both must
+            // return the flow ticket, or a discarded queue would leave `pending` permanently high and
+            // the source paused forever.
+            // Both callers are DEFERRED (an xterm write callback, or a resync's gate reset), so both
+            // can land after teardown — the write loop still runs the callbacks it holds even though
+            // `cleanups` has unsubscribed everything and the session is killed. `life.dead` (flipped
+            // before the teardown in BOTH paths: the effect cleanup and the park dispose) is the
+            // authority: past it there is no session left to un-pause, and `transport.setFlow` would
+            // address a dead one.
+            const relieve = (bytes: number): void => {
+              if (life.dead) return
+              pending -= bytes
+              if (paused && pending < LOW_WATER) {
+                paused = false
+                transport.setFlow(sid, true)
+              }
+            }
+            const writeChunk = (chunk: string): void => {
+              term.write(chunk, () => relieve(chunk.length))
+            }
+            // Subscribe BEFORE the seed below: main pushes pty data on a timer regardless of
+            // listeners and an IPC event with no listener is dropped, while tmux emits its attach
+            // redraw within tens of ms — i.e. inside the seed's subprocess/ssh round-trip. The gate
+            // queues those chunks until the seed is written, then drains them in order. Queued bytes
+            // still count towards `pending`, so a flood during the gap pauses the source.
+            const gate = createDataGate(writeChunk)
+            offData = transport.onData(sid, (chunk) => {
+              pending += chunk.length
+              if (!paused && pending > HIGH_WATER) {
+                paused = true
+                transport.setFlow(sid, false)
+              }
+              gate.push(chunk)
+            })
+            cleanups.push(offData)
+            // We fell so far behind that the server discarded our queued output and redrew us from
+            // tmux. The capture IS the current screen, so reset the emulator and write it — writing it
+            // on top of a stale buffer would splice two different points in time. An EMPTY payload is
+            // ignored outright (shouldApplyResync): a wrongly cleared screen is unrecoverable, a
+            // skipped repaint is not. The separator mirrors the cold-restore one.
+            //
+            // It must go THROUGH THE GATE, not around it. A resync can land while the seed below is
+            // still awaiting its capture (both are exactly the "this client is slow" case), and the
+            // gate is holding chunks that PREDATE this redraw: draining them on top of it would splice
+            // the stale flood right back over the screen we just repainted, and the pending history
+            // seed would then write an even older screen over that. So the redraw SUPERSEDES both —
+            // `gate.reset()` drops the queue (returning its bytes to the flow accounting) and switches
+            // to pass-through, and `superseded` tells the seed its capture is now stale and to write
+            // nothing (it still wires the rest of the session — see seedPaint). Everything arriving
+            // after the capture streams straight through, in order.
+            //
+            // `repaintResync` sequences the reset behind a write callback: writes already handed to
+            // xterm (up to a megabyte of history seed) are parsed asynchronously, and an inline
+            // `term.reset()` would clear the buffer before they land — see terminal-config. That
+            // deferral outlives teardown, so the repaint is gated on `!life.dead`: this listener is
+            // unsubscribed and the xterm disposed, but a callback already inside xterm's write loop
+            // still fires and would reset/write a disposed core. `life` is the session-scoped record
+            // (shared with the park entry), so a PARK — which keeps the xterm and the PTY alive — does
+            // not trip the guard and a resync arriving at a parked terminal still repaints it.
+            let superseded = false
+            if (transport.onResync) {
+              cleanups.push(
+                transport.onResync(sid, (resyncScreen) => {
+                  if (!shouldApplyResync(resyncScreen)) return
+                  superseded = true
+                  relieve(gate.reset())
+                  repaintResync(term, resyncScreen, () => !life.dead)
+                })
+              )
+            }
+            // Seed the (fresh) emulator — but only in the two cases where nothing else will paint it:
+            // a COLD restart (the machine rebooted, the tmux session is gone, so replay the persisted
+            // snapshot) and a co-attach JOINER (no redraw of its own — see below). A plain warm
+            // reattach seeds NOTHING: tmux is attached to this client, redraws it, and owns the
+            // history the wheel scrolls. Parked terminals seed nothing either — their buffer is still
+            // correct and writing to it would duplicate content.
+            // The gate MUST be opened whatever happens in here (`finally`): the data listener already
+            // exists, so a throw between it and `gate.open()` would queue chunks forever — the source
+            // pauses at the high-water mark and the terminal freezes silently and permanently. The
+            // only case that leaves it shut is a real teardown, where the xterm is disposed anyway.
+            let toreDown = false
+            try {
+              const replay = attachReplay({
+                parked: !!parked,
+                fresh,
+                hasInitialCommand: !!data.initialCommand
+              })
+              if (replay === 'cold-snapshot') {
+                const snapshot = await scrollbackPromise
+                if ((toreDown = onDisposed())) return
+                if (seedPaint({ replay, superseded, snapshot }) === 'snapshot') {
+                  // The snapshot comes from `capture-pane -p`: LF-separated, no CR bytes. xterm runs
+                  // with convertEol:false, so writing it raw would render as a staircase.
+                  term.write(toXtermText(snapshot))
+                  term.write(
+                    '\r\n\x1b[90m── session restored (process ended by a restart) ──\x1b[0m\r\n'
+                  )
+                }
+              } else if (replay === 'warm-attach') {
+                // tmux is attached to this client and paints it: the visible screen on attach, its own
+                // history under the wheel. So there is nothing to hydrate — EXCEPT for a CO-ATTACH
+                // JOINER, whose `screen` was captured inside `create()`: tmux only repaints on SIGWINCH,
+                // and a joiner that did not resize never gets one, so this capture is the only thing
+                // that paints it (see "Painting the joiner" in docs/team-presence.md).
+                // A resync that landed while we awaited the spawn is strictly newer, so `seedPaint` says
+                // 'none' and we write nothing. It is a CONDITION, never a `return`: everything below
+                // this try/finally — the onExit notice, `term.onData` (the KEYBOARD INPUT path) and the
+                // initialCommand / agent-resume — must still be wired, or the terminal streams output,
+                // looks alive, and silently accepts no input forever.
+                if (seedPaint({ replay, superseded, screen }) === 'create-screen') {
+                  // Start from a known-clean SGR state; the capture is LF-separated (`capture-pane -p`)
+                  // and xterm runs with convertEol:false, so the LFs have to become CRLFs.
+                  term.write('\x1b[0m' + toXtermText(stripTrailingNewline(screen as string)))
+                  // …and put the cursor back where the PANE has it. The capture is text, so the paint
+                  // above left the cursor after its last character — see `cursorPlacementSeq`.
+                  term.write(cursorPlacementSeq(cursor))
+                }
+              }
+              // A CO-ATTACH JOINER (a second window on this node — rare on the canvas, but possible)
+              // missed the mouse-tracking mode tmux only emits at its own attach, so it can't
+              // wheel-scroll tmux history. Enable it (see CO_ATTACH_MOUSE_SEQ). Only ever set on a join,
+              // so this never fires on the solo spawn / warm-reattach-with-own-tmux-client path.
+              if (coAttachMouse) term.write(CO_ATTACH_MOUSE_SEQ)
+            } catch (err) {
+              // Never let a seed failure freeze the terminal: the live stream matters more than the
+              // history. `finally` still opens the gate below.
+              console.error('[terminal] history seed failed', err)
+            } finally {
+              // Seed written — release the PTY output that arrived while it was in flight.
+              if (!toreDown) gate.open()
+            }
+            cleanups.push(
+              transport.onExit(sid, (code) => {
+                term.write(`\r\n\x1b[90m[process exited with code ${code}]\x1b[0m\r\n`)
+                // ssh exiting 255 on an SSH-project terminal is a CONNECTION drop (sleep/wake,
+                // network change, NAT idle) — the remote tmux session survives. Report it so the
+                // reconnect coordinator can re-establish the master and respawn this node.
+                if (code === 255 && sshProjectId) sshDropHandler?.(sshProjectId, id)
+              })
             )
+            cleanups.push(
+              term.onData((input) => {
+                // Lone Esc / Ctrl-C while the agent works: Claude Code fires NO hook on a user
+                // interrupt, so probe the cancelled turn (still-silent working → done). Exact
+                // match — arrow keys etc. arrive as multi-byte \x1b[… sequences.
+                if (showStatus && (input === '\x1b' || input === '\x03'))
+                  inferInterruptAfterSettle(id)
+                transport.write(sid, input)
+              }).dispose
+            )
+            // Deliver a command only after the fresh shell settles, and never blind: zsh's init
+            // (rc files / ZLE setup) resets the tty with a FLUSH that can eat part of a queued
+            // line — a long agent launch line then sat at the prompt mangled (unbalanced quote →
+            // `quote>` on Enter) instead of running. The settle wait below minimizes wasted
+            // attempts; deliverCommand (echo-verify + retry, fail-open) guarantees a mangled
+            // line is never submitted. See command-delivery.ts.
+            const writeWhenShellReady = (cmd: string): void => {
+              let done = false
+              let timer: ReturnType<typeof setTimeout>
+              const fire = (): void => {
+                if (done) return
+                done = true
+                unsub()
+                cleanups.push(
+                  deliverCommand(
+                    {
+                      write: (d) => transport.write(sid, d),
+                      onData: (cb) => transport.onData(sid, cb)
+                    },
+                    cmd
+                  )
+                )
+              }
+              const unsub = transport.onData(sid, () => {
+                if (done) return
+                clearTimeout(timer)
+                timer = setTimeout(fire, 200) // quiet for 200ms after output → prompt is up
+              })
+              timer = setTimeout(fire, 1500) // silence cap: no output at all → write anyway
+              cleanups.push(() => {
+                done = true
+                clearTimeout(timer)
+                unsub()
+              })
+            }
+            // Run a one-shot command on first open (e.g. "gh auth login" or the agent CLI), then
+            // forget it.
+            if (data.initialCommand) {
+              const initial =
+                agentId === 'codex' && sshProjectId && sshRemote?.codexLauncherPath
+                  ? String(data.initialCommand).replace(
+                      /^codex(?=\s|$)/,
+                      sshRemote.codexLauncherPath
+                    )
+                  : data.initialCommand
+              writeWhenShellReady(initial)
+              updateNodeData(id, { initialCommand: undefined })
+            } else if (fresh && agentId && canResume(agentId)) {
+              // Cold restart of an agent node: the live agent is gone, so re-launch it. Resume the
+              // prior conversation by its session id when we have one; otherwise start the agent
+              // fresh. Plain terminals get nothing here — just the restored shell.
+              //
+              // Two sources, in this order, and the order is the whole point:
+              //  1. the LIVE id from hooks, which tracks `/clear` and `--fork-session` minting a new
+              //     one mid-conversation, so it is the only one that can be current;
+              //  2. the id nodeterm MINTED at node creation and persisted (`data.agentSessionId`).
+              // Falling back to (2) is what stops a cold start from opening a blank conversation when
+              // no hook ever landed. That is not hypothetical: hook POSTs from an SSH node ride the
+              // reverse tunnel, and after one host reboot 18 of 40 agent nodes had no id at all and
+              // relaunched empty while their transcripts sat on disk, unreachable.
+              const st = useAgentStatus.getState().byId[id]
+              const priorId = st?.sessionId || data.agentSessionId
+              const base =
+                (priorId && resumeCommand(agentId, priorId, !!sshProjectId)) ||
+                (agentId === 'codex' && sshProjectId
+                  ? (sshRemote?.codexLauncherPath ?? 'codex')
+                  : agentConfig(agentId)?.launchCmd)
+              // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
+              // a persisted property of the node, so the current setting wins after a reboot. `base`
+              // is always freshly built here — never a command string read back from node data — so
+              // it can never end up double-flagged. Awaited (not the sync `activePermissionMode`)
+              // because this fires on mount: right after a machine reboot it can beat the CLI version
+              // probe, and an unanswered probe would conservatively drop `auto`.
+              // Gated on THIS node's agent: claude's `auto` version gate must not decide what a grok
+              // (or any other permission-mode-capable agent's) relaunch is flagged with.
+              const cmd =
+                base && withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
+              if (cmd) writeWhenShellReady(cmd) // same shell-startup race as initialCommand
+            }
           }
-          const unsub = transport.onData(sid, () => {
-            if (done) return
-            clearTimeout(timer)
-            timer = setTimeout(fire, 200) // quiet for 200ms after output → prompt is up
-          })
-          timer = setTimeout(fire, 1500) // silence cap: no output at all → write anyway
-          cleanups.push(() => {
-            done = true
-            clearTimeout(timer)
-            unsub()
-          })
-        }
-        // Run a one-shot command on first open (e.g. "gh auth login" or the agent CLI), then
-        // forget it.
-        if (data.initialCommand) {
-          writeWhenShellReady(data.initialCommand)
-          updateNodeData(id, { initialCommand: undefined })
-        } else if (fresh && agentId && canResume(agentId)) {
-          // Cold restart of an agent node: the live agent is gone, so re-launch it. Resume the
-          // prior conversation by its session id when we have one; otherwise start the agent
-          // fresh. Plain terminals get nothing here — just the restored shell.
+        )
+        .catch((err: unknown) => {
+          // THE missing handler, and the answer to "some terminals are black" (2026-08-06).
           //
-          // Two sources, in this order, and the order is the whole point:
-          //  1. the LIVE id from hooks, which tracks `/clear` and `--fork-session` minting a new
-          //     one mid-conversation, so it is the only one that can be current;
-          //  2. the id nodeterm MINTED at node creation and persisted (`data.agentSessionId`).
-          // Falling back to (2) is what stops a cold start from opening a blank conversation when
-          // no hook ever landed. That is not hypothetical: hook POSTs from an SSH node ride the
-          // reverse tunnel, and after one host reboot 18 of 40 agent nodes had no id at all and
-          // relaunched empty while their transcripts sat on disk, unreachable.
-          const st = useAgentStatus.getState().byId[id]
-          const priorId = st?.sessionId || data.agentSessionId
-          const base =
-            (priorId && resumeCommand(agentId, priorId, !!sshProjectId)) ||
-            (agentId === 'codex' && sshProjectId ? 'codex' : agentConfig(agentId)?.launchCmd)
-          // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
-          // a persisted property of the node, so the current setting wins after a reboot. `base`
-          // is always freshly built here — never a command string read back from node data — so
-          // it can never end up double-flagged. Awaited (not the sync `activePermissionMode`)
-          // because this fires on mount: right after a machine reboot it can beat the CLI version
-          // probe, and an unanswered probe would conservatively drop `auto`.
-          // Gated on THIS node's agent: claude's `auto` version gate must not decide what a grok
-          // (or any other permission-mode-capable agent's) relaunch is flagged with.
-          const cmd =
-            base && withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
-          if (cmd) writeWhenShellReady(cmd) // same shell-startup race as initialCommand
-        }
-      })
-      .catch((err: unknown) => {
-        // THE missing handler, and the answer to "some terminals are black" (2026-08-06).
-        //
-        // A rejected create means core started NOTHING: no session to tear down, no data gate to
-        // open, nothing to unwire. The only thing owed is telling the user — and until now nobody
-        // did. The rejection went nowhere, the node kept the empty xterm it had mounted with, and
-        // the result was a black rectangle with no message and no way back short of deleting the
-        // node. The failure was in the main-process log the whole time.
-        //
-        // `life.dead` first: a node unmounted while its spawn was in flight has no state worth
-        // writing, and `setCo` would publish into a key the next mount reads.
-        if (life.dead) return
-        setCo(termKey, { spawnError: err instanceof Error ? err.message : String(err) })
-      })
+          // A rejected create means core started NOTHING: no session to tear down, no data gate to
+          // open, nothing to unwire. The only thing owed is telling the user — and until now nobody
+          // did. The rejection went nowhere, the node kept the empty xterm it had mounted with, and
+          // the result was a black rectangle with no message and no way back short of deleting the
+          // node. The failure was in the main-process log the whole time.
+          //
+          // `life.dead` first: a node unmounted while its spawn was in flight has no state worth
+          // writing, and `setCo` would publish into a key the next mount reads.
+          if (life.dead) return
+          setCo(termKey, {
+            spawnError: err instanceof Error ? err.message : String(err)
+          })
+        })
     })()
 
     // In-place agent restart (Canvas node menu / bulk palette): ask the CLI to quit, wait until a
@@ -3126,10 +3287,15 @@ export function TerminalNode({
       // Remote terminal: uploading over the ControlMaster takes seconds and pastes nothing until
       // it's done, so show an overlay while it runs — without it a drop looks like it silently did
       // nothing. (The upload + REMOTE-path resolution itself lives in the shared droppedPaths.)
-      const projectId = useProjects.getState().activeProjectId
+      const projects = useProjects.getState()
+      const ownerProjectId = projects.activeProjectId
+      const project = projects.getProject(ownerProjectId)
+      const projectId = data.ssh
+        ? sshConnectionIdForProject(ownerProjectId, data.ssh, project?.ssh?.server)
+        : ownerProjectId
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
       setUploadNote({
-        text: `Uploading ${files.length === 1 ? files[0].name : `${files.length} files`}…`,
+        text: `Uploading ${files.length === 1 ? files[0].name : `${files.length} files`}…`
       })
       try {
         paths = await droppedPaths(files, { sshRemoteTmux: true, projectId })
@@ -3144,7 +3310,10 @@ export function TerminalNode({
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
       setUploadNote({ text: 'Saving pasted file…' })
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: false, projectId: '' })
+        paths = await droppedPaths(files, {
+          sshRemoteTmux: false,
+          projectId: ''
+        })
       } finally {
         setUploadNote(null)
       }
@@ -3153,7 +3322,10 @@ export function TerminalNode({
         uploadNoteTimer.current = setTimeout(() => setUploadNote(null), 2500)
       }
     } else {
-      paths = await droppedPaths(files, { sshRemoteTmux: false, projectId: '' })
+      paths = await droppedPaths(files, {
+        sshRemoteTmux: false,
+        projectId: ''
+      })
     }
     if (!paths.length) return
     // Enter the terminal and paste the path(s) like a real drop (trailing space to continue).
@@ -3257,18 +3429,12 @@ export function TerminalNode({
     let timer: ReturnType<typeof setTimeout> | undefined
     const sync = async () => {
       if (!titleAutoRef.current || editingTitleRef.current) return
-      const accountScope = agentId === 'codex'
-        ? (data.codexAccountId as string | undefined)
-        : data.accountId
+      const accountScope =
+        agentId === 'codex' ? (data.codexAccountId as string | undefined) : data.accountId
       const name = await api.pty.readSessionName(sid, accountScope, agentId)
       if (cancelled) return
       if (name) delayMs = 15000
-      if (
-        name &&
-        titleAutoRef.current &&
-        !editingTitleRef.current &&
-        name !== titleRef.current
-      ) {
+      if (name && titleAutoRef.current && !editingTitleRef.current && name !== titleRef.current) {
         updateNodeData(id, { title: name })
       }
     }
@@ -3305,7 +3471,12 @@ export function TerminalNode({
   // needed (the Electron renderer has no native find UI), unlike Cmd+M.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'f' && hoveredRef.current) {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        e.key.toLowerCase() === 'f' &&
+        hoveredRef.current
+      ) {
         e.preventDefault()
         setSearchOpen((v) => !v)
       }
@@ -3324,8 +3495,8 @@ export function TerminalNode({
       // startup path (it is what the canvas is made of), the markdown renderer is not — it runs
       // only after someone presses ⌘M. The capture is already a round trip to main, so the extra
       // chunk fetch is not even on a path the user can perceive.
-      void Promise.all([api.pty.capture(id, true), import('../lib/markdown')]).then(
-        ([text, md]) => setMdHtml(md.renderMarkdown(text))
+      void Promise.all([api.pty.capture(id, true), import('../lib/markdown')]).then(([text, md]) =>
+        setMdHtml(md.renderMarkdown(text))
       )
     }
   }, [data.mdMode, id, useChat])
@@ -3340,239 +3511,238 @@ export function TerminalNode({
 
   return (
     <>
-    {/* Sibling of the root: .term-node is overflow:hidden and would clip the half-pill. */}
-    <ColumnPill nodeId={id} />
-    <div
-      className={`term-node${selected ? ' selected' : ''}${collapsed ? ' collapsed' : ''}${
-        isUnread ? ' unread' : ''
-      }${status?.state === 'working' ? ' working' : ''}${
-        status?.state === 'waiting' || status?.state === 'blocked' ? ' attention' : ''
-      }${glyphMounted ? ' term-node--glyphgrid' : ''}`}
-      ref={rootRef}
-      style={{ borderTopColor: data.color }}
-      onMouseEnter={() => (hoveredRef.current = true)}
-      onMouseLeave={() => (hoveredRef.current = false)}
-    >
-      <NodeResizer minWidth={260} minHeight={160} isVisible={selected && !collapsed} color="#0a84ff" />
-      {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
-      <Handle
-        id="flow-out"
-        type="source"
-        position={Position.Bottom}
-        isConnectable={false}
-        style={{ opacity: 0, pointerEvents: 'none', bottom: 0 }}
-      />
-      {/* Invisible target handle so a rope from an agent node that opened this can attach. */}
-      <Handle
-        id="flow-in"
-        type="target"
-        position={Position.Top}
-        isConnectable={false}
-        style={{ opacity: 0, pointerEvents: 'none', top: 0 }}
-      />
-      {/* Link handles (all terminal nodes): drag right→left to link. Between two context-capable
+      {/* Sibling of the root: .term-node is overflow:hidden and would clip the half-pill. */}
+      <ColumnPill nodeId={id} />
+      <div
+        className={`term-node${selected ? ' selected' : ''}${collapsed ? ' collapsed' : ''}${
+          isUnread ? ' unread' : ''
+        }${status?.state === 'working' ? ' working' : ''}${
+          status?.state === 'waiting' || status?.state === 'blocked' ? ' attention' : ''
+        }${glyphMounted ? ' term-node--glyphgrid' : ''}`}
+        ref={rootRef}
+        style={{ borderTopColor: data.color }}
+        onMouseEnter={() => (hoveredRef.current = true)}
+        onMouseLeave={() => (hoveredRef.current = false)}
+      >
+        <NodeResizer
+          minWidth={260}
+          minHeight={160}
+          isVisible={selected && !collapsed}
+          color="#0a84ff"
+        />
+        {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
+        <Handle
+          id="flow-out"
+          type="source"
+          position={Position.Bottom}
+          isConnectable={false}
+          style={{ opacity: 0, pointerEvents: 'none', bottom: 0 }}
+        />
+        {/* Invisible target handle so a rope from an agent node that opened this can attach. */}
+        <Handle
+          id="flow-in"
+          type="target"
+          position={Position.Top}
+          isConnectable={false}
+          style={{ opacity: 0, pointerEvents: 'none', top: 0 }}
+        />
+        {/* Link handles (all terminal nodes): drag right→left to link. Between two context-capable
           (Claude) nodes this shares context; from a sticky note it attaches the note as context.
           Vertically centered on the side edges; raised above the body so they're never buried. */}
-      <Handle
-        id="link-out"
-        type="source"
-        position={Position.Right}
-        className="bridge-handle bridge-handle--out"
-        data-tip={
-          contextLinkCapable
-            ? "Link out — drag to another Claude node so they can read each other's context"
-            : 'Link out — drag to a sticky note to attach it as context'
-        }
-      />
-      <Handle
-        id="link-in"
-        type="target"
-        position={Position.Left}
-        className="bridge-handle bridge-handle--in"
-        data-tip={
-          contextLinkCapable
-            ? 'Link in — drop a link here to share context with this Claude session'
-            : 'Link in — drop a sticky note link here to attach it as context'
-        }
-      />
-
-      <div className="term-node__header">
-        <button className="term-node__collapse" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggleCollapse}>
-          {collapsed ? '▸' : '▾'}
-        </button>
-        <button
-          className="term-node__color"
-          style={{ background: data.color }}
-          title="Color"
-          onClick={() => setShowColors((v) => !v)}
+        <Handle
+          id="link-out"
+          type="source"
+          position={Position.Right}
+          className="bridge-handle bridge-handle--out"
+          data-tip={
+            contextLinkCapable
+              ? "Link out — drag to another Claude node so they can read each other's context"
+              : 'Link out — drag to a sticky note to attach it as context'
+          }
         />
-        {showColors && (
-          <div className="color-popover">
-            {NODE_COLORS.map((c) => (
-              <button
-                key={c}
-                style={{ background: c }}
-                onClick={() => {
-                  updateNodeData(id, { color: c })
-                  setShowColors(false)
-                }}
-              />
-            ))}
-          </div>
-        )}
-        {editingTitle ? (
-          <input
-            className="term-node__title nodrag"
-            value={data.title}
-            spellCheck={false}
-            autoFocus
-            onChange={(e) => updateNodeData(id, { title: e.target.value })}
-            // Enter commits, Escape reverts to the value editing started with. The blur that
-            // follows either keypress is skipped (skipBlurRef) so we don't commit twice; a plain
-            // focus-loss blur still commits.
-            onBlur={(e) => {
-              if (skipBlurRef.current) {
-                skipBlurRef.current = false
-                return
-              }
-              commitTitleEdit(e.currentTarget.value)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                skipBlurRef.current = true
-                commitTitleEdit(e.currentTarget.value)
-              } else if (e.key === 'Escape') {
-                skipBlurRef.current = true
-                updateNodeData(id, { title: titleEditStartRef.current })
-                setEditingTitle(false)
-              }
-            }}
+        <Handle
+          id="link-in"
+          type="target"
+          position={Position.Left}
+          className="bridge-handle bridge-handle--in"
+          data-tip={
+            contextLinkCapable
+              ? 'Link in — drop a link here to share context with this Claude session'
+              : 'Link in — drop a sticky note link here to attach it as context'
+          }
+        />
+
+        <div className="term-node__header">
+          <button
+            className="term-node__collapse"
+            title={collapsed ? 'Expand' : 'Collapse'}
+            onClick={toggleCollapse}
+          >
+            {collapsed ? '▸' : '▾'}
+          </button>
+          <button
+            className="term-node__color"
+            style={{ background: data.color }}
+            title="Color"
+            onClick={() => setShowColors((v) => !v)}
           />
-        ) : (
-          <span
-            className="term-node__title-text nodrag"
-            title="Click to rename"
-            onClick={() => {
-              titleEditStartRef.current = data.title as string
-              setEditingTitle(true)
-            }}
-          >
-            {data.title || 'Untitled'}
-          </span>
-        )}
-        {status?.session && status.session !== data.title && (
-          <span className="term-node__session" title={status.session}>
-            {status.session}
-          </span>
-        )}
-        {accountChip && (
-          <span
-            className={`node-account-chip${accountFallback ? ' node-account-chip--warning' : ''}`}
-            title={
-              accountFallback
-                ? 'Account folder missing — running on system account'
-                : accountChip.tooltip
-            }
-          >
-            {accountChip.short}
-          </span>
-        )}
-        {data.ssh ? (
-          <span
-            className="term-ssh-chip"
-            title={`ssh ${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`}
-          >
-            SSH {(data.ssh as SshConnection).user}@{(data.ssh as SshConnection).host}
-          </span>
-        ) : null}
-        {showUsage && <ContextMeter sessionId={status?.sessionId ?? null} />}
-        {/* Who else is in this node. Subscribes to presence itself — see PresenceChips. */}
-        <PresenceChips nodeId={id} />
-        {status?.state === 'working' && (
-          <span className="term-node__status term-node__status--busy" title={`${agentLabel} is working`}>
-            <AgentMascot agentId={agentId} />
-            RUNNING
-          </span>
-        )}
-        {showLoop && status?.loop && (
-          <span
-            className="term-node__status term-node__status--loop"
-            title={`Running /${status.loop.kind}`}
-          >
-            <span className="term-node__status-dot" />
-            {status.loop.kind.toUpperCase()}
-            {status.loop.count > 0 ? ` ×${status.loop.count}` : ''}
-          </span>
-        )}
-        {/* Armed by canvas-control `--after`: this node holds its launch until the stations it
+          {showColors && (
+            <div className="color-popover">
+              {NODE_COLORS.map((c) => (
+                <button
+                  key={c}
+                  style={{ background: c }}
+                  onClick={() => {
+                    updateNodeData(id, { color: c })
+                    setShowColors(false)
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {editingTitle ? (
+            <input
+              className="term-node__title nodrag"
+              value={data.title}
+              spellCheck={false}
+              autoFocus
+              onChange={(e) => updateNodeData(id, { title: e.target.value })}
+              // Enter commits, Escape reverts to the value editing started with. The blur that
+              // follows either keypress is skipped (skipBlurRef) so we don't commit twice; a plain
+              // focus-loss blur still commits.
+              onBlur={(e) => {
+                if (skipBlurRef.current) {
+                  skipBlurRef.current = false
+                  return
+                }
+                commitTitleEdit(e.currentTarget.value)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  skipBlurRef.current = true
+                  commitTitleEdit(e.currentTarget.value)
+                } else if (e.key === 'Escape') {
+                  skipBlurRef.current = true
+                  updateNodeData(id, { title: titleEditStartRef.current })
+                  setEditingTitle(false)
+                }
+              }}
+            />
+          ) : (
+            <span
+              className="term-node__title-text nodrag"
+              title="Click to rename"
+              onClick={() => {
+                titleEditStartRef.current = data.title as string
+                setEditingTitle(true)
+              }}
+            >
+              {data.title || 'Untitled'}
+            </span>
+          )}
+          {status?.session && status.session !== data.title && (
+            <span className="term-node__session" title={status.session}>
+              {status.session}
+            </span>
+          )}
+          {accountPresentation ? (
+            <AccountIdentityPills
+              className="node-identity-chips nodrag"
+              account={accountPresentation}
+              warning={accountFallback}
+            />
+          ) : null}
+          {showUsage && <ContextMeter sessionId={status?.sessionId ?? null} />}
+          {/* Who else is in this node. Subscribes to presence itself — see PresenceChips. */}
+          <PresenceChips nodeId={id} />
+          {status?.state === 'working' && (
+            <span
+              className="term-node__status term-node__status--busy"
+              title={`${agentLabel} is working`}
+            >
+              <AgentMascot agentId={agentId} />
+              RUNNING
+            </span>
+          )}
+          {showLoop && status?.loop && (
+            <span
+              className="term-node__status term-node__status--loop"
+              title={`Running /${status.loop.kind}`}
+            >
+              <span className="term-node__status-dot" />
+              {status.loop.kind.toUpperCase()}
+              {status.loop.count > 0 ? ` ×${status.loop.count}` : ''}
+            </span>
+          )}
+          {/* Armed by canvas-control `--after`: this node holds its launch until the stations it
             waits on go idle. Shown because an armed node is otherwise indistinguishable from one
             that simply failed to start — and it carries the manual escape, because agent state is
             transient: after an app restart nothing will ever report `done` again, so without a
             "run now" an armed node left over from before the restart would be a dead end. */}
-        {pendingLaunch && (
-          <span
-            className="term-node__status term-node__status--queued nodrag"
-            title={`Waiting for ${pendingWaitingOn} to finish, then runs:\n${pendingLaunch.command}`}
-          >
-            <span className="term-node__status-dot" />
-            QUEUED
-            <button
-              className="term-node__queued-run"
-              title="Run now without waiting"
-              onClick={(e) => {
-                e.stopPropagation()
-                void api.pty.sendText(id, pendingLaunch.command)
-                updateNodeData(id, { pendingLaunch: undefined })
-              }}
+          {pendingLaunch && (
+            <span
+              className="term-node__status term-node__status--queued nodrag"
+              title={`Waiting for ${pendingWaitingOn} to finish, then runs:\n${pendingLaunch.command}`}
             >
-              ▶
-            </button>
-          </span>
-        )}
-        {(status?.state === 'waiting' || status?.state === 'blocked') && (
-          <span
-            className="term-node__status term-node__status--attention"
-            title={`${agentLabel} needs your input`}
-          >
-            <span className="term-node__status-dot" />
-            NEEDS YOU
-          </span>
-        )}
-        {/* Deterministic hook-reply approvals (docs/hook-reply-approvals.md): when the node is
+              <span className="term-node__status-dot" />
+              QUEUED
+              <button
+                className="term-node__queued-run"
+                title="Run now without waiting"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void api.pty.sendText(id, pendingLaunch.command)
+                  updateNodeData(id, { pendingLaunch: undefined })
+                }}
+              >
+                ▶
+              </button>
+            </span>
+          )}
+          {(status?.state === 'waiting' || status?.state === 'blocked') && (
+            <span
+              className="term-node__status term-node__status--attention"
+              title={`${agentLabel} needs your input`}
+            >
+              <span className="term-node__status-dot" />
+              NEEDS YOU
+            </span>
+          )}
+          {/* Deterministic hook-reply approvals (docs/hook-reply-approvals.md): when the node is
             blocked on a Claude permission request whose managed hook is holding open (pendingId
             known), answer it in one click — no keystrokes into the prompt. Vanishes the moment the
             state leaves `blocked` (the store clears pendingId). */}
-        {status?.state === 'blocked' && status?.pendingId && (
-          <span className="term-node__approve nodrag">
-            <button
-              className="term-node__approve-btn term-node__approve-btn--allow"
-              title="Approve this permission request"
-              onClick={() =>
-                void window.nodeTerminal.answerPermission({
-                  nodeId: id,
-                  pendingId: status.pendingId!,
-                  decision: 'allow'
-                })
-              }
-            >
-              ✓ Approve
-            </button>
-            <button
-              className="term-node__approve-btn term-node__approve-btn--deny"
-              title="Deny this permission request"
-              onClick={() =>
-                void window.nodeTerminal.answerPermission({
-                  nodeId: id,
-                  pendingId: status.pendingId!,
-                  decision: 'deny'
-                })
-              }
-            >
-              ✕ Deny
-            </button>
-          </span>
-        )}
-        {isUnread && (
+          {status?.state === 'blocked' && status?.pendingId && (
+            <span className="term-node__approve nodrag">
+              <button
+                className="term-node__approve-btn term-node__approve-btn--allow"
+                title="Approve this permission request"
+                onClick={() =>
+                  void window.nodeTerminal.answerPermission({
+                    nodeId: id,
+                    pendingId: status.pendingId!,
+                    decision: 'allow'
+                  })
+                }
+              >
+                ✓ Approve
+              </button>
+              <button
+                className="term-node__approve-btn term-node__approve-btn--deny"
+                title="Deny this permission request"
+                onClick={() =>
+                  void window.nodeTerminal.answerPermission({
+                    nodeId: id,
+                    pendingId: status.pendingId!,
+                    decision: 'deny'
+                  })
+                }
+              >
+                ✕ Deny
+              </button>
+            </span>
+          )}
+          {isUnread && (
             <span
               className="term-node__status term-node__status--unread"
               title="Finished — click to mark read"
@@ -3581,227 +3751,245 @@ export function TerminalNode({
               unread
             </span>
           )}
-        {!editingTitle && <span className="term-node__spacer" />}
-        {canMoveIntoWorktree && (
-          <Tooltip label="Move this terminal into the group's worktree">
-            <button
-              className="term-node__move-worktree nodrag"
-              onClick={() => moveIntoWorktreeHandler?.(id)}
-            >
-              ↪
-            </button>
-          </Tooltip>
-        )}
-        {/* Refresh: rebuild THIS node's view and re-attach to the same session (the context
+          {!editingTitle && <span className="term-node__spacer" />}
+          {canMoveIntoWorktree && (
+            <Tooltip label="Move this terminal into the group's worktree">
+              <button
+                className="term-node__move-worktree nodrag"
+                onClick={() => moveIntoWorktreeHandler?.(id)}
+              >
+                ↪
+              </button>
+            </Tooltip>
+          )}
+          {/* Refresh: rebuild THIS node's view and re-attach to the same session (the context
             menu's "Refresh terminal", one click away). In the header because the cases that
             need it are exactly the ones where the node is unusable — a pane that never painted,
             a scroll that stopped responding after a long sleep — and a right-click on a dead
             view is the last thing a user wants to hunt for. Distinct from "Restart agent",
             which quits the CLI itself; this touches nothing but the viewer. */}
-        {!isHidden('refresh', hiddenHeaderButtons) && (
-          <Tooltip label="Refresh — rebuild this view; the session keeps running">
-            <button
-              className="term-node__refresh nodrag"
-              onClick={(e) => {
-                e.stopPropagation()
-                updateNodeData(id, (n) => ({
-                  respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1
-                }))
-              }}
-            >
-              <IconReload />
-            </button>
-          </Tooltip>
-        )}
-        {/* `claudeTranscript`, NOT `showUsage`: the transcript leg of the search is gated on the
+          {!isHidden('refresh', hiddenHeaderButtons) && (
+            <Tooltip label="Refresh — rebuild this view; the session keeps running">
+              <button
+                className="term-node__refresh nodrag"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateNodeData(id, (n) => ({
+                    respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1
+                  }))
+                }}
+              >
+                <IconReload />
+              </button>
+            </Tooltip>
+          )}
+          {/* `claudeTranscript`, NOT `showUsage`: the transcript leg of the search is gated on the
             claude-transcript fact (see the `useTerminalSearch` call above), so keying the label on
             the meter promised a codex/gemini node a conversation search it does not run. */}
-        <Tooltip
-          label={claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal'}
-        >
-          <button
-            className="term-node__search nodrag"
-            onClick={() => setSearchOpen((v) => !v)}
-            aria-pressed={searchOpen}
+          <Tooltip
+            label={claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal'}
           >
-            <IconSearch />
+            <button
+              className="term-node__search nodrag"
+              onClick={() => setSearchOpen((v) => !v)}
+              aria-pressed={searchOpen}
+            >
+              <IconSearch />
+            </button>
+          </Tooltip>
+          {!isHidden('mic', hiddenHeaderButtons) && (
+            <Tooltip label="Dictate into this terminal">
+              <button
+                className="term-node__mic nodrag"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  window.dispatchEvent(
+                    new CustomEvent('nodeterm:dictate', {
+                      detail: { nodeId: id }
+                    })
+                  )
+                }}
+              >
+                <IconMic />
+              </button>
+            </Tooltip>
+          )}
+          {!isHidden('ai-name', hiddenHeaderButtons) && (
+            <Tooltip label="Name with AI (from terminal output)">
+              <button className="term-node__ai nodrag" disabled={naming} onClick={nameWithAi}>
+                {naming ? '…' : '✦'}
+              </button>
+            </Tooltip>
+          )}
+          {!isHidden('comments', hiddenHeaderButtons) && (
+            <Tooltip label="Comments & activity">
+              <button
+                className="term-node__chat nodrag"
+                aria-pressed={commentsOpen}
+                onClick={() => setCommentsOpen((v) => !v)}
+              >
+                <IconChat />
+              </button>
+            </Tooltip>
+          )}
+          <button
+            className="term-node__close"
+            title="Close (ends the session)"
+            onClick={() => {
+              transport.destroy(id)
+              deleteElements({ nodes: [{ id }] })
+            }}
+          >
+            ×
           </button>
-        </Tooltip>
-        {!isHidden('mic', hiddenHeaderButtons) && (
-          <Tooltip label="Dictate into this terminal">
-            <button
-              className="term-node__mic nodrag"
-              onClick={(e) => {
-                e.stopPropagation()
-                window.dispatchEvent(new CustomEvent('nodeterm:dictate', { detail: { nodeId: id } }))
-              }}
-            >
-              <IconMic />
-            </button>
-          </Tooltip>
-        )}
-        {!isHidden('ai-name', hiddenHeaderButtons) && (
-          <Tooltip label="Name with AI (from terminal output)">
-            <button className="term-node__ai nodrag" disabled={naming} onClick={nameWithAi}>
-              {naming ? '…' : '✦'}
-            </button>
-          </Tooltip>
-        )}
-        {!isHidden('comments', hiddenHeaderButtons) && (
-          <Tooltip label="Comments & activity">
-            <button
-              className="term-node__chat nodrag"
-              aria-pressed={commentsOpen}
-              onClick={() => setCommentsOpen((v) => !v)}
-            >
-              <IconChat />
-            </button>
-          </Tooltip>
-        )}
-        <button
-          className="term-node__close"
-          title="Close (ends the session)"
-          onClick={() => {
-            transport.destroy(id)
-            deleteElements({ nodes: [{ id }] })
-          }}
-        >
-          ×
-        </button>
-      </div>
+        </div>
 
-      {searchOpen && !collapsed && (
-        <FindBar
-          query={search.query}
-          onQueryChange={search.setQuery}
-          matchIndex={search.matchIndex}
-          matchCount={search.matchCount}
-          current={search.current}
-          onNext={handleNext}
-          onPrev={handlePrev}
-          onClose={() => setSearchOpen(false)}
-        />
-      )}
+        {searchOpen && !collapsed && (
+          <FindBar
+            query={search.query}
+            onQueryChange={search.setQuery}
+            matchIndex={search.matchIndex}
+            matchCount={search.matchCount}
+            current={search.current}
+            onNext={handleNext}
+            onPrev={handlePrev}
+            onClose={() => setSearchOpen(false)}
+          />
+        )}
 
-      {!collapsed && <NodeLabels nodeId={id} />}
+        {!collapsed && <NodeLabels nodeId={id} />}
 
-      {/* Body always mounted (keeps xterm alive); hidden via CSS when collapsed. */}
-      <div
-        className={`term-node__body${dropping ? ' dropping' : ''}`}
-        onMouseEnter={onBodyEnter}
-        onMouseLeave={onBodyLeave}
-        onDragOver={onBodyDragOver}
-        onDragLeave={onBodyDragLeave}
-        onDrop={onBodyDrop}
-        onPasteCapture={onBodyPaste}
-      >
+        {/* Body always mounted (keeps xterm alive); hidden via CSS when collapsed. */}
         <div
-          className={`term-node__xterm nodrag nowheel${co.letterbox ? ' letterboxed' : ''}`}
-          data-canvas-trackpad-pan
-          ref={bodyRef}
-        />
-        {uploadNote && (
-          <div className={`term-node__upload${uploadNote.failed ? ' failed' : ''}`}>
-            {!uploadNote.failed && <span className="term-node__upload-spin" />}
-            {uploadNote.text}
-          </div>
-        )}
-        {/* Copy receipt / selection hint — floated over the terminal's bottom-right rather than
+          className={`term-node__body${dropping ? ' dropping' : ''}`}
+          onMouseEnter={onBodyEnter}
+          onMouseLeave={onBodyLeave}
+          onDragOver={onBodyDragOver}
+          onDragLeave={onBodyDragLeave}
+          onDrop={onBodyDrop}
+          onPasteCapture={onBodyPaste}
+        >
+          <div
+            className={`term-node__xterm nodrag nowheel${co.letterbox ? ' letterboxed' : ''}`}
+            ref={bodyRef}
+          />
+          {uploadNote && (
+            <div className={`term-node__upload${uploadNote.failed ? ' failed' : ''}`}>
+              {!uploadNote.failed && <span className="term-node__upload-spin" />}
+              {uploadNote.text}
+            </div>
+          )}
+          {/* Copy receipt / selection hint — floated over the terminal's bottom-right rather than
             worn as a header chip. It belongs where the user's eyes just were (the drag they
             finished), and the header cannot hold it: on a narrow node with the SSH chip and
             RUNNING already there, one more chip pushes the × under `.term-node`'s overflow.
             Bottom-RIGHT specifically — every agent CLI writes its input line bottom-LEFT. */}
-        {copy.feedback && (
-          <div className={`term-copy-pill term-copy-pill--${copy.feedback.kind}`}>
-            {copy.feedback.label}
-          </div>
-        )}
-        {/* Offscreen-disposed: the xterm and the PTY client are gone, the tmux session is not.
-            Deliberately above the overlays below it in the DOM but the least insistent of them —
-            it states a resting state, not a failure. Nobody is ever looking at it as it appears
-            (that is the precondition for appearing); it exists for the frame between coming into
-            view and the reattach redraw, and for a node parked at the edge of the viewport.
-
-            …with ONE case where it is seen head-on, and it is deliberate: a COLLAPSED node. The
-            body is `display: none` while collapsed, so the observed element reports
-            not-intersecting and a collapsed terminal is disposed after the window even though its
-            header sits in plain view. Expanding revives it — the display flip changes the
-            intersection, the observer fires, and the node reattaches. Collapsed is exactly the
-            state in which nobody is reading this terminal's output, which is why the WebGL budget
-            has always treated it as hidden too; this feature only agrees with it. Not a bug. */}
-        {offscreenDown && (
-          <div className="term-node__offscreen nodrag">
-            <span>Session running — reattaches on view</span>
-          </div>
-        )}
-        {co.closed && (
-          <div className="term-node__closed nodrag">
-            Closed by {closedName} — this session was ended.
-          </div>
-        )}
-        {!co.closed && co.ended && (
-          <div className="term-node__closed nodrag">
-            <span>Session ended — the node was moved and never came back.</span>
-            <button className="term-node__reopen" onClick={reopenEnded}>
-              Reopen
-            </button>
-          </div>
-        )}
-        {!co.closed && !co.ended && co.spawnError && (
-          <div className="term-node__closed nodrag">
-            <span>This terminal could not be started. {co.spawnError}</span>
-            <button className="term-node__reopen" onClick={retrySpawn}>
-              Try again
-            </button>
-          </div>
-        )}
-        {!co.closed && !co.ended && !co.spawnError && co.offline && (
-          <div className="term-node__closed nodrag">
-            <span>
-              Not connected to {data.ssh ? `${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}` : 'the host'} — this session was not started
-              locally.
-            </span>
-            <button className="term-node__reopen" onClick={reconnectOffline}>
-              Reconnect
-            </button>
-          </div>
-        )}
-        {armed && !mdMode && (
-          <div
-            className="term-hover-guard"
-            onMouseDown={onGuardDown}
-            onMouseUp={onGuardUp}
-            title="Click to type · drag to move · scroll to pan"
-          />
-        )}
-        {mdMode &&
-          (useChat ? (
-            <Suspense fallback={null}>
-              <ChatPanel
-                nodeId={id}
-                sessionId={status?.sessionId}
-                cwd={data.cwd as string | undefined}
-                accountId={data.accountId}
-              />
-            </Suspense>
-          ) : (
-            <div className="term-md nodrag nowheel">
-              <div className="term-md__bar">
-                <span>Markdown</span>
-                <span className="term-md__hint">{hintLabel('⌘M to exit')}</span>
-              </div>
-              <div className="term-md__content" dangerouslySetInnerHTML={{ __html: mdHtml }} />
+          {copy.feedback && (
+            <div className={`term-copy-pill term-copy-pill--${copy.feedback.kind}`}>
+              {copy.feedback.label}
             </div>
-          ))}
+          )}
+          {/* Offscreen-disposed: xterm and the PTY client are gone, but tmux keeps running.
+              The node reattaches as soon as it becomes visible again. */}
+          {offscreenDown && (
+            <div className="term-node__offscreen nodrag">
+              <span>Session running — reattaches on view</span>
+            </div>
+          )}
+          {co.closed && (
+            <div className="term-node__closed nodrag">
+              Closed by {closedName} — this session was ended.
+            </div>
+          )}
+          {!co.closed && co.ended && (
+            <div className="term-node__closed nodrag">
+              <span>Session ended — the node was moved and never came back.</span>
+              <button className="term-node__reopen" onClick={reopenEnded}>
+                Reopen
+              </button>
+            </div>
+          )}
+          {!co.closed && !co.ended && co.spawnError && (
+            <div className="term-node__closed nodrag">
+              <span>This terminal could not be started. {co.spawnError}</span>
+              <button className="term-node__reopen" onClick={retrySpawn}>
+                Try again
+              </button>
+            </div>
+          )}
+          {!co.closed && !co.ended && !co.spawnError && co.offline && (
+            <div className="term-node__closed nodrag">
+              <span>
+                Not connected to{' '}
+                {data.ssh
+                  ? `${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`
+                  : 'the host'}{' '}
+                — this session was not started locally.
+              </span>
+              <button className="term-node__reopen" onClick={reconnectOffline}>
+                Reconnect
+              </button>
+            </div>
+          )}
+          {armed && !mdMode && (
+            <div
+              className="term-hover-guard nowheel"
+              onMouseDown={onGuardDown}
+              onMouseUp={onGuardUp}
+              onWheel={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                termRef.current?.element?.dispatchEvent(
+                  new WheelEvent('wheel', {
+                    bubbles: true,
+                    cancelable: true,
+                    deltaMode: event.deltaMode,
+                    deltaX: event.deltaX,
+                    deltaY: event.deltaY,
+                    deltaZ: event.deltaZ,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                    ctrlKey: event.ctrlKey,
+                    metaKey: event.metaKey,
+                    shiftKey: event.shiftKey,
+                    altKey: event.altKey
+                  })
+                )
+              }}
+              title="Click to type · drag to move · scroll terminal"
+            />
+          )}
+          {mdMode &&
+            (useChat ? (
+              <Suspense fallback={null}>
+                <ChatPanel
+                  nodeId={id}
+                  sessionId={status?.sessionId}
+                  cwd={data.cwd as string | undefined}
+                  accountId={data.accountId}
+                />
+              </Suspense>
+            ) : (
+              <div className="term-md nodrag nowheel">
+                <div className="term-md__bar">
+                  <span>Markdown</span>
+                  <span className="term-md__hint">{hintLabel('⌘M to exit')}</span>
+                </div>
+                <div className="term-md__content" dangerouslySetInnerHTML={{ __html: mdHtml }} />
+              </div>
+            ))}
+        </div>
       </div>
-    </div>
-    {/* Board-log comments flyout — a SIBLING of the root (overflow:hidden would clip it),
+      {/* Board-log comments flyout — a SIBLING of the root (overflow:hidden would clip it),
         expanding to the node's right. Same feed/composer as the card modal's panel. */}
-    {commentsOpen && !collapsed && (
-      <div className="term-node__comments nodrag nowheel" onMouseDown={(e) => e.stopPropagation()}>
-        <BoardLogPanel card={{ id }} />
-      </div>
-    )}
+      {commentsOpen && !collapsed && (
+        <div
+          className="term-node__comments nodrag nowheel"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <BoardLogPanel card={{ id }} />
+        </div>
+      )}
     </>
   )
 }

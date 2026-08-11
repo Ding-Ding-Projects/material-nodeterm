@@ -1,5 +1,15 @@
 import { createHash, randomUUID } from 'crypto'
-import { existsSync, linkSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync } from 'fs'
+import {
+  existsSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  unlinkSync
+} from 'fs'
 import os from 'os'
 import path from 'path'
 
@@ -48,10 +58,7 @@ export function migrateLegacyCodexAccountHome(
   return target
 }
 
-export function migrateLegacyCodexAccountHomes(
-  userDataDir: string,
-  shortRoot?: string
-): void {
+export function migrateLegacyCodexAccountHomes(userDataDir: string, shortRoot?: string): void {
   const legacyRoot = path.join(userDataDir, 'codex-accounts')
   let entries: Array<{ name: string; isDirectory(): boolean }>
   try {
@@ -79,12 +86,53 @@ export function codexHomeForAccount(userDataDir: string, accountId?: string): st
 }
 
 export function codexSocketForAccount(userDataDir: string, accountId?: string): string {
-  return path.join(codexHomeForAccount(userDataDir, accountId), 'app-server-control', 'app-server-control.sock')
+  return path.join(
+    codexHomeForAccount(userDataDir, accountId),
+    'app-server-control',
+    'app-server-control.sock'
+  )
+}
+
+/** Short, deterministic remote homes keep the app-server Unix socket below SUN_LEN. */
+export function remoteCodexHome(remoteHome: string, accountId?: string): string {
+  if (!path.posix.isAbsolute(remoteHome)) throw new Error('Remote home must be absolute')
+  if (!accountId) return path.posix.join(remoteHome, '.codex')
+  assertCodexAccountId(accountId)
+  const digest = createHash('sha256').update(accountId).digest('hex').slice(0, 16)
+  return path.posix.join(remoteHome, '.nodeterm', 'cx', digest)
+}
+
+export function remoteCodexSocket(remoteHome: string, accountId?: string): string {
+  return path.posix.join(
+    remoteCodexHome(remoteHome, accountId),
+    'app-server-control',
+    'app-server-control.sock'
+  )
+}
+
+export function remoteCodexSessionEnv(
+  remoteHome: string,
+  accountId?: string
+): { CODEX_HOME: string; NODETERM_CODEX_ACCOUNT_ID: string } {
+  return {
+    CODEX_HOME: remoteCodexHome(remoteHome, accountId),
+    NODETERM_CODEX_ACCOUNT_ID: accountId ?? ''
+  }
+}
+
+export function remoteCodexTmuxEnvArgs(remoteHome: string, accountId?: string): string[] {
+  return Object.entries(remoteCodexSessionEnv(remoteHome, accountId)).flatMap(([key, value]) => [
+    '-e',
+    `${key}=${value}`
+  ])
 }
 
 function containedRelativePath(root: string, candidate: string): string | null {
   const relative = path.relative(root, candidate)
-  return relative && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative)
+  return relative &&
+    !relative.startsWith(`..${path.sep}`) &&
+    relative !== '..' &&
+    !path.isAbsolute(relative)
     ? relative
     : null
 }
@@ -105,8 +153,13 @@ export function planCodexRolloutExposure(
   sourcePath: string,
   threadId: string
 ): CodexRolloutExposurePlan {
-  if (!path.isAbsolute(sourceHome) || !path.isAbsolute(targetHome) || !path.isAbsolute(sourcePath) ||
-      !ACCOUNT_ID_RE.test(threadId) || !path.basename(sourcePath).endsWith(`${threadId}.jsonl`)) {
+  if (
+    !path.isAbsolute(sourceHome) ||
+    !path.isAbsolute(targetHome) ||
+    !path.isAbsolute(sourcePath) ||
+    !ACCOUNT_ID_RE.test(threadId) ||
+    !path.basename(sourcePath).endsWith(`${threadId}.jsonl`)
+  ) {
     throw new Error('Invalid Codex rollout exposure request')
   }
   if (!lstatSync(sourcePath).isFile()) throw new Error('Source Codex rollout is not a regular file')
@@ -136,8 +189,12 @@ export function commitCodexRolloutExposure(
     try {
       const entry = lstatSync(candidate)
       const linked = statSync(candidate)
-      return entry.isFile() && !entry.isSymbolicLink() &&
-        linked.dev === plan.sourceDev && linked.ino === plan.sourceIno
+      return (
+        entry.isFile() &&
+        !entry.isSymbolicLink() &&
+        linked.dev === plan.sourceDev &&
+        linked.ino === plan.sourceIno
+      )
     } catch {
       return false
     }
@@ -175,8 +232,10 @@ export function commitCodexRolloutExposure(
   const temporaryStillOurs = (): boolean => {
     try {
       const currentTemporary = lstatSync(temporaryPath)
-      return currentTemporary.dev === createdTemporary.dev &&
+      return (
+        currentTemporary.dev === createdTemporary.dev &&
         currentTemporary.ino === createdTemporary.ino
+      )
     } catch {
       return false
     }
@@ -190,8 +249,8 @@ export function commitCodexRolloutExposure(
       // ever deleting an unrelated entry raced into the final pathname.
       linkFile(temporaryPath, plan.targetPath)
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' ||
-          !isVerifiedRollout(plan.targetPath)) throw error
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || !isVerifiedRollout(plan.targetPath))
+        throw error
     }
     if (!isVerifiedRollout(plan.targetPath)) {
       throw new Error('Target Codex rollout did not preserve the verified source inode')
@@ -200,7 +259,9 @@ export function commitCodexRolloutExposure(
     // The private pathname may itself have been replaced. Delete it only while it still names
     // the exact inode created by our link(2), even when a source race made that inode invalid.
     if (temporaryStillOurs()) {
-      try { unlinkSync(temporaryPath) } catch {}
+      try {
+        unlinkSync(temporaryPath)
+      } catch {}
     }
   }
 }

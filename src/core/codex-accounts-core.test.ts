@@ -1,4 +1,16 @@
-import { existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  linkSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'fs'
 import os from 'os'
 import path from 'path'
 import { describe, expect, it, vi } from 'vitest'
@@ -12,7 +24,10 @@ import {
   legacyCodexAccountHome,
   migrateLegacyCodexAccountHome,
   codexTmuxEnvArgs,
-  codexSocketForAccount
+  codexSocketForAccount,
+  remoteCodexHome,
+  remoteCodexSocket,
+  remoteCodexTmuxEnvArgs
 } from './codex-accounts-core'
 
 describe('managed Codex account paths', () => {
@@ -54,6 +69,28 @@ describe('managed Codex account paths', () => {
     const userData = '/Users/example/Library/Application Support/node-terminal'
     const accountId = 'be28d3d4-c18c-430c-a257-ae550d3dd7ed'
     expect(Buffer.byteLength(codexSocketForAccount(userData, accountId))).toBeLessThan(104)
+  })
+
+  it('isolates remote accounts under short host-local homes', () => {
+    const remoteHome = '/home/corvin'
+    const first = remoteCodexHome(remoteHome, 'account-a')
+    const second = remoteCodexHome(remoteHome, 'account-b')
+    expect(first).not.toBe(second)
+    expect(remoteCodexHome(remoteHome)).toBe('/home/corvin/.codex')
+    expect(remoteCodexSocket(remoteHome, 'account-a')).toBe(
+      `${first}/app-server-control/app-server-control.sock`
+    )
+    expect(remoteCodexTmuxEnvArgs(remoteHome, 'account-a')).toEqual([
+      '-e',
+      `CODEX_HOME=${first}`,
+      '-e',
+      'NODETERM_CODEX_ACCOUNT_ID=account-a'
+    ])
+  })
+
+  it('rejects unsafe remote account paths', () => {
+    expect(() => remoteCodexHome('relative', 'account-a')).toThrow('Remote home must be absolute')
+    expect(() => remoteCodexHome('/home/corvin', '../escape')).toThrow('Invalid Codex account id')
   })
 
   it('moves an existing long managed home to its deterministic short home', () => {
@@ -98,7 +135,14 @@ describe('cross-account Codex rollout visibility', () => {
     const targetHome = path.join(fixture, 'target')
     const thirdHome = path.join(fixture, 'third')
     const threadId = 'thread-a'
-    const source = path.join(sourceHome, 'sessions', '2026', '08', '10', `rollout-${threadId}.jsonl`)
+    const source = path.join(
+      sourceHome,
+      'sessions',
+      '2026',
+      '08',
+      '10',
+      `rollout-${threadId}.jsonl`
+    )
     mkdirSync(path.dirname(source), { recursive: true })
     mkdirSync(targetHome)
     mkdirSync(thirdHome)
@@ -109,7 +153,9 @@ describe('cross-account Codex rollout visibility', () => {
     commitCodexRolloutExposure(toTarget)
     const target = toTarget.targetPath
     expect(statSync(target).ino).toBe(statSync(source).ino)
-    expect(readdirSync(path.dirname(target)).some((name) => name.endsWith('.nodeterm-link'))).toBe(false)
+    expect(readdirSync(path.dirname(target)).some((name) => name.endsWith('.nodeterm-link'))).toBe(
+      false
+    )
     writeFileSync(target, 'after\n', { flag: 'a' })
     expect(readFileSync(source, 'utf8')).toBe('before\nafter\n')
     const toThird = planCodexRolloutExposure(targetHome, thirdHome, target, threadId)
@@ -128,13 +174,15 @@ describe('cross-account Codex rollout visibility', () => {
     const outside = path.join(fixture, `rollout-${threadId}.jsonl`)
     writeFileSync(outside, 'outside')
     mkdirSync(path.join(sourceHome, 'sessions'), { recursive: true })
-    expect(() => planCodexRolloutExposure(sourceHome, targetHome, outside, threadId))
-      .toThrow('outside its account home')
+    expect(() => planCodexRolloutExposure(sourceHome, targetHome, outside, threadId)).toThrow(
+      'outside its account home'
+    )
 
     const malicious = path.join(sourceHome, 'sessions', `rollout-malicious-${threadId}.jsonl`)
     symlinkSync(outside, malicious)
-    expect(() => planCodexRolloutExposure(sourceHome, targetHome, malicious, threadId))
-      .toThrow('regular file')
+    expect(() => planCodexRolloutExposure(sourceHome, targetHome, malicious, threadId)).toThrow(
+      'regular file'
+    )
 
     const source = path.join(sourceHome, 'sessions', `rollout-${threadId}.jsonl`)
     const target = path.join(targetHome, 'sessions', `rollout-${threadId}.jsonl`)
@@ -143,8 +191,7 @@ describe('cross-account Codex rollout visibility', () => {
     writeFileSync(source, 'source')
     writeFileSync(target, 'different')
     const plan = planCodexRolloutExposure(sourceHome, targetHome, source, threadId)
-    expect(() => commitCodexRolloutExposure(plan))
-      .toThrow('different rollout')
+    expect(() => commitCodexRolloutExposure(plan)).toThrow('different rollout')
     expect(readFileSync(target, 'utf8')).toBe('different')
     rmSync(fixture, { recursive: true, force: true })
   })
@@ -180,11 +227,13 @@ describe('cross-account Codex rollout visibility', () => {
     writeFileSync(replacement, 'replacement')
     const plan = planCodexRolloutExposure(sourceHome, targetHome, source, threadId)
     let calls = 0
-    expect(() => commitCodexRolloutExposure(plan, (from, to) => {
-      calls += 1
-      if (calls === 1) renameSync(replacement, source)
-      linkSync(from, to)
-    })).toThrow('Temporary Codex rollout did not preserve')
+    expect(() =>
+      commitCodexRolloutExposure(plan, (from, to) => {
+        calls += 1
+        if (calls === 1) renameSync(replacement, source)
+        linkSync(from, to)
+      })
+    ).toThrow('Temporary Codex rollout did not preserve')
     const targetDir = path.dirname(plan.targetPath)
     expect(existsSync(plan.targetPath)).toBe(false)
     expect(readdirSync(targetDir).some((name) => name.endsWith('.nodeterm-link'))).toBe(false)

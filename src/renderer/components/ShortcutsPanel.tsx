@@ -18,7 +18,10 @@ interface Row {
 /** Everything but "Dictate" is fixed; that row's keys/label depend on `settings.speech.shortcut`
  *  (a modifier-only chord is hold-to-talk — no trailing key badge, so the label spells that out),
  *  so the sections are built at render time instead of module scope. */
-function buildSections(dictationKeys: string[], dictationLabel: string): { title: string; rows: Row[] }[] {
+function buildSections(
+  dictationKeys: string[],
+  dictationLabel: string
+): { title: string; rows: Row[] }[] {
   return [
     {
       title: 'General',
@@ -40,7 +43,7 @@ function buildSections(dictationKeys: string[], dictationLabel: string): { title
         { keys: ['Right-click'], label: 'Actions menu (empty space or node)' },
         { keys: ['Left-drag'], label: 'Box-select (touch to select)' },
         { keys: ['Middle / Right-drag'], label: 'Pan the canvas' },
-        { keys: ['Double-click'], label: 'Center & focus a node' },
+        { keys: ['Double-click'], label: 'Frame & focus a node' },
         { keys: ['⌘', 'wheel'], label: 'Zoom in / out' }
       ]
     },

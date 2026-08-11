@@ -1,26 +1,36 @@
 import { useEffect, useState } from 'react'
 import type { ClaudeAccount, CodexAccount } from '@shared/types'
-import { sshHostKey } from '@shared/ssh'
+import { sshAttachmentId, sshHostKey } from '@shared/ssh'
 import { useSettings } from '../../../state/settings'
 import { useSystemAccount } from '../../../state/systemAccount'
 import { useSystemCodexAccount } from '../../../state/systemCodexAccount'
 import { isAccountLoginNode, isCodexAccountLoginNode } from '../../../state/workspace'
 import { useProjects } from '../../../state/projects'
 import { useSshConn } from '../../../state/sshConn'
+import { useSshServers } from '../../../state/sshServers'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
+import { presentAccount, type AccountPresentation } from '../../../lib/accountPresentation'
+import { AccountIdentityPills } from '../../AccountIdentityPills'
 
 const ROWS = {
   accounts: {
-    title: 'Claude accounts',
-    keywords: ['account', 'claude', 'login', 'isolated', 'multi', 'email']
-  },
-  codexAccounts: {
-    title: 'Codex accounts',
-    keywords: ['account', 'codex', 'openai', 'chatgpt', 'login', 'email', 'usage']
+    title: 'Agent accounts',
+    keywords: [
+      'account',
+      'claude',
+      'codex',
+      'openai',
+      'chatgpt',
+      'login',
+      'isolated',
+      'multi',
+      'email',
+      'usage'
+    ]
   }
 }
 const ENTRIES = Object.values(ROWS)
@@ -38,6 +48,119 @@ function AddingLabel({ where }: { where: string }): React.JSX.Element {
   )
 }
 
+function MachinePanel({
+  label,
+  endpoint,
+  remote,
+  connected = true,
+  children
+}: {
+  label: string
+  endpoint?: string
+  remote: boolean
+  connected?: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <section className="overflow-hidden rounded-lg border border-border bg-fill-weak/20">
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-fill-weak/40 px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full ${connected ? 'bg-[color:var(--success)]' : 'bg-muted'}`}
+            aria-label={connected ? 'Connected' : 'Not connected'}
+          />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[13px] font-semibold text-text">{label}</span>
+              <span className="rounded-full bg-fill-weak px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+                {remote ? 'SSH' : 'Local'}
+              </span>
+            </div>
+            {endpoint ? (
+              <p className="truncate text-[11px] text-muted" title={endpoint}>
+                {endpoint}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </header>
+      <div>{children}</div>
+    </section>
+  )
+}
+
+function ProviderSection({
+  provider,
+  addLabel,
+  adding,
+  disabled,
+  onAdd,
+  children
+}: {
+  provider: 'Claude' | 'Codex'
+  addLabel: string
+  adding: boolean
+  disabled?: boolean
+  onAdd: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <section className="border-t border-border first:border-t-0">
+      <header className="flex items-center justify-between gap-3 bg-fill-weak/15 px-3 py-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+          {provider}
+        </span>
+        <Button variant="primary" disabled={disabled || adding} onClick={onAdd}>
+          {adding ? <AddingLabel where={provider} /> : addLabel}
+        </Button>
+      </header>
+      <div className="divide-y divide-border border-t border-border">{children}</div>
+    </section>
+  )
+}
+
+function AccountRow({
+  presentation,
+  email,
+  pending = false,
+  unavailable = false,
+  actions,
+  details,
+  labelControl
+}: {
+  presentation: AccountPresentation
+  email?: string | null
+  pending?: boolean
+  unavailable?: boolean
+  actions?: React.ReactNode
+  details?: React.ReactNode
+  labelControl?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="flex items-start justify-between gap-3 bg-bg px-3 py-3">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <AccountIdentityPills account={presentation} />
+          {pending ? (
+            <span className="rounded-full bg-[color:var(--warn)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--warn)]">
+              pending
+            </span>
+          ) : null}
+        </div>
+        {email && email !== presentation.identity ? (
+          <p className="truncate text-[12px] text-muted">{email}</p>
+        ) : null}
+        {labelControl}
+        {unavailable ? (
+          <p className="text-[12px] text-muted">Not logged in or unavailable</p>
+        ) : null}
+        {details}
+      </div>
+      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+    </div>
+  )
+}
+
 /** Reads fresh settings then applies a transform to the accounts list (avoids stale closures
  *  after an awaited login resolves late). */
 function applyAccounts(fn: (accs: ClaudeAccount[]) => ClaudeAccount[]): void {
@@ -50,10 +173,7 @@ function applyCodexAccounts(fn: (accs: CodexAccount[]) => CodexAccount[]): void 
   s.update({ codexAccounts: fn(s.settings.codexAccounts) })
 }
 
-function captureCodexIdentity(
-  id: string,
-  captured: { email: string | null }
-): void {
+function captureCodexIdentity(id: string, captured: { email: string | null }): void {
   applyCodexAccounts((accs) =>
     accs.map((a) =>
       a.id === id
@@ -74,10 +194,7 @@ function captureCodexIdentity(
 function countNodesUsing(accountId: string): number {
   return useProjects
     .getState()
-    .projects.reduce(
-      (sum, p) => sum + p.nodes.filter((n) => n.accountId === accountId).length,
-      0
-    )
+    .projects.reduce((sum, p) => sum + p.nodes.filter((n) => n.accountId === accountId).length, 0)
 }
 
 export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
@@ -85,6 +202,10 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   const codexAccounts = useSettings((s) => s.settings.codexAccounts)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
   const systemCodexLabelSetting = useSettings((s) => s.settings.systemCodexAccountLabel)
+  const remoteSystemAccountLabels = useSettings((s) => s.settings.remoteSystemAccountLabels)
+  const remoteSystemCodexAccountLabels = useSettings(
+    (s) => s.settings.remoteSystemCodexAccountLabels
+  )
   const systemEmail = useSystemAccount((s) => s.email)
   const systemCodexEmail = useSystemCodexAccount((s) => s.email)
   useEffect(() => useSystemAccount.getState().ensure(), [])
@@ -97,11 +218,16 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   // Subscribe to live SSH connections so a remote account's Retry button enables/disables as its
   // host connects/disconnects while this panel is open.
   const sshByProject = useSshConn((s) => s.byProject)
+  const sshServers = useSshServers((s) => s.servers)
+  useEffect(() => {
+    void useSshServers.getState().hydrate()
+  }, [])
   const [versionWarning, setVersionWarning] = useState(false)
   const [pendingRemove, setPendingRemove] = useState<ClaudeAccount | null>(null)
   const [pendingCodexRemove, setPendingCodexRemove] = useState<CodexAccount | null>(null)
-  const [addingCodex, setAddingCodex] = useState(false)
+  const [addingCodexOn, setAddingCodexOn] = useState<string | null>(null)
   const [codexAddError, setCodexAddError] = useState<string | null>(null)
+  const remoteSystemCodexEmails = useSystemCodexAccount((s) => s.remoteEmails)
   /**
    * Which "Add account" button is mid-setup: the host key, or LOCAL_TARGET for this machine.
    * Minting a REMOTE account is 10–15 s of real work on the host — mkdir, merging the status hook
@@ -111,6 +237,30 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
    */
   const [addingOn, setAddingOn] = useState<string | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
+  const codexRemoteTargets = [
+    ...new Map(
+      [
+        ...sshServers,
+        ...(activeProject?.ssh
+          ? [
+              {
+                ...activeProject.ssh.server,
+                id: activeHostKey!,
+                label: activeHostKey!
+              }
+            ]
+          : [])
+      ].map((server) => [sshHostKey(server), server])
+    ).entries()
+  ]
+  const presentationFor = (
+    label: string | undefined,
+    email: string | null | undefined,
+    host?: string
+  ): AccountPresentation => {
+    const server = host ? sshServers.find((entry) => sshHostKey(entry) === host) : undefined
+    return presentAccount({ label, email, host, machineLabel: server?.label })
+  }
 
   // A login may finish just before an app restart, or its terminal may close before the settings
   // waiter updates the row. Reconcile only credential files that already exist and whose
@@ -125,7 +275,13 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
       const captured = await Promise.all(
         pending.map(async (account) => ({
           account,
-          identity: await window.nodeTerminal.codexAccounts.identity(account.id).catch(() => null)
+          identity: await (async () => {
+            const projectId = account.host ? await ensureHostConnection(account.host) : undefined
+            return window.nodeTerminal.codexAccounts.identity(
+              account.id,
+              projectId ? { projectId } : undefined
+            )
+          })().catch(() => null)
         }))
       )
       if (cancelled) return
@@ -152,33 +308,121 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   const setCodexLabel = (id: string, label: string): void =>
     applyCodexAccounts((accs) => accs.map((a) => (a.id === id ? { ...a, label } : a)))
 
-  const runCodexLogin = async (account: Pick<CodexAccount, 'id'>): Promise<void> => {
-    window.dispatchEvent(
-      new CustomEvent('nodeterm:add-codex-account-login', { detail: { accountId: account.id } })
+  const setRemoteSystemLabel = (
+    provider: 'claude' | 'codex',
+    host: string,
+    label: string
+  ): void => {
+    const settings = useSettings.getState().settings
+    if (provider === 'claude') {
+      useSettings.getState().update({
+        remoteSystemAccountLabels: {
+          ...settings.remoteSystemAccountLabels,
+          [host]: label
+        }
+      })
+      return
+    }
+    useSettings.getState().update({
+      remoteSystemCodexAccountLabels: {
+        ...settings.remoteSystemCodexAccountLabels,
+        [host]: label
+      }
+    })
+  }
+
+  const setCodexRemoteCwd = (id: string, remoteCwd: string): void =>
+    applyCodexAccounts((accs) => accs.map((a) => (a.id === id ? { ...a, remoteCwd } : a)))
+
+  const ensureHostConnection = async (host: string): Promise<string | undefined> => {
+    const existing = projectIdForHost(host)
+    const server = useSshServers.getState().servers.find((entry) => sshHostKey(entry) === host)
+    const ownerProjectId = useProjects.getState().activeProjectId
+    if (!server || !ownerProjectId) return undefined
+    // A renderer entry only says that this UI observed a connection. It is not proof that the
+    // main-process manager still owns the ControlMaster or that a connection created before the
+    // current app build has the full Codex runtime metadata. Re-enter connect() idempotently on
+    // the SAME scope before every account lifecycle operation; the manager reuses a healthy
+    // master and repairs/bootstrap-checks anything incomplete.
+    const connectionId = existing ?? sshAttachmentId(ownerProjectId, server)
+    const remoteCwd = server.remoteCwd || '~'
+    const info = await window.nodeTerminal.sshProject.connect(connectionId, server, remoteCwd)
+    useSshConn.getState().setConn(connectionId, {
+      ...info,
+      hostKey: host,
+      conn: server,
+      remoteCwd,
+      ownerProjectId
+    })
+    return connectionId
+  }
+
+  useEffect(() => {
+    if (!isActive || codexRemoteTargets.length === 0) return
+    let cancelled = false
+    void Promise.all(
+      codexRemoteTargets.map(async ([host]) => {
+        const projectId = await ensureHostConnection(host).catch(() => undefined)
+        if (!cancelled && projectId) useSystemCodexAccount.getState().ensureRemote(host, projectId)
+      })
     )
-    const captured = await window.nodeTerminal.codexAccounts.waitLogin(account.id)
+    return () => {
+      cancelled = true
+    }
+  }, [isActive, sshServers, activeHostKey])
+
+  const runCodexLogin = async (account: Pick<CodexAccount, 'id' | 'host'>): Promise<void> => {
+    const projectId = account.host ? await ensureHostConnection(account.host) : undefined
+    if (account.host && !projectId) return
+    window.dispatchEvent(
+      new CustomEvent('nodeterm:add-codex-account-login', {
+        detail: {
+          accountId: account.id,
+          remote: !!account.host,
+          host: account.host
+        }
+      })
+    )
+    const captured = await window.nodeTerminal.codexAccounts.waitLogin(
+      account.id,
+      projectId ? { projectId } : undefined
+    )
     if (!captured) return
     captureCodexIdentity(account.id, captured)
   }
 
-  const onAddCodexAccount = async (): Promise<void> => {
-    if (addingCodex) return
-    setAddingCodex(true)
+  const onAddCodexAccount = async (host?: string): Promise<void> => {
+    if (addingCodexOn !== null) return
+    setAddingCodexOn(host ?? LOCAL_TARGET)
     setCodexAddError(null)
     try {
-      const added = await window.nodeTerminal.codexAccounts.add()
+      const projectId = host ? await ensureHostConnection(host) : undefined
+      if (host && !projectId) throw new Error('SSH project is not connected')
+      const added = await window.nodeTerminal.codexAccounts.add(
+        projectId ? { projectId } : undefined
+      )
       const account: CodexAccount = {
         id: added.id,
         label: 'New Codex account',
         pending: true,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        ...(host
+          ? {
+              host,
+              remoteCwd:
+                useSshServers.getState().servers.find((server) => sshHostKey(server) === host)
+                  ?.remoteCwd || '~'
+            }
+          : {})
       }
       applyCodexAccounts((accs) => [...accs, account])
       await runCodexLogin(account)
-    } catch {
-      setCodexAddError('Could not set up the Codex account.')
+    } catch (error) {
+      setCodexAddError(
+        `Could not set up the Codex account: ${error instanceof Error ? error.message : String(error)}`
+      )
     } finally {
-      setAddingCodex(false)
+      setAddingCodexOn(null)
     }
   }
 
@@ -189,15 +433,19 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     // node created immediately before opening Settings could be missed and its live CODEX_HOME
     // deleted underneath it.
     const live = { accountId: account.id, count: 0 }
-    window.dispatchEvent(new CustomEvent('nodeterm:query-live-codex-account-use', { detail: live }))
+    window.dispatchEvent(
+      new CustomEvent('nodeterm:query-live-codex-account-use', {
+        detail: live
+      })
+    )
     const inactiveNodeCount = useProjects
       .getState()
-      .projects.filter((project) => project.id !== activeProjectId).reduce(
+      .projects.filter((project) => project.id !== activeProjectId)
+      .reduce(
         (count, project) =>
           count +
           project.nodes.filter(
-            (node) =>
-              node.codexAccountId === account.id && !isCodexAccountLoginNode(node)
+            (node) => node.codexAccountId === account.id && !isCodexAccountLoginNode(node)
           ).length,
         0
       )
@@ -210,9 +458,16 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     }
     if (account.pending) await window.nodeTerminal.codexAccounts.cancelWaitLogin(account.id)
     try {
-      await window.nodeTerminal.codexAccounts.remove(account.id)
+      const projectId = account.host ? await ensureHostConnection(account.host) : undefined
+      if (account.host && !projectId) throw new Error('SSH host unavailable')
+      await window.nodeTerminal.codexAccounts.remove(
+        account.id,
+        projectId ? { projectId } : undefined
+      )
     } catch {
-      setCodexAddError('Could not remove this Codex account. An account switch may still be in progress.')
+      setCodexAddError(
+        'Could not remove this Codex account. An account switch may still be in progress.'
+      )
       return
     }
     applyCodexAccounts((accs) => accs.filter((a) => a.id !== account.id))
@@ -221,13 +476,13 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
         ...p,
         nodes: p.nodes
           .filter((n) => !(n.codexAccountId === account.id && isCodexAccountLoginNode(n)))
-          .map((n) =>
-            n.codexAccountId === account.id ? { ...n, codexAccountId: undefined } : n
-          )
+          .map((n) => (n.codexAccountId === account.id ? { ...n, codexAccountId: undefined } : n))
       }))
     }))
     window.dispatchEvent(
-      new CustomEvent('nodeterm:codex-account-removed', { detail: { accountId: account.id } })
+      new CustomEvent('nodeterm:codex-account-removed', {
+        detail: { accountId: account.id }
+      })
     )
   }
 
@@ -235,7 +490,15 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   // waitLogin / remove). Undefined for local accounts, or when no such project is open.
   const projectIdForHost = (host?: string): string | undefined => {
     if (!host) return undefined
-    return useProjects.getState().projects.find((p) => p.ssh && sshHostKey(p.ssh.server) === host)?.id
+    const project = useProjects
+      .getState()
+      .projects.find(
+        (p) => p.ssh && sshHostKey(p.ssh.server) === host && useSshConn.getState().byProject[p.id]
+      )
+    if (project) return project.id
+    return Object.entries(useSshConn.getState().byProject).find(
+      ([, info]) => info.hostKey === host
+    )?.[0]
   }
 
   // A remote account can only log in on a CONNECTED matching-host project (live ControlMaster in
@@ -282,8 +545,12 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   // `host` set → create the account dir + hook ON that SSH host (via the ctx projectId); the row
   // then carries the host chip and only appears in that host's projects.
   const onAddAccount = async (host?: string): Promise<void> => {
-    if (addingOn) return // one setup at a time — the buttons are disabled, this is the guard
-    const projectId = host ? projectIdForHost(host) : undefined
+    if (addingOn !== null) return // one setup at a time — the buttons are disabled, this is the guard
+    const projectId = host ? await ensureHostConnection(host) : undefined
+    if (host && !projectId) {
+      setAddError(`Could not connect to ${host}.`)
+      return
+    }
     setAddingOn(host ?? LOCAL_TARGET)
     setAddError(null)
     let added: { id: string; versionSupported: boolean }
@@ -344,7 +611,9 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     }))
     // ...and off the active project's LIVE nodes (Canvas listener patches React Flow).
     window.dispatchEvent(
-      new CustomEvent('nodeterm:account-removed', { detail: { accountId: account.id } })
+      new CustomEvent('nodeterm:account-removed', {
+        detail: { accountId: account.id }
+      })
     )
   }
 
@@ -379,234 +648,294 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
             </div>
           ) : null}
 
-          {/* The SYSTEM account (the machine's default ~/.claude login) is implicit — not a
-              ClaudeAccount record — but gets a fixed row so it can be told apart from managed
-              accounts: detected email as subtitle, renamable display label (empty = default). */}
-          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <Input
-                  className="w-56"
-                  placeholder="System account"
-                  value={systemLabelSetting}
-                  onChange={(e) => useSettings.getState().update({ systemAccountLabel: e.target.value })}
-                />
-                <span
-                  className="rounded-full bg-fill-weak px-2 py-0.5 text-[11px] font-medium text-muted"
-                  title="The machine's default Claude login (~/.claude). Used when a node has no account."
-                >
-                  system
-                </span>
-              </div>
-              {systemEmail ? <p className="text-[12px] text-muted">{systemEmail}</p> : null}
-            </div>
-          </div>
-
-          {accounts.length === 0 ? null : (
-            accounts.map((account) => (
-              <div
-                key={account.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
-              >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      className="w-56"
-                      placeholder="Account label"
-                      value={account.label}
-                      onChange={(e) => setLabel(account.id, e.target.value)}
-                    />
-                    {account.pending ? (
-                      <span className="rounded-full bg-[color:var(--warn)]/15 px-2 py-0.5 text-[11px] font-medium text-[color:var(--warn)]">
-                        pending
-                      </span>
-                    ) : null}
-                    {account.host ? (
-                      <span
-                        className="rounded-full bg-[color:var(--accent)]/15 px-2 py-0.5 text-[11px] font-medium text-[color:var(--accent)]"
-                        title={`Remote account on ${account.host}`}
-                      >
-                        {account.host}
-                      </span>
-                    ) : null}
-                  </div>
-                  {account.email && !account.pending ? (
-                    <p className="text-[12px] text-muted">{account.email}</p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {account.pending
-                    ? (() => {
-                        // A remote account can only retry login on a connected matching-host
-                        // project; without one, disable Retry (a local spawn would log into the
-                        // system account instead of the remote host).
-                        const blocked = !!account.host && !connectedProjectIdForHost(account.host)
-                        return (
-                          <Button
-                            disabled={blocked}
-                            title={
-                              blocked
-                                ? `Connect to ${account.host} to finish logging in`
-                                : undefined
-                            }
-                            onClick={() => void runLogin(account)}
-                          >
-                            Retry login
-                          </Button>
-                        )
-                      })()
-                    : null}
-                  <Button
-                    variant="ghost"
-                    aria-label="Remove account"
-                    onClick={() => setPendingRemove(account)}
-                  >
-                    ×
-                  </Button>
-                </div>
-              </div>
-            ))
-          )}
-
-          {activeHostKey ? (
-            // Inside an SSH project: choose where the new account lives. "On this Mac" is a normal
-            // local account; "On <host>" creates it on the remote host (usable only there).
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="primary"
-                  disabled={addingOn !== null}
-                  onClick={() => void onAddAccount()}
-                >
-                  {addingOn === LOCAL_TARGET ? (
-                    <AddingLabel where="this Mac" />
-                  ) : (
-                    'Add account — On this Mac'
-                  )}
-                </Button>
-                <Button
-                  variant="primary"
-                  disabled={addingOn !== null}
-                  onClick={() => void onAddAccount(activeHostKey)}
-                >
-                  {addingOn === activeHostKey ? (
-                    <AddingLabel where={activeHostKey} />
-                  ) : (
-                    `Add account — On ${activeHostKey}`
-                  )}
-                </Button>
-              </div>
-              {/* A spinner says "wait"; this says what for. Setting up a remote account is a
-                  handful of ssh round-trips plus a login-shell `claude --version`, so it takes
-                  long enough that silence reads as a broken button. */}
-              {addingOn !== null ? (
-                <p className="text-[12px] leading-relaxed text-muted">
-                  {addingOn === LOCAL_TARGET
-                    ? 'Creating the config dir and installing the status hook…'
-                    : `Creating the config dir on ${addingOn} and installing the status hook and agent skills over SSH — this takes a few seconds. The login terminal opens when it's ready.`}
-                </p>
-              ) : null}
-              {addError ? <p className="text-[12px] text-[color:var(--danger)]">{addError}</p> : null}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Button
-                variant="primary"
-                disabled={addingOn !== null}
-                onClick={() => void onAddAccount()}
-              >
-                {addingOn === LOCAL_TARGET ? <AddingLabel where="this Mac" /> : 'Add account'}
-              </Button>
-              {addingOn !== null ? (
-                <p className="text-[12px] leading-relaxed text-muted">
-                  Creating the config dir and installing the status hook…
-                </p>
-              ) : null}
-              {addError ? <p className="text-[12px] text-[color:var(--danger)]">{addError}</p> : null}
-            </div>
-          )}
-
-          <p className="text-[12px] leading-relaxed text-muted">
-            Accounts are isolated Claude logins. New Claude nodes pick an account from the add
-            menus; each node keeps its account for life. Remote accounts live on an SSH host and are
-            only offered in that host&apos;s projects.
-          </p>
-        </div>
-      </SearchableRow>
-
-      <SearchableRow {...ROWS.codexAccounts}>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <Input
-                  className="w-56"
-                  placeholder="System Codex account"
-                  value={systemCodexLabelSetting}
-                  onChange={(e) =>
-                    useSettings.getState().update({ systemCodexAccountLabel: e.target.value })
-                  }
-                />
-                <span className="rounded-full bg-fill-weak px-2 py-0.5 text-[11px] font-medium text-muted">
-                  system
-                </span>
-              </div>
-              {systemCodexEmail ? <p className="text-[12px] text-muted">{systemCodexEmail}</p> : null}
-            </div>
-          </div>
-
-          {codexAccounts.map((account) => (
-            <div
-              key={account.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
+          <MachinePanel label="This Mac" remote={false}>
+            <ProviderSection
+              provider="Claude"
+              addLabel="Add account"
+              adding={addingOn === LOCAL_TARGET}
+              disabled={addingOn !== null}
+              onAdd={() => void onAddAccount()}
             >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2">
+              <AccountRow
+                presentation={presentationFor(systemLabelSetting, systemEmail)}
+                email={systemEmail}
+                labelControl={
                   <Input
                     className="w-56"
-                    placeholder="Codex account label"
-                    value={account.label}
-                    onChange={(e) => setCodexLabel(account.id, e.target.value)}
+                    aria-label="Claude account display name"
+                    placeholder="Display name (optional)"
+                    value={systemLabelSetting}
+                    onChange={(event) =>
+                      useSettings.getState().update({ systemAccountLabel: event.target.value })
+                    }
                   />
-                  {account.pending ? (
-                    <span className="rounded-full bg-[color:var(--warn)]/15 px-2 py-0.5 text-[11px] font-medium text-[color:var(--warn)]">
-                      pending
-                    </span>
-                  ) : null}
-                </div>
-                {account.email ? <p className="text-[12px] text-muted">{account.email}</p> : null}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {account.pending ? (
-                  <Button onClick={() => void runCodexLogin(account)}>Retry login</Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  aria-label="Remove Codex account"
-                  onClick={() => setPendingCodexRemove(account)}
-                >
-                  ×
-                </Button>
-              </div>
-            </div>
-          ))}
-
-          <div className="space-y-2">
-            <Button
-              variant="primary"
-              disabled={addingCodex}
-              onClick={() => void onAddCodexAccount()}
+                }
+              />
+              {accounts
+                .filter((account) => !account.host)
+                .map((account) => (
+                  <AccountRow
+                    key={account.id}
+                    presentation={presentationFor(account.label, account.email)}
+                    email={!account.pending ? account.email : undefined}
+                    pending={account.pending}
+                    labelControl={
+                      <Input
+                        className="w-56"
+                        placeholder="Display name"
+                        value={account.label}
+                        onChange={(event) => setLabel(account.id, event.target.value)}
+                      />
+                    }
+                    actions={
+                      <>
+                        {account.pending ? (
+                          <Button onClick={() => void runLogin(account)}>Retry login</Button>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          aria-label="Remove account"
+                          onClick={() => setPendingRemove(account)}
+                        >
+                          ×
+                        </Button>
+                      </>
+                    }
+                  />
+                ))}
+            </ProviderSection>
+            <ProviderSection
+              provider="Codex"
+              addLabel="Add account"
+              adding={addingCodexOn === LOCAL_TARGET}
+              disabled={addingCodexOn !== null}
+              onAdd={() => void onAddCodexAccount()}
             >
-              {addingCodex ? <AddingLabel where="this Mac" /> : 'Add Codex account'}
-            </Button>
-            {codexAddError ? (
-              <p className="text-[12px] text-[color:var(--danger)]">{codexAddError}</p>
-            ) : null}
-          </div>
+              <AccountRow
+                presentation={presentationFor(systemCodexLabelSetting, systemCodexEmail)}
+                email={systemCodexEmail}
+                labelControl={
+                  <Input
+                    className="w-56"
+                    aria-label="Codex account display name"
+                    placeholder="Display name (optional)"
+                    value={systemCodexLabelSetting}
+                    onChange={(event) =>
+                      useSettings.getState().update({ systemCodexAccountLabel: event.target.value })
+                    }
+                  />
+                }
+              />
+              {codexAccounts
+                .filter((account) => !account.host)
+                .map((account) => (
+                  <AccountRow
+                    key={account.id}
+                    presentation={presentationFor(account.label, account.email)}
+                    email={account.email}
+                    pending={account.pending}
+                    labelControl={
+                      <Input
+                        className="w-56"
+                        placeholder="Display name"
+                        value={account.label}
+                        onChange={(event) => setCodexLabel(account.id, event.target.value)}
+                      />
+                    }
+                    actions={
+                      <>
+                        {account.pending ? (
+                          <Button onClick={() => void runCodexLogin(account)}>Retry login</Button>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          aria-label="Remove Codex account"
+                          onClick={() => setPendingCodexRemove(account)}
+                        >
+                          ×
+                        </Button>
+                      </>
+                    }
+                  />
+                ))}
+            </ProviderSection>
+          </MachinePanel>
+
+          {codexRemoteTargets.map(([host, server]) => {
+            const connected = !!connectedProjectIdForHost(host)
+            return (
+              <MachinePanel
+                key={host}
+                label={server.label || server.host}
+                endpoint={`${server.user}@${server.host}`}
+                remote
+                connected={connected}
+              >
+                <ProviderSection
+                  provider="Claude"
+                  addLabel="Add account"
+                  adding={addingOn === host}
+                  disabled={addingOn !== null}
+                  onAdd={() => void onAddAccount(host)}
+                >
+                  <AccountRow
+                    presentation={presentationFor(remoteSystemAccountLabels[host], undefined, host)}
+                    labelControl={
+                      <Input
+                        className="w-56"
+                        aria-label={`Claude account display name on ${server.label || server.host}`}
+                        placeholder="Display name (optional)"
+                        value={remoteSystemAccountLabels[host] ?? ''}
+                        onChange={(event) =>
+                          setRemoteSystemLabel('claude', host, event.target.value)
+                        }
+                      />
+                    }
+                  />
+                  {accounts
+                    .filter((account) => account.host === host)
+                    .map((account) => (
+                      <AccountRow
+                        key={account.id}
+                        presentation={presentationFor(account.label, account.email, host)}
+                        email={!account.pending ? account.email : undefined}
+                        pending={account.pending}
+                        labelControl={
+                          <Input
+                            className="w-56"
+                            placeholder="Display name"
+                            value={account.label}
+                            onChange={(event) => setLabel(account.id, event.target.value)}
+                          />
+                        }
+                        actions={
+                          <>
+                            {account.pending ? (
+                              <Button
+                                disabled={!connected}
+                                title={
+                                  !connected ? `Connect to ${host} to finish logging in` : undefined
+                                }
+                                onClick={() => void runLogin(account)}
+                              >
+                                Retry login
+                              </Button>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              aria-label="Remove account"
+                              onClick={() => setPendingRemove(account)}
+                            >
+                              ×
+                            </Button>
+                          </>
+                        }
+                      />
+                    ))}
+                </ProviderSection>
+                <ProviderSection
+                  provider="Codex"
+                  addLabel="Add account"
+                  adding={addingCodexOn === host}
+                  disabled={addingCodexOn !== null}
+                  onAdd={() => void onAddCodexAccount(host)}
+                >
+                  <AccountRow
+                    presentation={presentationFor(
+                      remoteSystemCodexAccountLabels[host],
+                      remoteSystemCodexEmails[host],
+                      host
+                    )}
+                    email={remoteSystemCodexEmails[host]}
+                    unavailable={!remoteSystemCodexEmails[host]}
+                    labelControl={
+                      <Input
+                        className="w-56"
+                        aria-label={`Codex account display name on ${server.label || server.host}`}
+                        placeholder="Display name (optional)"
+                        value={remoteSystemCodexAccountLabels[host] ?? ''}
+                        onChange={(event) =>
+                          setRemoteSystemLabel('codex', host, event.target.value)
+                        }
+                      />
+                    }
+                  />
+                  {codexAccounts
+                    .filter((account) => account.host === host)
+                    .map((account) => (
+                      <AccountRow
+                        key={account.id}
+                        presentation={presentationFor(account.label, account.email, host)}
+                        email={account.email}
+                        pending={account.pending}
+                        labelControl={
+                          <Input
+                            className="w-56"
+                            placeholder="Display name"
+                            value={account.label}
+                            onChange={(event) => setCodexLabel(account.id, event.target.value)}
+                          />
+                        }
+                        details={
+                          <label className="mt-2 flex max-w-lg items-center gap-2 text-[11px] text-muted">
+                            <span className="shrink-0 font-medium uppercase tracking-wide">
+                              Working directory
+                            </span>
+                            <Input
+                              className="min-w-0 flex-1 font-mono"
+                              aria-label={`Remote working directory for ${account.label}`}
+                              placeholder="~/nf-management"
+                              value={account.remoteCwd ?? '~'}
+                              onChange={(event) =>
+                                setCodexRemoteCwd(account.id, event.target.value)
+                              }
+                            />
+                          </label>
+                        }
+                        actions={
+                          <>
+                            {account.pending ? (
+                              <Button
+                                disabled={
+                                  !connected &&
+                                  !sshServers.some((entry) => sshHostKey(entry) === host)
+                                }
+                                onClick={() => void runCodexLogin(account)}
+                              >
+                                Retry login
+                              </Button>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              aria-label="Remove Codex account"
+                              onClick={() => setPendingCodexRemove(account)}
+                            >
+                              ×
+                            </Button>
+                          </>
+                        }
+                      />
+                    ))}
+                </ProviderSection>
+              </MachinePanel>
+            )
+          })}
+
+          {addingOn !== null ? (
+            <p className="text-[12px] leading-relaxed text-muted">
+              {addingOn === LOCAL_TARGET
+                ? 'Creating the local account directory and installing the status hook…'
+                : 'Preparing the account, status hook, and agent skills over SSH…'}
+            </p>
+          ) : null}
+          {addError ? <p className="text-[12px] text-[color:var(--danger)]">{addError}</p> : null}
+          {codexAddError ? (
+            <p className="text-[12px] text-[color:var(--danger)]">{codexAddError}</p>
+          ) : null}
 
           <p className="text-[12px] leading-relaxed text-muted">
-            Each login has its own credentials and one shared Codex app-server. New Codex nodes
-            choose an account from the canvas menu; usage is shown separately by email.
+            Each login has its own credentials. Remote logins stay on their SSH machine. Codex nodes
+            on the same machine and account reuse one shared app-server.
           </p>
         </div>
       </SearchableRow>

@@ -1,12 +1,19 @@
 import { promises as fs, writeFileSync } from 'fs'
+import { execFileSync, spawnSync } from 'child_process'
 import { request as httpRequest } from 'http'
 import os from 'os'
 import path from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SshProjectManager, lastSshErrorLine } from './ssh-project'
+import {
+  SshProjectManager,
+  lastSshErrorLine,
+  remoteCodexAppServerStartCommand,
+  remoteCodexAccountSetupCommand
+} from './ssh-project'
 import { AskpassServer } from './ssh-askpass'
 import { AppSshAgent } from './ssh-agent'
 import { controlPathFor } from '../../core/remote-ssh/control-master'
+import { remoteCodexHome } from '../../core/codex-accounts-core'
 import type { SshConnection } from '@shared/ssh'
 
 const conn: SshConnection = { host: 'h', user: 'u' }
@@ -15,7 +22,10 @@ function makeMgr() {
   const statuses: string[] = []
   // spawnMaster: returns a fake child that "stays up"; run: resolves stdout for one-shot ssh.
   const spawnMaster = vi.fn(() => ({ kill: vi.fn(), on: vi.fn() }))
-  const run = vi.fn(async (_args: string[], _stdin?: string) => ({ code: 0, stdout: 'src/\nbin/\n' }))
+  const run = vi.fn(async (_args: string[], _stdin?: string) => ({
+    code: 0,
+    stdout: 'src/\nbin/\n'
+  }))
   const runScp = vi.fn(async (_args: string[]) => ({ code: 0 }))
   const mgr = new SshProjectManager({
     userDataDir: '/ud',
@@ -55,14 +65,20 @@ describe('SshProjectManager', () => {
     const { mgr } = makeMgr()
     expect(mgr.refForProject('p1')).toBeUndefined()
     await mgr.connect('p1', conn)
-    expect(mgr.refForProject('p1')).toEqual({ conn, controlPath: controlPathFor('p1') })
+    expect(mgr.refForProject('p1')).toEqual({
+      conn,
+      controlPath: controlPathFor('p1')
+    })
     expect(mgr.refForProject('nope')).toBeUndefined()
   })
 
   it('refForRemoteCwd resolves {conn, controlPath} by the connected project remote cwd', async () => {
     const { mgr } = makeMgr()
     await mgr.connect('p1', conn, '/srv/repo')
-    expect(mgr.refForRemoteCwd('/srv/repo')).toEqual({ conn, controlPath: controlPathFor('p1') })
+    expect(mgr.refForRemoteCwd('/srv/repo')).toEqual({
+      conn,
+      controlPath: controlPathFor('p1')
+    })
     expect(mgr.refForRemoteCwd('/nope')).toBeUndefined()
   })
 
@@ -97,7 +113,9 @@ describe('SshProjectManager', () => {
   it('uploadFile uploads via scp under <remoteHome>/.nodeterm/uploads/<token> and returns the abs path', async () => {
     const scpCalls: string[][] = []
     const run = vi.fn(async (args: string[]) =>
-      args.join(' ').includes('printf %s') ? { code: 0, stdout: '/home/u' } : { code: 0, stdout: '' }
+      args.join(' ').includes('printf %s')
+        ? { code: 0, stdout: '/home/u' }
+        : { code: 0, stdout: '' }
     )
     const runScp = vi.fn(async (args: string[]) => {
       scpCalls.push(args)
@@ -121,7 +139,9 @@ describe('SshProjectManager', () => {
   it('uploadFile basenames a traversal fileName so it cannot escape the token dir', async () => {
     const scpCalls: string[][] = []
     const run = vi.fn(async (args: string[]) =>
-      args.join(' ').includes('printf %s') ? { code: 0, stdout: '/home/u' } : { code: 0, stdout: '' }
+      args.join(' ').includes('printf %s')
+        ? { code: 0, stdout: '/home/u' }
+        : { code: 0, stdout: '' }
     )
     const runScp = vi.fn(async (args: string[]) => {
       scpCalls.push(args)
@@ -162,10 +182,14 @@ describe('SshProjectManager', () => {
     const { tmuxConfPath } = await mgr.connect('p1', conn)
     expect(tmuxConfPath).toBe('/home/u/.nodeterm/tmux.conf')
     // The conf was written via `cat >` (with the conf body as stdin) and then source-file'd.
-    const write = calls.find((c) => c.args.join(' ').includes(`cat > '/home/u/.nodeterm/tmux.conf'`))
+    const write = calls.find((c) =>
+      c.args.join(' ').includes(`cat > '/home/u/.nodeterm/tmux.conf'`)
+    )
     expect(write).toBeDefined()
     expect(write?.stdin).toContain('set -g mouse on')
-    expect(calls.some((c) => c.args.join(' ').includes(`source-file '/home/u/.nodeterm/tmux.conf'`))).toBe(true)
+    expect(
+      calls.some((c) => c.args.join(' ').includes(`source-file '/home/u/.nodeterm/tmux.conf'`))
+    ).toBe(true)
   })
 
   it('connect leaves tmuxConfPath undefined when the remote conf write fails (no -f to a missing conf)', async () => {
@@ -237,11 +261,17 @@ describe('SshProjectManager', () => {
   }
 
   const probeEvent = (
-    events: { claudeAutoPermissionMode?: boolean; remoteClaudeVersion?: string | null }[]
+    events: {
+      claudeAutoPermissionMode?: boolean
+      remoteClaudeVersion?: string | null
+    }[]
   ) => events.find((e) => e.claudeAutoPermissionMode !== undefined)
 
   const probeEvents = (
-    events: { claudeAutoPermissionMode?: boolean; remoteClaudeVersion?: string | null }[]
+    events: {
+      claudeAutoPermissionMode?: boolean
+      remoteClaudeVersion?: string | null
+    }[]
   ) => events.filter((e) => e.claudeAutoPermissionMode !== undefined)
 
   it('a login-shell BANNER around an OLD claude never reports auto support (merge blocker)', async () => {
@@ -284,7 +314,10 @@ describe('SshProjectManager', () => {
     await mgr.connect('p1', conn)
     await vi.waitFor(() => expect(probeEvents(events).length).toBeGreaterThanOrEqual(2))
     const probes = probeEvents(events)
-    expect(probes[0]).toMatchObject({ claudeAutoPermissionMode: false, remoteClaudeVersion: null })
+    expect(probes[0]).toMatchObject({
+      claudeAutoPermissionMode: false,
+      remoteClaudeVersion: null
+    })
     expect(probes[probes.length - 1]).toMatchObject({
       claudeAutoPermissionMode: true,
       remoteClaudeVersion: '2.1.90 (Claude Code)'
@@ -365,6 +398,140 @@ describe('SshProjectManager', () => {
     expect((await unknown.mgr.remoteAccountAdd('p3', 'acc1'))?.versionSupported).toBe(true)
   })
 
+  it('installs a standalone Codex launcher and relay on the SSH host without credentials', async () => {
+    const writes: Array<{ command: string; stdin?: string }> = []
+    const run = vi.fn(async (args: string[], stdin?: string) => {
+      const command = args.at(-1) ?? ''
+      writes.push({ command, stdin })
+      if (command.includes('command -v node')) {
+        return {
+          code: 0,
+          stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+        }
+      }
+      return { code: 0, stdout: '' }
+    })
+    const mgr = new SshProjectManager({
+      userDataDir: '/ud',
+      spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn() })),
+      run,
+      runScp: vi.fn(async () => ({ code: 0 })),
+      getHook: () => ({ port: 1, token: 't', version: '1' }),
+      codexRelaySource: async () => '/* bundled relay */',
+      onStatus: vi.fn()
+    })
+    const result = await (
+      mgr as unknown as {
+        installRemoteCodexRuntime: (
+          conn: SshConnection,
+          controlPath: string,
+          remoteHome: string
+        ) => Promise<{
+          launcher: string
+          relay: string
+          runtime: string
+          codex: string
+        } | null>
+      }
+    ).installRemoteCodexRuntime(conn, '/cm', '/home/u')
+    expect(result).toEqual({
+      launcher: '/home/u/.nodeterm/bin/nodeterm-codex',
+      relay: '/home/u/.nodeterm/bin/codex-relay.js',
+      runtime: '/usr/bin/node',
+      codex: '/usr/bin/codex'
+    })
+    expect(writes.some((write) => write.stdin === '/* bundled relay */')).toBe(true)
+    const launcher = writes.find((write) => write.stdin?.startsWith('#!/bin/sh'))?.stdin ?? ''
+    expect(launcher).toContain('NODETERM_HOOK_SOCK')
+    expect(launcher).not.toContain('auth.json')
+  })
+
+  it('builds executable POSIX shell for remote Codex account provisioning', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-codex-account-'))
+    try {
+      const system = remoteCodexHome(root)
+      await fs.mkdir(system, { recursive: true })
+      await fs.writeFile(path.join(system, 'config.toml'), 'model = "test"\n')
+      const command = remoteCodexAccountSetupCommand(root, 'account-1')
+
+      execFileSync('/bin/sh', ['-n', '-c', command])
+      execFileSync('/bin/sh', ['-c', command])
+
+      const accountHome = remoteCodexHome(root, 'account-1')
+      expect((await fs.stat(accountHome)).mode & 0o777).toBe(0o700)
+      expect(await fs.realpath(path.join(accountHome, 'config.toml'))).toBe(
+        await fs.realpath(path.join(system, 'config.toml'))
+      )
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reports a stable phase marker when remote Codex account linking fails', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-codex-account-fail-'))
+    try {
+      const system = remoteCodexHome(root)
+      const accountHome = remoteCodexHome(root, 'account-1')
+      await fs.mkdir(system, { recursive: true })
+      await fs.mkdir(accountHome, { recursive: true })
+      await fs.writeFile(path.join(system, 'config.toml'), 'model = "test"\n')
+      await fs.symlink('/missing/nodeterm-test-target', path.join(accountHome, 'config.toml'))
+
+      const result = spawnSync(
+        '/bin/sh',
+        ['-c', remoteCodexAccountSetupCommand(root, 'account-1')],
+        { encoding: 'utf8' }
+      )
+
+      expect(result.status).toBe(71)
+      expect(result.stdout).toBe('NODETERM_CODEX_ACCOUNT_SETUP:link:config.toml\n')
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('starts and reuses one direct app-server when the remote npm CLI has no daemon install', async () => {
+    // Keep the Unix socket below macOS SUN_LEN; production remote homes are deliberately short too.
+    const root = await fs.mkdtemp('/tmp/nt-cx-server-')
+    const fakeCodex = path.join(root, 'fake-codex.cjs')
+    try {
+      await fs.writeFile(
+        fakeCodex,
+        `const net = require('net')\n` +
+          `const args = process.argv.slice(2)\n` +
+          `if (args[0] === 'app-server' && args[1] === 'daemon') process.exit(1)\n` +
+          `const listen = args[args.indexOf('--listen') + 1]\n` +
+          `const socket = listen.slice('unix://'.length)\n` +
+          `net.createServer(() => {}).listen(socket)\n`
+      )
+      const command = remoteCodexAppServerStartCommand(process.execPath, fakeCodex)
+      const env = { ...process.env, CODEX_HOME: root }
+
+      execFileSync('/bin/sh', ['-c', command], { env })
+      const pidFile = path.join(root, 'app-server-control', 'nodeterm-direct.pid')
+      const firstPid = Number((await fs.readFile(pidFile, 'utf8')).trim())
+      expect(firstPid).toBeGreaterThan(0)
+      expect(
+        (await fs.stat(path.join(root, 'app-server-control', 'app-server-control.sock'))).isSocket()
+      ).toBe(true)
+
+      execFileSync('/bin/sh', ['-c', command], { env })
+      expect(Number((await fs.readFile(pidFile, 'utf8')).trim())).toBe(firstPid)
+    } finally {
+      try {
+        const pid = Number(
+          (
+            await fs.readFile(path.join(root, 'app-server-control', 'nodeterm-direct.pid'), 'utf8')
+          ).trim()
+        )
+        if (pid > 0) process.kill(pid, 'SIGTERM')
+      } catch {
+        // No server reached the pid-write stage.
+      }
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  }, 15_000)
+
   // --- downloadFile (remote → this machine) -------------------------------------------------
   // These run against a REAL temp directory: collision resolution, the `.part` staging file and
   // the rename are filesystem behavior, and mocking the fs would only test the mock.
@@ -412,7 +579,11 @@ describe('SshProjectManager', () => {
       await mgr.connect('p1', conn, '/srv/repo')
       const dir = await destDir()
       const res = await mgr.downloadFile('p1', '/srv/repo/notes.md', dir)
-      expect(res).toEqual({ ok: true, localPath: path.join(dir, 'notes.md'), dir: false })
+      expect(res).toEqual({
+        ok: true,
+        localPath: path.join(dir, 'notes.md'),
+        dir: false
+      })
       expect(await fs.readFile(path.join(dir, 'notes.md'), 'utf8')).toBe('payload')
       // scp wrote to `<target>.part`, never straight to the final name.
       expect(scpCalls[0][scpCalls[0].length - 1]).toBe(path.join(dir, 'notes.md.part'))
@@ -425,7 +596,10 @@ describe('SshProjectManager', () => {
       const dir = await destDir()
       await fs.writeFile(path.join(dir, 'notes.md'), 'mine')
       const res = await mgr.downloadFile('p1', '/srv/repo/notes.md', dir)
-      expect(res).toMatchObject({ ok: true, localPath: path.join(dir, 'notes (2).md') })
+      expect(res).toMatchObject({
+        ok: true,
+        localPath: path.join(dir, 'notes (2).md')
+      })
       expect(await fs.readFile(path.join(dir, 'notes.md'), 'utf8')).toBe('mine')
     })
 
@@ -459,7 +633,9 @@ describe('SshProjectManager', () => {
 
     it('fails (never throws) when the project is not connected', async () => {
       const { mgr } = makeDlMgr()
-      expect(await mgr.downloadFile('nope', '/x/y.txt', await destDir())).toMatchObject({ ok: false })
+      expect(await mgr.downloadFile('nope', '/x/y.txt', await destDir())).toMatchObject({
+        ok: false
+      })
     })
   })
 
@@ -471,12 +647,21 @@ describe('SshProjectManager', () => {
   it('uploadFile rejects a non-absolute localPath (argv flag-smuggling guard)', async () => {
     const scpCalls: string[][] = []
     const run = vi.fn(async (args: string[]) =>
-      args.join(' ').includes('printf %s') ? { code: 0, stdout: '/home/u' } : { code: 0, stdout: '' }
+      args.join(' ').includes('printf %s')
+        ? { code: 0, stdout: '/home/u' }
+        : { code: 0, stdout: '' }
     )
-    const runScp = vi.fn(async (args: string[]) => { scpCalls.push(args); return { code: 0 } })
+    const runScp = vi.fn(async (args: string[]) => {
+      scpCalls.push(args)
+      return { code: 0 }
+    })
     const mgr = new SshProjectManager({
-      userDataDir: '/ud', spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn() })),
-      run, runScp, getHook: () => ({ port: 1, token: 't', version: '1' }), onStatus: vi.fn()
+      userDataDir: '/ud',
+      spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn() })),
+      run,
+      runScp,
+      getHook: () => ({ port: 1, token: 't', version: '1' }),
+      onStatus: vi.fn()
     })
     await mgr.connect('p1', conn, '/srv/repo')
     // A leading `-` would be parsed by scp as an OPTION (e.g. -oProxyCommand=…) → reject; also relative.
@@ -533,6 +718,12 @@ describe('SshProjectManager', () => {
       // `remoteHooks.setup` succeeds and the orphan is kept, no fresh master is built.
       const run = vi.fn(async (args: string[]) => {
         const j = args.join(' ')
+        if (j.includes('$SHELL') && j.includes('command') && j.includes('codex')) {
+          return {
+            code: 0,
+            stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+          }
+        }
         if (j.includes('$HOME')) return { code: 0, stdout: '/home/u' }
         if (j.includes('%{http_code}')) return { code: 0, stdout: '204' }
         return { code: 0, stdout: '' }
@@ -569,6 +760,12 @@ describe('SshProjectManager', () => {
       })
       const run = vi.fn(async (args: string[]) => {
         const j = args.join(' ')
+        if (j.includes('$SHELL') && j.includes('command') && j.includes('codex')) {
+          return {
+            code: 0,
+            stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+          }
+        }
         if (j.includes('$HOME')) return { code: 0, stdout: '/home/u' }
         if (j.includes('%{http_code}')) return { code: 0, stdout: respawned ? '204' : '000' }
         return { code: 0, stdout: '' }
@@ -619,7 +816,12 @@ describe('SshProjectManager', () => {
       const BIND_AT = 70 // 100ms cadence ⇒ ~7s: past BASE_WAIT_MS and past the old 50-check loop
       const spawnMaster = vi.fn(() => {
         respawned = true
-        return { kill: vi.fn(), on: vi.fn(), stderr: () => '', exited: () => false }
+        return {
+          kill: vi.fn(),
+          on: vi.fn(),
+          stderr: () => '',
+          exited: () => false
+        }
       })
       const run = vi.fn(async (args: string[]) => {
         const j = args.join(' ')
@@ -685,7 +887,9 @@ describe('SshProjectManager', () => {
         getHook: () => ({ port: 51234, token: 'tok', version: '1' }),
         onStatus: (e) => statuses.push(e.status)
       })
-      const assertion = expect(mgr.connect('p1', conn)).rejects.toThrow('Permission denied (publickey)')
+      const assertion = expect(mgr.connect('p1', conn)).rejects.toThrow(
+        'Permission denied (publickey)'
+      )
       await vi.advanceTimersByTimeAsync(3000)
       await assertion
       expect(statuses).not.toContain('connected')
@@ -721,6 +925,7 @@ describe('SshProjectManager', () => {
         run,
         runScp: vi.fn(async () => ({ code: 0 })),
         getHook: () => ({ port: 1, token: 't', version: '1' }),
+        codexRelaySource: async () => '/* bundled relay */',
         onStatus: vi.fn(),
         askpassIsPrompting: () => true, // another project's dialog is open the whole time
         askpassWasCancelled: (pid) => pid === undefined // the global-clock fallback would say yes
@@ -776,12 +981,19 @@ describe('SshProjectManager', () => {
      *  connect() takes the ordinary fresh-master path — a genuine establish. */
     function makeVerifiedMgr(
       onTunnelVerified: (projectId: string, controlPath: string, conn: SshConnection) => void,
-      httpCode = '204'
+      httpCode = '204',
+      installCodexRelay = true
     ) {
       vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined as never)
       vi.spyOn(fs, 'stat').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
       const run = vi.fn(async (args: string[]) => {
         const j = args.join(' ')
+        if (j.includes('$SHELL') && j.includes('command') && j.includes('codex')) {
+          return {
+            code: 0,
+            stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+          }
+        }
         if (j.includes('$HOME')) return { code: 0, stdout: '/home/u' }
         if (j.includes('%{http_code}')) return { code: 0, stdout: httpCode }
         return { code: 0, stdout: '' }
@@ -792,6 +1004,7 @@ describe('SshProjectManager', () => {
         run,
         runScp: vi.fn(async () => ({ code: 0 })),
         getHook: () => ({ port: 1, token: 't', version: '1' }),
+        codexRelaySource: installCodexRelay ? async () => '/* bundled relay */' : undefined,
         onStatus: vi.fn(),
         onTunnelVerified
       })
@@ -833,8 +1046,25 @@ describe('SshProjectManager', () => {
     it('does NOT fire when the tunnel failed verification (there is nothing to resync through)', async () => {
       const onTunnelVerified = vi.fn()
       const mgr = makeVerifiedMgr(onTunnelVerified, '000') // dead listener → setup() returns null
-      await mgr.connect('p1', conn, '/remote/cwd')
+      const connected = await mgr.connect('p1', conn, '/remote/cwd')
       expect(onTunnelVerified).not.toHaveBeenCalled()
+      // Canvas hooks are optional. Account isolation and the shared per-account app-server remain
+      // available on an otherwise healthy SSH host even when its reverse hook tunnel is absent.
+      expect(connected.hookEndpointPath).toBeUndefined()
+      expect(connected.codexLauncherPath).toBe('/home/u/.nodeterm/bin/nodeterm-codex')
+      expect(await mgr.remoteCodexAccountAdd('p1', 'account-1')).toEqual({
+        home: remoteCodexHome('/home/u', 'account-1')
+      })
+    })
+
+    it('provisions an account when relay metadata is absent from an otherwise live SSH connection', async () => {
+      const mgr = makeVerifiedMgr(vi.fn(), '204', false)
+      const connected = await mgr.connect('p1', conn, '/remote/cwd')
+      expect(connected.remoteHome).toBe('/home/u')
+      expect(connected.codexRelayScriptPath).toBeUndefined()
+      expect(await mgr.remoteCodexAccountAdd('p1', 'account-1')).toEqual({
+        home: remoteCodexHome('/home/u', 'account-1')
+      })
     })
 
     it('a THROWING hook still leaves the connect successful — the resync is never load-bearing', async () => {
@@ -883,7 +1113,9 @@ describe('SshProjectManager', () => {
       const viaWatchdog = mgr.revalidateAll() // hits connect() for the same project
       await Promise.all([first, viaWatchdog])
       expect(spawnMaster).toHaveBeenCalledTimes(1)
-      const killed = spawnMaster.mock.results[0].value as { kill: ReturnType<typeof vi.fn> }
+      const killed = spawnMaster.mock.results[0].value as {
+        kill: ReturnType<typeof vi.fn>
+      }
       expect(killed.kill).not.toHaveBeenCalled()
       expect(mgr.refForProject('p1')).toBeTruthy()
     })
@@ -897,7 +1129,12 @@ describe('SshProjectManager', () => {
       vi.spyOn(fs, 'stat').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
       let releaseCheck: (() => void) | undefined
       let gate: Promise<void> | null = new Promise((r) => (releaseCheck = r))
-      const spawnMaster = vi.fn((_args: string[]) => ({ kill: vi.fn(), on: vi.fn(), stderr: () => '', exited: () => false }))
+      const spawnMaster = vi.fn((_args: string[]) => ({
+        kill: vi.fn(),
+        on: vi.fn(),
+        stderr: () => '',
+        exited: () => false
+      }))
       const run = vi.fn(async (args: string[]) => {
         // Hold the connect's first `-O check` so it is genuinely in flight when we disconnect.
         if (args[0] === '-O' && args[1] === 'check' && gate) {
@@ -955,7 +1192,10 @@ describe('SshProjectManager', () => {
       const second = mgr.connect('p1', conn, '/srv/repo') // the tab switch names the folder
       releaseCheck!()
       await Promise.all([first, second])
-      expect(mgr.refForRemoteCwd('/srv/repo')).toEqual({ conn, controlPath: controlPathFor('p1') })
+      expect(mgr.refForRemoteCwd('/srv/repo')).toEqual({
+        conn,
+        controlPath: controlPathFor('p1')
+      })
     })
 
     it('an edited endpoint unlinks the old socket so the leftover probe cannot re-adopt it', async () => {
@@ -976,7 +1216,12 @@ describe('SshProjectManager', () => {
       })
       const spawnMaster = vi.fn(() => {
         socketOnDisk = true // a fresh master binds its own socket
-        return { kill: vi.fn(), on: vi.fn(), stderr: () => '', exited: () => false }
+        return {
+          kill: vi.fn(),
+          on: vi.fn(),
+          stderr: () => '',
+          exited: () => false
+        }
       })
       // Everything answers, INCLUDING the remote hook setup, so an adopted orphan would be kept
       // rather than rescued by the orphan-rebuild path (which would spawn and mask the bug).
@@ -1002,7 +1247,9 @@ describe('SshProjectManager', () => {
       // socket still answering and adopts it, and spawnMaster is never called at all.
       expect(spawnMaster).toHaveBeenCalledTimes(1)
       // and the teardown was aimed at the OLD endpoint before the socket went away.
-      expect(run.mock.calls.some(([a]) => a.includes('exit') && a.includes('u@old.example.com'))).toBe(true)
+      expect(
+        run.mock.calls.some(([a]) => a.includes('exit') && a.includes('u@old.example.com'))
+      ).toBe(true)
     })
 
     it('revalidateAll re-reads each project rather than trusting a stale snapshot', async () => {
@@ -1016,7 +1263,12 @@ describe('SshProjectManager', () => {
       let releaseSlow: (() => void) | undefined
       const slowGate = new Promise<void>((r) => (releaseSlow = r))
       let gateArmed = false
-      const spawnMaster = vi.fn(() => ({ kill: vi.fn(), on: vi.fn(), stderr: () => '', exited: () => false }))
+      const spawnMaster = vi.fn(() => ({
+        kill: vi.fn(),
+        on: vi.fn(),
+        stderr: () => '',
+        exited: () => false
+      }))
       const run = vi.fn(async (args: string[]) => {
         // Hold the FIRST project's revalidate open so the edit below lands mid-pass.
         if (gateArmed && args.includes('u@slow.example.com')) await slowGate
@@ -1044,7 +1296,9 @@ describe('SshProjectManager', () => {
       // The pass must reuse p2's NEW master, not re-establish the endpoint its snapshot recorded.
       expect(mgr.refForProject('p2')?.conn.host).toBe('new.example.com')
       expect(spawnMaster.mock.calls.length).toBe(spawnsAfterEdit)
-      expect(run.mock.calls.some(([a]) => a.includes('exit') && a.includes('u@new.example.com'))).toBe(false)
+      expect(
+        run.mock.calls.some(([a]) => a.includes('exit') && a.includes('u@new.example.com'))
+      ).toBe(false)
     })
 
     it('a connect naming an EDITED endpoint never shares the in-flight attempt to the old one', async () => {
@@ -1086,7 +1340,9 @@ describe('SshProjectManager', () => {
       // The map now owns the NEW endpoint, and the old-endpoint master was truly exited
       // (`-O exit` over its socket, so a daemonized ControlPersist master dies too).
       expect(mgr.refForProject('p1')?.conn).toEqual({ host: 'h2', user: 'u' })
-      expect(run.mock.calls.some(([a]) => (a as string[])[0] === '-O' && (a as string[])[1] === 'exit')).toBe(true)
+      expect(
+        run.mock.calls.some(([a]) => (a as string[])[0] === '-O' && (a as string[])[1] === 'exit')
+      ).toBe(true)
     })
 
     it('maps an asking master pid back to its user@host so the passphrase dialog can name the server', async () => {
@@ -1097,7 +1353,11 @@ describe('SshProjectManager', () => {
       vi.spyOn(fs, 'stat').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
       const mgr = new SshProjectManager({
         userDataDir: '/ud',
-        spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn(), pid: () => 4242 })),
+        spawnMaster: vi.fn(() => ({
+          kill: vi.fn(),
+          on: vi.fn(),
+          pid: () => 4242
+        })),
         run: vi.fn(async () => ({ code: 0, stdout: '' })),
         runScp: vi.fn(async () => ({ code: 0 })),
         getHook: () => ({ port: 1, token: 't', version: '1' }),
@@ -1197,7 +1457,12 @@ describe('SshProjectManager', () => {
       let spawns = 0
       const spawnMaster = vi.fn(() => {
         spawns++
-        return { kill: vi.fn(), on: vi.fn(), stderr: () => '', exited: () => spawns === 1 }
+        return {
+          kill: vi.fn(),
+          on: vi.fn(),
+          stderr: () => '',
+          exited: () => spawns === 1
+        }
       })
       const run = vi.fn(async (args: string[]) =>
         args[0] === '-O' && args[1] === 'check' ? { code: 1, stdout: '' } : { code: 0, stdout: '' }
@@ -1214,7 +1479,9 @@ describe('SshProjectManager', () => {
       await vi.advanceTimersByTimeAsync(2000)
       await assertion
       // Its own master was killed exactly once, and nothing else was touched.
-      const own = spawnMaster.mock.results[0].value as { kill: ReturnType<typeof vi.fn> }
+      const own = spawnMaster.mock.results[0].value as {
+        kill: ReturnType<typeof vi.fn>
+      }
       expect(own.kill).toHaveBeenCalled()
     })
   })
@@ -1239,7 +1506,11 @@ describe('SshProjectManager', () => {
     })
     const mgr = new SshProjectManager({
       userDataDir: '/ud',
-      spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn(), stderr: () => '' })),
+      spawnMaster: vi.fn(() => ({
+        kill: vi.fn(),
+        on: vi.fn(),
+        stderr: () => ''
+      })),
       run,
       runScp: vi.fn(async () => ({ code: 0 })),
       getHook: () => ({ port: 1, token: 't', version: '1' }),
@@ -1272,7 +1543,12 @@ describe('SshProjectManager', () => {
     const mgr = new SshProjectManager({
       userDataDir: '/ud',
       // exited() is true from the very first poll: the daemonize already happened.
-      spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn(), stderr: () => '', exited: () => true })),
+      spawnMaster: vi.fn(() => ({
+        kill: vi.fn(),
+        on: vi.fn(),
+        stderr: () => '',
+        exited: () => true
+      })),
       run,
       runScp: vi.fn(async () => ({ code: 0 })),
       getHook: () => ({ port: 1, token: 't', version: '1' }),
@@ -1296,11 +1572,19 @@ describe('SshProjectManager', () => {
     let checks = 0
     const run = vi.fn(async (args: string[]) => {
       if (args[0] === '-O' && args[1] === 'check') checks++
-      return { code: args[0] === '-O' && args[1] === 'check' ? 1 : 0, stdout: '' }
+      return {
+        code: args[0] === '-O' && args[1] === 'check' ? 1 : 0,
+        stdout: ''
+      }
     })
     const mgr = new SshProjectManager({
       userDataDir: '/ud',
-      spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn(), stderr: () => '', exited: () => false })),
+      spawnMaster: vi.fn(() => ({
+        kill: vi.fn(),
+        on: vi.fn(),
+        stderr: () => '',
+        exited: () => false
+      })),
       run,
       runScp: vi.fn(async () => ({ code: 0 })),
       getHook: () => ({ port: 1, token: 't', version: '1' }),
@@ -1334,9 +1618,13 @@ describe('SshProjectManager', () => {
     it('spawnMaster receives the env masterEnvFor(identityFile) returns', async () => {
       const spawnMaster = vi.fn(() => ({ kill: vi.fn(), on: vi.fn() }))
       const run = vi.fn(async (_args: string[]) => ({ code: 0, stdout: '' }))
-      const masterEnvFor = vi.fn(
-        (identityFile?: string): Record<string, string> =>
-          identityFile ? { SSH_ASKPASS: '/ud/ssh-askpass.sh', NODETERM_ASKPASS_IDENTITY: identityFile } : {}
+      const masterEnvFor = vi.fn((identityFile?: string): Record<string, string> =>
+        identityFile
+          ? {
+              SSH_ASKPASS: '/ud/ssh-askpass.sh',
+              NODETERM_ASKPASS_IDENTITY: identityFile
+            }
+          : {}
       )
       const mgr = new SshProjectManager({
         userDataDir: '/ud',
@@ -1347,7 +1635,11 @@ describe('SshProjectManager', () => {
         onStatus: vi.fn(),
         masterEnvFor
       })
-      const withKey = { host: 'h', user: 'u', identityFile: '/home/u/.ssh/id_ed25519' }
+      const withKey = {
+        host: 'h',
+        user: 'u',
+        identityFile: '/home/u/.ssh/id_ed25519'
+      }
       await mgr.connect('p1', withKey)
       expect(masterEnvFor).toHaveBeenCalledWith(withKey.identityFile)
       expect(spawnMaster).toHaveBeenCalledWith(expect.any(Array), {
@@ -1611,7 +1903,9 @@ describe('SshProjectManager', () => {
         userDataDir: '/ud',
         spawnMaster,
         run: vi.fn(async (args: string[]) =>
-          args[0] === '-O' && args[1] === 'check' ? { code: 1, stdout: '' } : { code: 0, stdout: '' }
+          args[0] === '-O' && args[1] === 'check'
+            ? { code: 1, stdout: '' }
+            : { code: 0, stdout: '' }
         ),
         runScp: vi.fn(async () => ({ code: 0 })),
         getHook: () => ({ port: 1, token: 't', version: '1' }),
@@ -1635,7 +1929,9 @@ describe('SshProjectManager', () => {
           pid: () => 77
         })),
         run: vi.fn(async (args: string[]) =>
-          args[0] === '-O' && args[1] === 'check' ? { code: 1, stdout: '' } : { code: 0, stdout: '' }
+          args[0] === '-O' && args[1] === 'check'
+            ? { code: 1, stdout: '' }
+            : { code: 0, stdout: '' }
         ),
         runScp: vi.fn(async () => ({ code: 0 })),
         getHook: () => ({ port: 1, token: 't', version: '1' }),
@@ -1659,7 +1955,11 @@ describe('SshProjectManager', () => {
       const run = vi.fn(async (args: string[]) =>
         args[0] === '-O' && args[1] === 'check' ? { code: 1, stdout: '' } : { code: 0, stdout: '' }
       )
-      const withKey = { host: 'h', user: 'u', identityFile: '/home/u/.ssh/id_ed25519' }
+      const withKey = {
+        host: 'h',
+        user: 'u',
+        identityFile: '/home/u/.ssh/id_ed25519'
+      }
       const mgr = new SshProjectManager({
         userDataDir: '/ud',
         spawnMaster,
@@ -1731,7 +2031,9 @@ describe('SshProjectManager', () => {
               pid: () => pid
             })),
             run: async (args: string[]) =>
-              args[0] === '-O' && args[1] === 'check' ? { code: 1, stdout: '' } : { code: 0, stdout: '' },
+              args[0] === '-O' && args[1] === 'check'
+                ? { code: 1, stdout: '' }
+                : { code: 0, stdout: '' },
             runScp: async () => ({ code: 0 }),
             getHook: () => ({ port: 1, token: 't', version: '1' }),
             onStatus: vi.fn(),
@@ -1764,7 +2066,8 @@ describe('SshProjectManager', () => {
       const run = vi.fn(async (args: string[]) =>
         args[0] === '-O' && args[1] === 'check' ? { code: 1, stdout: '' } : { code: 0, stdout: '' }
       )
-      const checkCount = () => run.mock.calls.filter((c) => (c[0] as string[])[1] === 'check').length
+      const checkCount = () =>
+        run.mock.calls.filter((c) => (c[0] as string[])[1] === 'check').length
       const mgr = new SshProjectManager({
         userDataDir: '/ud',
         spawnMaster,
@@ -1773,7 +2076,9 @@ describe('SshProjectManager', () => {
         getHook: () => ({ port: 1, token: 't', version: '1' }),
         onStatus: vi.fn()
       })
-      const assertion = expect(mgr.connect('p1', conn)).rejects.toThrow('Permission denied (publickey)')
+      const assertion = expect(mgr.connect('p1', conn)).rejects.toThrow(
+        'Permission denied (publickey)'
+      )
       await vi.advanceTimersByTimeAsync(2000)
       await assertion
       // Exit grace is a handful of checks, far fewer than the base 50-attempt window.
@@ -1785,7 +2090,11 @@ describe('SshProjectManager', () => {
       vi.useFakeTimers()
       let checkCalls = 0
       const SUCCEED_AT = 80 // past the base wall-clock budget (BASE_WAIT_MS): proves the alive-master extension
-      const spawnMaster = vi.fn(() => ({ kill: vi.fn(), on: vi.fn(), exited: () => false }))
+      const spawnMaster = vi.fn(() => ({
+        kill: vi.fn(),
+        on: vi.fn(),
+        exited: () => false
+      }))
       const run = vi.fn(async (args: string[]) => {
         if (args[0] === '-O' && args[1] === 'check') {
           checkCalls++
@@ -1793,7 +2102,11 @@ describe('SshProjectManager', () => {
         }
         return { code: 0, stdout: '' }
       })
-      const withKey = { host: 'h', user: 'u', identityFile: '/home/u/.ssh/id_ed25519' }
+      const withKey = {
+        host: 'h',
+        user: 'u',
+        identityFile: '/home/u/.ssh/id_ed25519'
+      }
       const mgr = new SshProjectManager({
         userDataDir: '/ud',
         spawnMaster,
@@ -1824,7 +2137,9 @@ describe('SshProjectManager', () => {
           exited: () => true
         })),
         run: vi.fn(async (args: string[]) =>
-          args[0] === '-O' && args[1] === 'check' ? { code: 1, stdout: '' } : { code: 0, stdout: '' }
+          args[0] === '-O' && args[1] === 'check'
+            ? { code: 1, stdout: '' }
+            : { code: 0, stdout: '' }
         ),
         runScp: vi.fn(async () => ({ code: 0 })),
         getHook: () => ({ port: 1, token: 't', version: '1' }),
@@ -1852,7 +2167,11 @@ describe('SshProjectManager', () => {
         }
         return { code: 0, stdout: '' }
       })
-      const withKey = { host: 'h', user: 'u', identityFile: '/home/u/.ssh/id_ed25519' }
+      const withKey = {
+        host: 'h',
+        user: 'u',
+        identityFile: '/home/u/.ssh/id_ed25519'
+      }
       const mgr = new SshProjectManager({
         userDataDir: '/ud',
         spawnMaster,
@@ -1902,7 +2221,12 @@ describe('master watchdog', () => {
       getHook: () => ({ port: 1, token: 't', version: '1' }),
       onStatus: (e) => statuses.push(e.status)
     })
-    return { mgr, statuses, spawnMaster, setMasterDead: () => (checkFails = true) }
+    return {
+      mgr,
+      statuses,
+      spawnMaster,
+      setMasterDead: () => (checkFails = true)
+    }
   }
 
   it('a healthy master is only checked, never respawned, no reconnecting status', async () => {
@@ -1939,6 +2263,121 @@ describe('master watchdog', () => {
     await new Promise((r) => setTimeout(r, 40))
     expect(spawnMaster).toHaveBeenCalledTimes(1) // no tick fired after stop
   })
+
+  describe('remote Codex conversation import', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    async function makeImportManager(uploadCode = 0) {
+      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined as never)
+      vi.spyOn(fs, 'stat').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+      const run = vi.fn(async (args: string[]) => {
+        const command = args.join(' ')
+        if (
+          command.includes('$SHELL') &&
+          command.includes('command') &&
+          command.includes('codex')
+        ) {
+          return {
+            code: 0,
+            stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+          }
+        }
+        if (command.includes('$HOME')) return { code: 0, stdout: '/home/u' }
+        if (command.includes('%{http_code}')) return { code: 0, stdout: '204' }
+        return { code: 0, stdout: '' }
+      })
+      const runScp = vi.fn(async (_args: string[]) => ({
+        code: uploadCode,
+        stdout: ''
+      }))
+      const mgr = new SshProjectManager({
+        userDataDir: '/ud',
+        spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn() })),
+        run,
+        runScp,
+        getHook: () => ({ port: 1, token: 't', version: '1' }),
+        codexRelaySource: async () => '/* bundled relay */',
+        onStatus: vi.fn()
+      })
+      await mgr.connect('p1', conn, '/remote/repo')
+      run.mockClear()
+      runScp.mockClear()
+      return { mgr, run, runScp }
+    }
+
+    it('stages one local rollout and atomically installs it in the selected remote account', async () => {
+      const { mgr, run, runScp } = await makeImportManager()
+      vi.spyOn(mgr, 'remoteCodexThreadExists')
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true)
+      const catalog = vi
+        .spyOn(mgr, 'remoteCodexCatalog')
+        .mockResolvedValue([{ accountId: 'account-b', socketPath: '/remote/socket' }])
+
+      await mgr.remoteCodexImportThread(
+        'p1',
+        'account-b',
+        'thread-123',
+        '/local/sessions/2026/rollout-thread-123.jsonl',
+        'sessions/2026/rollout-thread-123.jsonl'
+      )
+
+      expect(runScp).toHaveBeenCalledTimes(1)
+      expect(runScp.mock.calls[0][0]).toContain('/local/sessions/2026/rollout-thread-123.jsonl')
+      const commands = run.mock.calls.map(([args]) => (args as string[]).join(' ')).join('\n')
+      expect(commands).toContain('.nodeterm/codex-imports')
+      expect(commands).toContain(
+        `${remoteCodexHome('/home/u', 'account-b')}/sessions/2026/rollout-thread-123.jsonl`
+      )
+      expect(commands).toContain('mv ')
+      expect(catalog).toHaveBeenCalledWith(controlPathFor('p1'), ['account-b'])
+    })
+
+    it('never overwrites a rollout already present on the remote account', async () => {
+      const { mgr, run, runScp } = await makeImportManager()
+      vi.spyOn(mgr, 'remoteCodexThreadExists').mockResolvedValue(true)
+      const catalog = vi.spyOn(mgr, 'remoteCodexCatalog')
+
+      await mgr.remoteCodexImportThread(
+        'p1',
+        undefined,
+        'thread-123',
+        '/local/rollout.jsonl',
+        'sessions/2026/rollout-thread-123.jsonl'
+      )
+
+      expect(runScp).not.toHaveBeenCalled()
+      const commands = run.mock.calls.map(([args]) => (args as string[]).join(' '))
+      expect(
+        commands.some(
+          (command) => command.includes('codex-imports') || command.includes('/sessions/')
+        )
+      ).toBe(false)
+      expect(catalog).not.toHaveBeenCalled()
+    })
+
+    it('removes only its staging file when upload fails', async () => {
+      const { mgr, run, runScp } = await makeImportManager(1)
+      vi.spyOn(mgr, 'remoteCodexThreadExists').mockResolvedValue(false)
+
+      await expect(
+        mgr.remoteCodexImportThread(
+          'p1',
+          undefined,
+          'thread-123',
+          '/local/rollout.jsonl',
+          'sessions/2026/rollout-thread-123.jsonl'
+        )
+      ).rejects.toThrow('Could not upload Codex conversation')
+
+      expect(runScp).toHaveBeenCalledTimes(1)
+      const commands = run.mock.calls.map(([args]) => (args as string[]).join(' '))
+      expect(
+        commands.some((command) => command.includes('rm -f') && command.includes('.part'))
+      ).toBe(true)
+      expect(commands.some((command) => command.includes('/sessions/'))).toBe(false)
+    })
+  })
 })
 
 describe('lastSshErrorLine', () => {
@@ -1952,7 +2391,8 @@ describe('lastSshErrorLine', () => {
   })
 
   it('skips a trailing Warning line to keep the real cause', () => {
-    const stderr = 'ssh: Could not resolve hostname niova: nodename nor servname provided\nWarning: something'
+    const stderr =
+      'ssh: Could not resolve hostname niova: nodename nor servname provided\nWarning: something'
     expect(lastSshErrorLine(stderr)).toBe(
       'ssh: Could not resolve hostname niova: nodename nor servname provided'
     )

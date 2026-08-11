@@ -1,7 +1,11 @@
 import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { readCodexThreadAt, rememberCodexSessionName, startCodexThreadAt } from '../core/codex-session-name'
+import {
+  readCodexThreadAt,
+  rememberCodexSessionName,
+  startCodexThreadAt
+} from '../core/codex-session-name'
 import {
   bindCodexThreadIdentity,
   codexThreadIdentityHasLiveConflict,
@@ -20,7 +24,18 @@ import { readFile } from 'fs/promises'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
 import { spawn } from 'child_process'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, powerMonitor, safeStorage, shell, systemPreferences } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Notification,
+  powerMonitor,
+  safeStorage,
+  shell,
+  systemPreferences
+} from 'electron'
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
@@ -38,7 +53,11 @@ import { GitService } from '../core/git-service'
 import { registerGitHubIntegration } from '../core/github/integration'
 import { runGitHubCliCommand } from '../core/github/credentials'
 import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './github-control'
-import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
+import {
+  generateCommitMessage,
+  generateGroupName,
+  generateTerminalName
+} from '../core/commit-message'
 import { initUpdater } from './updater'
 import { fetchCheck } from '../core/check'
 import { hookServer } from '../core/agents/hook-server'
@@ -51,7 +70,13 @@ import {
   isValidPendingId,
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
-import { setMainWindow, getMainWindow, sendToMain, shouldHideOnClose, createCrashReloadPolicy } from './main-window'
+import {
+  setMainWindow,
+  getMainWindow,
+  sendToMain,
+  shouldHideOnClose,
+  createCrashReloadPolicy
+} from './main-window'
 import {
   initNotchHud,
   applyNotchHudSettings,
@@ -99,7 +124,11 @@ import { createContextTail, type TaskNotification } from '../core/context-tail'
 import { geminiContextParse } from '../core/gemini-session'
 import { codexContextParse } from '../core/codex-session'
 import { codexHome } from '../core/usage/codex-usage'
-import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
+import {
+  grokRawFields,
+  isAsyncSubagentLaunch,
+  type NormalizedAgentEvent
+} from '../shared/agents/normalize'
 import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
 import { forgetGrokSession, rememberGrokSessionDir } from '../core/grok-session'
 import {
@@ -123,7 +152,7 @@ import {
   remotePaneCommandArgs
 } from '../core/remote-ssh/control-master'
 import { sessionName } from '../core/tmux-naming'
-import { posixQuote } from '../shared/ssh'
+import { posixQuote, sshHostKey } from '../shared/ssh'
 import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
@@ -279,7 +308,9 @@ let sshProjectManager: ReturnType<typeof initSshProject> | undefined
 // over that project's live master. Resolves the ref lazily — the manager is created after the window
 // is ready — and fails open (no-op) while the project is disconnected.
 const workspaceSshFs = new SshFs((args, stdin) =>
-  sshProjectManager ? sshProjectManager.sshRun(args, stdin) : Promise.resolve({ code: 1, stdout: '' })
+  sshProjectManager
+    ? sshProjectManager.sshRun(args, stdin)
+    : Promise.resolve({ code: 1, stdout: '' })
 )
 const remoteWorkspaceIO = makeRemoteWorkspaceIO(
   (projectId) => sshProjectManager?.refForProject(projectId) ?? null,
@@ -526,7 +557,10 @@ function createWindow(): BrowserWindow {
 
   // Block any in-page top-level navigation away from the app origin (defense in depth).
   win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith('file://') && !url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '\0')) {
+    if (
+      !url.startsWith('file://') &&
+      !url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '\0')
+    ) {
       e.preventDefault()
       if (isSafeExternalUrl(url)) void shell.openExternal(url)
     }
@@ -866,11 +900,7 @@ app.whenReady().then(async () => {
     run: runGitHubCliCommand
   })
   dropGitHubRelayClient = (id) => github.service.dropClient(id)
-  registerElectronGitHubControl(
-    ipcMain,
-    () => getMainWindow()?.webContents.id,
-    github.controller
-  )
+  registerElectronGitHubControl(ipcMain, () => getMainWindow()?.webContents.id, github.controller)
 
   // SSH-project Explorer/Editor fs: the remote analog of the fs:* handlers above, scoped to a
   // project's ControlMaster. One SshFs bound to the SSH-project manager's own ssh runner (the SAME
@@ -878,7 +908,9 @@ app.whenReady().then(async () => {
   // sshProjectManager is created below. The ref is looked up per call; a call before the manager
   // exists, or for an unconnected project, finds no ref and fails open ([]/''/false).
   const sshFs = new SshFs((args, stdin) =>
-    sshProjectManager ? sshProjectManager.sshRun(args, stdin) : Promise.resolve({ code: 1, stdout: '' })
+    sshProjectManager
+      ? sshProjectManager.sshRun(args, stdin)
+      : Promise.resolve({ code: 1, stdout: '' })
   )
   const sshFsRefFor = (projectId: string) => sshProjectManager?.refForProject(projectId)
   ipcMain.handle(IPC.sshFsList, (_e, projectId: string, p: string) => {
@@ -914,8 +946,7 @@ app.whenReady().then(async () => {
     route: (projectId: string): BoardLogRoute => {
       const ref = sshProjectManager?.refForProject(projectId)
       if (ref?.remoteCwd) {
-        const run = (args: string[], stdin?: string) =>
-          sshProjectManager!.sshRun(args, stdin)
+        const run = (args: string[], stdin?: string) => sshProjectManager!.sshRun(args, stdin)
         const exec: RemoteLogExec = {
           append: async (p, line) => {
             const { code } = await run(sshAppendArgs(ref.conn, ref.controlPath, p, line))
@@ -941,7 +972,9 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle(IPC.dialogSelectFolder, async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory']
+    })
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
 
@@ -958,6 +991,9 @@ app.whenReady().then(async () => {
   // listeners (setListener/setRawListener/setControlHandler) attach later, which the server
   // tolerates — early hook POSTs are simply dropped, never mis-routed.
   hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, hookEndpoint, accountId }) => {
+    if (ptyManager.sshRemoteForNode(nodeId)) {
+      throw new Error('Remote Codex starts must use the host relay')
+    }
     await ensureCodexAccountDaemon(accountId)
     const threadId = await startCodexThreadAt(localCodexSocket(accountId), cwd)
     writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, accountId)
@@ -973,8 +1009,13 @@ app.whenReady().then(async () => {
     return threadId
   })
   hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId, hookEndpoint, accountId }) => {
-    await ensureCodexAccountDaemon(accountId)
-    if (!(await readCodexThreadAt(localCodexSocket(accountId), threadId))) {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    const belongs =
+      remote && sshProjectManager
+        ? await sshProjectManager.remoteCodexThreadExists(remote.controlPath, accountId, threadId)
+        : (await ensureCodexAccountDaemon(accountId),
+          !!(await readCodexThreadAt(localCodexSocket(accountId), threadId)))
+    if (!belongs) {
       throw new Error('Codex thread does not belong to the selected account')
     }
     bindCodexThreadIdentity(
@@ -994,46 +1035,74 @@ app.whenReady().then(async () => {
     if (emitAgentStatus) emitAgentStatus(identityEvent)
     else pendingCodexIdentityEvents.push(identityEvent)
   })
-  hookServer.setCodexThreadObservedHandler(async ({ nodeId, threadId, hookEndpoint, accountId, name }) => {
-    await ensureCodexAccountDaemon(accountId)
-    if (!(await readCodexThreadAt(localCodexSocket(accountId), threadId))) {
-      throw new Error('Observed Codex thread does not belong to the selected account')
+  hookServer.setCodexThreadObservedHandler(
+    async ({ nodeId, threadId, hookEndpoint, accountId, name }) => {
+      const remote = ptyManager.sshRemoteForNode(nodeId)
+      const belongs =
+        remote && sshProjectManager
+          ? await sshProjectManager.remoteCodexThreadExists(remote.controlPath, accountId, threadId)
+          : (await ensureCodexAccountDaemon(accountId),
+            !!(await readCodexThreadAt(localCodexSocket(accountId), threadId)))
+      if (!belongs) {
+        throw new Error('Observed Codex thread does not belong to the selected account')
+      }
+      bindCodexThreadIdentity(
+        threadId,
+        nodeId,
+        hookEndpoint,
+        (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
+        accountId
+      )
+      if (name) {
+        if (!remote) rememberCodexSessionName(threadId, name, localCodexSocket(accountId))
+        setNodeSessionName(nodeId, name)
+      }
+      const identityEvent: NormalizedAgentEvent = {
+        nodeId,
+        agentId: 'codex',
+        sessionId: threadId,
+        kind: 'session',
+        sessionPhase: 'start'
+      }
+      if (emitAgentStatus) emitAgentStatus(identityEvent)
+      else pendingCodexIdentityEvents.push(identityEvent)
     }
-    bindCodexThreadIdentity(
-      threadId,
-      nodeId,
-      hookEndpoint,
-      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
-      accountId
-    )
-    if (name) {
-      rememberCodexSessionName(threadId, name, localCodexSocket(accountId))
-      setNodeSessionName(nodeId, name)
-    }
-    const identityEvent: NormalizedAgentEvent = {
-      nodeId,
-      agentId: 'codex',
-      sessionId: threadId,
-      kind: 'session',
-      sessionPhase: 'start'
-    }
-    if (emitAgentStatus) emitAgentStatus(identityEvent)
-    else pendingCodexIdentityEvents.push(identityEvent)
-  })
+  )
   hookServer.setCodexThreadAuthorizeHandler(async ({ nodeId, threadId, accountId }) => {
-    await ensureCodexAccountDaemon(accountId)
+    if (!ptyManager.sshRemoteForNode(nodeId)) await ensureCodexAccountDaemon(accountId)
     // The relay freshly verifies a foreign rollout against a configured source socket before
     // path-resume. The target app-server cannot read that id until after the resume succeeds.
     // Authorization therefore owns concurrency only; bind/observed revalidate the target server.
-    if (codexThreadIdentityHasLiveConflict(
-      threadId,
-      nodeId,
-      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined
-    )) throw new Error('Codex thread is already bound to another live node')
+    if (
+      codexThreadIdentityHasLiveConflict(
+        threadId,
+        nodeId,
+        (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined
+      )
+    )
+      throw new Error('Codex thread is already bound to another live node')
   })
-  hookServer.setCodexThreadExposeHandler(async ({ threadId, accountId }) => {
+  hookServer.setCodexThreadExposeHandler(async ({ nodeId, threadId, accountId }) => {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    if (remote) {
+      if (!sshProjectManager) throw new Error('SSH Codex host is unavailable')
+      const host = sshHostKey(remote.conn)
+      const configuredAccountIds = (settingsStore.get().codexAccounts ?? [])
+        .filter((account) => account.host === host && !account.pending)
+        .map((account) => account.id)
+      if (accountId && !configuredAccountIds.includes(accountId)) {
+        throw new Error('Selected SSH Codex account is unavailable')
+      }
+      await sshProjectManager.remoteCodexExposeThread(
+        remote.controlPath,
+        accountId,
+        threadId,
+        configuredAccountIds
+      )
+      return
+    }
     const configuredAccountIds = (settingsStore.get().codexAccounts ?? [])
-      .filter((account) => !account.pending)
+      .filter((account) => !account.host && !account.pending)
       .map((account) => account.id)
     if (accountId && !configuredAccountIds.includes(accountId)) {
       throw new Error('Selected Codex account is unavailable')
@@ -1066,11 +1135,20 @@ app.whenReady().then(async () => {
     )
     commitCodexRolloutExposure(exposure)
   })
-  hookServer.setCodexThreadCatalogHandler(async () => {
+  hookServer.setCodexThreadCatalogHandler(async ({ nodeId }) => {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    if (remote) {
+      if (!sshProjectManager) throw new Error('SSH Codex host is unavailable')
+      const host = sshHostKey(remote.conn)
+      const accountIds = (settingsStore.get().codexAccounts ?? [])
+        .filter((account) => account.host === host && !account.pending)
+        .map((account) => account.id)
+      return sshProjectManager.remoteCodexCatalog(remote.controlPath, accountIds)
+    }
     const accountIds: Array<string | undefined> = [
       undefined,
       ...(settingsStore.get().codexAccounts ?? [])
-        .filter((account) => !account.pending)
+        .filter((account) => !account.host && !account.pending)
         .map((account) => account.id)
     ]
     const accounts: Array<{ accountId?: string; socketPath: string }> = []
@@ -1153,10 +1231,13 @@ app.whenReady().then(async () => {
   // 'show' guarantees a regular window has established the app's Dock presence first.
   const notchTunables = (): NotchHudTunables => {
     const s = settingsStore.get()
-    return { enabled: s.notchHud, notchWidth: s.notchWidth, hoverExpand: s.notchHoverExpand }
+    return {
+      enabled: s.notchHud,
+      notchWidth: s.notchWidth,
+      hoverExpand: s.notchHoverExpand
+    }
   }
-  const startNotchHud = (): void =>
-    initNotchHud({ getNodeTitle: displayTitleFor }, notchTunables())
+  const startNotchHud = (): void => initNotchHud({ getNodeTitle: displayTitleFor }, notchTunables())
   if (win.isVisible()) startNotchHud()
   else win.once('show', startNotchHud)
   settingsStore.onChange(() => applyNotchHudSettings(notchTunables()))
@@ -1355,7 +1436,10 @@ app.whenReady().then(async () => {
           ? {
               claudeAccounts: (s.claudeAccounts ?? [])
                 .filter((a) => a.host === hostKey && !a.pending)
-                .map((a) => ({ id: a.id, dir: remoteAccountConfigDirAbs(home, a.id) }))
+                .map((a) => ({
+                  id: a.id,
+                  dir: remoteAccountConfigDirAbs(home, a.id)
+                }))
             }
           : {}) // unresolved home ⇒ no accounts advertised (fail-open), autoSupported still ships
       }
@@ -1434,18 +1518,25 @@ app.whenReady().then(async () => {
       }
     }
   }
-  const contextTail = createContextTail(pushContextUpdate, { onTaskNotification, onToolResult })
+  const contextTail = createContextTail(pushContextUpdate, {
+    onTaskNotification,
+    onToolResult
+  })
   // ONE TAIL PER AGENT, each with its own parser — not one tail switching on an agent id, which
   // would mean changing `ContextTail.track(sessionId, path)` and the four call sites that depend on
   // it. The poller (offset reads, torn-line carry, change-gated push) is written once in
   // createContextTail; only the token keys differ, so only `parse` differs. Neither gets
   // onTaskNotification/onToolResult: both are claude transcript features (subagent cards, the
   // declined-ask rescue), and neither agent is in SUBAGENT_CAPABLE.
-  const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse })
+  const geminiContextTail = createContextTail(pushContextUpdate, {
+    parse: geminiContextParse
+  })
   // Hand the gemini session-name reader its path authority (declared above the handlers that use
   // it, assigned here where the tail exists).
   geminiTranscriptPathFor = (sessionId) => geminiContextTail.pathFor(sessionId)
-  const codexContextTail = createContextTail(pushContextUpdate, { parse: codexContextParse })
+  const codexContextTail = createContextTail(pushContextUpdate, {
+    parse: codexContextParse
+  })
   // Remote (SSH-project) counterparts: a node whose pty runs on a remote host has its Claude
   // transcript on that host, so its meter / subagent transcript / search must read over the
   // project's ControlMaster. One RemoteFile bound to the SSH-project manager's own ssh runner
@@ -1455,7 +1546,10 @@ app.whenReady().then(async () => {
   const remoteFile = new RemoteFile((args) =>
     sshProjectManager ? sshProjectManager.sshRun(args) : Promise.resolve({ code: 1, stdout: '' })
   )
-  const remoteContextTail = createRemoteContextTail(win, remoteFile, { onTaskNotification, onToolResult })
+  const remoteContextTail = createRemoteContextTail(win, remoteFile, {
+    onTaskNotification,
+    onToolResult
+  })
   const remoteSubagentTail = createRemoteSubagentTail(win, remoteFile)
   // Remote transcript ref learned from the hook raw-listener, keyed by sessionId — lets the
   // search/chat read handlers (which receive only sessionId + cwd) read remotely without a
@@ -1533,7 +1627,10 @@ app.whenReady().then(async () => {
     cwd: string | undefined,
     accountId: string | undefined,
     nodeId: string | undefined,
-    remote?: { conn: import('../shared/ssh').SshConnection; controlPath: string }
+    remote?: {
+      conn: import('../shared/ssh').SshConnection
+      controlPath: string
+    }
   ): Promise<RemoteFileRef | undefined> => {
     if (!sessionId) return undefined
     const cached = remoteTranscriptBySession.get(sessionId)
@@ -1570,7 +1667,11 @@ app.whenReady().then(async () => {
     // Jailed exactly like a hook-supplied path: the command only ever emits paths under our own
     // roots, but the answer still crosses a machine boundary before we read it.
     if (!located || !isSafeRemoteTranscriptPath(located, remoteHome)) return undefined
-    const ref: RemoteFileRef = { conn: rt.conn, controlPath: rt.controlPath, path: located }
+    const ref: RemoteFileRef = {
+      conn: rt.conn,
+      controlPath: rt.controlPath,
+      path: located
+    }
     remoteTranscriptBySession.set(sessionId, ref)
     locatedTranscriptSessions.add(sessionId)
     return ref
@@ -1620,11 +1721,16 @@ app.whenReady().then(async () => {
   // Shares core's `resolveTranscript` with the read channels — including its `accountId`-scoped
   // cwd fallback. This copy dropped the account, so a managed-account node could track (and then
   // meter, and then SERVE as the chat's first-choice path) an unrelated session's transcript.
-  corePlatform.on(IPC.contextEnsure, async (sessionId?: string, cwd?: string, accountId?: string) => {
-    if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
-    const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
-    if (p) contextTail.track(sessionId, p)
-  })
+  corePlatform.on(
+    IPC.contextEnsure,
+    async (sessionId?: string, cwd?: string, accountId?: string) => {
+      if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
+      const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) =>
+        contextTail.pathFor(s)
+      )
+      if (p) contextTail.track(sessionId, p)
+    }
+  )
   // The remote half of a handoff. Same three-line shape as the context-link deps above and for
   // the same reason: reading (and here also WRITING) on an SSH project's host is the one thing
   // the handoff builder cannot answer for itself. Absent deps ⇒ local-only, as before.
@@ -1662,7 +1768,15 @@ app.whenReady().then(async () => {
       sourceNodeId: string,
       cwd: string | undefined,
       accountId: string | undefined
-    ) => buildHandoff({ sessionId, agentId, sourceNodeId, cwd, accountId, remote: handoffRemote })
+    ) =>
+      buildHandoff({
+        sessionId,
+        agentId,
+        sourceNodeId,
+        cwd,
+        accountId,
+        remote: handoffRemote
+      })
   )
 
   installManagedAgentHooks()
@@ -1761,7 +1875,10 @@ app.whenReady().then(async () => {
     }
   }).start()
   const ackSweeper = createAckSweeper({
-    handlers: { ackDone, onUnreadClear: (id) => sendToMain(IPC.agentUnreadClear, id) }
+    handlers: {
+      ackDone,
+      onUnreadClear: (id) => sendToMain(IPC.agentUnreadClear, id)
+    }
   })
   let remoteAckSweepBusy = false
   const ackSweepTimer = setInterval(() => {
@@ -1871,7 +1988,11 @@ app.whenReady().then(async () => {
     // jailed by the same `safeTranscriptPath` claude uses (widened to those two agents' transcript
     // roots), because a forged POST could otherwise aim a file read at an arbitrary local path.
     if (agentId === 'gemini' || agentId === 'codex') {
-      const p = payload as { session_id?: string; transcript_path?: string; hook_event_name?: string }
+      const p = payload as {
+        session_id?: string
+        transcript_path?: string
+        hook_event_name?: string
+      }
       // A REMOTE (SSH) node's transcript lives on the HOST, and these tails read the LOCAL disk —
       // a host path like `~/.gemini/tmp/…` clears the local jail, so without this we would meter
       // whatever same-named file happens to exist on THIS machine. Remote meters for these agents
@@ -1905,7 +2026,8 @@ app.whenReady().then(async () => {
     }
     // An async subagent's PostToolUse is only the launch ack — keep tailing its transcript;
     // the real end (task-notification via the context tails) releases it.
-    const asyncLaunch = p.hook_event_name === 'PostToolUse' && isAsyncSubagentLaunch(p.tool_response)
+    const asyncLaunch =
+      p.hook_event_name === 'PostToolUse' && isAsyncSubagentLaunch(p.tool_response)
     // REMOTE node: route to the remote tails/search, jailing the path under the project's remote
     // ~/.claude/projects. Diverges from the local path ONLY when the node has a live ssh remote.
     const rt = nodeId ? ptyManager.sshRemoteForNode(nodeId) : undefined
@@ -1913,7 +2035,11 @@ app.whenReady().then(async () => {
       const remoteHome = sshProjectManager?.remoteHomeForControlPath(rt.controlPath)
       const transcriptPath = safeRemoteTranscriptPath(p.transcript_path, remoteHome)
       if (p.session_id && transcriptPath) {
-        const ref: RemoteFileRef = { conn: rt.conn, controlPath: rt.controlPath, path: transcriptPath }
+        const ref: RemoteFileRef = {
+          conn: rt.conn,
+          controlPath: rt.controlPath,
+          path: transcriptPath
+        }
         remoteContextTail.track(p.session_id, ref)
         remoteTranscriptBySession.set(p.session_id, ref)
       }
@@ -1923,7 +2049,8 @@ app.whenReady().then(async () => {
       // the local locators are no substitute (they search the wrong machine's disk, so
       // resolveLinkTranscript deliberately refuses them for remote nodes). The path stored is the
       // JAILED one, so a forged POST cannot aim a link read at an arbitrary remote file.
-      if (nodeId && p.session_id && transcriptPath) setNodeTranscript(nodeId, p.session_id, transcriptPath)
+      if (nodeId && p.session_id && transcriptPath)
+        setNodeTranscript(nodeId, p.session_id, transcriptPath)
       if (p.hook_event_name === 'SessionEnd' && p.session_id) {
         remoteContextTail.untrack(p.session_id)
         remoteTranscriptBySession.delete(p.session_id)
@@ -1939,7 +2066,11 @@ app.whenReady().then(async () => {
           void resolveRemoteSubagentFile(rt, transcriptPath, toolUseId)
             .then((file) => {
               if (file && !remoteSubagentCancel.has(toolUseId)) {
-                remoteSubagentTail.track(toolUseId, { conn: rt.conn, controlPath: rt.controlPath, path: file })
+                remoteSubagentTail.track(toolUseId, {
+                  conn: rt.conn,
+                  controlPath: rt.controlPath,
+                  path: file
+                })
               }
             })
             .finally(() => {
@@ -1972,7 +2103,8 @@ app.whenReady().then(async () => {
     // Context-window meter: tail the session transcript (any event carrying both fields).
     if (p.session_id && transcriptPath) contextTail.track(p.session_id, transcriptPath)
     if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
-    if (nodeId && p.session_id && transcriptPath) setNodeTranscript(nodeId, p.session_id, transcriptPath)
+    if (nodeId && p.session_id && transcriptPath)
+      setNodeTranscript(nodeId, p.session_id, transcriptPath)
     if (p.hook_event_name === 'SessionEnd' && p.session_id) contextTail.untrack(p.session_id)
     // Subagent live transcript: track on PreToolUse / finish on PostToolUse for subagent tools.
     if (p.tool_use_id && p.tool_name && SUBAGENT_TOOLS.has(p.tool_name)) {
@@ -2050,7 +2182,13 @@ app.whenReady().then(async () => {
     IPC.agentControlResult,
     (
       _e,
-      payload: { requestId: string; ok: boolean; message?: string; result?: unknown; error?: string }
+      payload: {
+        requestId: string
+        ok: boolean
+        message?: string
+        result?: unknown
+        error?: string
+      }
     ) => {
       const pending = pendingControl.get(payload.requestId)
       if (!pending) return
@@ -2066,10 +2204,18 @@ app.whenReady().then(async () => {
     return await new Promise((resolve) => {
       const timer = setTimeout(() => {
         pendingControl.delete(requestId)
-        resolve({ ok: false, error: 'timed out (no response / not confirmed)' })
+        resolve({
+          ok: false,
+          error: 'timed out (no response / not confirmed)'
+        })
       }, 120_000)
       pendingControl.set(requestId, { resolve, timer })
-      target.webContents.send(IPC.agentControl, { requestId, sourceNodeId: nodeId, verb, args })
+      target.webContents.send(IPC.agentControl, {
+        requestId,
+        sourceNodeId: nodeId,
+        verb,
+        args
+      })
     })
   })
   initMediaProtocol()
@@ -2093,7 +2239,9 @@ app.whenReady().then(async () => {
       const rt = ptyManager.sshRemoteForNode(nodeId)
       if (!rt || !sshProjectManager) return null
       try {
-        const { code, stdout } = await sshProjectManager.sshRun(childArgs(rt.conn, rt.controlPath, command))
+        const { code, stdout } = await sshProjectManager.sshRun(
+          childArgs(rt.conn, rt.controlPath, command)
+        )
         return code === 0 ? stdout : null
       } catch {
         return null
@@ -2110,7 +2258,10 @@ app.whenReady().then(async () => {
   const usageService = initClaudeUsage(win, {
     localAccounts: localClaudeAccountIds,
     codexAccounts: () =>
-      codexUsageAccounts(settingsStore.get().codexAccounts ?? [], localCodexAccountHome),
+      codexUsageAccounts(
+        (settingsStore.get().codexAccounts ?? []).filter((account) => !account.host),
+        localCodexAccountHome
+      ),
     onCacheUpdate: () => {
       void flushAgentStatusMirror()
     },
@@ -2147,7 +2298,7 @@ app.whenReady().then(async () => {
   // Lazy getter: sshProjectManager is created just below, so a remote account op (which only runs
   // after the user has connected an SSH project) always sees the live manager.
   initClaudeAccounts(() => sshProjectManager)
-  initCodexAccounts()
+  initCodexAccounts(() => sshProjectManager)
   // The jailed core bridge both phone hosts serve: typed git verbs against the real GitService
   // (cwd-jailed to the shared canvas roots inside the handlers) and phone node registration
   // through the workspace store (written as an outside edit, so the watcher broadcasts it and
@@ -2169,8 +2320,16 @@ app.whenReady().then(async () => {
   initRelayHost(win, corePlatform, {})
   // Standing (phone) relay host: keep a host connection registered so a paired phone can reach
   // this Mac from anywhere. Honors settings.phoneAccessEnabled internally.
-  const standingHost = initStandingHost(win, ptyManager, () => settingsStore.get(), listProjectsOutput, hostBridge)
-  ipcMain.on(IPC.remoteStandingHostSet, (_e, enabled: boolean) => standingHost.setEnabled(!!enabled))
+  const standingHost = initStandingHost(
+    win,
+    ptyManager,
+    () => settingsStore.get(),
+    listProjectsOutput,
+    hostBridge
+  )
+  ipcMain.on(IPC.remoteStandingHostSet, (_e, enabled: boolean) =>
+    standingHost.setEnabled(!!enabled)
+  )
   // Reconcile from persisted settings on launch (starts hosting if enabled).
   standingHost.syncFromSettings()
   // Interactive relay CLIENT (Stage 4): connect OUT to another desktop's host. `connectRelayClient`
@@ -2187,7 +2346,9 @@ app.whenReady().then(async () => {
       // No Pro gate on the client: the paywall is the HOST minting the pairing token, so a valid offer
       // is the credential (the paywall is host-side). The dev/relay gate still applies.
       if (!relayAllowed()) {
-        throw new Error('Remote access is unavailable in development builds (set NODETERM_RELAY_URL).')
+        throw new Error(
+          'Remote access is unavailable in development builds (set NODETERM_RELAY_URL).'
+        )
       }
       const offer = decodeOffer(String(offerCode ?? ''))
       if (!offer) {
@@ -2243,6 +2404,9 @@ app.whenReady().then(async () => {
   }
   sshProjectManager = initSshProject(
     (projectId) => {
+      // An attached host shares an existing local canvas; it has no independent remote workspace
+      // document to reconcile.
+      if (projectId.startsWith('attached-')) return
       // On (re)connect, reconcile the server's .nodeterm/project.json with our offline cache by rev.
       // A non-null result means the remote won → adopt it in the renderer (Task 7's listener does the
       // silent replace / conflict bar). null means our cache was pushed up instead, so nothing to send.
@@ -2303,7 +2467,8 @@ app.whenReady().then(async () => {
       }).catch(() => {
         // best-effort: a failed resync leaves the stale sweep as the backstop, exactly as today
       })
-    }
+    },
+    () => readFile(codexRelayScript, 'utf8')
   )
   // Wake-from-sleep: re-validate every SSH master NOW instead of letting ServerAlive discover the
   // dead TCP ~60s later — until it does, every remote terminal looks alive and is dead (no echo,
@@ -2329,7 +2494,9 @@ app.whenReady().then(async () => {
           .then((adopted) => {
             if (adopted) sendToMain(IPC.workspaceExternalChange, adopted)
           })
-          .catch(() => { /* fail-open: the next tick retries */ })
+          .catch(() => {
+            /* fail-open: the next tick retries */
+          })
           .finally(() => inFlight.delete(projectId))
       }
     }, REMOTE_WORKSPACE_POLL_MS)
@@ -2337,14 +2504,19 @@ app.whenReady().then(async () => {
   // Route git-service + commit-message git ops over the active SSH project's master only — and only
   // for that project's exact remoteCwd. Any other cwd (a local project, or a different connected
   // project) resolves to undefined, so the local path stays byte-identical.
-  setGitRemoteResolver((cwd) => (activeRemote && activeRemote.cwd === cwd ? activeRemote.ref : undefined))
+  setGitRemoteResolver((cwd) =>
+    activeRemote && activeRemote.cwd === cwd ? activeRemote.ref : undefined
+  )
   // The renderer's active-project effect calls this on every switch: a non-null projectId of a
   // connected SSH project (whose ref carries a remoteCwd) arms remote routing; null/local disarms it.
   ipcMain.handle(IPC.gitSetActiveRemote, (_e, projectId: string | null) => {
     const ref = projectId ? sshProjectManager?.refForProject(projectId) : undefined
     activeRemote =
       ref && ref.remoteCwd
-        ? { cwd: ref.remoteCwd, ref: { conn: ref.conn, controlPath: ref.controlPath } }
+        ? {
+            cwd: ref.remoteCwd,
+            ref: { conn: ref.conn, controlPath: ref.controlPath }
+          }
         : null
   })
 

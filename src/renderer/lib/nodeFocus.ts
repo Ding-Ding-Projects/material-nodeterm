@@ -34,8 +34,6 @@ export interface FocusableNode {
  *  `fitView` cannot drift apart: the clamp keeps a small node from filling the screen and a
  *  huge one from being fit microscopic. */
 export const FIT_NODE_OPTIONS = { padding: 0.2, minZoom: 0.25, maxZoom: 1.38 } as const
-export const DOUBLE_CLICK_NODE_OVERSCAN = 1.02
-export const DOUBLE_CLICK_NODE_MAX_ZOOM = 2
 
 /** A `parentId` chain longer than this is a data bug (or a cycle) — stop walking. */
 const MAX_PARENT_DEPTH = 20
@@ -102,32 +100,6 @@ export function viewportForRect(
     FIT_NODE_OPTIONS.maxZoom,
     FIT_NODE_OPTIONS.padding
   )
-}
-
-/** Tight double-click framing: whichever of full width, full height or max zoom limits first.
- * The imaginary target is 102% of the node on both axes, leaving a small visible rim without the
- * much larger navigation padding used by go-to-node. */
-export function doubleClickNodeCamera(
-  rect: Rect,
-  viewportWidth: number,
-  viewportHeight: number
-): { x: number; y: number; zoom: number } | null {
-  if (
-    !(rect.width > 0) ||
-    !(rect.height > 0) ||
-    !(viewportWidth > 0) ||
-    !(viewportHeight > 0)
-  ) return null
-  const zoom = Math.min(
-    DOUBLE_CLICK_NODE_MAX_ZOOM,
-    viewportWidth / (rect.width * DOUBLE_CLICK_NODE_OVERSCAN),
-    viewportHeight / (rect.height * DOUBLE_CLICK_NODE_OVERSCAN)
-  )
-  return {
-    x: rect.x + rect.width / 2,
-    y: rect.y + rect.height / 2,
-    zoom
-  }
 }
 
 /** Whether React Flow already knows this node's on-screen size — i.e. whether `fitView` will

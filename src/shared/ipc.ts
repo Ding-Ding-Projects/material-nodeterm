@@ -35,6 +35,7 @@ export const IPC = {
   codexAccountsIdentity: 'codex-accounts:identity',
   codexAccountsSystemIdentity: 'codex-accounts:system-identity',
   codexAccountsSwitchThread: 'codex-accounts:switch-thread',
+  codexAccountsTransferThreadToSsh: 'codex-accounts:transfer-thread-to-ssh',
   codexAccountsCommitSwitch: 'codex-accounts:commit-switch',
   codexAccountsFinishSwitch: 'codex-accounts:finish-switch',
   codexAccountsRollbackSwitch: 'codex-accounts:rollback-switch',

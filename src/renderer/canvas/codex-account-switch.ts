@@ -15,13 +15,13 @@ export interface CodexAccountSwitchState {
  */
 export function codexAccountSwitchStillEligible(
   expected: Required<Pick<CodexAccountSwitchState, 'agentId' | 'cwd' | 'sessionId'>> &
-    Pick<CodexAccountSwitchState, 'accountId'>,
+    Pick<CodexAccountSwitchState, 'accountId' | 'ssh'>,
   current: CodexAccountSwitchState
 ): boolean {
   return (
     current.agentId === expected.agentId &&
     current.agentId === 'codex' &&
-    !current.ssh &&
+    !!current.ssh === !!expected.ssh &&
     current.cwd === expected.cwd &&
     current.accountId === expected.accountId &&
     current.sessionId === expected.sessionId &&

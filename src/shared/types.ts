@@ -41,7 +41,18 @@ export interface PtyCreateOptions {
   /** When set, this PTY runs on a remote host over the project's ssh ControlMaster, in remote tmux.
    * `remoteHome` is the connection's resolved `$HOME`, used to build an ABSOLUTE remote
    * `CLAUDE_CONFIG_DIR` for a managed remote account (tmux `-e` values are not shell-expanded). */
-  sshRemote?: { controlPath: string; conn: import('./ssh').SshConnection; remoteCwd: string; hookEndpointPath?: string; tmuxConfPath?: string; remoteHome?: string }
+  sshRemote?: {
+    controlPath: string
+    conn: import('./ssh').SshConnection
+    remoteCwd: string
+    hookEndpointPath?: string
+    tmuxConfPath?: string
+    remoteHome?: string
+    /** Host-installed NodeTerm Codex runtime. Present only after remote capability preflight. */
+    codexLauncherPath?: string
+    codexRelayScriptPath?: string
+    codexRelayRuntimePath?: string
+  }
   /**
    * This node BELONGS to a remote host: never spawn it locally.
    *
@@ -161,7 +172,19 @@ export interface RecycledInfo {
 // 'subagent' and 'loop' are render-only (ephemeral hook-driven viz) and never persisted.
 // 'scheduler' is the user-created, persisted NodeTerm Loop; the internal name avoids colliding
 // with the existing derived agent card.
-export type NodeKind = 'terminal' | 'sticky' | 'group' | 'editor' | 'diff' | 'video' | 'web' | 'browser' | 'subagent' | 'loop' | 'scheduler' | 'dino'
+export type NodeKind =
+  | 'terminal'
+  | 'sticky'
+  | 'group'
+  | 'editor'
+  | 'diff'
+  | 'video'
+  | 'web'
+  | 'browser'
+  | 'subagent'
+  | 'loop'
+  | 'scheduler'
+  | 'dino'
 
 /** Persisted state of a single canvas node (terminal, sticky note, group frame, or editor). */
 /**
@@ -346,16 +369,7 @@ export interface KanbanCardMeta {
 /** The Notion label palette. A closed set so the chip colors and the picker can't desync; an
  *  unknown value read from a hand-edited file falls back to 'default'. */
 export type KanbanLabelColor =
-  | 'default'
-  | 'gray'
-  | 'brown'
-  | 'orange'
-  | 'yellow'
-  | 'green'
-  | 'blue'
-  | 'purple'
-  | 'pink'
-  | 'red'
+  'default' | 'gray' | 'brown' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'red'
 
 /** A board-level label (Notion-style): defined once per board, applied to any number of cards by
  *  id (KanbanCardMeta.labels). Order in ProjectKanban.labels is the palette's display order. */
@@ -706,7 +720,10 @@ export interface MediaApi {
    * allowlists the cached copy. Resolves the playable nt-media:// URL, or a reason it couldn't
    * (not connected, transfer failed). Desktop only — the browser bridge rejects it.
    */
-  allowSsh(projectId: string, remotePath: string): Promise<{ ok: true; url: string } | { ok: false; error: string }>
+  allowSsh(
+    projectId: string,
+    remotePath: string
+  ): Promise<{ ok: true; url: string } | { ok: false; error: string }>
   /** Persist raw HTML to <userData>/agent-web/<id>.html, allowlist it, return its absolute path. */
   writeHtml(html: string): Promise<string>
 }
@@ -752,6 +769,10 @@ export interface CodexAccount {
   id: string
   label: string
   email?: string
+  /** Set only for remote accounts; credentials and daemon live on this SSH host. */
+  host?: string
+  /** Default working directory for this account's nodes on its SSH host. */
+  remoteCwd?: string
   /** True until the official `codex login --device-auth` flow completes. */
   pending?: boolean
   createdAt: number
@@ -917,6 +938,10 @@ export interface Settings {
   systemAccountLabel: string
   /** Display label for the system Codex account (~/.codex). */
   systemCodexAccountLabel: string
+  /** Per-SSH-host display labels for each host's default ~/.claude login. */
+  remoteSystemAccountLabels: Record<string, string>
+  /** Per-SSH-host display labels for each host's default ~/.codex login. */
+  remoteSystemCodexAccountLabels: Record<string, string>
   /** Agent ids hidden from the Add menus. */
   disabledAgents: AgentId[]
   /** Usage providers hidden from the pill + popover (Settings → Usage toggles). Hiding is a
@@ -1040,6 +1065,8 @@ export const DEFAULT_SETTINGS: Settings = {
   codexAccounts: [],
   systemAccountLabel: '',
   systemCodexAccountLabel: '',
+  remoteSystemAccountLabels: {},
+  remoteSystemCodexAccountLabels: {},
   // All three builtin agents (Claude/Codex/Gemini) show in the Add menus out of the box.
   // Existing users keep whatever they've saved (their persisted disabledAgents overrides this).
   disabledAgents: [],
@@ -1068,7 +1095,12 @@ export const DEFAULT_SETTINGS: Settings = {
   notchHud: true,
   notchWidth: 168,
   notchHoverExpand: true,
-  speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
+  speech: {
+    engine: 'whisper',
+    model: 'tiny',
+    language: 'auto',
+    shortcut: 'Cmd+Alt'
+  }
 }
 
 export interface SettingsApi {
@@ -1108,7 +1140,8 @@ export interface SshApi {
   importCandidates(): Promise<import('./ssh').ParsedSshHost[]>
 }
 
-export type SshProjectStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error'
+export type SshProjectStatus =
+  'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error'
 
 /**
  * A live SSH project's status, pushed from main. `claudeAutoPermissionMode` rides a `connected`
@@ -1151,6 +1184,9 @@ export interface SshProjectApi {
     hookEndpointPath?: string
     tmuxConfPath?: string
     remoteHome?: string
+    codexLauncherPath?: string
+    codexRelayScriptPath?: string
+    codexRelayRuntimePath?: string
     /** Whether the REMOTE host's claude CLI accepts `--permission-mode auto` (probed on connect). */
     claudeAutoPermissionMode?: boolean
     /** The probed remote `claude --version` output (`null` = probe failed; only on reused conns). */
@@ -1194,8 +1230,7 @@ export interface SshProjectApi {
 /** Outcome of a file download (SSH pull). `localPath` is the absolute path actually written —
  *  collision resolution may have renamed it (`notes.md` → `notes (2).md`). */
 export type DownloadResult =
-  | { ok: true; localPath: string; dir: boolean }
-  | { ok: false; error: string }
+  { ok: true; localPath: string; dir: boolean } | { ok: false; error: string }
 
 /** A one-shot HTTP download ticket (Server Edition). `url` is same-origin and carries the token;
  *  the browser does the transfer natively, so nothing streams through the WS bridge. */
@@ -1332,13 +1367,29 @@ export interface GitApi {
   /** `{ ok: false, entries: [] }` when git itself could not be read — which is NOT the same fact as
    *  "this repo has no worktrees", and no caller may treat it as one (see worktree-ops). */
   worktreeList(repoPath: string): Promise<import('./worktree').WorktreeListResult>
-  worktreeAdd(repoPath: string, wtPath: string, branch: string, baseRef: string, isNew: boolean): Promise<GitResult>
+  worktreeAdd(
+    repoPath: string,
+    wtPath: string,
+    branch: string,
+    baseRef: string,
+    isNew: boolean
+  ): Promise<GitResult>
   /** `push`: also publish `baseRef` to origin after a successful merge (only if a remote exists).
    *  Opt-in — a merge must never publish to a shared remote the user was not told about. */
-  worktreeMerge(repoPath: string, branch: string, baseRef: string, push?: boolean): Promise<GitResult>
+  worktreeMerge(
+    repoPath: string,
+    branch: string,
+    baseRef: string,
+    push?: boolean
+  ): Promise<GitResult>
   /** `pruneOnly`: clean up git's registration only — never delete a directory. Used to prune a
    *  stale binding whose worktree was already deleted outside the app. */
-  worktreeRemove(repoPath: string, wtPath: string, deleteBranch: boolean, pruneOnly?: boolean): Promise<GitResult>
+  worktreeRemove(
+    repoPath: string,
+    wtPath: string,
+    deleteBranch: boolean,
+    pruneOnly?: boolean
+  ): Promise<GitResult>
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>
@@ -1637,7 +1688,13 @@ export interface TranscriptLine {
 export type ChatPart =
   | { kind: 'text'; text: string }
   | { kind: 'thinking'; text: string }
-  | { kind: 'tool'; name: string; arg: string; result?: string; summary?: ChatToolSummary }
+  | {
+      kind: 'tool'
+      name: string
+      arg: string
+      result?: string
+      summary?: ChatToolSummary
+    }
 
 /** A structured chat message reconstructed from a Claude session transcript. */
 export interface ChatMessage {
@@ -1698,17 +1755,17 @@ export interface ClaudeAccountsApi {
 }
 
 export interface CodexAccountsApi {
-  /** Create an isolated local CODEX_HOME. Credentials are written only by the official CLI. */
-  add(): Promise<{ id: string; home: string }>
+  /** Create an isolated CODEX_HOME locally or on the selected SSH project host. */
+  add(ctx?: AccountSshCtx): Promise<{ id: string; home: string }>
   /** Wait for official login completion and return app-server-confirmed identity metadata. */
-  waitLogin(id: string): Promise<{ email: string | null } | null>
+  waitLogin(id: string, ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
   cancelWaitLogin(id: string): Promise<void>
   /** Stop that account's shared daemon and remove its profile after explicit UI confirmation. */
-  remove(id: string): Promise<void>
+  remove(id: string, ctx?: AccountSshCtx): Promise<void>
   /** Return identity only when this managed home already contains a completed file login. */
-  identity(id: string): Promise<{ email: string | null } | null>
+  identity(id: string, ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
   /** Identity of the system ~/.codex account, read through account/read. */
-  systemIdentity(): Promise<{ email: string | null } | null>
+  systemIdentity(ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
   /** Rebind an idle conversation to another login without changing its thread identity. */
   switchThread(
     threadId: string,
@@ -1716,6 +1773,13 @@ export interface CodexAccountsApi {
     sourceAccountId?: string,
     targetAccountId?: string
   ): Promise<{ threadId: string; rollbackToken?: string }>
+  /** Copy a local rollout into an SSH-host account without deleting or rewriting the source. */
+  transferThreadToSsh(
+    threadId: string,
+    sourceAccountId: string | undefined,
+    targetAccountId: string | undefined,
+    ctx: AccountSshCtx
+  ): Promise<{ threadId: string }>
   commitSwitch(rollbackToken: string): Promise<void>
   finishSwitch(rollbackToken: string): Promise<void>
   rollbackSwitch(rollbackToken: string): Promise<void>
@@ -1966,7 +2030,11 @@ export interface PairedDevice {
 /** Phone-pairing (nodeterm iOS "scan a QR" flow) bridge. */
 export interface PairingApi {
   /** Start the one-shot LAN listener; resolves with the QR payload + an SSH-reachable hint. */
-  start(): Promise<{ payload: string; sshOpen: boolean; relayPlan?: 'ok' | 'dev' | 'off' }>
+  start(): Promise<{
+    payload: string
+    sshOpen: boolean
+    relayPlan?: 'ok' | 'dev' | 'off'
+  }>
   /** Cancel an in-flight pairing (e.g. when the settings section unmounts). */
   stop(): Promise<void>
   /** Fires once when pairing finishes (ok=true paired, ok=false timeout). Returns unsubscribe. */
@@ -2085,7 +2153,11 @@ export interface NodeTerminalApi {
    *  local project, or the remote host over the project's ControlMaster for an SSH project. Resolves
    *  `true` when the file was written, `false` on any failure (invalid pendingId, unknown node,
    *  unsupported project, fs/exec error). */
-  answerPermission(payload: { nodeId: string; pendingId: string; decision: 'allow' | 'deny' }): Promise<boolean>
+  answerPermission(payload: {
+    nodeId: string
+    pendingId: string
+    decision: 'allow' | 'deny'
+  }): Promise<boolean>
   /** Notify the core that the user READ a finished (done) session on this surface (the unread-clear
    *  funnel calls it when the node's latest state is `done`). The core marks the node's done inbox
    *  event(s) resolved (phone Inbox archives the card) and re-sends an 'end' live-update so the

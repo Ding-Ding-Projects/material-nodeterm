@@ -23,11 +23,20 @@ import {
 import { readCodexAccountAt, readCodexThreadAt } from '../core/codex-session-name'
 import { platform } from '../core/platform'
 import { findInLoginPath } from '../core/pty-manager'
+import type { SshProjectManager } from './remote-ssh/ssh-project'
 
 const execFileP = promisify(execFile)
 const LOGIN_POLL_MS = 2000
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
-const SHARED_ENTRIES = ['config.toml', 'AGENTS.md', 'skills', 'plugins', 'packages', 'rules', 'hooks.json']
+const SHARED_ENTRIES = [
+  'config.toml',
+  'AGENTS.md',
+  'skills',
+  'plugins',
+  'packages',
+  'rules',
+  'hooks.json'
+]
 const SWITCH_RESERVATION_TTL_MS = 60_000
 const waiters = new Map<string, { cancelled: boolean }>()
 type PendingSwitchExposure = {
@@ -47,7 +56,8 @@ function releasePendingSwitch(token: string): void {
   if (!pending) return
   pendingSwitchExposures.delete(token)
   clearTimeout(pending.timer)
-  if (!pending.owner.isDestroyed()) pending.owner.removeListener('destroyed', pending.ownerDestroyed)
+  if (!pending.owner.isDestroyed())
+    pending.owner.removeListener('destroyed', pending.ownerDestroyed)
 }
 
 export function localCodexAccountHome(accountId: string): string {
@@ -68,7 +78,10 @@ export async function ensureCodexAccountDaemon(accountId?: string): Promise<void
       if (!codex) throw new Error('Codex CLI unavailable')
       await execFileP(codex, ['app-server', 'daemon', 'start'], {
         cwd: os.homedir(),
-        env: { ...process.env, ...codexSessionEnv(platform().userDataDir, accountId) },
+        env: {
+          ...process.env,
+          ...codexSessionEnv(platform().userDataDir, accountId)
+        },
         timeout: 15_000,
         maxBuffer: 1024 * 1024
       })
@@ -89,8 +102,11 @@ async function initializeAccountHome(id: string): Promise<string> {
       await fs.lstat(source)
       await fs.symlink(source, target)
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' &&
-          (error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      if (
+        (error as NodeJS.ErrnoException).code !== 'ENOENT' &&
+        (error as NodeJS.ErrnoException).code !== 'EEXIST'
+      )
+        throw error
     }
   }
   return home
@@ -113,83 +129,182 @@ async function existingManagedIdentity(id: string): Promise<{ email: string | nu
   }
 }
 
-export function initCodexAccounts(): void {
+export function initCodexAccounts(getSshManager?: () => SshProjectManager | undefined): void {
+  const remoteFor = (ctx?: {
+    projectId?: string
+  }): { mgr: SshProjectManager; projectId: string } | null => {
+    const projectId = ctx?.projectId
+    const mgr = getSshManager?.()
+    if (!projectId) return null
+    if (!mgr) throw new Error('SSH Codex account manager is unavailable')
+    return { mgr, projectId }
+  }
   // Synchronous before renderer hydration/PTY restore: legacy long CODEX_HOMEs cannot host the
   // app-server Unix socket, and an already persisted managed node must see its migrated home on
   // its very first spawn.
   migrateLegacyCodexAccountHomes(platform().userDataDir)
 
-  ipcMain.handle(IPC.codexAccountsAdd, async () => {
+  ipcMain.handle(IPC.codexAccountsAdd, async (_event, ctx?: { projectId?: string }) => {
     const id = randomUUID()
+    const remote = remoteFor(ctx)
+    if (remote) {
+      const result = await remote.mgr.remoteCodexAccountAdd(remote.projectId, id)
+      if (!result) throw new Error('Could not initialize Codex account on SSH host')
+      return { id, home: result.home }
+    }
     return { id, home: await initializeAccountHome(id) }
   })
 
-  ipcMain.handle(IPC.codexAccountsWaitLogin, async (_event, id: string) => {
-    assertCodexAccountId(id)
-    const home = localCodexAccountHome(id)
-    const waiter = { cancelled: false }
-    waiters.set(id, waiter)
-    const deadline = Date.now() + LOGIN_TIMEOUT_MS
-    try {
-      while (!waiter.cancelled && Date.now() < deadline) {
-        try {
-          const auth = await fs.lstat(path.join(home, 'auth.json'))
-          if (auth.isFile() && !auth.isSymbolicLink()) {
-            const identity = await accountIdentity(id)
-            if (identity) return identity
+  ipcMain.handle(
+    IPC.codexAccountsWaitLogin,
+    async (_event, id: string, ctx?: { projectId?: string }) => {
+      assertCodexAccountId(id)
+      const remote = remoteFor(ctx)
+      const home = localCodexAccountHome(id)
+      const waiter = { cancelled: false }
+      waiters.set(id, waiter)
+      const deadline = Date.now() + LOGIN_TIMEOUT_MS
+      try {
+        while (!waiter.cancelled && Date.now() < deadline) {
+          try {
+            if (remote) {
+              const identity = await remote.mgr.remoteCodexAccountIdentity(remote.projectId, id)
+              if (identity) return identity
+            } else {
+              const auth = await fs.lstat(path.join(home, 'auth.json'))
+              if (auth.isFile() && !auth.isSymbolicLink()) {
+                const identity = await accountIdentity(id)
+                if (identity) return identity
+              }
+            }
+          } catch {
+            // Login has not produced a credential file yet, or its daemon is not ready.
           }
-        } catch {
-          // Login has not produced a credential file yet, or its daemon is not ready.
+          await new Promise((resolve) => setTimeout(resolve, LOGIN_POLL_MS))
         }
-        await new Promise((resolve) => setTimeout(resolve, LOGIN_POLL_MS))
+        return null
+      } finally {
+        waiters.delete(id)
       }
-      return null
-    } finally {
-      waiters.delete(id)
     }
-  })
+  )
 
   ipcMain.handle(IPC.codexAccountsCancelWait, (_event, id: string) => {
     const waiter = waiters.get(id)
     if (waiter) waiter.cancelled = true
   })
 
-  ipcMain.handle(IPC.codexAccountsIdentity, (_event, id: string) => existingManagedIdentity(id))
-
-  ipcMain.handle(IPC.codexAccountsRemove, async (_event, id: string) => {
-    assertCodexAccountId(id)
-    if ([...pendingSwitchExposures.values()].some((pending) =>
-      pending.sourceAccountId === id || pending.targetAccountId === id)) {
-      throw new Error('Codex account is reserved by an account switch')
-    }
-    if (removingCodexAccounts.has(id)) throw new Error('Codex account removal is already in progress')
-    removingCodexAccounts.add(id)
-    try {
-      const waiter = waiters.get(id)
-      if (waiter) waiter.cancelled = true
-      try {
-        const codex = await findInLoginPath('codex')
-        if (codex) {
-          await execFileP(codex, ['app-server', 'daemon', 'stop'], {
-            cwd: os.homedir(),
-            env: { ...process.env, CODEX_HOME: localCodexAccountHome(id) },
-            timeout: 10_000,
-            maxBuffer: 1024 * 1024
-          })
-        }
-      } catch {
-        // A stopped/missing daemon is already the desired state.
-      }
-      const home = localCodexAccountHome(id)
-      const legacy = legacyCodexAccountHome(platform().userDataDir, id)
-      await fs.rm(home, { recursive: true, force: true })
-      if (legacy !== home) await fs.rm(legacy, { recursive: true, force: true })
-    } finally {
-      removingCodexAccounts.delete(id)
-    }
+  ipcMain.handle(IPC.codexAccountsIdentity, (_event, id: string, ctx?: { projectId?: string }) => {
+    const remote = remoteFor(ctx)
+    return remote
+      ? remote.mgr.remoteCodexAccountIdentity(remote.projectId, id)
+      : existingManagedIdentity(id)
   })
 
-  ipcMain.handle(IPC.codexAccountsSystemIdentity, () => accountIdentity())
+  ipcMain.handle(
+    IPC.codexAccountsRemove,
+    async (_event, id: string, ctx?: { projectId?: string }) => {
+      assertCodexAccountId(id)
+      if (
+        [...pendingSwitchExposures.values()].some(
+          (pending) => pending.sourceAccountId === id || pending.targetAccountId === id
+        )
+      ) {
+        throw new Error('Codex account is reserved by an account switch')
+      }
+      if (removingCodexAccounts.has(id))
+        throw new Error('Codex account removal is already in progress')
+      removingCodexAccounts.add(id)
+      try {
+        const waiter = waiters.get(id)
+        if (waiter) waiter.cancelled = true
+        const remote = remoteFor(ctx)
+        if (remote) {
+          if (!(await remote.mgr.remoteCodexAccountRemove(remote.projectId, id))) {
+            throw new Error('Could not remove Codex account from SSH host')
+          }
+          return
+        }
+        try {
+          const codex = await findInLoginPath('codex')
+          if (codex) {
+            await execFileP(codex, ['app-server', 'daemon', 'stop'], {
+              cwd: os.homedir(),
+              env: { ...process.env, CODEX_HOME: localCodexAccountHome(id) },
+              timeout: 10_000,
+              maxBuffer: 1024 * 1024
+            })
+          }
+        } catch {
+          // A stopped/missing daemon is already the desired state.
+        }
+        const home = localCodexAccountHome(id)
+        const legacy = legacyCodexAccountHome(platform().userDataDir, id)
+        await fs.rm(home, { recursive: true, force: true })
+        if (legacy !== home) await fs.rm(legacy, { recursive: true, force: true })
+      } finally {
+        removingCodexAccounts.delete(id)
+      }
+    }
+  )
+
+  ipcMain.handle(IPC.codexAccountsSystemIdentity, (_event, ctx?: { projectId?: string }) => {
+    const remote = remoteFor(ctx)
+    return remote ? remote.mgr.remoteCodexAccountIdentity(remote.projectId) : accountIdentity()
+  })
+
+  ipcMain.handle(
+    IPC.codexAccountsTransferThreadToSsh,
+    async (
+      _event,
+      threadId: string,
+      sourceAccountId: string | undefined,
+      targetAccountId: string | undefined,
+      ctx?: { projectId?: string }
+    ) => {
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(threadId)) {
+        throw new Error('Invalid Codex transfer request')
+      }
+      if (sourceAccountId) assertCodexAccountId(sourceAccountId)
+      if (targetAccountId) assertCodexAccountId(targetAccountId)
+      const remote = remoteFor(ctx)
+      if (!remote) throw new Error('SSH Codex target is unavailable')
+      if (
+        (sourceAccountId && removingCodexAccounts.has(sourceAccountId)) ||
+        (targetAccountId && removingCodexAccounts.has(targetAccountId))
+      ) {
+        throw new Error('Codex account removal is in progress')
+      }
+      await ensureCodexAccountDaemon(sourceAccountId)
+      const source = await readCodexThreadAt(localCodexSocket(sourceAccountId), threadId, 5000)
+      if (!source?.path) throw new Error('Source Codex conversation is unavailable')
+      const sourceHome = await fs.realpath(
+        codexHomeForAccount(platform().userDataDir, sourceAccountId)
+      )
+      const sourcePath = await fs.realpath(source.path)
+      const stat = await fs.lstat(sourcePath)
+      const relative = path.relative(sourceHome, sourcePath)
+      const sessionsRelativePath = relative.split(path.sep).join('/')
+      if (
+        !stat.isFile() ||
+        relative.startsWith('..') ||
+        path.isAbsolute(relative) ||
+        !sessionsRelativePath.startsWith('sessions/') ||
+        !path.basename(sourcePath).includes(threadId) ||
+        path.extname(sourcePath) !== '.jsonl'
+      ) {
+        throw new Error('Source Codex rollout is outside its account home')
+      }
+      await remote.mgr.remoteCodexImportThread(
+        remote.projectId,
+        targetAccountId,
+        threadId,
+        sourcePath,
+        sessionsRelativePath
+      )
+      return { threadId }
+    }
+  )
 
   ipcMain.handle(IPC.codexAccountsCommitSwitch, (event, token: string) => {
     const pending = pendingSwitchExposures.get(token)
@@ -228,8 +343,10 @@ export function initCodexAccounts(): void {
       if (sourceAccountId) assertCodexAccountId(sourceAccountId)
       if (targetAccountId) assertCodexAccountId(targetAccountId)
       if (sourceAccountId === targetAccountId) return { threadId }
-      if ((sourceAccountId && removingCodexAccounts.has(sourceAccountId)) ||
-          (targetAccountId && removingCodexAccounts.has(targetAccountId))) {
+      if (
+        (sourceAccountId && removingCodexAccounts.has(sourceAccountId)) ||
+        (targetAccountId && removingCodexAccounts.has(targetAccountId))
+      ) {
         throw new Error('Codex account removal is in progress')
       }
       const rollbackToken = randomUUID()

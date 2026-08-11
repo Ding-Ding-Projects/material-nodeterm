@@ -12,4 +12,12 @@ describe('DEFAULT_SETTINGS', () => {
     // { ...DEFAULT_SETTINGS, ...saved } hydration. Do not change without a decision.
     expect(DEFAULT_SETTINGS.claudePermissionMode).toBe('auto')
   })
+
+  it('starts with independent SSH default-account display-name maps', () => {
+    expect(DEFAULT_SETTINGS.remoteSystemAccountLabels).toEqual({})
+    expect(DEFAULT_SETTINGS.remoteSystemCodexAccountLabels).toEqual({})
+    expect(DEFAULT_SETTINGS.remoteSystemAccountLabels).not.toBe(
+      DEFAULT_SETTINGS.remoteSystemCodexAccountLabels
+    )
+  })
 })

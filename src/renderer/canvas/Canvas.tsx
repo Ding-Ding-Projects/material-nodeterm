@@ -162,7 +162,6 @@ import {
 import {
   FIT_NODE_OPTIONS,
   absolutePosition,
-  doubleClickNodeCamera,
   isMeasured,
   nodeFitRect,
   viewportForRect,
@@ -250,15 +249,26 @@ import {
   sessionForProject,
   presenceForProject,
   setActiveSession,
-  disposeSession,
+  disposeSession
 } from '../session/session'
 import {
   openRelayTab,
   handleRelayDrop,
   reconnectRelayTab,
-  type RelayTab,
+  type RelayTab
 } from '../session/relay-tab'
-import { buildBackgroundLinkMaps, buildContextLinkNote, buildLinkMap, buildNotePushMessage, classifyLink, hiddenLinkIds, linkIdsCoveredByRopes, pairKey, planBridges, type LinkEndpoint } from '../lib/noteLink'
+import {
+  buildBackgroundLinkMaps,
+  buildContextLinkNote,
+  buildLinkMap,
+  buildNotePushMessage,
+  classifyLink,
+  hiddenLinkIds,
+  linkIdsCoveredByRopes,
+  pairKey,
+  planBridges,
+  type LinkEndpoint
+} from '../lib/noteLink'
 import { dependencyEdges, launchesToFire, unmetDeps, type ArmedNode } from '../lib/pendingLaunch'
 import { freeSpot } from '../lib/placement'
 import { pushSessionRename } from '../lib/sessionRename'
@@ -273,7 +283,7 @@ import { useSystemAccount } from '../state/systemAccount'
 import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { useEntitlement } from '../state/entitlement'
 import type { SshServer, SshConnection } from '@shared/ssh'
-import { sshHostKey } from '@shared/ssh'
+import { sshAttachmentId, sshHostKey } from '@shared/ssh'
 import type {
   CanvasNodeState,
   Project,
@@ -283,10 +293,19 @@ import type {
   TranscriptHit
 } from '@shared/types'
 import type { KanbanCreateChoice, KanbanSession } from '../components/kanban/KanbanView'
-import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTags, resolveColumnRef, unassigned } from '../lib/kanban'
+import {
+  assignNode,
+  assignedTo,
+  defaultKanban,
+  labelsForCard,
+  migrateProjectTags,
+  resolveColumnRef,
+  unassigned
+} from '../lib/kanban'
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
 import { canClearDirty, canCommitCanvas } from '../state/persistGuards'
 import { isHidden } from '../lib/ui-visibility'
+import { presentAccount, type AccountPresentation } from '../lib/accountPresentation'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
 import { isKanbanOpen, useViewMode, viewFor } from '../state/viewMode'
@@ -314,7 +333,6 @@ import {
   createCodexAccountLoginNode,
   isAccountLoginNode,
   isCodexAccountLoginNode,
-  systemAccountDisplay,
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
@@ -351,6 +369,31 @@ import {
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 const GRID = 24
+
+/** Codex accounts usable from this canvas. A local canvas may host remote nodes; a full SSH
+ * project remains restricted to its own host. */
+function codexAccountsForCanvas(
+  accounts: ReturnType<typeof useSettings.getState>['settings']['codexAccounts'],
+  project: Project | undefined
+) {
+  if (project?.ssh) return accountsForProject(accounts, project)
+  const savedHosts = new Set(useSshServers.getState().servers.map((server) => sshHostKey(server)))
+  return accounts.filter(
+    (account) => !account.pending && (!account.host || savedHosts.has(account.host))
+  )
+}
+
+function sshForCodexAccount(accountId: string | undefined): Project['ssh'] | undefined {
+  if (!accountId) return undefined
+  const account = useSettings
+    .getState()
+    .settings.codexAccounts.find((entry) => entry.id === accountId)
+  if (!account?.host) return undefined
+  const server = useSshServers
+    .getState()
+    .servers.find((entry) => sshHostKey(entry) === account.host)
+  return server ? { server, remoteCwd: account.remoteCwd || server.remoteCwd || '~' } : undefined
+}
 
 /** The empty opaque set (glyphgrid), shared so the render-time compute allocates nothing on the
  *  overwhelmingly common "nothing overlaps / layer off" path. */
@@ -520,9 +563,7 @@ const ropeEdge = (id: string, source: string, target: string, color: string): Ed
   markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 }
 })
 
-
-const minimapNodeColor = (n: Node): string =>
-  (n.data as { color?: string })?.color ?? '#0a84ff'
+const minimapNodeColor = (n: Node): string => (n.data as { color?: string })?.color ?? '#0a84ff'
 
 /** The agent a terminal node was CREATED as. Deliberately NOT `agentIdOf`, whose extra hook-status
  *  fallback also reports a plain terminal someone typed `claude` into by hand: TerminalNode's
@@ -707,7 +748,10 @@ export function Canvas() {
   // Result of a worktree operation (merge / remove). These used to be `window.alert`s — a modal
   // that blocks the whole app to say "Merged feat into main." Shown as a strip in the existing
   // top-banner column instead; an 'info' one fades itself out, an 'error' stays until dismissed.
-  const [notice, setNotice] = useState<{ kind: 'info' | 'error'; text: string } | null>(null)
+  const [notice, setNotice] = useState<{
+    kind: 'info' | 'error'
+    text: string
+  } | null>(null)
   useEffect(() => {
     if (notice?.kind !== 'info') return
     const t = setTimeout(() => setNotice(null), noticeDwellMs(notice.text))
@@ -764,8 +808,15 @@ export function Canvas() {
       window.removeEventListener('blur', release)
     }
   }, [])
-  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
-  const [remotePicker, setRemotePicker] = useState<{ x: number; y: number } | null>(null)
+  const [menu, setMenu] = useState<{
+    x: number
+    y: number
+    items: MenuItem[]
+  } | null>(null)
+  const [remotePicker, setRemotePicker] = useState<{
+    x: number
+    y: number
+  } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [fileIndex, setFileIndex] = useState<QuickOpenIndexedFile[]>([])
   const [transcriptHits, setTranscriptHits] = useState<TranscriptHit[]>([])
@@ -777,7 +828,10 @@ export function Canvas() {
   const captureTsRef = useRef<Record<string, number>>({})
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
-  const [phonePairAnchor, setPhonePairAnchor] = useState<{ right: number; bottom: number } | null>(null)
+  const [phonePairAnchor, setPhonePairAnchor] = useState<{
+    right: number
+    bottom: number
+  } | null>(null)
   // "+" opens the start screen (WelcomeScreen) on demand over existing projects.
   const [welcomeOpen, setWelcomeOpen] = useState(false)
   // Optional deep-link target when opening settings (e.g. RemotePicker → the SSH section).
@@ -1021,7 +1075,6 @@ export function Canvas() {
     zoomIn,
     zoomOut,
     screenToFlowPosition,
-    setCenter,
     getZoom,
     getInternalNode,
     getNodes,
@@ -1225,7 +1278,9 @@ export function Canvas() {
       void api.pty.sendText(f.id, f.command).then((ok) => {
         if (ok) {
           setNodes((ns) =>
-            ns.map((n) => (n.id === f.id ? { ...n, data: { ...n.data, pendingLaunch: undefined } } : n))
+            ns.map((n) =>
+              n.id === f.id ? { ...n, data: { ...n.data, pendingLaunch: undefined } } : n
+            )
           )
           markDirty()
           return
@@ -1281,7 +1336,10 @@ export function Canvas() {
         // with the group). Deliberately no extent:'parent' — the fan-out may hang below the
         // frame border without being clamped into it.
         ...(parent.parentId ? { parentId: parent.parentId } : {}),
-        position: offsetFrom(parent, ephemeralPos[lid], { x: -250, y: ph + 60 }),
+        position: offsetFrom(parent, ephemeralPos[lid], {
+          x: -250,
+          y: ph + 60
+        }),
         draggable: true,
         // NOT selectable: React Flow's rubber band would otherwise sweep a whole fan-out of cards
         // into the selection alongside the real nodes, and every selection action (Group,
@@ -1420,17 +1478,29 @@ export function Canvas() {
         labelBgPadding: [6, 3] as [number, number],
         labelBgBorderRadius: 5,
         style: { stroke: '#8e8e93', strokeWidth: 1.5, strokeDasharray: '6 4' },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#8e8e93', width: 14, height: 14 }
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: '#8e8e93',
+          width: 14,
+          height: 14
+        }
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- depEdgeSig IS the ref's signature
     [depEdgeSig]
   )
   // Native Loop delivery edges are derived from each persisted scheduler node's target ids.
   // Reducing to a primitive signature keeps drag frames from rebuilding every edge object.
-  const schedulePairsRef = useRef<Array<{ id: string; source: string; target: string; enabled: boolean }>>([])
+  const schedulePairsRef = useRef<
+    Array<{ id: string; source: string; target: string; enabled: boolean }>
+  >([])
   const scheduleEdgeSig = useMemo(() => {
     const ids = new Set(nodes.map((node) => node.id))
-    const pairs: Array<{ id: string; source: string; target: string; enabled: boolean }> = []
+    const pairs: Array<{
+      id: string
+      source: string
+      target: string
+      enabled: boolean
+    }> = []
     for (const node of nodes) {
       if (node.type !== 'scheduler') continue
       for (const target of (node.data.loopTargetIds as string[] | undefined) ?? []) {
@@ -1457,7 +1527,11 @@ export function Canvas() {
         type: 'default' as const,
         selectable: false,
         label: edge.enabled ? '↻ Loop' : '↻ paused',
-        labelStyle: { fill: edge.enabled ? '#ffb340' : '#8e8e93', fontSize: 11, fontWeight: 700 },
+        labelStyle: {
+          fill: edge.enabled ? '#ffb340' : '#8e8e93',
+          fontSize: 11,
+          fontWeight: 700
+        },
         labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.9 },
         labelBgPadding: [6, 3] as [number, number],
         labelBgBorderRadius: 5,
@@ -1483,29 +1557,43 @@ export function Canvas() {
     // rope keeps the pixels; the bridge still exists in data (it is what authorizes reading) and
     // rides the rope's delete, so it can never become an invisible link with nothing to click.
     const hidden = hiddenLinkIds(linkEdges, controlEdges)
-    const decorated = linkEdges.filter((e) => !hidden.has(e.id)).map((e) => {
-      const sel = !!e.selected
-      const isNote = stickyIds.has(e.source)
-      const stroke = sel ? '#ffffff' : accent
-      const baseLabel = isNote ? '🗒 note' : '⇄ context'
-      return {
-        ...e,
-        type: 'default',
-        sourceHandle: 'link-out',
-        targetHandle: 'link-in',
-        label: sel ? `${baseLabel} — ⌫ to remove` : baseLabel,
-        labelStyle: { fill: stroke, fontSize: 11, fontWeight: 600 },
-        labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.85 },
-        labelBgPadding: [6, 3] as [number, number],
-        labelBgBorderRadius: 5,
-        style: { stroke, strokeWidth: sel ? 3.5 : 2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 14, height: 14 },
-        // Context links are bidirectional (arrowheads both ends); note links flow one way.
-        ...(isNote
-          ? {}
-          : { markerStart: { type: MarkerType.ArrowClosed, color: stroke, width: 14, height: 14 } })
-      }
-    })
+    const decorated = linkEdges
+      .filter((e) => !hidden.has(e.id))
+      .map((e) => {
+        const sel = !!e.selected
+        const isNote = stickyIds.has(e.source)
+        const stroke = sel ? '#ffffff' : accent
+        const baseLabel = isNote ? '🗒 note' : '⇄ context'
+        return {
+          ...e,
+          type: 'default',
+          sourceHandle: 'link-out',
+          targetHandle: 'link-in',
+          label: sel ? `${baseLabel} — ⌫ to remove` : baseLabel,
+          labelStyle: { fill: stroke, fontSize: 11, fontWeight: 600 },
+          labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.85 },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 5,
+          style: { stroke, strokeWidth: sel ? 3.5 : 2 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: stroke,
+            width: 14,
+            height: 14
+          },
+          // Context links are bidirectional (arrowheads both ends); note links flow one way.
+          ...(isNote
+            ? {}
+            : {
+                markerStart: {
+                  type: MarkerType.ArrowClosed,
+                  color: stroke,
+                  width: 14,
+                  height: 14
+                }
+              })
+        }
+      })
     // Control ropes: white + a removal hint while selected (mirrors the context-link look). A
     // rope that is also standing in for a hidden context bridge says so, so the one visible edge
     // never under-reports what removing it will take with it.
@@ -1524,7 +1612,12 @@ export function Canvas() {
             labelBgPadding: [6, 3] as [number, number],
             labelBgBorderRadius: 5,
             style: { ...e.style, stroke: '#ffffff', strokeWidth: 3 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: '#ffffff', width: 14, height: 14 }
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#ffffff',
+              width: 14,
+              height: 14
+            }
           }
         : e
     )
@@ -1596,7 +1689,11 @@ export function Canvas() {
         : nodesRef.current.find((n) => n.selected && n.type === 'terminal')
       setDictationTarget(
         target
-          ? { kind: 'terminal', nodeId: target.id, title: (target.data.title as string) || 'Untitled' }
+          ? {
+              kind: 'terminal',
+              nodeId: target.id,
+              title: (target.data.title as string) || 'Untitled'
+            }
           : null
       )
       setDictationNonce((n) => n + 1)
@@ -1770,7 +1867,13 @@ export function Canvas() {
     if (project.cwd && !project.ssh) {
       void useWorktrees.getState().refresh(project.cwd, boundGroups(flow))
     }
-    setLinkEdges((project.bridges ?? []).map((b) => ({ id: b.id, source: b.source, target: b.target })))
+    setLinkEdges(
+      (project.bridges ?? []).map((b) => ({
+        id: b.id,
+        source: b.source,
+        target: b.target
+      }))
+    )
     // Restore control ropes with the source agent's color (falls back to the browser blue).
     setControlEdges(
       (project.ropes ?? []).map((r) => {
@@ -1809,7 +1912,9 @@ export function Canvas() {
       // keeps mirroring the previous project until the host's next edit. Gated like the effect:
       // without phone access on, the serialize itself is the waste (main would drop the payload).
       if (useSettings.getState().settings.phoneAccessEnabled) {
-        window.nodeTerminal.remoteHost.sendCanvasState({ nodes: flowToNodeStates(nodesRef.current) })
+        window.nodeTerminal.remoteHost.sendCanvasState({
+          nodes: flowToNodeStates(nodesRef.current)
+        })
       }
       // Consume a cross-project focus request (notification click on a background node).
       const pending = pendingFocusRef.current
@@ -1860,8 +1965,12 @@ export function Canvas() {
   // ride the same debounced whole-file save.
   useEffect(() => registerWorkspaceDirty(markDirty), [markDirty])
 
-  const kanbanOpen = useViewMode((s) => !!activeProjectId && viewFor(s, activeProjectId) === 'kanban')
-  const projectKanban = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.kanban)
+  const kanbanOpen = useViewMode(
+    (s) => !!activeProjectId && viewFor(s, activeProjectId) === 'kanban'
+  )
+  const projectKanban = useProjects(
+    (s) => s.projects.find((p) => p.id === s.activeProjectId)?.kanban
+  )
   // Fresh default per project — ids must not be shared across projects; NOT persisted
   // until the first edit writes it (spec lazy-default rule).
   const seedBoard = useMemo(
@@ -1916,15 +2025,21 @@ export function Canvas() {
     // ids still agree — but an autosave timer armed under the previous project now skips instead of
     // writing its nodes under the new project's id (field bug 2026-08-10).
     if (canCommitCanvas(nodesProjectIdRef.current, id))
-      useProjects
-        .getState()
-        .commitCanvas(
-          id,
-          flowToNodeStates(nodesRef.current),
-          viewportRef.current,
-          linkEdgesRef.current.map((e) => ({ id: e.id, source: e.source, target: e.target })),
-          controlEdgesRef.current.map((e) => ({ id: e.id, source: e.source, target: e.target }))
-        )
+      useProjects.getState().commitCanvas(
+        id,
+        flowToNodeStates(nodesRef.current),
+        viewportRef.current,
+        linkEdgesRef.current.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target
+        })),
+        controlEdgesRef.current.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target
+        }))
+      )
   }, [])
 
   const writeDisk = useCallback(async () => {
@@ -2048,7 +2163,9 @@ export function Canvas() {
   useEffect(() => {
     if (!phoneHosting || loadingRef.current) return
     const t = setTimeout(() => {
-      window.nodeTerminal.remoteHost.sendCanvasState({ nodes: flowToNodeStates(nodesRef.current) })
+      window.nodeTerminal.remoteHost.sendCanvasState({
+        nodes: flowToNodeStates(nodesRef.current)
+      })
     }, 120)
     return () => clearTimeout(t)
   }, [nodes, phoneHosting])
@@ -2134,7 +2251,8 @@ export function Canvas() {
     const reconnected = createReconnectWatch(activePresence.store.getState().myId)
     const readPresence = (): void => {
       hasPeersRef.current =
-        hasPeersRef.current || canvasSyncTarget(activeSession, activePresence.store.getState()).hasPeers
+        hasPeersRef.current ||
+        canvasSyncTarget(activeSession, activePresence.store.getState()).hasPeers
       if (reconnected(activePresence.store.getState().myId)) order.reset()
     }
     readPresence()
@@ -2368,8 +2486,10 @@ export function Canvas() {
           // The cards are `selectable: false`, so React Flow never SELECTS one — but it still
           // emits the deselect when the pane or another node is clicked, and that is what
           // dismisses the card's resize frame.
-          else if (c.type === 'select' && !c.selected && store.selectedId === c.id) store.select(null)
-          else if (c.type === 'dimensions' && c.dimensions && c.resizing) store.setSize(c.id, c.dimensions)
+          else if (c.type === 'select' && !c.selected && store.selectedId === c.id)
+            store.select(null)
+          else if (c.type === 'dimensions' && c.dimensions && c.resizing)
+            store.setSize(c.id, c.dimensions)
           return false
         }
         return true
@@ -2402,7 +2522,10 @@ export function Canvas() {
       const n = nodesRef.current.find((x) => x.id === id)
       if (!n) return null
       const a = agentIdOf(id)
-      return { kind: n.type ?? 'terminal', contextCapable: !!a && canContextLink(a) }
+      return {
+        kind: n.type ?? 'terminal',
+        contextCapable: !!a && canContextLink(a)
+      }
     },
     [agentIdOf]
   )
@@ -2425,7 +2548,10 @@ export function Canvas() {
             node.id === c.source
               ? {
                   ...node,
-                  data: { ...node.data, loopTargetIds: [...targets, c.target!] }
+                  data: {
+                    ...node.data,
+                    loopTargetIds: [...targets, c.target!]
+                  }
                 }
               : node
           )
@@ -2610,7 +2736,7 @@ export function Canvas() {
         sticky,
         agentId,
         sessionId: agentId ? useAgentStatus.getState().byId[id]?.sessionId : undefined,
-        accountId: sticky ? undefined : ((n?.data.accountId as string) || undefined)
+        accountId: sticky ? undefined : (n?.data.accountId as string) || undefined
       }
     }
     // Merge in the link maps of every OTHER project (from their serialized nodes + bridges):
@@ -2671,9 +2797,9 @@ export function Canvas() {
   // this is the single source of zoom (no double-zoom on the open canvas).
   //
   // With settings.wheelZoom on, a PLAIN mouse wheel zooms too (mouse-first workflow). macOS
-  // pixel gestures pan the canvas; over focused xterm they use the manual path, while Monaco,
-  // markdown/chat and other `nowheel` surfaces retain native scrolling. The hover guard overlay
-  // is NOT nowheel, so an unfocused terminal still zooms under the cursor.
+  // pixel gestures pan the canvas only outside native scroll surfaces. Terminals, Monaco and
+  // markdown/chat retain their own scrolling; the terminal hover guard forwards its wheel into
+  // xterm while it still owns pointer gestures for click-to-focus and drag-to-move.
   const wheelZoom = settings.wheelZoom
   useEffect(() => {
     const wrap = flowWrapRef.current
@@ -2684,19 +2810,10 @@ export function Canvas() {
       if (!e.ctrlKey && !e.metaKey) {
         const target = e.target as HTMLElement | null
         const overNativeScrollable = !!target?.closest('.nowheel')
-        const overTerminalSurface = !!target?.closest('[data-canvas-trackpad-pan]')
         // Chromium represents a macOS trackpad's two-finger scroll as an unmodified pixel-wheel;
-        // let React Flow pan it. The xterm surface blocks React Flow, so pan manually there;
-        // other `.nowheel` editors and documents retain their native scroll contract.
-        const destination = wheelRouting.destination(e, isMac, overTerminalSurface)
+        // let React Flow pan it on canvas surfaces and preserve native scrolling inside nodes.
+        const destination = wheelRouting.destination(e, isMac, overNativeScrollable)
         if (destination === 'flow-pan') return
-        if (destination === 'manual-pan') {
-          e.preventDefault()
-          e.stopPropagation()
-          const { x, y, zoom } = getViewport()
-          setViewport({ x: x - e.deltaX, y: y - e.deltaY, zoom })
-          return
-        }
         if (overNativeScrollable) return
         // Cmd/Ctrl+scroll always zooms; an ordinary mouse wheel only when opted in.
         if (!wheelZoom) return
@@ -2739,7 +2856,11 @@ export function Canvas() {
       const py = e.clientY - rect.top
       const k = PANE_OVERVIEW_ZOOM / zoom
       void setViewport(
-        { x: px - (px - x) * k, y: py - (py - y) * k, zoom: PANE_OVERVIEW_ZOOM },
+        {
+          x: px - (px - x) * k,
+          y: py - (py - y) * k,
+          zoom: PANE_OVERVIEW_ZOOM
+        },
         { duration: 300 }
       )
     }
@@ -2751,7 +2872,10 @@ export function Canvas() {
   const viewCenter = useCallback(() => {
     const rect = flowWrapRef.current?.getBoundingClientRect()
     if (!rect) return undefined
-    return screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+    return screenToFlowPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    })
   }, [screenToFlowPosition])
 
   /**
@@ -2806,7 +2930,9 @@ export function Canvas() {
       const unbound =
         typeof change?.unbound === 'string' ? [change.unbound] : (change?.unbound ?? [])
       const touched = new Set([change?.bind?.groupId, ...unbound].filter(Boolean))
-      const bound: BoundGroup[] = boundGroups(nodesRef.current).filter((b) => !touched.has(b.groupId))
+      const bound: BoundGroup[] = boundGroups(nodesRef.current).filter(
+        (b) => !touched.has(b.groupId)
+      )
       if (change?.bind) bound.push(change.bind)
       void useWorktrees.getState().refresh(project.cwd, bound)
     },
@@ -2869,7 +2995,10 @@ export function Canvas() {
       ...node,
       parentId: groupId,
       extent: 'parent' as const,
-      position: { x: node.position.x - groupPosition.x, y: node.position.y - groupPosition.y }
+      position: {
+        x: node.position.x - groupPosition.x,
+        y: node.position.y - groupPosition.y
+      }
     }
   }, [])
 
@@ -2904,7 +3033,12 @@ export function Canvas() {
    *  of the group as an unrelated top-level node. */
   const placeSpawned = useCallback(
     (node: CanvasNode, pos: { x: number; y: number }): CanvasNode => {
-      const placed = { ...node, position: pos, parentId: undefined, extent: undefined }
+      const placed = {
+        ...node,
+        position: pos,
+        parentId: undefined,
+        extent: undefined
+      }
       const groupId = groupAtPoint(pos)
       return groupId ? parentInto(placed, groupId) : placed
     },
@@ -2924,7 +3058,13 @@ export function Canvas() {
       setNodes((ns) => {
         // In an SSH project the node is stamped remote (runs over the project's master); the
         // factory takes the project's ssh and roots the terminal at its remoteCwd.
-        const node = createTerminalNode(ns.length, cwd, center ?? emptyNodePos(), initialCommand, project?.ssh)
+        const node = createTerminalNode(
+          ns.length,
+          cwd,
+          center ?? emptyNodePos(),
+          initialCommand,
+          project?.ssh
+        )
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -2970,7 +3110,7 @@ export function Canvas() {
         adoptProject: reconnectProjectId
           ? undefined
           : (p) => useProjects.getState().adoptProject(p),
-        setActiveProject: (id) => useProjects.getState().setActive(id),
+        setActiveProject: (id) => useProjects.getState().setActive(id)
       })
         .then((tab) => {
           relayTabsRef.current.set(connectionId, tab)
@@ -2990,7 +3130,7 @@ export function Canvas() {
             un()
             relayTabsRef.current.delete(connectionId)
             handleRelayDrop(tab, {
-              setProjectUnavailable: (id, v) => useProjects.getState().setProjectUnavailable(id, v),
+              setProjectUnavailable: (id, v) => useProjects.getState().setProjectUnavailable(id, v)
             })
           })
         })
@@ -3012,7 +3152,10 @@ export function Canvas() {
     (connectionId: string, label: string, reconnectProjectId?: string, staleSessionId?: string) => {
       const unSas = window.nodeTerminal.relayClient.onSas(connectionId, (sas) => {
         unSas()
-        if (sas && window.confirm(`Verify this code matches the one shown on the host:\n\n${sas}`)) {
+        if (
+          sas &&
+          window.confirm(`Verify this code matches the one shown on the host:\n\n${sas}`)
+        ) {
           window.nodeTerminal.relayClient.confirm(connectionId)
         } else {
           // Deliberate decline: mark it so the bootstrap's close-reject isn't surfaced as an error.
@@ -3062,8 +3205,9 @@ export function Canvas() {
       void reconnectRelayTab(projectId, {
         promptForOffer: () => promptDialog({ message: "Paste the host's new pairing code:" }),
         connect: (offer) => window.nodeTerminal.relayClient.connect(offer),
-        mount: (connectionId, projId) => confirmAndMount(connectionId, label, projId, staleSessionId),
-        onError: (message) => window.alert(`Could not reconnect: ${message}`),
+        mount: (connectionId, projId) =>
+          confirmAndMount(connectionId, label, projId, staleSessionId),
+        onError: (message) => window.alert(`Could not reconnect: ${message}`)
       })
     },
     [confirmAndMount]
@@ -3145,7 +3289,10 @@ export function Canvas() {
       if (!images.length) return
       event.preventDefault()
       event.stopPropagation()
-      const center = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      const center = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      })
       const projectId = useProjects.getState().activeProjectId
       if (projectId) void placeCanvasImages(images, center, projectId)
     }
@@ -3288,7 +3435,10 @@ export function Canvas() {
     (relPath: string, commitOid: string, scopeCwd?: string) => {
       const cwd = scmCwd(scopeCwd)
       if (!cwd) return
-      setNodes((ns) => [...ns, createDiffNode(ns.length, cwd, relPath, false, viewCenter(), commitOid)])
+      setNodes((ns) => [
+        ...ns,
+        createDiffNode(ns.length, cwd, relPath, false, viewCenter(), commitOid)
+      ])
       markDirty()
     },
     [setNodes, markDirty, scmCwd, viewCenter]
@@ -3425,7 +3575,9 @@ export function Canvas() {
 
   const addWebView = useCallback(
     async (center?: { x: number; y: number }) => {
-      const input = await promptDialog({ message: 'Open web view — enter a URL:' })
+      const input = await promptDialog({
+        message: 'Open web view — enter a URL:'
+      })
       const url = input?.trim()
       if (!url) return
       setNodes((ns) => [...ns, createWebNode(ns.length, { url }, center ?? emptyNodePos())])
@@ -3449,8 +3601,13 @@ export function Canvas() {
   // to open a terminal node running `claude /login` under the new account's config dir.
   useEffect(() => {
     const onAddAccountLogin = (ev: Event): void => {
-      const detail = (ev as CustomEvent<{ accountId: string; remote?: boolean; host?: string }>)
-        .detail
+      const detail = (
+        ev as CustomEvent<{
+          accountId: string
+          remote?: boolean
+          host?: string
+        }>
+      ).detail
       const accountId = detail?.accountId
       if (!accountId) return
       // A REMOTE account logs in ON ITS HOST: resolve the ssh binding BY HOST (from the event),
@@ -3472,7 +3629,10 @@ export function Canvas() {
       }
       setNodes((ns) => [
         ...ns.map((n) => ({ ...n, selected: false })),
-        { ...createAccountLoginNode(accountId, ns.length, viewCenter(), ssh), selected: true }
+        {
+          ...createAccountLoginNode(accountId, ns.length, viewCenter(), ssh),
+          selected: true
+        }
       ])
       markDirty()
       // The event fires from the full-screen Settings overlay — close it so the user actually
@@ -3487,17 +3647,52 @@ export function Canvas() {
 
   useEffect(() => {
     const onAddCodexAccountLogin = (ev: Event): void => {
-      const accountId = (ev as CustomEvent<{ accountId: string }>).detail?.accountId
+      const detail = (
+        ev as CustomEvent<{
+          accountId: string
+          remote?: boolean
+          host?: string
+        }>
+      ).detail
+      const accountId = detail?.accountId
       if (!accountId) return
+      let ssh: ReturnType<typeof useProjects.getState>['projects'][number]['ssh']
+      if (detail.remote) {
+        const live = Object.values(useSshConn.getState().byProject).find(
+          (entry) => entry.hostKey === detail.host && entry.conn
+        )
+        const project = useProjects
+          .getState()
+          .projects.find(
+            (p) =>
+              p.ssh &&
+              sshHostKey(p.ssh.server) === detail.host &&
+              useSshConn.getState().byProject[p.id]
+          )
+        const account = useSettings
+          .getState()
+          .settings.codexAccounts.find((entry) => entry.id === accountId)
+        if (project?.ssh) ssh = project.ssh
+        else if (live?.conn)
+          ssh = {
+            server: live.conn,
+            remoteCwd: account?.remoteCwd || live.remoteCwd || '~'
+          }
+        else return
+      }
       setNodes((ns) => [
         ...ns.map((n) => ({ ...n, selected: false })),
-        { ...createCodexAccountLoginNode(accountId, ns.length, viewCenter()), selected: true }
+        {
+          ...createCodexAccountLoginNode(accountId, ns.length, viewCenter(), ssh),
+          selected: true
+        }
       ])
       markDirty()
       setSettingsOpen(false)
     }
     window.addEventListener('nodeterm:add-codex-account-login', onAddCodexAccountLogin)
-    return () => window.removeEventListener('nodeterm:add-codex-account-login', onAddCodexAccountLogin)
+    return () =>
+      window.removeEventListener('nodeterm:add-codex-account-login', onAddCodexAccountLogin)
   }, [setNodes, markDirty, viewCenter])
 
   // Resolve the system account's email once, so context menus (built via getState) can label
@@ -3506,25 +3701,38 @@ export function Canvas() {
   useEffect(() => useSystemCodexAccount.getState().ensure(), [])
 
   const addAgentNode = useCallback(
-    (agentId: AgentId, center?: { x: number; y: number }, groupId?: string, accountId?: string) => {
+    (
+      agentId: AgentId,
+      center?: { x: number; y: number },
+      groupId?: string,
+      accountId?: string,
+      sshOverride?: Project['ssh']
+    ) => {
       const project = useProjects.getState().getProject(activeProjectId)
-      const cwd = cwdForNewNodeIn(groupId) ?? project?.cwd
+      const localCwd = cwdForNewNodeIn(groupId) ?? project?.cwd
       // Funnel through resolveNewNodeAccount so the project default applies even without an
       // explicit pick. The factory drops the account for non-claude agents.
       const settings = useSettings.getState().settings
-      const account = agentId === 'claude'
-        ? resolveNewNodeAccount(accountId, project, settings.claudeAccounts)
-        : agentId === 'codex' && accountId && settings.codexAccounts.some((a) => a.id === accountId && !a.pending)
-          ? accountId
-          : undefined
+      const eligibleCodexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
+      const account =
+        agentId === 'claude'
+          ? resolveNewNodeAccount(accountId, project, settings.claudeAccounts)
+          : agentId === 'codex' &&
+              accountId &&
+              eligibleCodexAccounts.some((a) => a.id === accountId)
+            ? accountId
+            : undefined
       setNodes((ns) => {
+        const accountSsh = agentId === 'codex' ? sshForCodexAccount(account) : undefined
+        const ssh = sshOverride ?? accountSsh ?? project?.ssh
+        const cwd = ssh?.remoteCwd ?? localCwd
         const node = createAgentNode(
           agentId,
           ns.length,
           cwd,
           center ?? emptyNodePos(),
           undefined,
-          project?.ssh,
+          ssh,
           account,
           activePermissionMode(agentId)
         )
@@ -3752,7 +3960,9 @@ export function Canvas() {
               ...n.data,
               cwd: fallbackCwd,
               ...(respawn && n.type === 'terminal'
-                ? { respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1 }
+                ? {
+                    respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1
+                  }
                 : {})
             }
           }
@@ -3796,9 +4006,7 @@ export function Canvas() {
       resetDisplacedCwd(groupId, wt.path, false)
       // A failed prune must still let the binding go — dropping it is the user's ask, and a
       // registration we could not clean up is not a reason to trap them in a dead group.
-      await api.git
-        .worktreeRemove(wt.repoPath, wt.path, false, true)
-        .catch(() => {})
+      await api.git.worktreeRemove(wt.repoPath, wt.path, false, true).catch(() => {})
     },
     [isSshProject, resetDisplacedCwd]
   )
@@ -3812,7 +4020,10 @@ export function Canvas() {
         // Permanent delete: the upcoming unmount must dispose the xterm, not park it (the
         // session is being destroyed right here). Also drops an already-parked entry.
         if (n.type === 'terminal')
-          disposeTerminalOnUnmount(sessionForProject(useProjects.getState().activeProjectId ?? '').id, n.id)
+          disposeTerminalOnUnmount(
+            sessionForProject(useProjects.getState().activeProjectId ?? '').id,
+            n.id
+          )
         if (n.type === 'terminal') transport.destroy(n.id)
         // Permanent deletion → drop the node's persisted agent status (sessionId/session/
         // unread/loop). Node unmount no longer does this, so deletion must. The loop card's
@@ -4079,7 +4290,11 @@ export function Canvas() {
   // (`cwdForNewNodeIn`), so the frame IS the binding.
   const attachWorktree = useCallback(
     (
-      target: { groupId: string | null; at?: { x: number; y: number }; size?: { width: number; height: number } },
+      target: {
+        groupId: string | null
+        at?: { x: number; y: number }
+        size?: { width: number; height: number }
+      },
       wt: GroupWorktree
     ): string => {
       let groupId = target.groupId
@@ -4185,7 +4400,11 @@ export function Canvas() {
       // to swap `removeTarget` under an open dialog (the user reads worktree A, approves the
       // deletion of worktree B), and an unrelated confirm stacked on top of this one used to make
       // it invisible while still live (see `confirmOpenRef`). Refuse instead.
-      if (confirmBusy()) return { ok: false, error: 'a confirmation is already pending — try again' }
+      if (confirmBusy())
+        return {
+          ok: false,
+          error: 'a confirmation is already pending — try again'
+        }
       const wt = nodesRef.current.find((n) => n.id === groupId)?.data.worktree
       if (!wt) return { ok: false, error: `${groupId} is not a worktree-bound group` }
       // Held across the `await` below: without it a second call slips through the gap before
@@ -4271,7 +4490,10 @@ export function Canvas() {
     // is still valid.
     if (!deleteFromDisk) {
       void releaseWorktreeBinding(t.groupId).finally(() => clearWorktreeBinding(t.groupId))
-      setNotice({ kind: 'info', text: `Unbound ${wt.branch}. The worktree is still on disk.` })
+      setNotice({
+        kind: 'info',
+        text: `Unbound ${wt.branch}. The worktree is still on disk.`
+      })
       return
     }
     // 1) Remove the worktree FIRST; only delete the branch if the branch is ours (we created it).
@@ -4319,7 +4541,13 @@ export function Canvas() {
     resetDisplacedCwd(t.groupId, wt.path, true)
     clearWorktreeBinding(t.groupId)
     setNotice({ kind: res.ok ? 'info' : 'error', text: res.message })
-  }, [removeTarget, deleteFromDisk, clearWorktreeBinding, resetDisplacedCwd, releaseWorktreeBinding])
+  }, [
+    removeTarget,
+    deleteFromDisk,
+    clearWorktreeBinding,
+    resetDisplacedCwd,
+    releaseWorktreeBinding
+  ])
 
   // Confirmed merge. The push is passed explicitly: `worktreeMerge` never publishes on its own, so
   // what the dialog said is exactly what runs — and the result banner names the push either way.
@@ -4580,7 +4808,10 @@ export function Canvas() {
         const dx = at ? at.x - Math.min(...abs.map((p) => p.x)) : DUPLICATE_NUDGE
         const dy = at ? at.y - Math.min(...abs.map((p) => p.y)) : DUPLICATE_NUDGE
         const copies = sources.map((n, i) =>
-          placeSpawned(duplicateNode(n), { x: abs[i].x + dx, y: abs[i].y + dy })
+          placeSpawned(duplicateNode(n), {
+            x: abs[i].x + dx,
+            y: abs[i].y + dy
+          })
         )
         return [...ns.map((n) => ({ ...n, selected: false })), ...copies]
       })
@@ -4602,7 +4833,10 @@ export function Canvas() {
           set.has(n.id) && n.type === 'terminal'
             ? {
                 ...n,
-                data: { ...n.data, respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1 }
+                data: {
+                  ...n.data,
+                  respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1
+                }
               }
             : n
         )
@@ -4667,39 +4901,171 @@ export function Canvas() {
   }, [])
 
   const switchCodexAccount = useCallback(
-    async (nodeId: string, targetAccountId?: string) => {
+    async (nodeId: string, targetAccountId?: string, targetSsh?: Project['ssh']) => {
       const node = nodesRef.current.find((n) => n.id === nodeId)
-      if (!node || restartAgentIdOf(node) !== 'codex' || node.data.ssh) return
+      if (!node || restartAgentIdOf(node) !== 'codex') return
       const status = useAgentStatus.getState().byId[nodeId]
       const gate = restartEligibility('codex', status?.state, status?.sessionId)
       if (!gate.ok || !status?.sessionId) {
         const reason = gate.ok ? 'no-session' : gate.reason
         setNotice({
           kind: 'error',
-          text: reason === 'working'
-            ? 'Finish the current Codex turn before switching accounts.'
-            : 'This Codex node has no conversation to move yet.'
+          text:
+            reason === 'working'
+              ? 'Finish the current Codex turn before switching accounts.'
+              : 'This Codex node has no conversation to move yet.'
         })
         return
       }
       const sourceAccountId = node.data.codexAccountId as string | undefined
-      if (sourceAccountId === targetAccountId) return
+      // `system` is represented by an undefined account id on every machine. A local-system to
+      // remote-system transfer therefore has equal account ids but still changes the host.
+      if (!targetSsh && sourceAccountId === targetAccountId) return
       const cwd = node.data.cwd as string | undefined
       if (!cwd) {
-        setNotice({ kind: 'error', text: 'This Codex node has no project directory to resume in.' })
+        setNotice({
+          kind: 'error',
+          text: 'This Codex node has no project directory to resume in.'
+        })
         return
       }
       if (codexAccountSwitchInFlight.current.has(nodeId)) {
-        setNotice({ kind: 'error', text: 'This Codex node is already switching accounts.' })
+        setNotice({
+          kind: 'error',
+          text: 'This Codex node is already switching accounts.'
+        })
         return
       }
       const expected = {
         accountId: sourceAccountId,
         agentId: 'codex' as const,
         cwd,
-        sessionId: status.sessionId
+        sessionId: status.sessionId,
+        ssh: !!node.data.ssh
       }
       codexAccountSwitchInFlight.current.add(nodeId)
+      if (!node.data.ssh && targetSsh) {
+        try {
+          const targetHost = sshHostKey(targetSsh.server)
+          const existing = Object.entries(useSshConn.getState().byProject).find(
+            ([, connection]) => connection.hostKey === targetHost
+          )
+          const ownerProjectId = useProjects.getState().activeProjectId
+          if (!ownerProjectId) throw new Error('No active project owns this transfer')
+          const projectId = existing?.[0] ?? sshAttachmentId(ownerProjectId, targetSsh.server)
+          if (!existing) {
+            const info = await window.nodeTerminal.sshProject.connect(
+              projectId,
+              targetSsh.server,
+              targetSsh.remoteCwd
+            )
+            useSshConn.getState().setConn(projectId, {
+              ...info,
+              hostKey: targetHost,
+              conn: targetSsh.server,
+              remoteCwd: targetSsh.remoteCwd,
+              ownerProjectId
+            })
+          }
+          const transferred = await window.nodeTerminal.codexAccounts.transferThreadToSsh(
+            status.sessionId,
+            sourceAccountId,
+            targetAccountId,
+            { projectId }
+          )
+          const currentNode = nodesRef.current.find((candidate) => candidate.id === nodeId)
+          const currentStatus = useAgentStatus.getState().byId[nodeId]
+          if (
+            !currentNode ||
+            !codexAccountSwitchStillEligible(expected, {
+              accountId: currentNode.data.codexAccountId as string | undefined,
+              agentId: restartAgentIdOf(currentNode),
+              cwd: currentNode.data.cwd as string | undefined,
+              sessionId: currentStatus?.sessionId,
+              ssh: !!currentNode.data.ssh,
+              state: currentStatus?.state
+            })
+          ) {
+            throw new Error('Conversation was copied, but the node changed before it could move.')
+          }
+          transport.recycle(nodeId)
+          const nextNodes = nodesRef.current.map((candidate) =>
+            candidate.id === nodeId
+              ? {
+                  ...candidate,
+                  data: {
+                    ...candidate.data,
+                    cwd: targetSsh.remoteCwd,
+                    ssh: targetSsh.server,
+                    sshRemoteTmux: true,
+                    codexAccountId: targetAccountId,
+                    initialCommand: `$HOME/.nodeterm/bin/nodeterm-codex resume ${transferred.threadId}`,
+                    respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
+                  }
+                }
+              : candidate
+          )
+          nodesRef.current = nextNodes
+          setNodes(nextNodes)
+          markDirty()
+          setNotice({
+            kind: 'info',
+            text: 'Conversation copied to the SSH machine and resumed there. The Mac copy remains available.'
+          })
+        } catch (error) {
+          setNotice({
+            kind: 'error',
+            text:
+              error instanceof Error
+                ? error.message
+                : 'Could not transfer this Codex conversation to SSH.'
+          })
+        } finally {
+          codexAccountSwitchInFlight.current.delete(nodeId)
+        }
+        return
+      }
+      if (node.data.ssh) {
+        try {
+          const currentNode = nodesRef.current.find((candidate) => candidate.id === nodeId)
+          if (
+            !currentNode ||
+            !codexAccountSwitchStillEligible(expected, {
+              accountId: currentNode.data.codexAccountId as string | undefined,
+              agentId: restartAgentIdOf(currentNode),
+              cwd: currentNode.data.cwd as string | undefined,
+              sessionId: useAgentStatus.getState().byId[nodeId]?.sessionId,
+              state: useAgentStatus.getState().byId[nodeId]?.state
+            })
+          )
+            throw new Error('Codex node changed before account switch')
+          transport.recycle(nodeId)
+          const nextNodes = nodesRef.current.map((candidate) =>
+            candidate.id === nodeId
+              ? {
+                  ...candidate,
+                  data: {
+                    ...candidate.data,
+                    codexAccountId: targetAccountId,
+                    initialCommand: `$HOME/.nodeterm/bin/nodeterm-codex resume ${status.sessionId}`,
+                    respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
+                  }
+                }
+              : candidate
+          )
+          nodesRef.current = nextNodes
+          setNodes(nextNodes)
+          markDirty()
+        } catch (error) {
+          setNotice({
+            kind: 'error',
+            text: error instanceof Error ? error.message : 'Could not switch Codex account.'
+          })
+        } finally {
+          codexAccountSwitchInFlight.current.delete(nodeId)
+        }
+        return
+      }
       let rollbackToken: string | undefined
       try {
         const switched = await window.nodeTerminal.codexAccounts.switchThread(
@@ -4711,14 +5077,17 @@ export function Canvas() {
         rollbackToken = switched.rollbackToken
         const currentNode = nodesRef.current.find((candidate) => candidate.id === nodeId)
         const currentStatus = useAgentStatus.getState().byId[nodeId]
-        if (!currentNode || !codexAccountSwitchStillEligible(expected, {
-          accountId: currentNode.data.codexAccountId as string | undefined,
-          agentId: restartAgentIdOf(currentNode),
-          cwd: currentNode.data.cwd as string | undefined,
-          sessionId: currentStatus?.sessionId,
-          ssh: !!currentNode.data.ssh,
-          state: currentStatus?.state
-        })) {
+        if (
+          !currentNode ||
+          !codexAccountSwitchStillEligible(expected, {
+            accountId: currentNode.data.codexAccountId as string | undefined,
+            agentId: restartAgentIdOf(currentNode),
+            cwd: currentNode.data.cwd as string | undefined,
+            sessionId: currentStatus?.sessionId,
+            ssh: !!currentNode.data.ssh,
+            state: currentStatus?.state
+          })
+        ) {
           if (rollbackToken) {
             await window.nodeTerminal.codexAccounts.rollbackSwitch(rollbackToken)
             rollbackToken = undefined
@@ -4737,18 +5106,18 @@ export function Canvas() {
         // CODEX_HOME. Account identity changes; conversation identity does not.
         transport.recycle(nodeId)
         const nextNodes = nodesRef.current.map((candidate) =>
-            candidate.id === nodeId
-              ? {
-                  ...candidate,
-                  data: {
-                    ...candidate.data,
-                    codexAccountId: targetAccountId,
-                    initialCommand: `nodeterm-codex resume ${switched.threadId}`,
-                    respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
-                  }
+          candidate.id === nodeId
+            ? {
+                ...candidate,
+                data: {
+                  ...candidate.data,
+                  codexAccountId: targetAccountId,
+                  initialCommand: `nodeterm-codex resume ${switched.threadId}`,
+                  respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
                 }
-              : candidate
-          )
+              }
+            : candidate
+        )
         // Account removal queries nodesRef synchronously. Publish outside React's scheduled state
         // updater before releasing the Main reservation, then render that exact snapshot.
         nodesRef.current = nextNodes
@@ -4870,7 +5239,11 @@ export function Canvas() {
           const error = res.error ?? 'Branch failed.'
           // The error dialog is for humans; agent-CLI calls get the error in the reply instead.
           if (opts?.interactive !== false) {
-            setConfirm({ message: error, alert: true, onConfirm: () => setConfirm(null) })
+            setConfirm({
+              message: error,
+              alert: true,
+              onConfirm: () => setConfirm(null)
+            })
           }
           return { ok: false, error }
         }
@@ -4923,7 +5296,11 @@ export function Canvas() {
         source.data.accountId
       )
       if ('error' in res) {
-        setConfirm({ message: res.error, alert: true, onConfirm: () => setConfirm(null) })
+        setConfirm({
+          message: res.error,
+          alert: true,
+          onConfirm: () => setConfirm(null)
+        })
         return
       }
       // The file is context-budgeted by buildHandoff (long sessions: digest + verbatim tail,
@@ -5059,7 +5436,9 @@ export function Canvas() {
         const wrap = flowWrapRef.current
         const size = internal?.measured
         const solved =
-          wrap && size?.width && size?.height ? solveFitPadding(wrap, size.width, size.height) : null
+          wrap && size?.width && size?.height
+            ? solveFitPadding(wrap, size.width, size.height)
+            : null
         void fitView({
           nodes: [{ id: node.id }],
           duration: 300,
@@ -5081,16 +5460,9 @@ export function Canvas() {
   const onNodeDoubleClick = useCallback(
     (_e: React.MouseEvent, node: Node) => {
       if (!useSettings.getState().settings.doubleClickFocus) return
-      const rect = nodeFitRect(node as FocusableNode, nodesRef.current as FocusableNode[])
-      const viewport = flowWrapRef.current?.getBoundingClientRect()
-      const camera = rect && viewport
-        ? doubleClickNodeCamera(rect, viewport.width, viewport.height)
-        : null
-      if (camera) {
-        void setCenter(camera.x, camera.y, { zoom: camera.zoom, duration: 300 })
-      }
+      goToNode(node)
     },
-    [setCenter]
+    [goToNode]
   )
 
   // Cmd/Ctrl+K toggles the command palette; Cmd/Ctrl+, opens settings.
@@ -5159,7 +5531,6 @@ export function Canvas() {
     document.documentElement.style.setProperty('--accent', settings.accent)
   }, [settings.accent])
 
-
   /** ids to act on for a node menu: the whole selection if the node is part of it, else just it. */
   const targetIds = useCallback((node: Node): string[] => {
     const selected = nodesRef.current.filter((n) => n.selected).map((n) => n.id)
@@ -5168,266 +5539,364 @@ export function Canvas() {
 
   /** `at` is where the menu was opened, in flow coordinates: every entry that SPAWNS a node
    *  (Duplicate / Branch / Transfer) puts it there, instead of somewhere the user never pointed. */
-  const selectionItems = useCallback((ids: string[], at?: { x: number; y: number }): MenuItem[] => {
-    // Rows the user chose to hide (Settings). Read here rather than through a selector because the
-    // menu is rebuilt on every open — a toggle applies to the next right-click with no reload.
-    // Destructive/recovery rows (Delete, Restart agent, Branch/Transfer) are not hideable at all:
-    // `isHidden` only answers for ids in its own inventory.
-    const hidden = useSettings.getState().settings.hiddenNodeMenuItems
-    return tidySeparators([
-      { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
-      ...((): MenuItem[] => {
-        // "Group …" wraps sibling nodes in their current container. Existing group frames are
-        // valid members too; mixed containers and ancestor+descendant selections are refused.
-        // "Remove from group" only when a target is inside a group frame (the frame stays).
-        const selectedNodes = ids
-          .map((nid) => nodesRef.current.find((node) => node.id === nid))
-          .filter((node): node is CanvasNode => !!node)
-        const rootIds = selectedRootIds(nodesRef.current as CanvasNode[], ids)
-        const rootSet = new Set(rootIds)
-        const rootNodes = selectedNodes.filter((node) => rootSet.has(node.id))
-        const groupable =
-          rootNodes.length > 0 &&
-          (ids.length === 1 || rootNodes.length > 1) &&
-          new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
-        const selectedGroups = selectedNodes.filter((node) => node.type === 'group')
-        const targetGroups = selectedGroups.filter(
-          (group) =>
-            addSelectionToGroup(nodesRef.current as CanvasNode[], ids, group.id) !==
-            nodesRef.current
-        )
-        const parented = ids.some(
-          (nid) => !!nodesRef.current.find((nd) => nd.id === nid)?.parentId
-        )
-        const items: MenuItem[] = []
-        if (targetGroups.length === 1 && !isHidden('group', hidden)) {
-          const targetGroup = targetGroups[0]
-          items.push({
-            label: `Add selection to ${targetGroup.data.title || 'group'}`,
-            icon: <IconGroup />,
-            onClick: () => addToExistingGroup(ids, targetGroup.id)
-          })
-        } else if (targetGroups.length > 1 && !isHidden('group', hidden)) {
-          items.push({
-            type: 'submenu',
-            label: 'Add selection to group',
-            icon: <IconGroup />,
-            children: targetGroups.map((targetGroup) => ({
-              label: targetGroup.data.title || 'Group',
+  const selectionItems = useCallback(
+    (ids: string[], at?: { x: number; y: number }): MenuItem[] => {
+      // Rows the user chose to hide (Settings). Read here rather than through a selector because the
+      // menu is rebuilt on every open — a toggle applies to the next right-click with no reload.
+      // Destructive/recovery rows (Delete, Restart agent, Branch/Transfer) are not hideable at all:
+      // `isHidden` only answers for ids in its own inventory.
+      const hidden = useSettings.getState().settings.hiddenNodeMenuItems
+      return tidySeparators([
+        {
+          type: 'label',
+          label: ids.length > 1 ? `${ids.length} nodes` : '1 node'
+        },
+        ...((): MenuItem[] => {
+          // "Group …" wraps sibling nodes in their current container. Existing group frames are
+          // valid members too; mixed containers and ancestor+descendant selections are refused.
+          // "Remove from group" only when a target is inside a group frame (the frame stays).
+          const selectedNodes = ids
+            .map((nid) => nodesRef.current.find((node) => node.id === nid))
+            .filter((node): node is CanvasNode => !!node)
+          const rootIds = selectedRootIds(nodesRef.current as CanvasNode[], ids)
+          const rootSet = new Set(rootIds)
+          const rootNodes = selectedNodes.filter((node) => rootSet.has(node.id))
+          const groupable =
+            rootNodes.length > 0 &&
+            (ids.length === 1 || rootNodes.length > 1) &&
+            new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
+          const selectedGroups = selectedNodes.filter((node) => node.type === 'group')
+          const targetGroups = selectedGroups.filter(
+            (group) =>
+              addSelectionToGroup(nodesRef.current as CanvasNode[], ids, group.id) !==
+              nodesRef.current
+          )
+          const parented = ids.some(
+            (nid) => !!nodesRef.current.find((nd) => nd.id === nid)?.parentId
+          )
+          const items: MenuItem[] = []
+          if (targetGroups.length === 1 && !isHidden('group', hidden)) {
+            const targetGroup = targetGroups[0]
+            items.push({
+              label: `Add selection to ${targetGroup.data.title || 'group'}`,
               icon: <IconGroup />,
               onClick: () => addToExistingGroup(ids, targetGroup.id)
-            }))
-          })
-        }
-        if (groupable && !isHidden('group', hidden))
-          items.push({
-            label: rootIds.length > 1 ? 'Group selection' : 'Group node',
-            icon: <IconGroup />,
-            onClick: () => groupSelection(rootIds)
-          })
-        if (parented && !isHidden('remove-from-group', hidden))
-          items.push({
-            label: 'Remove from group',
-            icon: <IconUngroup />,
-            onClick: () => removeFromGroup(ids)
-          })
-        if (items.length) items.push({ type: 'separator' })
-        return items
-      })(),
-      ...(isHidden('colors', hidden)
-        ? []
-        : ([{ type: 'colors', onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
-      { type: 'separator' },
-      ...(isHidden('duplicate', hidden)
-        ? []
-        : ([
-            { label: 'Duplicate', icon: <IconDuplicate />, onClick: () => duplicateNodes(ids, at) }
-          ] as MenuItem[])),
-      ...(ids.length === 1 && (() => {
-        const a = agentIdOf(ids[0])
-        return !!a && canBranch(a)
-      })()
-        ? ([
-            {
-              label: 'Branch conversation',
-              icon: <IconBranch />,
-              onClick: () => void branchClaude(ids[0], { at })
-            }
-          ] as MenuItem[])
-        : []),
-      ...(ids.length === 1 &&
-      (() => {
-        const a = agentIdOf(ids[0])
-        return !!a && canTransferFrom(a) && !!useAgentStatus.getState().byId[ids[0]]?.sessionId
-      })()
-        ? (() => {
-            const src = agentIdOf(ids[0]) as AgentId
-            const disabled = useSettings.getState().settings.disabledAgents
-            const settings = useSettings.getState().settings
-            const targets: { id: AgentId; label: string }[] = [
-              ...BUILTIN_AGENT_IDS.filter((aid) => aid !== src && !disabled.includes(aid)).map(
-                (aid) => ({ id: aid as AgentId, label: AGENT_CONFIG[aid].label })
-              ),
-              ...settings.customAgents
-                .filter((c) => c.id !== src && !disabled.includes(c.id))
-                .map((c) => ({ id: c.id, label: c.label }))
-            ]
-            return [
-              { type: 'label', label: 'Transfer conversation to' },
-              ...targets.map(
-                (tg): MenuItem => ({
+            })
+          } else if (targetGroups.length > 1 && !isHidden('group', hidden)) {
+            items.push({
+              type: 'submenu',
+              label: 'Add selection to group',
+              icon: <IconGroup />,
+              children: targetGroups.map((targetGroup) => ({
+                label: targetGroup.data.title || 'Group',
+                icon: <IconGroup />,
+                onClick: () => addToExistingGroup(ids, targetGroup.id)
+              }))
+            })
+          }
+          if (groupable && !isHidden('group', hidden))
+            items.push({
+              label: rootIds.length > 1 ? 'Group selection' : 'Group node',
+              icon: <IconGroup />,
+              onClick: () => groupSelection(rootIds)
+            })
+          if (parented && !isHidden('remove-from-group', hidden))
+            items.push({
+              label: 'Remove from group',
+              icon: <IconUngroup />,
+              onClick: () => removeFromGroup(ids)
+            })
+          if (items.length) items.push({ type: 'separator' })
+          return items
+        })(),
+        ...(isHidden('colors', hidden)
+          ? []
+          : ([{ type: 'colors', onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
+        { type: 'separator' },
+        ...(isHidden('duplicate', hidden)
+          ? []
+          : ([
+              {
+                label: 'Duplicate',
+                icon: <IconDuplicate />,
+                onClick: () => duplicateNodes(ids, at)
+              }
+            ] as MenuItem[])),
+        ...(ids.length === 1 &&
+        (() => {
+          const a = agentIdOf(ids[0])
+          return !!a && canBranch(a)
+        })()
+          ? ([
+              {
+                label: 'Branch conversation',
+                icon: <IconBranch />,
+                onClick: () => void branchClaude(ids[0], { at })
+              }
+            ] as MenuItem[])
+          : []),
+        ...(ids.length === 1 &&
+        (() => {
+          const a = agentIdOf(ids[0])
+          return !!a && canTransferFrom(a) && !!useAgentStatus.getState().byId[ids[0]]?.sessionId
+        })()
+          ? (() => {
+              const src = agentIdOf(ids[0]) as AgentId
+              const disabled = useSettings.getState().settings.disabledAgents
+              const settings = useSettings.getState().settings
+              const targets: { id: AgentId; label: string }[] = [
+                ...BUILTIN_AGENT_IDS.filter((aid) => aid !== src && !disabled.includes(aid)).map(
+                  (aid) => ({
+                    id: aid as AgentId,
+                    label: AGENT_CONFIG[aid].label
+                  })
+                ),
+                ...settings.customAgents
+                  .filter((c) => c.id !== src && !disabled.includes(c.id))
+                  .map((c) => ({ id: c.id, label: c.label }))
+              ]
+              return [
+                { type: 'label', label: 'Transfer conversation to' },
+                ...targets.map((tg): MenuItem => ({
                   label: tg.label,
                   icon: <AgentIcon agentId={tg.id} />,
                   onClick: () => void transferConversation(ids[0], tg.id, at)
-                })
+                }))
+              ] as MenuItem[]
+            })()
+          : []),
+        ...(isHidden('align-grid', hidden)
+          ? []
+          : ([
+              {
+                label: 'Align to grid',
+                icon: <IconGrid />,
+                onClick: () => alignToGrid(ids)
+              }
+            ] as MenuItem[])),
+        ...(isHidden('collapse', hidden)
+          ? []
+          : ([
+              {
+                label: 'Collapse / Expand',
+                icon: <IconCollapse />,
+                onClick: () => toggleCollapseNodes(ids)
+              }
+            ] as MenuItem[])),
+        ...(ids.some((nid) => nodesRef.current.find((n) => n.id === nid)?.type === 'terminal')
+          ? ([
+              ...(isHidden('markdown-view', hidden)
+                ? []
+                : [
+                    {
+                      label: 'Markdown view',
+                      icon: <IconMarkdown />,
+                      onClick: () => toggleMarkdown(ids)
+                    }
+                  ]),
+              ...(isHidden('refresh-terminal', hidden)
+                ? []
+                : [
+                    {
+                      label: 'Refresh terminal',
+                      icon: <IconReload />,
+                      hint: 'Rebuilds the view and re-attaches to the same session. Nothing running is interrupted.',
+                      onClick: () => reloadTerminals(ids)
+                    }
+                  ])
+            ] as MenuItem[])
+          : []),
+        ...(ids.length === 1
+          ? (() => {
+              const node = nodesRef.current.find((candidate) => candidate.id === ids[0])
+              const nodeHost = node?.data.ssh
+                ? sshHostKey(node.data.ssh as SshConnection)
+                : undefined
+              const accountSettings = useSettings.getState().settings
+              const allAccounts = accountSettings.codexAccounts.filter(
+                (account) => !account.pending
               )
-            ] as MenuItem[]
-          })()
-        : []),
-      ...(isHidden('align-grid', hidden)
-        ? []
-        : ([
-            { label: 'Align to grid', icon: <IconGrid />, onClick: () => alignToGrid(ids) }
-          ] as MenuItem[])),
-      ...(isHidden('collapse', hidden)
-        ? []
-        : ([
-            {
-              label: 'Collapse / Expand',
-              icon: <IconCollapse />,
-              onClick: () => toggleCollapseNodes(ids)
-            }
-          ] as MenuItem[])),
-      ...(ids.some((nid) => nodesRef.current.find((n) => n.id === nid)?.type === 'terminal')
-        ? ([
-            ...(isHidden('markdown-view', hidden)
-              ? []
-              : [
-                  {
-                    label: 'Markdown view',
-                    icon: <IconMarkdown />,
-                    onClick: () => toggleMarkdown(ids)
-                  }
-                ]),
-            ...(isHidden('refresh-terminal', hidden)
-              ? []
-              : [
-                  {
-                    label: 'Refresh terminal',
-                    icon: <IconReload />,
-                    hint: 'Rebuilds the view and re-attaches to the same session. Nothing running is interrupted.',
-                    onClick: () => reloadTerminals(ids)
-                  }
-                ])
-          ] as MenuItem[])
-        : []),
-      ...(ids.length === 1
-        ? (() => {
-            const node = nodesRef.current.find((candidate) => candidate.id === ids[0])
-            const accounts = useSettings.getState().settings.codexAccounts.filter((a) => !a.pending)
-            if (!node || restartAgentIdOf(node) !== 'codex' || node.data.ssh || accounts.length === 0) {
-              return []
-            }
-            const current = node.data.codexAccountId as string | undefined
-            const status = useAgentStatus.getState().byId[node.id]
-            const gate = restartEligibility('codex', status?.state, status?.sessionId)
-            const systemIdentity =
-              useSystemCodexAccount.getState().email ||
-              useSettings.getState().settings.systemCodexAccountLabel ||
-              'System Codex account'
-            const item = (label: string, target?: string): MenuItem => ({
-              label: `${label}${current === target ? ' ✓' : ''}`,
-              disabled: current === target || !gate.ok,
-              hint: !gate.ok
+              const accounts = allAccounts.filter((account) => account.host === nodeHost)
+              if (!node || restartAgentIdOf(node) !== 'codex') {
+                return []
+              }
+              const current = node.data.codexAccountId as string | undefined
+              const status = useAgentStatus.getState().byId[node.id]
+              const gate = restartEligibility('codex', status?.state, status?.sessionId)
+              const servers = useSshServers.getState().servers
+              const serverForHost = (host?: string) =>
+                host ? servers.find((server) => sshHostKey(server) === host) : undefined
+              const savedServer = serverForHost(nodeHost)
+              const systemPresentation = presentAccount({
+                label: nodeHost
+                  ? useSettings.getState().settings.remoteSystemCodexAccountLabels[nodeHost]
+                  : useSettings.getState().settings.systemCodexAccountLabel,
+                email: nodeHost
+                  ? useSystemCodexAccount.getState().remoteEmails[nodeHost]
+                  : useSystemCodexAccount.getState().email,
+                host: nodeHost,
+                machineLabel: savedServer?.label
+              })
+              const accountPresentation = (
+                account: (typeof allAccounts)[number]
+              ): AccountPresentation =>
+                presentAccount({
+                  label: account.label,
+                  email: account.email,
+                  host: account.host,
+                  machineLabel: serverForHost(account.host)?.label
+                })
+              const item = (
+                presentation: AccountPresentation,
+                target?: string,
+                targetSsh?: Project['ssh']
+              ): MenuItem => ({
+                label: '',
+                accountPresentation: presentation,
+                accountSelected:
+                  current === target &&
+                  nodeHost === (targetSsh ? sshHostKey(targetSsh.server) : nodeHost),
+                disabled: (current === target && !targetSsh) || !gate.ok,
+                hint: !gate.ok
+                  ? gate.reason === 'working'
+                    ? 'Finish the current turn before switching accounts.'
+                    : 'Nothing to switch yet — this node has no conversation id.'
+                  : targetSsh
+                    ? 'Copies this conversation to the SSH machine, then resumes this node there. The source copy remains on this Mac.'
+                    : 'Continues this conversation with the selected account, then restarts only this node.',
+                onClick: () => void switchCodexAccount(node.id, target, targetSsh)
+              })
+              const currentAccount = current
+                ? accounts.find((account) => account.id === current)
+                : undefined
+              const currentPresentation = currentAccount
+                ? accountPresentation(currentAccount)
+                : current
+                  ? presentAccount({
+                      label: 'Unknown account',
+                      host: nodeHost,
+                      machineLabel: savedServer?.label
+                    })
+                  : systemPresentation
+              return [
+                {
+                  type: 'submenu',
+                  label: 'Codex account',
+                  accountPresentation: currentPresentation,
+                  icon: <AgentIcon agentId="codex" />,
+                  children: [
+                    item(systemPresentation),
+                    ...accounts.map((account) => item(accountPresentation(account), account.id)),
+                    ...(!nodeHost && servers.length > 0
+                      ? [
+                          { type: 'separator' } as MenuItem,
+                          ...servers.flatMap((server): MenuItem[] => {
+                            const host = sshHostKey(server)
+                            const systemRemote = presentAccount({
+                              label: accountSettings.remoteSystemCodexAccountLabels[host],
+                              email: useSystemCodexAccount.getState().remoteEmails[host],
+                              host,
+                              machineLabel: server.label
+                            })
+                            const remoteSsh = {
+                              server,
+                              remoteCwd: server.remoteCwd || '~'
+                            }
+                            return [
+                              item(systemRemote, undefined, remoteSsh),
+                              ...allAccounts
+                                .filter((account) => account.host === host)
+                                .map((account) =>
+                                  item(accountPresentation(account), account.id, {
+                                    server,
+                                    remoteCwd: account.remoteCwd || server.remoteCwd || '~'
+                                  })
+                                )
+                            ]
+                          })
+                        ]
+                      : []),
+                    { type: 'separator' },
+                    {
+                      label: nodeHost
+                        ? 'Manage Codex accounts on this host…'
+                        : 'Manage Codex accounts…',
+                      hint: nodeHost
+                        ? 'Add another login on this SSH host in Settings → Accounts.'
+                        : 'Add or remove Codex logins in Settings → Accounts.',
+                      onClick: () => setSettingsOpen(true)
+                    }
+                  ]
+                }
+              ] as MenuItem[]
+            })()
+          : []),
+        // Restart the agent CLI itself (single selection): quit it and relaunch with `--resume`, so a
+        // newly released model appears in its model list with the conversation intact. Unlike "Reload
+        // terminal" above (which re-attaches the pane and leaves the CLI running) this one types into
+        // the session, so the row is shown only for a CLI we know how to quit AND resume.
+        ...(ids.length === 1
+          ? (() => {
+              const n = nodesRef.current.find((x) => x.id === ids[0])
+              const st = useAgentStatus.getState().byId[ids[0]]
+              const gate = restartEligibility(restartAgentIdOf(n), st?.state, st?.sessionId)
+              // 'not-resumable' is permanent (a plain shell, opencode, a custom CLI with no exit
+              // command) — no row at all. The other two are temporary, so the row stays and says
+              // what to wait for instead of disappearing and teaching nothing.
+              if (!gate.ok && gate.reason === 'not-resumable') return []
+              // The registry answers "is this node mounted and wired" only: every terminal node
+              // registers, agent or not.
+              const why = !gate.ok
                 ? gate.reason === 'working'
-                  ? 'Finish the current turn before switching accounts.'
-                  : 'Nothing to switch yet — this node has no conversation id.'
-                : 'Continues this conversation with the selected account, then restarts only this node.',
-              onClick: () => void switchCodexAccount(node.id, target)
-            })
-            const currentAccount = current
-              ? accounts.find((account) => account.id === current)
-              : undefined
-            const currentLabel = current
-              ? currentAccount?.email || currentAccount?.label || 'Unknown Codex account'
-              : systemIdentity
-            return [
-              {
-                type: 'submenu',
-                label: `Codex account: ${currentLabel}`,
-                icon: <AgentIcon agentId="codex" />,
-                children: [
-                  item(systemIdentity),
-                  ...accounts.map((account) =>
-                    item(
-                      account.email ? `${account.label} (${account.email})` : account.label,
-                      account.id
-                    )
-                  )
-                ]
-              }
-            ] as MenuItem[]
-          })()
-        : []),
-      // Restart the agent CLI itself (single selection): quit it and relaunch with `--resume`, so a
-      // newly released model appears in its model list with the conversation intact. Unlike "Reload
-      // terminal" above (which re-attaches the pane and leaves the CLI running) this one types into
-      // the session, so the row is shown only for a CLI we know how to quit AND resume.
-      ...(ids.length === 1
-        ? (() => {
-            const n = nodesRef.current.find((x) => x.id === ids[0])
-            const st = useAgentStatus.getState().byId[ids[0]]
-            const gate = restartEligibility(restartAgentIdOf(n), st?.state, st?.sessionId)
-            // 'not-resumable' is permanent (a plain shell, opencode, a custom CLI with no exit
-            // command) — no row at all. The other two are temporary, so the row stays and says
-            // what to wait for instead of disappearing and teaching nothing.
-            if (!gate.ok && gate.reason === 'not-resumable') return []
-            // The registry answers "is this node mounted and wired" only: every terminal node
-            // registers, agent or not.
-            const why = !gate.ok
-              ? gate.reason === 'working'
-                ? 'This session is busy — restart it once its turn (or permission prompt) is done.'
-                : 'Nothing to resume yet — this session has not reported an id.'
-              : !agentRestartFn(ids[0])
-                ? 'This terminal is not attached right now.'
-                : // Not every dead end is visible from here: the closure ALSO refuses a tmux
-                  // session that is closed / ended / gone, and a pane it cannot observe at all
-                  // (tmux off / absent — it pre-flights one `pane_current_command` before writing
-                  // anything). Only the node knows the first, and the second costs an IPC that must
-                  // not run per menu RENDER. Both reach the user through `restartAgentNode`'s skip
-                  // notice, which names them, rather than through a hint this row cannot compute.
-                  undefined
-            return [
-              {
-                label: 'Restart agent',
-                icon: <IconPower />,
-                disabled: !!why,
-                hint: why ?? 'Quits the CLI and relaunches it with --resume (same conversation).',
-                onClick: () => void restartAgentNode(ids[0])
-              }
-            ] as MenuItem[]
-          })()
-        : []),
-      { type: 'separator' },
-      { label: 'Delete', icon: <IconTrash />, danger: true, onClick: () => deleteNodes(ids) }
-    ])
-  }, [
-    groupSelection,
-    addToExistingGroup,
-    removeFromGroup,
-    setNodesColor,
-    duplicateNodes,
-    branchClaude,
-    transferConversation,
-    agentIdOf,
-    alignToGrid,
-    toggleCollapseNodes,
-    toggleMarkdown,
-    reloadTerminals,
-    switchCodexAccount,
-    restartAgentNode,
-    deleteNodes
-  ])
+                  ? 'This session is busy — restart it once its turn (or permission prompt) is done.'
+                  : 'Nothing to resume yet — this session has not reported an id.'
+                : !agentRestartFn(ids[0])
+                  ? 'This terminal is not attached right now.'
+                  : // Not every dead end is visible from here: the closure ALSO refuses a tmux
+                    // session that is closed / ended / gone, and a pane it cannot observe at all
+                    // (tmux off / absent — it pre-flights one `pane_current_command` before writing
+                    // anything). Only the node knows the first, and the second costs an IPC that must
+                    // not run per menu RENDER. Both reach the user through `restartAgentNode`'s skip
+                    // notice, which names them, rather than through a hint this row cannot compute.
+                    undefined
+              return [
+                {
+                  label: 'Restart agent',
+                  icon: <IconPower />,
+                  disabled: !!why,
+                  hint: why ?? 'Quits the CLI and relaunches it with --resume (same conversation).',
+                  onClick: () => void restartAgentNode(ids[0])
+                }
+              ] as MenuItem[]
+            })()
+          : []),
+        { type: 'separator' },
+        {
+          label: 'Delete',
+          icon: <IconTrash />,
+          danger: true,
+          onClick: () => deleteNodes(ids)
+        }
+      ])
+    },
+    [
+      groupSelection,
+      addToExistingGroup,
+      removeFromGroup,
+      setNodesColor,
+      duplicateNodes,
+      branchClaude,
+      transferConversation,
+      agentIdOf,
+      alignToGrid,
+      toggleCollapseNodes,
+      toggleMarkdown,
+      reloadTerminals,
+      switchCodexAccount,
+      restartAgentNode,
+      deleteNodes
+    ]
+  )
 
   /** "New <agent>" creation entries shared by the pane and group context menus.
    *  `at` is the flow position to create at; with `groupId` the node is parented into that group. */
@@ -5439,24 +5908,45 @@ export function Canvas() {
       // host's accounts for an SSH project (pending logins always excluded).
       const project = useProjects.getState().getProject(activeProjectId)
       const accounts = accountsForProject(settings.claudeAccounts, project)
-      const codexAccounts = project?.ssh ? [] : settings.codexAccounts.filter((a) => !a.pending)
-      // The system entry shows the user's custom label / detected email so it stays
-      // distinguishable from managed accounts (falls back to "System account").
-      const systemLabel = systemAccountDisplay(
-        settings.systemAccountLabel,
-        useSystemAccount.getState().email
-      )
-      const systemCodexLabel = systemAccountDisplay(
-        settings.systemCodexAccountLabel,
-        useSystemCodexAccount.getState().email
-      )
+      const codexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
+      const servers = useSshServers.getState().servers
+      const serverForHost = (host?: string) =>
+        host ? servers.find((server) => sshHostKey(server) === host) : undefined
+      const accountPresentation = (
+        account: { label?: string; email?: string; host?: string },
+        fallbackHost?: string
+      ): AccountPresentation => {
+        const host = account.host ?? fallbackHost
+        return presentAccount({
+          ...account,
+          host,
+          machineLabel: serverForHost(host)?.label
+        })
+      }
+      const projectHost = project?.ssh ? sshHostKey(project.ssh.server) : undefined
+      const systemClaudePresentation = presentAccount({
+        label: projectHost
+          ? settings.remoteSystemAccountLabels[projectHost]
+          : settings.systemAccountLabel,
+        email: projectHost ? undefined : useSystemAccount.getState().email,
+        host: projectHost,
+        machineLabel: project?.ssh?.server.label
+      })
+      const systemCodexPresentation = presentAccount({
+        label: projectHost
+          ? settings.remoteSystemCodexAccountLabels[projectHost]
+          : settings.systemCodexAccountLabel,
+        email: projectHost
+          ? useSystemCodexAccount.getState().remoteEmails[projectHost]
+          : useSystemCodexAccount.getState().email,
+        host: projectHost,
+        machineLabel: project?.ssh?.server.label
+      })
       // ✓ marks what a bare "New Claude" resolves to: the project default while it still
       // exists, else the system account (mirrors resolveNewNodeAccount's stale-id guard).
       const defaultAccountId = accounts.some((a) => a.id === project?.defaultAccountId)
         ? project?.defaultAccountId
         : undefined
-      const withDefaultMark = (label: string, id?: string): string =>
-        id === defaultAccountId ? `${label} ✓` : label
       // SSH project with no accounts on its host: keep the submenu, with a disabled row saying
       // where this host's accounts come from — local accounts are correctly invisible here, and
       // a bare flat entry read as "multi-account is broken on SSH".
@@ -5472,17 +5962,19 @@ export function Canvas() {
               icon: <AgentIcon agentId={aid} />,
               children: [
                 {
-                  label: withDefaultMark(systemLabel),
+                  label: '',
+                  accountPresentation: systemClaudePresentation,
+                  accountSelected: !defaultAccountId,
                   icon: <AgentIcon agentId="claude" />,
                   onClick: () => addAgentNode('claude', at, groupId)
                 },
-                ...accounts.map(
-                  (a): MenuItem => ({
-                    label: withDefaultMark(a.label, a.id),
-                    icon: <AgentIcon agentId="claude" />,
-                    onClick: () => addAgentNode('claude', at, groupId, a.id)
-                  })
-                ),
+                ...accounts.map((a): MenuItem => ({
+                  label: '',
+                  accountPresentation: accountPresentation(a),
+                  accountSelected: a.id === defaultAccountId,
+                  icon: <AgentIcon agentId="claude" />,
+                  onClick: () => addAgentNode('claude', at, groupId, a.id)
+                })),
                 ...(accountsHint
                   ? [
                       {
@@ -5496,24 +5988,45 @@ export function Canvas() {
               ]
             }
           }
-          if (aid === 'codex' && codexAccounts.length > 0) {
+          if (
+            aid === 'codex' &&
+            (codexAccounts.length > 0 ||
+              (!project?.ssh && useSshServers.getState().servers.length > 0))
+          ) {
             return {
               type: 'submenu',
               label: `New ${AGENT_CONFIG[aid].label}`,
               icon: <AgentIcon agentId={aid} />,
               children: [
                 {
-                  label: systemCodexLabel,
+                  label: '',
+                  accountPresentation: systemCodexPresentation,
                   icon: <AgentIcon agentId="codex" />,
                   onClick: () => addAgentNode('codex', at, groupId)
                 },
-                ...codexAccounts.map(
-                  (a): MenuItem => ({
-                    label: a.email ? `${a.label} (${a.email})` : a.label,
-                    icon: <AgentIcon agentId="codex" />,
-                    onClick: () => addAgentNode('codex', at, groupId, a.id)
-                  })
-                )
+                ...(!project?.ssh
+                  ? useSshServers.getState().servers.map((server): MenuItem => ({
+                      label: '',
+                      accountPresentation: presentAccount({
+                        label: settings.remoteSystemCodexAccountLabels[sshHostKey(server)],
+                        email: useSystemCodexAccount.getState().remoteEmails[sshHostKey(server)],
+                        host: sshHostKey(server),
+                        machineLabel: server.label
+                      }),
+                      icon: <AgentIcon agentId="codex" />,
+                      onClick: () =>
+                        addAgentNode('codex', at, groupId, undefined, {
+                          server,
+                          remoteCwd: server.remoteCwd || '~'
+                        })
+                    }))
+                  : []),
+                ...codexAccounts.map((a): MenuItem => ({
+                  label: '',
+                  accountPresentation: accountPresentation(a),
+                  icon: <AgentIcon agentId="codex" />,
+                  onClick: () => addAgentNode('codex', at, groupId, a.id)
+                }))
               ]
             }
           }
@@ -5526,13 +6039,11 @@ export function Canvas() {
         ...useSettings
           .getState()
           .settings.customAgents.filter((c) => !disabled.includes(c.id))
-          .map(
-            (c): MenuItem => ({
-              label: `New ${c.label}`,
-              icon: <AgentIcon agentId={c.id} />,
-              onClick: () => addAgentNode(c.id, at, groupId)
-            })
-          )
+          .map((c): MenuItem => ({
+            label: `New ${c.label}`,
+            icon: <AgentIcon agentId={c.id} />,
+            onClick: () => addAgentNode(c.id, at, groupId)
+          }))
       ]
     },
     [activeProjectId, addAgentNode]
@@ -5556,7 +6067,8 @@ export function Canvas() {
       // node menu, so hiding it in Settings hides it everywhere a right-click can reach it.
       return tidySeparators([
         { type: 'label', label: 'Group' },
-        ...(canAddSelection && !isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
+        ...(canAddSelection &&
+        !isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
           ? [
               {
                 label: 'Add selected objects to group',
@@ -5565,7 +6077,8 @@ export function Canvas() {
               } as MenuItem
             ]
           : []),
-        ...(canWrapSelection && !isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
+        ...(canWrapSelection &&
+        !isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
           ? [
               {
                 label: 'Wrap selection in new group',
@@ -5580,8 +6093,16 @@ export function Canvas() {
           onClick: () => addTerminal(at, undefined, groupId)
         },
         ...agentCreationItems(at, groupId),
-        { label: 'New sticky note', icon: <IconNote />, onClick: () => addSticky(at, groupId) },
-        { label: 'New Loop', icon: <IconReload />, onClick: () => addNativeLoop(at, groupId) },
+        {
+          label: 'New sticky note',
+          icon: <IconNote />,
+          onClick: () => addSticky(at, groupId)
+        },
+        {
+          label: 'New Loop',
+          icon: <IconReload />,
+          onClick: () => addNativeLoop(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -5600,7 +6121,11 @@ export function Canvas() {
                 onClick: () => openWorktreeDialog(groupId)
               } as MenuItem
             ]),
-        { label: 'Ungroup', icon: <IconUngroup />, onClick: () => ungroup(groupId) },
+        {
+          label: 'Ungroup',
+          icon: <IconUngroup />,
+          onClick: () => ungroup(groupId)
+        },
         {
           label: 'Delete (keeps nodes)',
           icon: <IconTrash />,
@@ -5673,7 +6198,11 @@ export function Canvas() {
         y: e.clientY,
         items: [
           // Sessions: local terminal, agent CLIs, remote host.
-          { label: 'New terminal', icon: <IconTerminal />, onClick: () => addTerminal(at) },
+          {
+            label: 'New terminal',
+            icon: <IconTerminal />,
+            onClick: () => addTerminal(at)
+          },
           ...agentCreationItems(at),
           {
             label: 'New remote…',
@@ -5682,13 +6211,39 @@ export function Canvas() {
           },
           { type: 'separator' },
           // Content nodes.
-          { label: 'New browser', icon: <IconRemote />, onClick: () => addBrowser(at) },
-          { label: 'New sticky note', icon: <IconNote />, onClick: () => addSticky(at) },
-          { label: 'New Loop', icon: <IconReload />, onClick: () => addNativeLoop(at) },
-          { label: 'New dino game', icon: <IconDino />, onClick: () => addDino(at) },
-          { label: 'Open file…', icon: <IconEditor />, onClick: () => void openFileDialog(at) },
+          {
+            label: 'New browser',
+            icon: <IconRemote />,
+            onClick: () => addBrowser(at)
+          },
+          {
+            label: 'New sticky note',
+            icon: <IconNote />,
+            onClick: () => addSticky(at)
+          },
+          {
+            label: 'New Loop',
+            icon: <IconReload />,
+            onClick: () => addNativeLoop(at)
+          },
+          {
+            label: 'New dino game',
+            icon: <IconDino />,
+            onClick: () => addDino(at)
+          },
+          {
+            label: 'Open file…',
+            icon: <IconEditor />,
+            onClick: () => void openFileDialog(at)
+          },
           ...(hasCwd
-            ? [{ label: 'New file…', icon: <IconEditor />, onClick: () => void newProjectFile(at) }]
+            ? [
+                {
+                  label: 'New file…',
+                  icon: <IconEditor />,
+                  onClick: () => void newProjectFile(at)
+                }
+              ]
             : []),
           { type: 'separator' },
           // A worktree lands as a group frame bound to it; nodes created inside inherit its path.
@@ -5988,29 +6543,31 @@ export function Canvas() {
             : choice.kind === 'browser'
               ? createBrowserNode(index, '', at)
               : createAgentNode(
-                choice.agentId,
-                index,
-                project?.cwd,
-                at,
-                undefined,
-                project?.ssh,
-                resolveNewNodeAccount(
+                  choice.agentId,
+                  index,
+                  project?.cwd,
+                  at,
                   undefined,
-                  project,
-                  useSettings.getState().settings.claudeAccounts
-                ),
-                activePermissionMode(choice.agentId)
-              )
+                  project?.ssh,
+                  resolveNewNodeAccount(
+                    undefined,
+                    project,
+                    useSettings.getState().settings.claudeAccounts
+                  ),
+                  activePermissionMode(choice.agentId)
+                )
       setNodes((ns) => [...ns, node])
       const board = project?.kanban ?? seedBoard
       if (columnId) {
-        useProjects.getState().setProjectKanban(activeProjectId, assignNode(board, node.id, columnId, null))
+        useProjects
+          .getState()
+          .setProjectKanban(activeProjectId, assignNode(board, node.id, columnId, null))
       }
       markDirty()
       // Log card-created directly here — the assignment above is written straight to the store
       // (not via onKanbanChange), so its diff never runs and never double-logs a card-moved.
       const toName = columnId
-        ? board.columns.find((c) => c.id === columnId)?.title ?? 'Ungrouped'
+        ? (board.columns.find((c) => c.id === columnId)?.title ?? 'Ungrouped')
         : 'Ungrouped'
       const kindLabel =
         choice.kind === 'terminal'
@@ -6019,10 +6576,10 @@ export function Canvas() {
             ? 'Sticky note'
             : choice.kind === 'browser'
               ? 'Browser'
-              : agentConfig(choice.agentId)?.label ??
-              useSettings.getState().settings.customAgents.find((a) => a.id === choice.agentId)
-                ?.label ??
-              choice.agentId
+              : (agentConfig(choice.agentId)?.label ??
+                useSettings.getState().settings.customAgents.find((a) => a.id === choice.agentId)
+                  ?.label ??
+                choice.agentId)
       const title = (node.data.title as string) || kindLabel
       useBoardLog.getState().append(api, activeProjectId, {
         kind: 'event',
@@ -6052,7 +6609,9 @@ export function Canvas() {
   // Persist a browser card's navigation (url/title) from the modal webview back to the node.
   const browserNavFromKanban = useCallback(
     (nodeId: string, patch: { url?: string; title?: string }) => {
-      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n)))
+      setNodes((ns) =>
+        ns.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n))
+      )
       markDirty()
     },
     [setNodes, markDirty]
@@ -6154,7 +6713,9 @@ export function Canvas() {
       // (ad loops, setInterval(window.open)). Prune old records, then dedup + rate-cap.
       const now = Date.now()
       const recent = browserPopupSpawnsRef.current.filter((r) => now - r.t < 10000)
-      const isDup = recent.some((r) => r.url === url && r.source === sourceNodeId && now - r.t < 2000)
+      const isDup = recent.some(
+        (r) => r.url === url && r.source === sourceNodeId && now - r.t < 2000
+      )
       if (isDup || recent.length >= 8) {
         browserPopupSpawnsRef.current = recent
         console.warn('[browser] popup spawn blocked (dedup/rate cap):', url)
@@ -6167,7 +6728,9 @@ export function Canvas() {
       // src.position is group-relative when the opener sits in a group frame: place in absolute
       // coords, then join the opener's group (parentInto converts back) so the popup node stays
       // inside the frame and moves with it.
-      const srcGroup = src.parentId ? nodesRef.current.find((n) => n.id === src.parentId) : undefined
+      const srcGroup = src.parentId
+        ? nodesRef.current.find((n) => n.id === src.parentId)
+        : undefined
       const node = createBrowserNode(
         nodesRef.current.length,
         url,
@@ -6179,7 +6742,10 @@ export function Canvas() {
       )
       const placed = src.parentId ? parentInto(node, src.parentId) : node
       setNodes((ns) => [...ns, placed])
-      setControlEdges((es) => [...es, ropeEdge(`ctrl-${sourceNodeId}-${placed.id}`, sourceNodeId, placed.id, '#0a84ff')])
+      setControlEdges((es) => [
+        ...es,
+        ropeEdge(`ctrl-${sourceNodeId}-${placed.id}`, sourceNodeId, placed.id, '#0a84ff')
+      ])
       markDirty()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6281,9 +6847,7 @@ export function Canvas() {
           if (!count) return
           setNodes((current) =>
             current.map((node) =>
-              node.id === loopId
-                ? { ...node, data: { ...node.data, loopLastRunAt: now } }
-                : node
+              node.id === loopId ? { ...node, data: { ...node.data, loopLastRunAt: now } } : node
             )
           )
           markDirty()
@@ -6307,7 +6871,10 @@ export function Canvas() {
               candidate.id === node.id
                 ? {
                     ...candidate,
-                    data: { ...candidate.data, loopNextRunAt: nextLoopRun(now, intervalMs) }
+                    data: {
+                      ...candidate.data,
+                      loopNextRunAt: nextLoopRun(now, intervalMs)
+                    }
                   }
                 : candidate
             )
@@ -6347,7 +6914,12 @@ export function Canvas() {
   }, [activeProjectId, fireNativeLoop, markDirty, setNodes])
 
   const mailboxNodeSig = useMemo(
-    () => nodes.filter((node) => node.type === 'terminal').map((node) => node.id).sort().join('|'),
+    () =>
+      nodes
+        .filter((node) => node.type === 'terminal')
+        .map((node) => node.id)
+        .sort()
+        .join('|'),
     [nodes]
   )
   useEffect(() => {
@@ -6377,7 +6949,9 @@ export function Canvas() {
         const route = routeControlSource(projects, activeId, sourceNodeId)
         if (route.kind === 'switch' || route.kind === 'reopen') {
           if (!needsLiveCanvas(verb)) {
-            const rows = storedNodeListing(projects.find((p) => p.id === route.projectId)?.nodes ?? [])
+            const rows = storedNodeListing(
+              projects.find((p) => p.id === route.projectId)?.nodes ?? []
+            )
             reply({
               ok: true,
               result: rows,
@@ -6406,7 +6980,10 @@ export function Canvas() {
       // rejecting it here contradicted the env it was handed and surfaced as a baffling
       // "not a control-capable agent" from a session that plainly runs claude.
       if (!sourceIsControlCapable(src.data.agentId)) {
-        reply({ ok: false, error: 'source node is not a control-capable agent' })
+        reply({
+          ok: false,
+          error: 'source node is not a control-capable agent'
+        })
         return
       }
       const srcTitle = (src.data.title as string) || sourceNodeId
@@ -6441,16 +7018,24 @@ export function Canvas() {
       const srcH = src.measured?.height ?? (src.height as number) ?? 400
       // src.position is group-relative when the agent sits inside a group frame — resolve the
       // absolute position first so placements land below the agent regardless of grouping.
-      const srcGroup = src.parentId ? nodesRef.current.find((n) => n.id === src.parentId) : undefined
+      const srcGroup = src.parentId
+        ? nodesRef.current.find((n) => n.id === src.parentId)
+        : undefined
       const srcAbs = {
         x: src.position.x + (srcGroup?.position.x ?? 0),
         y: src.position.y + (srcGroup?.position.y ?? 0)
       }
       const belowY = srcAbs.y + srcH + 80
       const edgeColor = agentConfig((src.data.agentId as string) ?? 'claude')?.color ?? '#d97757'
-      const placeBelow = (i = 0) => ({ x: srcAbs.x + srcW / 2 + i * 460, y: belowY + 210 })
+      const placeBelow = (i = 0) => ({
+        x: srcAbs.x + srcW / 2 + i * 460,
+        y: belowY + 210
+      })
       const connect = (newId: string) =>
-        setControlEdges((es) => [...es, ropeEdge(`ctrl-${sourceNodeId}-${newId}`, sourceNodeId, newId, edgeColor)])
+        setControlEdges((es) => [
+          ...es,
+          ropeEdge(`ctrl-${sourceNodeId}-${newId}`, sourceNodeId, newId, edgeColor)
+        ])
       // Draw real CONTEXT links (persisted `bridges`), not the display-only ropes `connect`
       // draws — a rope is lineage decoration, a bridge is what get-linked-context reads. This
       // is what lets an orchestrator fan IN: read back what the nodes it opened produced.
@@ -6516,7 +7101,10 @@ export function Canvas() {
         if (!args.group) return undefined
         const g = nodesRef.current.find((nd) => nd.id === args.group)
         if (!g || g.type !== 'group') {
-          reply({ ok: false, error: `${verb}: --group must name an existing group frame` })
+          reply({
+            ok: false,
+            error: `${verb}: --group must name an existing group frame`
+          })
           return null
         }
         return g.id
@@ -6529,12 +7117,18 @@ export function Canvas() {
       // instantly. Returns the ids, or null with the error already replied.
       const resolveAfter = (): string[] | null | undefined => {
         if (!args.after) return undefined
-        const ids = (args.after ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+        const ids = (args.after ?? '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
         if (ids.length === 0) return undefined
         for (const depId of ids) {
           const dep = nodesRef.current.find((nd) => nd.id === depId)
           if (!dep) {
-            reply({ ok: false, error: `${verb}: --after names no existing node (${depId})` })
+            reply({
+              ok: false,
+              error: `${verb}: --after names no existing node (${depId})`
+            })
             return null
           }
           const depAgent = agentIdOf(depId)
@@ -6549,16 +7143,34 @@ export function Canvas() {
         return ids
       }
       const resolveLoopTargets = (raw: string | undefined): string[] | null => {
-        const ids = [...new Set((raw ?? sourceNodeId).split(',').map((id) => id.trim()).filter(Boolean))]
+        const ids = [
+          ...new Set(
+            (raw ?? sourceNodeId)
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+          )
+        ]
         if (!ids.length) {
-          reply({ ok: false, error: `${verb}: --to must contain at least one exact agent node id` })
+          reply({
+            ok: false,
+            error: `${verb}: --to must contain at least one exact agent node id`
+          })
           return null
         }
         for (const id of ids) {
           const target = nodesRef.current.find((node) => node.id === id)
           const targetAgent = target && createdAgentId(target.data)
-          if (!target || target.type !== 'terminal' || !targetAgent || !canControlCanvas(targetAgent)) {
-            reply({ ok: false, error: `${verb}: ${id} is not an addressable agent node` })
+          if (
+            !target ||
+            target.type !== 'terminal' ||
+            !targetAgent ||
+            !canControlCanvas(targetAgent)
+          ) {
+            reply({
+              ok: false,
+              error: `${verb}: ${id} is not an addressable agent node`
+            })
             return null
           }
         }
@@ -6572,7 +7184,11 @@ export function Canvas() {
       // `extraLive` names nodes being created in this same tick — `verify` arms its judge on
       // reviewers that are not on the canvas yet, and without this they would look DELETED,
       // which counts as satisfied, and the judge would fire before a single review existed.
-      const armAfter = (node: CanvasNode, after: string[], extraLive?: Iterable<string>): CanvasNode => {
+      const armAfter = (
+        node: CanvasNode,
+        after: string[],
+        extraLive?: Iterable<string>
+      ): CanvasNode => {
         const command = node.data.initialCommand as string | undefined
         if (!after.length || !command) return node
         // If the wait is ALREADY over, don't arm at all — leave the command as the node's
@@ -6589,13 +7205,21 @@ export function Canvas() {
         if (!unmet.length) return node
         return {
           ...node,
-          data: { ...node.data, initialCommand: undefined, pendingLaunch: { after, command } }
+          data: {
+            ...node.data,
+            initialCommand: undefined,
+            pendingLaunch: { after, command }
+          }
         }
       }
       // Open `count` nodes INTO a group frame: grow the frame FIRST (extent:'parent' would
       // clamp children landing outside it), then drop each node into the next grid slot
       // after the existing children. Shared by the terminal and agent open verbs.
-      const addGrouped = (groupId: string, count: number, make: (i: number) => CanvasNode): string[] => {
+      const addGrouped = (
+        groupId: string,
+        count: number,
+        make: (i: number) => CanvasNode
+      ): string[] => {
         const existing = nodesRef.current.filter((nd) => nd.parentId === groupId).length
         const ids: string[] = []
         for (let i = 0; i < count; i++) {
@@ -6649,7 +7273,10 @@ export function Canvas() {
             if (!targets) return
             const intervalMs = parseLoopInterval(args.every)
             if (intervalMs === null) {
-              reply({ ok: false, error: 'create-loop: invalid or out-of-range --every interval' })
+              reply({
+                ok: false,
+                error: 'create-loop: invalid or out-of-range --every interval'
+              })
               return
             }
             const start = Object.prototype.hasOwnProperty.call(args, 'start')
@@ -6675,14 +7302,20 @@ export function Canvas() {
           case 'update-loop': {
             const loop = nativeLoop(args.node)
             if (!loop) {
-              reply({ ok: false, error: `update-loop: no Loop with id ${args.node ?? 'missing'}` })
+              reply({
+                ok: false,
+                error: `update-loop: no Loop with id ${args.node ?? 'missing'}`
+              })
               return
             }
             const intervalMs = Object.prototype.hasOwnProperty.call(args, 'every')
               ? parseLoopInterval(args.every)
               : undefined
             if (intervalMs === null) {
-              reply({ ok: false, error: 'update-loop: invalid or out-of-range --every interval' })
+              reply({
+                ok: false,
+                error: 'update-loop: invalid or out-of-range --every interval'
+              })
               return
             }
             const targets = Object.prototype.hasOwnProperty.call(args, 'to')
@@ -6690,7 +7323,8 @@ export function Canvas() {
               : undefined
             if (targets === null) return
             const now = Date.now()
-            const clearsTask = Object.prototype.hasOwnProperty.call(args, 'task') && !args.task?.trim()
+            const clearsTask =
+              Object.prototype.hasOwnProperty.call(args, 'task') && !args.task?.trim()
             setNodes((current) =>
               current.map((node) =>
                 node.id !== loop.id
@@ -6727,14 +7361,20 @@ export function Canvas() {
           case 'pause-loop': {
             const loop = nativeLoop(args.node)
             if (!loop) {
-              reply({ ok: false, error: `${verb}: no Loop with id ${args.node ?? 'missing'}` })
+              reply({
+                ok: false,
+                error: `${verb}: no Loop with id ${args.node ?? 'missing'}`
+              })
               return
             }
             const enabled = verb === 'start-loop'
             const task = String(loop.data.loopTask ?? '').trim()
             const targets = (loop.data.loopTargetIds as string[] | undefined) ?? []
             if (enabled && (!task || !targets.length)) {
-              reply({ ok: false, error: 'start-loop: Loop needs a task and at least one target' })
+              reply({
+                ok: false,
+                error: 'start-loop: Loop needs a task and at least one target'
+              })
               return
             }
             const intervalMs = validLoopInterval(loop.data.loopIntervalMs)
@@ -6753,26 +7393,33 @@ export function Canvas() {
               )
             )
             markDirty()
-            reply({ ok: true, message: `${enabled ? 'started' : 'paused'} Loop ${loop.id}` })
+            reply({
+              ok: true,
+              message: `${enabled ? 'started' : 'paused'} Loop ${loop.id}`
+            })
             return
           }
           case 'run-loop': {
             const loop = nativeLoop(args.node)
             if (!loop) {
-              reply({ ok: false, error: `run-loop: no Loop with id ${args.node ?? 'missing'}` })
+              reply({
+                ok: false,
+                error: `run-loop: no Loop with id ${args.node ?? 'missing'}`
+              })
               return
             }
             const now = Date.now()
             const count = await fireNativeLoop(loop.id, now)
             if (!count) {
-              reply({ ok: false, error: 'run-loop: Loop needs a task and at least one valid target' })
+              reply({
+                ok: false,
+                error: 'run-loop: Loop needs a task and at least one valid target'
+              })
               return
             }
             setNodes((current) =>
               current.map((node) =>
-                node.id === loop.id
-                  ? { ...node, data: { ...node.data, loopLastRunAt: now } }
-                  : node
+                node.id === loop.id ? { ...node, data: { ...node.data, loopLastRunAt: now } } : node
               )
             )
             markDirty()
@@ -6786,7 +7433,10 @@ export function Canvas() {
           case 'loop-status': {
             const loop = nativeLoop(args.node)
             if (!loop) {
-              reply({ ok: false, error: `loop-status: no Loop with id ${args.node ?? 'missing'}` })
+              reply({
+                ok: false,
+                error: `loop-status: no Loop with id ${args.node ?? 'missing'}`
+              })
               return
             }
             const result = {
@@ -6805,11 +7455,17 @@ export function Canvas() {
           case 'delete-loop': {
             const loop = nativeLoop(args.node)
             if (!loop) {
-              reply({ ok: false, error: `delete-loop: no Loop with id ${args.node ?? 'missing'}` })
+              reply({
+                ok: false,
+                error: `delete-loop: no Loop with id ${args.node ?? 'missing'}`
+              })
               return
             }
             if (confirmBusy()) {
-              reply({ ok: false, error: 'a confirmation is already pending — try again' })
+              reply({
+                ok: false,
+                error: 'a confirmation is already pending — try again'
+              })
               return
             }
             setConfirm({
@@ -6889,7 +7545,9 @@ export function Canvas() {
             // open-claude is the legacy fixed-agent form; open-agent takes any builtin
             // (claude/codex/gemini) or custom agent id — resolveAgent falls back for the rest.
             const agentId = (verb === 'open-agent' ? args.agent : 'claude') as AgentId
-            const count = args.resume ? 1 : Math.max(1, Math.min(5, parseInt(args.count || '1', 10) || 1))
+            const count = args.resume
+              ? 1
+              : Math.max(1, Math.min(5, parseInt(args.count || '1', 10) || 1))
             // --group parents the new node(s) into an existing group frame; a worktree-bound
             // group also hands its worktree path down as the cwd (same inheritance as
             // UI-created nodes — cwdForNewNodeIn is the one resolver for that).
@@ -6904,39 +7562,50 @@ export function Canvas() {
             const settings = useSettings.getState().settings
             const requestedAccount = args.account === 'system' ? undefined : args.account
             if (args.account && agentId !== 'codex') {
-              reply({ ok: false, error: 'open-agent --account is supported only for Codex' })
+              reply({
+                ok: false,
+                error: 'open-agent --account is supported only for Codex'
+              })
               return
             }
-            if (requestedAccount && !settings.codexAccounts.some((a) => a.id === requestedAccount && !a.pending)) {
-              reply({ ok: false, error: 'open-agent: unknown or unavailable Codex account' })
+            const project = projStore.getProject(projStore.activeProjectId ?? '')
+            const eligibleCodexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
+            if (requestedAccount && !eligibleCodexAccounts.some((a) => a.id === requestedAccount)) {
+              reply({
+                ok: false,
+                error: 'open-agent: unknown or unavailable Codex account'
+              })
               return
             }
-            const account = agentId === 'codex'
-              ? (args.account ? requestedAccount : src.data.codexAccountId as string | undefined)
-              : resolveNewNodeAccount(
-                  src.data.accountId as string | undefined,
-                  projStore.getProject(projStore.activeProjectId ?? ''),
-                  settings.claudeAccounts
-                )
+            const account =
+              agentId === 'codex'
+                ? args.account
+                  ? requestedAccount
+                  : (src.data.codexAccountId as string | undefined)
+                : resolveNewNodeAccount(
+                    src.data.accountId as string | undefined,
+                    project,
+                    settings.claudeAccounts
+                  )
             const after = resolveAfter()
             if (after === null) return // bad --after, already replied
-            const agentCwd = args.cwd || groupCwd || srcCwd
-            const agentSsh = sshFor(agentCwd)
-            if (agentId === 'codex' && account && agentSsh) {
-              reply({ ok: false, error: 'open-agent: managed Codex accounts are unavailable on SSH projects' })
-              return
-            }
+            const requestedCwd = args.cwd || groupCwd || srcCwd
+            const agentSsh =
+              agentId === 'codex'
+                ? (sshForCodexAccount(account) ?? sshFor(requestedCwd))
+                : sshFor(requestedCwd)
+            const agentCwd = agentSsh?.remoteCwd ?? requestedCwd
             const make = (i: number): CanvasNode => {
               const node = createAgentNode(
-                  agentId,
-                  nodesRef.current.length + i,
-                  agentCwd,
-                  placeBelow(i),
-                  args.prompt,
-                  agentSsh,
-                  account,
-                  activePermissionMode(agentId)
-                )
+                agentId,
+                nodesRef.current.length + i,
+                agentCwd,
+                placeBelow(i),
+                args.prompt,
+                agentSsh,
+                account,
+                activePermissionMode(agentId)
+              )
               if (args.resume) {
                 const resume = resumeCommand(agentId, args.resume, !!node.data.ssh)
                 if (!resume) throw new Error('Agent does not support session resume')
@@ -6957,7 +7626,10 @@ export function Canvas() {
               id === sourceNodeId
                 ? linkEndpointOf(id)
                 : ids.includes(id)
-                  ? { kind: 'terminal', contextCapable: canContextLink(agentId) }
+                  ? {
+                      kind: 'terminal',
+                      contextCapable: canContextLink(agentId)
+                    }
                   : linkEndpointOf(id)
             const bridged = bridgeTo(sourceNodeId, ids, openedEndpoint).linked
             // A dependency is also a READING relationship: the whole reason to wait for a
@@ -6992,7 +7664,11 @@ export function Canvas() {
             const id = addAndConnect(
               createEditorNode(nodesRef.current.length, args.path, placeBelow(), !!ctlSsh)
             )
-            reply({ ok: true, message: `showing image ${id}`, result: { id } })
+            reply({
+              ok: true,
+              message: `showing image ${id}`,
+              result: { id }
+            })
             return
           }
           case 'show-video': {
@@ -7008,7 +7684,11 @@ export function Canvas() {
             const id = addAndConnect(
               createVideoNode(nodesRef.current.length, args.path, placeBelow(), !!ctlSsh)
             )
-            reply({ ok: true, message: `showing video ${id}`, result: { id } })
+            reply({
+              ok: true,
+              message: `showing video ${id}`,
+              result: { id }
+            })
             return
           }
           case 'show-web': {
@@ -7018,7 +7698,10 @@ export function Canvas() {
             // host. (--html is written locally by main, but a remote agent asking us to render
             // its HTML would still be reaching across the same gap.)
             if (ctlSsh && !args.url) {
-              reply({ ok: false, error: MEDIA_SSH_NOTICE.replace('%s', 'show-web --file/--html') })
+              reply({
+                ok: false,
+                error: MEDIA_SSH_NOTICE.replace('%s', 'show-web --file/--html')
+              })
               return
             }
             if (args.url) webSrc = { url: args.url }
@@ -7028,7 +7711,10 @@ export function Canvas() {
               const p = await window.nodeTerminal.media.writeHtml(args.html)
               webSrc = { filePath: p }
             } else {
-              reply({ ok: false, error: 'show-web requires --url, --file or --html' })
+              reply({
+                ok: false,
+                error: 'show-web requires --url, --file or --html'
+              })
               return
             }
             // For an agent-provided --file (not html we just wrote), allowlist it first.
@@ -7044,21 +7730,34 @@ export function Canvas() {
             }
             const browserUrl = normalizeAddress(args.url)
             if (!browserUrl) {
-              reply({ ok: false, error: 'open-browser requires a valid http(s) --url' })
+              reply({
+                ok: false,
+                error: 'open-browser requires a valid http(s) --url'
+              })
               return
             }
             const id = addAndConnect(
               createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), sourceNodeId)
             )
-            reply({ ok: true, message: `opened browser ${id}`, result: { id } })
+            reply({
+              ok: true,
+              message: `opened browser ${id}`,
+              result: { id }
+            })
             return
           }
           case 'group': {
-            const ids = (args.nodes ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+            const ids = (args.nodes ?? '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
             const live = nodesRef.current as CanvasNode[]
             const resolvable = ids.filter((id) => live.some((node) => node.id === id))
             if (resolvable.length === 0) {
-              reply({ ok: false, error: 'group: none of the given node ids exist' })
+              reply({
+                ok: false,
+                error: 'group: none of the given node ids exist'
+              })
               return
             }
             const groupCount = live.filter((nd) => nd.type === 'group').length
@@ -7066,7 +7765,11 @@ export function Canvas() {
             const oldIds = new Set(live.map((node) => node.id))
             const groupNode = grouped.find((node) => !oldIds.has(node.id) && node.type === 'group')
             if (!groupNode) {
-              reply({ ok: false, error: 'group: nodes must be siblings in one container and may not include an ancestor with its descendant' })
+              reply({
+                ok: false,
+                error:
+                  'group: nodes must be siblings in one container and may not include an ancestor with its descendant'
+              })
               return
             }
             if (args.label) {
@@ -7077,13 +7780,15 @@ export function Canvas() {
             setNodes(grouped)
             markDirty()
             const skippedGrouped = ids.length - resolvable.length
-            const groupNote = skippedGrouped > 0
-              ? ` (${skippedGrouped} unknown id(s) skipped)`
-              : ''
+            const groupNote = skippedGrouped > 0 ? ` (${skippedGrouped} unknown id(s) skipped)` : ''
             reply({
               ok: true,
               message: `grouped ${resolvable.length} node(s) into ${groupNode.id}${groupNote}`,
-              result: { groupId: groupNode.id, grouped: resolvable, skipped: skippedGrouped }
+              result: {
+                groupId: groupNode.id,
+                grouped: resolvable,
+                skipped: skippedGrouped
+              }
             })
             return
           }
@@ -7092,25 +7797,39 @@ export function Canvas() {
             const live = nodesRef.current as CanvasNode[]
             const frame = live.find((nd) => nd.id === gid && nd.type === 'group')
             if (!frame) {
-              reply({ ok: false, error: `ungroup: --group names no group frame (${gid || 'missing'})` })
+              reply({
+                ok: false,
+                error: `ungroup: --group names no group frame (${gid || 'missing'})`
+              })
               return
             }
             const freed = live.filter((nd) => nd.parentId === gid).map((nd) => nd.id)
             setNodes(ungroupNodes(live, gid))
             markDirty()
-            reply({ ok: true, message: `ungrouped ${gid}, freed ${freed.length} node(s)`, result: { freed } })
+            reply({
+              ok: true,
+              message: `ungrouped ${gid}, freed ${freed.length} node(s)`,
+              result: { freed }
+            })
             return
           }
           case 'move': {
             // Reparent nodes or whole group subtrees into an existing frame (or to top level).
             // `reparentNode` keeps the root-space position fixed and rejects cycles.
-            const ids = (args.nodes ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+            const ids = (args.nodes ?? '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
             const live = nodesRef.current as CanvasNode[]
             const rawTarget = (args.group ?? '').trim().toLowerCase()
-            const toTop = !rawTarget || rawTarget === 'top' || rawTarget === 'none' || rawTarget === 'ungrouped'
+            const toTop =
+              !rawTarget || rawTarget === 'top' || rawTarget === 'none' || rawTarget === 'ungrouped'
             const targetGroup = toTop ? null : args.group!.trim()
             if (targetGroup && !live.some((nd) => nd.id === targetGroup && nd.type === 'group')) {
-              reply({ ok: false, error: `move: --group names no group frame (${targetGroup})` })
+              reply({
+                ok: false,
+                error: `move: --group names no group frame (${targetGroup})`
+              })
               return
             }
             let next = live
@@ -7122,7 +7841,10 @@ export function Canvas() {
               if (next !== before) moved.push(id)
             }
             if (moved.length === 0) {
-              reply({ ok: false, error: 'move: nothing moved (unknown ids, already there, or invalid group cycle)' })
+              reply({
+                ok: false,
+                error: 'move: nothing moved (unknown ids, already there, or invalid group cycle)'
+              })
               return
             }
             // The source frame(s) the nodes LEFT, and the destination, may now be the wrong size —
@@ -7139,16 +7861,28 @@ export function Canvas() {
             setNodes(next)
             markDirty()
             const where = targetGroup ? `into ${targetGroup}` : 'to the top level'
-            reply({ ok: true, message: `moved ${moved.length} node(s) ${where}`, result: { moved, group: targetGroup } })
+            reply({
+              ok: true,
+              message: `moved ${moved.length} node(s) ${where}`,
+              result: { moved, group: targetGroup }
+            })
             return
           }
           case 'arrange':
           case 'align': {
-            const ids = (args.nodes ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+            const ids = (args.nodes ?? '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
             const live = nodesRef.current as CanvasNode[]
-            const edge = (['left', 'right', 'top', 'bottom', 'hcenter', 'vcenter'] as const).find((e2) => e2 === args.edge)
+            const edge = (['left', 'right', 'top', 'bottom', 'hcenter', 'vcenter'] as const).find(
+              (e2) => e2 === args.edge
+            )
             if (verb === 'align' && !edge) {
-              reply({ ok: false, error: 'align requires --edge left|right|top|bottom|hcenter|vcenter' })
+              reply({
+                ok: false,
+                error: 'align requires --edge left|right|top|bottom|hcenter|vcenter'
+              })
               return
             }
             // arrange/align run in ONE coordinate space: all top-level, or all children of one
@@ -7159,37 +7893,50 @@ export function Canvas() {
               const known = ids.filter((id) => live.some((n) => n.id === id))
               reply({
                 ok: false,
-                error: known.length === 0
-                  ? `${verb}: none of the given node ids exist`
-                  : `${verb}: the nodes are in different containers — arrange the children of one frame (or top-level nodes) at a time`
+                error:
+                  known.length === 0
+                    ? `${verb}: none of the given node ids exist`
+                    : `${verb}: the nodes are in different containers — arrange the children of one frame (or top-level nodes) at a time`
               })
               return
             }
-            const layout = (['grid', 'row', 'column'] as const).find((l) => l === args.layout) ?? 'grid'
+            const layout =
+              (['grid', 'row', 'column'] as const).find((l) => l === args.layout) ?? 'grid'
             const cols = args.cols ? parseInt(args.cols, 10) || undefined : undefined
-            let next = verb === 'arrange'
-              ? arrangeNodes(live, ids, { layout, cols })
-              : alignNodes(live, ids, edge!)
+            let next =
+              verb === 'arrange'
+                ? arrangeNodes(live, ids, { layout, cols })
+                : alignNodes(live, ids, edge!)
             // Tidying a frame's children usually leaves the frame oversized (it was sized to their
             // old scattered spots) — shrink it to hug the new layout. Top-level sets have no frame.
             if (container) next = fitGroupToChildren(next, container)
             setNodes(next)
             markDirty()
             const how = verb === 'arrange' ? `as ${layout}` : `to ${edge}`
-            reply({ ok: true, message: `${verb === 'arrange' ? 'arranged' : 'aligned'} ${ids.length} node(s) ${how}`, result: { count: ids.length, container } })
+            reply({
+              ok: true,
+              message: `${verb === 'arrange' ? 'arranged' : 'aligned'} ${ids.length} node(s) ${how}`,
+              result: { count: ids.length, container }
+            })
             return
           }
           case 'link': {
             // Fan-in edge: link the caller (or --from) to nodes so each can READ the other's
             // transcript on demand. Pull-based and non-destructive — nothing is injected.
             const from = (args.from ?? sourceNodeId).trim()
-            const targets = (args.to ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+            const targets = (args.to ?? '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
             if (targets.length === 0) {
               reply({ ok: false, error: 'link requires --to <id,id>' })
               return
             }
             if (!linkEndpointOf(from)) {
-              reply({ ok: false, error: `link: --from names no existing node (${from})` })
+              reply({
+                ok: false,
+                error: `link: --from names no existing node (${from})`
+              })
               return
             }
             const { linked, skipped } = bridgeTo(from, targets)
@@ -7219,7 +7966,10 @@ export function Canvas() {
             const targetId = (args.node ?? '').trim()
             const target = nodesRef.current.find((nd) => nd.id === targetId)
             if (!target) {
-              reply({ ok: false, error: `verify: --node names no existing node (${targetId})` })
+              reply({
+                ok: false,
+                error: `verify: --node names no existing node (${targetId})`
+              })
               return
             }
             const targetAgent = agentIdOf(targetId)
@@ -7274,7 +8024,14 @@ export function Canvas() {
                 vMode
               )
               return armAfter(
-                { ...node, data: { ...node.data, title: `Verify: ${lens}`, titleAuto: false } },
+                {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    title: `Verify: ${lens}`,
+                    titleAuto: false
+                  }
+                },
                 [targetId]
               )
             })
@@ -7297,7 +8054,14 @@ export function Canvas() {
                       vAccount,
                       vMode
                     )
-                    return { ...j, data: { ...j.data, title: 'Verify: verdict', titleAuto: false } }
+                    return {
+                      ...j,
+                      data: {
+                        ...j.data,
+                        title: 'Verify: verdict',
+                        titleAuto: false
+                      }
+                    }
                   })(),
                   reviewerIds,
                   reviewerIds // the reviewers exist only in this tick — see armAfter
@@ -7305,7 +8069,10 @@ export function Canvas() {
               : null
             const panelIds = [...reviewerIds, ...(judge ? [judge.id] : [])]
             let next: CanvasNode[] = [...live, ...reviewers, ...(judge ? [judge] : [])]
-            next = arrangeNodes(next, panelIds, { layout: 'grid', origin: placeBelow(0) })
+            next = arrangeNodes(next, panelIds, {
+              layout: 'grid',
+              origin: placeBelow(0)
+            })
             const vGroupCount = next.filter((nd) => nd.type === 'group').length
             const existingGroupIds = new Set(
               next.filter((node) => node.type === 'group').map((node) => node.id)
@@ -7316,7 +8083,13 @@ export function Canvas() {
             )!
             next = next.map((nd) =>
               nd.id === vGroup.id
-                ? { ...nd, data: { ...nd.data, title: args.label || `Verify: ${targetTitle}` } }
+                ? {
+                    ...nd,
+                    data: {
+                      ...nd.data,
+                      title: args.label || `Verify: ${targetTitle}`
+                    }
+                  }
                 : nd
             )
             setNodes(next)
@@ -7324,7 +8097,10 @@ export function Canvas() {
             // Same-tick lookup: the panel is not on the canvas yet (setNodes is async).
             const panelEndpoint = (id: string): LinkEndpoint | null =>
               panelIds.includes(id)
-                ? { kind: 'terminal', contextCapable: canContextLink(reviewAgent) }
+                ? {
+                    kind: 'terminal',
+                    contextCapable: canContextLink(reviewAgent)
+                  }
                 : linkEndpointOf(id)
             for (const rid of reviewerIds) bridgeTo(rid, [targetId], panelEndpoint)
             bridgeTo(sourceNodeId, panelIds, panelEndpoint)
@@ -7353,12 +8129,20 @@ export function Canvas() {
               const parsed = JSON.parse(args.team ?? '')
               roles = Array.isArray(parsed) ? parsed : []
             } catch {
-              reply({ ok: false, error: 'spawn-team: --team must be a JSON array of {title?, prompt, agent?}' })
+              reply({
+                ok: false,
+                error: 'spawn-team: --team must be a JSON array of {title?, prompt, agent?}'
+              })
               return
             }
-            roles = roles.filter((r) => r && typeof r.prompt === 'string' && r.prompt.trim()).slice(0, 8)
+            roles = roles
+              .filter((r) => r && typeof r.prompt === 'string' && r.prompt.trim())
+              .slice(0, 8)
             if (roles.length === 0) {
-              reply({ ok: false, error: 'spawn-team: --team needs at least one role with a prompt' })
+              reply({
+                ok: false,
+                error: 'spawn-team: --team needs at least one role with a prompt'
+              })
               return
             }
             const live = nodesRef.current as CanvasNode[]
@@ -7385,12 +8169,20 @@ export function Canvas() {
                 teamAccount,
                 activePermissionMode(memberAgent)
               )
-              return r.title ? { ...node, data: { ...node.data, title: r.title, titleAuto: false } } : node
+              return r.title
+                ? {
+                    ...node,
+                    data: { ...node.data, title: r.title, titleAuto: false }
+                  }
+                : node
             })
             const memberIds = members.map((m) => m.id)
             // One computed array: append → arrange in a grid below the conductor → wrap in a group.
             let next: CanvasNode[] = [...live, ...members]
-            next = arrangeNodes(next, memberIds, { layout: 'grid', origin: placeBelow(0) })
+            next = arrangeNodes(next, memberIds, {
+              layout: 'grid',
+              origin: placeBelow(0)
+            })
             const groupCount = next.filter((nd) => nd.type === 'group').length
             const existingGroupIds = new Set(
               next.filter((node) => node.type === 'group').map((node) => node.id)
@@ -7400,7 +8192,9 @@ export function Canvas() {
               (node) => node.type === 'group' && !existingGroupIds.has(node.id)
             )!
             next = next.map((nd) =>
-              nd.id === teamGroup.id ? { ...nd, data: { ...nd.data, title: args.label || 'Team' } } : nd
+              nd.id === teamGroup.id
+                ? { ...nd, data: { ...nd.data, title: args.label || 'Team' } }
+                : nd
             )
             setNodes(next)
             memberIds.forEach((mid) => connect(mid))
@@ -7413,7 +8207,10 @@ export function Canvas() {
               const m = members.find((x) => x.id === id)
               if (!m) return null
               const a = m.data.agentId as AgentId | undefined
-              return { kind: m.type ?? 'terminal', contextCapable: !!a && canContextLink(a) }
+              return {
+                kind: m.type ?? 'terminal',
+                contextCapable: !!a && canContextLink(a)
+              }
             }
             const bridged = bridgeTo(sourceNodeId, memberIds, memberEndpoint).linked
             markDirty()
@@ -7438,19 +8235,28 @@ export function Canvas() {
             }
             const branch = sanitizeWorktreeBranch(args.branch ?? '')
             if (!branch) {
-              reply({ ok: false, error: `open-worktree: invalid branch name "${args.branch}"` })
+              reply({
+                ok: false,
+                error: `open-worktree: invalid branch name "${args.branch}"`
+              })
               return
             }
             const { repoRoot, entries } = useWorktrees.getState()
             if (!repoRoot) {
-              reply({ ok: false, error: 'open-worktree: this project has no git repository (repo root unknown)' })
+              reply({
+                ok: false,
+                error: 'open-worktree: this project has no git repository (repo root unknown)'
+              })
               return
             }
             let bindGroupId: string | null = null
             if (args.group) {
               const g = nodesRef.current.find((nd) => nd.id === args.group)
               if (!g || g.type !== 'group' || g.data.worktree) {
-                reply({ ok: false, error: 'open-worktree: --group must name an existing group without a worktree' })
+                reply({
+                  ok: false,
+                  error: 'open-worktree: --group must name an existing group without a worktree'
+                })
                 return
               }
               bindGroupId = g.id
@@ -7465,7 +8271,10 @@ export function Canvas() {
               branch
             })
             if (!wtPath) {
-              reply({ ok: false, error: 'open-worktree: could not derive a worktree path — pass --path' })
+              reply({
+                ok: false,
+                error: 'open-worktree: could not derive a worktree path — pass --path'
+              })
               return
             }
             const res = await api.git
@@ -7489,7 +8298,13 @@ export function Canvas() {
             }
             const groupId = worktreeControlRef.current.attachWorktree(
               { groupId: bindGroupId, at: frameAt },
-              worktreeFromCreate({ repoPath: repoRoot, mode: 'new', branch, baseRef, path: wtPath })
+              worktreeFromCreate({
+                repoPath: repoRoot,
+                mode: 'new',
+                branch,
+                baseRef,
+                path: wtPath
+              })
             )
             reply({
               ok: true,
@@ -7502,11 +8317,16 @@ export function Canvas() {
             const id = args.group ?? ''
             const g = nodesRef.current.find((nd) => nd.id === id)
             if (!g || g.type !== 'group' || !g.data.worktree) {
-              reply({ ok: false, error: `close-worktree: ${id} is not a worktree-bound group` })
+              reply({
+                ok: false,
+                error: `close-worktree: ${id} is not a worktree-bound group`
+              })
               return
             }
             const mode = args.mode ?? 'unbind'
-            const sshProject = !!useProjects.getState().getProject(useProjects.getState().activeProjectId ?? '')?.ssh
+            const sshProject = !!useProjects
+              .getState()
+              .getProject(useProjects.getState().activeProjectId ?? '')?.ssh
             if (mode !== 'unbind' && sshProject) {
               reply({ ok: false, error: WORKTREE_SSH_NOTICE })
               return
@@ -7515,7 +8335,10 @@ export function Canvas() {
             if (mode === 'unbind') {
               // Non-destructive: drops the binding, the worktree stays on disk as an orphan.
               await ctl.releaseWorktreeBinding(id).finally(() => ctl.clearWorktreeBinding(id))
-              reply({ ok: true, message: `unbound worktree from ${id} (directory kept on disk)` })
+              reply({
+                ok: true,
+                message: `unbound worktree from ${id} (directory kept on disk)`
+              })
               return
             }
             if (mode === 'remove') {
@@ -7523,15 +8346,26 @@ export function Canvas() {
               // other confirm is open (`confirmBusy`): stacking a second dialog on this one hid a
               // pre-ticked "delete from disk" behind a benign one, and the user's Enter answered
               // both. The dialog also names this agent and the branch/path it wants gone.
-              const res = await ctl.requestRemoveWorktree(id, { requestedBy: srcTitle })
+              const res = await ctl.requestRemoveWorktree(id, {
+                requestedBy: srcTitle
+              })
               reply(
                 res.ok
-                  ? { ok: true, message: 'removal confirmation shown to the user — they decide' }
-                  : { ok: false, error: res.error ?? 'could not open the removal confirmation' }
+                  ? {
+                      ok: true,
+                      message: 'removal confirmation shown to the user — they decide'
+                    }
+                  : {
+                      ok: false,
+                      error: res.error ?? 'could not open the removal confirmation'
+                    }
               )
               return
             }
-            reply({ ok: false, error: `close-worktree: unknown --mode ${mode} (unbind|remove)` })
+            reply({
+              ok: false,
+              error: `close-worktree: unknown --mode ${mode} (unbind|remove)`
+            })
             return
           }
           case 'branch': {
@@ -7543,13 +8377,20 @@ export function Canvas() {
             }
             const targetAgent = target.data.agentId as AgentId | undefined
             if (!targetAgent || !canBranch(targetAgent)) {
-              reply({ ok: false, error: 'branch: node is not a branch-capable agent node' })
+              reply({
+                ok: false,
+                error: 'branch: node is not a branch-capable agent node'
+              })
               return
             }
             const res = await branchClaude(id, { interactive: false })
             reply(
               res.ok
-                ? { ok: true, message: `branched ${id}; original resumes in ${res.newNodeId}`, result: { newNodeId: res.newNodeId } }
+                ? {
+                    ok: true,
+                    message: `branched ${id}; original resumes in ${res.newNodeId}`,
+                    result: { newNodeId: res.newNodeId }
+                  }
                 : { ok: false, error: res.error }
             )
             return
@@ -7565,7 +8406,9 @@ export function Canvas() {
             // Same semantics as renameSession: an explicit rename takes ownership of the
             // name (titleAuto off) and mirrors it into a rename-capable agent's session.
             setNodes((ns) =>
-              ns.map((nd) => (nd.id === id ? { ...nd, data: { ...nd.data, title, titleAuto: false } } : nd))
+              ns.map((nd) =>
+                nd.id === id ? { ...nd, data: { ...nd.data, title, titleAuto: false } } : nd
+              )
             )
             markDirty()
             const agentId = target.data.agentId as AgentId | undefined
@@ -7580,8 +8423,16 @@ export function Canvas() {
           case 'send': {
             const target = nodesRef.current.find((node) => node.id === args.node)
             const targetAgent = target && endpointFor(target).agentId
-            if (!target || target.type !== 'terminal' || !targetAgent || !canControlCanvas(targetAgent)) {
-              reply({ ok: false, error: `send: target is not an addressable agent node (${args.node ?? 'missing'})` })
+            if (
+              !target ||
+              target.type !== 'terminal' ||
+              !targetAgent ||
+              !canControlCanvas(targetAgent)
+            ) {
+              reply({
+                ok: false,
+                error: `send: target is not an addressable agent node (${args.node ?? 'missing'})`
+              })
               return
             }
             try {
@@ -7596,7 +8447,10 @@ export function Canvas() {
               reply({
                 ok: true,
                 message: `${delivered ? 'delivered' : 'queued'} ${message.id}`,
-                result: { id: message.id, status: delivered ? 'delivered' : 'queued' }
+                result: {
+                  id: message.id,
+                  status: delivered ? 'delivered' : 'queued'
+                }
               })
             } catch (error) {
               reply({ ok: false, error: `send: ${String(error)}` })
@@ -7606,19 +8460,29 @@ export function Canvas() {
           case 'reply': {
             const original = agentMailbox().get(args.message ?? '')
             if (!original) {
-              reply({ ok: false, error: `reply: unknown message (${args.message ?? 'missing'})` })
+              reply({
+                ok: false,
+                error: `reply: unknown message (${args.message ?? 'missing'})`
+              })
               return
             }
             if (
-              original.recipient.projectId !== (ctlProject?.id ?? useProjects.getState().activeProjectId) ||
+              original.recipient.projectId !==
+                (ctlProject?.id ?? useProjects.getState().activeProjectId) ||
               original.recipient.nodeId !== sourceNodeId
             ) {
-              reply({ ok: false, error: 'reply: this node is not the authenticated recipient' })
+              reply({
+                ok: false,
+                error: 'reply: this node is not the authenticated recipient'
+              })
               return
             }
             const target = nodesRef.current.find((node) => node.id === original.sender.nodeId)
             if (!target || target.type !== 'terminal') {
-              reply({ ok: false, error: 'reply: original sender node is unavailable' })
+              reply({
+                ok: false,
+                error: 'reply: original sender node is unavailable'
+              })
               return
             }
             try {
@@ -7635,7 +8499,10 @@ export function Canvas() {
               reply({
                 ok: true,
                 message: `${delivered ? 'delivered' : 'queued'} ${message.id}`,
-                result: { id: message.id, status: delivered ? 'delivered' : 'queued' }
+                result: {
+                  id: message.id,
+                  status: delivered ? 'delivered' : 'queued'
+                }
               })
             } catch (error) {
               reply({ ok: false, error: `reply: ${String(error)}` })
@@ -7645,20 +8512,32 @@ export function Canvas() {
           case 'status': {
             const message = agentMailbox().get(args.message ?? '')
             if (!message) {
-              reply({ ok: false, error: `status: unknown message (${args.message ?? 'missing'})` })
+              reply({
+                ok: false,
+                error: `status: unknown message (${args.message ?? 'missing'})`
+              })
               return
             }
             const projectId = ctlProject?.id ?? useProjects.getState().activeProjectId
-            const isSender = message.sender.projectId === projectId && message.sender.nodeId === sourceNodeId
-            const isRecipient = message.recipient.projectId === projectId && message.recipient.nodeId === sourceNodeId
+            const isSender =
+              message.sender.projectId === projectId && message.sender.nodeId === sourceNodeId
+            const isRecipient =
+              message.recipient.projectId === projectId && message.recipient.nodeId === sourceNodeId
             if (!isSender && !isRecipient) {
-              reply({ ok: false, error: 'status: this node is not a participant' })
+              reply({
+                ok: false,
+                error: 'status: this node is not a participant'
+              })
               return
             }
             reply({
               ok: true,
               message: `${message.status} ${message.id}`,
-              result: { id: message.id, status: message.status, deliveredAt: message.deliveredAt }
+              result: {
+                id: message.id,
+                status: message.status,
+                deliveredAt: message.deliveredAt
+              }
             })
             return
           }
@@ -7673,7 +8552,10 @@ export function Canvas() {
             // aimed at THIS harmless prompt into a deletion. `confirmBusy` covers every confirm
             // state, not just `confirm`. Reject instead.
             if (confirmBusy()) {
-              reply({ ok: false, error: 'a confirmation is already pending — try again' })
+              reply({
+                ok: false,
+                error: 'a confirmation is already pending — try again'
+              })
               return
             }
             // Destructive → confirm. Replies on confirm AND cancel.
@@ -7706,7 +8588,10 @@ export function Canvas() {
             // One confirm dialog at a time (see `write`): reject rather than orphan a pending one —
             // or stack this one over a destructive dialog the user then cannot see.
             if (confirmBusy()) {
-              reply({ ok: false, error: 'a confirmation is already pending — try again' })
+              reply({
+                ok: false,
+                error: 'a confirmation is already pending — try again'
+              })
               return
             }
             // Destructive → confirm. Replies on confirm AND cancel.
@@ -7785,7 +8670,10 @@ export function Canvas() {
             const nodeId = (args.node ?? '').trim()
             const target = nodesRef.current.find((n) => n.id === nodeId)
             if (!target || toKanbanSession(target) === null) {
-              reply({ ok: false, error: `assign: --node names no session card (${nodeId || 'missing'})` })
+              reply({
+                ok: false,
+                error: `assign: --node names no session card (${nodeId || 'missing'})`
+              })
               return
             }
             const store = useProjects.getState()
@@ -7825,7 +8713,7 @@ export function Canvas() {
               useBoardLog.getState().append(api, pid, { kind: 'event', nodeId: nid, event })
             }
             const where = columnId
-              ? next.columns.find((c) => c.id === columnId)?.title ?? columnId
+              ? (next.columns.find((c) => c.id === columnId)?.title ?? columnId)
               : 'Ungrouped'
             reply({
               ok: true,
@@ -7884,7 +8772,8 @@ export function Canvas() {
       }
       // Mirror the new name into a rename-capable agent's live session (tmux send-keys works
       // whether or not the node is currently mounted). Same one-way push as the node header's ✦.
-      const liveAgent = nodesRef.current.find((n) => n.id === id)?.data.agentId as AgentId | undefined
+      const liveAgent = nodesRef.current.find((n) => n.id === id)?.data.agentId as
+        AgentId | undefined
       const storedAgent = useProjects
         .getState()
         .projects.find((p) => p.id === projectId)
@@ -8021,7 +8910,11 @@ export function Canvas() {
         x: e.clientX,
         y: e.clientY,
         items: [
-          { label: 'Go to', icon: <IconJump />, onClick: () => focusNodeById(id) },
+          {
+            label: 'Go to',
+            icon: <IconJump />,
+            onClick: () => focusNodeById(id)
+          },
           {
             label: 'Rename',
             icon: <IconEditor />,
@@ -8057,9 +8950,7 @@ export function Canvas() {
   // Stream live subagent transcript chunks into the agent-nodes store.
   useEffect(
     () =>
-      api.onSubagentActivity((e) =>
-        useAgentNodes.getState().appendActivity(e.toolUseId, e.chunk)
-      ),
+      api.onSubagentActivity((e) => useAgentNodes.getState().appendActivity(e.toolUseId, e.chunk)),
     []
   )
 
@@ -8068,7 +8959,10 @@ export function Canvas() {
   // clear does NOT re-ack — the ack already happened on the phone side; a re-ack would loop
   // host→renderer→ackDone. See core/ack-sweep.ts.
   useEffect(
-    () => api.onUnreadClear((nodeId) => useAgentStatus.getState().clearUnread(nodeId, { external: true })),
+    () =>
+      api.onUnreadClear((nodeId) =>
+        useAgentStatus.getState().clearUnread(nodeId, { external: true })
+      ),
     []
   )
 
@@ -8155,13 +9049,17 @@ export function Canvas() {
           const stuckRescueSkip = e.idle === true && cs.byId[e.nodeId]?.state !== 'working'
           // `pendingId` (deterministic approvals) rides a `blocked` event; the store keeps it only
           // while blocked so the header's Approve/Deny buttons appear + vanish with the state.
-          if (e.state && !stuckRescueSkip) cs.setState(e.nodeId, e.state, e.agentId, e.newTurn, e.pendingId)
+          if (e.state && !stuckRescueSkip)
+            cs.setState(e.nodeId, e.state, e.agentId, e.newTurn, e.pendingId)
           if (e.newTurn) an.clearForParent(e.nodeId) // genuine new turn → drop the previous fan-out
           if (e.newTurn && e.task) {
             // Prompt-prefix fallback for /loop|/schedule|/cron when the natural-language
             // phrasing doesn't trigger the tool-based (recurring) detection.
             const m = e.task.match(/^\s*\/(loop|schedule|cron)\b/)
-            if (m) cs.setLoop(e.nodeId, true, m[1] as 'loop' | 'schedule' | 'cron', { task: e.task })
+            if (m)
+              cs.setLoop(e.nodeId, true, m[1] as 'loop' | 'schedule' | 'cron', {
+                task: e.task
+              })
           }
           if (e.state === 'done' && !e.interrupted && !stuckRescueSkip) {
             // Interrupted turns (Esc/Ctrl-C) alert nobody: the user did it themselves, and
@@ -8205,7 +9103,10 @@ export function Canvas() {
             cs.setLoop(e.nodeId, false)
             an.clearLoop(e.nodeId)
           } else if (e.recurringKind) {
-            cs.setLoop(e.nodeId, true, e.recurringKind, { schedule: e.schedule, task: e.task })
+            cs.setLoop(e.nodeId, true, e.recurringKind, {
+              schedule: e.schedule,
+              task: e.task
+            })
           }
           break
         case 'session':
@@ -8248,20 +9149,20 @@ export function Canvas() {
     )
     if (!stale.length) return
     let cancelled = false
-    void Promise.all(
-      stale.map(async (n) => [n.id, await api.pty.capture(n.id)] as const)
-    ).then((pairs) => {
-      if (cancelled) return
-      const ts = Date.now()
-      setBufferCache((prev) => {
-        const next = { ...prev }
-        for (const [id, text] of pairs) {
-          next[id] = text
-          captureTsRef.current[id] = ts
-        }
-        return next
-      })
-    })
+    void Promise.all(stale.map(async (n) => [n.id, await api.pty.capture(n.id)] as const)).then(
+      (pairs) => {
+        if (cancelled) return
+        const ts = Date.now()
+        setBufferCache((prev) => {
+          const next = { ...prev }
+          for (const [id, text] of pairs) {
+            next[id] = text
+            captureTsRef.current[id] = ts
+          }
+          return next
+        })
+      }
+    )
     return () => {
       cancelled = true
     }
@@ -8297,24 +9198,35 @@ export function Canvas() {
     const rec = new SshReconnector({
       connect: async (projectId) => {
         const project = useProjects.getState().getProject(projectId)
-        if (!project?.ssh) return false
-        const ssh = project.ssh
+        const attached = useSshConn.getState().byProject[projectId]
+        const ssh =
+          project?.ssh ??
+          (attached?.conn
+            ? { server: attached.conn, remoteCwd: attached.remoteCwd || '~' }
+            : undefined)
+        if (!ssh) return false
         // Same post-connect sequence as the active-project effect: arm remote git routing first
         // (only if this project is still the active tab), then record the connection info.
-        const info = await window.nodeTerminal.sshProject.connect(projectId, ssh.server, ssh.remoteCwd)
-        if (useProjects.getState().activeProjectId === projectId) {
+        const info = await window.nodeTerminal.sshProject.connect(
+          projectId,
+          ssh.server,
+          ssh.remoteCwd
+        )
+        if (project?.ssh && useProjects.getState().activeProjectId === projectId) {
           await api.git.setActiveRemote(projectId)
         }
-        useSshConn.getState().setConn(projectId, info)
+        useSshConn.getState().setConn(projectId, { ...attached, ...info })
         return true
       },
       respawn: (projectId, nodeIds) => {
-        if (useProjects.getState().activeProjectId !== projectId) {
+        const ownerProjectId =
+          useSshConn.getState().byProject[projectId]?.ownerProjectId ?? projectId
+        if (useProjects.getState().activeProjectId !== ownerProjectId) {
           // The project was switched away between the drop and the reconnect: nothing is mounted,
           // and any park is holding the DEAD pty (the node unmount-parked before the master came
           // back). Drop those parks so switching back mounts fresh sessions over the new master —
           // adopting one would hand the user a frozen corpse for TERM_PARK_MS.
-          const sessionId = sessionForProject(projectId).id
+          const sessionId = sessionForProject(ownerProjectId).id
           for (const nid of nodeIds) disposeParkedTerminal(terminalKey(sessionId, nid))
           return
         }
@@ -8351,7 +9263,10 @@ export function Canvas() {
       setSshStatus((prev) => ({ ...prev, [e.projectId]: e.status }))
       // Keep the cause for the banner. Cleared on any non-error status so a stale reason can
       // never be shown next to a healthy connection.
-      setSshError((prev) => ({ ...prev, [e.projectId]: e.status === 'error' ? e.error : undefined }))
+      setSshError((prev) => ({
+        ...prev,
+        [e.projectId]: e.status === 'error' ? e.error : undefined
+      }))
       // Feed the auto-reconnect coordinator: ANY successful connect (its own loop, the
       // active-project effect on a tab switch) respawns that project's dropped terminals.
       if (e.status === 'connected') sshReconnectorRef.current?.onConnected(e.projectId)
@@ -8361,7 +9276,11 @@ export function Canvas() {
       if (e.claudeAutoPermissionMode !== undefined) {
         useSshConn
           .getState()
-          .setClaudeAutoPermissionMode(e.projectId, e.claudeAutoPermissionMode, e.remoteClaudeVersion)
+          .setClaudeAutoPermissionMode(
+            e.projectId,
+            e.claudeAutoPermissionMode,
+            e.remoteClaudeVersion
+          )
       }
       // A repointed server (different host, possibly an older claude CLI) reconnects under the
       // SAME project id. Drop any cached auto-mode answer on disconnect/reconnect so a launch in
@@ -8380,7 +9299,9 @@ export function Canvas() {
   // whose request expired main-side, so a late answer cannot land in a dead request.
   useEffect(() => {
     return window.nodeTerminal.sshProject.onPassphraseRequest((e) =>
-      setSshPassphraseQueue((prev) => (prev.some((r) => r.requestId === e.requestId) ? prev : [...prev, e]))
+      setSshPassphraseQueue((prev) =>
+        prev.some((r) => r.requestId === e.requestId) ? prev : [...prev, e]
+      )
     )
   }, [])
   useEffect(() => {
@@ -8396,9 +9317,10 @@ export function Canvas() {
   const createSshProject = useCallback(
     (input: { server: SshServer; remoteCwd: string; label: string }) => {
       commitActiveToStore()
-      useProjects
-        .getState()
-        .openSshProject(input.label, { server: input.server, remoteCwd: input.remoteCwd })
+      useProjects.getState().openSshProject(input.label, {
+        server: input.server,
+        remoteCwd: input.remoteCwd
+      })
       // Same contract as onRepoCloned: the welcome screen waits behind the SSH dialog and
       // dismisses only once the project is created (cancel returns to the welcome screen).
       setWelcomeOpen(false)
@@ -8516,12 +9438,19 @@ export function Canvas() {
             label: 'Rename',
             icon: <IconEditor />,
             onClick: () => {
-              void promptDialog({ message: 'Rename project', initialValue: project.name }).then((t) => {
+              void promptDialog({
+                message: 'Rename project',
+                initialValue: project.name
+              }).then((t) => {
                 if (t && t.trim()) renameProject(projectId, t.trim())
               })
             }
           },
-          { label: 'Set folder…', icon: <IconProject />, onClick: () => setProjectFolder(projectId) },
+          {
+            label: 'Set folder…',
+            icon: <IconProject />,
+            onClick: () => setProjectFolder(projectId)
+          },
           { type: 'separator' },
           {
             label: 'Close project',
@@ -8662,60 +9591,97 @@ export function Canvas() {
     const activeProject = useProjects.getState().getProject(activeProjectId)
     const newFileHasCwd = !!(activeProject?.ssh?.remoteCwd ?? activeProject?.cwd)
     const cmds: Command[] = [
-      { id: 'new-term', label: 'New terminal', section: 'Create', icon: <IconTerminal />, run: () => addTerminal() },
-      ...BUILTIN_AGENT_IDS.filter((aid) => !disabled.includes(aid)).map(
-        (aid): Command => ({
-          id: `new-${aid}`,
-          label: `New ${AGENT_CONFIG[aid].label}`,
-          icon: <AgentIcon agentId={aid} />,
-          run: () => addAgentNode(aid)
-        })
-      ),
+      {
+        id: 'new-term',
+        label: 'New terminal',
+        section: 'Create',
+        icon: <IconTerminal />,
+        run: () => addTerminal()
+      },
+      ...BUILTIN_AGENT_IDS.filter((aid) => !disabled.includes(aid)).map((aid): Command => ({
+        id: `new-${aid}`,
+        label: `New ${AGENT_CONFIG[aid].label}`,
+        icon: <AgentIcon agentId={aid} />,
+        run: () => addAgentNode(aid)
+      })),
       ...useSettings
         .getState()
         .settings.customAgents.filter((c) => !disabled.includes(c.id))
-        .map(
-          (c): Command => ({
-            id: `new-${c.id}`,
-            label: `New ${c.label}`,
-            icon: <AgentIcon agentId={c.id} />,
-            run: () => addAgentNode(c.id)
-          })
-        ),
+        .map((c): Command => ({
+          id: `new-${c.id}`,
+          label: `New ${c.label}`,
+          icon: <AgentIcon agentId={c.id} />,
+          run: () => addAgentNode(c.id)
+        })),
       // One "New Claude — <label>" per account usable in the active project (local accounts for a
       // local project, this host's accounts for an SSH project). Plain "New Claude" above uses the
       // resolved project default; these pin a specific account.
       ...accountsForProject(
         useSettings.getState().settings.claudeAccounts,
         useProjects.getState().getProject(activeProjectId)
-      )
-        .map(
-          (a): Command => ({
-            id: `new-claude-${a.id}`,
-            label: `New Claude — ${a.label}`,
-            icon: <AgentIcon agentId="claude" />,
-            run: () => addAgentNode('claude', undefined, undefined, a.id)
-          })
-        ),
-      { id: 'new-sticky', label: 'New sticky note', icon: <IconNote />, run: () => addSticky() },
-      { id: 'new-loop', label: 'New Loop', icon: <IconReload />, run: () => addNativeLoop() },
-      { id: 'new-dino', label: 'New dino game', icon: <IconDino />, run: () => addDino() },
-      { id: 'open-file', label: 'Open file…', icon: <IconEditor />, run: () => void openFileDialog() },
+      ).map((a): Command => ({
+        id: `new-claude-${a.id}`,
+        label: `New Claude — ${a.label}`,
+        icon: <AgentIcon agentId="claude" />,
+        run: () => addAgentNode('claude', undefined, undefined, a.id)
+      })),
+      {
+        id: 'new-sticky',
+        label: 'New sticky note',
+        icon: <IconNote />,
+        run: () => addSticky()
+      },
+      {
+        id: 'new-loop',
+        label: 'New Loop',
+        icon: <IconReload />,
+        run: () => addNativeLoop()
+      },
+      {
+        id: 'new-dino',
+        label: 'New dino game',
+        icon: <IconDino />,
+        run: () => addDino()
+      },
+      {
+        id: 'open-file',
+        label: 'Open file…',
+        icon: <IconEditor />,
+        run: () => void openFileDialog()
+      },
       // "New file…" needs a project folder to create into — hidden when the project has no cwd.
       ...(newFileHasCwd
-        ? [{ id: 'new-file', label: 'New file…', icon: <IconEditor />, run: () => void newProjectFile() }]
+        ? [
+            {
+              id: 'new-file',
+              label: 'New file…',
+              icon: <IconEditor />,
+              run: () => void newProjectFile()
+            }
+          ]
         : []),
-      { id: 'open-web', label: 'Open web view…', icon: <IconRemote />, run: () => addWebView() },
-      { id: 'open-browser', label: 'New browser', icon: <IconRemote />, run: () => addBrowser() },
-      ...useSshServers.getState().servers.map(
-        (srv): Command => ({
-          id: `new-remote-${srv.id}`,
-          label: `New remote: ${srv.label}`,
-          icon: <IconTerminal />,
-          run: () =>
-            addSshTerminal(srv, { x: window.innerWidth / 2, y: window.innerHeight / 2 })
-        })
-      ),
+      {
+        id: 'open-web',
+        label: 'Open web view…',
+        icon: <IconRemote />,
+        run: () => addWebView()
+      },
+      {
+        id: 'open-browser',
+        label: 'New browser',
+        icon: <IconRemote />,
+        run: () => addBrowser()
+      },
+      ...useSshServers.getState().servers.map((srv): Command => ({
+        id: `new-remote-${srv.id}`,
+        label: `New remote: ${srv.label}`,
+        icon: <IconTerminal />,
+        run: () =>
+          addSshTerminal(srv, {
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2
+          })
+      })),
       {
         id: 'worktree-new',
         label: 'New worktree…',
@@ -8727,8 +9693,18 @@ export function Canvas() {
         note: isSshProject ? WORKTREE_SSH_HINT : undefined,
         run: () => openWorktreeDialog(null)
       },
-      { id: 'new-project', label: 'New project', icon: <IconProject />, run: () => addProject() },
-      { id: 'clone-repo', label: 'Clone repository…', icon: <IconProject />, run: () => setCloneDialogOpen(true) },
+      {
+        id: 'new-project',
+        label: 'New project',
+        icon: <IconProject />,
+        run: () => addProject()
+      },
+      {
+        id: 'clone-repo',
+        label: 'Clone repository…',
+        icon: <IconProject />,
+        run: () => setCloneDialogOpen(true)
+      },
       {
         id: 'new-remote',
         label: 'New Remote Connection',
@@ -8736,8 +9712,18 @@ export function Canvas() {
         run: () => void connectRemote()
       },
       { id: 'fit', label: 'Fit view', icon: <IconFit />, run: fitAll },
-      { id: 'zoom-100', label: 'Zoom to 100%', icon: <IconFit />, run: zoomTo100 },
-      { id: 'save', label: 'Save', icon: <IconSave />, run: () => void persist() },
+      {
+        id: 'zoom-100',
+        label: 'Zoom to 100%',
+        icon: <IconFit />,
+        run: zoomTo100
+      },
+      {
+        id: 'save',
+        label: 'Save',
+        icon: <IconSave />,
+        run: () => void persist()
+      },
       // Hidden when the canvas has no restartable agent node — the row would have nothing to act
       // on. `hint` is searchable, so "new model" / "update" find it too.
       ...(hasRestartableAgents()
@@ -8769,7 +9755,9 @@ export function Canvas() {
       )
     const cs = useAgentStatus.getState()
     // Labels replaced free-text tags — search matches label NAMES now (unified system).
-    const searchKanban = useProjects.getState().getProject(useProjects.getState().activeProjectId)?.kanban
+    const searchKanban = useProjects
+      .getState()
+      .getProject(useProjects.getState().activeProjectId)?.kanban
     nodesRef.current
       .filter((n) => n.type !== 'group')
       .forEach((n) => {
@@ -8920,9 +9908,7 @@ export function Canvas() {
         )}
         {notice && (
           <div
-            className={`announce-banner announce-banner--${
-              notice.kind === 'error' ? 'warning' : 'success'
-            }`}
+            className={`announce-banner announce-banner--${notice.kind === 'error' ? 'warning' : 'success'}`}
           >
             <span className="announce-banner__dot" />
             <div className="announce-banner__content">
@@ -9097,8 +10083,15 @@ export function Canvas() {
               x: Math.max(8, r.right - 220),
               y: r.bottom + 6,
               items: [
-                { label: 'Keyboard shortcuts', hint: hintLabel('⌘/'), onClick: () => setShortcutsOpen(true) },
-                { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
+                {
+                  label: 'Keyboard shortcuts',
+                  hint: hintLabel('⌘/'),
+                  onClick: () => setShortcutsOpen(true)
+                },
+                {
+                  label: 'Report a bug…',
+                  onClick: () => setBugReportOpen(true)
+                },
                 {
                   label: 'Documentation',
                   onClick: () => window.nodeTerminal.shell.openExternal(`${REPO_URL}#readme`)
@@ -9129,7 +10122,8 @@ export function Canvas() {
           <div className="empty-canvas-hint" aria-hidden>
             <div>Right-click to add a terminal or agent</div>
             <div>
-              <span className="kbd">{hintLabel('⌘K')}</span> command palette · <span className="kbd">+</span> in the dock below
+              <span className="kbd">{hintLabel('⌘K')}</span> command palette ·{' '}
+              <span className="kbd">+</span> in the dock below
             </div>
           </div>
         )}
@@ -9138,100 +10132,103 @@ export function Canvas() {
             (obligation 3): TerminalNode/EditorNode capture `api` in []-effects, so a live
             api change must remount them or they keep talking to the old core. For an all-local user
             the key is always 'local', so this never remounts — zero behavior change. */}
-        <SessionProvider session={sessionForProject(activeProjectId || '')} key={sessionForProject(activeProjectId || '').id}>
-        <ReactFlow
-          nodes={allNodes}
-          edges={displayEdges}
-          nodeTypes={nodeTypes}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={handleEdgesChange}
-          onConnect={onConnect}
-          onEdgeDoubleClick={onEdgeDoubleClick}
-          onMove={onMove}
-          onNodeDragStart={() => (draggingRef.current = true)}
-          onNodeDragStop={() => {
-            draggingRef.current = false
-            // Send the final position now instead of waiting for the throttle's trailing timer.
-            publisherRef.current?.flush()
-            markDirty()
-          }}
-          onSelectionDragStart={() => (draggingRef.current = true)}
-          onSelectionDragStop={() => {
-            draggingRef.current = false
-            publisherRef.current?.flush()
-            markDirty()
-          }}
-          onPaneClick={() => {
-            useAgentNodes.getState().select(null)
-            // …and RELEASE THE KEYBOARD (issue #86). Clicking empty canvas used to leave a sticky
-            // note's textarea focused, so everything typed afterwards went into that note — and,
-            // because the canvas shortcuts all skip while an input has focus, the canvas looked
-            // dead as well. Only real editing surfaces are blurred; see `shouldReleasePaneFocus`.
-            if (shouldReleasePaneFocus(document.activeElement)) {
-              ;(document.activeElement as HTMLElement).blur()
-            }
-          }}
-          onPaneContextMenu={onPaneContextMenu}
-          onNodeContextMenu={onNodeContextMenu}
-          onSelectionContextMenu={onSelectionContextMenu}
-          onNodeDoubleClick={onNodeDoubleClick}
-          minZoom={0.01}
-          maxZoom={2}
-          proOptions={{ hideAttribution: true }}
-          deleteKeyCode={null}
-          // 'pan' drag mode (Miro-style, opt-in): left-drag on empty canvas pans (React Flow
-          // shows the grab cursor whenever panOnDrag includes button 0); box-select stays
-          // reachable via Shift+drag (selectionKeyCode's default). 'select' keeps the
-          // Figma-style default: left-drag rubber-band selects, pan is middle-drag/scroll.
-          selectionOnDrag={!spacePan && settings.canvasDragMode !== 'pan'}
-          selectionMode={SelectionMode.Partial}
-          multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
-          // The lock freezes the CAMERA only (pan/zoom) — nodes stay draggable, resizable and
-          // connectable: the point is "stop the map sliding under me", not "freeze my work".
-          panOnDrag={
-            canvasLocked
-              ? false
-              : spacePan || settings.canvasDragMode === 'pan'
-                ? [0, 1]
-                : [1]
-          }
-          panOnScroll={canvasLocked ? false : isMac || !wheelZoom}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
-          // Off: a pane double-click is the overview-zoom gesture (see PANE_OVERVIEW_ZOOM) and a
-          // node's is "frame this node", so d3's zoom-in would fight both.
-          zoomOnDoubleClick={false}
-          zoomActivationKeyCode={null}
-          snapToGrid={settings.snapToGrid}
-          snapGrid={[settings.gridSize, settings.gridSize]}
+        <SessionProvider
+          session={sessionForProject(activeProjectId || '')}
+          key={sessionForProject(activeProjectId || '').id}
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={settings.gridSize || GRID}
-            size={2.5}
-            /* React Flow paints the dots from a JS prop, so this can't be a rule — it reads the
+          <ReactFlow
+            nodes={allNodes}
+            edges={displayEdges}
+            nodeTypes={nodeTypes}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={handleEdgesChange}
+            onConnect={onConnect}
+            onEdgeDoubleClick={onEdgeDoubleClick}
+            onMove={onMove}
+            onNodeDragStart={() => (draggingRef.current = true)}
+            onNodeDragStop={() => {
+              draggingRef.current = false
+              // Send the final position now instead of waiting for the throttle's trailing timer.
+              publisherRef.current?.flush()
+              markDirty()
+            }}
+            onSelectionDragStart={() => (draggingRef.current = true)}
+            onSelectionDragStop={() => {
+              draggingRef.current = false
+              publisherRef.current?.flush()
+              markDirty()
+            }}
+            onPaneClick={() => {
+              useAgentNodes.getState().select(null)
+              // …and RELEASE THE KEYBOARD (issue #86). Clicking empty canvas used to leave a sticky
+              // note's textarea focused, so everything typed afterwards went into that note — and,
+              // because the canvas shortcuts all skip while an input has focus, the canvas looked
+              // dead as well. Only real editing surfaces are blurred; see `shouldReleasePaneFocus`.
+              if (shouldReleasePaneFocus(document.activeElement)) {
+                ;(document.activeElement as HTMLElement).blur()
+              }
+            }}
+            onPaneContextMenu={onPaneContextMenu}
+            onNodeContextMenu={onNodeContextMenu}
+            onSelectionContextMenu={onSelectionContextMenu}
+            onNodeDoubleClick={onNodeDoubleClick}
+            minZoom={0.01}
+            maxZoom={2}
+            proOptions={{ hideAttribution: true }}
+            deleteKeyCode={null}
+            // 'pan' drag mode (Miro-style, opt-in): left-drag on empty canvas pans (React Flow
+            // shows the grab cursor whenever panOnDrag includes button 0); box-select stays
+            // reachable via Shift+drag (selectionKeyCode's default). 'select' keeps the
+            // Figma-style default: left-drag rubber-band selects, pan is middle-drag/scroll.
+            selectionOnDrag={!spacePan && settings.canvasDragMode !== 'pan'}
+            selectionMode={SelectionMode.Partial}
+            multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
+            // The lock freezes the CAMERA only (pan/zoom) — nodes stay draggable, resizable and
+            // connectable: the point is "stop the map sliding under me", not "freeze my work".
+            panOnDrag={
+              canvasLocked ? false : spacePan || settings.canvasDragMode === 'pan' ? [0, 1] : [1]
+            }
+            panOnScroll={canvasLocked ? false : isMac || !wheelZoom}
+            zoomOnScroll={false}
+            zoomOnPinch={false}
+            // Off: a pane double-click is the overview-zoom gesture (see PANE_OVERVIEW_ZOOM) and a
+            // node's is "frame this node", so d3's zoom-in would fight both.
+            zoomOnDoubleClick={false}
+            zoomActivationKeyCode={null}
+            snapToGrid={settings.snapToGrid}
+            snapGrid={[settings.gridSize, settings.gridSize]}
+          >
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={settings.gridSize || GRID}
+              size={2.5}
+              /* React Flow paints the dots from a JS prop, so this can't be a rule — it reads the
                token instead. On white the dark-mode grey reads as noise rather than as a grid. */
-            color="var(--canvas-dot)"
-          />
-          {/* The shared glyph canvas: a <ReactFlow> child (so it is a sibling of the background
+              color="var(--canvas-dot)"
+            />
+            {/* The shared glyph canvas: a <ReactFlow> child (so it is a sibling of the background
               and of the node renderer) at z-index 0 — above the dot grid, below every node. Only
               mounted in the experimental 'shared' renderer mode; nothing about it exists for the
               default modes. */}
-          {glyphLayerActive && <SharedGlyphLayer />}
-          <Controls showInteractive={false} position="bottom-left" onFitView={fitAll}>
-            <ControlButton
-              className={`canvas-lock-btn${canvasLocked ? ' locked' : ''}`}
-              title={canvasLocked ? 'Unlock view (pan/zoom)' : 'Lock view (pan/zoom) — nodes stay movable'}
-              onClick={() => setCanvasLocked((v) => !v)}
-            >
-              {canvasLocked ? <IconLock /> : <IconUnlock />}
-            </ControlButton>
-          </Controls>
-          {/* Peer cursors live INSIDE <ReactFlow>: PresenceLayer uses ViewportPortal +
+            {glyphLayerActive && <SharedGlyphLayer />}
+            <Controls showInteractive={false} position="bottom-left" onFitView={fitAll}>
+              <ControlButton
+                className={`canvas-lock-btn${canvasLocked ? ' locked' : ''}`}
+                title={
+                  canvasLocked
+                    ? 'Unlock view (pan/zoom)'
+                    : 'Lock view (pan/zoom) — nodes stay movable'
+                }
+                onClick={() => setCanvasLocked((v) => !v)}
+              >
+                {canvasLocked ? <IconLock /> : <IconUnlock />}
+              </ControlButton>
+            </Controls>
+            {/* Peer cursors live INSIDE <ReactFlow>: PresenceLayer uses ViewportPortal +
               useReactFlow, which throw outside the provider — and cursors are flow coordinates. */}
-          <PresenceLayer />
-          <StatusAwareMiniMap onNodeDoubleClick={goToNode} />
-        </ReactFlow>
+            <PresenceLayer />
+            <StatusAwareMiniMap onNodeDoubleClick={goToNode} />
+          </ReactFlow>
         </SessionProvider>
 
         {/* MUST stay OUTSIDE <ReactFlow>. The library's wrapper carries inline
@@ -9260,7 +10257,11 @@ export function Canvas() {
             }}
             onCloneRepo={cloneRepo}
             onConnectSsh={() => setSshDialogOpen(true)}
-            closedProjects={closedProjects.map((p) => ({ id: p.id, name: p.name, cwd: p.cwd }))}
+            closedProjects={closedProjects.map((p) => ({
+              id: p.id,
+              name: p.name,
+              cwd: p.cwd
+            }))}
             onReopen={reopenProject}
             onDeleteClosed={deleteProject}
             onClose={hasProjects ? () => setWelcomeOpen(false) : undefined}
@@ -9307,12 +10308,22 @@ export function Canvas() {
           retry={sshPassphraseRequest.retry}
           target={sshPassphraseRequest.target}
           onSubmit={(value) => {
-            void window.nodeTerminal.sshProject.submitPassphrase(sshPassphraseRequest.requestId, value)
-            setSshPassphraseQueue((prev) => prev.filter((r) => r.requestId !== sshPassphraseRequest.requestId))
+            void window.nodeTerminal.sshProject.submitPassphrase(
+              sshPassphraseRequest.requestId,
+              value
+            )
+            setSshPassphraseQueue((prev) =>
+              prev.filter((r) => r.requestId !== sshPassphraseRequest.requestId)
+            )
           }}
           onCancel={() => {
-            void window.nodeTerminal.sshProject.submitPassphrase(sshPassphraseRequest.requestId, null)
-            setSshPassphraseQueue((prev) => prev.filter((r) => r.requestId !== sshPassphraseRequest.requestId))
+            void window.nodeTerminal.sshProject.submitPassphrase(
+              sshPassphraseRequest.requestId,
+              null
+            )
+            setSshPassphraseQueue((prev) =>
+              prev.filter((r) => r.requestId !== sshPassphraseRequest.requestId)
+            )
           }}
         />
       )}
@@ -9373,7 +10384,9 @@ export function Canvas() {
               seenShortcuts: true,
               // Skipping the tour is also a consent answer — the standalone dialog must not
               // pop right on top of a just-skipped setup. Re-decidable in Settings.
-              ...(s.notifyConsentAsked ? {} : { notifyConsentAsked: true, notifyOnClaudeDone: false })
+              ...(s.notifyConsentAsked
+                ? {}
+                : { notifyConsentAsked: true, notifyOnClaudeDone: false })
             })
           }}
         />
@@ -9506,7 +10519,9 @@ export function Canvas() {
           // "New worktree…" — the header and the primary button say which.
           intent={worktreeDialog.groupId ? 'bind' : 'create'}
           repoPath={worktreeRepoRoot ?? ''}
-          existing={worktreeOrphans.filter((e) => !boundWorktreePaths.has(normWorktreePath(e.path)))}
+          existing={worktreeOrphans.filter(
+            (e) => !boundWorktreePaths.has(normWorktreePath(e.path))
+          )}
           defaultBaseRef={resolveBaseRef(worktreeEntries)}
           branches={worktreeBranches}
           defaultPath={(repoPath, branch) =>
@@ -9633,7 +10648,12 @@ export function Canvas() {
         onAddDino={addDino}
         onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
         onOpenFile={() => void openFileDialog()}
-        onAddRemote={() => openRemotePicker({ x: window.innerWidth / 2, y: window.innerHeight / 2 })}
+        onAddRemote={() =>
+          openRemotePicker({
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2
+          })
+        }
         onConnectRemote={() => void connectRemote()}
         onSave={persist}
         onFitView={fitAll}

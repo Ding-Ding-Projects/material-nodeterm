@@ -23,8 +23,13 @@ describe('accountChipLabel', () => {
   })
 
   it('takes the part before @ and tooltips as "label (email)"', () => {
-    const r = accountChipLabel('a1', [acct({ label: 'work@example.com', email: 'work@example.com' })])
-    expect(r).toEqual({ short: 'work', tooltip: 'work@example.com (work@example.com)' })
+    const r = accountChipLabel('a1', [
+      acct({ label: 'work@example.com', email: 'work@example.com' })
+    ])
+    expect(r).toEqual({
+      short: 'work',
+      tooltip: 'work@example.com (work@example.com)'
+    })
   })
 
   it('caps the short label at 10 chars with an ellipsis', () => {
@@ -67,8 +72,8 @@ describe('systemAccountDisplay', () => {
   })
 
   it('falls back to the generic name when nothing is known', () => {
-    expect(systemAccountDisplay('', null)).toBe('System account')
-    expect(systemAccountDisplay(undefined, undefined)).toBe('System account')
+    expect(systemAccountDisplay('', null)).toBe('Default account')
+    expect(systemAccountDisplay(undefined, undefined)).toBe('Default account')
   })
 })
 
