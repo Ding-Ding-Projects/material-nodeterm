@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { MacWheelGestureRouter } from './wheel-gesture'
 
-const gesture = (deltaY: number, o: Partial<{
-  deltaX: number; deltaMode: number; ctrlKey: boolean; metaKey: boolean; wheelDeltaY: number
-}> = {}) => ({
-  deltaY, deltaX: o.deltaX ?? 0, deltaMode: o.deltaMode ?? 0,
-  ctrlKey: o.ctrlKey ?? false, metaKey: o.metaKey ?? false, wheelDeltaY: o.wheelDeltaY
+const gesture = (
+  deltaY: number,
+  o: Partial<{
+    deltaX: number
+    deltaMode: number
+    ctrlKey: boolean
+    metaKey: boolean
+    wheelDeltaY: number
+  }> = {}
+) => ({
+  deltaY,
+  deltaX: o.deltaX ?? 0,
+  deltaMode: o.deltaMode ?? 0,
+  ctrlKey: o.ctrlKey ?? false,
+  metaKey: o.metaKey ?? false,
+  wheelDeltaY: o.wheelDeltaY
 })
 
 describe('MacWheelGestureRouter', () => {
@@ -19,12 +30,19 @@ describe('MacWheelGestureRouter', () => {
     const router = new MacWheelGestureRouter()
     expect(router.shouldPan(gesture(6.25), true, 1000)).toBe(true)
     expect(router.shouldPan(gesture(75), true, 1080)).toBe(true)
-    expect(router.shouldPan(gesture(75), true, 1400)).toBe(false)
+    expect(router.shouldPan(gesture(75), true, 1700)).toBe(false)
   })
 
-  it('captures trackpad panning over a terminal instead of leaking into its scrollback', () => {
+  it('does not reclassify a quantized packet in an active trackpad gesture as mouse zoom', () => {
     const router = new MacWheelGestureRouter()
-    expect(router.destination(gesture(6.25), true, true, 1000)).toBe('manual-pan')
+    expect(router.shouldPan(gesture(4.5), true, 1000)).toBe(true)
+    expect(router.shouldPan(gesture(100, { wheelDeltaY: -120 }), true, 1150)).toBe(true)
+    expect(router.shouldPan(gesture(70), true, 1500)).toBe(true)
+  })
+
+  it('keeps trackpad scrolling native over terminal and other native scroll surfaces', () => {
+    const router = new MacWheelGestureRouter()
+    expect(router.destination(gesture(6.25), true, true, 1000)).toBe('native')
     expect(router.destination(gesture(6.25), true, false, 1400)).toBe('flow-pan')
     expect(router.destination(gesture(100, { wheelDeltaY: -120 }), true, true, 1800)).toBe('native')
   })
