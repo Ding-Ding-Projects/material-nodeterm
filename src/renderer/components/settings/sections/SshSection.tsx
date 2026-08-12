@@ -125,13 +125,13 @@ export function SshSection({
             >
               <div className="min-w-0">
                 <div className="truncate text-sm text-text">
-                  {server.label} — {server.user}@{server.host}
-                  {server.port && server.port !== 22 ? `:${server.port}` : ''}
-                </div>
-                <div className="truncate text-xs text-muted">
-                  Default folder: {server.remoteCwd || '~'}
-                </div>
+                {server.label} — {server.user}@{server.host}
+                {server.port && server.port !== 22 ? `:${server.port}` : ''}
               </div>
+              <div className="truncate text-xs text-muted">
+                Default folder: {server.remoteCwd || '~'}
+              </div>
+            </div>
               <div className="flex shrink-0 gap-2">
                 <Button onClick={() => onNavigate('accounts')}>Accounts</Button>
                 <Button
@@ -221,7 +221,9 @@ export function SshSection({
                       className="w-56"
                       placeholder="~/.ssh/id_ed25519"
                       value={sshDraft.identityFile ?? ''}
-                      onChange={(e) => setSshDraft({ ...sshDraft, identityFile: e.target.value })}
+                      onChange={(e) =>
+                        setSshDraft({ ...sshDraft, identityFile: e.target.value })
+                      }
                     />
                     <Button
                       onClick={async () => {

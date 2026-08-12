@@ -38,9 +38,7 @@ function parseForm(body: string): Record<string, string> {
   for (const pair of body.split('&')) {
     const i = pair.indexOf('=')
     if (i < 0) continue
-    out[decodeURIComponent(pair.slice(0, i))] = decodeURIComponent(
-      pair.slice(i + 1).replace(/\+/g, ' ')
-    )
+    out[decodeURIComponent(pair.slice(0, i))] = decodeURIComponent(pair.slice(i + 1).replace(/\+/g, ' '))
   }
   return out
 }
@@ -81,8 +79,7 @@ class HookServer {
   private port = 0
   private token = ''
   private listener: ((e: NormalizedAgentEvent) => void) | null = null
-  private rawListener:
-    ((agentId: string, nodeId: string, payload: Record<string, unknown>) => void) | null = null
+  private rawListener: ((agentId: string, nodeId: string, payload: Record<string, unknown>) => void) | null = null
   private controlHandler:
     | ((cmd: { verb: string; nodeId: string; args: Record<string, string> }) => Promise<{
         ok: boolean
@@ -133,8 +130,7 @@ class HookServer {
   private codexNodeAuthSecret: Buffer | null = null
 
   endpointFilePath(): string {
-    if (!this.endpointPath)
-      this.endpointPath = path.join(platform().userDataDir, 'hook-endpoint.env')
+    if (!this.endpointPath) this.endpointPath = path.join(platform().userDataDir, 'hook-endpoint.env')
     return this.endpointPath
   }
 
@@ -174,9 +170,7 @@ class HookServer {
 
   // Raw payload listener: receives the parsed (un-normalized) hook JSON. Drives the
   // contextTail/subagentTail features, which need transcript_path (not in NormalizedAgentEvent).
-  setRawListener(
-    cb: (agentId: string, nodeId: string, payload: Record<string, unknown>) => void
-  ): void {
+  setRawListener(cb: (agentId: string, nodeId: string, payload: Record<string, unknown>) => void): void {
     this.rawListener = cb
   }
 
@@ -458,9 +452,7 @@ class HookServer {
             res.end(`${text}\n`)
             return
           }
-          res.writeHead(result.ok ? 200 : 400, {
-            'content-type': 'application/json'
-          })
+          res.writeHead(result.ok ? 200 : 400, { 'content-type': 'application/json' })
           res.end(JSON.stringify(result))
           return
         }
@@ -502,11 +494,7 @@ class HookServer {
           // Raw listener first: it drives the transcript-tailing features (which need
           // transcript_path). Inside the try so a throwing raw listener still ends 204.
           this.rawListener?.(agentId, nodeId, payload)
-          const normalized = normalizeFor(agentId, {
-            nodeId,
-            agentId,
-            payload
-          })
+          const normalized = normalizeFor(agentId, { nodeId, agentId, payload })
           if (normalized && this.listener) this.listener(normalized)
         }
         res.writeHead(204)

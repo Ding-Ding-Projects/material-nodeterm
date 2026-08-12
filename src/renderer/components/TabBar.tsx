@@ -191,11 +191,9 @@ export function TabBar({
   // a plain mouse wheel scrolls it horizontally, and the active tab is brought into view.
   const tabsRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    tabsRef.current?.querySelector('.tab.active')?.scrollIntoView({
-      behavior: 'smooth',
-      inline: 'nearest',
-      block: 'nearest'
-    })
+    tabsRef.current
+      ?.querySelector('.tab.active')
+      ?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
   }, [activeId, projects.length])
 
   return (
@@ -212,13 +210,7 @@ export function TabBar({
 
       <div className="tabbar">
         <div className="brand">
-          <svg
-            className="brand__mark"
-            viewBox="0 0 48 48"
-            width="26"
-            height="26"
-            aria-hidden="true"
-          >
+          <svg className="brand__mark" viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">
             <defs>
               <linearGradient id="ntg" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0" stopColor="#a38dff" />
@@ -316,7 +308,10 @@ export function TabBar({
                       : p.cwd || undefined
                 }
               >
-                <span className="tab__dot" style={active ? { background: p.color } : undefined} />
+                <span
+                  className="tab__dot"
+                  style={active ? { background: p.color } : undefined}
+                />
                 {/* An SSH project looks identical to a local one once it is named, and the
                     difference matters: its terminals, git and file ops all run on another
                     machine. The chip says so at a glance; the tab title carries user@host. */}

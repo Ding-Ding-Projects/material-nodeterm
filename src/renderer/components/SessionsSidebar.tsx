@@ -499,29 +499,29 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                 <>
                   {g.groups.map((bucket) => renderBucket(g.projectId, g.cwd, bucket, null))}
                   {g.groups.length > 0 && (
-                    <div
-                      className={`ss-subgroup__reorder-end ss-subgroup__reorder-end--root${dropKey === `group-end:${g.projectId}` ? ' is-drop-before' : ''}`}
-                      onDragOver={(e) => {
-                        if (
-                          !drag ||
-                          drag.kind !== 'group' ||
-                          drag.projectId !== g.projectId ||
-                          drag.parentGroupId !== null
-                        ) return
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setDropKey(`group-end:${g.projectId}`)
-                      }}
-                      onDrop={(e) => {
-                        if (!drag || drag.kind !== 'group' || drag.parentGroupId !== null) return
-                        e.preventDefault()
-                        e.stopPropagation()
-                        props.onReorderGroup(g.projectId, drag.nodeId, null, null)
-                        setDrag(null)
-                        setDropKey(null)
-                      }}
-                    />
-                  )}
+                      <div
+                        className={`ss-subgroup__reorder-end ss-subgroup__reorder-end--root${dropKey === `group-end:${g.projectId}` ? ' is-drop-before' : ''}`}
+                        onDragOver={(e) => {
+                          if (
+                            !drag ||
+                            drag.kind !== 'group' ||
+                            drag.projectId !== g.projectId ||
+                            drag.parentGroupId !== null
+                          ) return
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setDropKey(`group-end:${g.projectId}`)
+                            }}
+                            onDrop={(e) => {
+                              if (!drag || drag.kind !== 'group' || drag.parentGroupId !== null) return
+                              e.preventDefault()
+                              e.stopPropagation()
+                              props.onReorderGroup(g.projectId, drag.nodeId, null, null)
+                              setDrag(null)
+                              setDropKey(null)
+                            }}
+                          />
+                        )}
                   {g.ungrouped.length === 0 && g.groups.length === 0 ? (
                     <div className="ss-group__empty">No sessions</div>
                   ) : (

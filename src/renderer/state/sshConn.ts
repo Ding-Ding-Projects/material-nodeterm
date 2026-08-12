@@ -93,17 +93,11 @@ export const useSshConn = create<SshConnState>((set, get) => ({
       autoPermByProject:
         info.claudeAutoPermissionMode === undefined
           ? s.autoPermByProject
-          : {
-              ...s.autoPermByProject,
-              [projectId]: info.claudeAutoPermissionMode
-            },
+          : { ...s.autoPermByProject, [projectId]: info.claudeAutoPermissionMode },
       remoteClaudeVersionByProject:
         info.remoteClaudeVersion === undefined
           ? s.remoteClaudeVersionByProject
-          : {
-              ...s.remoteClaudeVersionByProject,
-              [projectId]: info.remoteClaudeVersion
-            }
+          : { ...s.remoteClaudeVersionByProject, [projectId]: info.remoteClaudeVersion }
     }))
   },
   setClaudeAutoPermissionMode(projectId, supported, version) {
@@ -154,10 +148,7 @@ export const useSshConn = create<SshConnState>((set, get) => ({
       delete next[projectId]
       const nextVersion = { ...s.remoteClaudeVersionByProject }
       delete nextVersion[projectId]
-      return {
-        autoPermByProject: next,
-        remoteClaudeVersionByProject: nextVersion
-      }
+      return { autoPermByProject: next, remoteClaudeVersionByProject: nextVersion }
     })
   },
   clear(projectId) {
@@ -168,11 +159,7 @@ export const useSshConn = create<SshConnState>((set, get) => ({
       delete nextAuto[projectId]
       const nextVersion = { ...s.remoteClaudeVersionByProject }
       delete nextVersion[projectId]
-      return {
-        byProject: next,
-        autoPermByProject: nextAuto,
-        remoteClaudeVersionByProject: nextVersion
-      }
+      return { byProject: next, autoPermByProject: nextAuto, remoteClaudeVersionByProject: nextVersion }
     })
   }
 }))

@@ -97,11 +97,7 @@ export function stripLocalExecArgs(tokens: string[]): {
       args.push(t)
       continue
     }
-    if (
-      t.startsWith('-o') &&
-      t.length > 2 &&
-      LOCAL_EXEC_SSH_OPTIONS.has(optionKeyword(t.slice(2)))
-    ) {
+    if (t.startsWith('-o') && t.length > 2 && LOCAL_EXEC_SSH_OPTIONS.has(optionKeyword(t.slice(2)))) {
       dropped.push(t)
       continue
     }

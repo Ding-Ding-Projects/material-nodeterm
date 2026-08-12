@@ -185,10 +185,7 @@ export function buildStubApi(): Omit<
       // the project's ControlMaster). Resolve a typed refusal instead of rejecting so the
       // VideoNode shows the reason rather than a generic load failure.
       allowSsh: (): Promise<{ ok: false; error: string }> =>
-        Promise.resolve({
-          ok: false,
-          error: 'Playing videos from an SSH host is not available in the browser.'
-        }),
+        Promise.resolve({ ok: false, error: 'Playing videos from an SSH host is not available in the browser.' }),
       writeHtml: U('media.writeHtml')
     },
     browser: {
@@ -209,8 +206,7 @@ export function buildStubApi(): Omit<
       // completeness gate — threw a TypeError on every Server Edition page load. There is no
       // server handler for the update policy (the browser cannot self-install anyway), so the
       // honest answer is the shape's own "no policy" value: nothing mandatory, no minimum.
-      getPolicy: (): Promise<UpdatePolicy> =>
-        Promise.resolve({ minSupported: null, mandatory: false }),
+      getPolicy: (): Promise<UpdatePolicy> => Promise.resolve({ minSupported: null, mandatory: false }),
       restart: noop
     },
     announcements: {
@@ -380,7 +376,7 @@ export function buildStubApi(): Omit<
     | 'onSubagentActivity'
     | 'onUnreadClear'
     | 'answerPermission'
-    | 'ackDone'
+  | 'ackDone'
     | 'userDataDir'
     | 'presence'
     | 'speech'

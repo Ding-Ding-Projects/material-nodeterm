@@ -352,33 +352,33 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
       <span className="usage-pill__rows">
         {claudePrimary && (
           <span className="usage-pill__account-row">
-            <span className="usage-pill__minibar" aria-hidden>
-              <span
-                className="usage-pill__minibar-fill"
-                style={{
-                  width: `${100 - claudePrimary.usedPercent}%`,
-                  background: severityColor(
-                    claudePrimary.severity,
-                    100 - claudePrimary.usedPercent
-                  )
-                }}
-              />
-            </span>
-            <span className="usage-pill__values">
-              {limits.map((l, i) => (
-                <span key={limitKey(l)}>
-                  {i > 0 && <span className="usage-pill__sep">·</span>}
-                  <span className="usage-pill__num">
-                    {percentNumber(l.usedPercent, percentMode)}%{' '}
-                    {limitShortLabel(l.kind, l.scopeLabel)}
-                  </span>
-                </span>
-              ))}
+          <span className="usage-pill__minibar" aria-hidden>
+            <span
+              className="usage-pill__minibar-fill"
+              style={{
+                width: `${100 - claudePrimary.usedPercent}%`,
+                background: severityColor(
+                  claudePrimary.severity,
+                  100 - claudePrimary.usedPercent
+                )
+              }}
+            />
+          </span>
+          <span className="usage-pill__values">
+        {limits.map((l, i) => (
+          <span key={limitKey(l)}>
+            {i > 0 && <span className="usage-pill__sep">·</span>}
+            <span className="usage-pill__num">
+              {percentNumber(l.usedPercent, percentMode)}%{' '}
+              {limitShortLabel(l.kind, l.scopeLabel)}
             </span>
           </span>
-        )}
-        {/* One ROW per enabled provider account, carrying its own bar and worst limit. */}
-        {enabled.map((p) => {
+        ))}
+      </span>
+    </span>
+  )}
+  {/* One ROW per enabled provider account, carrying its own bar and worst limit. */}
+  {enabled.map((p) => {
           const worst = primaryLimit(p.limits)
           if (!worst) return null
           const identity = providerIdentity(p)

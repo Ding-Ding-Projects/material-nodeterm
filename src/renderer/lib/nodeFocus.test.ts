@@ -73,12 +73,7 @@ describe('nodeFitRect', () => {
   })
 
   it('resolves a nested group chain', () => {
-    const outer: FocusableNode = {
-      id: 'o',
-      position: { x: 1000, y: 1000 },
-      width: 100,
-      height: 100
-    }
+    const outer: FocusableNode = { id: 'o', position: { x: 1000, y: 1000 }, width: 100, height: 100 }
     const inner: FocusableNode = {
       id: 'i',
       position: { x: 100, y: 200 },
@@ -97,20 +92,8 @@ describe('nodeFitRect', () => {
     const selfish = term({ id: 's', parentId: 's' })
     expect(nodeFitRect(selfish, [selfish])).toMatchObject({ x: 4000, y: 3000 })
 
-    const a: FocusableNode = {
-      id: 'a',
-      position: { x: 1, y: 1 },
-      width: 10,
-      height: 10,
-      parentId: 'b'
-    }
-    const b: FocusableNode = {
-      id: 'b',
-      position: { x: 2, y: 2 },
-      width: 10,
-      height: 10,
-      parentId: 'a'
-    }
+    const a: FocusableNode = { id: 'a', position: { x: 1, y: 1 }, width: 10, height: 10, parentId: 'b' }
+    const b: FocusableNode = { id: 'b', position: { x: 2, y: 2 }, width: 10, height: 10, parentId: 'a' }
     expect(nodeFitRect(a, [a, b])).not.toBeNull()
   })
 

@@ -194,7 +194,10 @@ function captureCodexIdentity(id: string, captured: { email: string | null }): v
 function countNodesUsing(accountId: string): number {
   return useProjects
     .getState()
-    .projects.reduce((sum, p) => sum + p.nodes.filter((n) => n.accountId === accountId).length, 0)
+    .projects.reduce(
+      (sum, p) => sum + p.nodes.filter((n) => n.accountId === accountId).length,
+      0
+    )
 }
 
 export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
@@ -611,9 +614,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     }))
     // ...and off the active project's LIVE nodes (Canvas listener patches React Flow).
     window.dispatchEvent(
-      new CustomEvent('nodeterm:account-removed', {
-        detail: { accountId: account.id }
-      })
+      new CustomEvent('nodeterm:account-removed', { detail: { accountId: account.id } })
     )
   }
 
@@ -660,278 +661,278 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                 presentation={presentationFor(systemLabelSetting, systemEmail)}
                 email={systemEmail}
                 labelControl={
-                  <Input
-                    className="w-56"
-                    aria-label="Claude account display name"
-                    placeholder="Display name (optional)"
-                    value={systemLabelSetting}
-                    onChange={(event) =>
-                      useSettings.getState().update({ systemAccountLabel: event.target.value })
-                    }
-                  />
-                }
-              />
-              {accounts
-                .filter((account) => !account.host)
-                .map((account) => (
-                  <AccountRow
-                    key={account.id}
-                    presentation={presentationFor(account.label, account.email)}
-                    email={!account.pending ? account.email : undefined}
-                    pending={account.pending}
-                    labelControl={
-                      <Input
-                        className="w-56"
-                        placeholder="Display name"
-                        value={account.label}
-                        onChange={(event) => setLabel(account.id, event.target.value)}
-                      />
-                    }
-                    actions={
-                      <>
-                        {account.pending ? (
-                          <Button onClick={() => void runLogin(account)}>Retry login</Button>
-                        ) : null}
-                        <Button
-                          variant="ghost"
-                          aria-label="Remove account"
-                          onClick={() => setPendingRemove(account)}
-                        >
-                          ×
-                        </Button>
-                      </>
-                    }
-                  />
-                ))}
-            </ProviderSection>
-            <ProviderSection
-              provider="Codex"
-              addLabel="Add account"
-              adding={addingCodexOn === LOCAL_TARGET}
-              disabled={addingCodexOn !== null}
-              onAdd={() => void onAddCodexAccount()}
-            >
-              <AccountRow
-                presentation={presentationFor(systemCodexLabelSetting, systemCodexEmail)}
-                email={systemCodexEmail}
+                <Input
+                  className="w-56"
+                  aria-label="Claude account display name"
+                  placeholder="Display name (optional)"
+                  value={systemLabelSetting}
+                  onChange={(event) =>
+                    useSettings.getState().update({ systemAccountLabel: event.target.value })
+                  }
+                />
+              }
+            />
+            {accounts
+              .filter((account) => !account.host)
+              .map((account) => (
+                <AccountRow
+                key={account.id}
+                presentation={presentationFor(account.label, account.email)}
+                email={!account.pending ? account.email : undefined}
+                pending={account.pending}
                 labelControl={
-                  <Input
-                    className="w-56"
-                    aria-label="Codex account display name"
-                    placeholder="Display name (optional)"
-                    value={systemCodexLabelSetting}
-                    onChange={(event) =>
-                      useSettings.getState().update({ systemCodexAccountLabel: event.target.value })
-                    }
-                  />
-                }
-              />
-              {codexAccounts
-                .filter((account) => !account.host)
-                .map((account) => (
-                  <AccountRow
-                    key={account.id}
-                    presentation={presentationFor(account.label, account.email)}
-                    email={account.email}
-                    pending={account.pending}
-                    labelControl={
-                      <Input
-                        className="w-56"
-                        placeholder="Display name"
-                        value={account.label}
-                        onChange={(event) => setCodexLabel(account.id, event.target.value)}
-                      />
-                    }
-                    actions={
-                      <>
-                        {account.pending ? (
-                          <Button onClick={() => void runCodexLogin(account)}>Retry login</Button>
-                        ) : null}
+                    <Input
+                      className="w-56"
+                      placeholder="Display name"
+                      value={account.label}
+                      onChange={(event) => setLabel(account.id, event.target.value)}
+                    />
+                  }
+                  actions={
+                    <>
+                    {account.pending ? (
+                      <Button onClick={() => void runLogin(account)}>Retry login</Button>
+                    ) : null}
+                  <Button
+                    variant="ghost"
+                    aria-label="Remove account"
+                    onClick={() => setPendingRemove(account)}
+                  >
+                    ×
+                  </Button>
+                </>
+              }
+            />
+          ))}
+      </ProviderSection>
+      <ProviderSection
+        provider="Codex"
+        addLabel="Add account"
+        adding={addingCodexOn === LOCAL_TARGET}
+        disabled={addingCodexOn !== null}
+        onAdd={() => void onAddCodexAccount()}
+      >
+        <AccountRow
+          presentation={presentationFor(systemCodexLabelSetting, systemCodexEmail)}
+          email={systemCodexEmail}
+          labelControl={
+            <Input
+              className="w-56"
+              aria-label="Codex account display name"
+              placeholder="Display name (optional)"
+              value={systemCodexLabelSetting}
+              onChange={(event) =>
+                useSettings.getState().update({ systemCodexAccountLabel: event.target.value })
+              }
+            />
+          }
+        />
+        {codexAccounts
+          .filter((account) => !account.host)
+          .map((account) => (
+            <AccountRow
+              key={account.id}
+              presentation={presentationFor(account.label, account.email)}
+              email={account.email}
+              pending={account.pending}
+              labelControl={
+                <Input
+                  className="w-56"
+                  placeholder="Display name"
+                  value={account.label}
+                  onChange={(event) => setCodexLabel(account.id, event.target.value)}
+                />
+              }
+              actions={
+                <>
+                  {account.pending ? (
+                    <Button onClick={() => void runCodexLogin(account)}>Retry login</Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    aria-label="Remove Codex account"
+                    onClick={() => setPendingCodexRemove(account)}
+                  >
+                    ×
+                  </Button>
+                </>
+              }
+            />
+          ))}
+      </ProviderSection>
+    </MachinePanel>
+
+    {codexRemoteTargets.map(([host, server]) => {
+      const connected = !!connectedProjectIdForHost(host)
+      return (
+        <MachinePanel
+          key={host}
+          label={server.label || server.host}
+          endpoint={`${server.user}@${server.host}`}
+          remote
+          connected={connected}
+        >
+          <ProviderSection
+            provider="Claude"
+            addLabel="Add account"
+            adding={addingOn === host}
+            disabled={addingOn !== null}
+            onAdd={() => void onAddAccount(host)}
+          >
+            <AccountRow
+              presentation={presentationFor(remoteSystemAccountLabels[host], undefined, host)}
+              labelControl={
+                <Input
+                  className="w-56"
+                  aria-label={`Claude account display name on ${server.label || server.host}`}
+                  placeholder="Display name (optional)"
+                  value={remoteSystemAccountLabels[host] ?? ''}
+                  onChange={(event) =>
+                    setRemoteSystemLabel('claude', host, event.target.value)
+                  }
+                />
+              }
+            />
+            {accounts
+              .filter((account) => account.host === host)
+              .map((account) => (
+                <AccountRow
+                  key={account.id}
+                  presentation={presentationFor(account.label, account.email, host)}
+                  email={!account.pending ? account.email : undefined}
+                  pending={account.pending}
+                  labelControl={
+                    <Input
+                      className="w-56"
+                      placeholder="Display name"
+                      value={account.label}
+                      onChange={(event) => setLabel(account.id, event.target.value)}
+                    />
+                  }
+                  actions={
+                    <>
+                      {account.pending ? (
                         <Button
-                          variant="ghost"
-                          aria-label="Remove Codex account"
-                          onClick={() => setPendingCodexRemove(account)}
+                          disabled={!connected}
+                          title={
+                            !connected ? `Connect to ${host} to finish logging in` : undefined
+                          }
+                          onClick={() => void runLogin(account)}
                         >
-                          ×
+                          Retry login
                         </Button>
-                      </>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        aria-label="Remove account"
+                        onClick={() => setPendingRemove(account)}
+                      >
+                        ×
+                      </Button>
+                    </>
+                  }
+                />
+              ))}
+          </ProviderSection>
+          <ProviderSection
+            provider="Codex"
+            addLabel="Add account"
+            adding={addingCodexOn === host}
+            disabled={addingCodexOn !== null}
+            onAdd={() => void onAddCodexAccount(host)}
+          >
+            <AccountRow
+              presentation={presentationFor(
+                remoteSystemCodexAccountLabels[host],
+                remoteSystemCodexEmails[host],
+                host
+          )}
+          email={remoteSystemCodexEmails[host]}
+          unavailable={!remoteSystemCodexEmails[host]}
+          labelControl={
+            <Input
+              className="w-56"
+              aria-label={`Codex account display name on ${server.label || server.host}`}
+              placeholder="Display name (optional)"
+              value={remoteSystemCodexAccountLabels[host] ?? ''}
+              onChange={(event) =>
+                setRemoteSystemLabel('codex', host, event.target.value)
+              }
+            />
+          }
+        />
+        {codexAccounts
+          .filter((account) => account.host === host)
+          .map((account) => (
+            <AccountRow
+              key={account.id}
+              presentation={presentationFor(account.label, account.email, host)}
+              email={account.email}
+              pending={account.pending}
+              labelControl={
+                <Input
+                  className="w-56"
+                  placeholder="Display name"
+                  value={account.label}
+                  onChange={(event) => setCodexLabel(account.id, event.target.value)}
+                />
+              }
+              details={
+                <label className="mt-2 flex max-w-lg items-center gap-2 text-[11px] text-muted">
+                  <span className="shrink-0 font-medium uppercase tracking-wide">
+                    Working directory
+                  </span>
+                  <Input
+                    className="min-w-0 flex-1 font-mono"
+                    aria-label={`Remote working directory for ${account.label}`}
+                    placeholder="~/nf-management"
+                    value={account.remoteCwd ?? '~'}
+                    onChange={(event) =>
+                      setCodexRemoteCwd(account.id, event.target.value)
                     }
                   />
-                ))}
-            </ProviderSection>
-          </MachinePanel>
+                </label>
+              }
+              actions={
+                <>
+                  {account.pending ? (
+                    <Button
+                      disabled={
+                        !connected &&
+                        !sshServers.some((entry) => sshHostKey(entry) === host)
+                      }
+                      onClick={() => void runCodexLogin(account)}
+                    >
+                      Retry login
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    aria-label="Remove Codex account"
+                    onClick={() => setPendingCodexRemove(account)}
+                  >
+                    ×
+                  </Button>
+                </>
+              }
+            />
+          ))}
+      </ProviderSection>
+    </MachinePanel>
+  )
+})}
 
-          {codexRemoteTargets.map(([host, server]) => {
-            const connected = !!connectedProjectIdForHost(host)
-            return (
-              <MachinePanel
-                key={host}
-                label={server.label || server.host}
-                endpoint={`${server.user}@${server.host}`}
-                remote
-                connected={connected}
-              >
-                <ProviderSection
-                  provider="Claude"
-                  addLabel="Add account"
-                  adding={addingOn === host}
-                  disabled={addingOn !== null}
-                  onAdd={() => void onAddAccount(host)}
-                >
-                  <AccountRow
-                    presentation={presentationFor(remoteSystemAccountLabels[host], undefined, host)}
-                    labelControl={
-                      <Input
-                        className="w-56"
-                        aria-label={`Claude account display name on ${server.label || server.host}`}
-                        placeholder="Display name (optional)"
-                        value={remoteSystemAccountLabels[host] ?? ''}
-                        onChange={(event) =>
-                          setRemoteSystemLabel('claude', host, event.target.value)
-                        }
-                      />
-                    }
-                  />
-                  {accounts
-                    .filter((account) => account.host === host)
-                    .map((account) => (
-                      <AccountRow
-                        key={account.id}
-                        presentation={presentationFor(account.label, account.email, host)}
-                        email={!account.pending ? account.email : undefined}
-                        pending={account.pending}
-                        labelControl={
-                          <Input
-                            className="w-56"
-                            placeholder="Display name"
-                            value={account.label}
-                            onChange={(event) => setLabel(account.id, event.target.value)}
-                          />
-                        }
-                        actions={
-                          <>
-                            {account.pending ? (
-                              <Button
-                                disabled={!connected}
-                                title={
-                                  !connected ? `Connect to ${host} to finish logging in` : undefined
-                                }
-                                onClick={() => void runLogin(account)}
-                              >
-                                Retry login
-                              </Button>
-                            ) : null}
-                            <Button
-                              variant="ghost"
-                              aria-label="Remove account"
-                              onClick={() => setPendingRemove(account)}
-                            >
-                              ×
-                            </Button>
-                          </>
-                        }
-                      />
-                    ))}
-                </ProviderSection>
-                <ProviderSection
-                  provider="Codex"
-                  addLabel="Add account"
-                  adding={addingCodexOn === host}
-                  disabled={addingCodexOn !== null}
-                  onAdd={() => void onAddCodexAccount(host)}
-                >
-                  <AccountRow
-                    presentation={presentationFor(
-                      remoteSystemCodexAccountLabels[host],
-                      remoteSystemCodexEmails[host],
-                      host
-                    )}
-                    email={remoteSystemCodexEmails[host]}
-                    unavailable={!remoteSystemCodexEmails[host]}
-                    labelControl={
-                      <Input
-                        className="w-56"
-                        aria-label={`Codex account display name on ${server.label || server.host}`}
-                        placeholder="Display name (optional)"
-                        value={remoteSystemCodexAccountLabels[host] ?? ''}
-                        onChange={(event) =>
-                          setRemoteSystemLabel('codex', host, event.target.value)
-                        }
-                      />
-                    }
-                  />
-                  {codexAccounts
-                    .filter((account) => account.host === host)
-                    .map((account) => (
-                      <AccountRow
-                        key={account.id}
-                        presentation={presentationFor(account.label, account.email, host)}
-                        email={account.email}
-                        pending={account.pending}
-                        labelControl={
-                          <Input
-                            className="w-56"
-                            placeholder="Display name"
-                            value={account.label}
-                            onChange={(event) => setCodexLabel(account.id, event.target.value)}
-                          />
-                        }
-                        details={
-                          <label className="mt-2 flex max-w-lg items-center gap-2 text-[11px] text-muted">
-                            <span className="shrink-0 font-medium uppercase tracking-wide">
-                              Working directory
-                            </span>
-                            <Input
-                              className="min-w-0 flex-1 font-mono"
-                              aria-label={`Remote working directory for ${account.label}`}
-                              placeholder="~/nf-management"
-                              value={account.remoteCwd ?? '~'}
-                              onChange={(event) =>
-                                setCodexRemoteCwd(account.id, event.target.value)
-                              }
-                            />
-                          </label>
-                        }
-                        actions={
-                          <>
-                            {account.pending ? (
-                              <Button
-                                disabled={
-                                  !connected &&
-                                  !sshServers.some((entry) => sshHostKey(entry) === host)
-                                }
-                                onClick={() => void runCodexLogin(account)}
-                              >
-                                Retry login
-                              </Button>
-                            ) : null}
-                            <Button
-                              variant="ghost"
-                              aria-label="Remove Codex account"
-                              onClick={() => setPendingCodexRemove(account)}
-                            >
-                              ×
-                            </Button>
-                          </>
-                        }
-                      />
-                    ))}
-                </ProviderSection>
-              </MachinePanel>
-            )
-          })}
-
-          {addingOn !== null ? (
-            <p className="text-[12px] leading-relaxed text-muted">
-              {addingOn === LOCAL_TARGET
-                ? 'Creating the local account directory and installing the status hook…'
-                : 'Preparing the account, status hook, and agent skills over SSH…'}
-            </p>
-          ) : null}
-          {addError ? <p className="text-[12px] text-[color:var(--danger)]">{addError}</p> : null}
-          {codexAddError ? (
-            <p className="text-[12px] text-[color:var(--danger)]">{codexAddError}</p>
-          ) : null}
+              {addingOn !== null ? (
+                <p className="text-[12px] leading-relaxed text-muted">
+                  {addingOn === LOCAL_TARGET
+                    ? 'Creating the local account directory and installing the status hook…'
+                    : 'Preparing the account, status hook, and agent skills over SSH…'}
+                </p>
+              ) : null}
+              {addError ? <p className="text-[12px] text-[color:var(--danger)]">{addError}</p> : null}
+              {codexAddError ? (
+                <p className="text-[12px] text-[color:var(--danger)]">{codexAddError}</p>
+              ) : null}
 
           <p className="text-[12px] leading-relaxed text-muted">
             Each login has its own credentials. Remote logins stay on their SSH machine. Codex nodes

@@ -351,35 +351,35 @@ done
 
 nt_out=$(mktemp 2>/dev/null || echo "/tmp/nodeterm-control.$$")
 nt_post() {
-  if [ -n "$NODETERM_HOOK_SOCK" ]; then
-    curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
-      --unix-socket "$NODETERM_HOOK_SOCK" "http://localhost/control/$nt_verb" \\
-      -H "Accept: text/plain" \\
-      -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
-      --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
-  elif [ -n "$NODETERM_HOOK_PORT" ]; then
-    curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
-      "http://127.0.0.1:\${NODETERM_HOOK_PORT}/control/$nt_verb" \\
-      -H "Accept: text/plain" \\
-      -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
-      --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
-  else
-    return 1
-  fi
+if [ -n "$NODETERM_HOOK_SOCK" ]; then
+  curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
+    --unix-socket "$NODETERM_HOOK_SOCK" "http://localhost/control/$nt_verb" \\
+    -H "Accept: text/plain" \\
+    -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
+    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
+elif [ -n "$NODETERM_HOOK_PORT" ]; then
+  curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
+    "http://127.0.0.1:\${NODETERM_HOOK_PORT}/control/$nt_verb" \\
+    -H "Accept: text/plain" \\
+    -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
+    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
+else
+  return 1
+fi
 }
 
 nt_code=$(nt_post "$@")
 # A long-lived tmux agent may race an app restart. Re-source the same authenticated endpoint and
 # retry exactly once; never scan for or guess another project's control endpoint.
 if [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; then
-  if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then
-    sleep 0.1
-    NODETERM_HOOK_SOCK=""
-    NODETERM_HOOK_PORT=""
-    NODETERM_HOOK_TOKEN=""
-    . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || :
-    nt_code=$(nt_post "$@")
-  fi
+if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then
+  sleep 0.1
+  NODETERM_HOOK_SOCK=""
+  NODETERM_HOOK_PORT=""
+  NODETERM_HOOK_TOKEN=""
+  . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || :
+  nt_code=$(nt_post "$@")
+fi
 fi
 
 if [ -z "$NODETERM_HOOK_SOCK$NODETERM_HOOK_PORT" ]; then

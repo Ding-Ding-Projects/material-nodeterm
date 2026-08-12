@@ -53,11 +53,7 @@ import { GitService } from '../core/git-service'
 import { registerGitHubIntegration } from '../core/github/integration'
 import { runGitHubCliCommand } from '../core/github/credentials'
 import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './github-control'
-import {
-  generateCommitMessage,
-  generateGroupName,
-  generateTerminalName
-} from '../core/commit-message'
+import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
 import { fetchCheck } from '../core/check'
 import { hookServer } from '../core/agents/hook-server'
@@ -70,13 +66,7 @@ import {
   isValidPendingId,
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
-import {
-  setMainWindow,
-  getMainWindow,
-  sendToMain,
-  shouldHideOnClose,
-  createCrashReloadPolicy
-} from './main-window'
+import { setMainWindow, getMainWindow, sendToMain, shouldHideOnClose, createCrashReloadPolicy } from './main-window'
 import {
   initNotchHud,
   applyNotchHudSettings,
@@ -124,11 +114,7 @@ import { createContextTail, type TaskNotification } from '../core/context-tail'
 import { geminiContextParse } from '../core/gemini-session'
 import { codexContextParse } from '../core/codex-session'
 import { codexHome } from '../core/usage/codex-usage'
-import {
-  grokRawFields,
-  isAsyncSubagentLaunch,
-  type NormalizedAgentEvent
-} from '../shared/agents/normalize'
+import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
 import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
 import { forgetGrokSession, rememberGrokSessionDir } from '../core/grok-session'
 import {
@@ -308,9 +294,7 @@ let sshProjectManager: ReturnType<typeof initSshProject> | undefined
 // over that project's live master. Resolves the ref lazily — the manager is created after the window
 // is ready — and fails open (no-op) while the project is disconnected.
 const workspaceSshFs = new SshFs((args, stdin) =>
-  sshProjectManager
-    ? sshProjectManager.sshRun(args, stdin)
-    : Promise.resolve({ code: 1, stdout: '' })
+  sshProjectManager ? sshProjectManager.sshRun(args, stdin) : Promise.resolve({ code: 1, stdout: '' })
 )
 const remoteWorkspaceIO = makeRemoteWorkspaceIO(
   (projectId) => sshProjectManager?.refForProject(projectId) ?? null,
@@ -557,10 +541,7 @@ function createWindow(): BrowserWindow {
 
   // Block any in-page top-level navigation away from the app origin (defense in depth).
   win.webContents.on('will-navigate', (e, url) => {
-    if (
-      !url.startsWith('file://') &&
-      !url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '\0')
-    ) {
+    if (!url.startsWith('file://') && !url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '\0')) {
       e.preventDefault()
       if (isSafeExternalUrl(url)) void shell.openExternal(url)
     }
@@ -668,10 +649,10 @@ app.whenReady().then(async () => {
   ipcMain.on(
     IPC.browserRegister,
     (_e, webContentsId: number, nodeId: string, ownerNodeId?: string) => {
-      browserGuests.set(webContentsId, nodeId)
-      browserUseBackend.register(webContentsId, nodeId, ownerNodeId)
-    }
-  )
+    browserGuests.set(webContentsId, nodeId)
+    browserUseBackend.register(webContentsId, nodeId, ownerNodeId)
+  }
+)
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
     browserGuests.delete(webContentsId)
     browserUseBackend.unregister(webContentsId)
@@ -900,7 +881,11 @@ app.whenReady().then(async () => {
     run: runGitHubCliCommand
   })
   dropGitHubRelayClient = (id) => github.service.dropClient(id)
-  registerElectronGitHubControl(ipcMain, () => getMainWindow()?.webContents.id, github.controller)
+  registerElectronGitHubControl(
+    ipcMain,
+    () => getMainWindow()?.webContents.id,
+    github.controller
+  )
 
   // SSH-project Explorer/Editor fs: the remote analog of the fs:* handlers above, scoped to a
   // project's ControlMaster. One SshFs bound to the SSH-project manager's own ssh runner (the SAME
@@ -908,9 +893,7 @@ app.whenReady().then(async () => {
   // sshProjectManager is created below. The ref is looked up per call; a call before the manager
   // exists, or for an unconnected project, finds no ref and fails open ([]/''/false).
   const sshFs = new SshFs((args, stdin) =>
-    sshProjectManager
-      ? sshProjectManager.sshRun(args, stdin)
-      : Promise.resolve({ code: 1, stdout: '' })
+    sshProjectManager ? sshProjectManager.sshRun(args, stdin) : Promise.resolve({ code: 1, stdout: '' })
   )
   const sshFsRefFor = (projectId: string) => sshProjectManager?.refForProject(projectId)
   ipcMain.handle(IPC.sshFsList, (_e, projectId: string, p: string) => {
@@ -946,7 +929,8 @@ app.whenReady().then(async () => {
     route: (projectId: string): BoardLogRoute => {
       const ref = sshProjectManager?.refForProject(projectId)
       if (ref?.remoteCwd) {
-        const run = (args: string[], stdin?: string) => sshProjectManager!.sshRun(args, stdin)
+        const run = (args: string[], stdin?: string) =>
+          sshProjectManager!.sshRun(args, stdin)
         const exec: RemoteLogExec = {
           append: async (p, line) => {
             const { code } = await run(sshAppendArgs(ref.conn, ref.controlPath, p, line))
@@ -972,9 +956,7 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle(IPC.dialogSelectFolder, async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory', 'createDirectory']
-    })
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
 
@@ -1231,13 +1213,10 @@ app.whenReady().then(async () => {
   // 'show' guarantees a regular window has established the app's Dock presence first.
   const notchTunables = (): NotchHudTunables => {
     const s = settingsStore.get()
-    return {
-      enabled: s.notchHud,
-      notchWidth: s.notchWidth,
-      hoverExpand: s.notchHoverExpand
-    }
+    return { enabled: s.notchHud, notchWidth: s.notchWidth, hoverExpand: s.notchHoverExpand }
   }
-  const startNotchHud = (): void => initNotchHud({ getNodeTitle: displayTitleFor }, notchTunables())
+  const startNotchHud = (): void =>
+    initNotchHud({ getNodeTitle: displayTitleFor }, notchTunables())
   if (win.isVisible()) startNotchHud()
   else win.once('show', startNotchHud)
   settingsStore.onChange(() => applyNotchHudSettings(notchTunables()))
@@ -1436,10 +1415,7 @@ app.whenReady().then(async () => {
           ? {
               claudeAccounts: (s.claudeAccounts ?? [])
                 .filter((a) => a.host === hostKey && !a.pending)
-                .map((a) => ({
-                  id: a.id,
-                  dir: remoteAccountConfigDirAbs(home, a.id)
-                }))
+                .map((a) => ({ id: a.id, dir: remoteAccountConfigDirAbs(home, a.id) }))
             }
           : {}) // unresolved home ⇒ no accounts advertised (fail-open), autoSupported still ships
       }
@@ -1518,25 +1494,18 @@ app.whenReady().then(async () => {
       }
     }
   }
-  const contextTail = createContextTail(pushContextUpdate, {
-    onTaskNotification,
-    onToolResult
-  })
+  const contextTail = createContextTail(pushContextUpdate, { onTaskNotification, onToolResult })
   // ONE TAIL PER AGENT, each with its own parser — not one tail switching on an agent id, which
   // would mean changing `ContextTail.track(sessionId, path)` and the four call sites that depend on
   // it. The poller (offset reads, torn-line carry, change-gated push) is written once in
   // createContextTail; only the token keys differ, so only `parse` differs. Neither gets
   // onTaskNotification/onToolResult: both are claude transcript features (subagent cards, the
   // declined-ask rescue), and neither agent is in SUBAGENT_CAPABLE.
-  const geminiContextTail = createContextTail(pushContextUpdate, {
-    parse: geminiContextParse
-  })
+  const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse })
   // Hand the gemini session-name reader its path authority (declared above the handlers that use
   // it, assigned here where the tail exists).
   geminiTranscriptPathFor = (sessionId) => geminiContextTail.pathFor(sessionId)
-  const codexContextTail = createContextTail(pushContextUpdate, {
-    parse: codexContextParse
-  })
+  const codexContextTail = createContextTail(pushContextUpdate, { parse: codexContextParse })
   // Remote (SSH-project) counterparts: a node whose pty runs on a remote host has its Claude
   // transcript on that host, so its meter / subagent transcript / search must read over the
   // project's ControlMaster. One RemoteFile bound to the SSH-project manager's own ssh runner
@@ -1546,10 +1515,7 @@ app.whenReady().then(async () => {
   const remoteFile = new RemoteFile((args) =>
     sshProjectManager ? sshProjectManager.sshRun(args) : Promise.resolve({ code: 1, stdout: '' })
   )
-  const remoteContextTail = createRemoteContextTail(win, remoteFile, {
-    onTaskNotification,
-    onToolResult
-  })
+  const remoteContextTail = createRemoteContextTail(win, remoteFile, { onTaskNotification, onToolResult })
   const remoteSubagentTail = createRemoteSubagentTail(win, remoteFile)
   // Remote transcript ref learned from the hook raw-listener, keyed by sessionId — lets the
   // search/chat read handlers (which receive only sessionId + cwd) read remotely without a
@@ -1667,11 +1633,7 @@ app.whenReady().then(async () => {
     // Jailed exactly like a hook-supplied path: the command only ever emits paths under our own
     // roots, but the answer still crosses a machine boundary before we read it.
     if (!located || !isSafeRemoteTranscriptPath(located, remoteHome)) return undefined
-    const ref: RemoteFileRef = {
-      conn: rt.conn,
-      controlPath: rt.controlPath,
-      path: located
-    }
+    const ref: RemoteFileRef = { conn: rt.conn, controlPath: rt.controlPath, path: located }
     remoteTranscriptBySession.set(sessionId, ref)
     locatedTranscriptSessions.add(sessionId)
     return ref
@@ -1721,16 +1683,11 @@ app.whenReady().then(async () => {
   // Shares core's `resolveTranscript` with the read channels — including its `accountId`-scoped
   // cwd fallback. This copy dropped the account, so a managed-account node could track (and then
   // meter, and then SERVE as the chat's first-choice path) an unrelated session's transcript.
-  corePlatform.on(
-    IPC.contextEnsure,
-    async (sessionId?: string, cwd?: string, accountId?: string) => {
-      if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
-      const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) =>
-        contextTail.pathFor(s)
-      )
-      if (p) contextTail.track(sessionId, p)
-    }
-  )
+  corePlatform.on(IPC.contextEnsure, async (sessionId?: string, cwd?: string, accountId?: string) => {
+    if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
+    const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
+    if (p) contextTail.track(sessionId, p)
+  })
   // The remote half of a handoff. Same three-line shape as the context-link deps above and for
   // the same reason: reading (and here also WRITING) on an SSH project's host is the one thing
   // the handoff builder cannot answer for itself. Absent deps ⇒ local-only, as before.
@@ -1768,15 +1725,7 @@ app.whenReady().then(async () => {
       sourceNodeId: string,
       cwd: string | undefined,
       accountId: string | undefined
-    ) =>
-      buildHandoff({
-        sessionId,
-        agentId,
-        sourceNodeId,
-        cwd,
-        accountId,
-        remote: handoffRemote
-      })
+    ) => buildHandoff({ sessionId, agentId, sourceNodeId, cwd, accountId, remote: handoffRemote })
   )
 
   installManagedAgentHooks()
@@ -1875,10 +1824,7 @@ app.whenReady().then(async () => {
     }
   }).start()
   const ackSweeper = createAckSweeper({
-    handlers: {
-      ackDone,
-      onUnreadClear: (id) => sendToMain(IPC.agentUnreadClear, id)
-    }
+    handlers: { ackDone, onUnreadClear: (id) => sendToMain(IPC.agentUnreadClear, id) }
   })
   let remoteAckSweepBusy = false
   const ackSweepTimer = setInterval(() => {
@@ -2026,8 +1972,7 @@ app.whenReady().then(async () => {
     }
     // An async subagent's PostToolUse is only the launch ack — keep tailing its transcript;
     // the real end (task-notification via the context tails) releases it.
-    const asyncLaunch =
-      p.hook_event_name === 'PostToolUse' && isAsyncSubagentLaunch(p.tool_response)
+    const asyncLaunch = p.hook_event_name === 'PostToolUse' && isAsyncSubagentLaunch(p.tool_response)
     // REMOTE node: route to the remote tails/search, jailing the path under the project's remote
     // ~/.claude/projects. Diverges from the local path ONLY when the node has a live ssh remote.
     const rt = nodeId ? ptyManager.sshRemoteForNode(nodeId) : undefined
@@ -2035,11 +1980,7 @@ app.whenReady().then(async () => {
       const remoteHome = sshProjectManager?.remoteHomeForControlPath(rt.controlPath)
       const transcriptPath = safeRemoteTranscriptPath(p.transcript_path, remoteHome)
       if (p.session_id && transcriptPath) {
-        const ref: RemoteFileRef = {
-          conn: rt.conn,
-          controlPath: rt.controlPath,
-          path: transcriptPath
-        }
+        const ref: RemoteFileRef = { conn: rt.conn, controlPath: rt.controlPath, path: transcriptPath }
         remoteContextTail.track(p.session_id, ref)
         remoteTranscriptBySession.set(p.session_id, ref)
       }
@@ -2049,8 +1990,7 @@ app.whenReady().then(async () => {
       // the local locators are no substitute (they search the wrong machine's disk, so
       // resolveLinkTranscript deliberately refuses them for remote nodes). The path stored is the
       // JAILED one, so a forged POST cannot aim a link read at an arbitrary remote file.
-      if (nodeId && p.session_id && transcriptPath)
-        setNodeTranscript(nodeId, p.session_id, transcriptPath)
+      if (nodeId && p.session_id && transcriptPath) setNodeTranscript(nodeId, p.session_id, transcriptPath)
       if (p.hook_event_name === 'SessionEnd' && p.session_id) {
         remoteContextTail.untrack(p.session_id)
         remoteTranscriptBySession.delete(p.session_id)
@@ -2066,11 +2006,7 @@ app.whenReady().then(async () => {
           void resolveRemoteSubagentFile(rt, transcriptPath, toolUseId)
             .then((file) => {
               if (file && !remoteSubagentCancel.has(toolUseId)) {
-                remoteSubagentTail.track(toolUseId, {
-                  conn: rt.conn,
-                  controlPath: rt.controlPath,
-                  path: file
-                })
+                remoteSubagentTail.track(toolUseId, { conn: rt.conn, controlPath: rt.controlPath, path: file })
               }
             })
             .finally(() => {
@@ -2103,8 +2039,7 @@ app.whenReady().then(async () => {
     // Context-window meter: tail the session transcript (any event carrying both fields).
     if (p.session_id && transcriptPath) contextTail.track(p.session_id, transcriptPath)
     if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
-    if (nodeId && p.session_id && transcriptPath)
-      setNodeTranscript(nodeId, p.session_id, transcriptPath)
+    if (nodeId && p.session_id && transcriptPath) setNodeTranscript(nodeId, p.session_id, transcriptPath)
     if (p.hook_event_name === 'SessionEnd' && p.session_id) contextTail.untrack(p.session_id)
     // Subagent live transcript: track on PreToolUse / finish on PostToolUse for subagent tools.
     if (p.tool_use_id && p.tool_name && SUBAGENT_TOOLS.has(p.tool_name)) {
@@ -2204,18 +2139,10 @@ app.whenReady().then(async () => {
     return await new Promise((resolve) => {
       const timer = setTimeout(() => {
         pendingControl.delete(requestId)
-        resolve({
-          ok: false,
-          error: 'timed out (no response / not confirmed)'
-        })
+        resolve({ ok: false, error: 'timed out (no response / not confirmed)' })
       }, 120_000)
       pendingControl.set(requestId, { resolve, timer })
-      target.webContents.send(IPC.agentControl, {
-        requestId,
-        sourceNodeId: nodeId,
-        verb,
-        args
-      })
+      target.webContents.send(IPC.agentControl, { requestId, sourceNodeId: nodeId, verb, args })
     })
   })
   initMediaProtocol()
@@ -2239,9 +2166,7 @@ app.whenReady().then(async () => {
       const rt = ptyManager.sshRemoteForNode(nodeId)
       if (!rt || !sshProjectManager) return null
       try {
-        const { code, stdout } = await sshProjectManager.sshRun(
-          childArgs(rt.conn, rt.controlPath, command)
-        )
+        const { code, stdout } = await sshProjectManager.sshRun(childArgs(rt.conn, rt.controlPath, command))
         return code === 0 ? stdout : null
       } catch {
         return null
@@ -2320,16 +2245,8 @@ app.whenReady().then(async () => {
   initRelayHost(win, corePlatform, {})
   // Standing (phone) relay host: keep a host connection registered so a paired phone can reach
   // this Mac from anywhere. Honors settings.phoneAccessEnabled internally.
-  const standingHost = initStandingHost(
-    win,
-    ptyManager,
-    () => settingsStore.get(),
-    listProjectsOutput,
-    hostBridge
-  )
-  ipcMain.on(IPC.remoteStandingHostSet, (_e, enabled: boolean) =>
-    standingHost.setEnabled(!!enabled)
-  )
+  const standingHost = initStandingHost(win, ptyManager, () => settingsStore.get(), listProjectsOutput, hostBridge)
+  ipcMain.on(IPC.remoteStandingHostSet, (_e, enabled: boolean) => standingHost.setEnabled(!!enabled))
   // Reconcile from persisted settings on launch (starts hosting if enabled).
   standingHost.syncFromSettings()
   // Interactive relay CLIENT (Stage 4): connect OUT to another desktop's host. `connectRelayClient`
@@ -2346,9 +2263,7 @@ app.whenReady().then(async () => {
       // No Pro gate on the client: the paywall is the HOST minting the pairing token, so a valid offer
       // is the credential (the paywall is host-side). The dev/relay gate still applies.
       if (!relayAllowed()) {
-        throw new Error(
-          'Remote access is unavailable in development builds (set NODETERM_RELAY_URL).'
-        )
+        throw new Error('Remote access is unavailable in development builds (set NODETERM_RELAY_URL).')
       }
       const offer = decodeOffer(String(offerCode ?? ''))
       if (!offer) {
@@ -2494,9 +2409,7 @@ app.whenReady().then(async () => {
           .then((adopted) => {
             if (adopted) sendToMain(IPC.workspaceExternalChange, adopted)
           })
-          .catch(() => {
-            /* fail-open: the next tick retries */
-          })
+          .catch(() => { /* fail-open: the next tick retries */ })
           .finally(() => inFlight.delete(projectId))
       }
     }, REMOTE_WORKSPACE_POLL_MS)
@@ -2513,10 +2426,7 @@ app.whenReady().then(async () => {
     const ref = projectId ? sshProjectManager?.refForProject(projectId) : undefined
     activeRemote =
       ref && ref.remoteCwd
-        ? {
-            cwd: ref.remoteCwd,
-            ref: { conn: ref.conn, controlPath: ref.controlPath }
-          }
+        ? { cwd: ref.remoteCwd, ref: { conn: ref.conn, controlPath: ref.controlPath } }
         : null
   })
 

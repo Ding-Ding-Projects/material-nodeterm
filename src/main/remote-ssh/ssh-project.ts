@@ -4,19 +4,8 @@ import { spawn, execFile, execFileSync } from 'child_process'
 import { app, ipcMain } from 'electron'
 import { IPC } from '../../shared/ipc'
 import { getMainWindow, sendToMain } from '../main-window'
-import {
-  parseLsDirs,
-  posixQuote,
-  quoteRemotePath,
-  remoteTmuxConf,
-  sshHostKey,
-  type SshConnection
-} from '../../shared/ssh'
-import type {
-  DownloadResult,
-  SshPassphraseRequest,
-  SshProjectStatusEvent
-} from '../../shared/types'
+import { parseLsDirs, posixQuote, quoteRemotePath, remoteTmuxConf, sshHostKey, type SshConnection } from '../../shared/ssh'
+import type { DownloadResult, SshPassphraseRequest, SshProjectStatusEvent } from '../../shared/types'
 import { candidateName, safeDownloadBasename } from '../../core/download-name'
 import { findExecutableSync, shellPathNow } from '../../core/exec-path'
 import { mediaCachePruneList, remoteMediaCacheName } from '../../core/remote-ssh/media-cache'
@@ -38,10 +27,7 @@ import {
   scpDownArgs,
   RMT_TMUX_SOCKET
 } from '../../core/remote-ssh/control-master'
-import {
-  claudeVersionProbeCommand,
-  parseClaudeVersionProbe
-} from '../../core/remote-ssh/claude-version-probe'
+import { claudeVersionProbeCommand, parseClaudeVersionProbe } from '../../core/remote-ssh/claude-version-probe'
 import { RemoteHooks } from './remote-hooks'
 import { hookServer } from '../../core/agents/hook-server'
 import { askpassServer } from './ssh-askpass'
@@ -489,10 +475,7 @@ export class SshProjectManager {
     // Best-effort: the socket dir is a short, space-free home dir (~/.nodeterm/ssh-cm). If it can't
     // be made, the master/`-O check` loop below fails and we report an error status anyway.
     try {
-      await fs.mkdir(path.dirname(controlPath), {
-        recursive: true,
-        mode: 0o700
-      })
+      await fs.mkdir(path.dirname(controlPath), { recursive: true, mode: 0o700 })
     } catch {
       // ignore, keeps the manager unit-testable
     }
@@ -541,10 +524,7 @@ export class SshProjectManager {
       // The app-private agent has to be listening BEFORE ssh authenticates, or `AddKeysToAgent`
       // stores the unlocked key nowhere and every connect this run prompts again. Never fatal.
       await this.r.ensureAgent?.().catch(() => {})
-      master = this.r.spawnMaster(
-        masterArgs(conn, controlPath),
-        this.r.masterEnvFor?.(conn.identityFile) ?? {}
-      )
+      master = this.r.spawnMaster(masterArgs(conn, controlPath), this.r.masterEnvFor?.(conn.identityFile) ?? {})
     }
     // A disconnect can land while this attempt is still in the probes above, BEFORE any conns
     // entry exists to tear down - its only lever is dropping this attempt's inFlight ticket
@@ -596,10 +576,7 @@ export class SshProjectManager {
           await fs.rm(controlPath, { force: true }).catch(() => {})
           reusedOrphan = false
           await this.r.ensureAgent?.().catch(() => {}) // as on the fresh-spawn path
-          master = this.r.spawnMaster(
-            masterArgs(conn, controlPath),
-            this.r.masterEnvFor?.(conn.identityFile) ?? {}
-          )
+          master = this.r.spawnMaster(masterArgs(conn, controlPath), this.r.masterEnvFor?.(conn.identityFile) ?? {})
           this.conns.set(projectId, { conn, controlPath, master, remoteCwd })
           // Re-enter the wait loop on the SAME terms as a fresh spawn: the exit-aware,
           // wall-clock-bounded wait above, with the budget restarted (the orphan adopt + failed
@@ -637,22 +614,12 @@ export class SshProjectManager {
             // write (mkdir perms, disk full, …) must leave it undefined so `remoteTmuxCommand`
             // never passes `-f <missing-conf>` (which makes tmux refuse to start → terminal dies).
             const w = await this.r.run(
-              childArgs(
-                conn,
-                controlPath,
-                `mkdir -p ${posixQuote(dir)} && cat > ${posixQuote(confPath)}`
-              ),
+              childArgs(conn, controlPath, `mkdir -p ${posixQuote(dir)} && cat > ${posixQuote(confPath)}`),
               remoteTmuxConf(50000)
             )
             if (w.code === 0) {
               // source-file is best-effort (pushes options into a warm server); ignore its result.
-              await this.r.run(
-                childArgs(
-                  conn,
-                  controlPath,
-                  `tmux -L ${RMT_TMUX_SOCKET} source-file ${posixQuote(confPath)}`
-                )
-              )
+              await this.r.run(childArgs(conn, controlPath, `tmux -L ${RMT_TMUX_SOCKET} source-file ${posixQuote(confPath)}`))
               tmuxConfPath = confPath
             }
           } catch {
@@ -684,8 +651,7 @@ export class SshProjectManager {
         // badges from remote sessions" failure), emitted a second `connected`, and started a
         // second claude probe against the same entry. A stale attempt reports its own result and
         // touches nothing.
-        const entry =
-          this.conns.get(projectId)?.master === master ? this.conns.get(projectId) : undefined
+        const entry = this.conns.get(projectId)?.master === master ? this.conns.get(projectId) : undefined
         if (entry) {
           entry.hookEndpointPath = hookEndpointPath
           entry.remoteHome = remoteHome
@@ -866,11 +832,7 @@ export class SshProjectManager {
    *    (a `.part` DIRECTORY for `-r`) and it is renamed into place only on exit 0, the same
    *    write-then-rename discipline `sshWriteArgs` uses remotely. A failure unlinks the remains.
    */
-  async downloadFile(
-    projectId: string,
-    remotePath: string,
-    destDir: string
-  ): Promise<DownloadResult> {
+  async downloadFile(projectId: string, remotePath: string, destDir: string): Promise<DownloadResult> {
     const c = this.conns.get(projectId)
     if (!c) return { ok: false, error: 'Not connected.' }
     const name = safeDownloadBasename(remotePath)
@@ -880,23 +842,16 @@ export class SshProjectManager {
       // it decides `-r`, and the tree can be stale. A failed probe is not evidence of "file" ,
       // but `test -d` failing on a live master overwhelmingly means "not a directory", and the
       // worst case of guessing wrong is a plain scp error, so this stays fail-open.
-      const probe = await this.r.run(
-        childArgs(c.conn, c.controlPath, `test -d ${quoteRemotePath(remotePath)}`)
-      )
+      const probe = await this.r.run(childArgs(c.conn, c.controlPath, `test -d ${quoteRemotePath(remotePath)}`))
       const isDir = probe.code === 0
       await fs.mkdir(destDir, { recursive: true })
       const finalPath = await this.freeDestPath(destDir, name)
       const partPath = `${finalPath}.part`
       await fs.rm(partPath, { recursive: true, force: true }).catch(() => {})
-      const res = await this.r.runScp(
-        scpDownArgs(c.conn, c.controlPath, remotePath, partPath, isDir)
-      )
+      const res = await this.r.runScp(scpDownArgs(c.conn, c.controlPath, remotePath, partPath, isDir))
       if (res.code !== 0) {
         await fs.rm(partPath, { recursive: true, force: true }).catch(() => {})
-        return {
-          ok: false,
-          error: 'The transfer failed. Is the file still there, and readable?'
-        }
+        return { ok: false, error: 'The transfer failed. Is the file still there, and readable?' }
       }
       await fs.rename(partPath, finalPath)
       return { ok: true, localPath: finalPath, dir: isDir }
@@ -940,11 +895,7 @@ export class SshProjectManager {
       const dirProbe = await this.r.run(
         childArgs(c.conn, c.controlPath, `test -d ${quoteRemotePath(remotePath)}`)
       )
-      if (dirProbe.code === 0)
-        return {
-          ok: false,
-          error: 'That path is a directory, not a video file.'
-        }
+      if (dirProbe.code === 0) return { ok: false, error: 'That path is a directory, not a video file.' }
       const dest = path.join(cacheDir, remoteMediaCacheName(sshHostKey(c.conn), remotePath, name))
       const sizeProbe = await this.r.run(
         childArgs(c.conn, c.controlPath, `wc -c < ${quoteRemotePath(remotePath)}`)
@@ -962,24 +913,16 @@ export class SshProjectManager {
       // under the final name, nt-media would happily serve a truncated video.
       const partPath = `${dest}.part`
       await fs.rm(partPath, { force: true }).catch(() => {})
-      const res = await this.r.runScp(
-        scpDownArgs(c.conn, c.controlPath, remotePath, partPath, false)
-      )
+      const res = await this.r.runScp(scpDownArgs(c.conn, c.controlPath, remotePath, partPath, false))
       if (res.code !== 0) {
         await fs.rm(partPath, { force: true }).catch(() => {})
-        return {
-          ok: false,
-          error: 'The transfer failed. Is the file still there, and readable?'
-        }
+        return { ok: false, error: 'The transfer failed. Is the file still there, and readable?' }
       }
       await fs.rename(partPath, dest)
       void this.pruneMediaCache(cacheDir, path.basename(dest))
       return { ok: true, localPath: dest }
     } catch {
-      return {
-        ok: false,
-        error: 'The file could not be fetched from the host.'
-      }
+      return { ok: false, error: 'The file could not be fetched from the host.' }
     }
   }
 
@@ -990,10 +933,7 @@ export class SshProjectManager {
     try {
       const names = (await fs.readdir(cacheDir)).filter((n) => !n.endsWith('.part'))
       const entries = await Promise.all(
-        names.map(async (n) => ({
-          name: n,
-          mtimeMs: (await fs.stat(path.join(cacheDir, n))).mtimeMs
-        }))
+        names.map(async (n) => ({ name: n, mtimeMs: (await fs.stat(path.join(cacheDir, n))).mtimeMs }))
       )
       for (const n of mediaCachePruneList(entries, except)) {
         await fs.rm(path.join(cacheDir, n), { force: true }).catch(() => {})
@@ -1547,39 +1487,20 @@ export class SshProjectManager {
     if (mk.code !== 0) return null
     // Install the managed hook into the account dir's settings.json (needs the absolute $HOME so the
     // merged `sh "…"` command has no unexpanded ~). Fail-open when the home never resolved.
-    if (c.remoteHome)
-      await this.remoteHooks.installIntoAccountDir(c.conn, c.controlPath, c.remoteHome, accountId)
+    if (c.remoteHome) await this.remoteHooks.installIntoAccountDir(c.conn, c.controlPath, c.remoteHome, accountId)
     // Same gap for the canvas-control SKILL: claude resolves user skills relative to
     // CLAUDE_CONFIG_DIR, so an account session never sees the one in `~/.claude/skills`.
     if (c.remoteHome && c.hookEndpointPath) {
-      await this.remoteHooks.installCanvasSkillIntoAccountDir(
-        c.conn,
-        c.controlPath,
-        c.remoteHome,
-        accountId
-      )
-      await this.remoteHooks.installContextLinkSkillIntoAccountDir(
-        c.conn,
-        c.controlPath,
-        c.remoteHome,
-        accountId
-      )
+      await this.remoteHooks.installCanvasSkillIntoAccountDir(c.conn, c.controlPath, c.remoteHome, accountId)
+      await this.remoteHooks.installContextLinkSkillIntoAccountDir(c.conn, c.controlPath, c.remoteHome, accountId)
     }
     // One remote `claude --version` gates both the keychain-scoping answer (>= 2.1, fail-open true)
     // AND the fullscreen-tui write (>= 2.1.89, write-if-absent) into the account dir.
     const version = await this.remoteClaudeVersion(c.conn, c.controlPath)
     if (c.remoteHome && supportsFullscreenTui(version)) {
-      await this.remoteHooks.ensureFullscreenTuiInAccountDir(
-        c.conn,
-        c.controlPath,
-        c.remoteHome,
-        accountId
-      )
+      await this.remoteHooks.ensureFullscreenTuiInAccountDir(c.conn, c.controlPath, c.remoteHome, accountId)
     }
-    return {
-      configDir: dir,
-      versionSupported: version ? isSupportedClaudeVersion(version) : true
-    }
+    return { configDir: dir, versionSupported: version ? isSupportedClaudeVersion(version) : true }
   }
 
   /** Read a managed remote account's `.claude.json` (login capture); null when not connected or the
@@ -1613,10 +1534,7 @@ export class SshProjectManager {
    * user's profile, whose STDOUT noise (banners, neofetch, …) would otherwise be parsed as the
    * version, hence the marker-delimited value (see `claude-version-probe.ts`).
    */
-  private async remoteClaudeVersion(
-    conn: SshConnection,
-    controlPath: string
-  ): Promise<string | null> {
+  private async remoteClaudeVersion(conn: SshConnection, controlPath: string): Promise<string | null> {
     try {
       const { stdout } = await this.r.run(childArgs(conn, controlPath, claudeVersionProbeCommand()))
       // Markers absent ⇒ FAILED probe ⇒ null (unknown). Never scrape free-form stdout.
@@ -1664,11 +1582,7 @@ export class SshProjectManager {
         // so a remote Claude session behaves natively in the host's tmux. Gated on the same probed
         // version; fail-open inside RemoteHooks. Needs the resolved $HOME for an absolute path.
         if (entry.remoteHome && supportsFullscreenTui(version)) {
-          await this.remoteHooks.ensureFullscreenTui(
-            entry.conn,
-            entry.controlPath,
-            entry.remoteHome
-          )
+          await this.remoteHooks.ensureFullscreenTui(entry.conn, entry.controlPath, entry.remoteHome)
         }
         return
       }
@@ -1685,10 +1599,7 @@ export class SshProjectManager {
    * internal teardowns, the watchdog's stale-master drop and a failed connect all empty `conns`
    * routinely and must not be read as "the user is done with SSH".
    */
-  async disconnect(
-    projectId: string,
-    opts?: { keepInFlight?: boolean; final?: boolean }
-  ): Promise<void> {
+  async disconnect(projectId: string, opts?: { keepInFlight?: boolean; final?: boolean }): Promise<void> {
     const c = this.conns.get(projectId)
     if (!c) {
       // No registered master, but an attempt may still be in flight for this id, inside
@@ -1706,13 +1617,7 @@ export class SshProjectManager {
     if (this.statusPushed.delete(projectId)) {
       const f = this.statusFilePath(projectId, c)
       await this.r
-        .run(
-          childArgs(
-            c.conn,
-            c.controlPath,
-            `rm -f ${quoteRemotePath(f)} ${quoteRemotePath(`${f}.tmp`)}`
-          )
-        )
+        .run(childArgs(c.conn, c.controlPath, `rm -f ${quoteRemotePath(f)} ${quoteRemotePath(`${f}.tmp`)}`))
         .catch(() => {})
     }
     // Cancel the reverse hook tunnel (over the still-live master) BEFORE tearing the master down.
@@ -1951,16 +1856,9 @@ export function initSshProject(
         const child = execFile(
           ssh,
           args,
-          {
-            timeout: 15000,
-            maxBuffer: 16 * 1024 * 1024,
-            env: { ...process.env, ...appSshAgent.env() }
-          },
+          { timeout: 15000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, ...appSshAgent.env() } },
           (err, stdout) =>
-            resolve({
-              code: err ? ((err as { code?: number }).code ?? 1) : 0,
-              stdout: stdout ?? ''
-            })
+            resolve({ code: err ? ((err as { code?: number }).code ?? 1) : 0, stdout: stdout ?? '' })
         )
         if (stdin !== undefined) {
           child.stdin?.end(stdin)
@@ -1969,14 +1867,8 @@ export function initSshProject(
     runScp: (args) =>
       new Promise((resolve) => {
         // Same reason as `run`: scp re-authenticates when the master socket is gone.
-        execFile(
-          scp,
-          args,
-          {
-            maxBuffer: 1024 * 1024,
-            env: { ...process.env, ...appSshAgent.env() }
-          },
-          (err) => resolve({ code: err ? 1 : 0 })
+        execFile(scp, args, { maxBuffer: 1024 * 1024, env: { ...process.env, ...appSshAgent.env() } }, (err) =>
+          resolve({ code: err ? 1 : 0 })
         )
       }),
     getHook: () => ({
@@ -2006,16 +1898,13 @@ export function initSshProject(
     promptForPassphrase({ ...req, target: mgr.targetForMasterPid(req.caller) })
   )
   mgr.startWatchdog()
-  ipcMain.handle(
-    IPC.sshConnectProject,
-    async (_e, projectId: string, conn: SshConnection, remoteCwd?: string) => {
-      const res = await mgr.connect(projectId, conn, remoteCwd)
-      // Connection is up (master in the map) → reconcile the remote project file with our cache.
-      // Only fires on a successful connect; a throw above propagates without calling back.
-      onConnected?.(projectId)
-      return res
-    }
-  )
+  ipcMain.handle(IPC.sshConnectProject, async (_e, projectId: string, conn: SshConnection, remoteCwd?: string) => {
+    const res = await mgr.connect(projectId, conn, remoteCwd)
+    // Connection is up (master in the map) → reconcile the remote project file with our cache.
+    // Only fires on a successful connect; a throw above propagates without calling back.
+    onConnected?.(projectId)
+    return res
+  })
   // `final`: the only USER-facing disconnect there is (a deleted project, or the connect dialog
   // dropping its browse master). Internal teardowns never reach here, which is what makes "no
   // connections left" a trustworthy signal to forget the key.
@@ -2025,9 +1914,7 @@ export function initSshProject(
   ipcMain.handle(IPC.sshKillSessions, (_e, projectId: string, nodeIds: string[]) =>
     mgr.killSessions(projectId, nodeIds)
   )
-  ipcMain.handle(IPC.sshListDir, (_e, projectId: string, dir: string) =>
-    mgr.listDir(projectId, dir)
-  )
+  ipcMain.handle(IPC.sshListDir, (_e, projectId: string, dir: string) => mgr.listDir(projectId, dir))
   ipcMain.handle(IPC.sshMkdir, (_e, projectId: string, dir: string) => mgr.makeDir(projectId, dir))
   ipcMain.handle(IPC.sshUploadFile, (_e, projectId: string, localPath: string, fileName: string) =>
     mgr.uploadFile(projectId, localPath, fileName)
@@ -2035,10 +1922,8 @@ export function initSshProject(
   // The DESTINATION is resolved here, in main: the OS Downloads folder unless the renderer passed
   // a directory the user picked in the native folder dialog. The renderer never gets to name an
   // arbitrary local write target for a remote payload.
-  ipcMain.handle(
-    IPC.sshDownloadFile,
-    (_e, projectId: string, remotePath: string, destDir?: string) =>
-      mgr.downloadFile(projectId, remotePath, destDir || app.getPath('downloads'))
+  ipcMain.handle(IPC.sshDownloadFile, (_e, projectId: string, remotePath: string, destDir?: string) =>
+    mgr.downloadFile(projectId, remotePath, destDir || app.getPath('downloads'))
   )
   // A VideoNode in an SSH project plays a HOST file: pull it into the local media cache over the
   // ControlMaster, allowlist the cached copy, and hand back its nt-media:// URL.

@@ -720,10 +720,7 @@ export interface MediaApi {
    * allowlists the cached copy. Resolves the playable nt-media:// URL, or a reason it couldn't
    * (not connected, transfer failed). Desktop only — the browser bridge rejects it.
    */
-  allowSsh(
-    projectId: string,
-    remotePath: string
-  ): Promise<{ ok: true; url: string } | { ok: false; error: string }>
+  allowSsh(projectId: string, remotePath: string): Promise<{ ok: true; url: string } | { ok: false; error: string }>
   /** Persist raw HTML to <userData>/agent-web/<id>.html, allowlist it, return its absolute path. */
   writeHtml(html: string): Promise<string>
 }
@@ -1140,8 +1137,7 @@ export interface SshApi {
   importCandidates(): Promise<import('./ssh').ParsedSshHost[]>
 }
 
-export type SshProjectStatus =
-  'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error'
+export type SshProjectStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error'
 
 /**
  * A live SSH project's status, pushed from main. `claudeAutoPermissionMode` rides a `connected`
@@ -1367,29 +1363,13 @@ export interface GitApi {
   /** `{ ok: false, entries: [] }` when git itself could not be read — which is NOT the same fact as
    *  "this repo has no worktrees", and no caller may treat it as one (see worktree-ops). */
   worktreeList(repoPath: string): Promise<import('./worktree').WorktreeListResult>
-  worktreeAdd(
-    repoPath: string,
-    wtPath: string,
-    branch: string,
-    baseRef: string,
-    isNew: boolean
-  ): Promise<GitResult>
+  worktreeAdd(repoPath: string, wtPath: string, branch: string, baseRef: string, isNew: boolean): Promise<GitResult>
   /** `push`: also publish `baseRef` to origin after a successful merge (only if a remote exists).
    *  Opt-in — a merge must never publish to a shared remote the user was not told about. */
-  worktreeMerge(
-    repoPath: string,
-    branch: string,
-    baseRef: string,
-    push?: boolean
-  ): Promise<GitResult>
+  worktreeMerge(repoPath: string, branch: string, baseRef: string, push?: boolean): Promise<GitResult>
   /** `pruneOnly`: clean up git's registration only — never delete a directory. Used to prune a
    *  stale binding whose worktree was already deleted outside the app. */
-  worktreeRemove(
-    repoPath: string,
-    wtPath: string,
-    deleteBranch: boolean,
-    pruneOnly?: boolean
-  ): Promise<GitResult>
+  worktreeRemove(repoPath: string, wtPath: string, deleteBranch: boolean, pruneOnly?: boolean): Promise<GitResult>
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>
