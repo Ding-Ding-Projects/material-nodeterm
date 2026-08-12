@@ -13,6 +13,7 @@ import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { Switch } from '@renderer/ui/Switch'
+import { describeGitHubAuth, tokenFieldIsPrimary } from '../../../lib/githubAuthView'
 
 const ROWS = {
   enable: {
@@ -154,7 +155,17 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   const completionReady = !!githubConfig?.completionColumnId &&
     mappings.has(githubConfig.completionColumnId)
   const ready = approved && authenticated && completionReady
-  const ghSignedIn = !!view?.auth.ghAuthenticated
+  // What the Authentication row should say/show — decided once, off the ACTIVE provider (not the
+  // raw ghAuthenticated flag, which lies for an unapproved project and for a gh-up/token-pinned
+  // session). See githubAuthView.ts.
+  const authView = describeGitHubAuth({
+    approved,
+    provider: view?.control.authProvider ?? 'auto',
+    activeProvider: view?.auth.activeProvider ?? null,
+    tokenPresent: !!view?.auth.tokenPresent,
+    ...(view?.auth.login ? { login: view.auth.login } : {})
+  })
+  const tokenPrimary = tokenFieldIsPrimary(authView)
 
   // The personal access token control, defined once and placed either prominently (when the GitHub
   // CLI is NOT signed in — it's the only way in) or tucked inside "Advanced" (when gh already works,
@@ -319,29 +330,53 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
 
           <SearchableRow {...ROWS.authentication}>
             <div className="space-y-3">
-              {ghSignedIn ? (
-                // Happy path: the CLI already authenticates every request — no token, no dropdown.
-                // (Unless the user has explicitly pinned the provider to token-only, below.)
-                <p className="text-[13px] text-text">
-                  ✓ Signed in via GitHub CLI
-                  {view?.auth.activeProvider === 'gh' && view?.auth.login ? ` as @${view.auth.login}` : ''}.
-                  {view?.control.authProvider === 'token' ? '' : ' No token needed.'}
-                </p>
-              ) : (
+              {authView.kind === 'unapproved' && (
+                // Approval gates credential resolution, so we genuinely can't check yet — say that,
+                // never "not signed in" (the setup flow approves right above this row).
                 <p className="text-[13px] text-muted">
-                  GitHub CLI is not signed in. Run <code>gh auth login</code> in a terminal, or paste a
-                  personal access token below.
+                  Approve this repository above to check GitHub authentication.
+                </p>
+              )}
+              {authView.kind === 'gh' && (
+                <p className="text-[13px] text-text">
+                  ✓ Signed in via GitHub CLI{authView.login ? ` as @${authView.login}` : ''}.
+                  {authView.pinned ? '' : ' No token needed.'}
+                  {authView.tokenPresent ? ' A saved token is kept as a fallback.' : ''}
+                </p>
+              )}
+              {authView.kind === 'token' && (
+                <p className="text-[13px] text-text">
+                  ✓ Authenticated with a saved personal access token.
+                </p>
+              )}
+              {authView.kind === 'need-gh' && (
+                <p className="text-[13px] text-muted">
+                  GitHub CLI is not signed in. Run <code>gh auth login</code> in a terminal
+                  {authView.allowToken ? ', or paste a personal access token below' : ''}.{' '}
+                  <button
+                    type="button"
+                    className="github-auth-recheck"
+                    disabled={busy !== ''}
+                    onClick={() => void refreshStatus()}
+                  >
+                    Check again
+                  </button>
+                </p>
+              )}
+              {authView.kind === 'need-token' && (
+                <p className="text-[13px] text-muted">
+                  Authentication is pinned to a personal access token — paste one below to authenticate.
                 </p>
               )}
 
-              {/* Token is the only way in when gh is absent, so surface it; otherwise hide it away. */}
-              {!ghSignedIn && tokenFieldRow}
+              {/* Token in the foreground only when it's actionable; otherwise tucked into Advanced. */}
+              {tokenPrimary && tokenFieldRow}
 
               <details className="github-auth-advanced">
-                <summary>{ghSignedIn ? 'Advanced — use a personal access token instead' : 'Advanced'}</summary>
+                <summary>Advanced — authentication provider &amp; token</summary>
                 <div className="space-y-4" style={{ marginTop: 12 }}>
                   {providerFieldRow}
-                  {ghSignedIn && tokenFieldRow}
+                  {!tokenPrimary && tokenFieldRow}
                 </div>
               </details>
             </div>
