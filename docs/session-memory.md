@@ -444,6 +444,20 @@ macOS (the ps path never runs on Linux)
     memory exactly 4.00× (18.87 → 4.72 GB). The darwin reaper default is now also guarded by a
     BEHAVIOURAL test (darwin-gated, mutation-verified on this machine: reverting the default to
     `readMemInfo` reaps 8) — see session-budget.test.ts, which CI's source-text check stands in for.
+    REAPER CAUGHT LIVE 2026-08-12: a build of main (one disclosed deviation: TMUX_SOCKET renamed to
+    an isolated verify socket so no real session was at risk) ran ~66 min against 60 detached bait
+    sessions with grace forced to 0 — the count cap reaped exactly 60−48=12 (8, then 4, lexical
+    order, converging AT the cap: positive proof the sweeps run), then ≥3 further sweeps stayed
+    SILENT for ~36 min with 48 eligible sessions and `os.freemem()` at 0.10 GB, the reading under
+    which the pre-fix reaper provably reaps 8 per sweep. Two honest caveats: (a) on a healthy host
+    this run discriminates the original os.freemem() bug, not #136 alone — #136's counterfactual
+    (an honest byte reading above the watermark) is also silent here; the darwin-gated test above is
+    what pins #136. (b) At measurement time NO shipped build contained either fix (installed 0.2.43
+    and even tag v0.2.45 both predate #136); v0.2.46/v0.2.47 — cut later the same morning — are the
+    first releases that carry both, so the field bug closes for a user the moment they update off
+    0.2.43. Found along the way: `envInt` floors AFTER its `> 0` guard, so
+    NODETERM_SESSION_GRACE_HOURS=0.9 yields graceSec=0 (protection off) — fractional env values
+    should be rejected or ceil'd.
  7. Open an SSH project: the panel must list THAT host's sessions and no local ones, and its header
     scope + the pill's title must read `user@host`.
  8. Open an SSH project BEFORE its ControlMaster is up. The pill must end on a NUMBER, not a
