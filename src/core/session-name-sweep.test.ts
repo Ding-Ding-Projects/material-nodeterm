@@ -7,7 +7,7 @@ function deps(
     names?: Record<string, string | null>
     nodes?: Record<string, { accountId?: string; titleAuto?: boolean }>
     throwFor?: string
-    /** The real `supports` is TITLE_READ_CAPABLE (claude, grok, gemini) — the READ list, since the
+    /** The real `supports` is TITLE_READ_CAPABLE (claude, codex, grok, gemini) — the READ list, since the
      *  sweep only reads names. */
     supportsGrok?: boolean
   } = {}

@@ -2,9 +2,16 @@ import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { NODE_COLORS } from '../state/workspace'
 import { useMenuFlip } from '../ui/useMenuFlip'
+import type { AccountPresentation } from '../lib/accountPresentation'
+import { AccountIdentityPills } from './AccountIdentityPills'
+
+type AccountMenuPresentation = {
+  accountPresentation?: AccountPresentation
+  accountSelected?: boolean
+}
 
 export type MenuItem =
-  | {
+  | ({
       type?: 'item'
       label: string
       onClick: () => void
@@ -16,11 +23,27 @@ export type MenuItem =
       /** Why the row is disabled (or what it does). Surfaced as the row's native `title` tooltip —
        *  deliberately not a tooltip system of our own. */
       hint?: string
-    }
+    } & AccountMenuPresentation)
   | { type: 'separator' }
   | { type: 'label'; label: string }
   | { type: 'colors'; onPick: (color: string) => void }
-  | { type: 'submenu'; label: string; icon?: ReactNode; children: MenuItem[] }
+  | ({
+      type: 'submenu'
+      label: string
+      icon?: ReactNode
+      children: MenuItem[]
+    } & AccountMenuPresentation)
+
+function MenuItemLabel({ item }: { item: AccountMenuPresentation & { label: string } }) {
+  return (
+    <span className="ctx-item__label">
+      {item.label ? <span>{item.label}</span> : null}
+      {item.accountPresentation ? (
+        <AccountIdentityPills account={item.accountPresentation} selected={item.accountSelected} />
+      ) : null}
+    </span>
+  )
+}
 
 interface ContextMenuProps {
   x: number
@@ -75,7 +98,12 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
       >
         {items.map((item, i) => {
           if (item.type === 'separator') return <div key={i} className="ctx-sep" />
-          if (item.type === 'label') return <div key={i} className="ctx-label">{item.label}</div>
+          if (item.type === 'label')
+            return (
+              <div key={i} className="ctx-label">
+                {item.label}
+              </div>
+            )
           if (item.type === 'colors') {
             return (
               <div key={i} className="ctx-colors">
@@ -101,13 +129,17 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                 onMouseLeave={() => setOpenSub((cur) => (cur === i ? null : cur))}
               >
                 <span className="ctx-icon">{item.icon}</span>
-                {item.label}
+                <MenuItemLabel item={item} />
                 {openSub === i && (
                   <div className="ctx-menu ctx-submenu" onClick={(e) => e.stopPropagation()}>
                     {item.children.map((child, j) => {
                       if (child.type === 'separator') return <div key={j} className="ctx-sep" />
                       if (child.type === 'label')
-                        return <div key={j} className="ctx-label">{child.label}</div>
+                        return (
+                          <div key={j} className="ctx-label">
+                            {child.label}
+                          </div>
+                        )
                       if (child.type === 'colors' || child.type === 'submenu') return null
                       return (
                         <button
@@ -121,7 +153,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                           }}
                         >
                           <span className="ctx-icon">{child.icon}</span>
-                          {child.label}
+                          <MenuItemLabel item={child} />
                         </button>
                       )
                     })}
@@ -142,7 +174,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
               }}
             >
               <span className="ctx-icon">{item.icon}</span>
-              {item.label}
+              <MenuItemLabel item={item} />
             </button>
           )
         })}

@@ -121,6 +121,8 @@ import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
 import { ContextMeter } from '../components/ContextMeter'
+import { AccountIdentityPills } from '../components/AccountIdentityPills'
+import { presentAccount } from '../lib/accountPresentation'
 import { isZoomModifierHeld } from '../lib/zoomModifier'
 import { isHidden } from '../lib/ui-visibility'
 import { readsClaudeTranscript } from '../lib/transcriptGates'
@@ -133,14 +135,35 @@ import { useAgentNodes } from '../state/agentNodes'
 import { useProjects } from '../state/projects'
 import { useViewMode, viewFor } from '../state/viewMode'
 import { useSshConn } from '../state/sshConn'
+import { useSshServers } from '../state/sshServers'
 import { useWorktrees } from '../state/worktrees'
+import { useSystemAccount } from '../state/systemAccount'
+import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { isRemoteSessionNode } from '@shared/worktree'
 import { useSession, useActiveSessionPresence } from '../session/session'
-import { accountChipLabel, COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
-import { hasHooks, canRecur, canContextLink, hasUsage, canChat, canResume, canRename, canReadTitle, createdAgentId, reportsOwnCopy, resumeCommand, agentConfig } from '@shared/agents/config'
+import { COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
+import {
+  hasHooks,
+  canRecur,
+  canContextLink,
+  hasUsage,
+  canChat,
+  canResume,
+  canRename,
+  canReadTitle,
+  createdAgentId,
+  reportsOwnCopy,
+  resumeCommand,
+  agentConfig
+} from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { ensureActivePermissionMode } from '../state/permissionMode'
-import { buildSshArgs, type SshConnection } from '@shared/ssh'
+import {
+  buildSshArgs,
+  sshConnectionIdForProject,
+  sshHostKey,
+  type SshConnection
+} from '@shared/ssh'
 import { hintLabel } from '@shared/platform-utils'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
@@ -179,11 +202,31 @@ export async function resolveSshRemote(
       hookEndpointPath?: string
       tmuxConfPath?: string
       remoteHome?: string
+      codexLauncherPath?: string
+      codexRelayScriptPath?: string
+      codexRelayRuntimePath?: string
     }
   | undefined
 > {
-  const projectId = useProjects.getState().activeProjectId
+  const ownerProjectId = useProjects.getState().activeProjectId
+  const project = useProjects.getState().getProject(ownerProjectId)
+  const projectId = sshConnectionIdForProject(ownerProjectId, conn, project?.ssh?.server)
   let controlPath = useSshConn.getState().getControlPath(projectId)
+  if (!controlPath && projectId !== ownerProjectId) {
+    try {
+      const info = await window.nodeTerminal.sshProject.connect(projectId, conn, cwd || '~')
+      useSshConn.getState().setConn(projectId, {
+        ...info,
+        hostKey: sshHostKey(conn),
+        conn,
+        remoteCwd: cwd || '~',
+        ownerProjectId
+      })
+      controlPath = info.controlPath
+    } catch {
+      return undefined
+    }
+  }
   if (!controlPath) {
     controlPath = await new Promise<string | undefined>((resolve) => {
       let settled = false
@@ -217,7 +260,16 @@ export async function resolveSshRemote(
   // managed remote account (Task 12). Optional (fail-open): absent → the remote account env is
   // skipped and the session runs under the remote system default `~/.claude`.
   const remoteHome = useSshConn.getState().getRemoteHome(projectId)
-  return { controlPath, conn, remoteCwd: cwd || '~', hookEndpointPath, tmuxConfPath, remoteHome }
+  const codexRuntime = useSshConn.getState().getCodexRuntime(projectId)
+  return {
+    controlPath,
+    conn,
+    remoteCwd: cwd || '~',
+    hookEndpointPath,
+    tmuxConfPath,
+    remoteHome,
+    ...codexRuntime
+  }
 }
 
 /**
@@ -901,11 +953,20 @@ export function TerminalNode({
   // One shallow-compared subscription for the whole appearance slice — see useXtermVisualSettings.
   const visual = useXtermVisualSettings()
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
+  const codexAccounts = useSettings((s) => s.settings.codexAccounts)
+  const systemClaudeLabel = useSettings((s) => s.settings.systemAccountLabel)
+  const systemCodexLabel = useSettings((s) => s.settings.systemCodexAccountLabel)
+  const remoteSystemClaudeLabels = useSettings((s) => s.settings.remoteSystemAccountLabels)
+  const remoteSystemCodexLabels = useSettings((s) => s.settings.remoteSystemCodexAccountLabels)
+  const systemClaudeEmail = useSystemAccount((s) => s.email)
+  const systemCodexEmail = useSystemCodexAccount((s) => s.email)
+  const remoteSystemCodexEmails = useSystemCodexAccount((s) => s.remoteEmails)
+  const sshConnections = useSshConn((s) => s.byProject)
+  const sshServers = useSshServers((s) => s.servers)
   // Header buttons the user chose to hide (Settings). A selector, so toggling one re-renders every
   // mounted node right away instead of waiting for a remount. Search, Close and the worktree-move
   // button are absent from `isHidden`'s inventory and stay put whatever the list says.
   const hiddenHeaderButtons = useSettings((s) => s.settings.hiddenHeaderButtons)
-  const accountChip = accountChipLabel(data.accountId, claudeAccounts)
   const bodyRef = useRef<HTMLDivElement>(null)
   /** Where a press on the hover guard started, for the click-vs-drag test in `onGuardUp`. */
   const guardDownAt = useRef<{ x: number; y: number } | null>(null)
@@ -973,7 +1034,10 @@ export function TerminalNode({
   const [dropping, setDropping] = useState(false)
   // Overlay while dropped files upload to an SSH host (scp is seconds-long with zero feedback);
   // doubles as a brief "Upload failed" flash when nothing made it.
-  const [uploadNote, setUploadNote] = useState<{ text: string; failed?: boolean } | null>(null)
+  const [uploadNote, setUploadNote] = useState<{
+    text: string
+    failed?: boolean
+  } | null>(null)
   const uploadNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => {
     if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
@@ -1078,7 +1142,11 @@ export function TerminalNode({
    *  its client size. Kept apart from `glyphBodyOffsetRef` (which tracks `.xterm-screen`) because
    *  plate and grid are independent rects; the position effect below re-derives the plate's world
    *  origin from this while the node is dragged, without re-measuring the DOM per frame. */
-  const glyphPlateBoxRef = useRef<{ offset: Vec2; w: number; h: number } | null>(null)
+  const glyphPlateBoxRef = useRef<{
+    offset: Vec2
+    w: number
+    h: number
+  } | null>(null)
   // Mutated (never reassigned) so the lifecycle effect's closures read the CURRENT position without
   // re-running; a drag rewrites these two numbers per frame.
   const nodePosRef = useRef<Vec2>({ x: positionAbsoluteX, y: positionAbsoluteY })
@@ -1124,6 +1192,58 @@ export function TerminalNode({
   // offer this node's in-place restart from the SAME derivation, and a second copy drifting from
   // this one yields a row whose closure refuses every click.
   const agentId = createdAgentId(data)
+  const sshConnection = data.ssh as SshConnection | undefined
+  const sshMachineKey = sshConnection ? sshHostKey(sshConnection) : null
+  const machineLabel = sshConnection
+    ? sshServers.find((server) => sshHostKey(server) === sshMachineKey)?.label || sshConnection.host
+    : null
+  const remoteIdentityProjectId = sshMachineKey
+    ? Object.entries(sshConnections).find(
+        ([, connection]) => connection.hostKey === sshMachineKey
+      )?.[0]
+    : undefined
+  const accountRecord =
+    agentId === 'codex'
+      ? codexAccounts.find((account) => account.id === data.codexAccountId)
+      : claudeAccounts.find((account) => account.id === data.accountId)
+  const accountPresentation = agentId
+    ? presentAccount({
+        label:
+          accountRecord?.label ||
+          (agentId === 'codex'
+            ? sshMachineKey
+              ? remoteSystemCodexLabels[sshMachineKey]
+              : systemCodexLabel
+            : sshMachineKey
+              ? remoteSystemClaudeLabels[sshMachineKey]
+              : systemClaudeLabel),
+        email:
+          accountRecord?.email ||
+          (!sshConnection
+            ? agentId === 'codex'
+              ? sshConnection
+                ? remoteSystemCodexEmails[sshMachineKey ?? '']
+                : systemCodexEmail
+              : systemClaudeEmail
+            : undefined),
+        host: sshMachineKey,
+        machineLabel
+      })
+    : null
+  useEffect(() => {
+    if (agentId === 'codex') useSystemCodexAccount.getState().ensure()
+    if (agentId === 'claude') useSystemAccount.getState().ensure()
+  }, [agentId])
+  useEffect(() => {
+    if (agentId === 'codex' && sshMachineKey && remoteIdentityProjectId) {
+      useSystemCodexAccount.getState().ensureRemote(sshMachineKey, remoteIdentityProjectId)
+    }
+  }, [agentId, sshMachineKey, remoteIdentityProjectId])
+  useEffect(() => {
+    if (sshConnection && useSshServers.getState().servers.length === 0) {
+      void useSshServers.getState().hydrate()
+    }
+  }, [sshMachineKey])
   // Gate each former `isClaude` site by the capability it actually represents.
   const showStatus = !!agentId && hasHooks(agentId) // status badge + session-title capture
   const showLoop = !!agentId && canRecur(agentId) // /loop · /schedule · /cron chrome
@@ -1153,18 +1273,30 @@ export function TerminalNode({
   editingTitleRef.current = editingTitle
   titleRef.current = data.title as string
   // "Move into worktree" affordance: shown only when this terminal is a child of a group that
-  // is bound to a worktree AND its current cwd differs from that worktree path (i.e. it's still
-  // running in the old folder). Reads the parent group from React Flow state (single source of
-  // truth); `parentId` is set by the group reparenting transforms.
+  // or one of its ancestor groups is bound to a worktree AND its current cwd differs from that
+  // worktree path (i.e. it's still running in the old folder). Reads the group chain from React
+  // Flow state (single source of truth); `parentId` is set by the group reparenting transforms.
   // A STALE group (its worktree directory was deleted outside the app) must NOT offer the move:
   // "move" destroys this node's tmux session — killing whatever is running in it — and respawns it
   // in the worktree path, which no longer exists. pty-manager would silently fall back to $HOME and
   // `data.cwd` would persist the dead path forever, which not even Unbind undoes. The chip already
   // says "· missing"; the ↪ must agree with it.
-  const parentWtPath = parentId
-    ? ((getNode(parentId) as CanvasNode | undefined)?.data.worktree?.path as string | undefined)
-    : undefined
-  const parentWtStale = useWorktrees((s) => (parentId ? s.staleGroupIds.includes(parentId) : false))
+  const parentWorktree = (() => {
+    const seen = new Set<string>()
+    let groupId = parentId
+    while (groupId && !seen.has(groupId)) {
+      seen.add(groupId)
+      const group = getNode(groupId) as CanvasNode | undefined
+      const path = group?.data.worktree?.path as string | undefined
+      if (path) return { groupId, path }
+      groupId = group?.parentId
+    }
+    return undefined
+  })()
+  const parentWtPath = parentWorktree?.path
+  const parentWtStale = useWorktrees((s) =>
+    parentWorktree ? s.staleGroupIds.includes(parentWorktree.groupId) : false
+  )
   // …and a session that runs on ANOTHER MACHINE must not offer it either. Worktrees are local-only
   // in v1, so ↪ would end this node's REMOTE tmux session and respawn it in a local path that does
   // not exist on the host. Both halves of "remote" are asked: the project (its terminals and its git
@@ -1530,7 +1662,10 @@ export function TerminalNode({
         const core = (
           term as unknown as {
             _core?: {
-              _renderService?: { setRenderer(r: unknown): void; handleResize(c: number, r: number): void }
+              _renderService?: {
+                setRenderer(r: unknown): void
+                handleResize(c: number, r: number): void
+              }
               _createRenderer?: () => unknown
             }
           }
@@ -1836,7 +1971,12 @@ export function TerminalNode({
      * — otherwise the plate silently under-covers again, which is precisely the band this whole
      * change removed, and every comment around it would still claim it cannot happen.
      */
-    const measurePlateRect = (): { x: number; y: number; w: number; h: number } | null => {
+    const measurePlateRect = (): {
+      x: number
+      y: number
+      w: number
+      h: number
+    } | null => {
       const offset = offsetInNode(container)
       if (!offset) return null
       // `clientWidth/Height` at the RO tick, the same measurement that positions the grid: LAYOUT
@@ -2257,7 +2397,12 @@ export function TerminalNode({
     // Owning project of an SSH-project terminal, captured at spawn time for the exit-255 drop
     // report below (a node only exists in the active project's React Flow, so the active
     // project is its owner — same assumption as resolveSshRemote).
-    const sshProjectId = sshRemoteTmux ? useProjects.getState().activeProjectId : null
+    const activeProjectId = useProjects.getState().activeProjectId
+    const activeProject = useProjects.getState().getProject(activeProjectId)
+    const sshProjectId =
+      sshRemoteTmux && ssh
+        ? sshConnectionIdForProject(activeProjectId, ssh, activeProject?.ssh?.server)
+        : null
     // Prefetch the persisted scrollback in parallel with the spawn so it's ready to replay the
     // instant the session resolves (a cold restart after a reboot recreates the tmux session
     // empty — see the `fresh` handling below). Cheap no-op ('') when there's no snapshot.
@@ -2324,6 +2469,7 @@ export function TerminalNode({
           persistKey: id,
           agentId: data.agentId,
           accountId: data.accountId,
+          codexAccountId: data.codexAccountId as string | undefined,
           sshRemote,
           // Belt AND braces: the guard above cannot see a `ssh` executable that has gone missing,
           // which is core's other route into the local branch.
@@ -2347,7 +2493,11 @@ export function TerminalNode({
         if (unavailable) {
           setCo(termKey, { offline: true })
           if (!disposed)
-            term.write('\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n')
+            term.write(
+              unavailable === 'codex-account'
+                ? '\r\n\x1b[90m[Codex account unavailable — nothing was started; open Settings → Accounts]\x1b[0m\r\n'
+                : '\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n'
+            )
           if (sshProjectId) reportSshDrop(sshProjectId, id)
           return
         }
@@ -2648,7 +2798,14 @@ export function TerminalNode({
         // Run a one-shot command on first open (e.g. "gh auth login" or the agent CLI), then
         // forget it.
         if (data.initialCommand) {
-          writeWhenShellReady(data.initialCommand)
+          const initial =
+            agentId === 'codex' && sshProjectId && sshRemote?.codexLauncherPath
+              ? String(data.initialCommand).replace(
+                  /^codex(?=\s|$)/,
+                  sshRemote.codexLauncherPath
+                )
+              : data.initialCommand
+          writeWhenShellReady(initial)
           updateNodeData(id, { initialCommand: undefined })
         } else if (fresh && agentId && canResume(agentId)) {
           // Cold restart of an agent node: the live agent is gone, so re-launch it. Resume the
@@ -2665,7 +2822,11 @@ export function TerminalNode({
           // relaunched empty while their transcripts sat on disk, unreachable.
           const st = useAgentStatus.getState().byId[id]
           const priorId = st?.sessionId || data.agentSessionId
-          const base = (priorId && resumeCommand(agentId, priorId)) || agentConfig(agentId)?.launchCmd
+          const base =
+            (priorId && resumeCommand(agentId, priorId, !!sshProjectId)) ||
+            (agentId === 'codex' && sshProjectId
+              ? (sshRemote?.codexLauncherPath ?? 'codex')
+              : agentConfig(agentId)?.launchCmd)
           // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
           // a persisted property of the node, so the current setting wins after a reboot. `base`
           // is always freshly built here — never a command string read back from node data — so
@@ -2738,7 +2899,7 @@ export function TerminalNode({
         // in acceptEdits/plan would come back from a restart in the default mode, silently.
         // Re-resolved at call time for the same reason as there: the mode is a property of how a
         // session is launched, not of the node.
-        const base = resumeCommand(agentId, agentSessionId)
+        const base = resumeCommand(agentId, agentSessionId, !!sshProjectId)
         const command = base
           ? withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
           : undefined
@@ -3610,7 +3771,12 @@ export function TerminalNode({
       // Remote terminal: uploading over the ControlMaster takes seconds and pastes nothing until
       // it's done, so show an overlay while it runs — without it a drop looks like it silently did
       // nothing. (The upload + REMOTE-path resolution itself lives in the shared droppedPaths.)
-      const projectId = useProjects.getState().activeProjectId
+      const projects = useProjects.getState()
+      const ownerProjectId = projects.activeProjectId
+      const project = projects.getProject(ownerProjectId)
+      const projectId = data.ssh
+        ? sshConnectionIdForProject(ownerProjectId, data.ssh, project?.ssh?.server)
+        : ownerProjectId
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
       setUploadNote({
         text: `Uploading ${files.length === 1 ? files[0].name : `${files.length} files`}…`,
@@ -3741,7 +3907,9 @@ export function TerminalNode({
     let timer: ReturnType<typeof setTimeout> | undefined
     const sync = async () => {
       if (!titleAutoRef.current || editingTitleRef.current) return
-      const name = await api.pty.readSessionName(sid, data.accountId, agentId)
+      const accountScope =
+        agentId === 'codex' ? (data.codexAccountId as string | undefined) : data.accountId
+      const name = await api.pty.readSessionName(sid, accountScope, agentId)
       if (cancelled) return
       if (name) delayMs = 15000
       if (
@@ -3946,25 +4114,12 @@ export function TerminalNode({
             {status.session}
           </span>
         )}
-        {accountChip && (
-          <span
-            className={`node-account-chip${accountFallback ? ' node-account-chip--warning' : ''}`}
-            title={
-              accountFallback
-                ? 'Account folder missing — running on system account'
-                : accountChip.tooltip
-            }
-          >
-            {accountChip.short}
-          </span>
-        )}
-        {data.ssh ? (
-          <span
-            className="term-ssh-chip"
-            title={`ssh ${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`}
-          >
-            SSH {(data.ssh as SshConnection).user}@{(data.ssh as SshConnection).host}
-          </span>
+        {accountPresentation ? (
+          <AccountIdentityPills
+            className="node-identity-chips nodrag"
+            account={accountPresentation}
+            warning={accountFallback}
+          />
         ) : null}
         {showUsage && <ContextMeter sessionId={status?.sessionId ?? null} />}
         {/* Who else is in this node. Subscribes to presence itself — see PresenceChips. */}
@@ -4217,19 +4372,8 @@ export function TerminalNode({
             {copy.feedback.label}
           </div>
         )}
-        {/* Offscreen-disposed: the xterm and the PTY client are gone, the tmux session is not.
-            Deliberately above the overlays below it in the DOM but the least insistent of them —
-            it states a resting state, not a failure. Nobody is ever looking at it as it appears
-            (that is the precondition for appearing); it exists for the frame between coming into
-            view and the reattach redraw, and for a node parked at the edge of the viewport.
-
-            …with ONE case where it is seen head-on, and it is deliberate: a COLLAPSED node. The
-            body is `display: none` while collapsed, so the observed element reports
-            not-intersecting and a collapsed terminal is disposed after the window even though its
-            header sits in plain view. Expanding revives it — the display flip changes the
-            intersection, the observer fires, and the node reattaches. Collapsed is exactly the
-            state in which nobody is reading this terminal's output, which is why the WebGL budget
-            has always treated it as hidden too; this feature only agrees with it. Not a bug. */}
+      {/* Offscreen-disposed: xterm and the PTY client are gone, but tmux keeps running.
+          The node reattaches as soon as it becomes visible again. */}
         {offscreenDown && (
           <div className="term-node__offscreen nodrag">
             <span>Session running — reattaches on view</span>
@@ -4259,8 +4403,11 @@ export function TerminalNode({
         {!co.closed && !co.ended && !co.spawnError && co.offline && (
           <div className="term-node__closed nodrag">
             <span>
-              Not connected to {data.ssh ? `${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}` : 'the host'} — this session was not started
-              locally.
+              Not connected to{' '}
+              {data.ssh
+                ? `${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`
+                : 'the host'}{' '}
+              — this session was not started locally.
             </span>
             <button className="term-node__reopen" onClick={reconnectOffline}>
               Reconnect
@@ -4269,10 +4416,30 @@ export function TerminalNode({
         )}
         {armed && !mdMode && (
           <div
-            className="term-hover-guard"
+            className="term-hover-guard nowheel"
             onMouseDown={onGuardDown}
             onMouseUp={onGuardUp}
-            title="Click to type · drag to move · scroll to pan"
+            onWheel={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              termRef.current?.element?.dispatchEvent(
+                new WheelEvent('wheel', {
+                  bubbles: true,
+                  cancelable: true,
+                  deltaMode: event.deltaMode,
+                  deltaX: event.deltaX,
+                  deltaY: event.deltaY,
+                  deltaZ: event.deltaZ,
+                  clientX: event.clientX,
+                  clientY: event.clientY,
+                  ctrlKey: event.ctrlKey,
+                  metaKey: event.metaKey,
+                  shiftKey: event.shiftKey,
+                  altKey: event.altKey
+                })
+              )
+            }}
+            title="Click to type · drag to move · scroll terminal"
           />
         )}
         {mdMode &&

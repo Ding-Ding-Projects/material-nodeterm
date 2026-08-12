@@ -30,6 +30,10 @@ export interface AgentConfig {
   expectedProcess: string
 }
 
+export function codexRemoteCommand(): string {
+  return '$HOME/.nodeterm/bin/nodeterm-codex'
+}
+
 export const BUILTIN_AGENT_IDS: readonly BuiltinAgentId[] = [
   'claude',
   'codex',
@@ -49,7 +53,9 @@ export const AGENT_CONFIG: Record<BuiltinAgentId, AgentConfig> = {
   codex: {
     label: 'Codex',
     color: '#10a37f',
-    launchCmd: 'codex',
+    // Keep NodeTerm's native Codex hooks/status while all canvas nodes share one
+    // managed local app-server instead of spawning a full server per terminal.
+    launchCmd: codexRemoteCommand(),
     promptInjectionMode: 'argv',
     expectedProcess: 'codex'
   },
@@ -145,9 +151,8 @@ export const RENAME_CAPABLE = ['claude', 'grok'] as const
 // INVARIANT (pinned in config.capabilities.test.ts): every RENAME_CAPABLE agent is also here. The
 // write leg pushes a name and the read leg is what confirms it settled.
 //
-// codex is in NEITHER: its slash-command set could not be enumerated from the CLI, so neither leg
-// has a measured basis — and a guess here costs a wrong node title, not a missing one.
-export const TITLE_READ_CAPABLE = ['claude', 'grok', 'gemini'] as const
+// Codex exposes Thread.name through its shared app-server, but NodeTerm does not push it back yet.
+export const TITLE_READ_CAPABLE = ['claude', 'codex', 'grok', 'gemini'] as const
 // Agents allowed to drive the canvas via the `nodeterm` CLI (open/show/write/close).
 // Discovery differs per agent: claude gets the manage-nodeterm-canvas skill; codex/gemini/
 // opencode a marker block in ~/.codex/AGENTS.md / ~/.gemini/GEMINI.md /
@@ -264,18 +269,34 @@ export function withSessionId(cmd: string, id: AgentId, sessionId: string): stri
 }
 
 /**
+ * Recognize the narrow legacy shape produced when an older canvas agent uses
+ * `open-terminal --cmd "codex resume <id>"` instead of `open-agent --resume <id>`.
+ *
+ * This is deliberately not a shell parser. Only one plain argv-equivalent command is promoted;
+ * flags, quoting, redirections, command chaining and substitutions remain ordinary terminal
+ * commands. That keeps arbitrary shell intent untouched while preventing an exact Codex resume
+ * from losing its durable agent/account metadata and NodeTerm launcher.
+ */
+export function explicitCodexResumeSession(command: string | undefined): string | null {
+  const match = command?.trim().match(
+    /^(?:codex|nodeterm-codex|\$HOME\/\.nodeterm\/bin\/nodeterm-codex)[ \t]+resume[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*)$/
+  )
+  return match?.[1] ?? null
+}
+
+/**
  * The command that resumes a resumable agent's prior conversation by its provider session id.
  * Used on a cold restart (machine reboot) where the tmux session — and the live agent — are
  * gone, so the conversation must be reconstructed via the agent CLI's own `--resume`.
  * Returns null for non-resumable/custom agents or an unsafe/empty session id.
  */
-export function resumeCommand(id: AgentId, sessionId: string): string | null {
+export function resumeCommand(id: AgentId, sessionId: string, nativeCodex = false): string | null {
   if (!canResume(id)) return null
   const sid = sessionId.trim()
   if (!sid || !SAFE_SESSION_ID.test(sid)) return null
   switch (id) {
     case 'codex':
-      return `codex resume ${sid}`
+      return `${nativeCodex ? 'codex' : codexRemoteCommand()} resume ${sid}`
     case 'opencode':
       return `opencode --session ${sid}`
     case 'claude':

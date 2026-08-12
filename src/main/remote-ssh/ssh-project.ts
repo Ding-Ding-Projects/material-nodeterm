@@ -34,6 +34,12 @@ import { hookServer } from '../../core/agents/hook-server'
 import { askpassServer } from './ssh-askpass'
 import { appSshAgent } from './ssh-agent'
 import { sessionName } from '../../core/tmux-naming'
+import { buildCodexLauncherScript } from '../../core/codex-identity-proxy'
+import {
+  assertCodexAccountId,
+  remoteCodexHome,
+  remoteCodexSocket
+} from '../../core/codex-accounts-core'
 
 interface Runners {
   userDataDir: string
@@ -62,6 +68,8 @@ interface Runners {
   runScp: (args: string[]) => Promise<{ code: number }>
   /** Live loopback hook-server coordinates (injected so the manager stays testable). */
   getHook: () => { port: number; token: string; version: string }
+  /** Standalone bundled relay uploaded to Linux hosts. Undefined keeps non-Codex SSH unchanged. */
+  codexRelaySource?: () => Promise<string>
   onStatus: (e: SshProjectStatusEvent) => void
   /** Delays between claude-probe retries after a FAILED attempt (claude not found). Injected so
    *  tests don't wait on real backoff; production uses PROBE_RETRY_DELAYS_MS. */
@@ -184,8 +192,56 @@ export interface ConnectResult {
   hookEndpointPath?: string
   tmuxConfPath?: string
   remoteHome?: string
+  codexLauncherPath?: string
+  codexRelayScriptPath?: string
+  codexRelayRuntimePath?: string
+  codexCliPath?: string
   claudeAutoPermissionMode?: boolean
   remoteClaudeVersion?: string | null
+}
+
+export function remoteCodexAccountSetupCommand(remoteHome: string, accountId: string): string {
+  const home = remoteCodexHome(remoteHome, accountId)
+  const system = remoteCodexHome(remoteHome)
+  const shared = [
+    'config.toml',
+    'AGENTS.md',
+    'skills',
+    'plugins',
+    'packages',
+    'rules',
+    'hooks.json'
+  ]
+    .map(
+      (name) =>
+        `if [ -e ${posixQuote(`${system}/${name}`)} ] && [ ! -e ${posixQuote(`${home}/${name}`)} ]; then ln -s ${posixQuote(`${system}/${name}`)} ${posixQuote(`${home}/${name}`)} || { printf '%s\n' ${posixQuote(`NODETERM_CODEX_ACCOUNT_SETUP:link:${name}`)}; exit 71; }; fi;`
+    )
+    .join(' ')
+  return `umask 077; mkdir -p ${posixQuote(home)} && chmod 700 ${posixQuote(home)} || { printf '%s\n' 'NODETERM_CODEX_ACCOUNT_SETUP:home'; exit 70; }; ${shared}`
+}
+
+/** Start one persistent app-server per remote CODEX_HOME. Official standalone installs use the
+ * daemon manager. npm/global installs cannot, so they fall back to one lock-guarded nohup server
+ * and reuse its socket + pid across every node on that account. */
+export function remoteCodexAppServerStartCommand(runtime: string, codexCli: string): string {
+  if (!path.posix.isAbsolute(runtime) || !path.posix.isAbsolute(codexCli)) {
+    throw new Error('Remote Codex runtime paths must be absolute')
+  }
+  const node = posixQuote(runtime)
+  const codex = posixQuote(codexCli)
+  return (
+    `${node} ${codex} app-server daemon start >/dev/null 2>&1 || { ` +
+    `nt_as_dir="$CODEX_HOME/app-server-control"; nt_as_sock="$nt_as_dir/app-server-control.sock"; nt_as_pid="$nt_as_dir/nodeterm-direct.pid"; nt_as_lock="$nt_as_dir/nodeterm-start.lock"; ` +
+    `mkdir -p "$nt_as_dir" && chmod 700 "$nt_as_dir" || exit 70; ` +
+    `nt_as_live=; if [ -S "$nt_as_sock" ] && [ -f "$nt_as_pid" ]; then nt_as_old_pid=$(cat "$nt_as_pid" 2>/dev/null || true); case "$nt_as_old_pid" in ''|*[!0-9]*) ;; *) kill -0 "$nt_as_old_pid" 2>/dev/null && nt_as_live=1 ;; esac; fi; ` +
+    `if [ -z "$nt_as_live" ] && mkdir "$nt_as_lock" 2>/dev/null; then ` +
+    `rm -f "$nt_as_sock" "$nt_as_pid"; ` +
+    `CODEX_HOME="$CODEX_HOME" nohup ${node} ${codex} app-server --listen "unix://$nt_as_sock" </dev/null >"$nt_as_dir/nodeterm-direct.log" 2>&1 & echo $! >"$nt_as_pid"; ` +
+    `rmdir "$nt_as_lock"; fi; ` +
+    `nt_as_i=0; while [ ! -S "$nt_as_sock" ] && [ "$nt_as_i" -lt 50 ]; do sleep 0.1; nt_as_i=$((nt_as_i + 1)); done; ` +
+    `[ -S "$nt_as_sock" ]; ` +
+    `}`
+  )
 }
 
 interface Conn {
@@ -200,6 +256,10 @@ interface Conn {
   /** The remote `$HOME`, resolved at connect. Used (Phase 2b) to jail remote transcript reads
    * under `<remoteHome>/.claude/projects`. Undefined if it couldn't be resolved (fail-open). */
   remoteHome?: string
+  codexLauncherPath?: string
+  codexRelayScriptPath?: string
+  codexRelayRuntimePath?: string
+  codexCliPath?: string
   /** The project's remote repo cwd (Phase 4). Lets `refForRemoteCwd` route remote git ops to this
    * connection's master. Undefined when the project has no folder selected. */
   remoteCwd?: string
@@ -394,6 +454,10 @@ export class SshProjectManager {
           hookEndpointPath: existing.hookEndpointPath,
           tmuxConfPath: existing.tmuxConfPath,
           remoteHome: existing.remoteHome,
+          codexLauncherPath: existing.codexLauncherPath,
+          codexRelayScriptPath: existing.codexRelayScriptPath,
+          codexRelayRuntimePath: existing.codexRelayRuntimePath,
+          codexCliPath: existing.codexCliPath,
           claudeAutoPermissionMode: existing.claudeAutoPermissionMode,
           remoteClaudeVersion: existing.remoteClaudeVersion
         }
@@ -573,6 +637,14 @@ export class SshProjectManager {
           void this.remoteHooks.installCanvasControl(conn, controlPath, remoteHome)
           void this.remoteHooks.installContextLink(conn, controlPath, remoteHome)
         }
+        // Remote Codex account isolation + shared app-server reuse need the launcher/relay, but do
+        // NOT need canvas hooks. The reverse hook tunnel is an optional control/status channel and
+        // can be unavailable on an otherwise healthy SSH host (the exact Ubuntu/WSL case). Gating
+        // runtime installation on `hookEndpointPath` made Add Codex account fail even though node,
+        // codex, curl, SSH and the account filesystem were all usable.
+        const codexRuntime = remoteHome
+          ? await this.installRemoteCodexRuntime(conn, controlPath, remoteHome)
+          : null
         // Same ownership check the failure path makes below, and for the same reason: the setup
         // above is several remote round-trips, and a disconnect + reconnect inside that window
         // leaves a DIFFERENT attempt's master in the map. Writing this attempt's results onto it
@@ -585,6 +657,10 @@ export class SshProjectManager {
           entry.hookEndpointPath = hookEndpointPath
           entry.remoteHome = remoteHome
           entry.tmuxConfPath = tmuxConfPath
+          entry.codexLauncherPath = codexRuntime?.launcher
+          entry.codexRelayScriptPath = codexRuntime?.relay
+          entry.codexRelayRuntimePath = codexRuntime?.runtime
+          entry.codexCliPath = codexRuntime?.codex
           this.r.onStatus({ projectId, status: 'connected' })
           // The tunnel is live again on a master we just established (the reuse branch returned long
           // before this line), so this is exactly the moment the hook events lost while it was down
@@ -630,6 +706,10 @@ export class SshProjectManager {
           hookEndpointPath,
           tmuxConfPath,
           remoteHome,
+          codexLauncherPath: entry?.codexLauncherPath,
+          codexRelayScriptPath: entry?.codexRelayScriptPath,
+          codexRelayRuntimePath: entry?.codexRelayRuntimePath,
+          codexCliPath: entry?.codexCliPath,
           claudeAutoPermissionMode: entry?.claudeAutoPermissionMode,
           remoteClaudeVersion: entry?.remoteClaudeVersion
         }
@@ -960,6 +1040,127 @@ export class SshProjectManager {
     return this.conns.get(projectId)?.remoteHome
   }
 
+  hostKeyFor(projectId: string): string | undefined {
+    const c = this.conns.get(projectId)
+    return c ? sshHostKey(c.conn) : undefined
+  }
+
+  async remoteCodexAccountAdd(
+    projectId: string,
+    accountId: string
+  ): Promise<{ home: string } | null> {
+    assertCodexAccountId(accountId)
+    const c = this.conns.get(projectId)
+    if (!c) throw new Error('SSH host is not connected')
+    if (!c.remoteHome) throw new Error('Could not resolve the SSH host home directory')
+    const home = remoteCodexHome(c.remoteHome, accountId)
+    const { code, stdout } = await this.r.run(
+      childArgs(c.conn, c.controlPath, remoteCodexAccountSetupCommand(c.remoteHome, accountId))
+    )
+    if (code !== 0) {
+      const marker = stdout
+        .split(/\r?\n/)
+        .find((line) => /^NODETERM_CODEX_ACCOUNT_SETUP:(?:home|link:[A-Za-z0-9._-]+)$/.test(line))
+      const phase = marker?.slice('NODETERM_CODEX_ACCOUNT_SETUP:'.length) ?? 'remote command'
+      throw new Error(
+        `Could not create the isolated Codex account directory (${phase}; SSH exit ${code})`
+      )
+    }
+    return { home }
+  }
+
+  async remoteCodexAccountIdentity(
+    projectId: string,
+    accountId?: string
+  ): Promise<{ email: string | null } | null> {
+    if (accountId) assertCodexAccountId(accountId)
+    const c = this.conns.get(projectId)
+    if (!c?.remoteHome || !c.codexRelayScriptPath || !c.codexRelayRuntimePath) return null
+    const home = remoteCodexHome(c.remoteHome, accountId)
+    if (accountId) {
+      const auth = await this.r.run(
+        childArgs(
+          c.conn,
+          c.controlPath,
+          `test -f ${posixQuote(`${home}/auth.json`)} && test ! -L ${posixQuote(`${home}/auth.json`)}`
+        )
+      )
+      if (auth.code !== 0) return null
+    }
+    const socket = remoteCodexSocket(c.remoteHome, accountId)
+    if (!c.codexCliPath) return null
+    const start = remoteCodexAppServerStartCommand(c.codexRelayRuntimePath, c.codexCliPath)
+    const command = `CODEX_HOME=${posixQuote(home)} ${start} && ${posixQuote(c.codexRelayRuntimePath)} ${posixQuote(c.codexRelayScriptPath)} account-read ${posixQuote(socket)}`
+    const result = await this.r.run(childArgs(c.conn, c.controlPath, command))
+    if (result.code !== 0) return null
+    try {
+      const parsed = JSON.parse(result.stdout) as { email?: unknown }
+      return { email: typeof parsed.email === 'string' ? parsed.email : null }
+    } catch {
+      return null
+    }
+  }
+
+  async remoteCodexAccountRemove(projectId: string, accountId: string): Promise<boolean> {
+    assertCodexAccountId(accountId)
+    const c = this.conns.get(projectId)
+    if (!c?.remoteHome) return false
+    const home = remoteCodexHome(c.remoteHome, accountId)
+    const stop = c.codexCliPath
+      ? `CODEX_HOME=${posixQuote(home)} ${posixQuote(c.codexCliPath)} app-server daemon stop >/dev/null 2>&1 || true; `
+      : ''
+    const command = `${stop}rm -rf -- ${posixQuote(home)}`
+    return (await this.r.run(childArgs(c.conn, c.controlPath, command))).code === 0
+  }
+
+  /** Install only executable code, never credentials. One relay process later serves every node
+   * on this host; account separation remains CODEX_HOME + one app-server socket per account. */
+  private async installRemoteCodexRuntime(
+    conn: SshConnection,
+    controlPath: string,
+    remoteHome: string
+  ): Promise<{
+    launcher: string
+    relay: string
+    runtime: string
+    codex: string
+  } | null> {
+    if (!this.r.codexRelaySource) return null
+    const probe = await this.r.run(
+      childArgs(
+        conn,
+        controlPath,
+        `$SHELL -lc ${posixQuote('nt_node=$(command -v node) && readlink -f "$nt_node"; nt_codex=$(command -v codex) && readlink -f "$nt_codex"; nt_curl=$(command -v curl) && readlink -f "$nt_curl"')}`
+      )
+    )
+    const commands = probe.code === 0 ? probe.stdout.trim().split(/\r?\n/) : []
+    const runtime = commands[0]
+    const codex = commands[1]
+    if (!runtime?.startsWith('/') || !codex?.startsWith('/') || commands.length < 3) return null
+    const dir = `${remoteHome}/.nodeterm/bin`
+    const launcher = `${dir}/nodeterm-codex`
+    const relay = `${dir}/codex-relay.js`
+    const source = await this.r.codexRelaySource()
+    const writeRelay = await this.r.run(
+      childArgs(
+        conn,
+        controlPath,
+        `umask 077; mkdir -p ${posixQuote(dir)} && cat > ${posixQuote(relay)} && chmod 700 ${posixQuote(relay)}`
+      ),
+      source
+    )
+    if (writeRelay.code !== 0) return null
+    const writeLauncher = await this.r.run(
+      childArgs(
+        conn,
+        controlPath,
+        `umask 077; cat > ${posixQuote(launcher)} && chmod 700 ${posixQuote(launcher)}`
+      ),
+      buildCodexLauncherScript(remoteCodexAppServerStartCommand(runtime, codex))
+    )
+    return writeLauncher.code === 0 ? { launcher, relay, runtime, codex } : null
+  }
+
   /**
    * Proactively re-validate every cached master (powerMonitor 'resume'). Sleep kills the TCP
    * under the masters, but ServerAlive only notices ~60s AFTER wake, until then every terminal
@@ -1011,12 +1212,6 @@ export class SshProjectManager {
       projectId,
       hostKey: sshHostKey(c.conn)
     }))
-  }
-
-  /** `user@host` key of a connected project (matches ClaudeAccount.host). */
-  hostKeyFor(projectId: string): string | undefined {
-    const c = this.conns.get(projectId)
-    return c ? sshHostKey(c.conn) : undefined
   }
 
   /** Remote path of this project's pushed agent-status mirror (`~`-relative when the remote
@@ -1167,6 +1362,131 @@ export class SshProjectManager {
   remoteHomeForControlPath(controlPath: string): string | undefined {
     for (const c of this.conns.values()) if (c.controlPath === controlPath) return c.remoteHome
     return undefined
+  }
+
+  async remoteCodexCatalog(
+    controlPath: string,
+    accountIds: string[]
+  ): Promise<Array<{ accountId?: string; socketPath: string }>> {
+    const c = [...this.conns.values()].find((entry) => entry.controlPath === controlPath)
+    if (!c?.remoteHome) throw new Error('SSH Codex host is unavailable')
+    for (const id of accountIds) assertCodexAccountId(id)
+    const ids: Array<string | undefined> = [undefined, ...accountIds]
+    for (const id of ids) {
+      const home = remoteCodexHome(c.remoteHome, id)
+      if (!c.codexCliPath || !c.codexRelayRuntimePath) {
+        throw new Error('SSH Codex CLI is unavailable')
+      }
+      const startCommand = remoteCodexAppServerStartCommand(c.codexRelayRuntimePath, c.codexCliPath)
+      const start = await this.r.run(
+        childArgs(c.conn, c.controlPath, `CODEX_HOME=${posixQuote(home)} ${startCommand}`)
+      )
+      if (start.code !== 0) throw new Error('SSH Codex app-server is unavailable')
+    }
+    return ids.map((accountId) => ({
+      accountId,
+      socketPath: remoteCodexSocket(c.remoteHome as string, accountId)
+    }))
+  }
+
+  async remoteCodexThreadExists(
+    controlPath: string,
+    accountId: string | undefined,
+    threadId: string
+  ): Promise<boolean> {
+    if (accountId) assertCodexAccountId(accountId)
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(threadId)) return false
+    const c = [...this.conns.values()].find((entry) => entry.controlPath === controlPath)
+    if (!c?.remoteHome || !c.codexRelayRuntimePath || !c.codexRelayScriptPath) return false
+    const socket = remoteCodexSocket(c.remoteHome, accountId)
+    const command = `${posixQuote(c.codexRelayRuntimePath)} ${posixQuote(c.codexRelayScriptPath)} thread-check ${posixQuote(socket)} ${posixQuote(threadId)}`
+    return (await this.r.run(childArgs(c.conn, c.controlPath, command))).code === 0
+  }
+
+  async remoteCodexExposeThread(
+    controlPath: string,
+    accountId: string | undefined,
+    threadId: string,
+    accountIds: string[]
+  ): Promise<void> {
+    const c = [...this.conns.values()].find((entry) => entry.controlPath === controlPath)
+    if (!c?.remoteHome || !c.codexRelayRuntimePath || !c.codexRelayScriptPath) {
+      throw new Error('SSH Codex runtime is unavailable')
+    }
+    const catalog = await this.remoteCodexCatalog(controlPath, accountIds)
+    const target = remoteCodexSocket(c.remoteHome, accountId)
+    const args = catalog.map((entry) => posixQuote(entry.socketPath)).join(' ')
+    const command = `${posixQuote(c.codexRelayRuntimePath)} ${posixQuote(c.codexRelayScriptPath)} expose-thread ${posixQuote(target)} ${posixQuote(threadId)} ${args}`
+    if ((await this.r.run(childArgs(c.conn, c.controlPath, command))).code !== 0) {
+      throw new Error('SSH Codex session is unavailable or ambiguous')
+    }
+  }
+
+  /**
+   * Copy one authoritative LOCAL rollout into a remote account home. The source stays untouched;
+   * the remote write is staged under ~/.nodeterm and renamed into CODEX_HOME only after scp
+   * completes. Existing destination files are never overwritten.
+   */
+  async remoteCodexImportThread(
+    projectId: string,
+    accountId: string | undefined,
+    threadId: string,
+    localPath: string,
+    sessionsRelativePath: string
+  ): Promise<void> {
+    if (accountId) assertCodexAccountId(accountId)
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(threadId)) throw new Error('Invalid Codex thread id')
+    if (
+      !sessionsRelativePath.startsWith('sessions/') ||
+      path.posix.isAbsolute(sessionsRelativePath) ||
+      sessionsRelativePath
+        .split('/')
+        .some((segment) => !segment || segment === '.' || segment === '..')
+    ) {
+      throw new Error('Invalid Codex rollout path')
+    }
+    const c = this.conns.get(projectId)
+    if (!c?.remoteHome) throw new Error('SSH Codex host is unavailable')
+    if (await this.remoteCodexThreadExists(c.controlPath, accountId, threadId)) return
+
+    const target = `${remoteCodexHome(c.remoteHome, accountId)}/${sessionsRelativePath}`
+    const targetDir = target.slice(0, target.lastIndexOf('/'))
+    const token = `${Date.now().toString(36)}${(this.uploadSeq++).toString(36)}`
+    const stagingDir = `${c.remoteHome}/.nodeterm/codex-imports`
+    const staging = `${stagingDir}/${token}.part`
+    const prepared = await this.r.run(
+      childArgs(
+        c.conn,
+        c.controlPath,
+        `mkdir -p ${posixQuote(stagingDir)} && chmod 700 ${posixQuote(stagingDir)}`
+      )
+    )
+    if (prepared.code !== 0) throw new Error('Could not prepare remote Codex import')
+    const uploaded = await this.r.runScp(scpArgs(c.conn, c.controlPath, localPath, staging))
+    if (uploaded.code !== 0) {
+      await this.r
+        .run(childArgs(c.conn, c.controlPath, `rm -f ${posixQuote(staging)}`))
+        .catch(() => {})
+      throw new Error('Could not upload Codex conversation')
+    }
+    const installed = await this.r.run(
+      childArgs(
+        c.conn,
+        c.controlPath,
+        `if [ -e ${posixQuote(target)} ]; then rm -f ${posixQuote(staging)}; exit 17; fi; ` +
+          `mkdir -p ${posixQuote(targetDir)} && chmod 700 ${posixQuote(targetDir)} && ` +
+          `mv ${posixQuote(staging)} ${posixQuote(target)} && chmod 600 ${posixQuote(target)}`
+      )
+    )
+    if (installed.code !== 0)
+      throw new Error('Remote Codex conversation already exists or could not be installed')
+    await this.remoteCodexCatalog(c.controlPath, accountId ? [accountId] : [])
+    if (!(await this.remoteCodexThreadExists(c.controlPath, accountId, threadId))) {
+      await this.r
+        .run(childArgs(c.conn, c.controlPath, `rm -f ${posixQuote(target)}`))
+        .catch(() => {})
+      throw new Error('Remote Codex app-server did not discover the imported conversation')
+    }
   }
 
   // ── Managed REMOTE Claude accounts (Task 12) ──────────────────────────────────────────────
@@ -1476,7 +1796,8 @@ export function initSshProject(
   /** Passed straight through to the manager's `onTunnelVerified` (see Runners). It lives on the
    *  caller because the resync it drives needs main's agent-status funnel and transcript readers,
    *  none of which this module knows about. */
-  onTunnelVerified?: (projectId: string, controlPath: string, conn: SshConnection) => void
+  onTunnelVerified?: (projectId: string, controlPath: string, conn: SshConnection) => void,
+  codexRelaySource?: () => Promise<string>
 ): SshProjectManager {
   const ssh = sshBin()
   const scp = scpBin()
@@ -1572,7 +1893,12 @@ export function initSshProject(
           resolve({ code: err ? 1 : 0 })
         )
       }),
-    getHook: () => ({ port: hookServer.getPort(), token: hookServer.getToken(), version: hookServer.getVersion() }),
+    getHook: () => ({
+      port: hookServer.getPort(),
+      token: hookServer.getToken(),
+      version: hookServer.getVersion()
+    }),
+    codexRelaySource,
     onStatus: (e) => {
       // sendToMain resolves the window AT SEND TIME (see main-window.ts): the `win` captured here
       // is destroyed and recreated by a macOS close/reopen, and sending to the stale reference is

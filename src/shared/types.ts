@@ -28,6 +28,8 @@ export interface PtyCreateOptions {
   agentId?: AgentId
   /** Managed Claude account: inject CLAUDE_CONFIG_DIR for this account into the session env. */
   accountId?: string
+  /** Managed Codex account: run this node against that account's shared CODEX_HOME app-server. */
+  codexAccountId?: string
   /**
    * Which VIEW of the session this is, WITHIN one connection. A second view in the same renderer
    * (the kanban card modal) passes its own id so it co-attaches as an independently-detachable
@@ -39,7 +41,18 @@ export interface PtyCreateOptions {
   /** When set, this PTY runs on a remote host over the project's ssh ControlMaster, in remote tmux.
    * `remoteHome` is the connection's resolved `$HOME`, used to build an ABSOLUTE remote
    * `CLAUDE_CONFIG_DIR` for a managed remote account (tmux `-e` values are not shell-expanded). */
-  sshRemote?: { controlPath: string; conn: import('./ssh').SshConnection; remoteCwd: string; hookEndpointPath?: string; tmuxConfPath?: string; remoteHome?: string }
+  sshRemote?: {
+    controlPath: string
+    conn: import('./ssh').SshConnection
+    remoteCwd: string
+    hookEndpointPath?: string
+    tmuxConfPath?: string
+    remoteHome?: string
+    /** Host-installed NodeTerm Codex runtime. Present only after remote capability preflight. */
+    codexLauncherPath?: string
+    codexRelayScriptPath?: string
+    codexRelayRuntimePath?: string
+  }
   /**
    * This node BELONGS to a remote host: never spawn it locally.
    *
@@ -73,8 +86,7 @@ export interface PaneCursor {
 export interface PtyCreateResult {
   sessionId: string
   fresh: boolean
-  /** Set when the node's `accountId` had no config dir at spawn, so the session fell back to the
-   *  system account. The renderer flags the account chip (folder-missing warning) when true. */
+  /** Claude-only: selected config dir missing, so that legacy path fell back to the system account. */
   accountFallback?: boolean
   /**
    * The CURRENT SCREEN of a session this create JOINED (co-attach), captured from tmux — write it
@@ -162,7 +174,7 @@ export interface PtyCreateResult {
    * node id still joins (the session is already running wherever it runs), so a second view of a
    * healthy remote terminal is unaffected.
    */
-  unavailable?: 'ssh'
+  unavailable?: 'ssh' | 'codex-account'
 }
 
 /** Payload of `pty:recycled` — see IPC.ptyRecycled and `recycleAction` in the renderer. */
@@ -173,7 +185,21 @@ export interface RecycledInfo {
 }
 
 // 'subagent' and 'loop' are render-only (ephemeral hook-driven viz) and never persisted.
-export type NodeKind = 'terminal' | 'sticky' | 'group' | 'editor' | 'diff' | 'video' | 'web' | 'browser' | 'subagent' | 'loop' | 'dino'
+// 'scheduler' is the user-created, persisted NodeTerm Loop; the internal name avoids colliding
+// with the existing derived agent card.
+export type NodeKind =
+  | 'terminal'
+  | 'sticky'
+  | 'group'
+  | 'editor'
+  | 'diff'
+  | 'video'
+  | 'web'
+  | 'browser'
+  | 'subagent'
+  | 'loop'
+  | 'scheduler'
+  | 'dino'
 
 /** Persisted state of a single canvas node (terminal, sticky note, group frame, or editor). */
 /**
@@ -216,6 +242,17 @@ export interface CanvasNodeState {
   tags?: string[]
   /** When true the node body is hidden (header-only). */
   collapsed?: boolean
+  /** scheduler-only: prompt delivered through the persistent inter-agent mailbox. */
+  loopTask?: string
+  /** scheduler-only: fixed cadence in milliseconds. */
+  loopIntervalMs?: number
+  /** scheduler-only: paused=false/running=true. */
+  loopEnabled?: boolean
+  /** scheduler-only: absolute local wall-clock instants. */
+  loopNextRunAt?: number
+  loopLastRunAt?: number
+  /** scheduler-only: exact agent node ids receiving each fire. */
+  loopTargetIds?: string[]
   /** Parent group node id, if this node belongs to a group frame. */
   parentId?: string
   // terminal-only
@@ -239,6 +276,8 @@ export interface CanvasNodeState {
    * The hook-fed id still wins when known: `/clear` and `--fork-session` mint a new one in-CLI.
    */
   agentSessionId?: string
+  /** Codex-only managed account. Undefined uses the system ~/.codex account. */
+  codexAccountId?: string
   /** When set, the terminal runs `ssh` to this host on the local PTY; persisted (auto-reconnects). */
   ssh?: import('./ssh').SshConnection
   /** When true (SSH-project terminals), the node runs in REMOTE tmux on `ssh` rather than `ssh`-on-local-PTY. */
@@ -345,16 +384,7 @@ export interface KanbanCardMeta {
 /** The Notion label palette. A closed set so the chip colors and the picker can't desync; an
  *  unknown value read from a hand-edited file falls back to 'default'. */
 export type KanbanLabelColor =
-  | 'default'
-  | 'gray'
-  | 'brown'
-  | 'orange'
-  | 'yellow'
-  | 'green'
-  | 'blue'
-  | 'purple'
-  | 'pink'
-  | 'red'
+  'default' | 'gray' | 'brown' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'red'
 
 /** A board-level label (Notion-style): defined once per board, applied to any number of cards by
  *  id (KanbanCardMeta.labels). Order in ProjectKanban.labels is the palette's display order. */
@@ -672,6 +702,8 @@ export interface DialogApi {
 
 export interface ClipboardApi {
   writeText(text: string): void
+  /** Copy local files so Finder and other file-aware macOS apps can paste them. */
+  writeFiles(paths: string[]): Promise<boolean>
 }
 
 export interface ShellApi {
@@ -740,7 +772,7 @@ export interface MediaApi {
 
 export interface BrowserApi {
   /** Map a browser node's <webview> guest to its node id (for new-window capture). */
-  register(webContentsId: number, nodeId: string): void
+  register(webContentsId: number, nodeId: string, ownerNodeId?: string): void
   unregister(webContentsId: number): void
   /** Fires when a browser guest requested a new window; the renderer opens another browser node. */
   onBrowserNewWindow(listener: (e: { url: string; sourceNodeId: string }) => void): () => void
@@ -770,6 +802,20 @@ export interface ClaudeAccount {
   /** Set only for remote (SSH) accounts: the ssh host this account's config dir lives on. */
   host?: string
   /** True until `claude /login` completes in the account dir and the email is captured. */
+  pending?: boolean
+  createdAt: number
+}
+
+/** A managed Codex/ChatGPT login with its own CODEX_HOME and one shared app-server. */
+export interface CodexAccount {
+  id: string
+  label: string
+  email?: string
+  /** Set only for remote accounts; credentials and daemon live on this SSH host. */
+  host?: string
+  /** Default working directory for this account's nodes on its SSH host. */
+  remoteCwd?: string
+  /** True until the official `codex login --device-auth` flow completes. */
   pending?: boolean
   createdAt: number
 }
@@ -836,10 +882,10 @@ export interface Settings {
    *  whatever size they were saved with; other node kinds keep their own defaults. */
   defaultNodeWidth: number
   defaultNodeHeight: number
-  /** Sessions sidebar: collapse inactive projects and re-focus the list on every project
-   *  switch (the historical behavior). Off = every project defaults to expanded and a
-   *  project switch never touches the user's expand/collapse choices. */
+  /** Sessions sidebar default for projects without an explicit persisted choice. */
   sidebarAutoCollapse: boolean
+  /** Persisted project/group collapse choices in the Sessions tree. */
+  sidebarCollapsedItems: Record<string, boolean>
   /** Fallback view for projects the user hasn't explicitly toggled (canvas or the kanban board).
    *  Personal machine-local preference; per-project explicit choices override it. */
   defaultProjectView: 'canvas' | 'kanban'
@@ -861,8 +907,8 @@ export interface Settings {
    * tmux's buffer, and it never reached the browser.
    */
   terminalMiddleClickPaste: boolean
-  /** Plain mouse wheel zooms the canvas (no Cmd/Ctrl needed). Trades away scroll-to-pan,
-   *  so it's opt-in — best for mouse users; trackpads keep two-finger pan when off. */
+  /** Plain mouse wheel zooms the canvas (no Cmd/Ctrl needed). Two-finger trackpad scroll keeps
+   *  panning independently, so mouse and trackpad can coexist. */
   wheelZoom: boolean
   /** What a left-drag on EMPTY canvas does. 'select' (default) rubber-band selects, like
    *  Figma's move tool — pan stays on middle-drag / two-finger scroll. 'pan' drags the map
@@ -941,9 +987,17 @@ export interface Settings {
   customAgents: CustomAgent[]
   /** Managed Claude accounts (config-dir isolated). See ClaudeAccount. */
   claudeAccounts: ClaudeAccount[]
+  /** Managed Codex accounts (CODEX_HOME/app-server isolated). See CodexAccount. */
+  codexAccounts: CodexAccount[]
   /** Custom display label for the SYSTEM Claude account (~/.claude) in pickers/settings.
    *  Empty = unset → fall back to the detected login email, else "System account". */
   systemAccountLabel: string
+  /** Display label for the system Codex account (~/.codex). */
+  systemCodexAccountLabel: string
+  /** Per-SSH-host display labels for each host's default ~/.claude login. */
+  remoteSystemAccountLabels: Record<string, string>
+  /** Per-SSH-host display labels for each host's default ~/.codex login. */
+  remoteSystemCodexAccountLabels: Record<string, string>
   /** Agent ids hidden from the Add menus. */
   disabledAgents: AgentId[]
   /** Usage providers hidden from the pill + popover (Settings → Usage toggles). Hiding is a
@@ -1047,6 +1101,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultNodeWidth: 640,
   defaultNodeHeight: 440,
   sidebarAutoCollapse: true,
+  sidebarCollapsedItems: {},
   defaultProjectView: 'canvas',
   panHoverDelay: 600,
   doubleClickFocus: true,
@@ -1072,7 +1127,11 @@ export const DEFAULT_SETTINGS: Settings = {
   soundVolume: 0.5,
   customAgents: [],
   claudeAccounts: [],
+  codexAccounts: [],
   systemAccountLabel: '',
+  systemCodexAccountLabel: '',
+  remoteSystemAccountLabels: {},
+  remoteSystemCodexAccountLabels: {},
   // All three builtin agents (Claude/Codex/Gemini) show in the Add menus out of the box.
   // Existing users keep whatever they've saved (their persisted disabledAgents overrides this).
   disabledAgents: [],
@@ -1105,7 +1164,12 @@ export const DEFAULT_SETTINGS: Settings = {
   notchHud: true,
   notchWidth: 168,
   notchHoverExpand: true,
-  speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
+  speech: {
+    engine: 'whisper',
+    model: 'tiny',
+    language: 'auto',
+    shortcut: 'Cmd+Alt'
+  }
 }
 
 export interface SettingsApi {
@@ -1188,6 +1252,9 @@ export interface SshProjectApi {
     hookEndpointPath?: string
     tmuxConfPath?: string
     remoteHome?: string
+    codexLauncherPath?: string
+    codexRelayScriptPath?: string
+    codexRelayRuntimePath?: string
     /** Whether the REMOTE host's claude CLI accepts `--permission-mode auto` (probed on connect). */
     claudeAutoPermissionMode?: boolean
     /** The probed remote `claude --version` output (`null` = probe failed; only on reused conns). */
@@ -1240,8 +1307,7 @@ export interface SshProjectApi {
 /** Outcome of a file download (SSH pull). `localPath` is the absolute path actually written —
  *  collision resolution may have renamed it (`notes.md` → `notes (2).md`). */
 export type DownloadResult =
-  | { ok: true; localPath: string; dir: boolean }
-  | { ok: false; error: string }
+  { ok: true; localPath: string; dir: boolean } | { ok: false; error: string }
 
 /** A one-shot HTTP download ticket (Server Edition). `url` is same-origin and carries the token;
  *  the browser does the transfer natively, so nothing streams through the WS bridge. */
@@ -1549,6 +1615,8 @@ export interface ProviderUsage {
   limits: UsageLimit[]
   /** Signed-in identity, when the provider exposes one cheaply (email / account label). */
   account: string | null
+  /** Managed provider account id; null/undefined means that provider's system account. */
+  accountId?: string | null
   updatedAt: number
   /**
    * 'unavailable' = not signed in / no subscription to report → hide this provider entirely.
@@ -1747,7 +1815,13 @@ export interface TranscriptLine {
 export type ChatPart =
   | { kind: 'text'; text: string }
   | { kind: 'thinking'; text: string }
-  | { kind: 'tool'; name: string; arg: string; result?: string; summary?: ChatToolSummary }
+  | {
+      kind: 'tool'
+      name: string
+      arg: string
+      result?: string
+      summary?: ChatToolSummary
+    }
 
 /** A structured chat message reconstructed from a Claude session transcript. */
 export interface ChatMessage {
@@ -1805,6 +1879,37 @@ export interface ClaudeAccountsApi {
   cancelWaitLogin(id: string): Promise<void>
   /** Delete a managed account's config dir (recursive). With an SSH `ctx`, `rm -rf` on the host. */
   remove(id: string, ctx?: AccountSshCtx): Promise<void>
+}
+
+export interface CodexAccountsApi {
+  /** Create an isolated CODEX_HOME locally or on the selected SSH project host. */
+  add(ctx?: AccountSshCtx): Promise<{ id: string; home: string }>
+  /** Wait for official login completion and return app-server-confirmed identity metadata. */
+  waitLogin(id: string, ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
+  cancelWaitLogin(id: string): Promise<void>
+  /** Stop that account's shared daemon and remove its profile after explicit UI confirmation. */
+  remove(id: string, ctx?: AccountSshCtx): Promise<void>
+  /** Return identity only when this managed home already contains a completed file login. */
+  identity(id: string, ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
+  /** Identity of the system ~/.codex account, read through account/read. */
+  systemIdentity(ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
+  /** Rebind an idle conversation to another login without changing its thread identity. */
+  switchThread(
+    threadId: string,
+    cwd: string,
+    sourceAccountId?: string,
+    targetAccountId?: string
+  ): Promise<{ threadId: string; rollbackToken?: string }>
+  /** Copy a local rollout into an SSH-host account without deleting or rewriting the source. */
+  transferThreadToSsh(
+    threadId: string,
+    sourceAccountId: string | undefined,
+    targetAccountId: string | undefined,
+    ctx: AccountSshCtx
+  ): Promise<{ threadId: string }>
+  commitSwitch(rollbackToken: string): Promise<void>
+  finishSwitch(rollbackToken: string): Promise<void>
+  rollbackSwitch(rollbackToken: string): Promise<void>
 }
 
 /** One ranked search hit across all on-disk Claude session transcripts. */
@@ -2052,7 +2157,11 @@ export interface PairedDevice {
 /** Phone-pairing (nodeterm iOS "scan a QR" flow) bridge. */
 export interface PairingApi {
   /** Start the one-shot LAN listener; resolves with the QR payload + an SSH-reachable hint. */
-  start(): Promise<{ payload: string; sshOpen: boolean; relayPlan?: 'ok' | 'dev' | 'off' }>
+  start(): Promise<{
+    payload: string
+    sshOpen: boolean
+    relayPlan?: 'ok' | 'dev' | 'off'
+  }>
   /** Cancel an in-flight pairing (e.g. when the settings section unmounts). */
   stop(): Promise<void>
   /** Fires once when pairing finishes (ok=true paired, ok=false timeout). Returns unsubscribe. */
@@ -2127,6 +2236,7 @@ export interface NodeTerminalApi {
   claude: ClaudeApi
   chat: ChatApi
   claudeAccounts: ClaudeAccountsApi
+  codexAccounts: CodexAccountsApi
   transcripts: TranscriptsApi
   remoteHost: RemoteHostApi
   relayHost: RelayHostApi
@@ -2182,7 +2292,11 @@ export interface NodeTerminalApi {
    *  local project, or the remote host over the project's ControlMaster for an SSH project. Resolves
    *  `true` when the file was written, `false` on any failure (invalid pendingId, unknown node,
    *  unsupported project, fs/exec error). */
-  answerPermission(payload: { nodeId: string; pendingId: string; decision: 'allow' | 'deny' }): Promise<boolean>
+  answerPermission(payload: {
+    nodeId: string
+    pendingId: string
+    decision: 'allow' | 'deny'
+  }): Promise<boolean>
   /** Notify the core that the user READ a finished (done) session on this surface (the unread-clear
    *  funnel calls it when the node's latest state is `done`). The core marks the node's done inbox
    *  event(s) resolved (phone Inbox archives the card) and re-sends an 'end' live-update so the

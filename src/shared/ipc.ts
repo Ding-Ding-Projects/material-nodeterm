@@ -38,6 +38,17 @@ export const IPC = {
   claudeAccountsWaitLogin: 'claude-accounts:wait-login',
   claudeAccountsCancelWait: 'claude-accounts:cancel-wait',
   claudeAccountsRemove: 'claude-accounts:remove',
+  codexAccountsAdd: 'codex-accounts:add',
+  codexAccountsWaitLogin: 'codex-accounts:wait-login',
+  codexAccountsCancelWait: 'codex-accounts:cancel-wait',
+  codexAccountsRemove: 'codex-accounts:remove',
+  codexAccountsIdentity: 'codex-accounts:identity',
+  codexAccountsSystemIdentity: 'codex-accounts:system-identity',
+  codexAccountsSwitchThread: 'codex-accounts:switch-thread',
+  codexAccountsTransferThreadToSsh: 'codex-accounts:transfer-thread-to-ssh',
+  codexAccountsCommitSwitch: 'codex-accounts:commit-switch',
+  codexAccountsFinishSwitch: 'codex-accounts:finish-switch',
+  codexAccountsRollbackSwitch: 'codex-accounts:rollback-switch',
   claudeCliCaps: 'claude-cli:caps',
   transcriptSearch: 'transcript:search',
   appToggleMarkdown: 'app:toggle-markdown',
@@ -47,6 +58,8 @@ export const IPC = {
   /** Write text to the system clipboard from the MAIN process. Renderer-side `clipboard` access is
    *  deprecated in Electron; the renderer sends this instead (fire-and-forget). */
   clipboardWrite: 'clipboard:write',
+  /** Copy local files as file references (not bytes/text) to the macOS system clipboard. */
+  clipboardWriteFiles: 'clipboard:write-files',
   appNotify: 'app:notify',
   appOpenNotificationSettings: 'app:open-notification-settings',
   appFocusNode: 'app:focus-node',

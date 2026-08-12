@@ -980,6 +980,7 @@ body,
 
 /* ---- Terminal node ---- */
 .term-node {
+  container-type: inline-size;
   width: 100%;
   height: 100%;
   display: flex;
@@ -1233,41 +1234,67 @@ body,
   border-radius: 6px;
 }
 
-/* SSH-bound terminal: user@host chip beside the title. Mirrors the session chip. */
-.term-ssh-chip {
-  margin-left: 8px;
-  max-width: 180px;
+/* Shared account identity across settings, node chrome and menus. Storage implementation
+   (system/managed) is intentionally absent; the second pill states where the login lives. */
+.account-identity-pills {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
+.account-identity-pill,
+.account-provenance-pill {
+  min-width: 0;
   padding: 1px 8px;
-  flex-shrink: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
   color: var(--muted);
-  background: rgba(var(--tint-rgb), 0.06);
   border-radius: 6px;
 }
 
-/* Account-bound node: which managed Claude account this node runs under. Mirrors the session
-   chip with a distinct accent-tinted background so it reads apart from the plain session chip. */
-.node-account-chip {
-  margin-left: 8px;
-  max-width: 120px;
-  padding: 1px 8px;
+.account-identity-pill {
   flex-shrink: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  color: var(--muted);
   background: rgba(10, 132, 255, 0.14);
-  border-radius: 6px;
 }
 
-/* Account folder missing at spawn → session fell back to the system account (orange warning). */
-.node-account-chip--warning {
+.account-provenance-pill {
+  background: rgba(var(--tint-rgb), 0.08);
+}
+
+.account-identity-check {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.account-identity-pills--warning .account-identity-pill,
+.account-identity-pills--warning .account-provenance-pill {
   color: var(--warn);
   background: rgba(255, 159, 10, 0.16);
+}
+
+.node-identity-chips {
+  margin-left: 8px;
+  max-width: 260px;
+  flex-shrink: 1;
+}
+
+.node-identity-chips .account-identity-pill {
+  max-width: 130px;
+}
+
+.node-identity-chips .account-provenance-pill {
+  max-width: 120px;
+}
+
+@container (max-width: 520px) {
+  .node-identity-chips .account-provenance-pill {
+    max-width: 64px;
+  }
 }
 
 /* Claude Code status: RUNNING badge while working, unread dot when finished. */
@@ -2697,6 +2724,21 @@ body,
   font-size: 13px;
   text-align: left;
   cursor: pointer;
+}
+
+.ctx-item__label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.ctx-item__label .account-identity-pill {
+  max-width: 180px;
+}
+
+.ctx-item__label .account-provenance-pill {
+  max-width: 150px;
 }
 
 .ctx-icon {
@@ -4949,7 +4991,17 @@ body,
   border: 1.5px dashed;
   border-radius: 14px;
   box-sizing: border-box;
-  cursor: grab;
+}
+
+/* A group is a background container, not a giant drag target. Its body passes pointer input to
+   React Flow's pane; the label/header, actions and resize controls explicitly opt back in. */
+.react-flow__node-group {
+  pointer-events: none !important;
+}
+.react-flow__node-group .group-node__label,
+.react-flow__node-group .group-node__actions,
+.react-flow__node-group .react-flow__resize-control {
+  pointer-events: auto;
 }
 
 /* Bound to a git worktree: a checkout, not a loose grouping. Solid, thicker border (the tint is
@@ -4986,6 +5038,10 @@ body,
   border: 1px solid var(--border);
   border-radius: 999px;
   user-select: none;
+  cursor: grab;
+}
+.group-node__label:active {
+  cursor: grabbing;
 }
 
 /* Zoomed far out (boost ≥ 2, toggled in Canvas.setGroupLabelBoost), the pill keeps only the
@@ -5554,8 +5610,8 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
-  padding: 0 9px;
+  min-height: 26px;
+  padding: 4px 9px;
   border-radius: 13px;
   background: rgba(var(--card-rgb), 0.92);
   border: 1px solid rgba(var(--tint-rgb), 0.08);
@@ -5580,6 +5636,24 @@ body,
 }
 .usage-pill:hover { background: rgba(44, 44, 46, 0.95); }
 .usage-pill__icon { color: #d97757; font-size: 13px; }
+.usage-pill__rows {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.usage-pill__account-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 12px;
+  white-space: nowrap;
+}
+.usage-pill__values {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .usage-pill__minibar {
   display: inline-block;
   width: 42px;
@@ -5593,8 +5667,7 @@ body,
 .sysres-pill__num { color: var(--text-strong); }
 .usage-pill__sep,
 .sysres-pill__sep { color: rgba(var(--tint-rgb), 0.4); }
-/* Non-Claude provider segments read one step quieter than the Claude numbers, so a long pill
-   still scans as "Claude first, others after" without needing separate icons per provider. */
+/* Non-Claude provider rows read one step quieter than Claude without losing account identity. */
 .usage-pill__provider .usage-pill__num { color: rgba(var(--tint-rgb), 0.75); font-size: 11px; }
 .usage-pill__dim,
 .sysres-pill__dim { color: rgba(var(--tint-rgb), 0.5); }
@@ -6355,12 +6428,49 @@ body,
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
   flex: 0 0 auto;
 }
-.ss-group__chev { font-size: 9px; color: var(--muted); width: 10px; }
-.ss-group__dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.ss-group__name { font-size: 12px; font-weight: 600; color: var(--text); }
-.ss-group.is-active .ss-group__name { color: var(--accent); }
-.ss-group__branch { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ss-group__count { font-size: 10px; color: var(--muted); }
+.ss-group__chev {
+  width: 14px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.ss-group__chev:hover {
+  background: rgba(var(--tint-rgb), 0.09);
+  color: var(--text);
+}
+.ss-group__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.ss-group__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ss-group.is-active .ss-group__name {
+  color: var(--accent);
+}
+.ss-group__branch {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ss-group__count {
+  font-size: 10px;
+  color: var(--muted);
+}
 /* Signal badges on the project header: 🔔 needs-you count / ✓ unread count. Visible even
    while the group is collapsed — that's their main job. */
 .ss-group__sig { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; flex: 0 0 auto; line-height: 0; }
@@ -6378,9 +6488,44 @@ body,
   padding-left: 6px;
   border-left: 1px solid rgba(var(--tint-rgb), 0.08);
 }
-.ss-subgroup__head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; }
-.ss-subgroup__head:hover { background: var(--panel-header); }
-.ss-subgroup__dot { width: 7px; height: 7px; border-radius: 2px; flex: 0 0 auto; }
+.ss-subgroup__reorder-zone,
+.ss-subgroup__reorder-end {
+  position: relative;
+  height: 5px;
+}
+.ss-subgroup__reorder-end--root {
+  margin-left: 15px;
+}
+.ss-subgroup__reorder-zone.is-drop-before::before,
+.ss-subgroup__reorder-end.is-drop-before::before {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  right: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.ss-subgroup__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.ss-subgroup__head:hover {
+  background: var(--panel-header);
+}
+.ss-subgroup__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
 /* Content-sized (not flex:1): the row click navigates to the group on the canvas, so the
    rename target must be only as wide as the name itself. */
 .ss-subgroup__name { flex: 0 1 auto; min-width: 0; font-size: 11.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10246,4 +10391,121 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---- Native Loop scheduler ------------------------------------------------ */
+.native-loop-node {
+  width: 100%;
+  height: 100%;
+  min-width: 280px;
+  min-height: 230px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 179, 64, 0.55);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 94%, #ffb340 6%);
+  color: var(--text);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+.native-loop-node.selected {
+  border-color: #ffb340;
+}
+.native-loop-node__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 179, 64, 0.08);
+}
+.native-loop-node__clock {
+  color: #ffb340;
+  font-size: 20px;
+  font-weight: 800;
+}
+.native-loop-node__title {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+}
+.native-loop-node__close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 19px;
+  cursor: pointer;
+}
+.native-loop-node__task {
+  flex: 1;
+  min-height: 72px;
+  margin: 10px;
+  padding: 9px;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+}
+.native-loop-node__task:focus {
+  border-color: #ffb340;
+}
+.native-loop-node__interval,
+.native-loop-node__actions,
+.native-loop-node__meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px 9px;
+}
+.native-loop-node__interval input,
+.native-loop-node__interval select {
+  height: 28px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+.native-loop-node__interval input {
+  width: 64px;
+  padding: 0 6px;
+}
+.native-loop-node__meta {
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 10px;
+}
+.native-loop-node__actions button {
+  flex: 1;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-2, var(--bg));
+  color: var(--text);
+  cursor: pointer;
+}
+.native-loop-node__actions button.active {
+  border-color: #ffb340;
+  color: #ffb340;
+}
+.native-loop-node__actions button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+.schedule-handle {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #1c1c1e;
+  background: #ffb340;
 }

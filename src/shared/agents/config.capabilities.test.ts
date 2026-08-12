@@ -178,9 +178,9 @@ describe('title read vs rename write', () => {
     for (const id of RENAME_CAPABLE) expect(canReadTitle(id), id).toBe(true)
   })
 
-  it('codex claims neither, for want of evidence', () => {
-    // Its slash-command set was not enumerable from the CLI, so neither leg has a measured basis.
-    expect(canReadTitle('codex')).toBe(false)
+  it('reads Codex task names without claiming two-way rename support', () => {
+    // Thread.name is read from the Codex app-server; no matching rename command is exposed.
+    expect(canReadTitle('codex')).toBe(true)
     expect(canRename('codex')).toBe(false)
   })
 

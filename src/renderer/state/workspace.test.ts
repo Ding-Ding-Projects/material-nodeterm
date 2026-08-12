@@ -1,22 +1,28 @@
 import { describe, it, expect } from 'vitest'
 import {
   alignNodes,
+  addSelectionToGroup,
   arrangeNodes,
   commonParentId,
   createAccountLoginNode,
+  createCodexAccountLoginNode,
   createAgentNode,
+  createCanvasControlTerminalNode,
   createDinoNode,
   fitGroupToChildren,
   flowToNodeStates,
   groupSelectedNodes,
   nodeStatesToFlow,
   nodeSshFor,
+  reorderGroupWithinParent,
   reorderNodeBefore,
   reparentNode,
   resolveNewNodeAccount,
+  selectedRootIds,
   ungroupNodes
 } from './workspace'
 import type { CanvasNode } from './workspace'
+import { codexRemoteCommand } from '../../shared/agents/config'
 
 const term = (id: string, pos: { x: number; y: number }, parentId?: string): CanvasNode =>
   ({
@@ -29,14 +35,15 @@ const term = (id: string, pos: { x: number; y: number }, parentId?: string): Can
     ...(parentId ? { parentId, extent: 'parent' as const } : {})
   }) as unknown as CanvasNode
 
-const grp = (id: string, pos: { x: number; y: number }): CanvasNode =>
+const grp = (id: string, pos: { x: number; y: number }, parentId?: string): CanvasNode =>
   ({
     id,
     type: 'group',
     position: pos,
     width: 400,
     height: 300,
-    data: { title: id, color: '#fff', group: null }
+    data: { title: id, color: '#fff', group: null },
+    ...(parentId ? { parentId, extent: 'parent' as const } : {})
   }) as unknown as CanvasNode
 
 describe('reparentNode', () => {
@@ -73,6 +80,84 @@ describe('reparentNode', () => {
     const nodes = [grp('g1', { x: 50, y: 50 }), term('t1', { x: 10, y: 10 })]
     expect(reparentNode(nodes, 'nope', 'g1')).toBe(nodes)
     expect(reparentNode(nodes, 't1', 't1')).toBe(nodes) // target is a terminal, not a group
+  })
+
+  it('moves a whole group subtree between nested containers without moving it in root space', () => {
+    const nodes = [
+      grp('outer', { x: 100, y: 80 }),
+      grp('inner', { x: 30, y: 40 }, 'outer'),
+      term('leaf', { x: 10, y: 12 }, 'inner'),
+      grp('target', { x: 500, y: 200 })
+    ]
+    const out = reparentNode(nodes, 'inner', 'target')
+    const inner = out.find((node) => node.id === 'inner')!
+    expect(inner.parentId).toBe('target')
+    expect(inner.position).toEqual({ x: -370, y: -80 })
+    expect(out.find((node) => node.id === 'leaf')!.position).toEqual({ x: 10, y: 12 })
+    expect(out.findIndex((node) => node.id === 'target')).toBeLessThan(
+      out.findIndex((node) => node.id === 'inner')
+    )
+  })
+
+  it('rejects parenting a group into itself or one of its descendants', () => {
+    const nodes = [grp('outer', { x: 0, y: 0 }), grp('inner', { x: 20, y: 20 }, 'outer')]
+    expect(reparentNode(nodes, 'outer', 'outer')).toBe(nodes)
+    expect(reparentNode(nodes, 'outer', 'inner')).toBe(nodes)
+  })
+})
+
+describe('addSelectionToGroup', () => {
+  it('adds selected sibling objects to the already selected group', () => {
+    const nodes = [
+      grp('target', { x: 100, y: 80 }),
+      term('a', { x: 500, y: 200 }),
+      term('b', { x: 700, y: 300 })
+    ]
+    const out = addSelectionToGroup(nodes, ['target', 'a', 'b'], 'target')
+    expect(out.find((node) => node.id === 'a')).toMatchObject({
+      parentId: 'target',
+      position: { x: 400, y: 120 }
+    })
+    expect(out.find((node) => node.id === 'b')!.parentId).toBe('target')
+  })
+
+  it('moves only a selected subtree root and rejects cycles through reparenting', () => {
+    const nodes = [
+      grp('target', { x: 500, y: 200 }),
+      grp('outer', { x: 100, y: 80 }),
+      term('leaf', { x: 10, y: 12 }, 'outer')
+    ]
+    const out = addSelectionToGroup(nodes, ['target', 'outer', 'leaf'], 'target')
+    expect(out.find((node) => node.id === 'outer')!.parentId).toBe('target')
+    expect(out.find((node) => node.id === 'leaf')!.parentId).toBe('outer')
+    const nested = [grp('outer', { x: 0, y: 0 }), grp('target', { x: 20, y: 20 }, 'outer')]
+    expect(addSelectionToGroup(nested, ['outer', 'target'], 'target')).toBe(nested)
+  })
+
+  it('is a no-op without a valid target or movable selected object', () => {
+    const nodes = [grp('target', { x: 0, y: 0 }), term('inside', { x: 10, y: 10 }, 'target')]
+    expect(addSelectionToGroup(nodes, ['target', 'inside'], 'target')).toBe(nodes)
+    expect(addSelectionToGroup(nodes, ['target'], 'missing')).toBe(nodes)
+  })
+})
+
+describe('selectedRootIds', () => {
+  it('normalizes box-selected group subtrees to their selected roots', () => {
+    const nodes = [
+      grp('outer', { x: 0, y: 0 }),
+      grp('inner', { x: 10, y: 10 }, 'outer'),
+      term('leaf', { x: 5, y: 5 }, 'inner'),
+      grp('sibling', { x: 500, y: 0 })
+    ]
+    expect(selectedRootIds(nodes, ['outer', 'inner', 'leaf', 'sibling'])).toEqual([
+      'outer',
+      'sibling'
+    ])
+  })
+
+  it('drops unknown ids and preserves independent selection order', () => {
+    const nodes = [term('a', { x: 0, y: 0 }), term('b', { x: 10, y: 10 })]
+    expect(selectedRootIds(nodes, ['missing', 'b', 'a'])).toEqual(['b', 'a'])
   })
 })
 
@@ -188,9 +273,36 @@ describe('groupSelectedNodes', () => {
     expect(out.find((n) => n.id === 't1')!.parentId).toBe(out[0].id)
   })
 
-  it('skips already-grouped children and group frames; all-skipped is a no-op', () => {
+  it('refuses an ancestor together with its descendant', () => {
     const nodes = [grp('g1', { x: 0, y: 0 }), term('t1', { x: 10, y: 10 }, 'g1')]
     expect(groupSelectedNodes(nodes, ['g1', 't1'], 1)).toBe(nodes)
+  })
+
+  it('wraps sibling groups in a nested group while preserving root-space positions', () => {
+    const nodes = [grp('a', { x: 100, y: 120 }), grp('b', { x: 600, y: 180 })]
+    const out = groupSelectedNodes(nodes, ['a', 'b'], 2)
+    const wrapper = out.find((node) => !nodes.some((old) => old.id === node.id))!
+    const a = out.find((node) => node.id === 'a')!
+    expect(wrapper.type).toBe('group')
+    expect(a.parentId).toBe(wrapper.id)
+    expect(wrapper.position.x + a.position.x).toBe(100)
+    expect(wrapper.position.y + a.position.y).toBe(120)
+    expect(out.indexOf(wrapper)).toBeLessThan(out.indexOf(a))
+  })
+
+  it('creates the wrapper inside the siblings\' existing parent', () => {
+    const nodes = [
+      grp('outer', { x: 100, y: 80 }),
+      grp('a', { x: 20, y: 30 }, 'outer'),
+      grp('b', { x: 500, y: 60 }, 'outer')
+    ]
+    const out = groupSelectedNodes(nodes, ['a', 'b'], 3)
+    const wrapper = out.find((node) => !nodes.some((old) => old.id === node.id))!
+    const a = out.find((node) => node.id === 'a')!
+    expect(wrapper.parentId).toBe('outer')
+    expect(a.parentId).toBe(wrapper.id)
+    expect(100 + wrapper.position.x + a.position.x).toBe(120)
+    expect(80 + wrapper.position.y + a.position.y).toBe(110)
   })
 })
 
@@ -213,9 +325,43 @@ describe('ungroupNodes', () => {
     expect(out.find((n) => n.id === 't2')!.position).toEqual({ x: 500, y: 300 })
   })
 
+  it('promotes direct children into the removed group\'s parent without moving them', () => {
+    const nodes = [
+      grp('outer', { x: 100, y: 80 }),
+      grp('inner', { x: 30, y: 40 }, 'outer'),
+      term('leaf', { x: 10, y: 12 }, 'inner')
+    ]
+    const out = ungroupNodes(nodes, 'inner')
+    const leaf = out.find((node) => node.id === 'leaf')!
+    expect(leaf.parentId).toBe('outer')
+    expect(leaf.position).toEqual({ x: 40, y: 52 })
+  })
+
   it('is a no-op when the group is missing', () => {
     const nodes = [term('t1', { x: 0, y: 0 })]
     expect(ungroupNodes(nodes, 'nope')).toBe(nodes)
+  })
+})
+
+describe('nested group persistence order', () => {
+  it('hydrates every parent group before its descendants even from reversed persisted order', () => {
+    const live = [
+      grp('outer', { x: 100, y: 80 }),
+      grp('inner', { x: 30, y: 40 }, 'outer'),
+      term('leaf', { x: 10, y: 12 }, 'inner')
+    ]
+    const hydrated = nodeStatesToFlow(flowToNodeStates(live).reverse())
+    expect(hydrated.findIndex((node) => node.id === 'outer')).toBeLessThan(
+      hydrated.findIndex((node) => node.id === 'inner')
+    )
+    expect(hydrated.findIndex((node) => node.id === 'inner')).toBeLessThan(
+      hydrated.findIndex((node) => node.id === 'leaf')
+    )
+  })
+
+  it('hydrates groups with the label-only drag handle', () => {
+    const [group] = nodeStatesToFlow(flowToNodeStates([grp('outer', { x: 0, y: 0 })]))
+    expect(group.dragHandle).toBe('.group-node__label')
   })
 })
 
@@ -254,6 +400,49 @@ describe('reorderNodeBefore', () => {
     expect(reorderNodeBefore(nodes, 'g1', 'a')).toBe(nodes) // can't drag a group row
     const out = reorderNodeBefore(nodes, 'b', 'a')
     expect(out[0].id).toBe('g1')
+  })
+})
+
+describe('reorderGroupWithinParent', () => {
+  it('moves a nested group subtree before a sibling without changing geometry or parenting', () => {
+    const nodes = [
+      grp('outer', { x: 0, y: 0 }),
+      grp('a', { x: 10, y: 10 }, 'outer'),
+      grp('a-child', { x: 5, y: 5 }, 'a'),
+      grp('b', { x: 20, y: 20 }, 'outer'),
+      term('inside-a', { x: 2, y: 3 }, 'a')
+    ]
+    const out = reorderGroupWithinParent(nodes, 'b', 'outer', 'a')
+    expect(out.map((node) => node.id)).toEqual(['outer', 'b', 'a', 'a-child', 'inside-a'])
+    expect(out.find((node) => node.id === 'b')).toMatchObject({
+      parentId: 'outer',
+      position: { x: 20, y: 20 }
+    })
+  })
+
+  it('appends a whole group subtree after its last sibling', () => {
+    const nodes = [
+      grp('a', { x: 0, y: 0 }),
+      grp('a-child', { x: 0, y: 0 }, 'a'),
+      grp('b', { x: 0, y: 0 }),
+      term('inside-a', { x: 0, y: 0 }, 'a')
+    ]
+    expect(reorderGroupWithinParent(nodes, 'a', null, null).map((node) => node.id)).toEqual([
+      'b',
+      'a',
+      'a-child',
+      'inside-a'
+    ])
+  })
+
+  it('rejects cross-parent and invalid-target reorders', () => {
+    const nodes = [
+      grp('outer', { x: 0, y: 0 }),
+      grp('a', { x: 0, y: 0 }, 'outer'),
+      grp('b', { x: 0, y: 0 })
+    ]
+    expect(reorderGroupWithinParent(nodes, 'a', null, 'b')).toBe(nodes)
+    expect(reorderGroupWithinParent(nodes, 'a', 'outer', 'missing')).toBe(nodes)
   })
 })
 
@@ -317,10 +506,56 @@ describe('accountId on Claude node factories', () => {
   it('does not stamp accountId onto a non-Claude agent node', () => {
     const node = createAgentNode('codex', 0, undefined, undefined, undefined, undefined, 'a1')
     expect(node.data.accountId).toBeUndefined()
+    expect(node.data.codexAccountId).toBe('a1')
   })
   it('omits accountId when none is given', () => {
     const node = createAgentNode('claude', 0)
     expect(node.data.accountId).toBeUndefined()
+  })
+})
+
+describe('Codex account node factories', () => {
+  it('creates a login terminal inside only the selected CODEX_HOME', () => {
+    const node = createCodexAccountLoginNode('codex-a', 0)
+    expect(node.data).toMatchObject({
+      title: 'Codex login',
+      codexAccountId: 'codex-a'
+    })
+    expect(node.data.initialCommand).toMatch(/^cd \"\$HOME\" && codex /)
+    expect(node.data.initialCommand).toContain('login --device-auth')
+  })
+})
+
+describe('canvas-control terminal compatibility', () => {
+  it('promotes an exact direct Codex resume to an account-aware agent node', () => {
+    const node = createCanvasControlTerminalNode(
+      0,
+      '/repo',
+      undefined,
+      'codex resume thread-a',
+      undefined,
+      'codex-a'
+    )
+    expect(node.data).toMatchObject({
+      agentId: 'codex',
+      codexAccountId: 'codex-a',
+      cwd: '/repo',
+      initialCommand: `${codexRemoteCommand()} resume thread-a`
+    })
+  })
+
+  it('keeps non-exact commands as plain terminal nodes', () => {
+    const node = createCanvasControlTerminalNode(
+      0,
+      '/repo',
+      undefined,
+      'codex resume thread-a; echo done',
+      undefined,
+      'codex-a'
+    )
+    expect(node.data.agentId).toBeUndefined()
+    expect(node.data.codexAccountId).toBeUndefined()
+    expect(node.data.initialCommand).toBe('codex resume thread-a; echo done')
   })
 })
 
@@ -338,6 +573,26 @@ describe('accountId serialization', () => {
     expect(states[0].accountId).toBe('a1')
     const back = nodeStatesToFlow(states)
     expect(back[0].data.accountId).toBe('a1')
+  })
+  it('round-trips data.codexAccountId on a Codex terminal node', () => {
+    const node = {
+      id: 'codex-term-1',
+      type: 'terminal',
+      position: { x: 0, y: 0 },
+      width: 600,
+      height: 400,
+      data: {
+        title: 'Codex',
+        color: '#888',
+        group: null,
+        agentId: 'codex',
+        codexAccountId: 'codex-a'
+      }
+    } as unknown as CanvasNode
+    const states = flowToNodeStates([node])
+    expect(states[0].codexAccountId).toBe('codex-a')
+    const back = nodeStatesToFlow(states)
+    expect(back[0].data.codexAccountId).toBe('codex-a')
   })
   it('leaves accountId undefined when unset', () => {
     const node = {
@@ -511,6 +766,12 @@ describe('createAgentNode permission mode', () => {
     const custom = createAgentNode('custom:x', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
     expect(custom.data.initialCommand).toBe('custom:x')
   })
+
+  it('uses native codex for an SSH project node', () => {
+    const ssh = { server: { host: 'example.test', user: 'tester' } } as any
+    const node = createAgentNode('codex', 0, undefined, undefined, undefined, ssh)
+    expect(node.data.initialCommand).toBe('codex')
+  })
 })
 
 describe('createAgentNode prompt injection', () => {
@@ -523,7 +784,9 @@ describe('createAgentNode prompt injection', () => {
     expect(n.data.initialCommand).toBe("opencode --prompt 'it'\\''s tricky'")
   })
   it('keeps argv injection byte-identical for codex and gemini', () => {
-    expect(createAgentNode('codex', 0, undefined, undefined, 'do X').data.initialCommand).toBe("codex 'do X'")
+    expect(createAgentNode('codex', 0, undefined, undefined, 'do X').data.initialCommand).toBe(
+      `${codexRemoteCommand()} 'do X'`
+    )
     expect(createAgentNode('gemini', 0, undefined, undefined, 'do X').data.initialCommand).toBe("gemini 'do X'")
   })
 })

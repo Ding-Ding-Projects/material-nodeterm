@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { resumeCommand, withSessionId } from './config'
+import {
+  codexRemoteCommand,
+  explicitCodexResumeSession,
+  resumeCommand,
+  withSessionId
+} from './config'
 
 describe('withSessionId', () => {
   it('appends the minted id for claude', () => {
@@ -32,7 +37,11 @@ describe('resumeCommand', () => {
   })
 
   it('builds codex resume (subcommand form)', () => {
-    expect(resumeCommand('codex', 'abc-123')).toBe('codex resume abc-123')
+    expect(resumeCommand('codex', 'abc-123')).toBe(`${codexRemoteCommand()} resume abc-123`)
+  })
+
+  it('keeps SSH Codex resumes on the remote host native', () => {
+    expect(resumeCommand('codex', 'abc-123', true)).toBe('codex resume abc-123')
   })
 
   it('builds gemini resume', () => {
@@ -60,6 +69,26 @@ describe('resumeCommand', () => {
   })
   it('rejects an unsafe opencode session id', () => {
     expect(resumeCommand('opencode', 'x; rm -rf /')).toBeNull()
+  })
+})
+
+describe('explicitCodexResumeSession', () => {
+  it('recognizes only a plain exact Codex resume command', () => {
+    expect(explicitCodexResumeSession('codex resume thread-a')).toBe('thread-a')
+    expect(explicitCodexResumeSession('nodeterm-codex resume thread_b')).toBe('thread_b')
+    expect(explicitCodexResumeSession('$HOME/.nodeterm/bin/nodeterm-codex resume 019f.abc')).toBe(
+      '019f.abc'
+    )
+  })
+
+  it('leaves general shell commands and unsafe ids as plain terminals', () => {
+    expect(explicitCodexResumeSession('codex')).toBeNull()
+    expect(explicitCodexResumeSession('codex resume thread-a --flag')).toBeNull()
+    expect(explicitCodexResumeSession('codex resume thread-a; echo owned')).toBeNull()
+    expect(explicitCodexResumeSession('env X=1 codex resume thread-a')).toBeNull()
+    expect(explicitCodexResumeSession('codex\nresume thread-a')).toBeNull()
+    expect(explicitCodexResumeSession('codex resume\nthread-a')).toBeNull()
+    expect(explicitCodexResumeSession(undefined)).toBeNull()
   })
 })
 

@@ -556,7 +556,7 @@ export async function startServer(
   )
   // A closed browser tab is the NORMAL way to leave the Server Edition and sends no `pty:kill`,
   // so the WS close hook is what unsubscribes that client from the sessions it was watching.
-  attachWsServer(server, {
+  const wsServer = attachWsServer(server, {
     platform,
     auth,
     onClientGone: (uiId) => {
@@ -591,6 +591,11 @@ export async function startServer(
       await speechService.shutdown()
       // Close the loopback hook-server listener (it would otherwise die with the process anyway).
       hookServer.stop()
+      // Upgraded WebSockets are not ordinary HTTP connections: server.close() waits for them but
+      // does not end them. Own the WS lifecycle explicitly so a client close racing shutdown
+      // cannot hang the Server Edition (or its tests) forever.
+      for (const client of wsServer.clients) client.terminate()
+      await new Promise<void>((resolve) => wsServer.close(() => resolve()))
       await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()))
       })

@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   buildSessionList,
+  groupSessionCount,
+  groupSessionRows,
   isGroupCollapsed,
   projectSignalCounts,
+  type GroupBucket,
   type SessionNodeInput
 } from '../lib/sessionList'
 import { SessionRow } from './SessionRow'
@@ -20,6 +23,7 @@ export interface SessionsSidebarProps {
   onTogglePin(): void
   onClose(): void
   onFocusNode(id: string): void
+  onFocusProject(projectId: string): void
   onCloseSession(projectId: string, id: string): void
   onRenameSession(projectId: string, id: string, title: string): void
   onAiNameSession(projectId: string, id: string, cwd?: string): void | Promise<void>
@@ -33,6 +37,13 @@ export interface SessionsSidebarProps {
   onAiNameGroup(projectId: string, groupId: string, memberIds: string[], cwd?: string): void | Promise<void>
   /** Reorder a session to sit immediately before another (within/across containers). */
   onReorder(projectId: string, draggedId: string, beforeId: string): void
+  /** Reorder a group among siblings. null beforeId appends within that parent. */
+  onReorderGroup(
+    projectId: string,
+    draggedId: string,
+    parentGroupId: string | null,
+    beforeId: string | null
+  ): void
   /** Reorder a project to sit before another (null = to the end). Shared order with the
    *  tab bar: both render the projects array, so one drag updates both surfaces. */
   onReorderProject(draggedId: string, beforeId: string | null): void
@@ -52,14 +63,14 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   const { api } = useSession()
 
   const [filter, setFilter] = useState('')
-  // Explicit per-project collapse choices (true = collapsed, false = expanded). Absent =
-  // follow the default (active project expanded, others collapsed — see isGroupCollapsed).
-  // Deliberately transient: reset on every project switch, so the toggles are "for now",
-  // not forever — switching projects always re-focuses the list on the active one.
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({})
   const [branches, setBranches] = useState<Record<string, string>>({})
   // Drag-to-group: the session being dragged, and the current drop target for highlighting.
-  const [drag, setDrag] = useState<{ projectId: string; nodeId: string } | null>(null)
+  const [drag, setDrag] = useState<{
+    projectId: string
+    nodeId: string
+    kind: 'session' | 'group'
+    parentGroupId?: string | null
+  } | null>(null)
   const [dropKey, setDropKey] = useState<string | null>(null)
   // Project reorder: the project being dragged (by its header) + the project it would land
   // before ('' = end of the list). Distinct from the session drag above — one at a time.
@@ -68,16 +79,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   // Inline group rename: the group node id being edited + its draft title.
   const [editGroup, setEditGroup] = useState<{ id: string; draft: string } | null>(null)
 
-  // Switching the active project resets the manual collapse choices, so the default takes
-  // over again: the newly active project expands, everything else collapses. Without this,
-  // one manual toggle stuck forever and project switches stopped re-focusing the list.
-  // Gated on settings.sidebarAutoCollapse — with it OFF, a project switch changes nothing:
-  // every project defaults to expanded (see isGroupCollapsed) and the user's toggles stick.
   const autoCollapse = useSettings((s) => s.settings.sidebarAutoCollapse)
-  useEffect(() => {
-    if (!autoCollapse) return
-    setOverrides((prev) => (Object.keys(prev).length === 0 ? prev : {}))
-  }, [activeProjectId, autoCollapse])
+  const collapsedItems = useSettings((s) => s.settings.sidebarCollapsedItems)
 
   // Look up the current git branch for each project cwd (best-effort, cached). Gated on `open`
   // and caches a NEGATIVE result too — without the '' fallback a non-git cwd re-fired a git
@@ -114,11 +117,13 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   )
 
   const projectCount = (g: (typeof groups)[number]): number =>
-    g.groups.reduce((n, b) => n + b.sessions.length, 0) + g.ungrouped.length
+    g.groups.reduce((n, b) => n + groupSessionCount(b), 0) + g.ungrouped.length
   const total = groups.reduce((n, g) => n + projectCount(g), 0)
 
-  const toggleCollapse = (id: string, currentlyCollapsed: boolean): void => {
-    setOverrides((prev) => ({ ...prev, [id]: !currentlyCollapsed }))
+  const toggleCollapse = (key: string, currentlyCollapsed: boolean): void => {
+    useSettings.getState().update({
+      sidebarCollapsedItems: { ...collapsedItems, [key]: !currentlyCollapsed }
+    })
   }
 
   // Drop-target wiring shared by the project header (ungroup) and group sub-headers (add).
@@ -201,12 +206,166 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           onRename={(title) => props.onRenameSession(projectId, row.id, title)}
           onAiName={() => props.onAiNameSession(projectId, row.id, row.cwd)}
           onContextMenu={(e) => props.onRowContextMenu(e, projectId, row.id)}
-          onDragStart={() => setDrag({ projectId, nodeId: row.id })}
+          onDragStart={() => setDrag({ projectId, nodeId: row.id, kind: 'session' })}
           onDragEnd={() => {
             setDrag(null)
             setDropKey(null)
           }}
         />
+      </div>
+    )
+  }
+
+  const renderBucket = (
+    projectId: string,
+    projectCwd: string | undefined,
+    bucket: GroupBucket,
+    parentGroupId: string | null
+  ): JSX.Element => {
+    const collapseKey = `project:${projectId}:group:${bucket.id}`
+    const collapsed = filter ? false : (collapsedItems[collapseKey] ?? false)
+    const members = groupSessionRows(bucket)
+    return (
+      <div key={bucket.id} className="ss-subgroup">
+        <div
+          className={`ss-subgroup__reorder-zone${dropKey === `group-before:${bucket.id}` ? ' is-drop-before' : ''}`}
+          onDragOver={(e) => {
+            if (
+              !drag ||
+              drag.kind !== 'group' ||
+              drag.projectId !== projectId ||
+              drag.parentGroupId !== parentGroupId ||
+              drag.nodeId === bucket.id
+            ) return
+            e.preventDefault()
+            e.stopPropagation()
+            setDropKey(`group-before:${bucket.id}`)
+          }}
+          onDrop={(e) => {
+            if (!drag || drag.kind !== 'group' || drag.parentGroupId !== parentGroupId) return
+            e.preventDefault()
+            e.stopPropagation()
+            props.onReorderGroup(projectId, drag.nodeId, parentGroupId, bucket.id)
+            setDrag(null)
+            setDropKey(null)
+          }}
+        />
+        <div
+          className={`ss-subgroup__head${dropClass(projectId, bucket.id)}`}
+          title="Click to show the group on the canvas"
+          onClick={() => props.onFocusNode(bucket.id)}
+          onContextMenu={(e) => props.onRowContextMenu(e, projectId, bucket.id)}
+          draggable
+          onDragStart={(e) => {
+            e.stopPropagation()
+            e.dataTransfer.effectAllowed = 'move'
+            setDrag({ projectId, nodeId: bucket.id, kind: 'group', parentGroupId })
+          }}
+          onDragEnd={() => {
+            setDrag(null)
+            setDropKey(null)
+          }}
+          {...dropProps(projectId, bucket.id)}
+        >
+          <button
+            type="button"
+            className="ss-group__chev"
+            aria-label={collapsed ? `Expand ${bucket.title}` : `Collapse ${bucket.title}`}
+            aria-expanded={!collapsed}
+            draggable={false}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleCollapse(collapseKey, collapsed)
+            }}
+          >
+            {collapsed ? '▶' : '▼'}
+          </button>
+          <span className="ss-subgroup__dot" style={{ background: bucket.color }} />
+          {editGroup?.id === bucket.id ? (
+            <input
+              className="ss-title-input"
+              style={{ flex: 1, minWidth: 0 }}
+              autoFocus
+              value={editGroup.draft}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setEditGroup({ id: bucket.id, draft: e.target.value })}
+              onBlur={() => {
+                const t = editGroup.draft.trim()
+                if (t && t !== bucket.title) props.onRenameSession(projectId, bucket.id, t)
+                setEditGroup(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+                if (e.key === 'Escape') setEditGroup(null)
+              }}
+            />
+          ) : (
+            <span
+              className="ss-subgroup__name"
+              title="Double-click to rename group"
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                setEditGroup({ id: bucket.id, draft: bucket.title })
+              }}
+            >
+              {bucket.title}
+            </span>
+          )}
+          <span className="ss-group__count">{groupSessionCount(bucket)}</span>
+          {members.length > 0 && (
+            <button
+              className="ss-subgroup__ai"
+              title="Name group with AI (from all descendant sessions' output)"
+              disabled={!!namingById[bucket.id]}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (namingById[bucket.id]) return
+                void props.onAiNameGroup(
+                  projectId,
+                  bucket.id,
+                  members.map((session) => session.id),
+                  projectCwd
+                )
+              }}
+            >
+              {namingById[bucket.id] ? '…' : '✦'}
+            </button>
+          )}
+        </div>
+        {!collapsed && (
+          <>
+            {bucket.children.map((child) => renderBucket(projectId, projectCwd, child, bucket.id))}
+            {bucket.children.length > 0 && (
+              <div
+                className={`ss-subgroup__reorder-end${dropKey === `group-end:${bucket.id}` ? ' is-drop-before' : ''}`}
+                onDragOver={(e) => {
+                  if (
+                    !drag ||
+                    drag.kind !== 'group' ||
+                    drag.projectId !== projectId ||
+                    drag.parentGroupId !== bucket.id
+                  ) return
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setDropKey(`group-end:${bucket.id}`)
+                }}
+                onDrop={(e) => {
+                  if (!drag || drag.kind !== 'group' || drag.parentGroupId !== bucket.id) return
+                  e.preventDefault()
+                  e.stopPropagation()
+                  props.onReorderGroup(projectId, drag.nodeId, bucket.id, null)
+                  setDrag(null)
+                  setDropKey(null)
+                }}
+              />
+            )}
+            {bucket.sessions.length === 0 && bucket.children.length === 0 ? (
+              <div className="ss-group__empty">Drop a node or group here</div>
+            ) : (
+              bucket.sessions.map((row) => renderRow(projectId, row))
+            )}
+          </>
+        )}
       </div>
     )
   }
@@ -263,7 +422,10 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
       >
         {groups.length === 0 && <div className="sessions-sidebar__empty">No sessions yet.</div>}
         {groups.map((g) => {
-          const isCollapsed = isGroupCollapsed(overrides, g.projectId, g.isActive, autoCollapse)
+          const collapseKey = `project:${g.projectId}`
+          const isCollapsed = filter
+            ? false
+            : isGroupCollapsed(collapsedItems, collapseKey, g.isActive, autoCollapse)
           const signals = projectSignalCounts(g)
           return (
             <div
@@ -275,7 +437,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
             >
               <div
                 className={`ss-group__head${dropClass(g.projectId, null)}`}
-                onClick={() => toggleCollapse(g.projectId, isCollapsed)}
+                onClick={() => props.onFocusProject(g.projectId)}
                 onContextMenu={(e) => props.onProjectContextMenu(e, g.projectId)}
                 title={drag?.projectId === g.projectId ? 'Drop here to remove from group' : undefined}
                 draggable
@@ -289,7 +451,19 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                 }}
                 {...dropProps(g.projectId, null)}
               >
-                <span className="ss-group__chev">{isCollapsed ? '▶' : '▼'}</span>
+                <button
+                  type="button"
+                  className="ss-group__chev"
+                  aria-label={isCollapsed ? `Expand ${g.projectName}` : `Collapse ${g.projectName}`}
+                  aria-expanded={!isCollapsed}
+                  draggable={false}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleCollapse(collapseKey, isCollapsed)
+                  }}
+                >
+                  {isCollapsed ? '▶' : '▼'}
+                </button>
                 <span className="ss-group__monogram" style={{ background: g.projectColor }}>
                   {(g.projectName.trim() || '?').charAt(0).toUpperCase()}
                 </span>
@@ -323,73 +497,31 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
               </div>
               {!isCollapsed && (
                 <>
-                  {g.groups.map((bucket) => (
-                    <div key={bucket.id} className="ss-subgroup">
+                  {g.groups.map((bucket) => renderBucket(g.projectId, g.cwd, bucket, null))}
+                  {g.groups.length > 0 && (
                       <div
-                        className={`ss-subgroup__head${dropClass(g.projectId, bucket.id)}`}
-                        title="Click to show the group on the canvas"
-                        onClick={() => props.onFocusNode(bucket.id)}
-                        {...dropProps(g.projectId, bucket.id)}
-                      >
-                        <span className="ss-subgroup__dot" style={{ background: bucket.color }} />
-                        {editGroup?.id === bucket.id ? (
-                          <input
-                            className="ss-title-input"
-                            style={{ flex: 1, minWidth: 0 }}
-                            autoFocus
-                            value={editGroup.draft}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => setEditGroup({ id: bucket.id, draft: e.target.value })}
-                            onBlur={() => {
-                              const t = editGroup.draft.trim()
-                              if (t && t !== bucket.title) props.onRenameSession(g.projectId, bucket.id, t)
-                              setEditGroup(null)
+                        className={`ss-subgroup__reorder-end ss-subgroup__reorder-end--root${dropKey === `group-end:${g.projectId}` ? ' is-drop-before' : ''}`}
+                        onDragOver={(e) => {
+                          if (
+                            !drag ||
+                            drag.kind !== 'group' ||
+                            drag.projectId !== g.projectId ||
+                            drag.parentGroupId !== null
+                          ) return
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setDropKey(`group-end:${g.projectId}`)
                             }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') e.currentTarget.blur()
-                              if (e.key === 'Escape') setEditGroup(null)
+                            onDrop={(e) => {
+                              if (!drag || drag.kind !== 'group' || drag.parentGroupId !== null) return
+                              e.preventDefault()
+                              e.stopPropagation()
+                              props.onReorderGroup(g.projectId, drag.nodeId, null, null)
+                              setDrag(null)
+                              setDropKey(null)
                             }}
                           />
-                        ) : (
-                          <span
-                            className="ss-subgroup__name"
-                            title="Double-click to rename group"
-                            onDoubleClick={(e) => {
-                              e.stopPropagation()
-                              setEditGroup({ id: bucket.id, draft: bucket.title })
-                            }}
-                          >
-                            {bucket.title}
-                          </span>
                         )}
-                        <span className="ss-group__count">{bucket.sessions.length}</span>
-                        {bucket.sessions.length > 0 && (
-                          <button
-                            className="ss-subgroup__ai"
-                            title="Name group with AI (from members' output)"
-                            disabled={!!namingById[bucket.id]}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (namingById[bucket.id]) return
-                              void props.onAiNameGroup(
-                                g.projectId,
-                                bucket.id,
-                                bucket.sessions.map((s) => s.id),
-                                g.cwd
-                              )
-                            }}
-                          >
-                            {namingById[bucket.id] ? '…' : '✦'}
-                          </button>
-                        )}
-                      </div>
-                      {bucket.sessions.length === 0 ? (
-                        <div className="ss-group__empty">Drop a session here</div>
-                      ) : (
-                        bucket.sessions.map((row) => renderRow(g.projectId, row))
-                      )}
-                    </div>
-                  ))}
                   {g.ungrouped.length === 0 && g.groups.length === 0 ? (
                     <div className="ss-group__empty">No sessions</div>
                   ) : (

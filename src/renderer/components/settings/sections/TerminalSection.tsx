@@ -359,7 +359,7 @@ export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.
           label="Terminal rendering"
           description={
             (isMacPlatform()
-              ? 'Auto uses Shared GPU on macOS, so GPU per terminal is an explicit opt-in (one context per terminal can flicker or composite black there). '
+              ? 'Auto uses the sharp DOM renderer on macOS. GPU per terminal can flicker or composite black there; Shared GPU trades exact xterm text parity for one canvas-wide context. '
               : 'Auto uses one GPU context per terminal; switch to Off if the window flickers. ') +
             'Shared GPU draws every terminal into a single canvas-wide context, which lifts the ' +
             'per-terminal context limit; GPU per terminal gives each one its own context; Off uses ' +

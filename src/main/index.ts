@@ -1,11 +1,44 @@
 import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
+import {
+  readCodexThreadAt,
+  rememberCodexSessionName,
+  startCodexThreadAt
+} from '../core/codex-session-name'
+import {
+  bindCodexThreadIdentity,
+  codexThreadIdentityHasLiveConflict,
+  resolveCodexThreadNodeIdentity,
+  setCodexThreadIdentityAuthSecret,
+  writeCodexThreadIdentity
+} from '../core/codex-identity-proxy'
+import {
+  codexHomeForAccount,
+  codexUsageAccounts,
+  commitCodexRolloutExposure,
+  planCodexRolloutExposure
+} from '../core/codex-accounts-core'
+import { statSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, powerMonitor, safeStorage, shell, systemPreferences } from 'electron'
+import { spawn } from 'child_process'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Notification,
+  powerMonitor,
+  safeStorage,
+  shell,
+  systemPreferences
+} from 'electron'
 import { IPC } from '../shared/ipc'
+import { writeFilesToClipboard } from './clipboard-files'
+import { NodeTermBrowserUseBackend } from './browser-use-backend'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import type { RemoteLogExec } from '../core/board-log'
@@ -24,6 +57,7 @@ import { generateCommitMessage, generateGroupName, generateTerminalName } from '
 import { initUpdater } from './updater'
 import { fetchCheck } from '../core/check'
 import { hookServer } from '../core/agents/hook-server'
+import { loadOrCreateCodexNodeAuthSecret } from './codex-node-auth-secret'
 import { askpassServer, ensureAskpassScript } from './remote-ssh/ssh-askpass'
 import { appSshAgent } from './remote-ssh/ssh-agent'
 import {
@@ -107,7 +141,7 @@ import {
   remotePaneCommandArgs
 } from '../core/remote-ssh/control-master'
 import { sessionName } from '../core/tmux-naming'
-import { posixQuote } from '../shared/ssh'
+import { posixQuote, sshHostKey } from '../shared/ssh'
 import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
@@ -121,6 +155,13 @@ import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { initClaudeAccounts } from './claude-accounts'
+import {
+  ensureCodexAccountDaemon,
+  initCodexAccounts,
+  localCodexAccountHome,
+  localCodexSocket
+} from './codex-accounts'
+import { resolveForeignThreadAt } from './codex-relay-daemon'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
 import { claudeConfigDirFor } from '../core/claude-config-dir'
 import {
@@ -157,7 +198,7 @@ import {
   allowMediaPath,
   writeAgentHtml
 } from './media-protocol'
-import { initPlatform } from '../core/platform'
+import { initPlatform, platform } from '../core/platform'
 import { electronPlatform } from './platform-electron'
 import { wirePeerRegistry } from './peer-registry'
 import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
@@ -207,6 +248,21 @@ function isSafeExternalUrl(url: unknown): url is string {
 const settingsStore = new SettingsStore()
 const sshStore = new SshStore()
 const ptyManager = new PtyManager()
+// One tiny detached relay is shared by every Codex node/account. Keeping it outside Electron
+// preserves live TUI connections across app restarts while the authenticated app-server remains
+// shared per account.
+const codexRelayScript = app.isPackaged
+  ? join(process.resourcesPath, 'codex-relay.js')
+  : join(__dirname, 'codex-relay.js')
+hookServer.setCodexRelayRuntime(process.execPath, codexRelayScript)
+// Start/ensure the one persistent relay before the renderer can create a Codex node. The daemon's
+// exclusive lock makes concurrent app starts harmless; detached + unref keeps it alive on Cmd+Q.
+const codexRelayProcess = spawn(process.execPath, [codexRelayScript, 'serve'], {
+  detached: true,
+  stdio: 'ignore',
+  env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+})
+codexRelayProcess.unref()
 // Dictation: local whisper.cpp models live under userData, one dir per install (same convention
 // as the tmux config / scrollback-store). onProgress pushes { id, pct } to the renderer the same
 // way agent-status events do (sendToMain — resolves the live window at send time).
@@ -318,6 +374,12 @@ const browserGuests = new Map<number, string>()
 // since the grok branch in the raw listener, grok's).
 const nodeContextSession = new Map<string, string>()
 const nodeSubagents = new Map<string, Set<string>>() // nodeId → active subagent tool_use_ids
+const browserUseBackend = new NodeTermBrowserUseBackend((sessionId) => {
+  for (const [nodeId, mappedSessionId] of nodeContextSession) {
+    if (mappedSessionId === sessionId) return nodeId
+  }
+  return resolveCodexThreadNodeIdentity(sessionId)
+})
 
 // Enforce a single instance. A second instance would re-attach every node's tmux session
 // (`new-session -A -D`), whose `-D` detaches the first instance's clients — leaving
@@ -499,7 +561,29 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
+  // A fresh shared-Codex thread is created before its remote TUI attaches. Codex may emit its own
+  // SessionStart hook before NodeTerm has the returned thread id available to write the mapping,
+  // so publish one identity-only session event ourselves after the mapping is durable. During the
+  // narrow boot window before the renderer/mirror fan-out is wired, retain those events in order.
+  const pendingCodexIdentityEvents: NormalizedAgentEvent[] = []
+  let emitAgentStatus: ((event: NormalizedAgentEvent) => void) | undefined
   if (!gotSingleInstanceLock) return // losing second instance — quitting; don't touch tmux
+
+  // A shared hook bearer authenticates only "some NodeTerm process". Thread ownership and browser
+  // routing require a second capability bound to the exact PTY node. Its signing key is encrypted
+  // by the OS keychain; neither the key nor another node's capability enters the shared endpoint.
+  // If secure storage is unavailable, privileged Codex identity control stays fail-closed.
+  try {
+    const codexNodeAuthSecret = await loadOrCreateCodexNodeAuthSecret()
+    hookServer.setCodexNodeAuthSecret(codexNodeAuthSecret)
+    setCodexThreadIdentityAuthSecret(codexNodeAuthSecret)
+  } catch (error) {
+    console.error('[codex-node-auth] unavailable; Codex identity control disabled:', error)
+  }
+
+  await browserUseBackend.start().catch((error) => {
+    console.error('[browser-use] backend start failed', error)
+  })
 
   // Harden every <webview> guest (WebNode runs its page in its own webContents, so the main
   // window's setWindowOpenHandler / will-navigate above don't cover it). Registered once at
@@ -565,11 +649,16 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.mediaAllow, (_e, absPath: string) => allowMediaPath(absPath))
   ipcMain.handle(IPC.mediaWriteHtml, (_e, html: string) => writeAgentHtml(html))
 
-  ipcMain.on(IPC.browserRegister, (_e, webContentsId: number, nodeId: string) => {
+  ipcMain.on(
+    IPC.browserRegister,
+    (_e, webContentsId: number, nodeId: string, ownerNodeId?: string) => {
     browserGuests.set(webContentsId, nodeId)
-  })
+    browserUseBackend.register(webContentsId, nodeId, ownerNodeId)
+  }
+)
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
     browserGuests.delete(webContentsId)
+    browserUseBackend.unregister(webContentsId)
   })
 
   // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS
@@ -645,6 +734,13 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC.clipboardWrite, (_e, text: string) => {
     if (typeof text === 'string') clipboard.writeText(text)
   })
+  ipcMain.handle(IPC.clipboardWriteFiles, (_e, paths: unknown) =>
+    writeFilesToClipboard(paths, {
+      platform: process.platform,
+      isFile: (path) => statSync(path).isFile(),
+      writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer)
+    })
+  )
 
   // Dock badge: number of Claude nodes with unread output (macOS only). '' clears it.
   ipcMain.on(IPC.appSetBadge, (_e, count: number) => {
@@ -879,6 +975,176 @@ app.whenReady().then(async () => {
   // hook POST dies against a dead port with zero symptoms beyond "statuses stay idle". The
   // listeners (setListener/setRawListener/setControlHandler) attach later, which the server
   // tolerates — early hook POSTs are simply dropped, never mis-routed.
+  hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, hookEndpoint, accountId }) => {
+    if (ptyManager.sshRemoteForNode(nodeId)) {
+      throw new Error('Remote Codex starts must use the host relay')
+    }
+    await ensureCodexAccountDaemon(accountId)
+    const threadId = await startCodexThreadAt(localCodexSocket(accountId), cwd)
+    writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, accountId)
+    const identityEvent: NormalizedAgentEvent = {
+      nodeId,
+      agentId: 'codex',
+      sessionId: threadId,
+      kind: 'session',
+      sessionPhase: 'start'
+    }
+    if (emitAgentStatus) emitAgentStatus(identityEvent)
+    else pendingCodexIdentityEvents.push(identityEvent)
+    return threadId
+  })
+  hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId, hookEndpoint, accountId }) => {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    const belongs =
+      remote && sshProjectManager
+        ? await sshProjectManager.remoteCodexThreadExists(remote.controlPath, accountId, threadId)
+        : (await ensureCodexAccountDaemon(accountId),
+          !!(await readCodexThreadAt(localCodexSocket(accountId), threadId)))
+    if (!belongs) {
+      throw new Error('Codex thread does not belong to the selected account')
+    }
+    bindCodexThreadIdentity(
+      threadId,
+      nodeId,
+      hookEndpoint,
+      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
+      accountId
+    )
+    const identityEvent: NormalizedAgentEvent = {
+      nodeId,
+      agentId: 'codex',
+      sessionId: threadId,
+      kind: 'session',
+      sessionPhase: 'start'
+    }
+    if (emitAgentStatus) emitAgentStatus(identityEvent)
+    else pendingCodexIdentityEvents.push(identityEvent)
+  })
+  hookServer.setCodexThreadObservedHandler(
+    async ({ nodeId, threadId, hookEndpoint, accountId, name }) => {
+      const remote = ptyManager.sshRemoteForNode(nodeId)
+      const belongs =
+        remote && sshProjectManager
+          ? await sshProjectManager.remoteCodexThreadExists(remote.controlPath, accountId, threadId)
+          : (await ensureCodexAccountDaemon(accountId),
+            !!(await readCodexThreadAt(localCodexSocket(accountId), threadId)))
+      if (!belongs) {
+        throw new Error('Observed Codex thread does not belong to the selected account')
+      }
+      bindCodexThreadIdentity(
+        threadId,
+        nodeId,
+        hookEndpoint,
+        (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
+        accountId
+      )
+      if (name) {
+        if (!remote) rememberCodexSessionName(threadId, name, localCodexSocket(accountId))
+        setNodeSessionName(nodeId, name)
+      }
+      const identityEvent: NormalizedAgentEvent = {
+        nodeId,
+        agentId: 'codex',
+        sessionId: threadId,
+        kind: 'session',
+        sessionPhase: 'start'
+      }
+      if (emitAgentStatus) emitAgentStatus(identityEvent)
+      else pendingCodexIdentityEvents.push(identityEvent)
+    }
+  )
+  hookServer.setCodexThreadAuthorizeHandler(async ({ nodeId, threadId, accountId }) => {
+    if (!ptyManager.sshRemoteForNode(nodeId)) await ensureCodexAccountDaemon(accountId)
+    // The relay freshly verifies a foreign rollout against a configured source socket before
+    // path-resume. The target app-server cannot read that id until after the resume succeeds.
+    // Authorization therefore owns concurrency only; bind/observed revalidate the target server.
+    if (
+      codexThreadIdentityHasLiveConflict(
+        threadId,
+        nodeId,
+        (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined
+      )
+    )
+      throw new Error('Codex thread is already bound to another live node')
+  })
+  hookServer.setCodexThreadExposeHandler(async ({ nodeId, threadId, accountId }) => {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    if (remote) {
+      if (!sshProjectManager) throw new Error('SSH Codex host is unavailable')
+      const host = sshHostKey(remote.conn)
+      const configuredAccountIds = (settingsStore.get().codexAccounts ?? [])
+        .filter((account) => account.host === host && !account.pending)
+        .map((account) => account.id)
+      if (accountId && !configuredAccountIds.includes(accountId)) {
+        throw new Error('Selected SSH Codex account is unavailable')
+      }
+      await sshProjectManager.remoteCodexExposeThread(
+        remote.controlPath,
+        accountId,
+        threadId,
+        configuredAccountIds
+      )
+      return
+    }
+    const configuredAccountIds = (settingsStore.get().codexAccounts ?? [])
+      .filter((account) => !account.host && !account.pending)
+      .map((account) => account.id)
+    if (accountId && !configuredAccountIds.includes(accountId)) {
+      throw new Error('Selected Codex account is unavailable')
+    }
+    const accountIds: Array<string | undefined> = [undefined, ...configuredAccountIds]
+    for (const candidateAccountId of accountIds) {
+      await ensureCodexAccountDaemon(candidateAccountId)
+    }
+    const socketEntries = accountIds.map((candidateAccountId) => ({
+      accountId: candidateAccountId,
+      socketPath: localCodexSocket(candidateAccountId)
+    }))
+    const targetSocket = localCodexSocket(accountId)
+    const resolved = await resolveForeignThreadAt(
+      targetSocket,
+      socketEntries.map((entry) => entry.socketPath),
+      threadId
+    )
+    if (resolved.kind === 'native') return
+    if (resolved.kind !== 'foreign') {
+      throw new Error('Codex session id is unavailable or ambiguous')
+    }
+    const source = socketEntries.find((entry) => entry.socketPath === resolved.thread.socketPath)
+    if (!source) throw new Error('Codex session source account is unavailable')
+    const exposure = planCodexRolloutExposure(
+      codexHomeForAccount(platform().userDataDir, source.accountId),
+      codexHomeForAccount(platform().userDataDir, accountId),
+      resolved.thread.path,
+      threadId
+    )
+    commitCodexRolloutExposure(exposure)
+  })
+  hookServer.setCodexThreadCatalogHandler(async ({ nodeId }) => {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    if (remote) {
+      if (!sshProjectManager) throw new Error('SSH Codex host is unavailable')
+      const host = sshHostKey(remote.conn)
+      const accountIds = (settingsStore.get().codexAccounts ?? [])
+        .filter((account) => account.host === host && !account.pending)
+        .map((account) => account.id)
+      return sshProjectManager.remoteCodexCatalog(remote.controlPath, accountIds)
+    }
+    const accountIds: Array<string | undefined> = [
+      undefined,
+      ...(settingsStore.get().codexAccounts ?? [])
+        .filter((account) => !account.host && !account.pending)
+        .map((account) => account.id)
+    ]
+    const accounts: Array<{ accountId?: string; socketPath: string }> = []
+    for (const accountId of accountIds) {
+      // Catalog completeness is a correctness boundary: omitting an unavailable account could
+      // make a duplicate thread id look unique and route a resume to the wrong credential store.
+      await ensureCodexAccountDaemon(accountId)
+      accounts.push({ accountId, socketPath: localCodexSocket(accountId) })
+    }
+    return accounts
+  })
   await hookServer.start()
   // SSH_ASKPASS relay (ssh-project.ts): lets the ControlMaster, which has no tty, route a
   // passphrase-protected identity file's prompt back through the app instead of failing auth.
@@ -922,7 +1188,12 @@ app.whenReady().then(async () => {
     entries: sessionNameSweepEntries,
     node: (nodeId) => {
       const n = workspaceStore.getNode(nodeId)
-      return n ? { accountId: n.accountId, titleAuto: n.titleAuto } : undefined
+      return n
+        ? {
+            accountId: n.agentId === 'codex' ? n.codexAccountId : n.accountId,
+            titleAuto: n.titleAuto
+          }
+        : undefined
     },
     // Same router the IPC handler above uses — the sweep sees every TITLE_READ_CAPABLE agent, so
     // resolving a grok or gemini node through claude's reader would scan ~/.claude/projects once a
@@ -1004,14 +1275,21 @@ app.whenReady().then(async () => {
   let pushHasPairedPhone = false
   const refreshPushIdentity = async (): Promise<void> => {
     try {
-      pushHostKeyB64 = publicKeyToB64((await loadOrCreateKeyPair()).publicKey)
-    } catch {
-      // Keyring locked / transient read error: keep the last-known key (never clobber identity).
-    }
-    try {
       pushHasPairedPhone = (await loadApprovedDevices()).pubkeys.length > 0
     } catch {
       pushHasPairedPhone = false
+    }
+    // No paired destination means no host-mode push can be sent. Avoid touching macOS
+    // Safe Storage at boot in that state: locally signed development builds otherwise trigger
+    // a Keychain ACL prompt even though there is nobody to notify.
+    if (!pushHasPairedPhone) {
+      pushHostKeyB64 = null
+      return
+    }
+    try {
+      pushHostKeyB64 = publicKeyToB64((await loadOrCreateKeyPair()).publicKey)
+    } catch {
+      // Keyring locked / transient read error: keep the last-known key (never clobber identity).
     }
   }
   void refreshPushIdentity()
@@ -1318,7 +1596,10 @@ app.whenReady().then(async () => {
     cwd: string | undefined,
     accountId: string | undefined,
     nodeId: string | undefined,
-    remote?: { conn: import('../shared/ssh').SshConnection; controlPath: string }
+    remote?: {
+      conn: import('../shared/ssh').SshConnection
+      controlPath: string
+    }
   ): Promise<RemoteFileRef | undefined> => {
     if (!sessionId) return undefined
     const cached = remoteTranscriptBySession.get(sessionId)
@@ -1471,7 +1752,7 @@ app.whenReady().then(async () => {
   // Fan a normalized agent event to BOTH consumers: the renderer's agentStatus store (canvas badge)
   // and the mobile-facing mirror. Named so the deterministic-approval answer handler below can reuse
   // it for the optimistic flip.
-  const emitAgentStatus = (e: NormalizedAgentEvent): void => {
+  emitAgentStatus = (e: NormalizedAgentEvent): void => {
     // Record FIRST: recordAgentEvent computes the stash-priority classification and returns the
     // event ENRICHED for a needs-you edge (a question strips its pendingId), so the canvas keys off
     // the same single source of truth as the mirror/phone. Then broadcast the enriched event.
@@ -1481,6 +1762,7 @@ app.whenReady().then(async () => {
     notchHudOnAgentEvent(enriched)
   }
   hookServer.setListener(emitAgentStatus)
+  for (const event of pendingCodexIdentityEvents.splice(0)) emitAgentStatus(event)
   // Deterministic hook-reply approvals (docs/hook-reply-approvals.md): the canvas Approve/Deny
   // buttons (and any relay client) answer a held Claude permission hook here. Route by the node's
   // project: an SSH project's hook runs on the REMOTE host (write over its ControlMaster), a local
@@ -1735,7 +2017,11 @@ app.whenReady().then(async () => {
     // jailed by the same `safeTranscriptPath` claude uses (widened to those two agents' transcript
     // roots), because a forged POST could otherwise aim a file read at an arbitrary local path.
     if (agentId === 'gemini' || agentId === 'codex') {
-      const p = payload as { session_id?: string; transcript_path?: string; hook_event_name?: string }
+      const p = payload as {
+        session_id?: string
+        transcript_path?: string
+        hook_event_name?: string
+      }
       // A REMOTE (SSH) node's transcript lives on the HOST, and these tails read the LOCAL disk —
       // a host path like `~/.gemini/tmp/…` clears the local jail, so without this we would meter
       // whatever same-named file happens to exist on THIS machine. Remote meters for these agents
@@ -1914,7 +2200,13 @@ app.whenReady().then(async () => {
     IPC.agentControlResult,
     (
       _e,
-      payload: { requestId: string; ok: boolean; message?: string; result?: unknown; error?: string }
+      payload: {
+        requestId: string
+        ok: boolean
+        message?: string
+        result?: unknown
+        error?: string
+      }
     ) => {
       const pending = pendingControl.get(payload.requestId)
       if (!pending) return
@@ -1973,6 +2265,11 @@ app.whenReady().then(async () => {
     (settingsStore.get().claudeAccounts ?? []).filter((a) => !a.host && !a.pending).map((a) => a.id)
   const usageService = initClaudeUsage(win, {
     localAccounts: localClaudeAccountIds,
+    codexAccounts: () =>
+      codexUsageAccounts(
+        (settingsStore.get().codexAccounts ?? []).filter((account) => !account.host),
+        localCodexAccountHome
+      ),
     onCacheUpdate: () => {
       void flushAgentStatusMirror()
     },
@@ -2009,6 +2306,7 @@ app.whenReady().then(async () => {
   // Lazy getter: sshProjectManager is created just below, so a remote account op (which only runs
   // after the user has connected an SSH project) always sees the live manager.
   initClaudeAccounts(() => sshProjectManager)
+  initCodexAccounts(() => sshProjectManager)
   // The jailed core bridge both phone hosts serve: typed git verbs against the real GitService
   // (cwd-jailed to the shared canvas roots inside the handlers) and phone node registration
   // through the workspace store (written as an outside edit, so the watcher broadcasts it and
@@ -2104,6 +2402,9 @@ app.whenReady().then(async () => {
   }
   sshProjectManager = initSshProject(
     (projectId) => {
+      // An attached host shares an existing local canvas; it has no independent remote workspace
+      // document to reconcile.
+      if (projectId.startsWith('attached-')) return
       // On (re)connect, reconcile the server's .nodeterm/project.json with our offline cache by rev.
       // A non-null result means the remote won → adopt it in the renderer (Task 7's listener does the
       // silent replace / conflict bar). null means our cache was pushed up instead, so nothing to send.
@@ -2164,7 +2465,8 @@ app.whenReady().then(async () => {
       }).catch(() => {
         // best-effort: a failed resync leaves the stale sweep as the backstop, exactly as today
       })
-    }
+    },
+    () => readFile(codexRelayScript, 'utf8')
   )
   // Wake-from-sleep: re-validate every SSH master NOW instead of letting ServerAlive discover the
   // dead TCP ~60s later — until it does, every remote terminal looks alive and is dead (no echo,
@@ -2198,7 +2500,9 @@ app.whenReady().then(async () => {
   // Route git-service + commit-message git ops over the active SSH project's master only — and only
   // for that project's exact remoteCwd. Any other cwd (a local project, or a different connected
   // project) resolves to undefined, so the local path stays byte-identical.
-  setGitRemoteResolver((cwd) => (activeRemote && activeRemote.cwd === cwd ? activeRemote.ref : undefined))
+  setGitRemoteResolver((cwd) =>
+    activeRemote && activeRemote.cwd === cwd ? activeRemote.ref : undefined
+  )
   // The renderer's active-project effect calls this on every switch: a non-null projectId of a
   // connected SSH project (whose ref carries a remoteCwd) arms remote routing; null/local disarms it.
   ipcMain.handle(IPC.gitSetActiveRemote, (_e, projectId: string | null) => {
@@ -2260,6 +2564,7 @@ app.on('before-quit', (e) => {
     // And the askpass relay's socket file: close() is what unlinks a unix socket (process exit
     // does not), and a lingering file is one more thing the next start() has to clear.
     askpassServer.stop()
+    void browserUseBackend.stop()
     // A SIGTERM quit (dev runners, `kill`, logout) arrives through Chromium's shutdown
     // detector, and this pass's re-issued app.quit() cannot resume the OS-initiated
     // termination the first pass preventDefault'ed: both passes run, but will-quit never

@@ -43,6 +43,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
       <div className="editor-node__body">
         <BrowserSurface
           nodeId={id}
+          ownerNodeId={data.browserOwnerNodeId as string | undefined}
           url={(data.url as string) ?? ''}
           onUrlChange={(u) => updateNodeData(id, { url: u })}
           onTitleChange={(t) => updateNodeData(id, { title: t })}

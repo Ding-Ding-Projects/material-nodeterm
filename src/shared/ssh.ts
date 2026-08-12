@@ -70,7 +70,10 @@ function optionKeyword(value: string): string {
  * Both spellings of an option are covered (`-o ProxyCommand=x` and `-oProxyCommand=x`), and `-F`
  * (an alternate ssh_config, which may itself carry a ProxyCommand) counts as exec-enabling.
  */
-export function stripLocalExecArgs(tokens: string[]): { args: string[]; dropped: string[] } {
+export function stripLocalExecArgs(tokens: string[]): {
+  args: string[]
+  dropped: string[]
+} {
   const args: string[] = []
   const dropped: string[] = []
   for (let i = 0; i < tokens.length; i++) {
@@ -113,6 +116,38 @@ export function sshExtraArgsEnableLocalExec(extraArgs: string | undefined): bool
 export interface SshServer extends SshConnection {
   id: string
   label: string
+  /** Optional default cwd for agent nodes attached to this host from a local canvas. */
+  remoteCwd?: string
+}
+
+/** Stable live-connection scope for an SSH host attached to a local canvas project. */
+export function sshAttachmentId(projectId: string, conn: SshConnection): string {
+  const input = `${conn.user}\0${conn.host}\0${conn.port ?? 22}`
+  let hash = 2166136261
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `attached-${projectId}-${(hash >>> 0).toString(16).padStart(8, '0')}`
+}
+
+/**
+ * Connection scope used by a terminal node inside a project.
+ *
+ * A normal SSH project owns its ControlMaster under the project id. A remote node embedded in a
+ * LOCAL project owns a host attachment instead, under the stable project × endpoint id. Every
+ * consumer of that connection (spawn, reconnect, upload) must make the same choice.
+ */
+export function sshConnectionIdForProject(
+  projectId: string,
+  conn: SshConnection,
+  projectServer?: SshConnection
+): string {
+  const sameEndpoint =
+    projectServer?.host === conn.host &&
+    projectServer.user === conn.user &&
+    (projectServer.port ?? 22) === (conn.port ?? 22)
+  return sameEndpoint ? projectId : sshAttachmentId(projectId, conn)
 }
 
 /**

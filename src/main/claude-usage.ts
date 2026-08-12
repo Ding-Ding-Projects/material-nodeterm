@@ -17,6 +17,7 @@ export { resolveClaudeAccessToken } from '../core/usage/usage-service'
  *  SSH projects, so it passes none and `usage:remote` answers empty). */
 export interface InitClaudeUsageOpts {
   localAccounts?: () => string[]
+  codexAccounts?: () => Array<{ id: string; home: string; label: string; email?: string | null }>
   onCacheUpdate?: () => void
   remote?: RemoteUsageDeps
 }
@@ -29,6 +30,7 @@ export function initClaudeUsage(win: BrowserWindow, opts: InitClaudeUsageOpts = 
   const service = startUsageService({
     shouldPoll: () => win.isFocused(),
     localAccounts: opts.localAccounts,
+    codexAccounts: opts.codexAccounts,
     onCacheUpdate: opts.onCacheUpdate,
     remote: opts.remote
   })

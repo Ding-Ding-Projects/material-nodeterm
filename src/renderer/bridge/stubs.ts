@@ -165,7 +165,9 @@ export function buildStubApi(): Omit<
           return
         }
         copyViaExecCommand(text)
-      }
+      },
+      // A browser cannot place host-local file references on the viewer's OS clipboard.
+      writeFiles: async (): Promise<boolean> => false
     },
     shell: {
       // no filesystem-reveal in a browser; intentionally inert (see docs/SERVER.md)
@@ -269,6 +271,19 @@ export function buildStubApi(): Omit<
       waitLogin: U('claudeAccounts.waitLogin'),
       cancelWaitLogin: U('claudeAccounts.cancelWaitLogin'),
       remove: U('claudeAccounts.remove')
+    },
+    codexAccounts: {
+      add: U('codexAccounts.add'),
+      waitLogin: U('codexAccounts.waitLogin'),
+      cancelWaitLogin: U('codexAccounts.cancelWaitLogin'),
+      remove: U('codexAccounts.remove'),
+      identity: U('codexAccounts.identity'),
+      systemIdentity: U('codexAccounts.systemIdentity'),
+      switchThread: U('codexAccounts.switchThread'),
+      transferThreadToSsh: U('codexAccounts.transferThreadToSsh'),
+      commitSwitch: U('codexAccounts.commitSwitch'),
+      finishSwitch: U('codexAccounts.finishSwitch'),
+      rollbackSwitch: U('codexAccounts.rollbackSwitch')
     },
     transcripts: {
       search: U('transcripts.search')

@@ -13,11 +13,46 @@ import { initPlatform, resetPlatformForTests } from '../platform'
 import { fakePlatform } from '../platform-fake'
 
 let dir = ''
+const brokerCalls: Array<{
+  nodeId: string
+  cwd: string
+  hookEndpoint: string
+  accountId?: string
+}> = []
+const bindCalls: Array<{
+  nodeId: string
+  threadId: string
+  hookEndpoint: string
+  accountId?: string
+}> = []
+const authorizeCalls: Array<{ nodeId: string; threadId: string; accountId?: string }> = []
+const exposeCalls: Array<{ threadId: string; accountId?: string }> = []
 
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-hookenv-'))
   resetPlatformForTests()
   initPlatform(fakePlatform({ userDataDir: dir }))
+  hookServer.setCodexNodeAuthSecret(Buffer.alloc(32, 7))
+  hookServer.setCodexThreadStartHandler(async (request) => {
+    brokerCalls.push(request)
+    return `thread-${request.nodeId}`
+  })
+  hookServer.setCodexThreadBindHandler(async (request) => {
+    bindCalls.push(request)
+    if (request.threadId === 'thread-conflict') throw new Error('already bound')
+  })
+  hookServer.setCodexThreadAuthorizeHandler(async (request) => {
+    authorizeCalls.push(request)
+    if (request.threadId === 'thread-conflict') throw new Error('already bound')
+  })
+  hookServer.setCodexThreadExposeHandler(async (request) => {
+    exposeCalls.push(request)
+    if (request.threadId === 'thread-conflict') throw new Error('ambiguous')
+  })
+  hookServer.setCodexThreadCatalogHandler(async () => [
+    { socketPath: '/isolated/system.sock' },
+    { accountId: 'account-a', socketPath: '/isolated/account-a.sock' }
+  ])
   // buildPtyEnv returns {} until the server has a port and a token.
   await hookServer.start()
 })
@@ -45,5 +80,187 @@ describe('hookServer.buildPtyEnv — canvas control gate', () => {
   it('still identifies the agent to the hook, whatever the gate says', () => {
     expect(hookServer.buildPtyEnv('n1', 'grok').NODETERM_AGENT_ID).toBe('grok')
     expect(hookServer.buildPtyEnv('n1', 'grok').NODETERM_NODE_ID).toBe('n1')
+  })
+
+  it('gives each Codex node a stable distinct identity capability outside the shared endpoint', () => {
+    const a = hookServer.buildPtyEnv('node-a', 'codex').NODETERM_CODEX_NODE_TOKEN
+    const b = hookServer.buildPtyEnv('node-b', 'codex').NODETERM_CODEX_NODE_TOKEN
+    expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(b).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(a).not.toBe(b)
+    expect(hookServer.buildPtyEnv('node-a', 'codex').NODETERM_CODEX_NODE_TOKEN).toBe(a)
+    expect(fs.readFileSync(path.join(dir, 'hook-endpoint.env'), 'utf8')).not.toContain(a)
+  })
+})
+
+describe('hookServer Codex thread broker', () => {
+  const nodeToken = (nodeId: string) => hookServer.codexNodeAuthToken(nodeId)
+  const nodeHeaders = (nodeId: string) => ({ 'x-nodeterm-node-token': nodeToken(nodeId) })
+  const request = (nodeId: string, cwd: string, accountId?: string) =>
+    fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/start`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-nodeterm-hook-token': hookServer.getToken(),
+        ...nodeHeaders(nodeId)
+      },
+      body: new URLSearchParams({ nodeId, cwd, ...(accountId ? { accountId } : {}) })
+    })
+  const bind = (nodeId: string, threadId: string, token = nodeToken(nodeId)) =>
+    fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/bind`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-nodeterm-hook-token': hookServer.getToken(),
+        'x-nodeterm-node-token': token
+      },
+      body: new URLSearchParams({ nodeId, threadId })
+    })
+  const authorize = (nodeId: string, threadId: string, accountId?: string) =>
+    fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/authorize`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-nodeterm-hook-token': hookServer.getToken(),
+        ...nodeHeaders(nodeId)
+      },
+      body: new URLSearchParams({ nodeId, threadId, ...(accountId ? { accountId } : {}) })
+    })
+  const expose = (nodeId: string, threadId: string, accountId?: string) =>
+    fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/expose`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-nodeterm-hook-token': hookServer.getToken(),
+        ...nodeHeaders(nodeId)
+      },
+      body: new URLSearchParams({ nodeId, threadId, ...(accountId ? { accountId } : {}) })
+    })
+
+  it('keeps two parallel session creations bound to their requesting nodes', async () => {
+    const [a, b] = await Promise.all([
+      request('node-a', '/isolated/node-a'),
+      request('node-b', '/isolated/node-b')
+    ])
+
+    expect([a.status, b.status]).toEqual([200, 200])
+    await expect(Promise.all([a.text(), b.text()])).resolves.toEqual([
+      'thread-node-a\n',
+      'thread-node-b\n'
+    ])
+    expect(brokerCalls).toEqual([
+      {
+        nodeId: 'node-a',
+        cwd: '/isolated/node-a',
+        hookEndpoint: path.join(dir, 'hook-endpoint.env')
+      },
+      {
+        nodeId: 'node-b',
+        cwd: '/isolated/node-b',
+        hookEndpoint: path.join(dir, 'hook-endpoint.env')
+      }
+    ])
+  })
+
+  it('rejects missing or invalid node/cwd identity before the broker', async () => {
+    const before = brokerCalls.length
+    const [missing, traversal, invalidAccount] = await Promise.all([
+      request('', '/isolated/node'),
+      request('node-c', '../other'),
+      request('node-d', '/isolated/node', '..')
+    ])
+    expect([missing.status, traversal.status, invalidAccount.status]).toEqual([400, 400, 400])
+    expect(brokerCalls).toHaveLength(before)
+  })
+
+  it('routes two parallel accounts to distinct broker identities', async () => {
+    const before = brokerCalls.length
+    const [a, b] = await Promise.all([
+      request('node-account-a', '/isolated/a', 'account-a'),
+      request('node-account-b', '/isolated/b', 'account-b')
+    ])
+    expect([a.status, b.status]).toEqual([200, 200])
+    expect(brokerCalls.slice(before)).toEqual([
+      expect.objectContaining({ nodeId: 'node-account-a', accountId: 'account-a' }),
+      expect.objectContaining({ nodeId: 'node-account-b', accountId: 'account-b' })
+    ])
+  })
+
+  it('binds explicit resumes and fails closed on invalid or conflicting ownership', async () => {
+    const [accepted, invalid, conflict] = await Promise.all([
+      bind('node-resume', 'thread-resume'),
+      bind('node-resume', '../invalid'),
+      bind('node-other', 'thread-conflict')
+    ])
+    expect([accepted.status, invalid.status, conflict.status]).toEqual([204, 400, 409])
+    expect(bindCalls).toContainEqual({
+      nodeId: 'node-resume',
+      threadId: 'thread-resume',
+      hookEndpoint: path.join(dir, 'hook-endpoint.env')
+    })
+  })
+
+  it('rejects a valid global bearer when its node capability belongs to another node', async () => {
+    const before = bindCalls.length
+    const [forged, missing] = await Promise.all([
+      bind('victim-node', 'victim-thread', nodeToken('attacker-node')),
+      fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/bind`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-nodeterm-hook-token': hookServer.getToken()
+        },
+        body: new URLSearchParams({ nodeId: 'victim-node', threadId: 'victim-thread' })
+      })
+    ])
+    expect([forged.status, missing.status]).toEqual([403, 403])
+    expect(bindCalls).toHaveLength(before)
+  })
+
+  it('authorizes a relay resume only through the account-scoped ownership preflight', async () => {
+    const [accepted, invalid, conflict] = await Promise.all([
+      authorize('node-resume', 'thread-resume', 'account-a'),
+      authorize('node-resume', '../invalid'),
+      authorize('node-other', 'thread-conflict')
+    ])
+    expect([accepted.status, invalid.status, conflict.status]).toEqual([204, 400, 409])
+    expect(authorizeCalls).toContainEqual({
+      nodeId: 'node-resume',
+      threadId: 'thread-resume',
+      accountId: 'account-a'
+    })
+  })
+
+  it('exposes only the exact caller-supplied id to the selected account', async () => {
+    const [accepted, invalid, conflict] = await Promise.all([
+      expose('node-resume', 'thread-resume', 'account-a'),
+      expose('node-resume', '../invalid'),
+      expose('node-resume', 'thread-conflict', 'account-b')
+    ])
+    expect([accepted.status, invalid.status, conflict.status]).toEqual([204, 400, 409])
+    expect(exposeCalls).toContainEqual({ threadId: 'thread-resume', accountId: 'account-a' })
+  })
+
+  it('returns the isolated account socket catalog only to the authenticated relay', async () => {
+    const url = `http://127.0.0.1:${hookServer.getPort()}/codex-thread/catalog`
+    const [accepted, rejected] = await Promise.all([
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-nodeterm-hook-token': hookServer.getToken(),
+          'x-nodeterm-node-id': 'node-catalog',
+          ...nodeHeaders('node-catalog')
+        }
+      }),
+      fetch(url, { method: 'POST' })
+    ])
+    expect(accepted.status).toBe(200)
+    await expect(accepted.json()).resolves.toEqual({
+      accounts: [
+        { socketPath: '/isolated/system.sock' },
+        { accountId: 'account-a', socketPath: '/isolated/account-a.sock' }
+      ]
+    })
+    expect(rejected.status).toBe(403)
   })
 })

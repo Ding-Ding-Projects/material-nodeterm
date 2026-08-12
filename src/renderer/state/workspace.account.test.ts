@@ -67,8 +67,8 @@ describe('systemAccountDisplay', () => {
   })
 
   it('falls back to the generic name when nothing is known', () => {
-    expect(systemAccountDisplay('', null)).toBe('System account')
-    expect(systemAccountDisplay(undefined, undefined)).toBe('System account')
+    expect(systemAccountDisplay('', null)).toBe('Default account')
+    expect(systemAccountDisplay(undefined, undefined)).toBe('Default account')
   })
 })
 

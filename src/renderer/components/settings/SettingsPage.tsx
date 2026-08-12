@@ -89,7 +89,7 @@ export function SettingsPage({
             <PresenceIdentitySection isActive={active === 'presence'} />
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />
             <TeamAccessSection isActive={active === 'team-access'} onClose={onClose} />
-            <SshSection isActive={active === 'ssh'} />
+            <SshSection isActive={active === 'ssh'} onNavigate={setActive} />
             <UpdatesSection isActive={active === 'updates'} />
             <PrivacySection isActive={active === 'privacy'} />
           </div>

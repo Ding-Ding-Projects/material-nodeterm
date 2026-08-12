@@ -1,12 +1,19 @@
 import { promises as fs, writeFileSync } from 'fs'
+import { execFileSync, spawnSync } from 'child_process'
 import { request as httpRequest } from 'http'
 import os from 'os'
 import path from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SshProjectManager, lastSshErrorLine } from './ssh-project'
+import {
+  SshProjectManager,
+  lastSshErrorLine,
+  remoteCodexAppServerStartCommand,
+  remoteCodexAccountSetupCommand
+} from './ssh-project'
 import { AskpassServer } from './ssh-askpass'
 import { AppSshAgent } from './ssh-agent'
 import { controlPathFor } from '../../core/remote-ssh/control-master'
+import { remoteCodexHome } from '../../core/codex-accounts-core'
 import type { SshConnection } from '@shared/ssh'
 
 const conn: SshConnection = { host: 'h', user: 'u' }
@@ -237,11 +244,17 @@ describe('SshProjectManager', () => {
   }
 
   const probeEvent = (
-    events: { claudeAutoPermissionMode?: boolean; remoteClaudeVersion?: string | null }[]
+    events: {
+      claudeAutoPermissionMode?: boolean
+      remoteClaudeVersion?: string | null
+    }[]
   ) => events.find((e) => e.claudeAutoPermissionMode !== undefined)
 
   const probeEvents = (
-    events: { claudeAutoPermissionMode?: boolean; remoteClaudeVersion?: string | null }[]
+    events: {
+      claudeAutoPermissionMode?: boolean
+      remoteClaudeVersion?: string | null
+    }[]
   ) => events.filter((e) => e.claudeAutoPermissionMode !== undefined)
 
   it('a login-shell BANNER around an OLD claude never reports auto support (merge blocker)', async () => {
@@ -365,6 +378,140 @@ describe('SshProjectManager', () => {
     expect((await unknown.mgr.remoteAccountAdd('p3', 'acc1'))?.versionSupported).toBe(true)
   })
 
+  it('installs a standalone Codex launcher and relay on the SSH host without credentials', async () => {
+    const writes: Array<{ command: string; stdin?: string }> = []
+    const run = vi.fn(async (args: string[], stdin?: string) => {
+      const command = args.at(-1) ?? ''
+      writes.push({ command, stdin })
+      if (command.includes('command -v node')) {
+        return {
+          code: 0,
+          stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+        }
+      }
+      return { code: 0, stdout: '' }
+    })
+    const mgr = new SshProjectManager({
+      userDataDir: '/ud',
+      spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn() })),
+      run,
+      runScp: vi.fn(async () => ({ code: 0 })),
+      getHook: () => ({ port: 1, token: 't', version: '1' }),
+      codexRelaySource: async () => '/* bundled relay */',
+      onStatus: vi.fn()
+    })
+    const result = await (
+      mgr as unknown as {
+        installRemoteCodexRuntime: (
+          conn: SshConnection,
+          controlPath: string,
+          remoteHome: string
+        ) => Promise<{
+          launcher: string
+          relay: string
+          runtime: string
+          codex: string
+        } | null>
+      }
+    ).installRemoteCodexRuntime(conn, '/cm', '/home/u')
+    expect(result).toEqual({
+      launcher: '/home/u/.nodeterm/bin/nodeterm-codex',
+      relay: '/home/u/.nodeterm/bin/codex-relay.js',
+      runtime: '/usr/bin/node',
+      codex: '/usr/bin/codex'
+    })
+    expect(writes.some((write) => write.stdin === '/* bundled relay */')).toBe(true)
+    const launcher = writes.find((write) => write.stdin?.startsWith('#!/bin/sh'))?.stdin ?? ''
+    expect(launcher).toContain('NODETERM_HOOK_SOCK')
+    expect(launcher).not.toContain('auth.json')
+  })
+
+  it('builds executable POSIX shell for remote Codex account provisioning', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-codex-account-'))
+    try {
+      const system = remoteCodexHome(root)
+      await fs.mkdir(system, { recursive: true })
+      await fs.writeFile(path.join(system, 'config.toml'), 'model = "test"\n')
+      const command = remoteCodexAccountSetupCommand(root, 'account-1')
+
+      execFileSync('/bin/sh', ['-n', '-c', command])
+      execFileSync('/bin/sh', ['-c', command])
+
+      const accountHome = remoteCodexHome(root, 'account-1')
+      expect((await fs.stat(accountHome)).mode & 0o777).toBe(0o700)
+      expect(await fs.realpath(path.join(accountHome, 'config.toml'))).toBe(
+        await fs.realpath(path.join(system, 'config.toml'))
+      )
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reports a stable phase marker when remote Codex account linking fails', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-codex-account-fail-'))
+    try {
+      const system = remoteCodexHome(root)
+      const accountHome = remoteCodexHome(root, 'account-1')
+      await fs.mkdir(system, { recursive: true })
+      await fs.mkdir(accountHome, { recursive: true })
+      await fs.writeFile(path.join(system, 'config.toml'), 'model = "test"\n')
+      await fs.symlink('/missing/nodeterm-test-target', path.join(accountHome, 'config.toml'))
+
+      const result = spawnSync(
+        '/bin/sh',
+        ['-c', remoteCodexAccountSetupCommand(root, 'account-1')],
+        { encoding: 'utf8' }
+      )
+
+      expect(result.status).toBe(71)
+      expect(result.stdout).toBe('NODETERM_CODEX_ACCOUNT_SETUP:link:config.toml\n')
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('starts and reuses one direct app-server when the remote npm CLI has no daemon install', async () => {
+    // Keep the Unix socket below macOS SUN_LEN; production remote homes are deliberately short too.
+    const root = await fs.mkdtemp('/tmp/nt-cx-server-')
+    const fakeCodex = path.join(root, 'fake-codex.cjs')
+    try {
+      await fs.writeFile(
+        fakeCodex,
+        `const net = require('net')\n` +
+          `const args = process.argv.slice(2)\n` +
+          `if (args[0] === 'app-server' && args[1] === 'daemon') process.exit(1)\n` +
+          `const listen = args[args.indexOf('--listen') + 1]\n` +
+          `const socket = listen.slice('unix://'.length)\n` +
+          `net.createServer(() => {}).listen(socket)\n`
+      )
+      const command = remoteCodexAppServerStartCommand(process.execPath, fakeCodex)
+      const env = { ...process.env, CODEX_HOME: root }
+
+      execFileSync('/bin/sh', ['-c', command], { env })
+      const pidFile = path.join(root, 'app-server-control', 'nodeterm-direct.pid')
+      const firstPid = Number((await fs.readFile(pidFile, 'utf8')).trim())
+      expect(firstPid).toBeGreaterThan(0)
+      expect(
+        (await fs.stat(path.join(root, 'app-server-control', 'app-server-control.sock'))).isSocket()
+      ).toBe(true)
+
+      execFileSync('/bin/sh', ['-c', command], { env })
+      expect(Number((await fs.readFile(pidFile, 'utf8')).trim())).toBe(firstPid)
+    } finally {
+      try {
+        const pid = Number(
+          (
+            await fs.readFile(path.join(root, 'app-server-control', 'nodeterm-direct.pid'), 'utf8')
+          ).trim()
+        )
+        if (pid > 0) process.kill(pid, 'SIGTERM')
+      } catch {
+        // No server reached the pid-write stage.
+      }
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  }, 15_000)
+
   // --- downloadFile (remote → this machine) -------------------------------------------------
   // These run against a REAL temp directory: collision resolution, the `.part` staging file and
   // the rename are filesystem behavior, and mocking the fs would only test the mock.
@@ -473,7 +620,10 @@ describe('SshProjectManager', () => {
     const run = vi.fn(async (args: string[]) =>
       args.join(' ').includes('printf %s') ? { code: 0, stdout: '/home/u' } : { code: 0, stdout: '' }
     )
-    const runScp = vi.fn(async (args: string[]) => { scpCalls.push(args); return { code: 0 } })
+    const runScp = vi.fn(async (args: string[]) => {
+      scpCalls.push(args)
+      return { code: 0 }
+    })
     const mgr = new SshProjectManager({
       userDataDir: '/ud', spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn() })),
       run, runScp, getHook: () => ({ port: 1, token: 't', version: '1' }), onStatus: vi.fn()
@@ -533,6 +683,12 @@ describe('SshProjectManager', () => {
       // `remoteHooks.setup` succeeds and the orphan is kept, no fresh master is built.
       const run = vi.fn(async (args: string[]) => {
         const j = args.join(' ')
+        if (j.includes('$SHELL') && j.includes('command') && j.includes('codex')) {
+          return {
+            code: 0,
+            stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+          }
+        }
         if (j.includes('$HOME')) return { code: 0, stdout: '/home/u' }
         if (j.includes('%{http_code}')) return { code: 0, stdout: '204' }
         return { code: 0, stdout: '' }
@@ -569,6 +725,12 @@ describe('SshProjectManager', () => {
       })
       const run = vi.fn(async (args: string[]) => {
         const j = args.join(' ')
+        if (j.includes('$SHELL') && j.includes('command') && j.includes('codex')) {
+          return {
+            code: 0,
+            stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+          }
+        }
         if (j.includes('$HOME')) return { code: 0, stdout: '/home/u' }
         if (j.includes('%{http_code}')) return { code: 0, stdout: respawned ? '204' : '000' }
         return { code: 0, stdout: '' }
@@ -721,6 +883,7 @@ describe('SshProjectManager', () => {
         run,
         runScp: vi.fn(async () => ({ code: 0 })),
         getHook: () => ({ port: 1, token: 't', version: '1' }),
+        codexRelaySource: async () => '/* bundled relay */',
         onStatus: vi.fn(),
         askpassIsPrompting: () => true, // another project's dialog is open the whole time
         askpassWasCancelled: (pid) => pid === undefined // the global-clock fallback would say yes
@@ -776,12 +939,19 @@ describe('SshProjectManager', () => {
      *  connect() takes the ordinary fresh-master path — a genuine establish. */
     function makeVerifiedMgr(
       onTunnelVerified: (projectId: string, controlPath: string, conn: SshConnection) => void,
-      httpCode = '204'
+      httpCode = '204',
+      installCodexRelay = true
     ) {
       vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined as never)
       vi.spyOn(fs, 'stat').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
       const run = vi.fn(async (args: string[]) => {
         const j = args.join(' ')
+        if (j.includes('$SHELL') && j.includes('command') && j.includes('codex')) {
+          return {
+            code: 0,
+            stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+          }
+        }
         if (j.includes('$HOME')) return { code: 0, stdout: '/home/u' }
         if (j.includes('%{http_code}')) return { code: 0, stdout: httpCode }
         return { code: 0, stdout: '' }
@@ -792,6 +962,7 @@ describe('SshProjectManager', () => {
         run,
         runScp: vi.fn(async () => ({ code: 0 })),
         getHook: () => ({ port: 1, token: 't', version: '1' }),
+        codexRelaySource: installCodexRelay ? async () => '/* bundled relay */' : undefined,
         onStatus: vi.fn(),
         onTunnelVerified
       })
@@ -833,8 +1004,25 @@ describe('SshProjectManager', () => {
     it('does NOT fire when the tunnel failed verification (there is nothing to resync through)', async () => {
       const onTunnelVerified = vi.fn()
       const mgr = makeVerifiedMgr(onTunnelVerified, '000') // dead listener → setup() returns null
-      await mgr.connect('p1', conn, '/remote/cwd')
+      const connected = await mgr.connect('p1', conn, '/remote/cwd')
       expect(onTunnelVerified).not.toHaveBeenCalled()
+      // Canvas hooks are optional. Account isolation and the shared per-account app-server remain
+      // available on an otherwise healthy SSH host even when its reverse hook tunnel is absent.
+      expect(connected.hookEndpointPath).toBeUndefined()
+      expect(connected.codexLauncherPath).toBe('/home/u/.nodeterm/bin/nodeterm-codex')
+      expect(await mgr.remoteCodexAccountAdd('p1', 'account-1')).toEqual({
+        home: remoteCodexHome('/home/u', 'account-1')
+      })
+    })
+
+    it('provisions an account when relay metadata is absent from an otherwise live SSH connection', async () => {
+      const mgr = makeVerifiedMgr(vi.fn(), '204', false)
+      const connected = await mgr.connect('p1', conn, '/remote/cwd')
+      expect(connected.remoteHome).toBe('/home/u')
+      expect(connected.codexRelayScriptPath).toBeUndefined()
+      expect(await mgr.remoteCodexAccountAdd('p1', 'account-1')).toEqual({
+        home: remoteCodexHome('/home/u', 'account-1')
+      })
     })
 
     it('a THROWING hook still leaves the connect successful — the resync is never load-bearing', async () => {
@@ -1938,6 +2126,121 @@ describe('master watchdog', () => {
     setMasterDead()
     await new Promise((r) => setTimeout(r, 40))
     expect(spawnMaster).toHaveBeenCalledTimes(1) // no tick fired after stop
+  })
+
+  describe('remote Codex conversation import', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    async function makeImportManager(uploadCode = 0) {
+      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined as never)
+      vi.spyOn(fs, 'stat').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+      const run = vi.fn(async (args: string[]) => {
+        const command = args.join(' ')
+        if (
+          command.includes('$SHELL') &&
+          command.includes('command') &&
+          command.includes('codex')
+        ) {
+          return {
+            code: 0,
+            stdout: '/usr/bin/node\n/usr/bin/codex\n/usr/bin/curl\n'
+          }
+        }
+        if (command.includes('$HOME')) return { code: 0, stdout: '/home/u' }
+        if (command.includes('%{http_code}')) return { code: 0, stdout: '204' }
+        return { code: 0, stdout: '' }
+      })
+      const runScp = vi.fn(async (_args: string[]) => ({
+        code: uploadCode,
+        stdout: ''
+      }))
+      const mgr = new SshProjectManager({
+        userDataDir: '/ud',
+        spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn() })),
+        run,
+        runScp,
+        getHook: () => ({ port: 1, token: 't', version: '1' }),
+        codexRelaySource: async () => '/* bundled relay */',
+        onStatus: vi.fn()
+      })
+      await mgr.connect('p1', conn, '/remote/repo')
+      run.mockClear()
+      runScp.mockClear()
+      return { mgr, run, runScp }
+    }
+
+    it('stages one local rollout and atomically installs it in the selected remote account', async () => {
+      const { mgr, run, runScp } = await makeImportManager()
+      vi.spyOn(mgr, 'remoteCodexThreadExists')
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true)
+      const catalog = vi
+        .spyOn(mgr, 'remoteCodexCatalog')
+        .mockResolvedValue([{ accountId: 'account-b', socketPath: '/remote/socket' }])
+
+      await mgr.remoteCodexImportThread(
+        'p1',
+        'account-b',
+        'thread-123',
+        '/local/sessions/2026/rollout-thread-123.jsonl',
+        'sessions/2026/rollout-thread-123.jsonl'
+      )
+
+      expect(runScp).toHaveBeenCalledTimes(1)
+      expect(runScp.mock.calls[0][0]).toContain('/local/sessions/2026/rollout-thread-123.jsonl')
+      const commands = run.mock.calls.map(([args]) => (args as string[]).join(' ')).join('\n')
+      expect(commands).toContain('.nodeterm/codex-imports')
+      expect(commands).toContain(
+        `${remoteCodexHome('/home/u', 'account-b')}/sessions/2026/rollout-thread-123.jsonl`
+      )
+      expect(commands).toContain('mv ')
+      expect(catalog).toHaveBeenCalledWith(controlPathFor('p1'), ['account-b'])
+    })
+
+    it('never overwrites a rollout already present on the remote account', async () => {
+      const { mgr, run, runScp } = await makeImportManager()
+      vi.spyOn(mgr, 'remoteCodexThreadExists').mockResolvedValue(true)
+      const catalog = vi.spyOn(mgr, 'remoteCodexCatalog')
+
+      await mgr.remoteCodexImportThread(
+        'p1',
+        undefined,
+        'thread-123',
+        '/local/rollout.jsonl',
+        'sessions/2026/rollout-thread-123.jsonl'
+      )
+
+      expect(runScp).not.toHaveBeenCalled()
+      const commands = run.mock.calls.map(([args]) => (args as string[]).join(' '))
+      expect(
+        commands.some(
+          (command) => command.includes('codex-imports') || command.includes('/sessions/')
+        )
+      ).toBe(false)
+      expect(catalog).not.toHaveBeenCalled()
+    })
+
+    it('removes only its staging file when upload fails', async () => {
+      const { mgr, run, runScp } = await makeImportManager(1)
+      vi.spyOn(mgr, 'remoteCodexThreadExists').mockResolvedValue(false)
+
+      await expect(
+        mgr.remoteCodexImportThread(
+          'p1',
+          undefined,
+          'thread-123',
+          '/local/rollout.jsonl',
+          'sessions/2026/rollout-thread-123.jsonl'
+        )
+      ).rejects.toThrow('Could not upload Codex conversation')
+
+      expect(runScp).toHaveBeenCalledTimes(1)
+      const commands = run.mock.calls.map(([args]) => (args as string[]).join(' '))
+      expect(
+        commands.some((command) => command.includes('rm -f') && command.includes('.part'))
+      ).toBe(true)
+      expect(commands.some((command) => command.includes('/sessions/'))).toBe(false)
+    })
   })
 })
 

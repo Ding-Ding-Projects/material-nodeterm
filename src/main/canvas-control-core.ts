@@ -1,12 +1,21 @@
 // Pure core for agent canvas control: the verb model, request validation, and the standalone
 // CLI source. No electron imports, so this module + CONTROL_CLI_SCRIPT are unit-testable.
 // Electron/ipc/server wiring lives in canvas-control.ts + index.ts + hook-server.ts.
+import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from '../core/codex-thread-identity-sh'
+import { explicitCodexResumeSession } from '../shared/agents/config'
 
 export type ControlVerb =
   | 'list'
   | 'open-terminal'
   | 'open-claude'
   | 'open-agent'
+  | 'create-loop'
+  | 'update-loop'
+  | 'start-loop'
+  | 'pause-loop'
+  | 'run-loop'
+  | 'delete-loop'
+  | 'loop-status'
   | 'show-image'
   | 'show-video'
   | 'show-web'
@@ -23,6 +32,9 @@ export type ControlVerb =
   | 'close-worktree'
   | 'branch'
   | 'rename'
+  | 'send'
+  | 'reply'
+  | 'status'
   | 'write'
   | 'close'
   | 'board'
@@ -38,6 +50,13 @@ const VERBS: ControlVerb[] = [
   'open-terminal',
   'open-claude',
   'open-agent',
+  'create-loop',
+  'update-loop',
+  'start-loop',
+  'pause-loop',
+  'run-loop',
+  'delete-loop',
+  'loop-status',
   'show-image',
   'show-video',
   'show-web',
@@ -54,13 +73,16 @@ const VERBS: ControlVerb[] = [
   'close-worktree',
   'branch',
   'rename',
+  'send',
+  'reply',
+  'status',
   'write',
   'close',
   'board',
   'assign'
 ]
 
-const DESTRUCTIVE: ReadonlySet<ControlVerb> = new Set(['write', 'close'])
+const DESTRUCTIVE: ReadonlySet<ControlVerb> = new Set(['write', 'close', 'delete-loop'])
 
 export function isDestructiveVerb(verb: ControlVerb): boolean {
   return DESTRUCTIVE.has(verb)
@@ -76,6 +98,12 @@ export function parseControlRequest(
   if (v === 'close' && !args.node) return { error: 'close requires --node <id>' }
   if (v === 'write' && !args.node) return { error: 'write requires --node <id>' }
   if (v === 'write' && !args.text) return { error: 'write requires --text' }
+  if (v === 'send' && !args.node) return { error: 'send requires --node <id>' }
+  if (v === 'send' && !args.subject) return { error: 'send requires --subject' }
+  if (v === 'send' && !args.text) return { error: 'send requires --text' }
+  if (v === 'reply' && !args.message) return { error: 'reply requires --message <id>' }
+  if (v === 'reply' && !args.text) return { error: 'reply requires --text' }
+  if (v === 'status' && !args.message) return { error: 'status requires --message <id>' }
   if ((v === 'show-image' || v === 'show-video') && !args.path) {
     return { error: `${v} requires --path` }
   }
@@ -84,6 +112,45 @@ export function parseControlRequest(
   }
   if (v === 'open-browser' && !args.url) return { error: 'open-browser requires --url' }
   if (v === 'open-agent' && !args.agent) return { error: 'open-agent requires --agent <id>' }
+  if (v === 'open-agent' && args.resume && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(args.resume)) {
+    return { error: 'open-agent --resume requires a safe session id' }
+  }
+  if (v === 'open-agent' && args.resume && args.count && args.count !== '1') {
+    return { error: 'open-agent --resume opens exactly one session' }
+  }
+  if (v === 'create-loop' && !args.task?.trim()) return { error: 'create-loop requires --task' }
+  if (v === 'update-loop' && !args.node) return { error: 'update-loop requires --node <id>' }
+  if (
+    v === 'update-loop' &&
+    !['task', 'title', 'every', 'to'].some((key) => Object.prototype.hasOwnProperty.call(args, key))
+  ) {
+    return { error: 'update-loop requires at least one of --task, --title, --every or --to' }
+  }
+  if (
+    (v === 'create-loop' || v === 'update-loop') &&
+    Object.prototype.hasOwnProperty.call(args, 'every') &&
+    !/^[1-9][0-9]*(?:m|h|d)$/.test(args.every)
+  ) {
+    return { error: `${v} --every must be a positive interval such as 15m, 2h or 1d` }
+  }
+  if (
+    (v === 'start-loop' ||
+      v === 'pause-loop' ||
+      v === 'run-loop' ||
+      v === 'delete-loop' ||
+      v === 'loop-status') &&
+    !args.node
+  ) {
+    return { error: `${v} requires --node <id>` }
+  }
+  if (
+    v === 'open-terminal' &&
+    explicitCodexResumeSession(args.cmd) &&
+    args.count &&
+    args.count !== '1'
+  ) {
+    return { error: 'open-terminal Codex resume opens exactly one agent session' }
+  }
   if ((v === 'group' || v === 'arrange') && !args.nodes) return { error: `${v} requires --nodes <id,id>` }
   if (v === 'ungroup' && !args.group) return { error: 'ungroup requires --group <id>' }
   if (v === 'move' && !args.nodes) return { error: 'move requires --nodes <id,id>' }
@@ -141,19 +208,34 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '- `list` — current nodes (id, kind, title). Start here when you need a node id.',
     '- `open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>]` — open N plain terminals.',
     '- `open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]` — open N Claude sessions.',
-    '- `open-agent --agent claude|codex|gemini|opencode|<custom-id> [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]` — open',
+    '- `open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]` — open',
     '  any agent CLI. `--group` parents the node(s) into a group frame; a worktree-bound group also',
     '  hands its worktree path down as the cwd. `--after <id,id>` opens the node ARMED: it does not',
     '  start until every listed station has gone idle, and is context-linked to them so it can read',
     '  their work when it wakes — use it for "B needs what A produced" instead of polling. Only',
     '  status-reporting agent nodes (claude/codex/gemini) may be waited on; a plain terminal never',
     '  reports finishing, so waiting on one is refused.',
+    '  `--resume` opens exactly one existing session through the agent\'s native resume command.',
+    '  RESTORE RULE: when an existing session id is known, you MUST pass it with `--resume`.',
+    '  A prompt-only node plus a renamed title is a new conversation, never a restored session.',
+    '  Example: `open-agent --agent codex --resume <known-id> --cwd <project>`.',
+    '  For Codex, `--account system|<id>` selects the login; otherwise the opener\'s Codex account is inherited.',
+    '  In Codex TUI use this shell verb; Desktop dynamic tool calls are not available there.',
+    '- `create-loop --task "..." [--every 15m|2h|1d] [--to <node-id,id>] [--title L] [--start]` — create',
+    '  a visible persistent Loop. Omit `--to` to target yourself. Targets must be exact existing agent',
+    '  node ids from `list`; titles are never addresses. Loops start paused unless `--start` is explicit.',
+    '  Use only for an explicitly recurring user request, never to turn a one-off task into automation.',
+    '- `update-loop --node <id> [--task "..."] [--every 15m] [--to <id,id>] [--title L]` /',
+    '  `start-loop --node <id>` / `pause-loop --node <id>` / `run-loop --node <id>` /',
+    '  `loop-status --node <id>` / `delete-loop --node <id>` — manage visible Loops. `run-loop` queues',
+    '  one immediate mailbox delivery without changing the cadence; `delete-loop` asks the user to confirm.',
     '- `show-image <path>` / `show-video <path>` — open a media file as a node.',
     '- `show-web (--url U | --file P.html | --html "<...>")` — open a web viewer.',
-    '- `open-browser --url U` — open a navigable browser node.',
-    '- `group --nodes <id,id> [--label L]` — wrap TOP-LEVEL nodes in a new labeled frame (nodes already',
-    '  inside another frame are skipped — use `move` for those). `ungroup --group <id>` dissolves a frame,',
-    '  freeing its nodes to the top level. `move --nodes <id,id> [--group <id>]` reparents nodes INTO an',
+    '- `open-browser --url U` — open a navigable browser node. In Codex, control that exact node',
+    '  through the bundled Browser Plugin; NodeTerm exposes only tabs opened by your agent session.',
+    '- `group --nodes <id,id> [--label L]` — wrap sibling nodes or sibling groups in a new labeled frame.',
+    '  Every id must share one container. `ungroup --group <id>` dissolves a frame and promotes its direct',
+    '  children into the frame\'s parent. `move --nodes <id,id> [--group <id>]` reparents nodes or groups INTO an',
     '  existing frame (omit `--group`, or pass `top`/`none`, to pull them out to the top level) — this is',
     '  how you move a node from one frame to another.',
     '- `arrange --nodes <id,id> [--layout grid|row|column] [--cols N]` /',
@@ -176,8 +258,13 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  the user to confirm deletion.',
     '- `branch --node <id>` — branch a Claude node\'s conversation (Claude nodes only).',
     '- `rename --node <id> --title "New Name"` — rename any node (terminals, groups, stickies…).',
+    '- `send --node <id> --subject "LABEL" --text "..."` — send a persistent inter-agent message.',
+    '  NodeTerm generates timestamp, exact current sender/recipient titles, authenticated addresses',
+    '  and message id. Busy recipients receive it at the next safe turn boundary.',
+    '- `reply --message <id> --text "..."` — reply over the authenticated return route.',
+    '  `status --message <id>` reports `queued` or `delivered`. Never guess ids from mutable titles.',
     '- `write --node <id> --text "..."` / `close --node <id>` — type into / close a node.',
-    '  Both ask the user to confirm a dialog and may be denied.',
+    '  Both ask the user to confirm a dialog and may be denied. Never use `write` as agent messaging.',
     '- `board` — the project\'s kanban board: every column (id + title) and the session cards in each,',
     '  plus the virtual Ungrouped column. Start here when you need a column id or want the board state.',
     '- `assign --node <id> [--column <id|title>] [--before <nodeId>]` — move a session card to a column',
@@ -194,8 +281,8 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     'per stream `open-worktree --branch <slug>` then `open-agent --agent claude --group <groupId>',
     '--prompt "<concrete task>"` (each stream on its own branch, no tree conflicts). Members land',
     'in grid slots inside the frame automatically; align the frames themselves with',
-    '`arrange --nodes <groupId,…> --layout row` (pass GROUP ids — arrange/align are top-level',
-    'only) and `rename` each by subject. When a station goes idle, READ what it did through the',
+    '`arrange --nodes <groupId,…> --layout row` (pass sibling GROUP ids from one container)',
+    'and `rename` each by subject. When a station goes idle, READ what it did through the',
     'context link (the linked-context CLI — see the get-linked-context section in your global',
     'agent instructions) and reconcile the streams into ONE synthesis yourself; a station you',
     'never read is one you cannot vouch for. The user merges when a stream is done;',
@@ -216,6 +303,8 @@ export function buildCanvasControlInstructions(shimPath: string): string {
 // could not be made safe.
 export const CONTROL_SHIM_SCRIPT = `#!/bin/sh
 # nodeterm canvas-control CLI (auto-generated — do not edit).
+
+${CODEX_THREAD_IDENTITY_RESOLVER_SH}
 
 if [ -z "$NODETERM_CANVAS_CONTROL" ]; then
   echo "Canvas control is not available in this session (not a nodeterm agent node)." >&2
@@ -261,19 +350,39 @@ while [ "$nt_i" -lt "$nt_count" ]; do
 done
 
 nt_out=$(mktemp 2>/dev/null || echo "/tmp/nodeterm-control.$$")
+nt_post() {
 if [ -n "$NODETERM_HOOK_SOCK" ]; then
-  nt_code=$(curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
+  curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
     --unix-socket "$NODETERM_HOOK_SOCK" "http://localhost/control/$nt_verb" \\
     -H "Accept: text/plain" \\
     -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
-    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null)
+    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
 elif [ -n "$NODETERM_HOOK_PORT" ]; then
-  nt_code=$(curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
+  curl -sS -o "$nt_out" -w '%{http_code}' -X POST \\
     "http://127.0.0.1:\${NODETERM_HOOK_PORT}/control/$nt_verb" \\
     -H "Accept: text/plain" \\
     -H "X-Nodeterm-Hook-Token: \${NODETERM_HOOK_TOKEN}" \\
-    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null)
+    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
 else
+  return 1
+fi
+}
+
+nt_code=$(nt_post "$@")
+# A long-lived tmux agent may race an app restart. Re-source the same authenticated endpoint and
+# retry exactly once; never scan for or guess another project's control endpoint.
+if [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; then
+if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then
+  sleep 0.1
+  NODETERM_HOOK_SOCK=""
+  NODETERM_HOOK_PORT=""
+  NODETERM_HOOK_TOKEN=""
+  . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || :
+  nt_code=$(nt_post "$@")
+fi
+fi
+
+if [ -z "$NODETERM_HOOK_SOCK$NODETERM_HOOK_PORT" ]; then
   rm -f "$nt_out"
   echo "nodeterm control endpoint unavailable." >&2
   exit 1
@@ -316,7 +425,13 @@ Verbs:
 - \`list\` — list current nodes (id, kind, title). Start here when you need a node id.
 - \`open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>]\` — open N plain terminals (default 1).
 - \`open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N Claude sessions (default 1).
-- \`open-agent --agent claude|codex|gemini|opencode|<custom-id> [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N sessions of any agent CLI.
+- \`open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N sessions of any agent CLI.
+  \`--resume\` opens exactly one existing session with the agent's native resume command.
+  **Restore rule:** when an existing session id is known, you MUST pass it with \`--resume\`.
+  A prompt-only node plus a renamed title is a new conversation, never a restored session.
+  Example: \`open-agent --agent codex --resume <known-id> --cwd <project>\`.
+  For Codex, \`--account system|<id>\` selects the login; otherwise the opener's Codex account is inherited.
+  In Codex TUI use this shell verb; Desktop dynamic tool calls are not available there.
   \`--group\` parents the node(s) into an existing group frame; a worktree-bound group also
   hands its worktree path down as the cwd.
   \`--after <id,id>\` opens the node **armed**: it does NOT start yet, and launches itself once
@@ -327,23 +442,33 @@ Verbs:
   plain terminal never reports finishing and the node would hang forever. Note the semantics:
   "idle" is the end of a station's TURN, not proof its whole job is done — right for a station
   given one self-contained prompt, wrong if you expect a long conversation first.
+- \`create-loop --task "..." [--every 15m|2h|1d] [--to <node-id,id>] [--title L] [--start]\` — create
+  a visible persistent Loop. Omit \`--to\` to target yourself. Every target must be an exact existing
+  agent node id from \`list\`; never address mutable titles. New Loops are paused unless \`--start\`
+  is explicit. Create one only for an explicitly recurring user request, never for a one-off task.
+- \`update-loop --node <id> [--task "..."] [--every 15m] [--to <id,id>] [--title L]\` — update it.
+- \`start-loop --node <id>\` / \`pause-loop --node <id>\` — enable or pause its cadence.
+- \`run-loop --node <id>\` — queue one immediate mailbox delivery without changing its cadence.
+- \`loop-status --node <id>\` — inspect task, cadence, targets and last/next run.
+- \`delete-loop --node <id>\` — delete the visible Loop after user confirmation.
 - \`show-image <path>\` — open an image file as a node.
 - \`show-video <path>\` — open a video file as a player node.
 - \`show-web (--url U | --file P.html | --html "<...>")\` — open a web viewer (live URL or local HTML you wrote).
-- \`open-browser --url U\` — open a navigable browser (back/forward/address bar) at a URL.
+- \`open-browser --url U\` — open a navigable browser (back/forward/address bar) at a URL. Codex
+  controls that exact node through the bundled Browser Plugin; only tabs opened by this agent
+  session are exposed.
   In an SSH project, nodes you open run on the HOST (same machine as you). The media viewers
   render on the DESKTOP: \`show-image\` and \`show-video\` still work with a host path (the
   file is read/fetched back over the connection), but \`show-web --file/--html\` is refused —
   use \`--url\`, or copy the file to the desktop first.
-- \`group --nodes <id,id> [--label "Frontend Team"]\` — wrap TOP-LEVEL nodes in a new labeled
-  group frame. Nodes that are ALREADY inside another frame are skipped (the reply says how many) —
-  use \`move\` to pull those across, not \`group\`.
-- \`ungroup --group <id>\` — dissolve a group frame, freeing its nodes back to the top level (the
-  nodes stay put; only the frame is removed).
-- \`move --nodes <id,id> [--group <id>]\` — reparent nodes INTO an existing group frame, keeping
+- \`group --nodes <id,id> [--label "Frontend Team"]\` — wrap sibling nodes or sibling groups in a
+  new labeled frame. Every id must share one container; an ancestor cannot be grouped with its descendant.
+- \`ungroup --group <id>\` — dissolve a group frame, promoting its direct children into the frame's
+  parent (the nodes stay put; only the frame is removed).
+- \`move --nodes <id,id> [--group <id>]\` — reparent nodes or group subtrees INTO an existing group, keeping
   each where it sits on the canvas. Omit \`--group\` (or pass \`top\`/\`none\`) to pull them OUT to the
   top level. This is how you move a node from one frame to another: \`move --nodes n1,n2 --group g2\`.
-  (\`group\` only wraps loose top-level nodes; it will not steal a node out of its current frame.)
+  Invalid cycles are rejected.
 - \`arrange --nodes <id,id> [--layout grid|row|column] [--cols N]\` — tidy layout, no overlap. Works
   on top-level nodes OR on the children of ONE frame — every id must share a container (you cannot
   arrange nodes from two different frames, or mix framed + loose, in one call). When the ids are a
@@ -377,7 +502,12 @@ Verbs:
 - \`branch --node <id>\` — branch a Claude node's conversation: the node stays on the new
   branch and a new node opens resuming the original. Target must be a Claude agent node.
 - \`rename --node <id> --title "New Name"\` — rename any node (terminals, groups, stickies…).
-- \`write --node <id> --text "..."\` — type text into a terminal node. (Asks the user to confirm.)
+- \`send --node <id> --subject "LABEL" --text "..."\` — send a persistent inter-agent message.
+  NodeTerm generates timestamp, current Node Chroma titles, authenticated addresses and id.
+  Busy recipients are queued until a safe turn boundary.
+- \`reply --message <id> --text "..."\` — reply over the authenticated return route.
+  \`status --message <id>\` reports delivery state. Never guess an id from a mutable title.
+- \`write --node <id> --text "..."\` — raw terminal control, not agent messaging. (Asks the user to confirm.)
 - \`close --node <id>\` — close a node. (Asks the user to confirm.)
 - \`board\` — read the project's kanban board: every column (id + title) and the session cards
   filed in each, plus the virtual Ungrouped column (unfiled sessions). Start here when you need
@@ -429,8 +559,8 @@ across Nodeterm sessions), be the orchestration chef — plan the kitchen, then 
 3. Keep the kitchen tidy: members opened with \`--group\` land in neat grid slots inside the
    frame automatically (the frame grows to fit), and successive \`open-worktree\` frames fan
    out side by side — after opening all stations, align the frames with
-   \`arrange --nodes <groupId,groupId,…> --layout row\` (arrange/align work on top-level
-   nodes, so pass the GROUP ids, not the children). \`rename\` each group by subject.
+   \`arrange --nodes <groupId,groupId,…> --layout row\` (pass sibling GROUP ids from one
+   container, not their children). \`rename\` each group by subject.
 4. Track progress (their status badges show working/waiting) and coordinate.
 5. Collect the results yourself — this is the half most orchestrators skip. Every station you
    opened is context-linked to you, so when one goes idle, read what it actually did with the
