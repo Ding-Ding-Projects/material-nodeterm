@@ -26,7 +26,7 @@ const bindCalls: Array<{
   accountId?: string
 }> = []
 const authorizeCalls: Array<{ nodeId: string; threadId: string; accountId?: string }> = []
-const exposeCalls: Array<{ threadId: string; accountId?: string }> = []
+const exposeCalls: Array<{ nodeId: string; threadId: string; accountId?: string }> = []
 
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-hookenv-'))
@@ -238,7 +238,13 @@ describe('hookServer Codex thread broker', () => {
       expose('node-resume', 'thread-conflict', 'account-b')
     ])
     expect([accepted.status, invalid.status, conflict.status]).toEqual([204, 400, 409])
-    expect(exposeCalls).toContainEqual({ threadId: 'thread-resume', accountId: 'account-a' })
+    // The route scopes the expose to the CALLER's node as well as the account — `nodeId` is
+    // what makes 'the exact caller-supplied id' exact, so it is part of the recorded call.
+    expect(exposeCalls).toContainEqual({
+      nodeId: 'node-resume',
+      threadId: 'thread-resume',
+      accountId: 'account-a'
+    })
   })
 
   it('returns the isolated account socket catalog only to the authenticated relay', async () => {

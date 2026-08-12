@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createAgentNode } from './workspace'
-import type { AgentPermissionMode } from '@shared/agents/config'
+import { codexRemoteCommand, type AgentPermissionMode } from '@shared/agents/config'
 
 /**
  * The separator is the whole reason `argvPromptSeparator` exists, and it is invisible in the config
@@ -72,11 +72,22 @@ describe('createAgentNode — permission mode meets the argv separator', () => {
     expect(cmd('gemini', 'explain this repo', 'acceptEdits')).toBe(
       "gemini 'explain this repo' --approval-mode auto_edit"
     )
+    // codex no longer launches the bare `codex` binary: every codex node goes through the managed
+    // launcher (AGENT_CONFIG.codex.launchCmd = codexRemoteCommand()), which is what lets one shared
+    // app-server back the whole canvas instead of one server per terminal. The flag rules below are
+    // unchanged — what moved is the executable the flags are appended to, which means the "codex's
+    // command line stays byte-identical" invariant no longer holds. Pinned literally here so a
+    // silent change to that path shows up in a diff, and so the decision stays visible: is a
+    // launcher-mediated launch acceptable as the ONLY codex path, or must plain `codex` remain a
+    // fallback? (Owner call — still owed.)
+    expect(codexRemoteCommand()).toBe('$HOME/.nodeterm/bin/nodeterm-codex')
     // codex in a mode it cannot express: the bare command, never a substituted flag.
-    expect(cmd('codex', 'explain this repo', 'plan')).toBe("codex 'explain this repo'")
+    expect(cmd('codex', 'explain this repo', 'plan')).toBe(
+      `${codexRemoteCommand()} 'explain this repo'`
+    )
     // ...and in one it can, the flag lands last, same convention.
     expect(cmd('codex', 'explain this repo', 'auto')).toBe(
-      "codex 'explain this repo' --ask-for-approval on-request"
+      `${codexRemoteCommand()} 'explain this repo' --ask-for-approval on-request`
     )
   })
 
@@ -93,6 +104,8 @@ describe('createAgentNode — permission mode meets the argv separator', () => {
       'grok --permission-mode bypassPermissions'
     )
     expect(cmd('gemini', undefined, 'bypassPermissions')).toBe('gemini --approval-mode yolo')
-    expect(cmd('codex', undefined, 'bypassPermissions')).toBe('codex --ask-for-approval never')
+    expect(cmd('codex', undefined, 'bypassPermissions')).toBe(
+      `${codexRemoteCommand()} --ask-for-approval never`
+    )
   })
 })

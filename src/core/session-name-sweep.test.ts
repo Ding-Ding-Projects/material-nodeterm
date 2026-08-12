@@ -146,26 +146,28 @@ describe('the default supports gate (TITLE_READ_CAPABLE)', () => {
     // gemini is the reason the lists split: it names its own sessions (its transcript's
     // `update_topic` title) but has no rename command, so it is read-only — and read is all the
     // sweep ever does. On the write list it would be skipped here and the phone would show a stale
-    // node title forever.
+    // node title forever. codex joined the read leg the same way: the shared app-server exposes
+    // Thread.name (core/codex-session-name.ts), while nothing pushes a name back to it yet.
     const { published, asked } = await sweepWithDefaultGate([
       { nodeId: 'c', sessionId: 'cs', agentId: 'claude' },
       { nodeId: 'g', sessionId: 'gs', agentId: 'grok' },
-      { nodeId: 'm', sessionId: 'ms', agentId: 'gemini' }
+      { nodeId: 'm', sessionId: 'ms', agentId: 'gemini' },
+      { nodeId: 'x', sessionId: 'xs', agentId: 'codex' }
     ])
-    expect(asked).toEqual(['cs', 'gs', 'ms'])
+    expect(asked).toEqual(['cs', 'gs', 'ms', 'xs'])
     expect(published).toEqual([
       ['c', 'name of cs'],
       ['g', 'name of gs'],
-      ['m', 'name of ms']
+      ['m', 'name of ms'],
+      ['x', 'name of xs']
     ])
   })
 
   it('never asks about an agent whose name we cannot read', async () => {
-    // codex is in neither list (its command set was not enumerable, so neither leg has a measured
-    // basis) and a custom agent has no reader at all. Asking anyway would send them through
-    // claude's resolver, which SCANS ~/.claude/projects for an id that can never be there.
+    // A custom agent has no reader at all, and a node with no agentId is a plain terminal. Asking
+    // anyway would send them through claude's resolver, which SCANS ~/.claude/projects for an id
+    // that can never be there.
     const { published, asked } = await sweepWithDefaultGate([
-      { nodeId: 'x', sessionId: 'xs', agentId: 'codex' },
       { nodeId: 'y', sessionId: 'ys', agentId: 'custom:mine' },
       { nodeId: 'z', sessionId: 'zs' }
     ])
