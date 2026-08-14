@@ -1040,6 +1040,16 @@ export interface Settings {
   notchHoverExpand: boolean
   /** Dictation (desktop/server). Written as a whole object by the renderer. */
   speech: SpeechSettings
+  /** Per-node hook identity enforcement (src/core/agents/node-identity-policy.ts).
+   *
+   *  The ONLY optional key in this interface, and deliberately so: it is a TRI-state, and the two
+   *  non-default states are opposite escape hatches. Absent (the default — it is not in
+   *  DEFAULT_SETTINGS) follows `NODE_IDENTITY_STRICT_AFTER`, so the rollout has one schedule for
+   *  everybody. `true` opts in to strict enforcement before that date. `false` keeps the warning
+   *  window open past it and releases the trust-on-first-proof latch, so a user whose upgrade
+   *  strands a live session gets their canvas back without downgrading the app. Neither value ever
+   *  admits a forged token. */
+  hookIdentityStrict?: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -2209,6 +2219,10 @@ export interface NodeTerminalApi {
   onMarkdownToggle(listener: () => void): () => void
   /** Fires when the user presses Cmd/Ctrl+W (close selected node). Returns unsubscribe. */
   onCloseNode(listener: () => void): () => void
+  /** Fires when the user presses Cmd/Ctrl+0 (zoom the canvas back to 100%). Desktop only: the
+   *  key is intercepted in main because Electron's default View menu owns the accelerator. In the
+   *  Server Edition the renderer's own keydown handler sees the key and this is a no-op stub. */
+  onZoomActualSize(listener: () => void): () => void
   /** Close the application window (Cmd/Ctrl+W fallback when no node is selected). */
   closeWindow(): void
   /** Bring the app window to the foreground (show + OS focus). Called after a file is DROPPED
