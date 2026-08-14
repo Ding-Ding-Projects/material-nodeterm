@@ -4,6 +4,7 @@ import { AGENT_CONFIG } from '@shared/agents/config'
 import { useSettings } from '../state/settings'
 import { useProjects } from '../state/projects'
 import { useSshConn } from '../state/sshConn'
+import { markWorkspaceDirty } from '../state/workspaceDirty'
 import { scopeFromKey, scopeUsage, usageScopeKey } from '../lib/usageScope'
 import { formatResetCountdown, formatTimeAgo, percentNumber, percentText, severityColor } from '../lib/usageFormat'
 import {
@@ -56,23 +57,38 @@ function AccountUsageBlock({
   label,
   email,
   u,
-  mode
+  mode,
+  accountId,
+  selected,
+  onSelect
 }: {
   label: string
   email?: string
   u: ClaudeUsage | null
   mode: 'used' | 'remaining'
+  accountId: string | undefined
+  selected: boolean
+  onSelect: (accountId: string | undefined) => void
 }) {
   return (
-    <div className="usage-account">
-      <div className="usage-account__label">{label}</div>
+    <button
+      type="button"
+      className="usage-account usage-account--selectable"
+      aria-pressed={selected}
+      title={selected ? 'Default for new sessions' : 'Use for new sessions'}
+      onClick={() => onSelect(accountId)}
+    >
+      <div className="usage-account__label">
+        <span>{label}</span>
+        {selected && <span className="usage-account__default" aria-hidden>✓</span>}
+      </div>
       {(email ?? u?.email) && <div className="usage-account__email">{email ?? u?.email}</div>}
       {u?.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
       {u && u.limits.length === 0 && <div className="usage-popover__empty">No usage data.</div>}
       {!u && <div className="usage-popover__empty usage-pill__pulse">···</div>}
-    </div>
+    </button>
   )
 }
 
@@ -85,13 +101,32 @@ function AccountUsageBlock({
  * `claude` has nothing to report, and listing it would turn "connect an SSH project" into "grow
  * a permanent empty section".
  */
-function RemoteUsageBlock({ row, mode }: { row: RemoteAccountUsage; mode: 'used' | 'remaining' }) {
+function RemoteUsageBlock({
+  row,
+  mode,
+  accountId,
+  selected,
+  onSelect
+}: {
+  row: RemoteAccountUsage
+  mode: 'used' | 'remaining'
+  accountId: string | undefined
+  selected: boolean
+  onSelect: (accountId: string | undefined) => void
+}) {
   if (row.usage.status === 'unavailable') return null
   const showHost = row.label !== row.hostKey
   return (
-    <div className="usage-account">
+    <button
+      type="button"
+      className="usage-account usage-account--selectable"
+      aria-pressed={selected}
+      title={selected ? 'Default for new sessions' : 'Use for new sessions'}
+      onClick={() => onSelect(accountId)}
+    >
       <div className="usage-account__label">
-        {row.label}
+        <span>{row.label}</span>
+        {selected && <span className="usage-account__default" aria-hidden>✓</span>}
         <span className="usage-account__host" title={`Read on ${row.hostKey} over SSH`}>
           {showHost ? row.hostKey : 'SSH'}
         </span>
@@ -105,7 +140,7 @@ function RemoteUsageBlock({ row, mode }: { row: RemoteAccountUsage; mode: 'used'
           {row.usage.status === 'error' ? 'Could not read usage on this host.' : 'No usage data.'}
         </div>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -170,6 +205,9 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   // project it is that host and nothing else. Showing every source at once is what made the panel
   // unreadable once remote hosts joined it.
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const defaultAccountId = useProjects((s) =>
+    s.projects.find((p) => p.id === s.activeProjectId)?.defaultAccountId
+  )
   const scopeHostKey = useProjects((s) =>
     usageScopeKey(s.projects.find((p) => p.id === s.activeProjectId))
   )
@@ -256,6 +294,13 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   const closeSoon = (): void => {
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
     closeTimerRef.current = window.setTimeout(() => setOpen(false), USAGE_HOVER_CLOSE_MS)
+  }
+
+  const selectDefaultAccount = (accountId: string | undefined): void => {
+    const projectId = useProjects.getState().activeProjectId
+    if (!projectId) return
+    useProjects.getState().setProjectDefaultAccount(projectId, accountId)
+    markWorkspaceDirty()
   }
 
   // Settings → Usage toggles are a display choice, applied before any other rule — a hidden
@@ -382,7 +427,7 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
               remote blocks below carry the same limits, and rendering both would print the
               host's numbers twice under two different headings. */}
           {scope.kind === 'local' &&
-            (scoped.accounts.length > 0 && claudeUsage ? (
+            (claudeUsage ? (
               <>
                 <AccountUsageBlock
                   mode={percentMode}
@@ -390,15 +435,26 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
                   // Avoid printing the email twice when it's already the display label.
                   email={systemLabelSetting.trim() ? (claudeUsage.email ?? undefined) : undefined}
                   u={claudeUsage}
+                  accountId={undefined}
+                  selected={defaultAccountId === undefined}
+                  onSelect={selectDefaultAccount}
                 />
                 {scoped.accounts.map((a) => (
-                  <AccountUsageBlock key={a.id} mode={percentMode} label={a.label} email={a.email} u={acctUsage[a.id] ?? null} />
+                  <AccountUsageBlock
+                    key={a.id}
+                    mode={percentMode}
+                    label={a.label}
+                    email={a.email}
+                    u={acctUsage[a.id] ?? null}
+                    accountId={a.id}
+                    selected={defaultAccountId === a.id}
+                    onSelect={selectDefaultAccount}
+                  />
                 ))}
               </>
             ) : (
               <>
-                {/* Claude's rows are bare when it is the only provider; once others share the
-                    panel they need a heading of their own to stay attributable. */}
+                {/* No Claude snapshot is available, but enabled providers may still have limits. */}
                 {enabled.length > 0 && limits.length > 0 && (
                   <div className="usage-account__label">Claude</div>
                 )}
@@ -406,18 +462,19 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
                   <LimitRow key={limitKey(l)} limit={l} mode={percentMode} />
                 ))}
                 {!hasData && <div className="usage-popover__empty">No usage data.</div>}
-                {claudeUsage?.email && (
-                  <div className="usage-account">
-                    <div className="usage-account__label">Claude Account</div>
-                    <div className="usage-account__email">{claudeUsage.email}</div>
-                  </div>
-                )}
               </>
             ))}
           {/* On an SSH project these are the whole panel; the host badge is what says the numbers
               were read somewhere other than this machine. */}
           {visibleRemote.map((r) => (
-            <RemoteUsageBlock key={`${r.hostKey}#${r.accountId ?? ''}`} row={r} mode={percentMode} />
+            <RemoteUsageBlock
+              key={`${r.hostKey}#${r.accountId ?? ''}`}
+              row={r}
+              mode={percentMode}
+              accountId={r.accountId ?? undefined}
+              selected={(r.accountId ?? undefined) === defaultAccountId}
+              onSelect={selectDefaultAccount}
+            />
           ))}
           {scope.kind === 'ssh' && visibleRemote.length === 0 && (
             <div className="usage-popover__empty">
