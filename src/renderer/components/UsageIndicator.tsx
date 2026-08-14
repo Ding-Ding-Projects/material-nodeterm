@@ -29,23 +29,23 @@ const USAGE_HOVER_CLOSE_MS = 220
 function LimitRow({ limit, mode }: { limit: UsageLimit; mode: 'used' | 'remaining' }) {
   const left = 100 - limit.usedPercent
   return (
-    <div className="usage-row">
-      <div className="usage-row__title">
+    <span className="usage-row">
+      <span className="usage-row__title">
         {limitLabel(limit.kind, limit.scopeLabel)}
         {/* The server flags which window is actually gating the account right now. */}
         {limit.isActive && <span className="usage-row__active" title="Currently limiting">●</span>}
-      </div>
-      <div className="usage-bar">
-        <div
+      </span>
+      <span className="usage-bar">
+        <span
           className="usage-bar__fill"
           style={{ width: `${left}%`, background: severityColor(limit.severity, left) }}
         />
-      </div>
-      <div className="usage-row__meta">
+      </span>
+      <span className="usage-row__meta">
         <span>{percentText(limit.usedPercent, mode)}</span>
         <span>{formatResetCountdown(limit.resetsAt)}</span>
-      </div>
-    </div>
+      </span>
+    </span>
   )
 }
 
@@ -78,16 +78,16 @@ function AccountUsageBlock({
       title={selected ? 'Default for new sessions' : 'Use for new sessions'}
       onClick={() => onSelect(accountId)}
     >
-      <div className="usage-account__label">
+      <span className="usage-account__label">
         <span>{label}</span>
         {selected && <span className="usage-account__default" aria-hidden>✓</span>}
-      </div>
-      {(email ?? u?.email) && <div className="usage-account__email">{email ?? u?.email}</div>}
+      </span>
+      {(email ?? u?.email) && <span className="usage-account__email">{email ?? u?.email}</span>}
       {u?.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
-      {u && u.limits.length === 0 && <div className="usage-popover__empty">No usage data.</div>}
-      {!u && <div className="usage-popover__empty usage-pill__pulse">···</div>}
+      {u && u.limits.length === 0 && <span className="usage-popover__empty">No usage data.</span>}
+      {!u && <span className="usage-popover__empty usage-pill__pulse">···</span>}
     </button>
   )
 }
@@ -124,21 +124,21 @@ function RemoteUsageBlock({
       title={selected ? 'Default for new sessions' : 'Use for new sessions'}
       onClick={() => onSelect(accountId)}
     >
-      <div className="usage-account__label">
+      <span className="usage-account__label">
         <span>{row.label}</span>
         {selected && <span className="usage-account__default" aria-hidden>✓</span>}
         <span className="usage-account__host" title={`Read on ${row.hostKey} over SSH`}>
           {showHost ? row.hostKey : 'SSH'}
         </span>
-      </div>
-      {row.usage.email && <div className="usage-account__email">{row.usage.email}</div>}
+      </span>
+      {row.usage.email && <span className="usage-account__email">{row.usage.email}</span>}
       {row.usage.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
       {row.usage.limits.length === 0 && (
-        <div className="usage-popover__empty">
+        <span className="usage-popover__empty">
           {row.usage.status === 'error' ? 'Could not read usage on this host.' : 'No usage data.'}
-        </div>
+        </span>
       )}
     </button>
   )
@@ -413,6 +413,23 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
       onMouseEnter={openNow}
       onMouseLeave={closeSoon}
     >
+      {/* The SSH pill is visually identical to the local one — same labels, same bar — so the
+          title is what answers "whose numbers are these?" without opening the popover. The trigger
+          comes first so Tab enters an open popover before the refresh button. */}
+      <button
+        className="usage-pill"
+        // Keyboard activation reports detail 0. Keep its focus-opened popover open, while a real
+        // pointer click retains the established open/close toggle.
+        onClick={(event) => {
+          if (event.detail === 0) setOpen(true)
+          else setOpen((v) => !v)
+        }}
+        onFocus={openNow}
+        title={scope.kind === 'ssh' ? `Agent usage on ${scope.hostKey}` : 'Agent usage'}
+      >
+        <span className="usage-pill__icon">✦</span>
+        {pillBody}
+      </button>
       {open && (
         <div className="usage-popover">
           <div className="usage-popover__head">
@@ -427,7 +444,7 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
               remote blocks below carry the same limits, and rendering both would print the
               host's numbers twice under two different headings. */}
           {scope.kind === 'local' &&
-            (claudeUsage ? (
+            (scoped.accounts.length > 0 && claudeUsage ? (
               <>
                 <AccountUsageBlock
                   mode={percentMode}
@@ -462,6 +479,12 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
                   <LimitRow key={limitKey(l)} limit={l} mode={percentMode} />
                 ))}
                 {!hasData && <div className="usage-popover__empty">No usage data.</div>}
+                {claudeUsage?.email && (
+                  <div className="usage-account">
+                    <div className="usage-account__label">Claude Account</div>
+                    <div className="usage-account__email">{claudeUsage.email}</div>
+                  </div>
+                )}
               </>
             ))}
           {/* On an SSH project these are the whole panel; the host badge is what says the numbers
@@ -486,19 +509,6 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
           ))}
         </div>
       )}
-      {/* The SSH pill is visually identical to the local one — same labels, same bar — so the
-          title is what answers "whose numbers are these?" without opening the popover. */}
-      <button
-        className="usage-pill"
-        // Hover already opens it; the click stays for the pointer-less paths (keyboard focus,
-        // touch) and as the way to dismiss it without moving the pointer away.
-        onClick={() => setOpen((v) => !v)}
-        onFocus={openNow}
-        title={scope.kind === 'ssh' ? `Agent usage on ${scope.hostKey}` : 'Agent usage'}
-      >
-        <span className="usage-pill__icon">✦</span>
-        {pillBody}
-      </button>
       <button
         className={`usage-refresh${fetching ? ' spin' : ''}`}
         onClick={refresh}

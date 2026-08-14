@@ -5740,18 +5740,19 @@ body,
 .usage-popover__head { margin-bottom: 12px; }
 .usage-popover__title { display: block; font-size: 15px; font-weight: 600; }
 .usage-popover__ago { font-size: 12px; color: rgba(var(--tint-rgb), 0.5); }
-.usage-popover__empty { font-size: 13px; color: rgba(var(--tint-rgb), 0.5); }
-.usage-row { margin-top: 14px; }
-.usage-row__title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.usage-popover__empty { display: block; font-size: 13px; color: rgba(var(--tint-rgb), 0.5); }
+.usage-row { display: block; margin-top: 14px; }
+.usage-row__title { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
 /* Marks the limit the server says is currently gating the account. */
 .usage-row__active { color: var(--accent); font-size: 9px; margin-left: 6px; vertical-align: 2px; }
 .usage-bar {
+  display: block;
   height: 8px;
   border-radius: 4px;
   background: rgba(var(--tint-rgb), 0.12);
   overflow: hidden;
 }
-.usage-bar__fill { height: 100%; border-radius: 4px; }
+.usage-bar__fill { display: block; height: 100%; border-radius: 4px; }
 .usage-row__meta {
   display: flex;
   justify-content: space-between;
@@ -6057,7 +6058,7 @@ body,
 .ctx-bar__fill { height: 100%; border-radius: 4px; }
 .ctx-popover__meta { margin-top: 8px; font-size: 12px; }
 .ctx-popover__sub { margin-top: 4px; font-size: 11px; color: rgba(var(--tint-rgb), 0.5); }
-.usage-account__email { font-size: 13px; }
+.usage-account__email { display: block; font-size: 13px; }
 
 .seg-pill {
   display: inline-flex;

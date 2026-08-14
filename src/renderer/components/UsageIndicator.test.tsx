@@ -78,6 +78,19 @@ async function openPopover(): Promise<void> {
   })
 }
 
+function tabFromFocusedButton(): void {
+  const buttons = [...host.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+  const current = buttons.indexOf(document.activeElement as HTMLButtonElement)
+  buttons[current + 1]?.focus()
+}
+
+function activateWithSpace(button: HTMLButtonElement): void {
+  button.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+  button.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }))
+  // jsdom does not perform the browser's native Space-to-click default action.
+  button.click()
+}
+
 beforeEach(() => {
   useProjects.setState({ projects: [], activeProjectId: '' })
   useSettings.setState({ settings: DEFAULT_SETTINGS, hydrated: false })
@@ -88,6 +101,7 @@ afterEach(() => {
   unregisterDirty?.()
   unregisterDirty = undefined
   if (root) act(() => root.unmount())
+  host?.remove()
 })
 
 describe('UsageIndicator account defaults', () => {
@@ -169,6 +183,114 @@ describe('UsageIndicator account defaults', () => {
     expect(useProjects.getState().getProject('p1')?.defaultAccountId).toBeUndefined()
     expect(markDirty).toHaveBeenCalledTimes(1)
     expect(accountButtons()[0].getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('moves from the focused pill to a local account selector and keeps the popover open on Space', async () => {
+    useProjects.setState({ projects: [project()], activeProjectId: 'p1' })
+    useSettings.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        claudeAccounts: [{ id: 'a1', label: 'Work', email: 'work@example.test', createdAt: 1 }]
+      }
+    })
+    ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
+      usage: {
+        fetch: (accountId?: string) => Promise.resolve(usage(accountId ? 'work@example.test' : 'system@example.test')),
+        providers: () => Promise.resolve([]),
+        remote: () => Promise.resolve([]),
+        onUpdate: () => () => {}
+      }
+    }
+
+    await mount()
+    document.body.appendChild(host)
+    const pill = host.querySelector<HTMLButtonElement>('.usage-pill')!
+    await act(async () => {
+      pill.focus()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(accountButtons()).toHaveLength(2)
+
+    await act(async () => {
+      activateWithSpace(pill)
+      await Promise.resolve()
+    })
+    expect(host.querySelector('.usage-popover')).not.toBeNull()
+
+    act(() => tabFromFocusedButton())
+    expect(document.activeElement).toBe(accountButtons()[0])
+  })
+
+  it('keeps a pointer click on the usage pill as the popover toggle', async () => {
+    useProjects.setState({ projects: [project()], activeProjectId: 'p1' })
+    useSettings.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        claudeAccounts: [{ id: 'a1', label: 'Work', email: 'work@example.test', createdAt: 1 }]
+      }
+    })
+    ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
+      usage: {
+        fetch: (accountId?: string) => Promise.resolve(usage(accountId ? 'work@example.test' : 'system@example.test')),
+        providers: () => Promise.resolve([]),
+        remote: () => Promise.resolve([]),
+        onUpdate: () => () => {}
+      }
+    }
+
+    await mount()
+    await openPopover()
+    const pill = host.querySelector<HTMLButtonElement>('.usage-pill')!
+    expect(host.querySelector('.usage-popover')).not.toBeNull()
+
+    act(() => pill.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })))
+    expect(host.querySelector('.usage-popover')).toBeNull()
+  })
+
+  it('keeps a System-only local usage row read-only', async () => {
+    const markDirty = vi.fn()
+    unregisterDirty = registerWorkspaceDirty(markDirty)
+    useProjects.setState({ projects: [project()], activeProjectId: 'p1' })
+    ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
+      usage: {
+        fetch: () => Promise.resolve(usage('system@example.test')),
+        providers: () => Promise.resolve([]),
+        remote: () => Promise.resolve([]),
+        onUpdate: () => () => {}
+      }
+    }
+
+    await mount()
+    await openPopover()
+
+    expect([...host.querySelectorAll('.usage-account')]).toHaveLength(1)
+    expect(accountButtons()).toHaveLength(0)
+    expect(markDirty).not.toHaveBeenCalled()
+  })
+
+  it('uses phrasing content inside selectable account buttons', async () => {
+    useProjects.setState({ projects: [project()], activeProjectId: 'p1' })
+    useSettings.setState({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        claudeAccounts: [{ id: 'a1', label: 'Work', email: 'work@example.test', createdAt: 1 }]
+      }
+    })
+    ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
+      usage: {
+        fetch: (accountId?: string) => Promise.resolve(usage(accountId ? 'work@example.test' : 'system@example.test')),
+        providers: () => Promise.resolve([]),
+        remote: () => Promise.resolve([]),
+        onUpdate: () => () => {}
+      }
+    }
+
+    await mount()
+    await openPopover()
+
+    expect(accountButtons()).toHaveLength(2)
+    expect(accountButtons().every((button) => button.querySelector('div') === null)).toBe(true)
   })
 
   it('selects and clears the SSH host account default from its remote Claude rows', async () => {
