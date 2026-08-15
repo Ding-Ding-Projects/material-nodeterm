@@ -1983,11 +1983,19 @@ update-feed hosting are handled outside this repo.
 
 **Windows** (the active delivery target for CI): `build.win` targets Squirrel.Windows
 (`build.squirrelWindows`), signing permanently disabled — no `CSC_LINK`/`CSC_KEY_PASSWORD` is
-ever set, `CSC_IDENTITY_AUTO_DISCOVERY=false` in CI, and root `build.forceCodeSigning: false`.
-`npm run dist:win` is the local smoke test. `.github/workflows/release.yml` builds + packages + publishes an unsigned Windows
-installer as a new GitHub Release on **every push** and on `workflow_dispatch` — it runs no
-tests and no lint; see `docs/ci-and-releases.md` for the full policy and
-`scripts/release-notes.mjs` / `scripts/count-lines.mjs` for what the release notes carry.
+ever set, `CSC_IDENTITY_AUTO_DISCOVERY=false` in CI, Windows `signExecutable: false`, and root
+`build.forceCodeSigning: false`. Resource editing remains enabled so the unsigned executable
+still receives its icon and version metadata.
+`npm run dist:win` is the local smoke test. `.github/workflows/release.yml` builds + packages an
+unsigned Windows installer on every **branch** push whose ref contains this workflow, and on
+`workflow_dispatch`. Publication is a
+transaction: validate Setup + `RELEASES` + full `.nupkg` locally, stage/upload only on a draft,
+compare the remote names and sizes, then make that one complete release public. Reruns verify the
+tag still targets the run's commit and reuse it without clobbering an already-public asset. The
+runner executes no tests, type-check or
+lint; `scripts/check-release-workflow.mjs` guards those semantics locally. See
+`docs/ci-and-releases.md` for the full policy and `scripts/release-notes.mjs` /
+`scripts/count-lines.mjs` for what the release notes carry.
 
 Auto-update uses **electron-updater** (`src/main/updater.ts`, `initUpdater(win)` from `index.ts`):
 runs **only when `app.isPackaged`** (dev = no-op), checks on launch + every 6h, auto-downloads,

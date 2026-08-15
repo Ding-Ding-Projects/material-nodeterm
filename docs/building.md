@@ -171,8 +171,8 @@ the same version as `package.json`:
      available) the exact commit it was built from and whether the working tree was clean or
      dirty at build time.
 4. States plainly, every time, that **the installer is unsigned**. Code signing is permanently out
-   of scope for this project (see `package.json`'s `win.forceCodeSigning` / `signExecutable` /
-   `signAndEditExecutable`, all pinned to `false`, and the mac build's `identity=null` /
+   of scope for this project (see `package.json`'s `win.forceCodeSigning` / `signExecutable`,
+   pinned to `false`, and the mac build's `identity=null` /
    `notarize=false`) — installing or opening the artifact will trigger Windows SmartScreen /
    "unknown publisher" or macOS Gatekeeper warnings. That is expected, not a build defect.
 5. **Never publishes, tags, pushes, or creates a release.** It only builds and verifies a local
