@@ -77,6 +77,27 @@ site/app/features/
 
 ## Per-feature notes
 
+### Remote access routes (`pair-device.js`)
+
+The Pages playground is a static product tour, not a terminal client. Its former pairing room
+generated an Ed25519 keypair and installed the public key through the desktop's `/pair` endpoint,
+but discarded the private key and the successful response (`agentToken` and optional relay token).
+That left an authorized key on the host while giving the browser no credential or transport with
+which to reconnect. The room now makes no pairing request and offers two honest routes instead:
+
+- **Server Edition / Docker** — open the URL served by the actual self-hosted browser client. The
+  page links to the Server Edition article and its container quickstart.
+- **nodeterm mobile** — open the live App Store listing. The iOS companion implements the complete
+  pairing protocol and owns the private key and returned device credentials.
+
+Mobile handoff: **@eneskirca**, no pairing wire format changed here. The iOS client remains the
+owner of Settings → Phone QR/code pairing and must continue retaining the SSH private key,
+`agentToken`, and optional relay token. Any future browser pairing client must implement that same
+durable credential lifecycle before it is allowed to install a host key.
+
+Behavior is covered by `site/app/features/pair-device.test.js`; it executes the real module,
+registers the room, and verifies the rendered destinations and absence of pairing actions.
+
 ### Language modes, funny levels, emoji (`language-settings.js`, `shared/i18n.js`)
 
 Every other feature module renders its own chrome through `t(id)` /

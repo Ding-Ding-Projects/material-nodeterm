@@ -11,6 +11,9 @@ export default defineConfig({
       // .tsx too: component tests (jsdom via a per-file pragma; everything else stays node).
       'src/renderer/**/*.test.{ts,tsx}',
       'src/server/**/*.test.ts',
+      // The Pages playground is unbundled browser JavaScript. Run its behavior tests as the
+      // actual JS modules so persistence/search regressions are not hidden behind TS fixtures.
+      'site/app/**/*.test.js',
       'test/server/**/*.test.ts',
       'test/remote/**/*.test.ts',
       // Opt-in end-to-end tests against a real sshd in Docker. They self-skip unless
