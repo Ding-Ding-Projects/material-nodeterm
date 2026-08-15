@@ -126,6 +126,14 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M2.5 3.6h11v6.4H8.6L6 12.6v-2.6H2.5Z" />
       <path d="M4.6 6.8h6.8M6.4 3.6a5.4 5.4 0 0 0 0 6.4M9.6 3.6a5.4 5.4 0 0 1 0 6.4" />
     </>
+  ),
+  // A speaker with two emanating arcs — the narrator SPEAKING, distinct from `language`'s
+  // bubble (which is about which language the UI is written in, not what is read aloud).
+  narrator: (
+    <>
+      <path d="M3 6.2h2L7.6 4v8L5 9.8H3Z" />
+      <path d="M10 6a2.6 2.6 0 0 1 0 4M11.8 4.2a5.2 5.2 0 0 1 0 7.6" />
+    </>
   )
 }
 
