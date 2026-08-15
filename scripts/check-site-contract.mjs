@@ -503,6 +503,79 @@ if (cdnHits.length > 0) {
 }
 
 // ---------------------------------------------------------------------
+// The shared-link embed graphic (Discord/Slack/iMessage unfurl).
+// ---------------------------------------------------------------------
+//
+// A link is how this project introduces itself, and most people meet it for the first time in a
+// chat window. Without these tags the embed is a grey card with some text on it.
+//
+// Each assertion below is a way the embed breaks WITHOUT anything looking wrong in the source:
+// a relative og:image (the crawler cannot resolve it), a missing twitter:card (a big picture
+// silently becomes a thumbnail), or an image path that no longer exists in the published tree
+// (the Pages workflow ships `site/` only, so a card left in docs/ is a tag pointing at a 404).
+{
+  const html = readText('site/index.html') ?? ''
+  const tag = (prop) => {
+    // Attribute order and whitespace both vary once a formatter has been through the file, so
+    // match the property and then look for the content anywhere in the same tag.
+    const re = new RegExp(`<meta[^>]*(?:property|name)=["']${prop}["'][^>]*>`, 'i')
+    const m = re.exec(html)
+    if (!m) return null
+    const c = /content=["']([^"']*)["']/i.exec(m[0])
+    return c ? c[1] : null
+  }
+
+  const required = [
+    'og:title',
+    'og:description',
+    'og:type',
+    'og:url',
+    'og:site_name',
+    'og:image',
+    'og:image:width',
+    'og:image:height',
+    'og:image:alt',
+    'twitter:card',
+    'twitter:image'
+  ]
+  for (const p of required) {
+    checkedCount += 1
+    const v = tag(p)
+    if (!v) fail(`Shared-link embed: site/index.html is missing a <meta> for ${p}`)
+    else pass(`Shared-link embed: ${p} present`)
+  }
+
+  // og:image must be absolute https — the failure that looks fine in the source and shows no
+  // picture in the embed.
+  checkedCount += 1
+  const img = tag('og:image')
+  if (img && /^https:\/\//.test(img)) pass('Shared-link embed: og:image is an absolute https URL')
+  else fail(`Shared-link embed: og:image must be an absolute https:// URL, got "${img ?? '(none)'}" — a relative path renders no picture`)
+
+  // summary_large_image is the difference between a big card and a stamp.
+  checkedCount += 1
+  const tc = tag('twitter:card')
+  if (tc === 'summary_large_image') pass('Shared-link embed: twitter:card is summary_large_image (big card, not a thumbnail)')
+  else fail(`Shared-link embed: twitter:card must be "summary_large_image", got "${tc ?? '(none)'}"`)
+
+  // The referenced image has to exist in the tree the Pages workflow actually publishes.
+  checkedCount += 1
+  const marker = '/material-nodeterm/'
+  const idx = img ? img.indexOf(marker) : -1
+  const rel = idx >= 0 ? img.slice(idx + marker.length) : null
+  if (rel && existsSync(join(REPO_ROOT, 'site', rel))) {
+    pass(`Shared-link embed: og:image resolves to a real published file (site/${rel})`)
+  } else {
+    fail(`Shared-link embed: og:image points at "${img}", which is not a file under site/ — the Pages workflow publishes site/ only, so this would 404`)
+  }
+
+  // And the GitHub repository social preview, which is a manual upload but whose ASSET must be
+  // committed so it is versioned and reviewable rather than living only in a settings page.
+  requireFileExists('docs/assets/social-preview.png', 'Shared-link embed')
+  requireFileExists('scripts/make-social-card.mjs', 'Shared-link embed')
+}
+
+// ---------------------------------------------------------------------
 // Every relative import resolves to a file that exists.
 // ---------------------------------------------------------------------
 //
