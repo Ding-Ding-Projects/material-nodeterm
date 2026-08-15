@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import {
   createSubagentTail,
+  formatLine,
   formatSubagentChunk,
   splitCompleteLines,
   SUBAGENT_READ_CAP
@@ -147,5 +148,31 @@ describe('subagent-tail read cap', () => {
 
     tail.finish('tu1')
     fs.rmSync(path.dirname(transcriptPath), { recursive: true, force: true })
+  })
+})
+
+describe('tool arguments on Windows paths', () => {
+  // Was `p.split('/').pop()`. A tool call on Windows reports `C:\Users\me\workspace.ts`, which
+  // has no '/' in it — so the split returned the whole absolute path and these cards showed one
+  // instead of the short filename the code's own comment promises. Same class as the fix already
+  // documented in speech/whisper-models.ts, in a file that never got the memo.
+  const call = (input: Record<string, unknown>): string =>
+    formatLine(JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', name: 'Read', input }] }
+    }))
+
+  it('shows the filename for a Windows path, not the whole path', () => {
+    const out = call({ file_path: String.raw`C:\Users\me\workspace.ts` })
+    expect(out).toContain('workspace.ts')
+    // String.raw. Written as '\U...' this is not a valid JS escape, so the string silently
+    // becomes 'C:Users' — which can never appear in the output, so the negative assertion
+    // passed no matter how broken the code was. A mangled needle in a `not.toContain` is
+    // invisible: it does not error, it just stops testing anything.
+    expect(out).not.toContain(String.raw`C:\Users`)
+  })
+
+  it('still shows the filename for a POSIX path', () => {
+    expect(call({ file_path: '/Users/me/workspace.ts' })).toContain('workspace.ts')
   })
 })

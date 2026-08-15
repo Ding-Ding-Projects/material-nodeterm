@@ -91,3 +91,38 @@ describe('planRefresh', () => {
     expect(plan.toRead).toEqual([])
   })
 })
+
+describe('projectLabel on a Windows cwd', () => {
+  // Was `cwd.split('/').filter(Boolean).pop()`. A Windows cwd contains no '/' at all, so the
+  // split returned the WHOLE path and the find bar labelled every result with an absolute path
+  // instead of the project's name. The suite above never caught it because every fixture cwd is
+  // POSIX — which is exactly the shape of the bug: the code is correct on the platform the
+  // fixtures were written on.
+  const WIN = String.raw`C:\Users\me\beta`
+
+  it('labels with the folder name, not the whole path', () => {
+    const entries: TranscriptIndexEntry[] = [
+      { sessionId: 's1', transcriptPath: '/p/s1.jsonl', cwd: WIN, mtime: 1, title: 'x', text: 'tmux' }
+    ]
+    const hits = searchEntries(entries, 'tmux', 20)
+    expect(hits[0].projectLabel).toBe('beta')
+    // '\\', not String.raw — a raw template literal cannot END with a backslash, because the
+    // backslash escapes the closing backtick even in raw mode. This is the one place the usual
+    // String.raw advice does not apply.
+    expect(hits[0].projectLabel).not.toContain('\\')
+  })
+
+  it('still labels a POSIX cwd correctly', () => {
+    const entries: TranscriptIndexEntry[] = [
+      { sessionId: 's1', transcriptPath: '/p/s1.jsonl', cwd: '/Users/me/alpha', mtime: 1, title: 'x', text: 'tmux' }
+    ]
+    expect(searchEntries(entries, 'tmux', 20)[0].projectLabel).toBe('alpha')
+  })
+
+  it('falls back to the cwd when there is no folder name to take', () => {
+    const entries: TranscriptIndexEntry[] = [
+      { sessionId: 's1', transcriptPath: '/p/s1.jsonl', cwd: '/', mtime: 1, title: 'x', text: 'tmux' }
+    ]
+    expect(searchEntries(entries, 'tmux', 20)[0].projectLabel).toBe('/')
+  })
+})

@@ -46,7 +46,10 @@ function textOf(content: unknown): string {
 function toolArg(name: string | undefined, input: unknown): string {
   if (!input || typeof input !== 'object') return ''
   const i = input as Record<string, unknown>
-  const base = (p: unknown) => (typeof p === 'string' ? p.split('/').pop() || p : '')
+  // basename(), not split('/'): a tool call on Windows reports `C:\Users\me\workspace.ts`,
+  // which has no '/' in it at all — so the split returned the WHOLE absolute path and these
+  // cards showed one instead of the short filename the comment above promises.
+  const base = (p: unknown) => (typeof p === 'string' ? path.basename(p) : '')
   const p = i.file_path ?? i.path ?? i.notebook_path
   if (p) return base(p)
   if (typeof i.command === 'string') return i.command.replace(/\s+/g, ' ').slice(0, 80)
