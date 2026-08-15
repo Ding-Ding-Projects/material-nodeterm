@@ -1864,6 +1864,57 @@ next reconnect asks again); a failed revoke still cuts the live socket and repor
 `persisted:false`. Normal packaged operation is single-instance; the dev-only `NT_MULTI=1` flow must
 keep using a distinct `NT_USER_DATA` per instance because this queue is process-local.
 
+### Relay RPC authorization is an exact allowlist
+
+A mutually approved relay peer receives shell-equivalent access to the project/session it joined,
+but it does **not** become the host renderer. That distinction is enforced at the narrow inbound
+boundary in `src/main/platform-electron.ts`: every request, cast, and host→peer event must appear in
+the exact allowlists in `src/main/relay-rpc-policy.ts`. Inbound checks run before the recorded
+CorePlatform handler/listener is even looked up; outbound checks run before a peer sink is called
+(the host renderer still receives its local broadcast). An unlisted request answers `E_FORBIDDEN`;
+unlisted casts/events are dropped because they have no reply channel. A new handler, listener, or
+broadcast therefore fails closed until somebody reviews its relay semantics and adds it deliberately.
+
+This second gate is mandatory because `platform.handle()` serves two different remote surfaces.
+The Server Edition legitimately registers machine-global core services such as settings, School /
+Kids mode, scheduled settings, toy locks, and the authenticator. The relay API deliberately keeps
+those namespaces — plus licensing and usage credentials — on the **viewing** desktop. Registration
+alone used to erase that distinction: a raw approved peer could dispatch
+`authenticator:reveal` or `authenticator:export-secrets`, skip the renderer's reveal/two-key export
+confirmation, and make the host process unseal the stored TOTP seeds. The whole `authenticator:*`
+namespace is now local-only (live TOTP codes are credentials too), as are the other machine-global
+credential/control namespaces; tests drive raw encrypted relay frames and prove rejection occurs
+before the authenticator handler is entered or its store is loaded, sealed, unsealed, or saved.
+The outbound half is equally load-bearing: usage updates include the host account email,
+converter events contain local
+paths, and local model streams contain prompt/response content. None may ride an unrelated
+machine-global broadcast to a peer merely because CorePlatform is the emitter.
+
+The allowlist intentionally includes destructive `fs:*`, `git:*`, and terminal lifecycle methods:
+the mutual-consent copy grants the peer shell access, so withholding a git discard while allowing a
+terminal would be theatre. GitHub issue methods are likewise allowed but remain jailed to the
+shared project in `relay-host.ts`; GitHub credential control stays local. Keep both layers: method
+authorization answers *which service*, while the host-session scope checks answer *which project*.
+Whole-workspace save is not allowed: its payload can rewrite the host's index and remove unrelated
+projects, while relay tabs already converge the shared project through ordered canvas mutations.
+`git.setActiveRemote` also refuses over relay until Desktop owns a scoped CorePlatform handler.
+
+**A browser/Electron File path belongs to the viewer, not automatically to the session machine.**
+Every terminal/canvas file-drop resolver takes the current session's `NodeTerminalApi`; it never
+reaches back to `window.nodeTerminal` for `getPathForFile`, `files.*`, or `sshProject.uploadFile`.
+The relay API makes `getPathForFile` answer empty, forcing viewer-held bytes through the host-routed
+`files.saveUpload` / `files.saveCanvasImage` methods before a host path is pasted or persisted. The
+Server Edition prefers its optional raw-Blob HTTP upload (with the shared 64 MiB guard) and relay
+retains base64 RPC. SSH-project control/filesystem has no scoped relay carrier in v1, so it refuses
+instead of using the viewing desktop's unrelated ControlMaster; add a host-scoped composite carrier
+before enabling that path.
+
+**Surfaces:** Desktop relay is the enforcement point. The Server Edition's authenticated browser
+socket is unchanged and continues to receive its full explicitly-built API. The current mobile
+companion still uses the legacy phone dialect; when it migrates to the raw RPC tunnel it will
+inherit this host-side allowlist without a protocol change (call out any newly required method to
+`@eneskirca` rather than widening a namespace).
+
 ## The unlock ladder (Server Edition lockout)
 
 Five wrong passwords locks the account, and instead of a bare countdown the lockout screen offers a

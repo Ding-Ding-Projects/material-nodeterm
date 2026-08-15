@@ -8,15 +8,18 @@
 // `createSession('relay', api, label)` (Task 6) wires it into the session registry.
 //
 // ── The API split (binding, from docs/remote-sessions.md line 70–76) ──────────────────────────────
-// • CORE-BOUND namespaces (`pty`, `workspace`, `fs`, `git`, `files`, `context`, `canvas`, `presence`,
-//   the `onAgentStatus`/`onSubagentActivity` streams, `claude.cliCaps`, `userDataDir`) route over the
-//   relay RpcClient → they hit the REMOTE core. This is what makes the tab actually remote: its
-//   terminals, repos, files, canvas and presence all live on the host's machine.
+// • CORE-BOUND namespaces (`pty`, workspace read/probe, `fs`, reviewed `git`, `files`, `context`,
+//   `canvas`, `presence`, the `onAgentStatus`/`onSubagentActivity` streams, `claude.cliCaps`,
+//   `userDataDir`) route over the relay RpcClient → they hit the REMOTE core. This is what makes
+//   the tab actually remote: its terminals, repos, files, canvas and presence all live on the
+//   host's machine.
 // • APP-GLOBAL namespaces (`updates`, `license`, `clipboard`, `shell`, `dialog`, `media`,
-//   `settings`, `pairing`, `announcements`, `usage`, `ssh*`, `remote*`, `relay*`, notifications, menu events)
+//   `settings`, `pairing`, `announcements`, `usage`, `remote*`, `relay*`, notifications, menu events)
 //   stay LOCAL (`window.nodeTerminal.*`). Your update banner shows YOUR version, a file picker
 //   browses YOUR disk, your UI settings/theme are yours, and the relay-tunnel machinery itself is
-//   your local main process. Routing one of these to the remote core would be a latent bug.
+//   your local main process. Routing one of these to the remote core would be a latent bug. SSH
+//   project control/filesystem operations have no relay carrier yet and refuse rather than touching
+//   the viewer's SSH masters; viewer-held file bytes use the host-routed `files` namespace below.
 //
 // ── Two gotchas that make or break the tab ───────────────────────────────────────────────────────
 // 1. `pty.onData` is the ONE core-bound member that does NOT go through the RpcClient. Relay pty
@@ -31,6 +34,7 @@
 //    it after approval already fired leaves `ready()` pending forever and the api never comes up.
 
 import type { NodeTerminalApi } from '../../shared/types'
+import { E_UNSUPPORTED } from '../../shared/rpc'
 import { type FrameTransport, RelayFrameTransport } from './frame-transport'
 import {
   RpcClient,
@@ -44,6 +48,13 @@ import {
 } from './ws-bridge'
 import { buildStubApi } from './stubs'
 import { mountPickerRoot, openDirectoryPicker } from './dialog-picker'
+
+const relayUnsupported = (name: string): Promise<never> =>
+  Promise.reject(
+    Object.assign(new Error(`${name} is not supported over a relay session`), {
+      code: E_UNSUPPORTED
+    })
+  )
 
 /** What Task 6 consumes: the bridged api for `createSession`, an approval gate to await, and a
  *  teardown hook to run on disconnect/revoke. */
@@ -81,10 +92,20 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     ...local,
 
     // ── CORE-BOUND: route to the REMOTE core over the relay RpcClient. ──
-    workspace: real.workspace, // the host's canvas/project files
+    workspace: {
+      ...real.workspace,
+      // A raw whole-workspace save can remove unrelated host projects. Relay tabs converge their
+      // shared project through canvas mutations; there is no safe project-scoped save contract.
+      save: () => relayUnsupported('workspace.save')
+    },
     userDataDir: real.userDataDir, // the host's writable base — worktree default paths live there
     fs: files.fs,
-    git: files.git,
+    git: {
+      ...files.git,
+      // Desktop owns this selection in raw ipcMain rather than CorePlatform, so pretending it is
+      // remote-capable only yields E_NO_HANDLER. Refuse explicitly until it has scoped semantics.
+      setActiveRemote: () => relayUnsupported('git.setActiveRemote')
+    },
     files: files.files,
     context: files.context,
     githubIssues: github.githubIssues,
@@ -96,6 +117,21 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // claude CLI (a remote node launches on the host); `readTranscript` stays LOCAL (v1 degrade —
     // transcripts aren't relayed, so it reads this machine's; the only consumer reads the global api).
     claude: buildClaudeApi(client, local.claude),
+
+    // A File selected/dropped on THIS desktop can carry a perfectly valid absolute path — on THIS
+    // desktop. The remote session cannot read it. Force the shared file-drop resolver down its byte
+    // upload path, whose `files.saveUpload` / `saveCanvasImage` calls above land on the host.
+    getPathForFile: stub.getPathForFile,
+
+    // There is no host-routed SSH-project control API in relay v1. Refuse cleanly instead of letting
+    // a session-scoped caller operate this viewer's local ControlMaster and paste that third
+    // machine's path into the host shell. A plain relay file drop is fully supported through
+    // `files`; a drop into an SSH-project terminal inside a relay tab degrades to no inserted path.
+    sshProject: stub.sshProject,
+    // An SSH project's paths live on a third machine behind the HOST's ControlMaster. Until relay
+    // has a scoped carrier for that master, even reads must not fall through to this viewer's
+    // unrelated SSH connection (quick-open is the easy wrong-machine example).
+    sshFs: stub.sshFs,
 
     // pty is core-bound EXCEPT `onData` (gotcha 1): its output arrives on the LOCAL per-session
     // channel, so subscribe on the local preload, same shape as a local pty.
@@ -147,8 +183,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // `chat` is now just readTranscript (the SDK chat node was removed). It has no relay builder:
     // reading a transcript over the relay would read THIS machine's transcript, not the host's, so
     // refuse with E_UNSUPPORTED instead. contextLink / transcripts / handoff stay LOCAL by way of
-    // `...local` (a v1 degrade: they read/write on this machine, not the host). boardLog is now
-    // bridged to the host (see above) — it no longer rides `...local`.
+    // `...local` (a v1 degrade: they read/write on this machine, not the host). `sshProject` is
+    // explicitly stubbed above because a wrong-machine mutation is worse than a visible refusal.
+    // boardLog is now bridged to the host (see above) — it no longer rides `...local`.
     chat: stub.chat,
     // Agent canvas-control (`agent:control`) is not wired over the relay (matches the Server
     // Edition); inert no-ops rather than a local subscription that never carries the host's events.

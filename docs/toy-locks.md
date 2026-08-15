@@ -148,8 +148,10 @@ over the same request/response channel every other core service uses
 (`src/renderer/bridge/ws-bridge.ts`'s `buildToylockApi` / `buildAuthenticatorApi` for the browser;
 the Electron preload for Desktop). A relay tab (one desktop viewing another desktop's canvas over
 the E2EE relay) keeps its **own local** toy locks — they describe the viewer's own machine and
-never route to the remote host, the same way the update banner or the file picker stay local
-there.
+never route to the remote host, the same way the update banner stays local there. The host's
+raw-relay dispatcher enforces that split with an exact allowlist: every `toylock:*` request is
+rejected before its handler can read or change the host's lock store. Registering the shared core
+handler for the Server Edition does not, by itself, make it relay-callable.
 
 ## Known limitations
 

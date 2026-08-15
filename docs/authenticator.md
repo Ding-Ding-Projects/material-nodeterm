@@ -136,7 +136,13 @@ Like toy locks, the authenticator is **core-bound**: entries live wherever nodet
 runs (Electron's main process on Desktop; the server process for the Server Edition), reached over
 the same request/response channel every other core service uses. A relay tab (viewing another
 desktop's canvas over the E2EE relay) keeps its **own local** authenticator — it describes the
-viewer's own machine, exactly like the toy-lock list does.
+viewer's own machine, exactly like the toy-lock list does. That is enforced below the UI as well as
+in the bridge assembly: the desktop host's raw-relay dispatcher default-denies every
+`authenticator:*` method before handler lookup. A peer-crafted `reveal`, `export-secrets`, or live
+code request therefore receives `E_FORBIDDEN` without loading or unsealing the host's store; the
+renderer-only reveal and two-key export confirmations are never treated as a network authorization
+boundary. The Server Edition is unaffected — its authenticated browser socket still reaches the
+authenticator service running on that server.
 
 ## Known limitations
 

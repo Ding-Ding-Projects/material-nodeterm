@@ -42,6 +42,9 @@ function fakeLocalApi() {
   const ptyOnData = vi.fn(() => LOCAL_ONDATA_UNSUB)
   const localUpload = vi.fn(async () => 'C:\\viewer\\upload.bin')
   const localBlobUpload = vi.fn(async () => 'C:\\viewer\\blob.bin')
+  const getPathForFile = vi.fn(() => '/viewer/private/drop.png')
+  const sshUploadFile = vi.fn(async () => '/viewer/ssh/drop.png')
+  const sshQuickOpen = vi.fn(async () => ['viewer-secret.txt'])
   const local = {
     updates: { NAME: 'local-updates' },
     clipboard: { NAME: 'local-clipboard' },
@@ -51,10 +54,21 @@ function fakeLocalApi() {
     files: { saveUpload: localUpload, saveUploadBlob: localBlobUpload },
     license: { NAME: 'local-license' },
     pty: { onData: ptyOnData },
+    getPathForFile,
+    sshProject: { uploadFile: sshUploadFile },
+    sshFs: { quickOpen: sshQuickOpen },
     claude: { cliCaps: () => Promise.resolve({}), readTranscript: () => Promise.reject() },
     relayClient: { disconnect: vi.fn() }
   }
-  return { local: local as unknown as NodeTerminalApi, ptyOnData, localUpload, localBlobUpload }
+  return {
+    local: local as unknown as NodeTerminalApi,
+    ptyOnData,
+    localUpload,
+    localBlobUpload,
+    getPathForFile,
+    sshUploadFile,
+    sshQuickOpen
+  }
 }
 
 describe('buildRelayApi', () => {
@@ -130,6 +144,52 @@ describe('buildRelayApi', () => {
     expect(localUpload).not.toHaveBeenCalled()
     expect(localBlobUpload).not.toHaveBeenCalled()
     expect(fetchUpload).not.toHaveBeenCalled()
+  })
+
+  it('refuses unscoped whole-workspace saves and unavailable desktop git selection locally', async () => {
+    const { local } = fakeLocalApi()
+    ;(globalThis as Record<string, unknown>).window = { nodeTerminal: local }
+    const t = new FakeTransport()
+    const { api } = buildRelayApi('conn-1', t)
+
+    await expect(api.workspace.save({ version: 2, activeProjectId: '', projects: [] })).rejects.toMatchObject({
+      code: 'E_UNSUPPORTED'
+    })
+    await expect(api.git.setActiveRemote('project-a')).rejects.toMatchObject({
+      code: 'E_UNSUPPORTED'
+    })
+    expect(t.sent).toEqual([])
+  })
+
+  it('never treats viewer-local file or SSH paths as paths on the relay host', async () => {
+    const { local, getPathForFile, sshUploadFile, sshQuickOpen } = fakeLocalApi()
+    ;(globalThis as Record<string, unknown>).window = { nodeTerminal: local }
+    const t = new FakeTransport()
+    const { api } = buildRelayApi('conn-1', t)
+    const file = new File(['bytes'], 'drop.png', { type: 'image/png' })
+
+    // Empty forces file-drop.ts to carry bytes through the host-routed files API; returning the
+    // Electron path here would paste a path that exists only on the viewing desktop.
+    expect(api.getPathForFile(file)).toBe('')
+    expect(getPathForFile).not.toHaveBeenCalled()
+
+    void api.files.saveUpload('drop.png', 'Ynl0ZXM=')
+    expect(JSON.parse(t.sent[0])).toMatchObject({
+      t: 'req',
+      method: IPC.filesSaveUpload,
+      args: ['drop.png', 'Ynl0ZXM=']
+    })
+
+    // SSH project control has no relay carrier in v1. A clean refusal is safer than uploading
+    // through this desktop's unrelated ControlMaster and pasting that third machine's path.
+    await expect(api.sshProject.uploadFile('project-a', '/tmp/drop.png', 'drop.png')).rejects.toMatchObject({
+      code: 'E_UNSUPPORTED'
+    })
+    await expect(api.sshFs.quickOpen('project-a', '/remote')).rejects.toMatchObject({
+      code: 'E_UNSUPPORTED'
+    })
+    expect(sshUploadFile).not.toHaveBeenCalled()
+    expect(sshQuickOpen).not.toHaveBeenCalled()
   })
 
   it('routes the folder/file picker to the HOST fs, not the local native dialog', () => {

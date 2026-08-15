@@ -375,7 +375,7 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
     const term = termRef.current
     if (!term || !files.length) return
     // Clipboard bytes must be written before they have a path, which is not instant either.
-    const needsWrite = files.some((f) => !window.nodeTerminal.getPathForFile(f))
+    const needsWrite = files.some((f) => !api.getPathForFile(f))
     let paths: string[]
     if (spawn.sshRemoteTmux) {
       // Uploads go over the master this card's PTY runs on — its scope, not the project's.
@@ -384,19 +384,19 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
         : useProjects.getState().activeProjectId
       setUploading(true)
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: true, projectId })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: true, projectId })
       } finally {
         setUploading(false)
       }
     } else if (needsWrite) {
       setUploading(true)
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: false, projectId: '' })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
       } finally {
         setUploading(false)
       }
     } else {
-      paths = await droppedPaths(files, { sshRemoteTmux: false, projectId: '' })
+      paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
     }
     if (!paths.length) return
     // A drag-drop from another OS app doesn't bring our window forward (esp. macOS), so the
