@@ -217,6 +217,14 @@ Where a behaviour can only be verified on hardware we do not have in CI (a Mac, 
 GPU), say so explicitly rather than implying coverage. Several docs carry numbered device
 checklists for exactly this.
 
+**A harness that boots the desktop app owns a disposable home, not just disposable `userData`.**
+Boot installs managed agent hooks and instruction files through `os.homedir()` and agent/XDG config
+variables. On Windows, setting only `HOME` does not move Node's home; `USERPROFILE` is the
+load-bearing override. Follow `scripts/check-app-wired-core.mjs`: redirect the complete home,
+AppData, temp, XDG, and agent config set before spawn, verify `userDataDir()` from the live main
+process, and sentinel the exact real-home targets before and after. Likewise, process cleanup must
+pass paths as data and compare them literally—never put a checkout path into a shell wildcard.
+
 ## Pull requests
 
 - Branch from `main`. **GitHub Actions runs no tests, no type-check, and no lint** — see

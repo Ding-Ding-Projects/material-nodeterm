@@ -198,10 +198,35 @@ appeared. Not "all Electron for this repo", which would take the developer's own
 it. Launch, CDP setup, and every interaction run inside one `try`/`finally`; a failed CDP connection
 therefore cleans up too, and an unprovable cleanup makes the gate fail rather than reporting green.
 
+Cleanup is literal, not wildcard-shaped. The repo directory is passed to PowerShell as environment
+data with a trailing path separator and compared with case-insensitive `String.IndexOf`; it is
+never interpolated into a `-like` expression. A checkout named `oak[prod]?*` otherwise makes `[]`,
+`?`, and `*` pattern syntax: the harness can miss its own process and select an unrelated one for
+`Stop-Process`. Failure to inventory processes aborts the launch instead of becoming an empty
+snapshot, and candidates are revalidated immediately before termination to reduce PID-reuse risk.
+
+**Launching the gate must not launch against the developer's home.** `NT_USER_DATA` moves only
+Electron's profile. App boot also installs managed hooks, skills, and instruction blocks through
+`os.homedir()`, `XDG_CONFIG_HOME`, and `GROK_HOME`; on Windows, Node resolves `os.homedir()` from
+`USERPROFILE`, not `HOME`. An owned launch therefore creates one disposable root and redirects
+HOME/USERPROFILE/HOMEDRIVE/HOMEPATH, AppData, temp, XDG, Claude, Codex, Grok, and Kimi roots into it.
+Before interactions it asks the running main process for `userDataDir()` and verifies that the real
+boot created every managed hook/config artefact inside the sandbox. Exact real-home targets are
+fingerprinted before and after the run; an unreadable sentinel aborts rather than being treated as
+absent, and any changed path makes the run fail. The sandbox is removed only after this run's
+literal-matched Electron processes are stopped. `--attach` deliberately does not claim this
+isolation because the harness does not own the attached app.
+
+The helper gates execute both boundaries rather than scan their source: a real child Node process
+must resolve and write only inside the disposable home, the sentinel must turn red on both a changed
+and a newly-created config file, and real Windows PowerShell must distinguish literal `[?*`
+checkout names from wildcard lookalikes and sibling prefixes.
+
 ## Deliberately not done here
 
-- **No test suite integration.** This is a standalone Node script, matching the site guard's
-  pattern, run manually.
+- **The live interaction pass remains manual.** `npm test` includes only the fast isolation and
+  PowerShell-fixture gates; it does not launch Electron. The built-app pass remains
+  `npm run check:wired` so its native-runtime and process-cleanup prerequisites stay explicit.
 - **No exhaustive "every settings section" sweep.** The guard checks the settings-sidebar wiring
   only for rows that name a `settingsSection` — it does not separately assert that every id in
   `SettingsSectionId` (including ones with no dedicated feature row here, like `presence` or

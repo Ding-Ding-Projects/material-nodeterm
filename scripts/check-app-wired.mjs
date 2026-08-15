@@ -34,10 +34,16 @@
 //    reason, never inferred at runtime from something not being found.
 
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { existsSync, rmSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  assertManagedConfigUnchanged,
+  captureManagedConfigSentinel,
+  createAppSandbox,
+  repoElectronPids,
+} from './check-app-wired-core.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
@@ -53,7 +59,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function cdp(port) {
   const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
-  const page = targets.find((t) => t.type === 'page' && !t.url.startsWith('devtools://'))
+  // The HUD is a second page target with its own narrow preload; it intentionally has no
+  // nodeTerminal bridge. Targeting "the first page" selected it on a real Windows run and made
+  // the harness report that the main app had no bridge at all.
+  const page = targets.find(
+    (t) =>
+      t.type === 'page' &&
+      !t.url.startsWith('devtools://') &&
+      !/(?:^|[\\/])hud\.html(?:[?#]|$)/i.test(t.url),
+  )
   if (!page) throw new Error('no renderer target on the debugging port')
   const ws = new WebSocket(page.webSocketDebuggerUrl, { maxPayload: 64 * 1024 * 1024 })
   let id = 0
@@ -80,90 +94,62 @@ async function cdp(port) {
   return { send, close: () => ws.close() }
 }
 
-/**
- * PIDs of Electron processes belonging to THIS repo, right now.
- *
- * Needed because killing the app is not enough. On Windows the app spawns a **session host** —
- * the tmux-equivalent — and that process outlives its parent BY DESIGN, which is the whole point
- * of it. So every harness run that launches the app leaves one behind, still holding
- * `node_modules\electron\dist\electron.exe`.
- *
- * That is not theoretical: a leftover from a capture run made the next `npm ci` fail on that
- * binary, and because `npm ci` deletes node_modules BEFORE installing, it left the tree gutted —
- * no vitest, no react, no ws. The harness broke the checkout it was written to inspect.
- *
- * Snapshot before, diff after, kill only what appeared. Killing "all Electron for this repo"
- * would take the developer's own running app with it.
- */
-function repoElectronPids() {
-  if (process.platform !== 'win32') return []
-  try {
-    // No backslash doubling. Inside a PowerShell SINGLE-quoted string a backslash is an ordinary
-    // character, so escaping them made the -like pattern `C:\\Users\\…`, which matches nothing —
-    // the cleanup silently found zero leftovers and reported success while leaking every time.
-    // Only the single quote needs escaping there, by doubling it.
-    const ps =
-      `Get-CimInstance Win32_Process -Filter "Name='electron.exe'" | ` +
-      `Where-Object { $_.CommandLine -like '*${ROOT.replace(/'/g, "''")}*' } | ` +
-      `ForEach-Object { $_.ProcessId }`
-    return execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
-      encoding: 'utf8',
-      timeout: 20000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .split(/\r?\n/)
-      .map((s) => Number(s.trim()))
-      .filter(Boolean)
-  } catch {
-    // An empty list means "checked, and none exist". `null` means the check itself failed; the
-    // latter must stop a launch because otherwise the finally block cannot prove it cleaned up.
-    return null
-  }
-}
-
 const port = typeof attachPort === 'string' ? Number(attachPort) : 9223
-let pidsBefore = new Set()
+const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
+const unix = join(ROOT, 'node_modules', '.bin', 'electron')
+const bin = process.platform === 'win32' ? electron : unix
+if (!attachPort && !existsSync(bin)) {
+  console.error('✗ Electron binary not found — run `npm ci` (or `npm run rebuild`) first.')
+  process.exit(1)
+}
+// A failed process inventory is not an empty inventory. Abort before launch: treating it as []
+// makes every pre-existing matching process look new at cleanup and risks killing a Swiftie's app.
+const pidsBefore = new Set(attachPort ? [] : repoElectronPids({ root: ROOT }))
+const realHomeSentinelOptions = { home: homedir(), env: process.env }
+const realHomeBefore = attachPort
+  ? null
+  : captureManagedConfigSentinel(realHomeSentinelOptions)
+const sandbox = attachPort ? null : createAppSandbox()
 let child = null
-let ownedUserData = null
-let client = null
+let close = null
 let selected = []
 let failed = 0
-let fatalError = null
-let cleanupFailed = false
-let processSnapshotReady = false
+let runError = null
+let cleanupError = null
 
 try {
 if (!attachPort) {
-  const before = repoElectronPids()
-  if (before === null) {
-    throw new Error('could not enumerate this checkout\'s Electron processes before launch')
-  }
-  pidsBefore = new Set(before)
-  processSnapshotReady = true
-  const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
-  const unix = join(ROOT, 'node_modules', '.bin', 'electron')
-  const bin = existsSync(electron) ? electron : unix
-  if (!existsSync(bin)) {
-    throw new Error('Electron binary not found — run `npm ci` (or `npm run rebuild`) first.')
-  }
-  // Never point an interaction gate at the operator's real profile. The settings case deliberately
-  // toggles and reloads a persisted value; NT_MULTI + NT_USER_DATA give this run a disposable,
-  // process-local identity/workspace/settings tree instead of gambling that a restore wins every
-  // debounce or crash. Attach mode is explicitly caller-owned and therefore leaves the target's
-  // profile alone.
-  ownedUserData = mkdtempSync(join(tmpdir(), 'nodeterm-wired-'))
   child = spawn(bin, [join(ROOT, 'out', 'main', 'index.js'), `--remote-debugging-port=${port}`], {
     cwd: ROOT,
-    env: { ...process.env, NT_MULTI: '1', NT_USER_DATA: ownedUserData },
     stdio: 'ignore',
+    env: sandbox.env,
   })
-  await sleep(6000)
+  await new Promise((resolveLaunch, rejectLaunch) => {
+    const cleanupListeners = () => {
+      clearTimeout(timer)
+      child.off('error', onError)
+      child.off('exit', onExit)
+    }
+    const onError = (error) => {
+      cleanupListeners()
+      rejectLaunch(error)
+    }
+    const onExit = (code, signal) => {
+      cleanupListeners()
+      rejectLaunch(new Error(`Electron exited during launch (code ${code}, signal ${signal})`))
+    }
+    const timer = setTimeout(() => {
+      cleanupListeners()
+      resolveLaunch()
+    }, 6000)
+    child.once('error', onError)
+    child.once('exit', onExit)
+  })
 }
-
-client = await cdp(port)
-const { send } = client
+const connection = await cdp(port)
+const { send } = connection
+close = connection.close
 await send('Runtime.enable')
-await send('Page.enable')
 await send('Emulation.setDeviceMetricsOverride', {
   width: 1600,
   height: 1000,
@@ -209,6 +195,52 @@ async function chord({ key: k, code, vk, ctrl = false, shift = false }) {
   await sleep(400)
 }
 
+if (sandbox) {
+  // NT_USER_DATA is not trusted merely because it was passed. Ask the running main process what
+  // Electron actually chose before touching any control, using the same real preload round-trip
+  // as the product. A missing NT_MULTI or NT_USER_DATA override turns this red.
+  await evaluate(`(function(){
+    window.__wiredUserData = 'pending';
+    try {
+      window.nodeTerminal.userDataDir().then(
+        function(v){ window.__wiredUserData = v },
+        function(e){ window.__wiredUserData = 'rejected: ' + e }
+      );
+    } catch (e) { window.__wiredUserData = 'threw: ' + e }
+    return true;
+  })()`)
+  const actualUserData = await until(
+    `window.__wiredUserData !== 'pending' ? window.__wiredUserData : null`,
+    8000,
+  )
+  const actualPath = typeof actualUserData === 'string' ? resolve(actualUserData) : ''
+  const expectedPath = resolve(sandbox.userData)
+  const samePath = process.platform === 'win32'
+    ? actualPath.toLowerCase() === expectedPath.toLowerCase()
+    : actualPath === expectedPath
+  if (!samePath) {
+    throw new Error(`app reported userData ${JSON.stringify(actualUserData)}; expected ${expectedPath}`)
+  }
+
+  // These are consequences of the real boot installers. Checking all of them proves HOME,
+  // USERPROFILE, XDG_CONFIG_HOME, and GROK_HOME converged on the disposable root; a test that
+  // only inspected the env object could stay green while Electron ignored it.
+  const installed = captureManagedConfigSentinel({ home: sandbox.home, env: sandbox.env })
+  const missing = Object.entries(installed)
+    .filter(([, value]) => value === 'absent')
+    .map(([target]) => target)
+  for (const target of [
+    join(sandbox.userData, 'hook-endpoint.env'),
+    join(sandbox.userData, 'context-links', 'context.sh'),
+    join(sandbox.userData, 'canvas-control', 'nodeterm.sh'),
+  ]) {
+    if (!existsSync(target)) missing.push(target)
+  }
+  if (missing.length) {
+    throw new Error(`isolated boot did not create its managed artefacts:\n${missing.map((p) => `  - ${p}`).join('\n')}`)
+  }
+}
+
 const CHECKS = [
   {
     id: 'palette',
@@ -248,41 +280,6 @@ const CHECKS = [
     id: 'settings-persist',
     title: 'A settings toggle changes state and survives a reload',
     async run() {
-      const selectSwitch = async (wantedIndex = null) =>
-        evaluate(`(function(wantedIndex){
-          var all = Array.prototype.slice.call(
-            document.querySelectorAll('[role="switch"], input[type=checkbox]'));
-          var visible = all.filter(function(x){
-            return !x.disabled && x.getAttribute('aria-disabled') !== 'true' && x.offsetParent !== null;
-          });
-          var index = wantedIndex === null ? 0 : wantedIndex;
-          var b = visible[index];
-          if (!b) return null;
-          window.__wiredBox = b;
-          var state = b.getAttribute('aria-checked');
-          var label = b.getAttribute('aria-label') || '';
-          for (var p = b.parentElement, depth = 0; !label && p && depth < 5; p = p.parentElement, depth++) {
-            var text = (p.innerText || '').trim().replace(/\s+/g, ' ');
-            if (text && text.length <= 120) label = text;
-          }
-          return {
-            index: index,
-            label: (label || (b.textContent || '').trim() || 'switch').slice(0, 80),
-            state: state === null ? String(b.checked) : state
-          };
-        })(${wantedIndex === null ? 'null' : Number(wantedIndex)})`)
-      const read = `(function(){ var b = window.__wiredBox; if (!b || !b.isConnected) return null;
-        var s = b.getAttribute('aria-checked'); return s === null ? String(b.checked) : s })()`
-      const reload = async () => {
-        await send('Page.reload', { ignoreCache: true })
-        await sleep(1400)
-        const ready = await until(
-          `document.readyState === 'complete' && !!document.querySelector('.react-flow')`,
-          8000,
-        )
-        if (!ready) throw new Error('renderer did not become ready after reload')
-      }
-
       await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
       const open = await until(`!!document.querySelector('[class*="settings" i]')`)
       if (!open) return { ok: false, why: 'settings did not open on Ctrl+,' }
@@ -292,54 +289,39 @@ const CHECKS = [
       // failed CORRECTLY: rule 3 says a check that cannot run is a failure, because "I could not
       // find the control" and "the control does nothing" are indistinguishable from outside, and
       // only one of them is safe to ignore.
-      const found = await selectSwitch()
+      const found = await evaluate(`(function(){
+        var all = Array.prototype.slice.call(
+          document.querySelectorAll('[role="switch"], input[type=checkbox]'));
+        var b = all.filter(function(x){
+          return !x.disabled && x.getAttribute('aria-disabled') !== 'true' && x.offsetParent !== null;
+        })[0];
+        if (!b) return null;
+        window.__wiredBox = b;
+        var state = b.getAttribute('aria-checked');
+        return {
+          label: (b.getAttribute('aria-label') || (b.textContent || '').trim() || 'switch').slice(0, 48),
+          state: state === null ? String(b.checked) : state
+        };
+      })()`)
       if (!found) return { ok: false, why: 'no enabled switch or checkbox visible in settings' }
+      const read = `(function(){ var b = window.__wiredBox; var s = b.getAttribute('aria-checked');
+        return s === null ? String(b.checked) : s })()`
       await evaluate(`window.__wiredBox.click()`)
-      const after = await until(`${read} !== ${JSON.stringify(found.state)} ? ${read} : null`)
-      if (after === null || after === found.state) {
+      await sleep(500)
+      const after = await evaluate(read)
+      if (after === found.state) {
         return { ok: false, why: `"${found.label}" did not change when clicked — an inert control` }
       }
-
-      // A DOM flip proves only React state. Reload the built renderer, reopen Settings, and find the
-      // same stable switch slot: only a completed main-process save can make the new value return.
-      await sleep(500)
-      await reload()
-      await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
-      if (!(await until(`!!document.querySelector('[class*="settings" i]')`))) {
-        return { ok: false, why: 'settings did not reopen after reload' }
-      }
-      const persisted = await selectSwitch(found.index)
-      if (!persisted || persisted.state !== after) {
-        return {
-          ok: false,
-          why: `"${found.label}" did not survive reload (${after} became ${persisted?.state ?? 'missing'})`,
-        }
-      }
-
-      // Restore inside the disposable profile and reload once more. This catches one-way controls
-      // and proves the original value is durable before the profile is removed in `finally`.
+      // Put it back, and confirm the restore also takes: a control that only moves one way is
+      // half-wired, and leaving the app mutated would poison later checks and the user's config.
       await evaluate(`window.__wiredBox.click()`)
-      if (!(await until(`${read} === ${JSON.stringify(found.state)} ? ${read} : null`))) {
-        return { ok: false, why: `"${found.label}" would not toggle back in the DOM` }
-      }
       await sleep(500)
-      await reload()
-      await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
-      if (!(await until(`!!document.querySelector('[class*="settings" i]')`))) {
-        return { ok: false, why: 'settings did not reopen for the restore check' }
-      }
-      const restored = await selectSwitch(found.index)
+      const restored = await evaluate(read)
       await chord({ key: 'Escape', code: 'Escape', vk: 27 })
-      if (!restored || restored.state !== found.state) {
-        return {
-          ok: false,
-          why: `"${found.label}" restore did not survive reload (left at ${restored?.state ?? 'missing'})`,
-        }
+      if (restored !== found.state) {
+        return { ok: false, why: `"${found.label}" would not toggle back (left at ${restored})` }
       }
-      return {
-        ok: true,
-        detail: `"${found.label}" ${found.state} → ${after} (reload) → ${restored.state} (reload)`,
-      }
+      return { ok: true, detail: `"${found.label}" ${found.state} → ${after} → ${restored}` }
     },
   },
   {
@@ -472,55 +454,71 @@ for (const c of selected) {
     console.error(`✗ ${c.title}\n    ${r.why}`)
   }
 }
-
 } catch (error) {
-  fatalError = error
-  console.error(`✗ interaction harness could not complete\n    ${error instanceof Error ? error.message : String(error)}`)
+  runError = error
 } finally {
-  client?.close()
-  if (child) child.kill()
+  try {
+    close?.()
+  } catch (error) {
+    cleanupError ??= error
+  }
+  if (child) {
+    try {
+      child.kill()
+    } catch (error) {
+      cleanupError ??= error
+    }
+  }
 
-  // Clean up everything this run started, not just the process we hold a handle to. See
-  // `repoElectronPids` for why the session host survives `child.kill()` and what it costs. This is
-  // in `finally`: a failed CDP connection used to skip the entire block and poison the next npm ci.
-  if (!attachPort && processSnapshotReady) {
+  // Killing the app is not enough: on Windows its session host outlives the parent by design.
+  // Snapshot/diff means an already-running developer instance is never ours to stop. Re-query
+  // immediately before Stop-Process too, so a PID that exited and was reused cannot cross the
+  // literal repo-command-line boundary between discovery and termination.
+  if (!attachPort) {
     await sleep(1500)
-    const after = repoElectronPids()
-    if (after === null) {
-      cleanupFailed = true
-      console.error('  ! could not enumerate Electron processes during cleanup')
-    } else {
-      const leaked = after.filter((p) => !pidsBefore.has(p))
+    try {
+      const candidates = repoElectronPids({ root: ROOT }).filter((pid) => !pidsBefore.has(pid))
+      const stillOwned = new Set(repoElectronPids({ root: ROOT }))
+      const leaked = candidates.filter((pid) => stillOwned.has(pid))
       if (leaked.length) {
-        try {
-          execFileSync(
-            'powershell',
-            [
-              '-NoProfile',
-              '-NonInteractive',
-              '-Command',
-              `Stop-Process -Id ${leaked.join(',')} -Force -ErrorAction Stop`,
-            ],
-            { timeout: 20000, stdio: 'ignore' },
-          )
-          console.log(`  (cleaned up ${leaked.length} process(es) this run started: ${leaked.join(', ')})`)
-        } catch {
-          cleanupFailed = true
-          console.error(`  ! could not stop leftover PIDs ${leaked.join(', ')} — they hold electron.exe`)
-        }
+        execFileSync(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `Stop-Process -Id ${leaked.join(',')} -Force -ErrorAction Stop`,
+          ],
+          { timeout: 20000, stdio: 'ignore' },
+        )
+        console.log(`  (cleaned up ${leaked.length} process(es) this run started: ${leaked.join(', ')})`)
+      }
+    } catch (error) {
+      cleanupError ??= new Error(`could not inventory or stop this run's Electron processes: ${error.message}`, {
+        cause: error,
+      })
+    }
+
+    try {
+      const realHomeAfter = captureManagedConfigSentinel(realHomeSentinelOptions)
+      assertManagedConfigUnchanged(realHomeBefore, realHomeAfter)
+    } catch (error) {
+      cleanupError ??= error
+    }
+    if (sandbox) {
+      try {
+        rmSync(sandbox.root, { recursive: true, force: true })
+      } catch (error) {
+        cleanupError ??= new Error(`could not remove wiring sandbox ${sandbox.root}: ${error.message}`, {
+          cause: error,
+        })
       }
     }
   }
-
-  if (ownedUserData) {
-    try {
-      rmSync(ownedUserData, { recursive: true, force: true })
-    } catch (error) {
-      cleanupFailed = true
-      console.error(`  ! could not remove isolated user data ${ownedUserData}: ${String(error)}`)
-    }
-  }
 }
+
+if (runError) throw runError
+if (cleanupError) throw cleanupError
 
 console.log('')
 const sha = (() => {
@@ -530,14 +528,9 @@ const sha = (() => {
     return 'unknown'
   }
 })()
-console.log(`${Math.max(0, selected.length - failed)}/${selected.length} interaction checks passed at ${sha}`)
-if (failed || fatalError || cleanupFailed) {
-  const totalFailures = failed + Number(!!fatalError) + Number(cleanupFailed)
+console.log(`${selected.length - failed}/${selected.length} interaction checks passed at ${sha}`)
+if (failed) {
   console.error(`\n${failed} FAILURE(S). A control that does not do its labelled thing is a defect, not a gap.`)
-  if (totalFailures !== failed) {
-    console.error(`Harness/cleanup failures: ${Number(!!fatalError) + Number(cleanupFailed)}`)
-  }
-  process.exitCode = 1
-} else {
-  process.exitCode = 0
+  process.exit(1)
 }
+process.exit(0)
