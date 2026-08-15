@@ -1,7 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import { toDataURL } from 'qrcode'
+import type { PairingDoneResult } from '@shared/types'
 
-export type PairingPhase = 'idle' | 'waiting' | 'paired' | 'timeout'
+export type PairingPhase = 'idle' | 'waiting' | 'paired' | 'timeout' | 'failed'
+
+/** Pure completion mapping so a persistence failure cannot silently regress to "timed out". */
+export function pairingDonePresentation(result: PairingDoneResult): {
+  phase: PairingPhase
+  error: string
+} {
+  if (result.ok) return { phase: 'paired', error: '' }
+  if (result.reason === 'attempts') {
+    return {
+      phase: 'failed',
+      error: 'Pairing closed after too many incorrect codes. Start again for a fresh code.'
+    }
+  }
+  if (result.reason === 'failed') {
+    return {
+      phase: 'failed',
+      error:
+        'Pairing failed before credentials were delivered. Review Paired devices in Phone settings; if an entry was created, revoke it before trying again.'
+    }
+  }
+  return { phase: 'timeout', error: '' }
+}
 
 /** How often the Remote Login warning re-probes sshd while it is showing. */
 const SSH_RECHECK_MS = 2000
@@ -13,7 +36,7 @@ const SSH_RECHECK_MS = 2000
  * both hosts are transient surfaces, and a headless listener would silently pair whoever scans a
  * QR that is no longer on screen.
  */
-export function usePhonePairing(onPaired?: () => void): {
+export function usePhonePairing(onFinished?: () => void): {
   phase: PairingPhase
   qr: string
   /** Six-digit code for typing in by hand where a camera cannot be used. */
@@ -115,19 +138,23 @@ export function usePhonePairing(onPaired?: () => void): {
     setManualHost('')
   }
 
-  // Subscribe to the completion event; drives paired/timeout state. `onPaired` rides a ref so
-  // a re-rendered callback never resubscribes the event.
-  const onPairedRef = useRef(onPaired)
-  onPairedRef.current = onPaired
+  // Subscribe to the completion event. `onFinished` rides a ref so a re-rendered callback never
+  // resubscribes the event. It runs for failures too: registry-first persistence can deliberately
+  // leave a retryable device record when authorized_keys finalization fails, and Settings must
+  // refresh immediately so that record is visible and revocable.
+  const onFinishedRef = useRef(onFinished)
+  onFinishedRef.current = onFinished
   useEffect(() => {
     return window.nodeTerminal.pairing.onDone((result) => {
       runningRef.current = false
       setQr('')
-    setShortCode('')
-    setManualHost('')
-      setPhase(result.ok ? 'paired' : 'timeout')
+      setShortCode('')
+      setManualHost('')
+      const presentation = pairingDonePresentation(result)
+      setPhase(presentation.phase)
+      setError(presentation.error)
       setRelayResult(result.ok ? (result.relay ?? null) : null)
-      if (result.ok) onPairedRef.current?.()
+      onFinishedRef.current?.()
     })
   }, [])
 
@@ -141,5 +168,24 @@ export function usePhonePairing(onPaired?: () => void): {
     }
   }, [])
 
-  return { phase, qr, shortCode, manualHost, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset: () => setPhase('idle') }
+  const reset = (): void => {
+    setPhase('idle')
+    setError('')
+  }
+
+  return {
+    phase,
+    qr,
+    shortCode,
+    manualHost,
+    sshOpen,
+    sshHealed,
+    relayResult,
+    relayPlan,
+    error,
+    busy,
+    start,
+    stop,
+    reset
+  }
 }
