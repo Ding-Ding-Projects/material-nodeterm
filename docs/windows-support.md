@@ -154,6 +154,20 @@ root-BAT placement skipped the check on a machine with no initial Node and went 
    in the User or Machine registry — so it is recorded here only so the next person who meets it
    does not spend a build on it. Clear it for the build process only; never for the machine.
 
+## Testing generated POSIX shell
+
+Windows has no literal `/bin/sh`, but Git for Windows provides a real POSIX-compatible shell. Tests
+for generated remote commands should use `src/core/testing/posix-shell.ts`, not skip the behavior or
+reimplement it in TypeScript. The adapter derives `usr/bin/sh.exe` from `git --exec-path`, adds the
+matching runtime bins, translates native paths to `/c/...`, and puts a fake tool directory first
+inside the running shell. That last step matters because `Git\bin\sh.exe` initializes its own PATH
+with `/mingw64/bin` ahead of a parent-process prefix; without the adapter, a fake `curl` fixture can
+silently invoke Git's real curl and make the test observe the network path instead of its recorder.
+
+AF_UNIX socket binding is still unavailable in the native Node test host, so those narrowly scoped
+cases retain an explicit `process.platform === 'win32'` skip. The same files' TCP, parser, fallback,
+credential and shell-syntax cases continue to run under real Git Bash.
+
 ## Known gaps
 
 - **No packaged build has been INSTALLED and launched.** CI builds and publishes the installer on

@@ -24,6 +24,7 @@ import {
 } from './agents/node-token-files'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
+import { REAL_SHELL_TEST_TIMEOUT_MS } from './testing/posix-shell'
 
 const run = promisify(execFile)
 
@@ -156,7 +157,7 @@ function codexArgv(): string[] {
   return fs.readFileSync(argvLog, 'utf8').split('\n').slice(0, -1)
 }
 
-describe('generated Codex launcher', () => {
+describe('generated Codex launcher', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('is valid POSIX sh', async () => {
     await expect(run(SH, ['-n', launcher])).resolves.toBeTruthy()
   })
@@ -186,7 +187,7 @@ describe('generated Codex launcher', () => {
 // Each case below is a way the managed identity can be unavailable on a real machine. The
 // assertion is always the same pair: plain `codex` ran WITH THE ORIGINAL ARGUMENTS, and the
 // desktop was told why. Upstream, every one of these exited 69 — a dead node.
-describe('falls back to plain codex', () => {
+describe('falls back to plain codex', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const cases: Array<[string, Record<string, string>, string]> = [
     ['no node id (a session nodeterm did not spawn)', { NODETERM_NODE_ID: '' }, 'node-id-unavailable'],
     [
@@ -274,7 +275,7 @@ describe('falls back to plain codex', () => {
   })
 })
 
-describe('a start handler that takes real time', () => {
+describe('a start handler that takes real time', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   // REGRESSION. `/codex-thread/start` mints a thread through a five-step conversation with an
   // app-server that is typically COLD — the first codex node after boot. The route inherited the
   // 2s slowloris guard (a RECEIVE-phase guard), so the socket was destroyed while the handler was
@@ -294,7 +295,7 @@ describe('a start handler that takes real time', () => {
 // shared derivation with /hook/*) and it arrives in a 0600 FILE, not in the tmux argv. Between the
 // two changes the feature was INERT — the launcher read an env var nothing set any more, reported
 // `node-token-unavailable` and ran plain codex. These are the tests that say it is not.
-describe('the per-node capability, over the file channel', () => {
+describe('the per-node capability, over the file channel', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('accepts the kid.mac wire shape — the dot is part of the token, not a charset violation', async () => {
     // THE TRAP. The old gate was `*[!A-Za-z0-9_-]*`, minted from HMAC(secret, nodeId) with no
     // separator in it. The shared derivation puts a `.` between kid and mac, so that gate rejects
@@ -364,7 +365,7 @@ describe('the per-node capability, over the file channel', () => {
   })
 })
 
-describe('per-node capability (the authorization the shared bearer cannot give)', () => {
+describe('per-node capability (the authorization the shared bearer cannot give)', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const post = (verb: string, body: string, headers: Record<string, string>) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/${verb}`, {
       method: 'POST',

@@ -13,23 +13,22 @@ describe('server headless mode: boots core services, binds no public listener', 
   it('startServer with headless:true returns port 0 and closes cleanly', async () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-headless-'))
     const scheduledStop = vi.spyOn(ScheduledSettingsService.prototype, 'stop')
-    const occupiedPort = net.createServer()
-    await new Promise<void>((resolve, reject) => {
-      occupiedPort.once('error', reject)
-      occupiedPort.listen(0, '127.0.0.1', () => {
-        occupiedPort.off('error', reject)
-        resolve()
-      })
-    })
+    const sentinel = net.createServer()
     let srv: Awaited<ReturnType<typeof startServer>> | undefined
     try {
-      const address = occupiedPort.address()
-      if (!address || typeof address === 'string') throw new Error('test port did not bind')
-      // Keep our private port occupied while headless startup runs. If the public HTTP branch ever
-      // starts listening, startup fails with EADDRINUSE; unlike probing a fixed port afterwards,
-      // this cannot mistake an unrelated developer service for a nodeterm listener.
+      // Hold the configured port open for the whole boot. If headless mode ever tries to bind its
+      // public listener, startServer fails with EADDRINUSE. A fixed "probably unused" port can be
+      // owned by Docker or another local service and falsely attribute that listener to nodeterm.
+      await new Promise<void>((resolve, reject) => {
+        sentinel.once('error', reject)
+        sentinel.listen(0, '127.0.0.1', () => {
+          sentinel.off('error', reject)
+          resolve()
+        })
+      })
+      const occupiedPort = (sentinel.address() as net.AddressInfo).port
       srv = await startServer({
-        port: address.port,
+        port: occupiedPort,
         host: '127.0.0.1',
         dataDir,
         rendererDir: path.join(dataDir, 'no-renderer'),
@@ -39,19 +38,20 @@ describe('server headless mode: boots core services, binds no public listener', 
         // which the teardown removes, leaving a dangling hook that breaks agent sessions.
         installHooks: false
       })
-      // Nothing bound: the sentinel port is 0.
+      // Nothing public was bound: headless returns its documented port-0 sentinel.
       expect(srv.port).toBe(0)
+      expect(sentinel.listening).toBe(true)
       await srv.close()
       srv = undefined
       // Headless returns before the normal HTTP/WS close implementation. Its independent close
-      // path must still stop this poller or `docker stop`/SIGTERM leaves a live 30s interval and
-      // store listener behind while the rest of the host is already torn down.
+      // path must still stop this poller or container/SIGTERM teardown leaves a live 30s interval
+      // and store listener behind while the rest of the host is already torn down.
       expect(scheduledStop).toHaveBeenCalledTimes(1)
     } finally {
-      if (srv) await srv.close()
-      await new Promise<void>((resolve, reject) => {
-        occupiedPort.close((error) => (error ? reject(error) : resolve()))
-      })
+      await srv?.close()
+      if (sentinel.listening) {
+        await new Promise<void>((resolve) => sentinel.close(() => resolve()))
+      }
       scheduledStop.mockRestore()
       fs.rmSync(dataDir, { recursive: true, force: true })
     }

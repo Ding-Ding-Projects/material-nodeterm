@@ -14,14 +14,26 @@ import { hookServer } from './agents/hook-server'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
 import { posixQuote } from '../shared/ssh'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS,
+  pathForPosixShell,
+  pathsForPosixShellEnv,
+  posixShellScriptArgs,
+  quotePathForPosixShell
+} from './testing/posix-shell'
 
 const run = promisify(execFile)
 
-/** A real POSIX shell to exec the generated shim with. There is no literal `/bin/sh` path on
- *  win32, but a POSIX-compatible `sh` (Git for Windows' MSYS sh) is expected on PATH — resolved by
- *  bare name rather than an assumed install location. A no-op on POSIX. */
-const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
+const SHELL_PATH_ENV_KEYS = [
+  'HOME',
+  'NODETERM_HOOK_ENDPOINT',
+  'NODETERM_HOOK_SOCK',
+  'NODETERM_NODE_TOKEN_DIR'
+] as const
 
+/** Values read as paths by the POSIX shim must use the shell's spelling, not native Node's. */
 let dir = ''
 let shim = ''
 let doc: LinkDoc
@@ -145,19 +157,19 @@ afterAll(() => {
 })
 
 async function shimRun(nodeId: string, args: string[]): Promise<string> {
-  const { stdout } = await run(SH, [shim, ...args], {
-    env: {
+  const { stdout } = await run(REAL_POSIX_SHELL, [pathForPosixShell(shim), ...args], {
+    env: environmentForPosixShell({
       PATH: process.env.PATH ?? '',
       NODETERM_NODE_ID: nodeId,
       NODETERM_HOOK_PORT: String(hookServer.getPort()),
       NODETERM_HOOK_TOKEN: hookServer.getToken()
-    },
+    }),
     maxBuffer: 10 * 1024 * 1024
   })
   return stdout
 }
 
-describe('context-link CLI', () => {
+describe('context-link CLI', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('list shows the linked node', async () => {
     const out = await shimRun('node-A', ['list'])
     expect(out).toContain('Builder')
@@ -265,7 +277,7 @@ describe('context-link CLI', () => {
 // curl DROPS a header whose value is empty (`-H "X: ${empty}"` sends nothing at all) — which is
 // the contract we want, since the server reads absent and empty identically as `legacy`. So
 // "empty token" below is read as `headers[...] ?? ''`.
-describe('context-link shim presents the per-node token', () => {
+describe('context-link shim presents the per-node token', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const seen: { path: string; nodeToken: string }[] = []
   let tcp: import('node:http').Server
   let unix: import('node:http').Server | undefined
@@ -308,8 +320,13 @@ describe('context-link shim presents the per-node token', () => {
   })
 
   function probe(nodeId: string, env: Record<string, string>): Promise<unknown> {
-    return run(SH, [shim, 'list'], {
-      env: { PATH: process.env.PATH ?? '', NODETERM_NODE_ID: nodeId, NODETERM_HOOK_TOKEN: 'x', ...env }
+    return run(REAL_POSIX_SHELL, [pathForPosixShell(shim), 'list'], {
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
+        NODETERM_NODE_ID: nodeId,
+        NODETERM_HOOK_TOKEN: 'x',
+        ...env
+      }, SHELL_PATH_ENV_KEYS))
     })
   }
 
@@ -338,7 +355,7 @@ describe('context-link shim presents the per-node token', () => {
     // mangle it into a nonexistent, separator-free string before the shim ever reads a token.
     writeFileSync(
       endpoint,
-      `NODETERM_HOOK_PORT=${tcpPort}\nNODETERM_HOOK_TOKEN=whatever\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR=${posixQuote(tokenDir)}\n`
+      `NODETERM_HOOK_PORT=${tcpPort}\nNODETERM_HOOK_TOKEN=whatever\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR=${posixQuote(pathForPosixShell(tokenDir))}\n`
     )
     await probe('node-A', { NODETERM_HOOK_ENDPOINT: endpoint })
     expect(seen).toEqual([{ path: '/context-link/list', nodeToken: 'CONTEXT-NODE-TOKEN' }])
@@ -364,7 +381,7 @@ describe('context-link shim presents the per-node token', () => {
 // The recording curl is a PASSTHROUGH (log argv + stdin, then run the real curl), so each case
 // proves the credential left argv AND that it still reached the server. Checking only the server's
 // headers would pass with the leak entirely intact.
-describe('context-link shim keeps credentials off curl\'s command line', () => {
+describe('context-link shim keeps credentials off curl\'s command line', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const seen: { hookToken: string; nodeToken: string }[] = []
   let tcp: import('node:http').Server
   let unix: import('node:http').Server | undefined
@@ -405,18 +422,22 @@ describe('context-link shim keeps credentials off curl\'s command line', () => {
     mkdirSync(binDir, { recursive: true })
     argvLog = join(binDir, 'argv.log')
     stdinLog = join(binDir, 'stdin.log')
-    const realCurl = (await run(SH, ['-c', 'command -v curl'])).stdout.trim()
+    const realCurl = (
+      await run(REAL_POSIX_SHELL, ['-c', 'command -v curl'], {
+        env: environmentForPosixShell()
+      })
+    ).stdout.trim()
     writeFileSync(
       join(binDir, 'curl'),
       [
         '#!/bin/sh',
-        `printf '%s\\n' "$*" >> ${JSON.stringify(argvLog)}`,
+        `printf '%s\\n' "$*" >> ${quotePathForPosixShell(argvLog)}`,
         // Only a curl told to read its config from stdin gets a reader. A regression that put the
         // headers back on argv would otherwise leave `tee` waiting on a stdin nobody ever closes,
         // and the failure would read as a timeout instead of the assertion it really is.
         'case "$*" in',
-        `  *"--config -"*) tee -a ${JSON.stringify(stdinLog)} | ${JSON.stringify(realCurl)} "$@" ;;`,
-        `  *) ${JSON.stringify(realCurl)} "$@" </dev/null ;;`,
+        `  *"--config -"*) tee -a ${quotePathForPosixShell(stdinLog)} | ${posixQuote(realCurl)} "$@" ;;`,
+        `  *) ${posixQuote(realCurl)} "$@" </dev/null ;;`,
         'esac',
         ''
       ].join('\n'),
@@ -434,14 +455,14 @@ describe('context-link shim keeps credentials off curl\'s command line', () => {
     writeFileSync(argvLog, '')
     writeFileSync(stdinLog, '')
     seen.length = 0
-    await run(SH, [shim, 'list'], {
-      env: {
-        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    await run(REAL_POSIX_SHELL, posixShellScriptArgs(shim, ['list'], binDir), {
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         NODETERM_NODE_ID: 'node-A',
         NODETERM_HOOK_TOKEN: 'SECRET-BEARER',
         NODETERM_NODE_TOKEN_DIR: tokenDir,
         ...env
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     return { argv: readFileSync(argvLog, 'utf8'), stdin: readFileSync(stdinLog, 'utf8') }
   }
