@@ -31,6 +31,10 @@ import {
 import { HostSession } from './session'
 import { paneCommand as readPaneCommand } from './process-tree'
 import { publishSessionHostState } from './state-file'
+import {
+  currentSessionAfterRetirement,
+  retireSessionGeneration
+} from './generation-barrier'
 
 /** How long a session-less host lingers before exiting — mirrors tmux's own server lifetime rule
  *  ("the server exits when its last session dies"), plus a grace window so an app restart that
@@ -228,12 +232,18 @@ async function main(): Promise<void> {
   function endSession(session: HostSession, exitCode: number): Promise<void> {
     if (session.ending) return session.ending
     session.exited = true
-    sessions.delete(session.name)
     session.ending = (async () => {
-      await session.settleOutput()
-      broadcast(session, { type: 'exit', name: session.name, exitCode })
-      session.dispose()
-      scheduleGraceExitIfEmpty()
+      const released = await retireSessionGeneration(
+        sessions,
+        session.name,
+        session,
+        async () => {
+          await session.settleOutput()
+          broadcast(session, { type: 'exit', name: session.name, exitCode })
+          session.dispose()
+        }
+      )
+      if (released) scheduleGraceExitIfEmpty()
       log(`session ended name=${session.name} exitCode=${exitCode}`)
     })()
     return session.ending
@@ -256,8 +266,11 @@ async function main(): Promise<void> {
   }
 
   async function handleAttach(req: Extract<SessionHostRequest, { cmd: 'attach' }>, socket: net.Socket): Promise<AttachResult> {
-    const existing = sessions.get(req.name)
     cancelGraceExit()
+    // An exited entry deliberately keeps the name reserved until all old-generation frames have
+    // reached its subscribers. The protocol carries only `name`, not a generation id, so creating
+    // the replacement sooner lets a delayed old exit kill that replacement on the same socket.
+    const existing = await currentSessionAfterRetirement(sessions, req.name)
     if (existing && !existing.exited) {
       // Add the new subscriber only AFTER the barrier+snapshot. Otherwise a pending chunk can be
       // delivered live to this socket and then appear again in its warm-attach screen.
@@ -271,7 +284,6 @@ async function main(): Promise<void> {
       log(`attach (warm) name=${req.name} subscribers=${existing.subscribers.size}`)
       return { fresh: false, screen: screen || undefined }
     }
-    if (existing?.exited) sessions.delete(req.name) // stale entry racing its own exit — replace it
     const session = new HostSession(req.name, req.spawn, req.scrollback)
     sessions.set(req.name, session)
     session.subscribers.add(socket)
@@ -338,12 +350,16 @@ async function main(): Promise<void> {
       }
       case 'killSession': {
         const s = sessions.get(req.name)
-        if (s && !s.exited) {
-          try {
-            s.proc.kill()
-          } catch {
-            /* already dead */
+        if (s) {
+          if (!s.exited) {
+            try {
+              s.proc.kill()
+            } catch {
+              /* already dead */
+            }
           }
+          // A natural exit may already own this completion. Await the shared barrier either way;
+          // acknowledging here early would recreate the same old-generation publication race.
           await endSession(s, 0)
         }
         return { ok: true }
