@@ -231,7 +231,11 @@ export class ConverterService {
     const rejected: { path: string; error: string }[] = []
     for (const p of paths) {
       const result = await this.buildItem(p, destDir, adapterId, opts.lossyAcknowledged === true)
-      if ('error' in result) rejected.push(result)
+      // Narrow on `id`, NOT on `error`: `ConvertQueueItem` carries its own optional `error?`, so
+      // `'error' in result` does not discriminate the union — a real queue item that already had
+      // an error set would be filed as a rejection and never queued at all. Only the rejection
+      // shape lacks an `id`.
+      if (!('id' in result)) rejected.push(result)
       else {
         this.items.push(result)
         this.byId.set(result.id, result)
