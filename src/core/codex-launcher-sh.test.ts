@@ -27,6 +27,24 @@ import { fakePlatform } from './platform-fake'
 
 const run = promisify(execFile)
 
+/** A real POSIX shell to exec the generated launcher with. There is no literal `/bin/sh` path on
+ *  win32, but a POSIX-compatible `sh` (Git for Windows' MSYS sh) is expected on PATH — resolved by
+ *  bare name rather than an assumed install location, matching how the launcher's own login-shell
+ *  PATH probe already works. A no-op on POSIX, where the literal path is correct as written. */
+const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
+
+/**
+ * The launcher's own `cwd=$PWD` (codex-identity-proxy.ts) is read by a REAL MSYS shell on win32,
+ * whose `$PWD` — MEASURED directly, not assumed — is the native drive path with slashes flipped
+ * (`C:/Users/x`, original drive-letter case, no `/c/` mount-style rewrite; that fuller conversion
+ * is what interactive `pwd` does, but reading the already-initialized `$PWD` variable is a plainer
+ * transform). A no-op on POSIX, where `fs.realpathSync` is already forward-slash-shaped.
+ */
+function shCwd(nativePath: string): string {
+  if (process.platform !== 'win32') return nativePath
+  return nativePath.replace(/\\/g, '/')
+}
+
 /** The one secret. Every token in this file is derived from it by `nodeAuthToken` — the same
  *  function the server verifies with, so a second derivation cannot hide here. */
 const SECRET = randomBytes(32)
@@ -130,7 +148,7 @@ function callLauncher(
 ): Promise<{ stdout: string; stderr: string }> {
   const merged = { ...baseEnv(), ...env }
   for (const [k, v] of Object.entries(merged)) if (v === '') delete (merged as any)[k]
-  return run('/bin/sh', [script, ...args], { env: merged, cwd: dir })
+  return run(SH, [script, ...args], { env: merged, cwd: dir })
 }
 
 /** What the fake `codex` was exec'd with, one line per invocation. */
@@ -140,12 +158,12 @@ function codexArgv(): string[] {
 
 describe('generated Codex launcher', () => {
   it('is valid POSIX sh', async () => {
-    await expect(run('/bin/sh', ['-n', launcher])).resolves.toBeTruthy()
+    await expect(run(SH, ['-n', launcher])).resolves.toBeTruthy()
   })
 
   it('starts a thread for a fresh node and resumes it on the shared app-server', async () => {
     await callLauncher([])
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
     expect(codexArgv()).toEqual(['--remote unix:// resume thread-abc'])
     expect(fallbacks).toEqual([])
   })
@@ -285,7 +303,7 @@ describe('the per-node capability, over the file channel', () => {
     expect(token).toContain('.')
     expect(fs.readFileSync(path.join(nodeTokenDir(), 'node-1'), 'utf8').trim()).toBe(token)
     await callLauncher([])
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
     expect(fallbacks).toEqual([])
     expect(codexArgv()).toEqual(['--remote unix:// resume thread-abc'])
   })
@@ -301,7 +319,7 @@ describe('the per-node capability, over the file channel', () => {
     // Charset-valid but minted for the WRONG node. If anything still read that variable, the route
     // would 403 and this node would degrade to plain codex.
     await callLauncher([], { NODETERM_CODEX_NODE_TOKEN: nodeAuthToken(SECRET, 'node-2') })
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
     expect(fallbacks).toEqual([])
   })
 
