@@ -116,6 +116,13 @@ export interface PtyCreateResult {
    *
    * Guaranteed non-empty when present (an empty/failed capture is omitted, exactly like `pty:resync`
    * — a plain-shell session has no tmux to capture and simply gets nothing).
+   *
+   * Also populated on a PLAIN (non-join) `fresh:false` create for a session-host-backed session
+   * (docs/windows-session-host.md — the Windows/tmux-absent persistence backend): that backend is
+   * not a "painter" the way a real tmux client is, so a warm attach gets no free redraw and must
+   * carry its own seed here. The renderer needs no special case for this — `seedPaint` already
+   * treats any non-empty `screen` on a `warm-attach` replay as paintable, regardless of whether it
+   * arrived via a co-attach join or a plain reattach.
    */
   screen?: string
   /**

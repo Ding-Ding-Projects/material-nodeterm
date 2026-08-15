@@ -214,6 +214,15 @@ project's nodes only.** The contract:
 
 ## Terminal session continuity (tmux)
 
+**Windows has no tmux at all.** When `PtyManager` finds no local tmux binary (always true on
+Windows, sometimes true elsewhere), it falls back to a standalone **session host** process — a
+from-scratch tmux-equivalent (real PTYs + `@xterm/headless` for server-side screen
+reconstruction) that gives Windows the same cross-restart persistence this whole section
+describes for tmux. See `docs/windows-session-host.md` for the full design; the short version is
+`Session.sessionHost?: boolean` in `pty-manager.ts` and a handful of `else if (!this.tmuxPath)`
+branches alongside the existing tmux CLI calls — everything below in this section still describes
+the tmux path exactly as before.
+
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
 a generated config (`-f <userData>/tmux.conf`, so the user's `~/.tmux.conf` never
