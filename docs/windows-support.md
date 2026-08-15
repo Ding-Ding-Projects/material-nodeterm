@@ -70,7 +70,11 @@ rename anywhere in `src/core`, `src/main` or `src/server`.
 Five of those sites also shared a **fixed temp name**, so two writers could publish each other's
 half-written bytes. Fixed, and guarded by the property (a pid, counter or per-call UUID in the
 name) rather than by "must call the helper", because several stores build the same name inline and
-are correct.
+are correct. A later SSH audit found the same race outside direct `fs` calls: remote shell writes
+shared `<target>.tmp`, scp downloads and media-cache fetches shared `<target>.part`, and upload
+directories used a timestamp plus a per-manager counter. Those now use per-call UUID staging,
+clean only their own failed stage, and reserve user-visible download names
+across app processes before transferring.
 
 ### Paths
 

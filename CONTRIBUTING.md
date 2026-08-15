@@ -89,7 +89,10 @@ need it too, and wire it in the same change.
   `src/core/fs-atomic.ts`. On Windows a rename fails with `EPERM` whenever anything has the
   destination open — Defender scanning the file you just wrote, the search indexer, OneDrive — so
   the plain version loses saves intermittently and only on other people's machines. A test scans
-  for this and will fail your PR; `docs/atomic-writes.md` explains why the retry is safe.
+  for this and will fail your PR; `docs/atomic-writes.md` explains why the retry is safe. Every
+  temp/part staging name must also be unique per call across processes and cleaned by its owner —
+  including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot
+  see.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.
