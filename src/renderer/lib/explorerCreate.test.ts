@@ -36,3 +36,53 @@ describe('ancestorDirs', () => {
     expect(ancestorDirs('/repo', 'c.ts')).toEqual([])
   })
 })
+
+describe('a name typed with backslashes cannot escape the base dir', () => {
+  // The check split on '/' alone, so only the POSIX spelling was refused. Every Windows form went
+  // through: `..\evil.txt` produced `C:/proj/..\evil.txt`, which Windows resolves to `C:/evil.txt`
+  // — a file created outside the project by the guard written to prevent it. That the POSIX case
+  // was correctly rejected is what made the check look like it worked.
+  const BASE = 'C:/proj'
+
+  it.each([
+    [String.raw`..\evil.txt`, 'parent traversal'],
+    [String.raw`..\..\Windows\evil`, 'deep traversal'],
+    [String.raw`sub\..\..\evil`, 'traversal in the middle'],
+    [String.raw`C:\Windows\evil`, 'drive-qualified absolute'],
+    [String.raw`\\server\share\evil`, 'UNC'],
+    [String.raw`\evil`, 'backslash-absolute'],
+    // '\\', not String.raw — a raw template literal cannot END with a backslash: it escapes the
+    // closing backtick, swallows the rest of the file, and the parse error surfaces a dozen lines
+    // later somewhere innocent.
+    ['sub\\', 'trailing backslash']
+  ])('refuses %s (%s)', (name) => {
+    expect(newEntryPath(BASE, name)).toBeNull()
+  })
+
+  it('still refuses the POSIX spellings it always did', () => {
+    expect(newEntryPath(BASE, '../evil')).toBeNull()
+    expect(newEntryPath(BASE, '/evil')).toBeNull()
+    expect(newEntryPath(BASE, 'sub/')).toBeNull()
+    expect(newEntryPath(BASE, '  ')).toBeNull()
+  })
+
+  it('treats a backslash as a separator, so a nested Windows name works naturally', () => {
+    expect(newEntryPath(BASE, String.raw`sub\file.ts`)).toBe('C:/proj/sub/file.ts')
+    expect(newEntryPath(BASE, 'sub/file.ts')).toBe('C:/proj/sub/file.ts')
+  })
+
+  it('ancestorDirs segments the same way, or the parents are never created', () => {
+    expect(ancestorDirs(BASE, String.raw`a\b\c.ts`)).toEqual(['C:/proj/a', 'C:/proj/a/b'])
+    expect(ancestorDirs(BASE, 'a/b/c.ts')).toEqual(['C:/proj/a', 'C:/proj/a/b'])
+  })
+
+  it('a refused name leaves no stray directories behind', () => {
+    // ancestorDirs used to happily segment a name newEntryPath would reject.
+    expect(ancestorDirs(BASE, String.raw`..\..\evil\x.ts`)).toEqual([])
+  })
+
+  it('an ordinary dotfile is untouched', () => {
+    expect(newEntryPath(BASE, '.gitignore')).toBe('C:/proj/.gitignore')
+    expect(newEntryPath(BASE, '.config/app.json')).toBe('C:/proj/.config/app.json')
+  })
+})

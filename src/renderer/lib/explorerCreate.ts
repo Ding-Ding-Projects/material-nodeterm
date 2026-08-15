@@ -13,20 +13,65 @@ export function parentDir(p: string): string {
 }
 
 /**
- * Join a user-entered name onto a base dir. Multi-segment relative names (`a/b.ts`) are
- * allowed — intermediate dirs are the caller's job (see `ancestorDirs`). Returns null for
- * anything unsafe or senseless: empty, absolute, `..` traversal, trailing slash.
+ * Validate a user-entered name and return it as `/`-separated segments, or null if it is unsafe.
+ *
+ * The paths this module deals in are `/`-separated by convention, but the NAME is typed by a
+ * person — and on Windows a person types `sub\file.ts`, or `..\evil.txt`. The original check
+ * split on '/' alone, so every backslash form sailed through: `..\evil.txt` was accepted and
+ * produced `C:/proj/..\evil.txt`, which Windows resolves to `C:/evil.txt` — a file created
+ * OUTSIDE the project, by the guard that exists to prevent exactly that. The POSIX spelling was
+ * correctly refused the whole time, which is what made it look like the check worked.
+ *
+ * Backslash is now a real separator rather than an ordinary character, so `sub\file.ts` does the
+ * natural thing instead of creating one oddly-named file.
+ *
+ * A leading drive letter is refused too. On Windows a colon cannot appear in a filename at all,
+ * so nothing legitimate is lost; on POSIX a file literally named `C:foo` is legal but is far more
+ * likely to be someone pasting a Windows path than naming a file that way on purpose.
  */
-export function newEntryPath(baseDir: string, name: string): string | null {
-  const n = name.trim()
-  if (!n || n.startsWith('/') || n.endsWith('/')) return null
-  if (n.split('/').some((seg) => !seg || seg === '..')) return null
-  return `${baseDir.replace(/\/+$/, '')}/${n}`
+function safeSegments(name: string): string[] | null {
+  const t = name.trim()
+  if (!t) return null
+  // Which of these actually carry weight was measured by reverting each one and watching the
+  // tests, rather than assumed — four checks that all look essential is how a redundant one gets
+  // treated as load-bearing and a load-bearing one gets "simplified" away.
+  //
+  //   split on BOTH separators   LOAD-BEARING — 5 tests fail without it
+  //   drive-letter refusal       LOAD-BEARING — `C:\Windows\evil` has no empty segment and no
+  //                              `..`, so nothing else catches it
+  //   leading-separator refusal  redundant: `\evil` and `\\server\share` split to an EMPTY first
+  //                              segment, which the check below already rejects
+  //   trailing-separator refusal redundant: `sub\` splits to a trailing empty segment, likewise
+  //
+  // The two redundant ones are kept deliberately. This is a traversal guard, the cost is two
+  // regex tests, and each states an intent that the empty-segment rule only implies.
+  if (/^[\\/]/.test(t)) return null
+  if (/^[A-Za-z]:/.test(t)) return null
+  if (/[\\/]$/.test(t)) return null
+  const segs = t.split(/[\\/]/)
+  if (segs.some((seg) => !seg || seg === '..')) return null
+  return segs
 }
 
-/** Absolute paths of the intermediate dirs a nested name passes through (shallowest first). */
+/**
+ * Join a user-entered name onto a base dir. Multi-segment relative names (`a/b.ts`, and on
+ * Windows `a\b.ts`) are allowed — intermediate dirs are the caller's job (see `ancestorDirs`).
+ * Returns null for anything unsafe or senseless: empty, absolute, `..` traversal, trailing
+ * separator.
+ */
+export function newEntryPath(baseDir: string, name: string): string | null {
+  const segs = safeSegments(name)
+  if (!segs) return null
+  return `${baseDir.replace(/\/+$/, '')}/${segs.join('/')}`
+}
+
+/** Absolute paths of the intermediate dirs a nested name passes through (shallowest first).
+ *
+ *  Uses the same segmentation as `newEntryPath`, or a name written with backslashes would create
+ *  the file while silently skipping the parent directories it needs. Returns nothing for a name
+ *  that would be refused, so a rejected name cannot leave stray dirs behind either. */
 export function ancestorDirs(baseDir: string, name: string): string[] {
-  const segs = name.trim().split('/').slice(0, -1)
+  const segs = safeSegments(name)?.slice(0, -1) ?? []
   const out: string[] = []
   let acc = baseDir.replace(/\/+$/, '')
   for (const s of segs) {
