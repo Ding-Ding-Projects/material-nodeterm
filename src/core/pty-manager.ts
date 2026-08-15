@@ -1986,6 +1986,10 @@ export class PtyManager {
     // Strip TMUX so tmux doesn't refuse to nest if the app itself was launched
     // from inside a tmux session.
     const env = { ...process.env, TERM: 'xterm-256color' } as Record<string, string>
+    // The Server Edition may receive a first-boot password through its own environment. That
+    // bootstrap credential belongs to the server process, never to the interactive shells and
+    // agent CLIs it launches; inheriting it here would expose it to every terminal node.
+    delete env.NODETERM_SERVER_PASSWORD
     delete env.TMUX
     delete env.TMUX_PANE
 

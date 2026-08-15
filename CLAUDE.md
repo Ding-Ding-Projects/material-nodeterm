@@ -1810,6 +1810,33 @@ also fires when the window is unfocused. Exposed via `window.nodeTerminal.update
 macOS *silent* self-install requires a signed+notarized build; unsigned builds still surface
 the card for a manual download.
 
+### Server Edition container image
+
+The root `Dockerfile` is a separate Node-runtime packaging path. `npm postinstall` is unusable in
+that path because it rebuilds native addons for Electron's ABI; the deps stage uses
+`--ignore-scripts` and explicitly rebuilds **both** `node-pty` and `smart-whisper` against the same
+Node major the runtime stage uses. Rebuilding only node-pty produces a healthy terminal server whose
+browser dictation fails later with a missing `smart-whisper/build/Release/smart-whisper` binding —
+the health check cannot see that feature-specific native load.
+
+The legacy image ran as root and therefore left existing `/data` volumes root-owned. The container
+entrypoint exists solely to bridge that upgrade: while uid 0, it scans the literal `/data` filesystem
+and changes only uid/gid-0 entries, without dereferencing symlinks, then `exec`s through `gosu` as the
+image's `node` user (uid 1000), leaving Node as PID 1 so `docker stop` reaches the server's SIGTERM
+handler. It must never follow `NODETERM_DATA_DIR`: that value is operator-controlled, and a hand-edited
+`/` would turn a compatibility migration into filesystem-wide damage. A new image/compose/host-wrapper
+change owes the real `node scripts/test-docker-host.mjs` smoke: build, health/auth page, both native
+loads, uid of PID 1, graceful shutdown, volume persistence across restart and recreation, and the
+first-boot-only password contract.
+
+The wrappers create the first-boot password before starting the build. Root `.env` and the wrappers'
+`.env.bak` / `.nodeterm-env-*` temporary files therefore belong in **both** `.gitignore` and
+`.dockerignore`: Git exclusion alone still sends them through `COPY . .` into the BuildKit context
+and cache. Wrapper starts pin the Compose file/project/profiles and export the exact password,
+loopback bind and port they validated. Do not replace that with a partial dotenv parser: Compose
+accepts whitespace, quotes, colon delimiters and predefined control variables that can otherwise
+redirect the stack or bypass the loopback decision.
+
 **Backend check feed** (`src/main/check.ts`, successor to the static `announcements.json`): the
 **main process** calls `GET https://api.nodeterm.dev/v1/check?version=&os=&channel=stable` (so the
 renderer CSP stays `'self'`) on launch + every 6h, cached 5 min, returning `{ messages, update }`.
