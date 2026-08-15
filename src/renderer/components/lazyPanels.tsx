@@ -71,3 +71,9 @@ export const PhonePairPopover = withSuspense(
 export const KanbanView = withSuspense(
   lazy(() => import('./kanban/KanbanView').then((m) => ({ default: m.KanbanView })))
 )
+export const FileConverterPanel = withSuspense(
+  lazy(() => import('./converter/FileConverterPanel').then((m) => ({ default: m.FileConverterPanel })))
+)
+export const OllamaManagerPanel = withSuspense(
+  lazy(() => import('./ollama/OllamaManagerPanel').then((m) => ({ default: m.OllamaManagerPanel })))
+)
