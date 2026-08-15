@@ -857,7 +857,7 @@ export class SshProjectManager {
   /**
    * Reserve the first free `<dir>/<name>` variant across app processes.
    *
-   * A read-only `access(candidate)` is not a reservation: two downloads can both observe absence,
+   * A read-only `lstat(candidate)` is not a reservation: two downloads can both observe absence,
    * choose one final path, and then atomically overwrite each other. The deterministic lock name
    * is opened with `wx`, so exactly one cooperating process owns each candidate. A crash can leave
    * a tiny lock behind; that safely advances the next download to `name (n)` instead of risking an
@@ -886,14 +886,17 @@ export class SshProjectManager {
         await handle.close()
         let taken = true
         try {
-          await fs.access(finalPath)
+          // lstat asks whether the DIRECTORY ENTRY exists. access follows a symlink, so a dangling
+          // link reports ENOENT and was incorrectly treated as a free name, then replaced.
+          await fs.lstat(finalPath)
         } catch (error) {
           const code =
             typeof error === 'object' && error && 'code' in error
               ? String((error as { code: unknown }).code)
               : ''
-          // A failed read is not evidence of absence. Only ENOENT proves the destination is free;
-          // EACCES/EIO and unknown failures must refuse instead of authorizing an overwrite.
+          // A failed read is not evidence of absence. Only lstat's ENOENT proves the directory
+          // entry is free; EACCES/EIO and unknown failures must refuse instead of authorizing an
+          // overwrite. In particular, lstat succeeds for a dangling symlink while access did not.
           if (code === 'ENOENT') taken = false
           else throw error
         }

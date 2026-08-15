@@ -57,7 +57,7 @@ describe('RemoteHooks.setup', () => {
     // Endpoint bearer goes to a private, invocation-owned temp and is then published atomically.
     const endpointWrite = calls.find((c) => (c.stdin ?? '').includes('NODETERM_HOOK_TOKEN=tok'))
     const endpointTemp = endpointWrite?.cmd.match(
-      /cat > ('\/home\/u\/\.nodeterm\/hook-endpoint-p1\.env\.[0-9a-f-]{36}\.tmp')/
+      /cat > ('\/home\/u\/\.nodeterm\/\.nodeterm-[0-9a-f-]{36}\.tmp')/
     )?.[1]
     expect(endpointTemp).toBeTruthy()
     expect(endpointWrite?.cmd).toContain(`chmod 600 -- ${endpointTemp}`)
@@ -176,7 +176,7 @@ describe('RemoteHooks.setup', () => {
   })
 
   it('does not advertise an endpoint whose atomic credential publish returns non-zero', async () => {
-    const { rh, calls } = harness({ failCodeOn: 'hook-endpoint-p1.env.' })
+    const { rh, calls } = harness({ failCodeOn: 'hook-endpoint-p1.env' })
     const res = await rh.setup('p1', conn, '/s.sock', {
       port: 51234,
       token: 'tok',
@@ -215,7 +215,7 @@ describe('RemoteHooks.setup', () => {
     const joined = calls.map((c) => c.args.join(' '))
     expect(
       joined.some(
-        (j) => j.includes('cat > ') && j.includes('hook-endpoint-ssh-browse-xyz.env.')
+        (j) => j.includes('cat > ') && j.includes("hook-endpoint-ssh-browse-xyz.env'")
       )
     ).toBe(true)
     expect(joined.some((j) => j.includes('hook-endpoint-proj.env'))).toBe(false)
@@ -250,7 +250,7 @@ describe('RemoteHooks.setup — a hostile remote $HOME', () => {
     expect(joined.some((j) => j.includes(`mkdir -p '/Users/Enes K/.nodeterm'`))).toBe(true)
     expect(
       joined.some(
-        (j) => j.includes('cat > ') && j.includes('/Users/Enes K/.nodeterm/hook-endpoint-p1.env.')
+        (j) => j.includes('cat > ') && j.includes("/Users/Enes K/.nodeterm/hook-endpoint-p1.env'")
       )
     ).toBe(true)
     expect(joined.some((j) => j.includes(`cat > '/Users/Enes K/.claude/settings.json'`))).toBe(true)
@@ -690,7 +690,7 @@ describe('RemoteHooks.writeNodeTokens', () => {
     // credential behind when the host is out of quota or disk. The same owned temp is chmodded,
     // published and cleaned without ever carrying the token in argv.
     const temp = writes[0].cmd.match(
-      /cat > ('\/home\/u\/\.nodeterm\/node-tokens\/node-1\.[0-9a-f-]{36}\.tmp')/
+      /cat > ('\/home\/u\/\.nodeterm\/node-tokens\/\.nodeterm-[0-9a-f-]{36}\.tmp')/
     )?.[1]
     expect(temp).toBeTruthy()
     expect(writes[0].cmd).toContain(`chmod 600 -- ${temp}`)
@@ -722,7 +722,7 @@ describe('RemoteHooks.writeNodeTokens', () => {
       .filter((call) => call.cmd.includes('cat >'))
       .map((call) =>
         call.cmd.match(
-          /cat > ('\/home\/u\/\.nodeterm\/node-tokens\/node-1\.[0-9a-f-]{36}\.tmp')/
+          /cat > ('\/home\/u\/\.nodeterm\/node-tokens\/\.nodeterm-[0-9a-f-]{36}\.tmp')/
         )?.[1]
       )
     expect(temps).toHaveLength(2)
@@ -836,7 +836,7 @@ describe('RemoteHooks.writeNodeTokens', () => {
     await rh.writeNodeTokens(conn, '/s.sock', '/home/u', ['Node-1', 'node-2'], refusing)
     expect(calls.some((c) => c.cmd.includes("rm -f '/home/u/.nodeterm/node-tokens/Node-1'"))).toBe(true)
     expect(calls.some((c) => /cat > .*node-tokens\/Node-1\./.test(c.cmd))).toBe(false)
-    expect(calls.some((c) => /cat > .*node-tokens\/node-2\.[0-9a-f-]{36}\.tmp/.test(c.cmd))).toBe(true)
+    expect(calls.some((c) => /cat > .*node-tokens\/\.nodeterm-[0-9a-f-]{36}\.tmp/.test(c.cmd))).toBe(true)
   })
 })
 

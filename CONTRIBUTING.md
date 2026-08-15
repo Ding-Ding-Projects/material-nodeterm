@@ -102,7 +102,8 @@ need it too, and wire it in the same change.
   Every temp/part staging name must also be unique per call across processes and cleaned by its
   owner —
   including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot
-  see.
+  see. Keep a remote temp's own leaf bounded: extending an already-valid maximum-length target leaf
+  with a UUID suffix turns an atomic write into a guaranteed `ENAMETOOLONG` failure.
 
 - **Unique temp files do not order whole-document writers.** If two flushes can snapshot the same
   store concurrently, publish them FIFO (or reject stale generations). Otherwise an older flush can

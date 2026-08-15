@@ -21,7 +21,7 @@ describe('ssh-fs arg builders', () => {
     const first = sshWriteArgs(conn, '/s.sock', '/d/e/f.txt').join(' ')
     const second = sshWriteArgs(conn, '/s.sock', '/d/e/f.txt').join(' ')
     const temp = first.match(/cat > '([^']+\.tmp)'/)?.[1]
-    expect(temp).toMatch(/^\/d\/e\/f\.txt\.[0-9a-f-]{36}\.tmp$/)
+    expect(temp).toMatch(/^\/d\/e\/\.nodeterm-[0-9a-f-]{36}\.tmp$/)
     expect(second).not.toContain(`cat > '${temp}'`)
     const j = first
     expect(j).toContain(`mkdir -p -- '/d/e'`)
@@ -38,7 +38,7 @@ describe('ssh-fs arg builders', () => {
     const j = sshWriteArgs(conn, '/s', '~/projects/file.txt').join(' ')
     expect(j).toContain(`mkdir -p -- ~/'projects'`)
     const temp = j.match(/cat > ~\/'([^']+\.tmp)'/)?.[1]
-    expect(temp).toMatch(/^projects\/file\.txt\.[0-9a-f-]{36}\.tmp$/)
+    expect(temp).toMatch(/^projects\/\.nodeterm-[0-9a-f-]{36}\.tmp$/)
     expect(j).toContain(`mv -f -- ~/'${temp}' ~/'projects/file.txt'`)
     expect(j).toContain(`rm -f -- ~/'${temp}'`)
   })

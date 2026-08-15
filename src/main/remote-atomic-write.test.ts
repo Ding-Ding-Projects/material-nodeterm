@@ -56,7 +56,7 @@ describe('remoteAtomicWrite', () => {
       chmod600: true
     })
 
-    expect(first.temporaryPath).toMatch(/^~\/a b\/quo'te\\name\.json\.[0-9a-f-]{36}\.tmp$/)
+    expect(first.temporaryPath).toMatch(/^~\/a b\/\.nodeterm-[0-9a-f-]{36}\.tmp$/)
     expect(second.temporaryPath).not.toBe(first.temporaryPath)
     expect(first.command).toContain('umask 077; mkdir -p -- ~/' + "'a b'")
     expect(first.command).toContain(`cat > ${quoteRemotePath(first.temporaryPath)}`)
@@ -77,6 +77,26 @@ describe('remoteAtomicWrite', () => {
 
     expect(readFileSync(nativeTarget, 'utf8')).toBe('payload')
     expect(readdirSync(root).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it.skipIf(!SHELL)('keeps the sibling temp bounded for a valid long target leaf', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'nt-ra-'))
+    roots.push(root)
+    // 220 bytes is valid under the usual NAME_MAX=255, while the old `<leaf>.<uuid>.tmp` shape was
+    // 261 bytes and failed before cat could write anything.
+    const leaf = `${'x'.repeat(215)}.json`
+    const nativeTarget = path.join(root, leaf)
+    const target = `${shellPath(root)}/${leaf}`
+    const write = remoteAtomicWrite(target)
+
+    execFileSync(SHELL!, ['-c', write.command], {
+      input: 'long-name',
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+
+    expect(readFileSync(nativeTarget, 'utf8')).toBe('long-name')
+    expect(path.basename(write.temporaryPath)).toMatch(/^\.nodeterm-[0-9a-f-]{36}\.tmp$/)
+    expect(readdirSync(root)).toEqual([leaf])
   })
 
   it.skipIf(!SHELL || process.platform === 'win32')(

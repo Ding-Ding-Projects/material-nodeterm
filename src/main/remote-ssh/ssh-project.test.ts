@@ -77,7 +77,7 @@ describe('SshProjectManager', () => {
     const calls = run.mock.calls.slice(before).filter((c) => (c[0] as string[]).join(' ').includes('.answer'))
     expect(calls).toHaveLength(2)
     const commands = calls.map((call) => (call[0] as string[]).join(' '))
-    const temps = commands.map((cmd) => cmd.match(/cat > (\S+\.answer\.[0-9a-f-]{36}\.tmp')/)?.[1])
+    const temps = commands.map((cmd) => cmd.match(/cat > (\S*\.nodeterm-[0-9a-f-]{36}\.tmp')/)?.[1])
     expect(temps[0]).toBeTruthy()
     expect(temps[1]).toBeTruthy()
     expect(temps[0]).not.toBe(temps[1])
@@ -101,7 +101,7 @@ describe('SshProjectManager', () => {
     const writes = run.mock.calls.slice(before).filter((call) => call[1]?.toString().includes('writer'))
     expect(writes).toHaveLength(2)
     const commands = writes.map((call) => (call[0] as string[]).at(-1)!)
-    const temps = commands.map((command) => command.match(/cat > (\S+\.json\.[0-9a-f-]{36}\.tmp')/)?.[1])
+    const temps = commands.map((command) => command.match(/cat > (\S*\.nodeterm-[0-9a-f-]{36}\.tmp')/)?.[1])
     expect(temps[0]).toBeTruthy()
     expect(temps[1]).toBeTruthy()
     expect(temps[0]).not.toBe(temps[1])
@@ -290,12 +290,12 @@ describe('SshProjectManager', () => {
     const { tmuxConfPath } = await mgr.connect('p1', conn)
     expect(tmuxConfPath).toBe('/home/u/.nodeterm/tmux.conf')
     // The conf was staged via a unique temp (body on stdin), atomically published, then sourced.
-    const write = calls.find((c) => c.args.join(' ').includes('/.nodeterm/tmux.conf.') && c.stdin)
+    const write = calls.find((c) => c.args.join(' ').includes("/.nodeterm/tmux.conf'") && c.stdin)
     expect(write).toBeDefined()
     expect(write?.stdin).toContain('set -g mouse on')
     const command = write?.args.at(-1) ?? ''
     const temp = command.match(
-      /cat > ('\/home\/u\/\.nodeterm\/tmux\.conf\.[0-9a-f-]{36}\.tmp')/
+      /cat > ('\/home\/u\/\.nodeterm\/\.nodeterm-[0-9a-f-]{36}\.tmp')/
     )?.[1]
     expect(temp).toBeTruthy()
     expect(command).toContain(`mv -f -- ${temp} '/home/u/.nodeterm/tmux.conf'`)
@@ -632,6 +632,40 @@ describe('SshProjectManager', () => {
       expect(await fs.readFile(path.join(dir, 'notes.md'), 'utf8')).toBe('mine')
     })
 
+    it('treats a dangling symlink directory entry as occupied', async () => {
+      const { mgr } = makeDlMgr()
+      await mgr.connect('p1', conn, '/srv/repo')
+      const dir = await destDir()
+      const dangling = path.join(dir, 'notes.md')
+      if (process.platform === 'win32') {
+        // A junction needs no Developer Mode privilege. Create it while its target exists, then
+        // remove the target to leave the same dangling directory entry lstat must preserve.
+        const vanished = path.join(dir, 'vanished')
+        await fs.mkdir(vanished)
+        await fs.symlink(vanished, dangling, 'junction')
+        await fs.rm(vanished, { recursive: true })
+      } else {
+        await fs.symlink('vanished', dangling)
+      }
+
+      // Node on Windows may report a dangling junction as accessible even though POSIX access(2)
+      // follows the link and returns ENOENT. Force that production-host behavior so an lstat →
+      // access regression is discriminated on the Windows test host too.
+      const windowsAccess = process.platform === 'win32'
+        ? vi.spyOn(fs, 'access').mockRejectedValue(
+            Object.assign(new Error('dangling target'), { code: 'ENOENT' })
+          )
+        : undefined
+      try {
+        const res = await mgr.downloadFile('p1', '/srv/repo/notes.md', dir)
+        expect(res).toMatchObject({ ok: true, localPath: path.join(dir, 'notes (2).md') })
+        expect((await fs.lstat(dangling)).isSymbolicLink()).toBe(true)
+        expect(await fs.readFile(path.join(dir, 'notes (2).md'), 'utf8')).toBe('payload')
+      } finally {
+        windowsAccess?.mockRestore()
+      }
+    })
+
     it('passes -r for a remote directory (probed on the host, not taken from the renderer)', async () => {
       const { mgr, scpCalls } = makeDlMgr(true)
       await mgr.connect('p1', conn, '/srv/repo')
@@ -667,7 +701,7 @@ describe('SshProjectManager', () => {
       await mgr.connect('p1', conn, '/srv/repo')
       const dir = await destDir()
       const denied = vi
-        .spyOn(fs, 'access')
+        .spyOn(fs, 'lstat')
         .mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }))
       try {
         const res = await mgr.downloadFile('p1', '/srv/repo/notes.md', dir)
@@ -2522,8 +2556,8 @@ describe('SshProjectManager — per-node tokens on the host', () => {
     const cmds = run.mock.calls.map(([a]) => (a as string[]).join(' '))
     // tmp + rename (`cat >` truncates, so writing straight at the file leaves an EMPTY token
     // behind when the host is out of quota or disk — see RemoteHooks.writeNodeTokens).
-    expect(cmds.some((c) => /mv -f -- .*node-1\.[0-9a-f-]{36}\.tmp' '\/home\/u\/\.nodeterm\/node-tokens\/node-1'/.test(c))).toBe(true)
-    expect(cmds.some((c) => /mv -f -- .*node-2\.[0-9a-f-]{36}\.tmp' '\/home\/u\/\.nodeterm\/node-tokens\/node-2'/.test(c))).toBe(true)
+    expect(cmds.some((c) => /mv -f -- .*node-tokens\/\.nodeterm-[0-9a-f-]{36}\.tmp' '\/home\/u\/\.nodeterm\/node-tokens\/node-1'/.test(c))).toBe(true)
+    expect(cmds.some((c) => /mv -f -- .*node-tokens\/\.nodeterm-[0-9a-f-]{36}\.tmp' '\/home\/u\/\.nodeterm\/node-tokens\/node-2'/.test(c))).toBe(true)
     // never on a command line — the host's process table is readable by its other users.
     expect(cmds.some((c) => c.includes('mac-of-node-1'))).toBe(false)
     const write = run.mock.calls.find(([a]) =>
@@ -2566,7 +2600,7 @@ describe('SshProjectManager — per-node tokens on the host', () => {
     run.mockClear()
     await mgr.writeNodeTokenForNode(controlPath, 'node-9')
     const cmds = run.mock.calls.map(([a]) => (a as string[]).join(' '))
-    expect(cmds.some((c) => /mv -f -- .*node-9\.[0-9a-f-]{36}\.tmp' '\/home\/u\/\.nodeterm\/node-tokens\/node-9'/.test(c))).toBe(true)
+    expect(cmds.some((c) => /mv -f -- .*node-tokens\/\.nodeterm-[0-9a-f-]{36}\.tmp' '\/home\/u\/\.nodeterm\/node-tokens\/node-9'/.test(c))).toBe(true)
     // an unknown control path is a no-op, not a throw
     run.mockClear()
     await expect(mgr.writeNodeTokenForNode('/nope.sock', 'node-9')).resolves.toBeUndefined()

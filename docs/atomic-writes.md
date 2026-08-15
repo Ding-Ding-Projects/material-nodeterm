@@ -100,14 +100,18 @@ Remote-shell writes use the equivalent property with a locally minted random UUI
 never has to interpolate a nonce.
 
 The same rule applies to SSH and scp staging even though those writes do not call `fs.writeFile`.
-`remoteAtomicWrite` mints one UUID before quoting the complete remote path, so spaces, apostrophes,
-literal POSIX backslashes and `~/` expansion keep their meanings. It preserves the `cat`/`mv`
+`remoteAtomicWrite` mints a bounded `.nodeterm-<uuid>.tmp` sibling before quoting both complete
+remote paths, so spaces, apostrophes, literal POSIX backslashes and `~/` expansion keep their
+meanings. The bounded leaf is independent of the target: appending `.uuid.tmp` to a valid
+`NAME_MAX` filename would exceed the directory's component limit. It preserves the `cat`/`mv`
 status while removing exactly that invocation's temp. Uploads likewise use UUID directories rather
 than a timestamp plus a per-manager counter, and failed uploads remove only their own directory.
 Downloads and media-cache fetches stage through hidden UUID `.part` paths beside the target; the
 bounded name avoids lengthening an already maximum-length filename. Ordinary downloads also
 reserve the final candidate with an exclusive lock, so two app processes cannot both observe
-`report.pdf` as absent and overwrite each other after transferring. Atomic remote stdin sites use
+`report.pdf` as absent and overwrite each other after transferring. Candidate checks use `lstat`:
+a dangling symlink is an occupied directory entry, not evidence that the name is free. Atomic
+remote stdin sites use
 the same helper for filesystem writes, tmux.conf, the credential-bearing hook endpoint and node
 tokens, agent status, and pending answers. Generated hook scripts/config merges still have direct
 writes and are not covered by this atomicity claim.

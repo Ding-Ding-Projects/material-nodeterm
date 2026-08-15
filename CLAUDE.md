@@ -2034,9 +2034,11 @@ including the separate shared-temp-name bug at the same sites:
 **`docs/atomic-writes.md`**.
 
 SSH/scp staging follows the same ownership rule outside direct `fs` calls. Atomic remote stdin
-writes use `src/main/remote-atomic-write.ts`: one locally minted UUID is appended BEFORE the
-complete path is quoted, then the shell preserves the write/move status while cleaning that exact
-temp. It currently protects filesystem API writes, tmux.conf, the private hook endpoint, node
+writes use `src/main/remote-atomic-write.ts`: a bounded `.nodeterm-<uuid>.tmp` leaf is placed beside
+the target BEFORE both complete paths are quoted, then the shell preserves the write/move status
+while cleaning that exact temp. The temp leaf must stay independent of the target leaf — appending
+`.uuid.tmp` to a valid `NAME_MAX` target makes the write impossible. It currently protects
+filesystem API writes, tmux.conf, the private hook endpoint, node
 tokens, agent status and pending answers; generated hook scripts/config merges still use their
 existing direct writes and must not be described as atomic. Upload directories use UUIDs across app
 processes. Downloads and media-cache copies use hidden UUID `.part` names; user-visible downloads
