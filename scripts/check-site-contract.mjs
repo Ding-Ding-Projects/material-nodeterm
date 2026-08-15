@@ -22,6 +22,23 @@
 // deployment is served from a subpath (/material-nodeterm/, not a domain
 // root) and a root-absolute link is invisible in local testing but 404s
 // the moment it ships.
+//
+// REWRITTEN 2026-08 for the imported "nodeterm playground" redesign (a
+// hallway-of-doors landing page + per-room shell, replacing the earlier
+// tabbed marketing-site layout). The site's implementation architecture
+// changed — from tabs.js-driven tab panels to a single store + render()
+// loop with a room/settings-card registry (see site/app/core/engine.js
+// and site/app/core/render.js) — so this guard's FEATURES table below was
+// updated to match: it now points at each feature's *registrar* function
+// under site/app/features/, which is how every room and settings card
+// actually gets wired into the running app (see
+// site/app/features/index.js#FEATURE_REGISTRARS). Nine feature rows are
+// new in this pass (authenticator, Ollama shop, converter, coverage,
+// playroom, appearance, about-you, timers, download-demo) because the
+// redesign's component.js implements real behaviour for all of them that
+// the previous guard never had a row for. Three new sections (6-8) guard
+// the redesign's own divergences from the imported design and its removed
+// design-tool scaffolding.
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -84,6 +101,17 @@ function requireExportedFunction(relPath, fnName, label) {
   return requireFileContains(relPath, new RegExp(`export\\s+(async\\s+)?function\\s+${fnName}\\b`), label || `exports ${fnName}`)
 }
 
+function listSiteFiles(dir) {
+  const out = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...listSiteFiles(full))
+    else if (/\.(html|js|css|json)$/i.test(entry.name)) out.push(full)
+  }
+  return out
+}
+const ALL_SITE_FILES = listSiteFiles(SITE_DIR)
+
 // ---------------------------------------------------------------------
 // 1. Registered feature contracts — one row per canonical feature this
 //    lane owns. Each row asserts the implementing file exists, exports
@@ -108,6 +136,23 @@ const FEATURES = [
     ],
   },
   {
+    id: 'appearance',
+    label: 'Appearance: colours, presets, logo, export/import/reset',
+    file: 'site/app/features/appearance.js',
+    exportName: 'registerAppearance',
+    contentChecks: [
+      ['site/app/shared/data.js', 'SWATCHES'],
+      ['site/app/shared/data.js', 'PRESETS'],
+    ],
+  },
+  {
+    id: 'about-you',
+    label: 'About you: nickname + little sounds',
+    file: 'site/app/features/about-you.js',
+    exportName: 'registerAboutYou',
+    contentChecks: [['site/app/core/engine.js', 'export function blip(']],
+  },
+  {
     id: 'school-mode',
     label: 'School mode',
     file: 'site/app/features/school-mode.js',
@@ -120,7 +165,7 @@ const FEATURES = [
   },
   {
     id: 'personal-vocabulary',
-    label: 'Personal-vocabulary JSON upload',
+    label: 'Personal-vocabulary swaps',
     file: 'site/app/features/vocabulary.js',
     exportName: 'registerVocabulary',
     contentChecks: [
@@ -135,7 +180,7 @@ const FEATURES = [
     label: 'Dim sum surprise',
     file: 'site/app/features/dimsum.js',
     exportName: 'registerDimSum',
-    contentChecks: [['site/app/features/dimsum.js', 'Math.random() >= 0.1']],
+    contentChecks: [['site/app/features/dimsum.js', 'Math.random() < 0.1']],
   },
   {
     id: 'narrator',
@@ -180,6 +225,61 @@ const FEATURES = [
     file: 'site/app/features/docs-index.js',
     exportName: 'registerDocs',
     contentChecks: [['site/docs/index.html', 'Documentation']],
+  },
+  {
+    id: 'authenticator',
+    label: 'Built-in TOTP authenticator (Code maker room)',
+    file: 'site/app/features/authenticator.js',
+    exportName: 'registerAuthenticator',
+    contentChecks: [
+      ['site/app/shared/crypto.js', 'b32decode'],
+      ['site/app/shared/crypto.js', 'export async function totp('],
+    ],
+  },
+  {
+    id: 'ollama-shop',
+    label: 'Ollama browser with hardware-fit verdicts (Model shop room)',
+    file: 'site/app/features/ollama-shop.js',
+    exportName: 'registerOllamaShop',
+    contentChecks: [['site/app/shared/hardware-fit.js', 'export function fitVerdict(']],
+  },
+  {
+    id: 'converter',
+    label: 'Local file/text converter with honest unsupported cases (Turn-it-into lab)',
+    file: 'site/app/features/converter.js',
+    exportName: 'registerConverter',
+    contentChecks: [
+      ['site/app/shared/convert.js', 'export function parseRecords('],
+      ['site/app/shared/data.js', 'loss:'],
+    ],
+  },
+  {
+    id: 'coverage-checklist',
+    label: 'The big checklist (hand-written coverage table)',
+    file: 'site/app/features/coverage.js',
+    exportName: 'registerCoverage',
+    contentChecks: [['site/app/shared/data.js', 'export const COVERAGE']],
+  },
+  {
+    id: 'playroom',
+    label: 'Three working games that keep score (Playroom)',
+    file: 'site/app/features/playroom.js',
+    exportName: 'registerPlayroom',
+    contentChecks: [['site/app/shared/games.js', 'export function dealMemory(']],
+  },
+  {
+    id: 'timers',
+    label: 'Scheduled settings (Timers)',
+    file: 'site/app/features/timers.js',
+    exportName: 'registerTimers',
+    contentChecks: [],
+  },
+  {
+    id: 'download-demo',
+    label: 'Download-capture demonstration (partial by design — documented)',
+    file: 'site/app/features/download-demo.js',
+    exportName: 'registerDownloadDemo',
+    contentChecks: [['site/app/features/download-demo.js', 'cannot hand a transfer to an installed']],
   },
 ]
 
@@ -280,22 +380,10 @@ requireFileExists('site/content/changelog.json', 'Generated changelog content')
 //    http(s):// URLs, which are not root-absolute in the sense that
 //    breaks a subpath deployment.
 // ---------------------------------------------------------------------
-function listSiteFiles(dir) {
-  const out = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...listSiteFiles(full))
-    else if (/\.(html|js|css)$/i.test(entry.name)) out.push(full)
-  }
-  return out
-}
-
 const ROOT_ABSOLUTE_PATTERN = /(href|src)\s*=\s*["']\/(?!\/)|url\(\s*\/(?!\/)/gi
 
-let scannedFiles = 0
 let rootAbsoluteHits = []
-for (const file of listSiteFiles(SITE_DIR)) {
-  scannedFiles += 1
+for (const file of ALL_SITE_FILES) {
   const text = readFileSync(file, 'utf8')
   const matches = text.match(ROOT_ABSOLUTE_PATTERN)
   if (matches) {
@@ -308,7 +396,110 @@ if (rootAbsoluteHits.length > 0) {
   fail(`Found ${rootAbsoluteHits.length} root-absolute internal URL(s) under site/ (breaks a subpath Pages deployment):`)
   for (const hit of rootAbsoluteHits) console.error(`    - ${hit}`)
 } else {
-  pass(`No root-absolute internal URLs found across ${scannedFiles} scanned files under site/`)
+  pass(`No root-absolute internal URLs found across ${ALL_SITE_FILES.length} scanned files under site/`)
+}
+
+// ---------------------------------------------------------------------
+// 6. No third-party CDN requests — the redesign's imported source links
+//    fonts.googleapis.com / fonts.gstatic.com for "Baloo 2" and "Nunito".
+//    This project forbids CDN assets and any request that leaves the
+//    origin, so the shipped site drops to the design's own declared
+//    fallback font stack instead (see site/styles.css's top comment for
+//    the full reasoning). Guard against that regressing, and against any
+//    other common CDN host creeping back in.
+// ---------------------------------------------------------------------
+const FORBIDDEN_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'unpkg.com', 'cdnjs.cloudflare.com', 'google-analytics.com', 'googletagmanager.com']
+let cdnHits = []
+for (const file of ALL_SITE_FILES) {
+  const text = readFileSync(file, 'utf8')
+  for (const host of FORBIDDEN_HOSTS) {
+    if (text.includes(host)) cdnHits.push(`${relative(REPO_ROOT, file)}: ${host}`)
+  }
+}
+checkedCount += 1
+if (cdnHits.length > 0) {
+  fail(`Found ${cdnHits.length} third-party CDN/tracking reference(s) under site/ (this project bundles everything locally):`)
+  for (const hit of cdnHits) console.error(`    - ${hit}`)
+} else {
+  pass(`No third-party CDN or tracking hosts referenced across ${ALL_SITE_FILES.length} scanned files under site/`)
+}
+
+// ---------------------------------------------------------------------
+// 7. Upstream-repository link scan — the imported design points at
+//    github.com/eneskirca/nodeterm (the upstream project this repo is a
+//    fork of). Every repository link in the shipped site must point at
+//    THIS fork instead, with exactly one deliberate exception: a single
+//    "forked from" attribution line in the room footer. Anything beyond
+//    that exact count is a leftover upstream link that needs repointing.
+// ---------------------------------------------------------------------
+{
+  // site/app/shared/data.js is where UPSTREAM_URL is DEFINED (one
+  // legitimate occurrence of the substring, by design — see that file's
+  // top comment) and is excluded from this scan for exactly that reason.
+  // Every OTHER file may contain the substring at most once, and that one
+  // occurrence must be app/core/render.js's single "forked from"
+  // attribution link in the room footer.
+  const ATTRIBUTION_ALLOWANCE = 1
+  let upstreamHits = 0
+  const perFile = []
+  for (const file of ALL_SITE_FILES) {
+    const rel = relative(REPO_ROOT, file)
+    if (rel.endsWith('shared/data.js') || rel.endsWith('shared\\data.js')) continue // UPSTREAM_URL's own definition
+    if (rel.endsWith('changelog.json')) continue // real project history may name eneskirca's Homebrew tap as a historical fact, not a link
+    const text = readFileSync(file, 'utf8')
+    const matches = text.match(/eneskirca\/nodeterm/g)
+    if (matches) {
+      upstreamHits += matches.length
+      perFile.push(`${rel}: ${matches.length}`)
+    }
+  }
+  checkedCount += 1
+  if (upstreamHits > ATTRIBUTION_ALLOWANCE) {
+    fail(`Found ${upstreamHits} reference(s) to the upstream repo (eneskirca/nodeterm) outside its one definition in shared/data.js — expected at most ${ATTRIBUTION_ALLOWANCE} (the single "forked from" attribution link):`)
+    for (const hit of perFile) console.error(`    - ${hit}`)
+  } else {
+    pass(`Upstream-repository references bounded to the single attribution link (${upstreamHits} found outside shared/data.js, ${ATTRIBUTION_ALLOWANCE} allowed)`)
+  }
+}
+
+// ---------------------------------------------------------------------
+// 8. No leftover design-tool scaffolding — the imported design.html is a
+//    proprietary <x-dc>/{{expr}}/support.js preview-harness template, not
+//    something this site ships. Fail if any of it survived into site/.
+// ---------------------------------------------------------------------
+{
+  const FORBIDDEN_TOKENS = ['<x-dc', 'data-dc-script', 'support.js', 'window.React', 'ReactDOM', 'hint-placeholder']
+  let scaffoldHits = []
+  for (const file of ALL_SITE_FILES) {
+    const text = readFileSync(file, 'utf8')
+    for (const token of FORBIDDEN_TOKENS) {
+      if (text.includes(token)) scaffoldHits.push(`${relative(REPO_ROOT, file)}: ${token}`)
+    }
+  }
+  checkedCount += 1
+  if (scaffoldHits.length > 0) {
+    fail(`Found ${scaffoldHits.length} leftover design-tool artefact(s) under site/ (the design's own React preview harness must never ship):`)
+    for (const hit of scaffoldHits) console.error(`    - ${hit}`)
+  } else {
+    pass('No leftover design-tool scaffolding (<x-dc>, {{ }} bindings, support.js, React) found under site/')
+  }
+  // A bare "{{" is also checked, separately, because it is common enough
+  // in unrelated JSON/JS (template literals, object destructuring) that
+  // bundling it with the exact-token list above would produce false
+  // failures on innocent code. This regex specifically looks for the
+  // design template's own double-mustache binding shape.
+  checkedCount += 1
+  let mustacheHits = []
+  for (const file of ALL_SITE_FILES) {
+    const text = readFileSync(file, 'utf8')
+    if (/\{\{[a-zA-Z][\w.]*\}\}/.test(text)) mustacheHits.push(relative(REPO_ROOT, file))
+  }
+  if (mustacheHits.length > 0) {
+    fail(`Found ${mustacheHits.length} file(s) with a leftover {{binding}} template expression:`)
+    for (const hit of mustacheHits) console.error(`    - ${hit}`)
+  } else {
+    pass('No leftover {{binding}} template expressions found under site/')
+  }
 }
 
 // ---------------------------------------------------------------------
