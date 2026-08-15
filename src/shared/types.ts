@@ -804,6 +804,10 @@ export interface SpeechSettings {
 export type TerminalCursorStyle = 'block' | 'bar' | 'underline'
 export type TerminalCursorInactiveStyle = TerminalCursorStyle | 'outline' | 'none'
 
+/** Which language(s) the spoken narrator speaks (docs/narrator.md). 'both' speaks English then
+ *  Cantonese, strictly serialized — never overlapping. */
+export type NarratorLanguage = 'en' | 'yue' | 'both'
+
 /** User-configurable application settings (settings.json). */
 export interface Settings {
   fontSize: number
@@ -1040,6 +1044,25 @@ export interface Settings {
   notchHoverExpand: boolean
   /** Dictation (desktop/server). Written as a whole object by the renderer. */
   speech: SpeechSettings
+  /** Spoken TTS narrator for app events (docs/narrator.md). OFF by default — narration is an
+   *  opt-in the user must turn on; the feature itself always ships. */
+  narratorEnabled: boolean
+  /** Which language(s) the narrator speaks. 'both' speaks English then Cantonese, strictly
+   *  serialized (never overlapping) — see renderer/lib/narrator.ts. */
+  narratorLanguage: NarratorLanguage
+  /** English voice, by its STABLE `voiceURI` (never the display name — names aren't unique and
+   *  are localized by the platform). `null` = automatic: the narrator picks the best English
+   *  voice available at speak time, re-resolved every time the voice list changes. */
+  narratorVoiceEn: string | null
+  /** Cantonese voice, by `voiceURI`. `null` = automatic (prefers a `zh-HK` voice; see
+   *  `pickAutomaticVoice` in renderer/lib/narrator.ts). */
+  narratorVoiceYue: string | null
+  /** Speech rate, 0.1–10 (SpeechSynthesisUtterance's own documented range). 1 = the voice's
+   *  normal delivery. */
+  narratorRate: number
+  /** Speech pitch, 0–2 (SpeechSynthesisUtterance's own documented range). 1 = the voice's
+   *  normal pitch. */
+  narratorPitch: number
   /** Per-node hook identity enforcement (src/core/agents/node-identity-policy.ts).
    *
    *  The ONLY optional key in this interface, and deliberately so: it is a TRI-state, and the two
@@ -1138,6 +1161,14 @@ export const DEFAULT_SETTINGS: Settings = {
   notchWidth: 168,
   notchHoverExpand: true,
   speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
+  // Narrator: opt-in and silent out of the box. Voices default to automatic — never a named
+  // voice, since we can't know what's installed until we ask the platform.
+  narratorEnabled: false,
+  narratorLanguage: 'en',
+  narratorVoiceEn: null,
+  narratorVoiceYue: null,
+  narratorRate: 1,
+  narratorPitch: 1,
 }
 
 export interface SettingsApi {
