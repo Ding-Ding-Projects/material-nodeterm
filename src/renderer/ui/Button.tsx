@@ -1,15 +1,15 @@
-import type { ButtonHTMLAttributes } from 'react'
+import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { cn } from './cn'
 
 type Variant = 'default' | 'primary' | 'ghost'
 
-export function Button({
-  variant = 'default',
-  className,
-  ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }): React.JSX.Element {
+export const Button = forwardRef<
+  HTMLButtonElement,
+  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }
+>(function Button({ variant = 'default', className, ...rest }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       className={cn(
         'inline-flex cursor-pointer items-center justify-center rounded-md px-3 py-1.5 text-[13px] font-medium outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50',
@@ -21,4 +21,4 @@ export function Button({
       {...rest}
     />
   )
-}
+})

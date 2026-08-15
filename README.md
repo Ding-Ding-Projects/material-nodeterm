@@ -362,6 +362,19 @@ plain shell instead of a tmux session, so they don't survive an app restart — 
 [docs/windows.md](docs/windows.md) for the full picture (what degrades, the unsigned-installer
 SmartScreen warning, and how to get tmux-backed continuity anyway).
 
+### 🎨 Appearance & identity
+
+- [**Appearance editor**](./docs/appearance.md) — right-click (or Shift+right-click on a tab)
+  any tab or node title for a non-modal, per-element typography/colour editor, with presets you
+  can export and import.
+- [**Colour picker**](./docs/colour-picker.md) — the infinite spectrum picker behind every colour
+  field in the app, with a HEX/RGB/HSL/HSV/HWB/Lab/LCH/OKLab/OKLCH/CMYK translator and a
+  contrast readout.
+- [**App rename**](./docs/app-rename.md) — give the app whatever display name you like; it never
+  touches the app's real identity (data directory, installer, update feed).
+- [**App logo**](./docs/app-logo.md) — pick a shipped colour variant of the mark or upload your
+  own image, processed entirely on your machine.
+
 ## 🤝 Contributing
 
 Issues and pull requests are welcome. **Start with [CONTRIBUTING.md](./CONTRIBUTING.md)** —

@@ -158,6 +158,7 @@ export function CommandPalette({
     <div className="palette-overlay" onClick={onClose}>
       <div
         className={`palette${size === 'full' ? ' palette--full' : ''}`}
+        data-appearance-id="app:command-palette"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="palette__header-row">

@@ -9,6 +9,8 @@ import { TerminalSection } from './sections/TerminalSection'
 import { ShellSection } from './sections/ShellSection'
 import { BehaviorSection } from './sections/BehaviorSection'
 import { AppearanceSection } from './sections/AppearanceSection'
+import { AppearanceEditorSection } from './sections/AppearanceEditorSection'
+import { AppIdentitySection } from './sections/AppIdentitySection'
 import { NotchSection } from './sections/NotchSection'
 import { PhoneSection } from './sections/PhoneSection'
 import { SpeechSection } from './sections/SpeechSection'
@@ -81,7 +83,10 @@ export function SettingsPage({
   }, [onClose])
 
   return createPortal(
-    <div className="nt-settings fixed inset-0 z-[55] flex bg-bg text-text">
+    <div
+      className="nt-settings fixed inset-0 z-[55] flex bg-bg text-text"
+      data-appearance-id="app:settings-dialog"
+    >
       <SettingsSidebar activeSectionId={active} search={search} onSelect={setActive} onClose={onClose} />
       <SettingsSearchContext.Provider value={searchState}>
         <main className="min-w-0 flex-1 overflow-y-auto px-12 py-10">
@@ -90,6 +95,8 @@ export function SettingsPage({
             <ShellSection isActive={active === 'shell'} />
             <BehaviorSection isActive={active === 'behavior'} />
             <AppearanceSection isActive={active === 'appearance'} />
+            <AppearanceEditorSection isActive={active === 'appearance-editor'} />
+            <AppIdentitySection isActive={active === 'app-identity'} />
             {isMac && <NotchSection isActive={active === 'notch'} />}
             <PhoneSection isActive={active === 'phone'} />
             <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />

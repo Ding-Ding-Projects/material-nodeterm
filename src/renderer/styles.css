@@ -239,6 +239,9 @@ body,
 
 .brand__mark {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .brand__name {
@@ -10887,7 +10890,7 @@ body,
   color: var(--text-strong);
 }
 @keyframes dimsum-toast-in {
-/* ==================================================================================
+/* ===========================================================================
    Non-blocking notifications: corner-anchored toast stack + reviewable history panel.
    See src/renderer/state/notifications.ts and docs/notifications.md.
    ================================================================================== */
@@ -11116,12 +11119,120 @@ body,
   font-size: 11.5px;
   font-weight: 600;
   border-radius: 999px;
+=======
+/* ---- Infinite colour picker (docs/colour-picker.md) ---- */
+.color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 280px;
+}
+.color-picker__field {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  border-radius: 8px;
+  cursor: crosshair;
+  touch-action: none;
+  border: 1px solid var(--border);
+}
+.color-picker__thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  margin-top: -7px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: grab;
+  outline: none;
+}
+.color-picker__thumb:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.color-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-picker__preview-wrap {
+  flex-shrink: 0;
+}
+.color-picker__preview {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.color-picker__preview-fill {
+  width: 100%;
+  height: 100%;
+}
+.color-picker__sliders {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.color-picker__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+.color-picker__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  margin-top: -2px;
+}
+.color-picker__slider--hue {
+  background: linear-gradient(
+    to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%
+  );
+}
+.color-picker__slider--alpha {
+  border-radius: 6px;
+}
+.color-picker__eyedropper {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-header);
+  cursor: pointer;
+}
+.color-picker__eyedropper:hover {
+  background: rgba(var(--tint-rgb), 0.08);
+}
+.color-picker__formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.color-picker__format-tab {
+  padding: 3px 7px;
+  font-size: 11px;
+  border-radius: 5px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
 }
 .notif-center__filter.active {
+.color-picker__format-tab.is-active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -11222,7 +11333,7 @@ body,
   background: rgba(var(--tint-rgb), 0.1);
 }
 
-/* ==================================================================================
+/* ===========================================================================
    Destructive-action super confirmation gate.
    See src/renderer/components/DestructiveConfirmGate.tsx and docs/destructive-confirmation.md.
    ================================================================================== */
@@ -11303,6 +11414,169 @@ body,
 }
 .destgate__affected li {
   list-style: none;
+=======
+.color-picker__entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.color-picker__hex-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: var(--mono-font, ui-monospace, monospace);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.color-picker__hex-input.is-invalid {
+  border-color: var(--danger);
+}
+.color-picker__channels {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+}
+.color-picker__channel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.color-picker__channel span {
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.color-picker__channel input {
+  width: 100%;
+  height: 26px;
+  padding: 0 4px;
+  font-size: 11px;
+  text-align: center;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.color-picker__copy {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-header);
+  color: var(--text);
+  cursor: pointer;
+}
+.color-picker__copy:hover {
+  background: rgba(var(--tint-rgb), 0.08);
+}
+.color-picker__note {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.4;
+}
+.color-picker__note--warn {
+  color: var(--warn);
+}
+.color-picker__contrast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.color-picker__contrast-swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+}
+.color-picker__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.color-picker__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px solid rgba(var(--tint-rgb), 0.2);
+  cursor: pointer;
+  padding: 0;
+}
+.color-picker__swatch:hover {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.color-picker__remember {
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--accent-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.color-picker__remember:hover {
+  text-decoration: underline;
+}
+
+/* ---- ColorField (compact swatch + popover picker) ---- */
+.color-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+}
+.color-field__label {
+  font-size: 12px;
+  color: var(--text);
+  flex-shrink: 0;
+  min-width: 90px;
+}
+.color-field__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.color-field__swatch {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  background:
+    linear-gradient(45deg, rgba(0,0,0,.2) 25%, transparent 25%, transparent 75%, rgba(0,0,0,.2) 75%) 0 0/8px 8px,
+    linear-gradient(45deg, rgba(0,0,0,.2) 25%, transparent 25%, transparent 75%, rgba(0,0,0,.2) 75%) 4px 4px/8px 8px;
+}
+.color-field__unset {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+}
+.color-field__value {
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11460,6 +11734,199 @@ body,
 
 /* ---- Context-menu keyboard-shortcut column ---- */
 .ctx-item__label {
+.color-field__reset {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+}
+.color-field__reset:hover {
+  color: var(--text);
+}
+.color-field__popover {
+  position: fixed;
+  z-index: 70;
+  padding: 12px;
+  background: rgba(var(--popover-rgb), 0.98);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, calc(0.55 * var(--shadow-k)));
+}
+
+/* ---- Per-element appearance editor (docs/appearance.md) ---- */
+.appearance-editor {
+  position: fixed;
+  z-index: 65;
+  width: 340px;
+  max-height: min(640px, calc(100vh - 24px));
+  display: flex;
+  flex-direction: column;
+  background: rgba(var(--popover-rgb), 0.99);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, calc(0.6 * var(--shadow-k)));
+  overflow: hidden;
+}
+.appearance-editor__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.appearance-editor__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.appearance-editor__kind {
+  font-size: 11px;
+  color: var(--muted);
+}
+.appearance-editor__close {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+.appearance-editor__close:hover {
+  background: var(--panel-header);
+  color: var(--text);
+}
+.appearance-editor__preview {
+  margin: 10px 14px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 15px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.appearance-editor__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.appearance-editor__tab {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.appearance-editor__tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.appearance-editor__body {
+  overflow-y: auto;
+  padding: 10px 14px 16px;
+  flex: 1;
+  min-height: 0;
+}
+.appearance-editor__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.appearance-editor__fields--nested {
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+  margin-left: 2px;
+}
+.appearance-editor__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+.appearance-editor__row-label {
+  font-size: 12px;
+  color: var(--text);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+.appearance-editor__row-control {
+  flex: 1;
+  min-width: 0;
+}
+.appearance-editor__row-reset {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.appearance-editor__row-reset:hover {
+  color: var(--text);
+}
+.appearance-editor__subhead {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-2);
+}
+.appearance-editor__note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 4px 0 6px;
+}
+.appearance-editor__note--warn {
+  color: var(--warn);
+}
+.appearance-editor__disclosure {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 0;
+}
+.appearance-editor__disclosure:hover {
+  color: var(--text);
+}
+.appearance-editor__font-preview {
+  font-size: 15px;
+  color: var(--text);
+  padding: 4px 0;
+}
+.appearance-editor__preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.appearance-editor__preset-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -11559,4 +12026,33 @@ body,
 }
 .palette__header-row .palette__input {
   flex: 1;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* ---- App logo picker (Settings → App name & logo) ---- */
+.app-logo__preset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  background: var(--panel-header);
+  cursor: pointer;
+}
+.app-logo__preset:hover {
+  background: rgba(var(--tint-rgb), 0.08);
+}
+.app-logo__preset.is-active {
+  border-color: var(--accent);
+}
+.app-logo__preset:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.app-logo__preset-empty {
+  font-size: 18px;
+  color: var(--muted);
 }

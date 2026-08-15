@@ -81,6 +81,8 @@ import { withNodeBoundary } from '../components/NodeBoundary'
 import { Dock } from '../components/Dock'
 import { TabBar } from '../components/TabBar'
 import { ContextMenu, type MenuItem } from '../components/ContextMenu'
+import { appearanceId } from '../lib/appearance/registry'
+import { openAppearanceEditor } from '../state/appearanceEditorHost'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import {
   IconCollapse,
@@ -88,6 +90,7 @@ import {
   IconBranch,
   IconDuplicate,
   IconEditor,
+  IconColor,
   IconExplorer,
   IconFit,
   IconGear,
@@ -5220,6 +5223,26 @@ export function Canvas() {
         : ([
             { label: 'Duplicate', icon: <IconDuplicate />, onClick: () => duplicateNodes(ids, at) }
           ] as MenuItem[])),
+      // "Edit appearance…" — reachable from every rendered element per docs/appearance.md; wired
+      // here for a single selected node whose title carries `data-appearance-id` (terminal/agent
+      // nodes today — see TerminalNode.tsx). Absent when the node doesn't have one yet rather
+      // than opening an editor that visibly does nothing.
+      ...(ids.length === 1 &&
+      document.querySelector<HTMLElement>(`[data-appearance-id="${appearanceId('node', ids[0])}"]`)
+        ? ([
+            {
+              label: 'Edit appearance…',
+              icon: <IconColor />,
+              onClick: () => {
+                const anchor = document.querySelector<HTMLElement>(
+                  `[data-appearance-id="${appearanceId('node', ids[0])}"]`
+                )
+                const nodeLabel = nodesRef.current.find((n) => n.id === ids[0])?.data.title || 'Node'
+                if (anchor) openAppearanceEditor(appearanceId('node', ids[0]), nodeLabel, 'node', anchor)
+              }
+            }
+          ] as MenuItem[])
+        : []),
       ...(ids.length === 1 && (() => {
         const a = agentIdOf(ids[0])
         return !!a && canBranch(a)
