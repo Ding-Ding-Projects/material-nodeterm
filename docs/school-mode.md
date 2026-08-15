@@ -23,8 +23,18 @@ it everywhere. The record is small and holds only:
 It is watched with `fs.watch` on its containing directory (not the file handle itself — editors
 and other processes commonly write via temp-file-then-rename, which a file-handle watch can miss)
 so a change made by **another window or another app** applies **live**, with no restart, everywhere
-this app is running (`SchoolModeStore.watchDir`, broadcast over `IPC.schoolModeChanged` to every
-attached renderer).
+this app is running (`SharedRecordWatcher`, broadcast over `IPC.schoolModeChanged` to every attached
+renderer).
+
+On first run that containing directory usually does not exist. `SharedRecordWatcher` therefore
+keeps exactly one watcher on the nearest existing ancestor and promotes it toward
+`~/.nodeterm/shared/` as directories appear; a successful local write retries promotion
+immediately, closing the creation-event race without a polling timer. Promotion performs one
+reload because another app may have written the record before the target watcher was armed.
+`dispose()` closes the sole live handle, and a lifecycle generation makes a reload queued before
+shutdown inert when it eventually runs. Only `ENOENT` means absence: corrupt JSON still follows
+the documented OFF policy, while a permission or other I/O failure preserves the last-known record
+instead of laundering “could not read” into “mode is off”.
 
 ## Turning it on and off
 

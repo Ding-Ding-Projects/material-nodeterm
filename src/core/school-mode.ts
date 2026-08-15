@@ -1,4 +1,3 @@
-import { promises as fs, type FSWatcher, watch } from 'fs'
 import os from 'os'
 import path from 'path'
 import { IPC } from '../shared/ipc'
@@ -13,6 +12,7 @@ import {
   setCredential as writeCredential,
   verifyPin as checkPin
 } from './shared-mode-credential'
+import { readSharedJson, SharedRecordWatcher } from './shared-record-watch'
 
 /**
  * "School mode" — a self-imposed, USER-EXPERIENCE switch, not a security boundary. While on,
@@ -76,61 +76,50 @@ function sanitizeName(name: string): string {
 export class SchoolModeStore {
   private cache: SchoolModeRecord = DEFAULT_RECORD
   private listeners = new Set<(r: SchoolModeRecord) => void>()
-  private watcher: FSWatcher | null = null
+  private watcher = new SharedRecordWatcher(recordFile(), () => this.queueReload())
   /** Every write is FIFO'd through this chain (same idiom as SettingsStore.saveChain / WorkspaceStore
    *  .saveChain): the watcher's own reload can race a write we just issued ourselves. */
   private chain: Promise<unknown> = Promise.resolve()
+  /** Invalidates watcher reloads that were queued before dispose/re-init. */
+  private lifecycle = 0
 
   /** Load the current record from disk (or defaults) and start watching for external edits. Call
    *  once at boot, before `registerIpc()`. */
   async init(): Promise<void> {
-    await this.reload()
-    this.watchDir()
+    const lifecycle = ++this.lifecycle
+    await this.reload(lifecycle)
+    if (lifecycle === this.lifecycle) this.watcher.start()
   }
 
-  private async reload(): Promise<void> {
-    try {
-      const raw = await fs.readFile(recordFile(), 'utf-8')
-      const parsed: unknown = JSON.parse(raw)
+  private async reload(lifecycle: number): Promise<boolean> {
+    const result = await readSharedJson(recordFile())
+    if (lifecycle !== this.lifecycle) return false
+    if (result.kind === 'value') {
+      const parsed = result.value
       this.cache = isValidRecord(parsed)
         ? { version: 1, enabled: parsed.enabled, name: sanitizeName(parsed.name) }
         : DEFAULT_RECORD
-    } catch {
-      // Absent (first run — no app has enabled the mode yet) or corrupt: defaults, silently. A
-      // hand-editable shared file must never crash a boot over a malformed byte.
+    } else if (result.kind === 'absent' || result.kind === 'invalid') {
+      // A proven absence (first run) or corrupt JSON defaults OFF. A failed read is different:
+      // it preserves the last-known state rather than laundering an I/O failure into absence.
       this.cache = DEFAULT_RECORD
     }
+    return result.kind !== 'error'
   }
 
-  /** Watch the shared directory (not the file — it may not exist yet, and editors/other
-   *  processes commonly write via temp+rename, which a file-handle watch can miss) so a change
-   *  made by another app or window is picked up and applied LIVE, no restart required. Best
-   *  effort: if the directory cannot be created/watched yet, changes still apply on the next IPC
-   *  call — never fatal. */
-  private watchDir(): void {
-    const dir = path.dirname(recordFile())
-    try {
-      this.watcher?.close()
-      this.watcher = watch(dir, { persistent: false }, (_evt, filename) => {
-        if (filename && filename !== path.basename(recordFile())) return
-        void this.chain.then(async () => {
-          const before = this.cache
-          await this.reload()
-          if (before.enabled !== this.cache.enabled || before.name !== this.cache.name) {
-            this.notify()
-          }
-        })
-      })
-    } catch {
-      // Directory doesn't exist yet (nobody has ever turned the mode on/renamed it on this
-      // machine) — created lazily by the first write, at which point a later init() elsewhere
-      // (or this process's own writes, which reload synchronously) will see it.
-    }
+  private queueReload(): void {
+    const lifecycle = this.lifecycle
+    const run = this.chain.then(async () => {
+      const before = this.cache
+      const applied = await this.reload(lifecycle)
+      if (applied && (before.enabled !== this.cache.enabled || before.name !== this.cache.name)) this.notify()
+    })
+    this.chain = run.catch(() => {})
   }
 
   dispose(): void {
-    this.watcher?.close()
-    this.watcher = null
+    this.lifecycle += 1
+    this.watcher.dispose()
   }
 
   get(): SchoolModeRecord {
@@ -155,6 +144,7 @@ export class SchoolModeStore {
   private async writeRecord(next: SchoolModeRecord): Promise<SchoolModeRecord> {
     this.cache = next
     await persistFile(recordFile(), JSON.stringify(next, null, 2))
+    this.watcher.recordWritten()
     this.notify()
     return this.cache
   }
