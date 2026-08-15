@@ -79,6 +79,29 @@ helper must emit exactly that shape, and must compare case-insensitively under a
 (where NTFS does) while staying case-sensitive under a POSIX root (where `/home/Me` and `/home/me`
 are different directories).
 
+### Ctrl+click file links
+
+The token matcher required a `/` and the resolver was POSIX throughout, so a Windows path was
+never even tokenised — the feature was absent rather than wrong, failing *closed* with no link
+offered.
+
+`matchFileTokens` and `resolveFileToken` now take a `{ windows }` option, and the Windows matcher
+is a **separate** regex rather than a widened separator class: the POSIX path is what every
+existing user runs and stays byte-identical, and widening it would start matching Windows-shaped
+text inside a POSIX session, where it can only ever be wrong.
+
+The gate is **per-session, not per-platform** — an SSH project's paths are POSIX however the client
+is spelled, so `TerminalNode` computes `isWindowsPlatform() && !remoteSession`. Getting that
+backwards would break the SSH links that already work in order to fix the local ones that never
+did.
+
+Two deliberate limits. A **UNC path is refused** rather than half-handled: there is no drive to
+anchor on, its first two segments are a host and a share rather than directories, and resolving it
+would aim a directory listing at a network host. And **spaces are not part of a segment**, so
+`C:\Program Files\…` does not link — an unquoted path in terminal output gives no way to tell where
+it ends, and allowing spaces made the matcher swallow the rest of the sentence. The POSIX matcher
+takes the same position, so this is parity rather than a Windows shortfall.
+
 ### Delete-to-stop-something
 
 `removeRelayAdvertisement` was an unlink in a bare catch commented *"already absent — fine"*. True
@@ -110,15 +133,8 @@ compile.
    in the User or Machine registry — so it is recorded here only so the next person who meets it
    does not spend a build on it. Clear it for the build process only; never for the machine.
 
-## Known gaps, deliberately not fixed
+## Known gaps
 
-- **Ctrl+click file links do not work for a local Windows project.** The token matcher requires a
-  `/` and the resolver is POSIX throughout, so a Windows path is never tokenised — it fails
-  *closed* (no link offered) rather than resolving to something wrong. SSH projects are unaffected
-  on any client OS, because remote paths are POSIX regardless of the desktop's platform. That is
-  also what makes the fix non-trivial: the resolver must know which convention applies **per
-  session**, not per platform, and a scanner matching `C:\…` risks linkifying prose. Pinned by
-  tests in `file-links.test.ts` so the gap is visible rather than reading as an oversight.
 - **No packaged build has been launched.** Everything above is source-level or unit-tested. The
   runtime behaviour of a real installed Windows build — tmux absence and the session-host fallback
   in particular (see [windows-session-host.md](windows-session-host.md)) — is unverified.

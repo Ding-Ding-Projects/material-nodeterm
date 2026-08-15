@@ -145,7 +145,7 @@ import { hasHooks, canRecur, canContextLink, hasUsage, canChat, canResume, canRe
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { ensureActivePermissionMode } from '../state/permissionMode'
 import { buildSshArgs, sshConnectionIdForProject, sshHostKey, type SshConnection } from '@shared/ssh'
-import { hintLabel } from '@shared/platform-utils'
+import { hintLabel, isWindowsPlatform } from '@shared/platform-utils'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
 import { AgentMascot } from './AgentMascot'
@@ -2263,7 +2263,14 @@ export function TerminalNode({
             new CustomEvent('nodeterm:open-file', { detail: { path: abs, ssh: projectFs().ssh } })
           )
       }
-      term.registerLinkProvider(createFileLinkProvider(term, { getCwd, lookup, activate: openFile }))
+      // Which path convention this session's output uses. NOT simply "is the desktop Windows":
+      // an SSH project's paths are POSIX however the client is spelled, so a remote session keeps
+      // the POSIX matcher even on a Windows desktop. Getting that backwards would break the SSH
+      // links that already work in order to fix the local ones that never did.
+      const winPaths = isWindowsPlatform() && !remoteSession
+      term.registerLinkProvider(
+        createFileLinkProvider(term, { getCwd, lookup, activate: openFile, windows: winPaths })
+      )
       // Both providers above rely on xterm's own click handling, which
       // tmux/agent mouse-reporting swallows. This capture-phase mouse-up fallback restores
       // Cmd/Ctrl+click for both URLs and file paths in that mode. Attached to `term.element` so
@@ -2274,7 +2281,8 @@ export function TerminalNode({
           lookup,
           activateFile: openFile,
           openUrl: (uri) => window.nodeTerminal.shell.openExternal(uri),
-          fileEnabled: () => !isRelayProject()
+          fileEnabled: () => !isRelayProject(),
+          windows: winPaths
         })
       }
     }
