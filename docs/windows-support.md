@@ -1,4 +1,11 @@
-# Windows support: what works, what is fixed, what is still missing
+# Windows support — the engineering view
+
+**Two Windows pages, and this is the contributor one.** [`windows.md`](windows.md) is for people
+USING nodeterm on Windows: what works, what degrades, shell and SSH resolution, the unsigned
+installer warning, how to install. This page is for people CHANGING the code: which
+platform-difference defects were found, what now guards against them, and what is still unverified.
+Keep the split — a user reading "what degrades" should not have to wade through regex archaeology,
+and a contributor about to touch a path needs the archaeology.
 
 **The honest summary first: nobody has run a packaged Windows build of this app end to end.** The
 installer has never been produced on this machine — see [Building](#building) for the three

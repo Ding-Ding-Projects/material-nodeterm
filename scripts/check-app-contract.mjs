@@ -391,6 +391,40 @@ const FEATURES = [
     docs: ['docs/command-palette.md'],
   },
   {
+    // Named in the shared instructions as mandatory and explicitly NOT opt-out-able, and it had
+    // code and a doc but no row here for the entire time this guard has existed. That is the exact
+    // failure the header comment warns about: a list that only validates what it already knows
+    // about cannot notice a canonical feature nobody added to it.
+    id: 'dim-sum-surprise',
+    label: 'Dim sum surprise',
+    files: ['src/renderer/components/DimSumSurprise.tsx'],
+    contentChecks: [
+      ['src/renderer/components/DimSumSurprise.tsx', 'export function DimSumSurprise'],
+      // The contract is that there is no off switch. A settings toggle appearing here would be a
+      // violation, not a feature, so the guard asserts the absence.
+      ['docs/dim-sum.md', 'no setting'],
+    ],
+    wired: { file: 'src/renderer/App.tsx', symbol: 'DimSumSurprise' },
+    docs: ['docs/dim-sum.md'],
+  },
+  {
+    id: 'session-memory',
+    label: 'Session memory (RAM pill + per-session panel)',
+    files: [
+      'src/renderer/components/SystemResourcePill.tsx',
+      'src/renderer/components/SessionMemoryPanel.tsx',
+      'src/core/session-memory.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/components/SystemResourcePill.tsx', 'export function SystemResourcePill'],
+      ['src/renderer/components/SessionMemoryPanel.tsx', 'export function SessionMemoryPanel'],
+      // "could not measure" and "there is nothing here" must stay distinguishable — the rule the
+      // whole feature exists to honour.
+      ['src/core/session-memory.ts', 'ok'],
+    ],
+    docs: ['docs/session-memory.md'],
+  },
+  {
     id: 'atomic-writes',
     label: 'Atomic writes that survive Windows',
     files: ['src/core/fs-atomic.ts', 'src/core/fs-atomic.guard.test.ts'],

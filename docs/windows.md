@@ -7,6 +7,12 @@ buttons on the right instead of macOS's traffic lights on the left.
 This page covers what works out of the box, what degrades (and why), how the unsigned installer
 behaves, and how to build it yourself.
 
+> **Changing the code rather than using it?** [`windows-support.md`](windows-support.md) is the
+> contributor page: the platform-difference defects found so far, the guards that now catch them,
+> and the build preconditions. The short version of its lesson, worth knowing before you touch
+> anything path-shaped — almost every Windows defect in this codebase has been code that is
+> genuinely *correct* on POSIX, which is why reviews and a 6,000-test suite sailed past it.
+
 ## What works
 
 - **Terminals** — every terminal/agent node spawns a real Windows shell (see [Default shell
