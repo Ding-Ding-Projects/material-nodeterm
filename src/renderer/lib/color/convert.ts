@@ -506,78 +506,94 @@ export function parseAnyColor(input: string): RGBA | null {
   if (!m) return null
   const fn = m[1].toLowerCase()
   const parts = nums(m[2])
-  const alphaFrom = (i: number, count: number) => (parts.length > count ? pct(parts[i], 1) : 1)
+  // `parts[i]` is `string | undefined` under noUncheckedIndexedAccess, and the two problems are
+  // the same problem: a malformed `rgb(1,2)` would otherwise read the missing third component as
+  // `undefined`, `parseFloat` it to NaN, and hand back a colour built from nonsense. `need()`
+  // demands the component count each function actually takes and bails to `null` instead — a
+  // colour we cannot parse is not a colour we should guess at.
+  const need = (n: number): boolean => parts.length >= n
+  const at = (i: number): string => parts[i] as string
+  const alphaFrom = (i: number, count: number) => (parts.length > count ? pct(at(i), 1) : 1)
   try {
     if (fn === 'rgb' || fn === 'rgba') {
+      if (!need(3)) return null
       return {
-        r: pct(parts[0], 255),
-        g: pct(parts[1], 255),
-        b: pct(parts[2], 255),
+        r: pct(at(0), 255),
+        g: pct(at(1), 255),
+        b: pct(at(2), 255),
         a: alphaFrom(3, 3)
       }
     }
     if (fn === 'hsl' || fn === 'hsla') {
+      if (!need(3)) return null
       return hslToRgb({
-        h: parseFloat(parts[0]),
-        s: pct(parts[1]),
-        l: pct(parts[2]),
+        h: parseFloat(at(0)),
+        s: pct(at(1)),
+        l: pct(at(2)),
         a: alphaFrom(3, 3)
       })
     }
     if (fn === 'hsv' || fn === 'hsb') {
+      if (!need(3)) return null
       return hsvToRgb({
-        h: parseFloat(parts[0]),
-        s: pct(parts[1]),
-        v: pct(parts[2]),
+        h: parseFloat(at(0)),
+        s: pct(at(1)),
+        v: pct(at(2)),
         a: alphaFrom(3, 3)
       })
     }
     if (fn === 'hwb') {
+      if (!need(3)) return null
       return hwbToRgb({
-        h: parseFloat(parts[0]),
-        w: pct(parts[1]),
-        b: pct(parts[2]),
+        h: parseFloat(at(0)),
+        w: pct(at(1)),
+        b: pct(at(2)),
         a: alphaFrom(3, 3)
       })
     }
     if (fn === 'lab') {
+      if (!need(3)) return null
       return labToRgbClamped({
-        l: parseFloat(parts[0]),
-        a: parseFloat(parts[1]),
-        b: parseFloat(parts[2]),
+        l: parseFloat(at(0)),
+        a: parseFloat(at(1)),
+        b: parseFloat(at(2)),
         alpha: alphaFrom(3, 3)
       }).value
     }
     if (fn === 'lch') {
+      if (!need(3)) return null
       return lchToRgbClamped({
-        l: parseFloat(parts[0]),
-        c: parseFloat(parts[1]),
-        h: parseFloat(parts[2]),
+        l: parseFloat(at(0)),
+        c: parseFloat(at(1)),
+        h: parseFloat(at(2)),
         alpha: alphaFrom(3, 3)
       }).value
     }
     if (fn === 'oklab') {
+      if (!need(3)) return null
       return oklabToRgb({
-        l: parseFloat(parts[0]),
-        a: parseFloat(parts[1]),
-        b: parseFloat(parts[2]),
+        l: parseFloat(at(0)),
+        a: parseFloat(at(1)),
+        b: parseFloat(at(2)),
         alpha: alphaFrom(3, 3)
       }).value
     }
     if (fn === 'oklch') {
+      if (!need(3)) return null
       return oklchToRgbClamped({
-        l: parseFloat(parts[0]),
-        c: parseFloat(parts[1]),
-        h: parseFloat(parts[2]),
+        l: parseFloat(at(0)),
+        c: parseFloat(at(1)),
+        h: parseFloat(at(2)),
         alpha: alphaFrom(3, 3)
       }).value
     }
     if (fn === 'cmyk') {
+      if (!need(4)) return null
       return cmykToRgb({
-        c: pct(parts[0]),
-        m: pct(parts[1]),
-        y: pct(parts[2]),
-        k: pct(parts[3]),
+        c: pct(at(0)),
+        m: pct(at(1)),
+        y: pct(at(2)),
+        k: pct(at(3)),
         a: alphaFrom(4, 4)
       })
     }

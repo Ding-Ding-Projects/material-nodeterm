@@ -135,6 +135,22 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M10 6a2.6 2.6 0 0 1 0 4M11.8 4.2a5.2 5.2 0 0 1 0 7.6" />
     </>
   ),
+  // A paint roller over a rectangle — editing how one ELEMENT looks, as opposed to `appearance`'s
+  // whole-theme disc.
+  'appearance-editor': (
+    <>
+      <rect x="2.4" y="2.8" width="7" height="3.4" rx="1" />
+      <path d="M9.4 4.5h2.6a1 1 0 0 1 1 1v1.3a1 1 0 0 1-1 1H7.6" />
+      <rect x="6.2" y="8.4" width="2.8" height="4.8" rx="1" />
+    </>
+  ),
+  // A tag/label with a dot — the app's own NAME and mark, which the user may change.
+  'app-identity': (
+    <>
+      <path d="M2.6 7.4V3.4a.8.8 0 0 1 .8-.8h4l6 6-4.8 4.8-6-6Z" />
+      <circle cx="5.4" cy="5.4" r="1" />
+    </>
+  ),
   // A calendar page with a clock face on it — a rule is a DATE window plus a TIME window, and
   // either half alone would misdescribe it.
   schedule: (

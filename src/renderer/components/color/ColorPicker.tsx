@@ -22,6 +22,7 @@ import {
   rgbToOklch,
   toHex,
   toHslString,
+  toHsvString,
   toHwbString,
   toLabString,
   toLchString,
