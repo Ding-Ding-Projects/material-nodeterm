@@ -12,6 +12,23 @@ import { codexThreadIdentityResolverSh } from './codex-thread-identity-sh'
 
 const run = promisify(execFile)
 
+/** A real POSIX shell to exec the generated prelude with. There is no literal `/bin/sh` path on
+ *  win32, but a POSIX-compatible `sh` (Git for Windows' MSYS sh) is expected on PATH — resolved by
+ *  bare name rather than an assumed install location. A no-op on POSIX. */
+const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
+
+/**
+ * MSYS/Git-Bash represents `C:\Users\x` as `/c/Users/x`. `codexThreadIdentityResolverSh`'s own
+ * endpoint validation (`case "$nt_codex_endpoint" in /*) ;; …`) requires a literal leading `/`, so
+ * on win32 every path fed to — or expected back from — the sh prelude has to be in that POSIX
+ * shape, exactly as a real MSYS shell would see it. A no-op on POSIX, where `dir`/`root` are
+ * already POSIX-shaped and this prelude's contract is native to begin with.
+ */
+function shPath(nativePath: string): string {
+  if (process.platform !== 'win32') return nativePath
+  return nativePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`)
+}
+
 let dir = ''
 let root = ''
 let script = ''
@@ -24,7 +41,7 @@ beforeAll(() => {
   script = path.join(dir, 'prelude.sh')
   fs.writeFileSync(
     script,
-    `#!/bin/sh\n${codexThreadIdentityResolverSh(root)}\n` +
+    `#!/bin/sh\n${codexThreadIdentityResolverSh(shPath(root))}\n` +
       `printf '%s|%s|%s\\n' "\${NODETERM_NODE_ID-}" "\${NODETERM_HOOK_ENDPOINT-}" "\${NODETERM_CANVAS_CONTROL-}"\n`,
     { mode: 0o755 }
   )
@@ -37,7 +54,7 @@ function record(threadId: string, body: string): void {
 }
 
 async function resolve(env: Record<string, string>): Promise<string> {
-  const { stdout } = await run('/bin/sh', [script], {
+  const { stdout } = await run(SH, [script], {
     env: { PATH: process.env.PATH ?? '', HOME: dir, ...env }
   })
   return stdout.trim()
@@ -45,18 +62,18 @@ async function resolve(env: Record<string, string>): Promise<string> {
 
 describe('codex thread identity prelude', () => {
   it('is valid POSIX sh', async () => {
-    await expect(run('/bin/sh', ['-n', script])).resolves.toBeTruthy()
+    await expect(run(SH, ['-n', script])).resolves.toBeTruthy()
   })
 
   it('recovers the node binding a tool shell never inherited', async () => {
-    record('thread-1', `nodeId=node-7\nendpoint=${dir}/hook-endpoint.env\nsignature=x\n`)
+    record('thread-1', `nodeId=node-7\nendpoint=${shPath(dir)}/hook-endpoint.env\nsignature=x\n`)
     expect(await resolve({ CODEX_THREAD_ID: 'thread-1' })).toBe(
-      `node-7|${dir}/hook-endpoint.env|1`
+      `node-7|${shPath(dir)}/hook-endpoint.env|1`
     )
   })
 
   it('changes nothing when the session already knows its node', async () => {
-    record('thread-1', `nodeId=node-7\nendpoint=${dir}/hook-endpoint.env\nsignature=x\n`)
+    record('thread-1', `nodeId=node-7\nendpoint=${shPath(dir)}/hook-endpoint.env\nsignature=x\n`)
     expect(await resolve({ CODEX_THREAD_ID: 'thread-1', NODETERM_NODE_ID: 'node-own' })).toBe(
       'node-own||'
     )

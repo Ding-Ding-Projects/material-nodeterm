@@ -38,6 +38,34 @@ export class GitHubCacheError extends Error {
  *  one). Same scheme as agent-status-mirror's local write. */
 let writeSeq = 0
 
+/**
+ * `fs.rename(from, to)` when `to` already exists — the exact "last writer wins" move every save
+ * here relies on, precisely because two writers can legitimately race for the same
+ * `<digest>.json` (see the comment on `writePrivate`). POSIX `rename(2)` replaces the destination
+ * atomically and never fails for that reason alone. Windows does not have that guarantee: NTFS can
+ * transiently refuse to replace a file that another handle still has open — including this SAME
+ * process's own concurrent writer, mid `chmod`/`rename` on the identical path a moment earlier —
+ * and `fs.rename` surfaces that as `EPERM` (occasionally `EBUSY`). Measured directly: two
+ * concurrent writers to one path failed with `EPERM` in roughly 3 of 5 runs on this host. A short
+ * bounded retry is the standard remedy for this exact, well-known Windows gap (it is why
+ * `graceful-fs` exists); every other error — a real permission problem, a missing directory —
+ * repeats immediately and still propagates on the first attempt. A no-op loop (one iteration, no
+ * delay) on POSIX, where this path is not reachable at all.
+ */
+async function renameReplacing(from: string, to: string): Promise<void> {
+  const attempts = process.platform === 'win32' ? 5 : 1
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await fs.rename(from, to)
+      return
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (attempt >= attempts || (code !== 'EPERM' && code !== 'EBUSY')) throw error
+      await new Promise((resolve) => setTimeout(resolve, 15 * attempt))
+    }
+  }
+}
+
 function safeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
@@ -261,7 +289,7 @@ export class GitHubIssueCache {
     try {
       await fs.writeFile(temporary, content, { encoding: 'utf-8', mode: 0o600 })
       await fs.chmod(temporary, 0o600)
-      await fs.rename(temporary, file)
+      await renameReplacing(temporary, file)
     } catch (error) {
       // A unique name never self-heals the way the fixed one did (the next write just reused it),
       // so a failed write has to remove its own temp — the more so as the two mutation saves in

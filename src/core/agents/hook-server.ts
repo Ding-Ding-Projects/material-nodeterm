@@ -8,6 +8,7 @@ import { normalizeFor, type NormalizedAgentEvent } from '../../shared/agents/nor
 import type { CodexIdentityEvent } from '../../shared/types'
 import type { NodeTokenVerdict } from './node-auth-token'
 import { nodeTokenDir } from './node-token-files'
+import { posixQuote } from '../../shared/ssh'
 import { isForeignKidToken, isSafeNodeId, verifyNodeToken } from './node-auth-token'
 import { isSafeThreadId } from '../codex-identity-proxy'
 import {
@@ -790,8 +791,6 @@ class HookServer {
       // whatever follows it, in or out of quotes) — silently mangling the dir into a path that
       // does not exist, so every per-node token lookup (and the endpoint-failover retry) fails
       // closed with an empty token. Single-quoting preserves the value byte-for-byte.
-      const dir = nodeTokenDir()
-      const q = `'${dir.replaceAll("'", "'\\''")}'`
       writeFileSync(
         p,
         `NODETERM_HOOK_PORT=${this.port}\n` +
@@ -801,7 +800,17 @@ class HookServer {
           // Advertised (not compiled in) so a failover that sources ANOTHER instance's endpoint
           // file also picks up THAT instance's token dir: it then finds a token that instance can
           // verify, or none — never a mismatched one.
-          `NODETERM_NODE_TOKEN_DIR=${q}\n`,
+          //
+          // `posixQuote`d, not raw: this file is `.`-sourced by a POSIX shell (the managed hook
+          // scripts), and an UNQUOTED assignment is not a literal string to that shell — a bare
+          // backslash in the value is its own escape character, silently consumed. On win32
+          // `nodeTokenDir()` is a native path (`C:\Users\...`), so an unquoted line here fed the
+          // sourcing shell `NODETERM_NODE_TOKEN_DIR=C:UserscntowAppDataRoaming...` — every
+          // backslash gone, every path segment run together — and every codex/context-link node on
+          // Windows silently lost its per-node capability and degraded to the no-identity fallback,
+          // every single launch. Measured directly (`. file` on a hand-built fixture with this
+          // exact shape). Single-quoting is a no-op on POSIX, where the value never contains `\`.
+          `NODETERM_NODE_TOKEN_DIR=${posixQuote(nodeTokenDir())}\n`,
         // 0o600: this file holds the bearer token — owner read/write only so another local user
         // can't read it and forge hook events.
         { encoding: 'utf8', mode: 0o600 }

@@ -324,9 +324,18 @@ fi
 # endpoint lives under the app's data dir, which on macOS contains a space ("Application Support")
 # — escaping a space inside a case pattern's bracket expression is exactly the kind of quoting
 # that reads fine and matches nothing.
+#
+# Accepts a POSIX absolute path (\`/...\`) OR a Windows drive-absolute one (\`C:\\...\` / \`C:/...\`):
+# this same script runs unmodified wherever a POSIX shell exists, including a Windows machine whose
+# default terminal shell the user has set to something sh-compatible (Git Bash, WSL), and there
+# \`CorePlatform.userDataDir\` — and so \`NODETERM_HOOK_ENDPOINT\` — is a native Windows path. Without
+# this branch every codex launch on such a machine failed \`nt_safe_path\` before ever reading the
+# endpoint file, permanently degrading to plain codex with no hook/thread integration at all,
+# silently. \`:\` and \`\\\` join the allowed charset only for that reason; POSIX behavior is
+# unchanged — a POSIX path never contains either, so the widened charset accepts nothing new there.
 nt_safe_path() {
-  case "\${1-}" in /*) ;; *) return 1 ;; esac
-  [ "$(printf %s "$1" | tr -cd 'A-Za-z0-9._/ -')" = "$1" ]
+  case "\${1-}" in /*) ;; [A-Za-z]:[/\\\\]*) ;; *) return 1 ;; esac
+  [ "$(printf %s "$1" | tr -cd 'A-Za-z0-9._/\\\\: -')" = "$1" ]
 }
 
 # Runs in THIS shell, never a command substitution: it sources the endpoint file, and that file is
