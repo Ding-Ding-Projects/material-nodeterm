@@ -34,7 +34,8 @@
 //    reason, never inferred at runtime from something not being found.
 
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -114,30 +115,55 @@ function repoElectronPids() {
       .map((s) => Number(s.trim()))
       .filter(Boolean)
   } catch {
-    return []
+    // An empty list means "checked, and none exist". `null` means the check itself failed; the
+    // latter must stop a launch because otherwise the finally block cannot prove it cleaned up.
+    return null
   }
 }
 
 const port = typeof attachPort === 'string' ? Number(attachPort) : 9223
-const pidsBefore = new Set(attachPort ? [] : repoElectronPids())
+let pidsBefore = new Set()
 let child = null
+let ownedUserData = null
+let client = null
+let selected = []
+let failed = 0
+let fatalError = null
+let cleanupFailed = false
+let processSnapshotReady = false
+
+try {
 if (!attachPort) {
+  const before = repoElectronPids()
+  if (before === null) {
+    throw new Error('could not enumerate this checkout\'s Electron processes before launch')
+  }
+  pidsBefore = new Set(before)
+  processSnapshotReady = true
   const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
   const unix = join(ROOT, 'node_modules', '.bin', 'electron')
   const bin = existsSync(electron) ? electron : unix
   if (!existsSync(bin)) {
-    console.error('✗ Electron binary not found — run `npm ci` (or `npm run rebuild`) first.')
-    process.exit(1)
+    throw new Error('Electron binary not found — run `npm ci` (or `npm run rebuild`) first.')
   }
+  // Never point an interaction gate at the operator's real profile. The settings case deliberately
+  // toggles and reloads a persisted value; NT_MULTI + NT_USER_DATA give this run a disposable,
+  // process-local identity/workspace/settings tree instead of gambling that a restore wins every
+  // debounce or crash. Attach mode is explicitly caller-owned and therefore leaves the target's
+  // profile alone.
+  ownedUserData = mkdtempSync(join(tmpdir(), 'nodeterm-wired-'))
   child = spawn(bin, [join(ROOT, 'out', 'main', 'index.js'), `--remote-debugging-port=${port}`], {
     cwd: ROOT,
+    env: { ...process.env, NT_MULTI: '1', NT_USER_DATA: ownedUserData },
     stdio: 'ignore',
   })
   await sleep(6000)
 }
 
-const { send, close } = await cdp(port)
+client = await cdp(port)
+const { send } = client
 await send('Runtime.enable')
+await send('Page.enable')
 await send('Emulation.setDeviceMetricsOverride', {
   width: 1600,
   height: 1000,
@@ -222,6 +248,41 @@ const CHECKS = [
     id: 'settings-persist',
     title: 'A settings toggle changes state and survives a reload',
     async run() {
+      const selectSwitch = async (wantedIndex = null) =>
+        evaluate(`(function(wantedIndex){
+          var all = Array.prototype.slice.call(
+            document.querySelectorAll('[role="switch"], input[type=checkbox]'));
+          var visible = all.filter(function(x){
+            return !x.disabled && x.getAttribute('aria-disabled') !== 'true' && x.offsetParent !== null;
+          });
+          var index = wantedIndex === null ? 0 : wantedIndex;
+          var b = visible[index];
+          if (!b) return null;
+          window.__wiredBox = b;
+          var state = b.getAttribute('aria-checked');
+          var label = b.getAttribute('aria-label') || '';
+          for (var p = b.parentElement, depth = 0; !label && p && depth < 5; p = p.parentElement, depth++) {
+            var text = (p.innerText || '').trim().replace(/\s+/g, ' ');
+            if (text && text.length <= 120) label = text;
+          }
+          return {
+            index: index,
+            label: (label || (b.textContent || '').trim() || 'switch').slice(0, 80),
+            state: state === null ? String(b.checked) : state
+          };
+        })(${wantedIndex === null ? 'null' : Number(wantedIndex)})`)
+      const read = `(function(){ var b = window.__wiredBox; if (!b || !b.isConnected) return null;
+        var s = b.getAttribute('aria-checked'); return s === null ? String(b.checked) : s })()`
+      const reload = async () => {
+        await send('Page.reload', { ignoreCache: true })
+        await sleep(1400)
+        const ready = await until(
+          `document.readyState === 'complete' && !!document.querySelector('.react-flow')`,
+          8000,
+        )
+        if (!ready) throw new Error('renderer did not become ready after reload')
+      }
+
       await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
       const open = await until(`!!document.querySelector('[class*="settings" i]')`)
       if (!open) return { ok: false, why: 'settings did not open on Ctrl+,' }
@@ -231,39 +292,54 @@ const CHECKS = [
       // failed CORRECTLY: rule 3 says a check that cannot run is a failure, because "I could not
       // find the control" and "the control does nothing" are indistinguishable from outside, and
       // only one of them is safe to ignore.
-      const found = await evaluate(`(function(){
-        var all = Array.prototype.slice.call(
-          document.querySelectorAll('[role="switch"], input[type=checkbox]'));
-        var b = all.filter(function(x){
-          return !x.disabled && x.getAttribute('aria-disabled') !== 'true' && x.offsetParent !== null;
-        })[0];
-        if (!b) return null;
-        window.__wiredBox = b;
-        var state = b.getAttribute('aria-checked');
-        return {
-          label: (b.getAttribute('aria-label') || (b.textContent || '').trim() || 'switch').slice(0, 48),
-          state: state === null ? String(b.checked) : state
-        };
-      })()`)
+      const found = await selectSwitch()
       if (!found) return { ok: false, why: 'no enabled switch or checkbox visible in settings' }
-      const read = `(function(){ var b = window.__wiredBox; var s = b.getAttribute('aria-checked');
-        return s === null ? String(b.checked) : s })()`
       await evaluate(`window.__wiredBox.click()`)
-      await sleep(500)
-      const after = await evaluate(read)
-      if (after === found.state) {
+      const after = await until(`${read} !== ${JSON.stringify(found.state)} ? ${read} : null`)
+      if (after === null || after === found.state) {
         return { ok: false, why: `"${found.label}" did not change when clicked — an inert control` }
       }
-      // Put it back, and confirm the restore also takes: a control that only moves one way is
-      // half-wired, and leaving the app mutated would poison later checks and the user's config.
-      await evaluate(`window.__wiredBox.click()`)
+
+      // A DOM flip proves only React state. Reload the built renderer, reopen Settings, and find the
+      // same stable switch slot: only a completed main-process save can make the new value return.
       await sleep(500)
-      const restored = await evaluate(read)
-      await chord({ key: 'Escape', code: 'Escape', vk: 27 })
-      if (restored !== found.state) {
-        return { ok: false, why: `"${found.label}" would not toggle back (left at ${restored})` }
+      await reload()
+      await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
+      if (!(await until(`!!document.querySelector('[class*="settings" i]')`))) {
+        return { ok: false, why: 'settings did not reopen after reload' }
       }
-      return { ok: true, detail: `"${found.label}" ${found.state} → ${after} → ${restored}` }
+      const persisted = await selectSwitch(found.index)
+      if (!persisted || persisted.state !== after) {
+        return {
+          ok: false,
+          why: `"${found.label}" did not survive reload (${after} became ${persisted?.state ?? 'missing'})`,
+        }
+      }
+
+      // Restore inside the disposable profile and reload once more. This catches one-way controls
+      // and proves the original value is durable before the profile is removed in `finally`.
+      await evaluate(`window.__wiredBox.click()`)
+      if (!(await until(`${read} === ${JSON.stringify(found.state)} ? ${read} : null`))) {
+        return { ok: false, why: `"${found.label}" would not toggle back in the DOM` }
+      }
+      await sleep(500)
+      await reload()
+      await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
+      if (!(await until(`!!document.querySelector('[class*="settings" i]')`))) {
+        return { ok: false, why: 'settings did not reopen for the restore check' }
+      }
+      const restored = await selectSwitch(found.index)
+      await chord({ key: 'Escape', code: 'Escape', vk: 27 })
+      if (!restored || restored.state !== found.state) {
+        return {
+          ok: false,
+          why: `"${found.label}" restore did not survive reload (left at ${restored?.state ?? 'missing'})`,
+        }
+      }
+      return {
+        ok: true,
+        detail: `"${found.label}" ${found.state} → ${after} (reload) → ${restored.state} (reload)`,
+      }
     },
   },
   {
@@ -284,28 +360,72 @@ const CHECKS = [
   },
   {
     id: 'theme-token',
-    title: 'Appearance tokens are live CSS variables, not baked colours',
+    title: 'A real app control consumes the live accent token',
     async run() {
+      await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
+      if (!(await until(`!!document.querySelector('[class*="settings" i]')`))) {
+        return { ok: false, why: 'settings did not open for the accent-consumer check' }
+      }
       const accent = await evaluate(
         `getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()`,
       )
       if (!accent) return { ok: false, why: '--accent is not defined on :root' }
-      // Change it and confirm something actually reads it. A baked stylesheet would not move.
-      const probe = await evaluate(`(function(){
-        var d = document.createElement('div');
-        d.style.color = 'var(--accent)';
-        document.body.appendChild(d);
-        var before = getComputedStyle(d).color;
-        document.documentElement.style.setProperty('--accent', 'rgb(1, 2, 3)');
-        var after = getComputedStyle(d).color;
-        document.documentElement.style.removeProperty('--accent');
-        d.remove();
-        return { before: before, after: after };
+
+      // Use the production Switch component as the consumer. Creating our own div with
+      // `color:var(--accent)` proves only that Chromium implements CSS variables — it stays green
+      // if every app rule stops consuming the token. Ensure one real, visible switch is ON, move
+      // the token, then restore both the exact prior inline declaration and the switch state.
+      const target = await evaluate(`(function(){
+        var switches = Array.prototype.slice.call(document.querySelectorAll('[role="switch"]'))
+          .filter(function(x){ return !x.disabled && x.offsetParent !== null; });
+        var control = switches[0];
+        if (!control) return null;
+        window.__wiredAccentSwitch = control;
+        var wasOn = control.getAttribute('aria-checked') === 'true';
+        if (!wasOn) control.click();
+        return { wasOn: wasOn };
       })()`)
-      if (probe.before === probe.after) {
-        return { ok: false, why: 'changing --accent moved nothing — the token is not live' }
+      if (!target) return { ok: false, why: 'no enabled app switch was visible in settings' }
+      if (!(await until(`window.__wiredAccentSwitch?.getAttribute('aria-checked') === 'true'`))) {
+        return { ok: false, why: 'the real switch did not enter its accent-backed ON state' }
       }
-      return { ok: true, detail: `--accent = ${accent}, and consumers follow it` }
+      const before = await evaluate(`(function(){
+        var control = window.__wiredAccentSwitch;
+        var root = document.documentElement;
+        window.__wiredAccentPrior = root.style.getPropertyValue('--accent');
+        window.__wiredAccentPriority = root.style.getPropertyPriority('--accent');
+        var colour = getComputedStyle(control).backgroundColor;
+        root.style.setProperty('--accent', 'rgb(1, 2, 3)');
+        return colour;
+      })()`)
+      // Switch has a deliberate 200 ms colour transition. Reading in the same JS turn measures its
+      // starting colour and falsely calls the live token baked; cross the authored transition.
+      await sleep(300)
+      const after = await evaluate(`(function(){
+        var control = window.__wiredAccentSwitch;
+        var root = document.documentElement;
+        var colour = getComputedStyle(control).backgroundColor;
+        if (window.__wiredAccentPrior) {
+          root.style.setProperty('--accent', window.__wiredAccentPrior, window.__wiredAccentPriority);
+        } else {
+          root.style.removeProperty('--accent');
+        }
+        return colour;
+      })()`)
+      if (!target.wasOn) {
+        await evaluate(`window.__wiredAccentSwitch.click()`)
+        if (!(await until(`window.__wiredAccentSwitch?.getAttribute('aria-checked') === 'false'`))) {
+          return { ok: false, why: 'the accent probe did not restore the switch' }
+        }
+      }
+      await chord({ key: 'Escape', code: 'Escape', vk: 27 })
+      if (before === after || !/rgb\(1, 2, 3\)/.test(after)) {
+        return {
+          ok: false,
+          why: `the real switch ignored --accent (${before} → ${after})`,
+        }
+      }
+      return { ok: true, detail: `Switch background followed --accent (${accent} → ${after})` }
     },
   },
   {
@@ -335,8 +455,9 @@ const CHECKS = [
   },
 ]
 
-const selected = only ? CHECKS.filter((c) => only.includes(c.id)) : CHECKS
-let failed = 0
+selected = only ? CHECKS.filter((c) => only.includes(c.id)) : CHECKS
+const unknown = only ? only.filter((id) => !CHECKS.some((c) => c.id === id)) : []
+if (unknown.length) throw new Error(`unknown --only check(s): ${unknown.join(', ')}`)
 console.log('')
 for (const c of selected) {
   let r
@@ -352,30 +473,51 @@ for (const c of selected) {
   }
 }
 
-close()
-if (child) child.kill()
+} catch (error) {
+  fatalError = error
+  console.error(`✗ interaction harness could not complete\n    ${error instanceof Error ? error.message : String(error)}`)
+} finally {
+  client?.close()
+  if (child) child.kill()
 
-// Clean up everything this run started, not just the process we hold a handle to. See
-// `repoElectronPids` for why the session host survives `child.kill()` and what it costs.
-if (!attachPort) {
-  await sleep(1500)
-  const leaked = repoElectronPids().filter((p) => !pidsBefore.has(p))
-  if (leaked.length) {
+  // Clean up everything this run started, not just the process we hold a handle to. See
+  // `repoElectronPids` for why the session host survives `child.kill()` and what it costs. This is
+  // in `finally`: a failed CDP connection used to skip the entire block and poison the next npm ci.
+  if (!attachPort && processSnapshotReady) {
+    await sleep(1500)
+    const after = repoElectronPids()
+    if (after === null) {
+      cleanupFailed = true
+      console.error('  ! could not enumerate Electron processes during cleanup')
+    } else {
+      const leaked = after.filter((p) => !pidsBefore.has(p))
+      if (leaked.length) {
+        try {
+          execFileSync(
+            'powershell',
+            [
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              `Stop-Process -Id ${leaked.join(',')} -Force -ErrorAction Stop`,
+            ],
+            { timeout: 20000, stdio: 'ignore' },
+          )
+          console.log(`  (cleaned up ${leaked.length} process(es) this run started: ${leaked.join(', ')})`)
+        } catch {
+          cleanupFailed = true
+          console.error(`  ! could not stop leftover PIDs ${leaked.join(', ')} — they hold electron.exe`)
+        }
+      }
+    }
+  }
+
+  if (ownedUserData) {
     try {
-      execFileSync(
-        'powershell',
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          `Stop-Process -Id ${leaked.join(',')} -Force -ErrorAction SilentlyContinue`,
-        ],
-        { timeout: 20000, stdio: 'ignore' },
-      )
-      console.log(`  (cleaned up ${leaked.length} process(es) this run started: ${leaked.join(', ')})`)
-    } catch {
-      // Not fatal to the verdict — but say so, because a leftover here breaks the NEXT npm ci.
-      console.error(`  ! could not stop leftover PIDs ${leaked.join(', ')} — they hold electron.exe`)
+      rmSync(ownedUserData, { recursive: true, force: true })
+    } catch (error) {
+      cleanupFailed = true
+      console.error(`  ! could not remove isolated user data ${ownedUserData}: ${String(error)}`)
     }
   }
 }
@@ -388,9 +530,14 @@ const sha = (() => {
     return 'unknown'
   }
 })()
-console.log(`${selected.length - failed}/${selected.length} interaction checks passed at ${sha}`)
-if (failed) {
+console.log(`${Math.max(0, selected.length - failed)}/${selected.length} interaction checks passed at ${sha}`)
+if (failed || fatalError || cleanupFailed) {
+  const totalFailures = failed + Number(!!fatalError) + Number(cleanupFailed)
   console.error(`\n${failed} FAILURE(S). A control that does not do its labelled thing is a defect, not a gap.`)
-  process.exit(1)
+  if (totalFailures !== failed) {
+    console.error(`Harness/cleanup failures: ${Number(!!fatalError) + Number(cleanupFailed)}`)
+  }
+  process.exitCode = 1
+} else {
+  process.exitCode = 0
 }
-process.exit(0)

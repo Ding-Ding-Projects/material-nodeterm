@@ -162,9 +162,9 @@ convincing mock-up and a working app photograph identically.
 | check | what it proves |
 |---|---|
 | Command palette | a nonsense query **narrows** the result list |
-| Settings toggle | a switch flips **and flips back** |
+| Settings toggle | a switch flips, **survives a renderer reload**, flips back, and survives again |
 | Canvas | a live viewport transform, which a static image cannot have |
-| Appearance | changing `--accent` moves a **consumer's computed colour** |
+| Appearance | changing `--accent` moves a **real app Switch's** computed colour |
 | Preload bridge | `settings.load()` **round-trips to the main process** |
 
 Three rules it is built on, each of which it would be worthless without:
@@ -184,13 +184,19 @@ Three rules it is built on, each of which it would be worthless without:
 takes the run to 4/5 with the settings case red; restoring gives 5/5 back. That is the whole claim
 of this harness — that it can tell a wired control from a painted one — tested rather than asserted.
 
+The launched app never uses the operator's real profile. The harness creates a disposable
+`NT_USER_DATA` directory and sets `NT_MULTI=1`, so the settings round-trip can persist and reload a
+real value without touching the user's settings, workspace, identity, or sessions. Attach mode is
+the explicit exception: the caller selected that already-running target and owns its state.
+
 **It cleans up after itself, and that mattered.** On Windows the app spawns a session host that
 outlives its parent *by design*. So a harness that only kills the app leaves one behind holding
 `node_modules\electron\dist\electron.exe` — and because `npm ci` deletes `node_modules` BEFORE
 installing, the next install failed and left the checkout gutted: no vitest, no react, no ws. The
 harness now snapshots this repo's Electron PIDs before launching and stops only the ones that
 appeared. Not "all Electron for this repo", which would take the developer's own running app with
-it.
+it. Launch, CDP setup, and every interaction run inside one `try`/`finally`; a failed CDP connection
+therefore cleans up too, and an unprovable cleanup makes the gate fail rather than reporting green.
 
 ## Deliberately not done here
 

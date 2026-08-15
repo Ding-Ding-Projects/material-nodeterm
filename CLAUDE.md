@@ -46,6 +46,13 @@ microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring
 `npm test` runs the vitest suite (unit + integration; the remote e2e suites skip when the
 companion server repo isn't checked out). `npm run typecheck` is the fastest correctness gate.
 
+`npm run build && npm run check:wired` is the built-app interaction gate. It launches with
+`NT_MULTI=1` and a disposable `NT_USER_DATA`, drives real controls over CDP, and removes both that
+profile and every checkout-owned Electron process it created from a `finally` block. Do not point
+it at the operator's real profile, weaken cleanup failure into success, or prove app wiring with an
+element the probe invented itself. Settings persistence crosses a renderer reload; the appearance
+probe changes a production Switch's computed background, then restores it.
+
 ## Process model (Electron, three contexts)
 
 The codebase is split by Electron process boundary — keep code on the correct side:
