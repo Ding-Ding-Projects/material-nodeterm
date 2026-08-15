@@ -1854,8 +1854,11 @@ Nothing in that says "close the app", and the usual reactions (admin terminal, r
 macOS/Linux, where unlinking an open file is ordinary — so it only bites on the platform this
 project ships.
 
-`scripts/check-build-preflight.mjs` preflights both scripts and names the exact file and the PID
-holding it. It also checks for the **Spectre-mitigated MSVC libraries**: node-pty's own
+`download-dependencies.bat` runs `scripts/check-build-preflight.mjs` after Node bootstrap and
+before `npm ci`/`npm install`, so both root BAT entry points name the exact file and the PID
+holding it even on a machine that started with no Node on `PATH`. The old pre-dependency placement
+skipped the check on exactly that fresh-machine path and never retried it before npm removed
+`node_modules`. The preflight also checks for the **Spectre-mitigated MSVC libraries**: node-pty's own
 `binding.gyp` sets `SpectreMitigation`, that component is not part of a default C++ workload, and
 without it the build dies minutes in with four copies of `MSB8040`. Deliberately not worked around
 with `/p:SpectreMitigation=false` — node-pty asks for the mitigation on purpose, and disabling it
@@ -1866,7 +1869,7 @@ against a genuinely locked `conpty.node`: **rename succeeded, open-for-read succ
 open-for-write returned `EBUSY`.** The tempting proxy (can I rename it?) does not work, because
 Windows blocks DELETE on a mapped image and a same-directory rename does not need it.
 
-Wired into `dist:win` and `rebuild`, deliberately **not** into `postinstall` — that runs
+Also wired into `dist:win` and `rebuild`, deliberately **not** into `postinstall` — that runs
 automatically in contexts a hard stop would be more disruptive than the underlying failure.
 
 ## Atomic writes (never a bare `fs.rename`)
