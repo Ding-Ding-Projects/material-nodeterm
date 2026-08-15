@@ -261,6 +261,36 @@ describe('Material 3 token foundation', () => {
   })
 })
 
+describe('themed container roles stay derived from their theme\'s own RGB triple', () => {
+  // `--md-primary-container` / `--md-error-container` are neither a bare alias (`var(--x)` alone)
+  // nor a pure `--tint-rgb` mix, so the "every M3 role is DEFINED for light" test above only
+  // requires SOME declaration to exist in the light block — it would happily accept
+  // `--md-primary-container: rgba(10, 132, 255, 0.16);` there, a hardcoded copy of the DARK
+  // triple. That is the exact bug this M3 pass fixed at `.dock-btn.active`,
+  // `.canvas-lock-btn.locked` and `.welcome__recent-del:hover`: each previously carried a literal
+  // dark-tuned `rgba(10, 132, 255, …)` / `rgba(255, 69, 58, …)` background that never flipped for
+  // light, so a light-mode user saw the dark theme's blue/red tint baked in. A future edit that
+  // "restates" these container roles for light with a pasted-in fixed triple instead of
+  // `var(--accent-rgb)` / `var(--danger-rgb)` would reintroduce that bug and pass every other test
+  // in this file — this is the one check that would catch it.
+  const DERIVED_CONTAINERS: [string, string][] = [
+    ['--md-primary-container', '--accent-rgb'],
+    ['--md-error-container', '--danger-rgb']
+  ]
+
+  it.each(DERIVED_CONTAINERS)('%s stays wired to var(%s) in both themes', (role, rgbToken) => {
+    const re = new RegExp(`^\\s*${role}\\s*:\\s*([^;]+);`, 'm')
+    for (const [label, block] of [['dark', DARK], ['light', LIGHT]] as const) {
+      const m = re.exec(block)
+      expect(m, `${role} has no declaration in the ${label} block`).toBeTruthy()
+      expect(
+        m![1],
+        `${role} in the ${label} block should read var(${rgbToken}), not a hardcoded triple`
+      ).toContain(`var(${rgbToken})`)
+    }
+  })
+})
+
 describe('the theme selector uses this app\'s convention, not the design doc\'s literal one', () => {
   // The design file this foundation was implemented from used `data-md-theme` as its selector.
   // This app's theme switch (App.tsx / lib/appTheme.ts) has always been `data-theme`, and every
