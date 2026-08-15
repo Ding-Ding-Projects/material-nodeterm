@@ -27,7 +27,7 @@ So the mode draws a deliberately narrow line, and says so on every surface that 
 > Kids mode keeps things friendly and asks before anything is deleted. It does NOT sandbox the
 > terminal — a typed command can still do anything your account can do, so stay nearby.
 
-That string is `KIDS_DISCLOSURE` in `src/core/kids-mode-policy.ts`, and a test asserts its wording.
+That string is `KIDS_DISCLOSURE` in `src/shared/kids-mode-policy.ts`, and a test asserts its wording.
 A feature that overstates its protection is worse than no feature, because somebody relies on it.
 The precedent is this app's toy locks, which already tell the user outright that they are "a speed
 bump, not real security".
@@ -138,6 +138,6 @@ own coverage.
 ## Verifying a claim here
 
 ```bash
-npx vitest run src/core/kids-mode.test.ts src/core/kids-mode-policy.test.ts
+npx vitest run src/core/kids-mode.test.ts src/shared/kids-mode-policy.test.ts \n  src/renderer/state/permissionMode.kids.test.ts
 node scripts/check-app-contract.mjs
 ```
