@@ -4,6 +4,7 @@
 // unique temp ownership, bounded Windows sharing-violation retries, cleanup on every failure.
 
 import { renameSync, rmSync, writeFileSync } from 'fs'
+import { randomUUID } from 'crypto'
 
 const TRANSIENT_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
 const RETRY_DELAYS_MS = [10, 25, 75, 200]
@@ -16,11 +17,24 @@ function codeOf(error: unknown): string {
     : ''
 }
 
-/** PID separates competing host processes; the counter separates repeated publications inside
- *  one process. A fixed `<state>.tmp` lets a second startup publish or remove the first one's
- *  bytes, especially after a stale-lock reclaim. */
-export function sessionHostStateTempName(target: string, pid = process.pid): string {
-  return `${target}.${pid}.${++tempSequence}.tmp`
+export interface SessionHostTempNameOptions {
+  /** Deterministic seams for the collision gate; production leaves all three undefined. */
+  pid?: number
+  sequence?: number
+  uuid?: () => string
+}
+
+/** The UUID separates PID namespaces, worker isolates, and PID reuse. PID/counter remain useful
+ *  ownership metadata. A fixed `<state>.tmp` lets a second startup publish or remove the first
+ *  one's bytes, especially after a stale-lock reclaim. */
+export function sessionHostStateTempName(
+  target: string,
+  opts: SessionHostTempNameOptions = {}
+): string {
+  const pid = opts.pid ?? process.pid
+  const sequence = opts.sequence ?? ++tempSequence
+  const uuid = opts.uuid ?? randomUUID
+  return `${target}.${pid}.${sequence}.${uuid()}.tmp`
 }
 
 export function renameSessionHostStateAtomic(

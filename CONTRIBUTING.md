@@ -90,7 +90,20 @@ need it too, and wire it in the same change.
   `src/core/fs-atomic.ts`. On Windows a rename fails with `EPERM` whenever anything has the
   destination open — Defender scanning the file you just wrote, the search indexer, OneDrive — so
   the plain version loses saves intermittently and only on other people's machines. A test scans
-  for this and will fail your PR; `docs/atomic-writes.md` explains why the retry is safe.
+  for this and will fail your PR; `docs/atomic-writes.md` explains why the retry is safe. A temp
+  name needs random UUID entropy: `Date.now()` is shared by every save in the same millisecond, and
+  pid-plus-counter also repeats across PID namespaces, worker isolates, and PID reuse. Keep pid and
+  sequence as ownership/diagnostic fields, not as the uniqueness guarantee. And never sweep a temp
+  merely because its pid differs — another live instance may share the directory;
+  `sweepStaleTempFiles` requires a long age grace plus an owner pid no longer visible in this
+  process's namespace; an unjudgeable probe preserves the file. A credential Clear must then use
+  `clearAtomicTarget` and surface `clear-incomplete` while any recognized temp remains — preserving
+  a plausible live writer is correct, but telling the UI its bearer bytes are gone is not.
+
+- **Unique temp files do not order whole-document writers.** If two flushes can snapshot the same
+  store concurrently, publish them FIFO (or reject stale generations). Otherwise an older flush can
+  stall inside `renameAtomic`, let a newer document land, then wake and overwrite it intact with
+  stale state. Unique names prevent byte splicing; they do not prevent time from running backwards.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.

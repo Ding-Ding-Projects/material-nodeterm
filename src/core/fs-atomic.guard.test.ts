@@ -1,6 +1,6 @@
 // Two rules, both about temp-then-rename, both invisible for the life of the project:
 //   1. no store publishes with a bare rename (any spelling) — the Windows data-loss bug;
-//   2. no store builds a temp name two writers can share — the corruption bug beside it.
+//   2. no local `.tmp` publisher builds a name two writers can share — the corruption bug beside it.
 //
 // Twenty-eight files wrote temp-then-rename, which is correct on POSIX and silently lossy on Windows: the rename
 // fails with EPERM whenever anything has the destination open, and the things that open a file we
@@ -18,9 +18,19 @@
 
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'fs'
-import { join } from 'path'
+import { join, relative } from 'path'
 
-const ROOTS = ['core', 'main', 'server'].map((d) => join(__dirname, '..', d))
+const ROOTS = ['core', 'main', 'server', 'session-host'].map((d) => join(__dirname, '..', d))
+const SOURCE_ROOT = join(__dirname, '..')
+
+/** Guard comparisons use one separator regardless of the host running Vitest. */
+function normalizedSourcePath(value: string): string {
+  return value.replace(/\\/g, '/')
+}
+
+function sourceRelativePath(file: string): string {
+  return normalizedSourcePath(relative(SOURCE_ROOT, file))
+}
 
 function sources(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -40,9 +50,17 @@ function sources(dir: string, out: string[] = []): string[] {
  * Kept deliberately short. Every entry is a place the retry does not apply, not a place somebody
  * did not get round to — an exemption that means "later" belongs in an issue, not here.
  */
-const ALLOWED = new Map<string, string>([
-  ['core\\fs-atomic.ts', 'the helper itself; this is the one real rename']
+const RENAME_ALLOWED = new Map<string, string>([
+  ['core/fs-atomic.ts', 'the async/core helper; this is its one real rename'],
+  [
+    'session-host/state-file.ts',
+    'the standalone host cannot import core; this helper owns its bounded synchronous rename retry'
+  ]
 ])
+
+function isRenameAllowed(relativeFile: string): boolean {
+  return RENAME_ALLOWED.has(normalizedSourcePath(relativeFile))
+}
 
 describe('every store publishes through renameAtomic', () => {
   const files = ROOTS.flatMap((r) => sources(r))
@@ -65,46 +83,76 @@ describe('every store publishes through renameAtomic', () => {
   //
   // `renameAtomic`/`renameAtomicSync` must not match, hence the trailing `\s*\(` and the
   // preceding-character guards.
-  const NS_CALL = /(?<![A-Za-z0-9_$.])(fs|fsPromises|fsp)\.rename\s*\(/
-  const BARE_CALL = /(?<![A-Za-z0-9_$.])rename\s*\(/
-  const BARE_SYNC_CALL = /(?<![A-Za-z0-9_$.])renameSync\s*\(/
+  interface FsRenameBindings {
+    namespaces: Set<string>
+    asyncCalls: Set<string>
+    syncCalls: Set<string>
+  }
 
-  /** Does this file import `name` from a filesystem module?
-   *
-   *  This qualifier is what makes the bare-name needles usable. Without it, `rename(` matches any
-   *  method called `rename` — and this app has several perfectly innocent ones: the kids-mode and
-   *  School-mode stores rename their own display name, the Ollama chat store renames a chat. The
-   *  first version of this test flagged all three. A guard that cries wolf is a guard somebody
-   *  deletes, so it may only fire on a name the file actually imported from `fs`. */
-  function importsFromFs(text: string, name: string): boolean {
-    const imports = text.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/g)
-    for (const [, members, mod] of imports) {
-      if (!/^(node:)?fs(\/promises)?$/.test(mod)) continue
-      if (new RegExp(`(^|[,{\\s])${name}(\\s*,|\\s*$|\\s)`).test(members.replace(/\n/g, ' ')))
-        return true
+  const FS_MODULE = /^(node:)?fs(\/promises)?$/
+  const identifier = /^[A-Za-z_$][\w$]*$/
+  const escaped = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  /** Resolve the LOCAL bindings imported from fs. Hard-coding `fs`/`fsp` let a harmless alias
+   * change (`import nodeFs ...`) turn the guard green over the same dangerous call. */
+  function fsRenameBindings(text: string): FsRenameBindings {
+    const found: FsRenameBindings = {
+      namespaces: new Set(),
+      asyncCalls: new Set(),
+      syncCalls: new Set()
     }
-    return false
+    for (const match of text.matchAll(
+      /import\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/g
+    )) {
+      if (FS_MODULE.test(match[2])) found.namespaces.add(match[1])
+    }
+    for (const match of text.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+      if (!FS_MODULE.test(match[2])) continue
+      for (const rawMember of match[1].split(',')) {
+        const member = rawMember.trim().match(/^(rename|renameSync)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/)
+        if (!member) continue
+        const local = member[2] ?? member[1]
+        if (!identifier.test(local)) continue
+        ;(member[1] === 'rename' ? found.asyncCalls : found.syncCalls).add(local)
+      }
+    }
+    // TypeScript sources occasionally retain CommonJS imports at process boundaries. They get
+    // the same alias resolution rather than becoming a quiet escape hatch.
+    for (const match of text.matchAll(
+      /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*require\(\s*['"]([^'"]+)['"]\s*\)/g
+    )) {
+      if (FS_MODULE.test(match[2])) found.namespaces.add(match[1])
+    }
+    return found
+  }
+
+  function renameHits(text: string): string[] {
+    const code = text
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+      .replace(/import\s*[\s\S]*?\s+from\s*['"][^'"]+['"]/g, '')
+    const bindings = fsRenameBindings(text)
+    const hits: string[] = []
+    for (const namespace of bindings.namespaces) {
+      const call = new RegExp(
+        `(?<![A-Za-z0-9_$.])${escaped(namespace)}(?:\\.promises)?\\.rename(?:Sync)?\\s*\\(`
+      )
+      if (call.test(code)) hits.push(`${namespace}.rename`)
+    }
+    for (const local of [...bindings.asyncCalls, ...bindings.syncCalls]) {
+      const call = new RegExp(`(?<![A-Za-z0-9_$.])${escaped(local)}\\s*\\(`)
+      if (call.test(code)) hits.push(`${local}(`)
+    }
+    return hits
   }
 
   it('no bare rename, in ANY spelling, outside the helper', () => {
     const offenders: string[] = []
     for (const f of files) {
       const text = readFileSync(f, 'utf8')
-      // Strip comments first: several files legitimately DISCUSS rename in the prose explaining
-      // why they no longer call one, and flagging those teaches people to delete the explanation.
-      const code = text
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/(^|[^:])\/\/.*$/gm, '$1')
-        // An import naming `rename`/`renameSync` is not a call, and the migrated files keep other
-        // members from the same import.
-        .replace(/import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"]/g, '')
-      const rel = f.slice(f.indexOf('src') + 4)
-      if ([...ALLOWED.keys()].some((k) => rel.endsWith(k))) continue
-      const hits: string[] = []
-      if (NS_CALL.test(code)) hits.push('fs.rename(')
-      if (importsFromFs(text, 'renameSync') && BARE_SYNC_CALL.test(code)) hits.push('renameSync(')
-      if (importsFromFs(text, 'rename') && BARE_CALL.test(code))
-        hits.push('bare rename( — destructured from fs')
+      const rel = sourceRelativePath(f)
+      if (isRenameAllowed(rel)) continue
+      const hits = renameHits(text)
       if (hits.length) offenders.push(`${rel}  [${hits.join(', ')}]`)
     }
     expect(
@@ -116,36 +164,53 @@ describe('every store publishes through renameAtomic', () => {
 
   it('the guard would actually catch each spelling', () => {
     // Proving the needles bite, on strings rather than by breaking real files.
-    expect(NS_CALL.test('await fs.rename(a, b)')).toBe(true)
-    expect(BARE_SYNC_CALL.test('renameSync(tmp, file)')).toBe(true)
-    expect(BARE_CALL.test('await rename(tmp, this.file)')).toBe(true)
+    expect(renameHits("import fs from 'fs'\nawait fs.rename(a, b)")).not.toEqual([])
+    expect(renameHits("import nodeFs from 'node:fs'\nnodeFs.renameSync(a, b)")).not.toEqual([])
+    expect(renameHits("import fs from 'fs'\nawait fs.promises.rename(a, b)")).not.toEqual([])
+    expect(renameHits("import { renameSync } from 'fs'\nrenameSync(tmp, file)")).not.toEqual([])
+    expect(renameHits("import { rename as move } from 'node:fs/promises'\nawait move(a, b)")).not.toEqual([])
+    expect(renameHits("const disk = require('fs')\ndisk.renameSync(a, b)")).not.toEqual([])
     // …and that the replacements do NOT trip it. `renameAtomic` contains `rename`, so this is the
     // assertion standing between the guard and flagging every file it just fixed.
-    expect(NS_CALL.test('await renameAtomic(a, b)')).toBe(false)
-    expect(BARE_SYNC_CALL.test('renameAtomicSync(tmp, file)')).toBe(false)
-    expect(BARE_CALL.test('await renameAtomic(tmp, this.file)')).toBe(false)
-    expect(BARE_CALL.test('await renameAtomicSync(tmp, f)')).toBe(false)
+    expect(renameHits("import { renameAtomic } from './fs-atomic'\nawait renameAtomic(a, b)"))
+      .toEqual([])
+    expect(renameHits("import { renameAtomicSync } from './fs-atomic'\nrenameAtomicSync(a, b)"))
+      .toEqual([])
   })
 
   it('the fs-import qualifier separates a real rename from a method called rename', () => {
     // The false positives that made this necessary were all real: kids-mode, School-mode and the
     // Ollama chat store each expose a `rename()` of their own.
     const fsImport = "import { mkdir, rename, writeFile } from 'node:fs/promises'"
-    expect(importsFromFs(fsImport, 'rename')).toBe(true)
-    expect(importsFromFs("import { renameSync } from 'fs'", 'renameSync')).toBe(true)
-    expect(importsFromFs("import { mkdir, writeFile } from 'node:fs/promises'", 'rename')).toBe(false)
+    expect([...fsRenameBindings(fsImport).asyncCalls]).toEqual(['rename'])
+    expect([...fsRenameBindings("import { renameSync } from 'fs'").syncCalls]).toEqual(['renameSync'])
+    expect(fsRenameBindings("import { mkdir, writeFile } from 'node:fs/promises'").asyncCalls.size)
+      .toBe(0)
     // Not from fs at all — a store's own method, or a helper of the same name.
-    expect(importsFromFs("import { rename } from './my-store'", 'rename')).toBe(false)
+    expect(fsRenameBindings("import { rename } from './my-store'").asyncCalls.size).toBe(0)
     // Must not be satisfied by a longer member that merely contains the name.
-    expect(importsFromFs("import { renameAtomic } from './fs-atomic'", 'rename')).toBe(false)
-    expect(importsFromFs("import { renameSync } from 'fs'", 'rename')).toBe(false)
+    expect(fsRenameBindings("import { renameAtomic } from './fs-atomic'").asyncCalls.size).toBe(0)
+    expect(fsRenameBindings("import { renameSync } from 'fs'").asyncCalls.size).toBe(0)
+  })
+
+  it('normalizes helper exemptions on both POSIX and Windows-shaped paths', () => {
+    expect(normalizedSourcePath('core/fs-atomic.ts')).toBe('core/fs-atomic.ts')
+    expect(normalizedSourcePath(String.raw`core\fs-atomic.ts`)).toBe('core/fs-atomic.ts')
+    expect(isRenameAllowed('core/fs-atomic.ts')).toBe(true)
+    expect(isRenameAllowed(String.raw`core\fs-atomic.ts`)).toBe(true)
+    expect(isRenameAllowed('session-host/state-file.ts')).toBe(true)
+    expect(isRenameAllowed(String.raw`session-host\state-file.ts`)).toBe(true)
+    expect(isRenameAllowed('nested/session-host/state-file.ts')).toBe(false)
+    expect(isRenameAllowed('session-host/state-file.ts.bak')).toBe(false)
+    const scanned = new Set(files.map(sourceRelativePath))
+    for (const allowed of RENAME_ALLOWED.keys()) expect(scanned.has(allowed)).toBe(true)
   })
 })
 
-describe('no store publishes through a shared temp name', () => {
+describe('no local .tmp publisher uses a shared temp name', () => {
   const files = ROOTS.flatMap((r) => sources(r))
 
-  it('every temp path carries a pid or a counter', () => {
+  it('every local temp path carries random UUID entropy', () => {
     // The second bug at the same sites, independent of the platform question: a FIXED temp name
     // means two writers share one path, so one rename publishes the other's half-written bytes —
     // or moves the temp out from under it, and the loser fails with a confusing ENOENT.
@@ -155,15 +220,14 @@ describe('no store publishes through a shared temp name', () => {
     // silent about a second. The Server Edition takes a --data-dir, so two can be aimed at one
     // directory; scrollback-store had a counter and no pid, which is that gap exactly.
     //
-    // Deliberately NOT "must call tempNameFor": several stores build the same pid+counter name
-    // inline and are perfectly correct. The rule is the property, not the helper.
+    // Deliberately NOT "must call tempNameFor": an inline randomUUID name is also correct. The
+    // rule is the collision-resistant property, not one spelling of the helper call.
     const offenders: string[] = []
     for (const f of files) {
       const text = readFileSync(f, 'utf8')
-      const rel = f.slice(f.indexOf('src') + 4)
-      if (rel.endsWith('core\fs-atomic.ts')) continue
-      for (const m of text.matchAll(/^\s*(?:const|let)\s+\w+\s*=\s*`([^`]*\.tmp)`/gm)) {
-        if (/\$\{[^}]*\b(pid|Seq|seq|randomUUID|uuid)\b|Date\.now/.test(m[1])) continue
+      const rel = sourceRelativePath(f)
+      for (const m of tempNameTemplates(text)) {
+        if (isUniqueTempName(m[1], rel, text)) continue
         offenders.push(`${rel}  \`${m[1]}\``)
       }
     }
@@ -176,12 +240,65 @@ describe('no store publishes through a shared temp name', () => {
   })
 
   it('the needle tells a shared name from a safe one', () => {
-    const shared = /^\s*(?:const|let)\s+\w+\s*=\s*`([^`]*\.tmp)`/m
-    const safe = (n: string): boolean =>
-      /\$\{[^}]*\b(pid|Seq|seq|randomUUID|uuid)\b|Date\.now/.test(n)
-    expect(shared.test('  const tmp = `${this.path}.tmp`')).toBe(true)
-    expect(safe('${this.path}.tmp')).toBe(false)
-    expect(safe('${file}.${process.pid}.${++writeSeq}.tmp')).toBe(true)
-    expect(safe('${f}.${Date.now()}.tmp')).toBe(true)
+    expect(tempNameTemplates('  const tmp = `${this.path}.tmp`')).toHaveLength(1)
+    expect(tempNameTemplates('  const tmp = `${this.path}.tmp-${process.pid}-${Date.now()}`')).toHaveLength(1)
+    expect(tempNameTemplates('  const tmp = path.join(dir, `.${nodeId}.${process.pid}.${Date.now()}.tmp`)')).toHaveLength(1)
+    expect(tempNameTemplates('  const tmp = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)')).toHaveLength(1)
+    expect(tempNameTemplates('  return `${target}.${pid}.${sequence}.${uuid()}.tmp`')).toHaveLength(1)
+    const importsUuid = "import { randomUUID } from 'crypto'"
+    expect(isUniqueTempName('${this.path}.tmp', 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName(
+      '${file}.${process.pid}.${++writeSeq}.${randomUUID()}.tmp',
+      'core/store.ts',
+      importsUuid
+    )).toBe(true)
+    expect(isUniqueTempName(
+      '${file}.${process.pid}.${++this.writeSeq}.${uuid()}.tmp',
+      'core/fs-atomic.ts',
+      ''
+    )).toBe(true)
+    expect(isUniqueTempName('${file}.${Date.now()}-${randomUUID()}.tmp', 'core/store.ts', importsUuid))
+      .toBe(true)
+    // A function merely NAMED uuid/randomUUID is not entropy. Only the two helpers may use their
+    // behavior-tested injected uuid seam; inline sites must import crypto.randomUUID directly.
+    expect(isUniqueTempName('${file}.${uuid()}.tmp', 'core/other.ts', '')).toBe(false)
+    expect(isUniqueTempName('${file}.${randomUUID()}.tmp', 'core/other.ts', '')).toBe(false)
+    // A clock tick is shared by every writer in that millisecond. A pid only separates processes;
+    // neither one separates two calls in the same process.
+    expect(isUniqueTempName('${file}.${Date.now()}.tmp', 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName('${file}.${process.pid}.${Date.now()}.tmp', 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName('${file}.tmp-${process.pid}-${Date.now()}', 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName('${file}.${process.pid}.tmp', 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName('${file}.${++writeSeq}.tmp', 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName('${file}.${process.pid}.${writeSeq}.tmp', 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName('${file}.${process.pid}.${++writeSeq}.tmp', 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName('${file}.${process.pid}.${writeSeq++ % 2}.tmp', 'core/store.ts', ''))
+      .toBe(false)
   })
 })
+
+/** Find temp-path templates returned by a helper or assigned directly/through path.join. Keeping
+ * the expression bounded to one line avoids walking into an unrelated later template when a
+ * declaration is not a path. The nested form matters: the historical node-token collision lived
+ * inside path.join and the old direct-only needle silently missed it. */
+function tempNameTemplates(text: string): RegExpMatchArray[] {
+  return [...text.matchAll(
+    /^\s*(?:(?:const|let)\s+\w+\s*=\s*(?:(?:path\.)?join\([^`\r\n]*?)?|return\s+)`([^`]*(?:\.tmp|tmp-)[^`]*)`/gm
+  )]
+}
+
+/** A random UUID is the unique dimension. PID+counter is valuable ownership metadata, but two
+ * containers can both be PID 1 with a fresh module counter, worker isolates share a PID with
+ * separate counters, and an OS can reuse a PID while crash litter remains. */
+function isUniqueTempName(name: string, relativeFile: string, source: string): boolean {
+  const helperWithBehavioralUuidChut =
+    relativeFile === 'core/fs-atomic.ts' || relativeFile === 'session-host/state-file.ts'
+  if (helperWithBehavioralUuidChut && /\$\{[^}]*\buuid\s*\(/.test(name)) return true
+  if (!/\$\{[^}]*\brandomUUID\s*\(/.test(name)) return false
+  for (const match of source.matchAll(
+    /import\s*\{([^}]*)\}\s*from\s*['"](?:node:)?crypto['"]/g
+  )) {
+    if (match[1].split(',').some((member) => /^randomUUID$/.test(member.trim()))) return true
+  }
+  return false
+}

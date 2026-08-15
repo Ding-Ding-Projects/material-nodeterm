@@ -17,7 +17,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
-import { renameAtomic } from '../fs-atomic'
+import { clearAtomicTarget, renameAtomic, sweepStaleTempFiles, tempNameFor } from '../fs-atomic'
 
 /** Owner read/write only. The whole reason these are separate files. */
 const MODE = 0o600
@@ -25,6 +25,14 @@ const MODE = 0o600
 /** Providers whose usage is read with a pasted browser cookie. */
 export const COOKIE_PROVIDERS = ['minimax', 'opencode'] as const
 export type CookieProvider = (typeof COOKIE_PROVIDERS)[number]
+
+export class ProviderCookieClearError extends Error {
+  readonly code = 'clear-incomplete' as const
+
+  constructor() {
+    super('The provider cookie file was removed, but credential temp files are still active or could not be inspected.')
+  }
+}
 
 export function isCookieProvider(v: unknown): v is CookieProvider {
   return typeof v === 'string' && (COOKIE_PROVIDERS as readonly string[]).includes(v)
@@ -42,42 +50,6 @@ export async function readProviderCookie(provider: CookieProvider): Promise<stri
     return typeof j.cookie === 'string' && j.cookie.trim() ? j.cookie : null
   } catch {
     return null
-  }
-}
-
-/** Paired with `process.pid` in the temp name: the counter makes a name unique WITHIN this process,
- *  the pid makes it unique ACROSS processes (it restarts at 0 in every new one — two
- *  `nodeterm-server --data-dir X` processes share the dir with no lock). Same scheme as
- *  agent-status-mirror's local write. */
-let writeSeq = 0
-
-/**
- * Remove temp files no writer in THIS process owns: the legacy fixed `<file>.tmp` (written by
- * builds before per-call names) and any `<file>.<pid>.<seq>.tmp` whose pid is not ours. Best
- * effort — a failure here must never break a save.
- *
- * Unlike settings.json, an orphan here is a live credential at 0600 that nothing will ever
- * overwrite, so it has to be collected rather than left. Temps bearing our own pid are untouchable:
- * one may belong to a concurrent write sitting between its `writeFile` and its `rename`, and
- * deleting it would recreate the exact race the unique names fixed. A foreign pid can in theory be
- * a second LIVE process on the same data dir; that setup has no lock to begin with, and the worst
- * case is that process's rename failing cleanly (ENOENT, rethrown to its caller) instead of a
- * forgotten cookie sitting on disk forever.
- */
-async function sweepStaleTmp(target: string): Promise<void> {
-  try {
-    const dir = path.dirname(target)
-    const base = path.basename(target)
-    for (const entry of await fs.readdir(dir)) {
-      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>'
-      const owner = /^\.(\d+)\.\d+$/.exec(middle)?.[1]
-      if (middle === '' || (owner && owner !== String(process.pid))) {
-        await fs.rm(path.join(dir, entry), { force: true }).catch(() => undefined)
-      }
-    }
-  } catch {
-    // A dir we cannot read is not a reason to fail (or skip) the write below.
   }
 }
 
@@ -107,21 +79,23 @@ const writeChains = new Map<CookieProvider, Promise<unknown>>()
 
 async function writeCookieNow(provider: CookieProvider, cookie: string): Promise<void> {
   const target = file(provider)
-  // Both paths sweep: clearing a cookie that leaves an orphan temp behind has not cleared anything.
-  await sweepStaleTmp(target)
   if (!cookie.trim()) {
-    await fs.rm(target, { force: true })
+    // A fresh foreign temp may be a live writer and must survive. That makes this clear
+    // incomplete, though: surface it instead of reporting that bearer bytes are gone.
+    const result = await clearAtomicTarget(target)
+    if (!result.cleared) throw new ProviderCookieClearError()
     return
   }
-  const tmp = `${target}.${process.pid}.${++writeSeq}.tmp`
+  await sweepStaleTempFiles(target)
+  const tmp = tempNameFor(target)
   try {
     await fs.writeFile(tmp, JSON.stringify({ cookie }), { encoding: 'utf-8', mode: MODE })
     // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
     await renameAtomic(tmp, target)
   } catch (e) {
     // A failed write MUST remove its own temp, because here a leaked temp IS a leaked cookie: a
-    // unique name is never written again, so only this cleanup (or a later run's sweep above, once
-    // the pid is dead) will ever collect it. The error still propagates.
+    // unique name is never written again, so only this cleanup (or a later sweep after the age
+    // grace and an owner pid no longer visible here mark it abandoned) will collect it. The error propagates.
     await fs.rm(tmp, { force: true }).catch(() => {})
     throw e
   }

@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { GitHubIssue } from '../../shared/github-issues'
 import { parseGitHubRepository } from './config'
-import { renameAtomic } from '../fs-atomic'
+import { renameAtomic, tempNameFor } from '../fs-atomic'
 
 const DIRECTORY = 'github-issues-cache'
 const BINDING_DIRECTORY = 'github-issues-bindings'
@@ -33,11 +33,6 @@ export class GitHubCacheError extends Error {
     super(code)
   }
 }
-
-/** Paired with `process.pid` in the temp name in `writePrivate`: the counter makes a name unique
- *  WITHIN this process, the pid makes it unique ACROSS processes (it restarts at 0 in every new
- *  one). Same scheme as agent-status-mirror's local write. */
-let writeSeq = 0
 
 /**
  * `fs.rename(from, to)` when `to` already exists — the exact "last writer wins" move every save
@@ -288,9 +283,9 @@ export class GitHubIssueCache {
     // ordered by nothing at all. Binding writes are looser still — `prepareState` runs under
     // `statePreparations`, a Set that admits several at once, and they share a binding file. With a
     // shared name one writer's rename publishes the other's half-written document, or moves the
-    // file out from under it entirely and the loser's rename fails. The pid covers the other
-    // direction: two processes on one data dir have no lock, and their counters both start at 0.
-    const temporary = `${file}.${process.pid}.${++writeSeq}.tmp`
+    // file out from under it entirely and the loser's rename fails. `tempNameFor` also keeps
+    // separate processes sharing one data dir from choosing the same staging path.
+    const temporary = tempNameFor(file)
     try {
       await fs.writeFile(temporary, content, { encoding: 'utf-8', mode: 0o600 })
       await fs.chmod(temporary, 0o600)

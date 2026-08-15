@@ -2,7 +2,7 @@ import { mkdirSync, chmodSync, existsSync, writeFileSync, rmSync } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
 import { isSafeNodeId } from './node-auth-token'
-import { renameAtomicSync } from '../fs-atomic'
+import { renameAtomicSync, tempNameFor } from '../fs-atomic'
 
 /**
  * Distribution channel for the per-node capability: a FILE keyed by node id, read by the client at
@@ -35,7 +35,7 @@ export function writeNodeTokenFile(nodeId: string, token: string): boolean {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     chmodSync(dir, 0o700) // an existing dir keeps its old mode otherwise
     const file = path.join(dir, nodeId)
-    const tmp = path.join(dir, `.${nodeId}.${process.pid}.${Date.now()}.tmp`)
+    const tmp = tempNameFor(file)
     try {
       writeFileSync(tmp, `${token}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
       renameAtomicSync(tmp, file)

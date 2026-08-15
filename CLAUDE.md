@@ -1960,12 +1960,37 @@ one indivisible rename, so a retry cannot tear a write. They deliberately do NOT
 eventually lands), do not retry `ENOENT`/`ENOSPC`, do not branch on platform (or the behaviour under
 test on a Mac is not the behaviour shipped to Windows), and never swallow the final error.
 
+**A unique temp name owes random UUID entropy. `Date.now()` and pid-plus-counter are not global
+dimensions** — two bridge calls routinely start in the same millisecond, while containers can both
+be PID 1, worker isolates share a PID with separate module counters, and the OS reuses PIDs after
+crashes. `tempNameFor` owns UUID uniqueness while retaining pid/sequence for ownership and
+diagnostics. The cleanup is equally strict:
+`sweepStaleTempFiles` never reads “foreign pid” as “dead process”; desktop multi-instance mode and
+two Server Edition processes can deliberately share a directory. It removes a pid-bearing temp
+only after a 24-hour grace and a signal-0 probe says the owner pid is no longer visible in this
+process's namespace; `EPERM` or an unfamiliar probe result preserves it. ESRCH is not global proof
+across PID namespaces, which is why age and UUID entropy are both required. A fresh or unjudgeable
+temp may be an in-flight credential write. Credential clear paths use `clearAtomicTarget`: it
+removes the canonical file without sabotaging that possible writer, inspects for every recognized
+temp, and returns an incomplete result while any remain or inspection fails. The PAT/cookie/token
+callers propagate that as `clear-incomplete`; they must never report success while bearer bytes are
+still beside the canonical path.
+
+**Unique paths prevent splicing, not stale generations.** A writer that snapshots a whole document
+must also serialize publishes (or reject an out-of-date generation). `agent-status-mirror.flush`
+demonstrated the separate race: flush A captured old state and slept during `renameAtomic`'s
+transient-`EPERM` retry, flush B published new state, then A woke and atomically replaced it with
+the complete but stale document. Its disk writes are FIFO; the barrier test deliberately recreates
+that ordering and must stay red if the queue is removed.
+
 **Nothing in the toolchain catches the bare version.** 28 files had it, across three spellings — the user's canvas, their
 settings, their sealed credentials, their pinned devices — and every one of them reads as a correct
 atomic write, because on the platform most of this was written on it is one. The only signal in a
 6,000-test suite was one store's overlapping-saves test, red on Windows for that store's whole life.
-So it is enforced by scan: `src/core/fs-atomic.guard.test.ts` fails on any bare `fs.rename` outside
-the helper. Full write-up, including the separate shared-temp-name bug at the same sites:
+So it is enforced by scan: `src/core/fs-atomic.guard.test.ts` covers core, both shells and the
+standalone session host, and fails on any bare `fs.rename` outside the two publication helpers
+(`core/fs-atomic.ts`; `session-host/state-file.ts`, which cannot import core). Full write-up,
+including the separate shared-temp-name bug at the same sites:
 **`docs/atomic-writes.md`**.
 
 ## Conventions
