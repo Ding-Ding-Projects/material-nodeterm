@@ -128,63 +128,63 @@ function fakeDocument(execCommand: () => boolean) {
 describe('bridge clipboard', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('uses the Clipboard API when it is available', () => {
+  it('uses the Clipboard API when it is available and reports completion', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('navigator', { clipboard: { writeText } })
-    buildStubApi().clipboard.writeText('hi')
+    await expect(buildStubApi().clipboard.writeText('hi')).resolves.toBe(true)
     expect(writeText).toHaveBeenCalledWith('hi')
   })
 
-  it('falls back to execCommand when there is no Clipboard API (plain http)', () => {
+  it('falls back to execCommand when there is no Clipboard API (plain http)', async () => {
     const { doc, textarea } = fakeDocument(() => true)
     vi.stubGlobal('navigator', {})
     vi.stubGlobal('document', doc)
-    buildStubApi().clipboard.writeText('hi')
+    await expect(buildStubApi().clipboard.writeText('hi')).resolves.toBe(true)
     expect(doc.execCommand).toHaveBeenCalledWith('copy')
     expect(textarea.value).toBe('hi')
     // the scratch textarea must not be left behind in the DOM
     expect(textarea.remove).toHaveBeenCalled()
   })
 
-  it('removes the scratch textarea even when execCommand THROWS (no leaked node)', () => {
+  it('removes the scratch textarea even when execCommand THROWS (no leaked node)', async () => {
     const { doc, textarea } = fakeDocument(() => {
       throw new Error('NS_ERROR_FAILURE')
     })
     vi.stubGlobal('navigator', {})
     vi.stubGlobal('document', doc)
     vi.stubGlobal('window', { dispatchEvent: vi.fn(), isSecureContext: false })
-    expect(() => buildStubApi().clipboard.writeText('hi')).not.toThrow()
+    await expect(buildStubApi().clipboard.writeText('hi')).resolves.toBe(false)
     // an invisible, focused, position:fixed textarea left in <body> would eat every keystroke
     expect(textarea.remove).toHaveBeenCalled()
   })
 
-  it('restores focus to the previously-focused element after a successful fallback copy', () => {
+  it('restores focus to the previously-focused element after a successful fallback copy', async () => {
     const { doc, previouslyFocused } = fakeDocument(() => true)
     vi.stubGlobal('navigator', {})
     vi.stubGlobal('document', doc)
-    buildStubApi().clipboard.writeText('hi')
+    await expect(buildStubApi().clipboard.writeText('hi')).resolves.toBe(true)
     // without this the terminal goes deaf: activeElement falls back to <body>
     expect(previouslyFocused.focus).toHaveBeenCalledTimes(1)
   })
 
-  it('restores focus even when the copy fails', () => {
+  it('restores focus even when the copy fails', async () => {
     const { doc, previouslyFocused } = fakeDocument(() => {
       throw new Error('NS_ERROR_FAILURE')
     })
     vi.stubGlobal('navigator', {})
     vi.stubGlobal('document', doc)
     vi.stubGlobal('window', { dispatchEvent: vi.fn(), isSecureContext: false })
-    buildStubApi().clipboard.writeText('hi')
+    await expect(buildStubApi().clipboard.writeText('hi')).resolves.toBe(false)
     expect(previouslyFocused.focus).toHaveBeenCalledTimes(1)
   })
 
-  it('surfaces a toast when even execCommand cannot copy (never silent)', () => {
+  it('surfaces a toast when even execCommand cannot copy (never silent)', async () => {
     const { doc } = fakeDocument(() => false)
     const dispatchEvent = vi.fn()
     vi.stubGlobal('navigator', {})
     vi.stubGlobal('document', doc)
     vi.stubGlobal('window', { dispatchEvent, isSecureContext: false })
-    buildStubApi().clipboard.writeText('hi')
+    await expect(buildStubApi().clipboard.writeText('hi')).resolves.toBe(false)
     expect(dispatchEvent).toHaveBeenCalledTimes(1)
     const ev = dispatchEvent.mock.calls[0][0] as CustomEvent<{ kind: string; message: string }>
     expect(ev.type).toBe('nodeterm:toast')
@@ -192,15 +192,45 @@ describe('bridge clipboard', () => {
     expect(ev.detail.message).toMatch(/http/i)
   })
 
-  it('does not blame plain http when the failure happens in a secure context', () => {
+  it('does not blame plain http when the failure happens in a secure context', async () => {
     const { doc } = fakeDocument(() => false)
     const dispatchEvent = vi.fn()
     vi.stubGlobal('navigator', {})
     vi.stubGlobal('document', doc)
     vi.stubGlobal('window', { dispatchEvent, isSecureContext: true })
-    buildStubApi().clipboard.writeText('hi')
+    await expect(buildStubApi().clipboard.writeText('hi')).resolves.toBe(false)
     const ev = dispatchEvent.mock.calls[0][0] as CustomEvent<{ message: string }>
     expect(ev.detail.message).not.toMatch(/plain http/i)
     expect(ev.detail.message).toMatch(/copy/i)
+  })
+
+  it('awaits a rejected Clipboard API write before reporting execCommand success', async () => {
+    const { doc } = fakeDocument(() => true)
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error('permission denied')) }
+    })
+    vi.stubGlobal('document', doc)
+    vi.stubGlobal('window', { dispatchEvent, isSecureContext: true })
+
+    await expect(buildStubApi().clipboard.writeText('hi')).resolves.toBe(true)
+    expect(doc.execCommand).toHaveBeenCalledWith('copy')
+    expect(dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('can defer the toast while its caller still has another fallback', async () => {
+    const { doc } = fakeDocument(() => false)
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error('permission denied')) }
+    })
+    vi.stubGlobal('document', doc)
+    vi.stubGlobal('window', { dispatchEvent, isSecureContext: true })
+
+    await expect(
+      buildStubApi().clipboard.writeText('hi', { reportFailure: false })
+    ).resolves.toBe(false)
+    expect(doc.execCommand).toHaveBeenCalledWith('copy')
+    expect(dispatchEvent).not.toHaveBeenCalled()
   })
 })

@@ -242,7 +242,9 @@ Single-user auth. There is one password; sessions are per-browser.
 - **Login rate limit / lockout:** 5 failed password attempts trip a 60-second lockout
   (further attempts get `429 too_many_attempts`); a success resets the counter.
 - **Auth gate:** every route except the login/setup pages and their POST handlers
-  requires a valid session — HTML navigations redirect to `/login`, API/WS get `401`.
+  requires a valid session — HTML navigations redirect to `/login`, API/WS get `401`. The raw
+  browser upload route is behind this same gate; an unauthenticated request cannot create a staging
+  file.
 
 ### Reverse-proxy SSO (header trust)
 
@@ -386,6 +388,36 @@ browser:
   diff) all run against the server's `git` service.
 - **Explorer** — the file tree lists the project `cwd` via `fs:list`.
 
+### Bounded browser uploads
+
+Browser-held files no longer travel as base64 inside `files.saveUpload` WebSocket RPC calls. A
+7 MiB raw file becomes roughly 9.3 MiB after base64 expansion, which exceeds the socket's deliberate
+8 MiB `WS_MAX_PAYLOAD` and used to disconnect every feature multiplexed over that connection.
+
+The Server Edition bridge now sends raw `application/octet-stream` bytes to the authenticated,
+same-origin `POST /upload?name=…` endpoint. The receiver streams the request into a private staging
+file and atomically publishes it only after the body completes. A selected `File` is passed directly
+to `fetch` as its Blob body — the renderer does not materialize an ArrayBuffer, base64 string,
+decoded binary string, and second byte array first. Both sides share a 64 MiB raw-byte ceiling: the
+browser checks `Blob.size` before fetch (and legacy base64 callers check encoded length before
+decoding), while the server checks `Content-Length` when present and counts the body again while
+receiving it, so chunked or dishonestly-labelled requests cannot bypass the limit. Over-limit
+requests receive `413` with the same human-readable limit and leave no partial file. The WebSocket
+ceiling remains 8 MiB — upload capacity is not bought by weakening the socket's memory/backpressure
+boundary. When a chunked sender crosses the limit, the server sends the refusal immediately but
+continues discarding that request to natural EOF. Returning early from Node's default async
+iterator destroys the request stream, resets a slow client before it can reliably read the `413`,
+and prevents keep-alive reuse. Upload roots/directories request mode `0700` and files `0600` on
+POSIX (the mode flags are harmless on Windows); failed writes remove only their own random staging
+directory. Before a new upload, POSIX hosts also tighten a legacy permissive staging tree left by an
+older build. That migration opens the managed root, token directories, and immediate single-link
+files with `O_NOFOLLOW` and applies `0700`/`0600` through the opened descriptor; it skips symlinks,
+hard-linked files, nested directories, and anything outside the upload root.
+
+Authentication remains mandatory for non-browser clients that omit `Origin`. When an `Origin`
+header is present, its host must also match the request `Host`; malformed or cross-host origins are
+rejected before a staging directory is created, matching the WebSocket's cross-site request guard.
+
 The following affordances change shape in the browser (no native OS is reachable):
 
 - **Folder / file picker** — there is **no native dialog**. "Open folder…" and file
@@ -402,7 +434,10 @@ The following affordances change shape in the browser (no native OS is reachable
   only works **inside a user gesture**: the copy shortcut and the click-driven copy
   buttons are fine, but an `OSC 52` write driven by terminal *output* (`vim "+y`, `gh`,
   `yazi`) is not — it fails and raises a **banner** ("the browser blocks clipboard access
-  over plain http"). Copy never fails silently, but if you want it to work properly,
+  over plain http"). The bridge awaits both routes and resolves a truthful boolean. A caller with
+  one more fallback can defer the bridge's banner; the final exhausted route raises exactly one,
+  so a later success is never contradicted by an earlier error. Copy never fails silently, but if
+  you want it to work properly,
   **serve over https (or localhost)** — that is one more reason for the TLS proxy above.
   Note also that **Ctrl+Shift+C** (advertised as copy on Linux/Windows) additionally opens
   Chromium's element inspector and a page cannot suppress that; **Ctrl+Insert** is the
@@ -550,3 +585,7 @@ only exercises the HTTP/auth surface). With `npm run server:dev` running:
     parent node; click it to watch its live transcript stream.
 13. **Context meter (Phase 3b)** — as a Claude session accumulates transcript, the node's
     **context-window meter** should fill.
+14. **Converter upload transport** — open the File converter and add a 7 MiB browser file; it
+    should stage successfully without the WebSocket reconnect overlay appearing. An upload above
+    64 MiB should show the upload-limit refusal, keep the socket connected, and create no queue
+    item or partial staging file.

@@ -9,13 +9,28 @@ import {
   type ConverterPreflightResult,
   type ConverterQueueState
 } from '@shared/converter'
+import { E_UNSUPPORTED } from '@shared/rpc'
+import type { NodeTerminalApi } from '@shared/types'
+import { UPLOAD_MAX_BYTES, UPLOAD_TOO_LARGE_MESSAGE } from '@shared/uploads'
 import { isBrowserRuntime } from '../../bridge/runtime'
 import { formatBytes } from '../../lib/bytesFormat'
 import { bytesToBase64 } from '../../lib/browserBytes'
+import { useActiveSessionApi } from '../../session/session'
 import { AdapterCatalog } from './AdapterCatalog'
 
 export interface FileConverterPanelProps {
   onClose: () => void
+}
+
+const PANEL_SCOPE_KEYS = new WeakMap<NodeTerminalApi, number>()
+let nextPanelScopeKey = 1
+
+function panelScopeKey(api: NodeTerminalApi): number {
+  const known = PANEL_SCOPE_KEYS.get(api)
+  if (known !== undefined) return known
+  const key = nextPanelScopeKey++
+  PANEL_SCOPE_KEYS.set(api, key)
+  return key
 }
 
 interface PickedFile {
@@ -27,15 +42,42 @@ const toast = (message: string, kind: 'error' | 'info' = 'info'): void => {
   window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind, message } }))
 }
 
-/** Reads a browser File's bytes and lands them on the server via files.saveUpload — the Server
- *  Edition has no native multi-file dialog, so this is how "Add files…" works in the browser. */
-async function uploadBrowserFiles(files: FileList): Promise<string[]> {
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message
+  return fallback
+}
+
+function converterErrorMessage(error: unknown): string {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === E_UNSUPPORTED
+  ) {
+    return `File conversion is not available for this session (${E_UNSUPPORTED}).`
+  }
+  return errorMessage(error, 'The file converter could not complete that action.')
+}
+
+/** Lands browser Files on the active machine — the Server Edition has no native multi-file dialog,
+ *  so this is how "Add files…" works there. */
+async function uploadBrowserFiles(filesApi: NodeTerminalApi['files'], files: FileList): Promise<string[]> {
   const paths: string[] = []
   for (const file of Array.from(files)) {
-    const buf = await file.arrayBuffer()
-    const base64 = bytesToBase64(new Uint8Array(buf))
-    const path = await window.nodeTerminal.files.saveUpload(file.name, base64)
-    if (path) paths.push(path)
+    // File.size is browser-owned metadata. Refuse before either carrier reads the file; the
+    // receiver still enforces the same shared ceiling against untrusted bytes.
+    if (file.size > UPLOAD_MAX_BYTES) throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+    const path = filesApi.saveUploadBlob
+      ? // Server Edition owns this same-origin capability. Passing the File by identity lets fetch
+        // stream its backing store without ArrayBuffer + base64 + atob + Uint8Array copies.
+        await filesApi.saveUploadBlob(file.name, file)
+      : await file.arrayBuffer().then((buf) =>
+          filesApi.saveUpload(file.name, bytesToBase64(new Uint8Array(buf)))
+        )
+    // `null` covers an unwritable staging area and core-side size rejection. Silently dropping it
+    // makes the picker look like it accepted the file while adding nothing to the next step.
+    if (!path) throw new Error(`Could not upload "${file.name}" — the server did not save the file.`)
+    paths.push(path)
   }
   return paths
 }
@@ -66,13 +108,15 @@ function QueueRow({
   onCancel,
   onRetry,
   onRemove,
-  onResolve
+  onResolve,
+  onReveal
 }: {
   item: ConvertQueueItem
   onCancel: (id: string) => void
   onRetry: (id: string) => void
   onRemove: (id: string) => void
   onResolve: (id: string, opts: { overwrite?: boolean; lossyAcknowledged?: boolean }) => void
+  onReveal: (path: string) => void
 }) {
   const pct = item.totalBytes > 0 ? Math.round((item.progressBytes / item.totalBytes) * 100) : 0
   return (
@@ -137,7 +181,7 @@ function QueueRow({
           </button>
         )}
         {item.status === 'done' && !isBrowserRuntime() && (
-          <button className="cv-item__link" onClick={() => void window.nodeTerminal.shell.reveal(item.destPath)}>
+          <button className="cv-item__link" onClick={() => onReveal(item.destPath)}>
             Reveal
           </button>
         )}
@@ -163,7 +207,21 @@ function QueueRow({
  * full two-key destructive-action slider; and the queue list here shows the first page only (no
  * pager control yet) — the engine itself is already paginated (converter.state(offset, limit)).
  */
-export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
+export function FileConverterPanel(props: FileConverterPanelProps) {
+  // This drawer sits outside Canvas's project-keyed SessionProvider. Resolve from the active
+  // project binding directly so a relay tab reaches its refusing converter stub instead of
+  // silently operating on the guest's window-global core.
+  const api = useActiveSessionApi()
+  // The key changes during the project-switch render itself. That synchronously discards rows,
+  // paths, and callbacks owned by the old machine before a user can click them with the new API;
+  // a passive-effect reset leaves one committed stale-owner frame.
+  return <FileConverterPanelForApi key={panelScopeKey(api)} {...props} api={api} />
+}
+
+function FileConverterPanelForApi({
+  onClose,
+  api
+}: FileConverterPanelProps & { api: NodeTerminalApi }) {
   const [catalog, setCatalog] = useState<ConverterAdapterDescriptor[]>(CONVERTER_CATALOG)
   const [selectedAdapterId, setSelectedAdapterId] = useState<string | null>(null)
   const [pending, setPending] = useState<PickedFile[]>([])
@@ -174,15 +232,74 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
   const [summary, setSummary] = useState<
     Pick<ConverterQueueState, 'running' | 'scanning' | 'concurrency' | 'total'>
   >({ running: false, scanning: false, concurrency: 2, total: 0 })
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const apiRef = useRef(api)
+  const mountedRef = useRef(true)
+  apiRef.current = api
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false
+    },
+    []
+  )
+
+  const apiStillActive = useCallback(
+    (candidate: NodeTerminalApi): boolean => mountedRef.current && apiRef.current === candidate,
+    []
+  )
+
+  const showConverterError = useCallback((cause: unknown) => {
+    setError(converterErrorMessage(cause))
+  }, [])
+
+  const runConverterAction = useCallback(
+    (actionApi: NodeTerminalApi, action: () => Promise<unknown>): void => {
+      if (!apiStillActive(actionApi)) return
+      setError(null)
+      void action().catch((cause) => {
+        if (apiStillActive(actionApi)) showConverterError(cause)
+      })
+    },
+    [apiStillActive, showConverterError]
+  )
 
   useEffect(() => {
-    window.nodeTerminal.converter.catalog().then(setCatalog).catch(() => {})
-    window.nodeTerminal.converter.state(0, 500).then((s) => {
-      setQueue(s.items)
-      setSummary({ running: s.running, scanning: s.scanning, concurrency: s.concurrency, total: s.total })
-    })
-    const offItem = window.nodeTerminal.converter.onItem((item) => {
+    let current = true
+    // Queue paths belong to one machine. Never leave the previous core's rows or pending paths on
+    // screen while an active-project switch resolves the next core.
+    setCatalog(CONVERTER_CATALOG)
+    setSelectedAdapterId(null)
+    setPending([])
+    setDestDir('')
+    setPreflight(null)
+    setLossyAck(false)
+    setQueue([])
+    setSummary({ running: false, scanning: false, concurrency: 2, total: 0 })
+    setError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+
+    void api.converter.catalog().then(
+      (next) => {
+        if (current) setCatalog(next)
+      },
+      (cause) => {
+        if (current) showConverterError(cause)
+      }
+    )
+    void api.converter.state(0, 500).then(
+      (s) => {
+        if (!current) return
+        setQueue(s.items)
+        setSummary({ running: s.running, scanning: s.scanning, concurrency: s.concurrency, total: s.total })
+      },
+      (cause) => {
+        if (current) showConverterError(cause)
+      }
+    )
+    const offItem = api.converter.onItem((item) => {
+      if (!current) return
       setQueue((prev) => {
         const idx = prev.findIndex((i) => i.id === item.id)
         if (idx === -1) return [...prev, item]
@@ -191,20 +308,36 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
         return copy
       })
     })
-    const offSummary = window.nodeTerminal.converter.onSummary((s) => setSummary((prev) => ({ ...prev, ...s })))
+    const offSummary = api.converter.onSummary((s) => {
+      if (current) setSummary((prev) => ({ ...prev, ...s }))
+    })
     return () => {
+      current = false
       offItem()
       offSummary()
     }
-  }, [])
+  }, [api, showConverterError])
 
   useEffect(() => {
     if (!destDir) {
       setPreflight(null)
       return
     }
-    window.nodeTerminal.converter.preflight(destDir).then(setPreflight).catch(() => setPreflight(null))
-  }, [destDir])
+    let current = true
+    void api.converter.preflight(destDir).then(
+      (result) => {
+        if (current) setPreflight(result)
+      },
+      (cause) => {
+        if (!current) return
+        setPreflight(null)
+        showConverterError(cause)
+      }
+    )
+    return () => {
+      current = false
+    }
+  }, [api, destDir, showConverterError])
 
   const selectedAdapter = useMemo(
     () => (selectedAdapterId ? converterAdapterById(selectedAdapterId) ?? catalog.find((a) => a.id === selectedAdapterId) : null),
@@ -218,9 +351,10 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
   }, [pending])
 
   const addPaths = useCallback(async (paths: string[]) => {
+    const operationApi = api
     const detections = await Promise.all(
       paths.map((path) =>
-        window.nodeTerminal.converter.detect(path).catch(
+        operationApi.converter.detect(path).catch(
           (): ConverterDetectionResult => ({
             path,
             name: path.split(/[\\/]/).pop() ?? path,
@@ -233,35 +367,54 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
         )
       )
     )
+    if (!apiStillActive(operationApi)) return
     setPending((prev) => [...prev, ...paths.map((path, i) => ({ path, detection: detections[i] }))])
-  }, [])
+  }, [api, apiStillActive])
 
   const handlePickFiles = useCallback(async () => {
+    const operationApi = api
+    if (!apiStillActive(operationApi)) return
     if (isBrowserRuntime()) {
       fileInputRef.current?.click()
       return
     }
-    const paths = await window.nodeTerminal.dialog.selectFiles()
-    if (paths && paths.length > 0) await addPaths(paths)
-  }, [addPaths])
+    try {
+      const paths = await operationApi.dialog.selectFiles()
+      if (!apiStillActive(operationApi)) return
+      if (paths && paths.length > 0) await addPaths(paths)
+    } catch (cause) {
+      if (apiStillActive(operationApi)) showConverterError(cause)
+    }
+  }, [addPaths, api, apiStillActive, showConverterError])
 
   const handleBrowserFileInput = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
+      const operationApi = api
+      if (!apiStillActive(operationApi)) return
       const files = e.target.files
       if (!files || files.length === 0) return
       try {
-        const paths = await uploadBrowserFiles(files)
+        const paths = await uploadBrowserFiles(operationApi.files, files)
+        if (!apiStillActive(operationApi)) return
         if (paths.length > 0) await addPaths(paths)
-      } catch {
-        toast('Could not upload the selected files.', 'error')
+      } catch (cause) {
+        // HTTP 413 carries the exact 64 MiB refusal here. Preserve it instead of replacing it with
+        // a generic upload failure that gives the user no actionable size boundary.
+        if (apiStillActive(operationApi)) {
+          toast(errorMessage(cause, 'Could not upload the selected files.'), 'error')
+        }
       } finally {
-        e.target.value = ''
+        // The active-api reset clears the picker on a project switch. A late upload from the old
+        // project must not clear a newer selection made for the new one.
+        if (apiStillActive(operationApi)) e.target.value = ''
       }
     },
-    [addPaths]
+    [addPaths, api, apiStillActive]
   )
 
   const handlePickFolder = useCallback(async () => {
+    const operationApi = api
+    if (!apiStillActive(operationApi)) return
     if (isBrowserRuntime()) {
       toast('Adding a whole folder is not available in the browser edition yet — add files instead.', 'error')
       return
@@ -278,20 +431,35 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
       toast('Acknowledge the lossy-conversion notice before adding a folder.', 'error')
       return
     }
-    const folder = await window.nodeTerminal.dialog.selectFolder()
-    if (!folder) return
-    await window.nodeTerminal.converter.addFolder(folder, destDir, selectedAdapter.id, {
-      lossyAcknowledged: lossyAck
-    })
-    toast(`Scanning "${folder}" in the background — matching files will appear in the queue.`)
-  }, [selectedAdapter, destDir, lossyAck])
+    try {
+      const folder = await operationApi.dialog.selectFolder()
+      if (!apiStillActive(operationApi)) return
+      if (!folder) return
+      await operationApi.converter.addFolder(folder, destDir, selectedAdapter.id, {
+        lossyAcknowledged: lossyAck
+      })
+      if (!apiStillActive(operationApi)) return
+      toast(`Scanning "${folder}" in the background — matching files will appear in the queue.`)
+    } catch (cause) {
+      if (apiStillActive(operationApi)) showConverterError(cause)
+    }
+  }, [api, apiStillActive, selectedAdapter, destDir, lossyAck, showConverterError])
 
   const handleChooseDest = useCallback(async () => {
-    const folder = await window.nodeTerminal.dialog.selectFolder()
-    if (folder) setDestDir(folder)
-  }, [])
+    const operationApi = api
+    if (!apiStillActive(operationApi)) return
+    try {
+      const folder = await operationApi.dialog.selectFolder()
+      if (!apiStillActive(operationApi)) return
+      if (folder) setDestDir(folder)
+    } catch (cause) {
+      if (apiStillActive(operationApi)) showConverterError(cause)
+    }
+  }, [api, apiStillActive, showConverterError])
 
   const handleAddToQueue = useCallback(async () => {
+    const operationApi = api
+    if (!apiStillActive(operationApi)) return
     if (!selectedAdapter) {
       toast('Choose a target format from the catalog first.', 'error')
       return
@@ -309,19 +477,23 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
       toast('Pick at least one file first.', 'error')
       return
     }
-    const result = await window.nodeTerminal.converter.addFiles(paths, destDir, selectedAdapter.id, lossyAck)
-    setPending([])
-    if (result.rejected.length > 0) {
-      toast(`${result.added.length} added, ${result.rejected.length} rejected: ${result.rejected[0].error}`, 'error')
-    } else {
-      toast(`${result.added.length} file(s) added to the queue.`)
+    try {
+      const result = await operationApi.converter.addFiles(paths, destDir, selectedAdapter.id, lossyAck)
+      if (!apiStillActive(operationApi)) return
+      setPending([])
+      if (result.rejected.length > 0) {
+        toast(`${result.added.length} added, ${result.rejected.length} rejected: ${result.rejected[0].error}`, 'error')
+      } else {
+        toast(`${result.added.length} file(s) added to the queue.`)
+      }
+    } catch (cause) {
+      if (apiStillActive(operationApi)) showConverterError(cause)
     }
-  }, [selectedAdapter, destDir, lossyAck, pending])
+  }, [api, apiStillActive, selectedAdapter, destDir, lossyAck, pending, showConverterError])
 
   const toggleRunning = useCallback(() => {
-    if (summary.running) void window.nodeTerminal.converter.pause()
-    else void window.nodeTerminal.converter.start()
-  }, [summary.running])
+    runConverterAction(api, () => (summary.running ? api.converter.pause() : api.converter.start()))
+  }, [api, runConverterAction, summary.running])
 
   const counts = useMemo(() => {
     const c = { queued: 0, running: 0, done: 0, failed: 0, cancelled: 0, needsConfirm: 0 }
@@ -346,6 +518,11 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
           </button>
         </div>
         <div className="drawer__body cv-body">
+          {error && (
+            <p className="cv-item__error" role="alert">
+              {error}
+            </p>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -460,13 +637,21 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
                   min={1}
                   max={6}
                   value={summary.concurrency}
-                  onChange={(e) => void window.nodeTerminal.converter.setConcurrency(Number(e.target.value))}
+                  onChange={(e) =>
+                    runConverterAction(api, () => api.converter.setConcurrency(Number(e.target.value)))
+                  }
                 />
               </label>
-              <button className="cv-item__link" onClick={() => void window.nodeTerminal.converter.cancelAll()}>
+              <button
+                className="cv-item__link"
+                onClick={() => runConverterAction(api, () => api.converter.cancelAll())}
+              >
                 Cancel all
               </button>
-              <button className="cv-item__link" onClick={() => void window.nodeTerminal.converter.clearFinished()}>
+              <button
+                className="cv-item__link"
+                onClick={() => runConverterAction(api, () => api.converter.clearFinished())}
+              >
                 Clear finished
               </button>
               {summary.scanning && <span className="cv-scanning">Scanning folder…</span>}
@@ -483,10 +668,13 @@ export function FileConverterPanel({ onClose }: FileConverterPanelProps) {
                   <QueueRow
                     key={item.id}
                     item={item}
-                    onCancel={(id) => void window.nodeTerminal.converter.cancelItem(id)}
-                    onRetry={(id) => void window.nodeTerminal.converter.retryItem(id)}
-                    onRemove={(id) => void window.nodeTerminal.converter.removeItem(id)}
-                    onResolve={(id, opts) => void window.nodeTerminal.converter.resolvePending([id], opts)}
+                    onCancel={(id) => runConverterAction(api, () => api.converter.cancelItem(id))}
+                    onRetry={(id) => runConverterAction(api, () => api.converter.retryItem(id))}
+                    onRemove={(id) => runConverterAction(api, () => api.converter.removeItem(id))}
+                    onResolve={(id, opts) =>
+                      runConverterAction(api, () => api.converter.resolvePending([id], opts))
+                    }
+                    onReveal={(path) => api.shell.reveal(path)}
                   />
                 ))}
               </ul>

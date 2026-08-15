@@ -531,6 +531,14 @@ session.
   `useCopyFeedback` is the glue (it also yields to a clipboard-failure `nodeterm:toast`, so the
   Server Edition never shows a green receipt beside a red banner), and the node publishes its sink
   through the module-level `copySubs` map because the OSC handler survives a park.
+  **Clipboard writes are acknowledged, never fire-and-forget:**
+  `window.nodeTerminal.clipboard.writeText` resolves `true` only after the selected host route
+  completes. Desktop uses invoke/handle IPC around Electron's system clipboard; Server Edition
+  awaits `navigator.clipboard` and then its click-driven `execCommand` fallback. Every implementation
+  owns transport/permission exceptions and resolves `false`, because older terminal/menu callers
+  intentionally ignore this safe Promise. A caller with another fallback passes
+  `{ reportFailure: false }`, tries that route, and reports only the final exhausted outcome — do
+  not restore an eager Server toast that can race a later green receipt.
   **Shift+Enter** is remapped to `\x1b\r` (ESC+CR / M-Enter) so agent CLIs insert a newline
   instead of submitting (`terminalKeyAction` / `SHIFT_ENTER_SEQ` in `terminal-config.ts`; sent in
   all terminals — harmless in a plain shell). **Cmd (mac) / Ctrl+click** opens links in the
@@ -1453,6 +1461,39 @@ again; the grace window was never the thing that was wrong.
 
 
 ## Canvas interaction & panels (`Canvas.tsx` is the hub)
+
+**A root-mounted drawer is outside the project-keyed `SessionProvider`, so context there is NOT
+the active project's core.** `useSession()` at that level resolves the root/local session and
+`window.nodeTerminal` is the viewer's preload; either one silently runs an otherwise-correct action
+on the viewer when the selected tab is a relay project. Every core-bound global panel must resolve
+through `useActiveSessionApi()` (or, outside React, `sessionForProject(activeProjectId)` /
+`activeSessionApi()`) and keep that API through the whole operation. The file converter and Ollama
+manager are the concrete tripwires: status reads, queued work, and destructive actions such as
+model deletion all go through the active session. Their relay namespaces deliberately reject with
+`E_UNSUPPORTED`, and the drawers render that refusal instead of retrying against local state.
+Clipboard is the deliberate counterexample: it is app-global, so a relay tab still copies on the
+viewer through the local clipboard bridge. Behavior tests need distinct local/relay spies; a test
+with only one API cannot prove which machine an action reached.
+
+**Server browser uploads have two deliberately different carriers.** `buildServerFilesApi` alone
+adds `files.saveUploadBlob` and sends the browser-owned `File` directly as an authenticated
+same-origin HTTP body. `buildFilesApi` must remain RPC because the relay API shares it; changing the
+default builder to same-origin HTTP writes on the viewer. The raw path checks the shared 64 MiB
+limit from `Blob.size` before fetch, while the server checks `Content-Length` and counts streamed
+bytes again. Keep the WebSocket receiver at 8 MiB: a 7 MiB base64 message already exceeds that
+frame, and increasing the socket cap weakens every multiplexed request. The server streams into a
+private unique staging directory and publishes only after EOF. On a streamed over-limit request it
+sends `413` and keeps discarding through natural EOF; exiting Node's default async iterator early
+destroys the request stream, resets slow senders, and defeats keep-alive. Tests must cover the live
+bridge assembly, exact non-repeating bytes, zero RPC/File reads on the Blob path, over-limit before
+fetch, no partial artifact, and reuse of the same slow-tail socket.
+When an upload request carries `Origin`, require its host to match `Host` before writing anything;
+native clients may omit `Origin` but still pass the normal session/proxy authentication gate.
+Legacy POSIX upload trees need an upgrade path too: `mkdir(..., { mode })` does not repair an
+existing permissive directory. `tightenUploadPermissions` uses `O_NOFOLLOW` descriptor opens and
+descriptor `chmod` for the managed root, token directories, and immediate single-link files. Never
+replace it with `lstat` followed by path `chmod` (a symlink-swap window), and never chmod a
+multiply-linked inode whose other name may be outside the staging tree.
 
 - **Context menus** (`components/ContextMenu.tsx`, portal, icons from `components/icons.tsx`):
   pane right-click = add nodes at cursor (terminal / Claude / sticky / open file) + select

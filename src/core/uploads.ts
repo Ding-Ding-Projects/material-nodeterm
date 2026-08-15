@@ -11,12 +11,12 @@
 // machine that owns the terminal, and hand back that absolute path. `<token>` per save, so two
 // pastes of `image.png` never collide and the name the user recognizes is kept.
 
-import { promises as fs } from 'fs'
+import { constants as fsConstants, promises as fs } from 'fs'
 import { basename, join } from 'path'
+import { UPLOAD_MAX_BASE64_CHARS, UPLOAD_MAX_BYTES } from '../shared/uploads'
 
-/** Anything bigger is refused rather than marshalled through the RPC layer as base64 (which is
- *  itself ~4/3 of the bytes). Clipboard images and dropped documents sit far below this. */
-export const UPLOAD_MAX_BYTES = 64 * 1024 * 1024
+/** Anything bigger is refused by every carrier before it reaches the managed staging area. */
+export { UPLOAD_MAX_BYTES } from '../shared/uploads'
 
 /** Uploads older than this are swept on the next save — the directory is a staging area for a
  *  paste, not storage the user manages, and nothing is coming back to clean it up otherwise. */
@@ -39,8 +39,79 @@ export function safeUploadName(name: string): string {
   return clean || `upload-${Date.now().toString(36)}`
 }
 
+type ManagedEntryKind = 'directory' | 'file'
+
+async function chmodManagedEntry(
+  entryPath: string,
+  kind: ManagedEntryKind,
+  mode: number
+): Promise<boolean> {
+  const flags =
+    fsConstants.O_RDONLY |
+    fsConstants.O_NOFOLLOW |
+    (kind === 'directory' ? fsConstants.O_DIRECTORY : 0)
+  let handle: fs.FileHandle | null = null
+  try {
+    // O_NOFOLLOW makes the check and chmod operate on one opened inode. A preceding lstat followed
+    // by path-based chmod would still have a symlink-swap window.
+    handle = await fs.open(entryPath, flags)
+    const stat = await handle.stat()
+    if (kind === 'directory') {
+      if (!stat.isDirectory()) return false
+    } else {
+      // chmod changes the inode, not the directory entry. A multiply-linked file may also live
+      // outside the managed upload tree, so leave it alone rather than changing an unrelated path.
+      if (!stat.isFile() || stat.nlink !== 1) return false
+    }
+    await handle.chmod(mode)
+    return true
+  } finally {
+    await handle?.close().catch(() => {})
+  }
+}
+
+function isVanishedOrSymlinkRace(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP'
+}
+
+/**
+ * Tighten a tree made by an older build that relied on the ambient umask. Scope is deliberately
+ * shallow: the managed root, its per-save directories, and regular single-link files immediately
+ * inside those directories. Symlinks, hard-linked files, root-level files, and nested directories
+ * are not ours to chmod. Windows has no compatible POSIX mode contract, so it keeps its existing
+ * behavior and relies on the private modes requested when entries are first created.
+ */
+export async function tightenUploadPermissions(root: string): Promise<void> {
+  if (process.platform === 'win32') return
+
+  // The root is the boundary that makes any legacy child private immediately. Refuse a symlinked
+  // root instead of following it into an operator- or attacker-chosen directory.
+  if (!(await chmodManagedEntry(root, 'directory', 0o700))) {
+    throw new Error('Upload root is not a directory')
+  }
+
+  for (const entry of await fs.readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const dir = join(root, entry.name)
+    try {
+      if (!(await chmodManagedEntry(dir, 'directory', 0o700))) continue
+      for (const child of await fs.readdir(dir, { withFileTypes: true })) {
+        if (!child.isFile()) continue
+        try {
+          await chmodManagedEntry(join(dir, child.name), 'file', 0o600)
+        } catch (error) {
+          if (!isVanishedOrSymlinkRace(error)) throw error
+        }
+      }
+    } catch (error) {
+      if (!isVanishedOrSymlinkRace(error)) throw error
+    }
+  }
+}
+
 /** Delete upload folders older than the TTL. Best-effort: a sweep that fails changes nothing. */
-async function sweep(root: string): Promise<void> {
+export async function sweepUploads(root: string): Promise<void> {
   try {
     const now = Date.now()
     for (const entry of await fs.readdir(root, { withFileTypes: true })) {
@@ -68,21 +139,38 @@ export async function saveUpload(
   name: string,
   dataBase64: string
 ): Promise<string | null> {
+  let createdDir: string | null = null
   try {
     // Guard on the ENCODED length first: decoding a hostile 2 GB string to measure it is the
     // allocation this limit exists to prevent.
-    if (typeof dataBase64 !== 'string' || dataBase64.length > UPLOAD_MAX_BYTES * 1.4) return null
+    if (typeof dataBase64 !== 'string' || dataBase64.length > UPLOAD_MAX_BASE64_CHARS) return null
     const buf = Buffer.from(dataBase64, 'base64')
     if (!buf.length || buf.length > UPLOAD_MAX_BYTES) return null
     const root = uploadsRoot(userDataDir)
-    void sweep(root)
+    // Clipboard images and dropped documents can contain secrets. The app data parent is not a
+    // permission boundary on every Unix installation, so make the staging tree private itself.
+    // Windows ignores POSIX mode bits; these options are harmless there and keep one code path.
+    await fs.mkdir(root, { recursive: true, mode: 0o700 })
+    await tightenUploadPermissions(root)
+    void sweepUploads(root)
     const token = `${Date.now().toString(36)}${(seq++).toString(36)}`
     const dir = join(root, token)
-    await fs.mkdir(dir, { recursive: true })
+    await fs.mkdir(dir, { recursive: false, mode: 0o700 })
+    createdDir = dir
     const target = join(dir, safeUploadName(name))
-    await fs.writeFile(target, buf)
+    await fs.writeFile(target, buf, { flag: 'wx', mode: 0o600 })
     return target
   } catch {
+    // writeFile can leave a short file behind when the disk fills. Remove only the directory this
+    // invocation successfully created; setting createdDir after mkdir avoids deleting a colliding
+    // directory that belonged to another save.
+    if (createdDir) {
+      try {
+        await fs.rm(createdDir, { recursive: true, force: true })
+      } catch {
+        /* best-effort cleanup; the original save still reports failure */
+      }
+    }
     return null
   }
 }

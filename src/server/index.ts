@@ -610,7 +610,8 @@ export async function startServer(
       auth,
       rendererDir: config.rendererDir,
       trustProxy: config.trustProxy,
-      downloadTickets
+      downloadTickets,
+      uploadUserDataDir: config.dataDir
     })
   )
   // A closed browser tab is the NORMAL way to leave the Server Edition and sends no `pty:kill`,

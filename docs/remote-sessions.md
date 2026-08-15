@@ -82,6 +82,14 @@ instead of the global.
   `media`, `settings`, `pairing`): always local. Your update banner shows *your*
   version, never the host's.
 
+There is one easy-to-miss provider boundary: global drawers are mounted above the canvas'
+project-keyed `SessionProvider`. Reading `useSession()` or `window.nodeTerminal` there selects the
+root/viewer's API, not necessarily the active tab's core. A core-bound drawer must resolve
+`useActiveSessionApi()` / `sessionForProject(activeProjectId)` explicitly. An app-global drawer such
+as clipboard remains local by design. If a relay API has no implementation for a core-bound
+namespace, a visible `E_UNSUPPORTED` refusal is the safe outcome; falling back to the viewer is a
+wrong-machine mutation.
+
 **Stores become session-scoped.** `presence` and `agentStatus` hold per-session
 tables (two sessions = two peer tables). This is the riskiest part of the refactor:
 the presence store's module-level state (`connectPresence` idempotence, `lastFocus`,
@@ -396,6 +404,12 @@ users before 4d is wired (it grants `pty.create` to peers).
   never re-renders Canvas (`usePresence` was removed from Canvas entirely). Deferred: a background
   RELAY project (while a LOCAL tab is active) isn't live — only the active session's `onMutation` is
   subscribed; it re-syncs on reactivation.
+- **Global management drawers follow the active session** — the File converter and Ollama manager
+  resolve the active project's API even though they sit outside the canvas provider. Their relay
+  namespaces remain deliberately unsupported in v1, so the panels show `E_UNSUPPORTED` and do not
+  run converter work, pulls, chats, or model deletion against the viewer's machine. Clipboard is
+  intentionally different: it is app-global, so Colour picker Copy uses the viewing app's clipboard
+  bridge (with a browser fallback) even while a relay tab is active.
 
 **Retained on the OLD dialect (do NOT delete — a shipped feature):** the phone server path —
 `host-service.ts`, `standing-host.ts`, `host-canvas-hub.ts`, `framing.ts`, `snapshot.ts`,

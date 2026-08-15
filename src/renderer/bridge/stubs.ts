@@ -51,15 +51,16 @@ const pnoop = (): Promise<void> => Promise.resolve()
  *  Browsers only honor it inside a user gesture. That holds for the copy shortcut and the click-
  *  driven copy buttons, but NOT for the OSC 52 path (`TerminalNode.tsx` — driven by terminal
  *  OUTPUT, e.g. `vim "+y`, with no user activation): over plain http that one always fails and
- *  lands in the error banner below. Returns false when the copy fails, so the caller surfaces it
- *  rather than swallowing it — never silent.
+ *  lands in the error banner below. Returns false when the copy fails. `reportFailure=false` is
+ *  reserved for a caller that still has another route to try; that caller owns the final notice so
+ *  a successful later fallback can never sit beside a stale red banner.
  *
  *  Cleanup is in a `finally` on purpose: `select()`/`execCommand()` CAN throw (Firefox has thrown
  *  NS_ERROR_FAILURE on execCommand('copy')), and a leaked scratch textarea would be invisible,
  *  focused and `position:fixed` — i.e. it would swallow every subsequent keystroke. `select()` also
  *  steals focus from xterm's helper textarea, so the previously-focused element is restored too
  *  (the terminal's *selection* survives on its own — xterm paints it, it is not a DOM Selection). */
-function copyViaExecCommand(text: string): boolean {
+function copyViaExecCommand(text: string, reportFailure: boolean): boolean {
   const prev = document.activeElement as HTMLElement | null
   let ta: HTMLTextAreaElement | undefined
   try {
@@ -73,23 +74,25 @@ function copyViaExecCommand(text: string): boolean {
     if (!document.execCommand('copy')) throw new Error('execCommand returned false')
     return true
   } catch {
-    // Surfacing beats silence: the user needs to know why nothing landed in their clipboard. The
-    // diagnosis differs — plain http has no Clipboard API at all, while in a secure context we got
-    // here because the API rejected (permission denied / document not focused) AND the fallback
-    // failed too. Canvas listens for this event and shows a banner.
+    // By default, surface why nothing landed. The diagnosis differs — plain http has no Clipboard
+    // API at all, while in a secure context we got here because the API rejected (permission denied
+    // / document not focused) AND the fallback failed too. Canvas listens for this event and shows
+    // a banner. A caller that suppresses this owns a later fallback and its final failure notice.
     // This module only ever runs in a browser (it IS the browser shim), so `window` is there —
     // guarded consistently rather than half-guarded.
-    const secure = window.isSecureContext
-    window.dispatchEvent(
-      new CustomEvent('nodeterm:toast', {
-        detail: {
-          kind: 'error',
-          message: secure
-            ? 'Copy failed — the browser denied clipboard access. Click the page and try again.'
-            : 'Copy failed — the browser blocks clipboard access over plain http. Use https or localhost.'
-        }
-      })
-    )
+    if (reportFailure) {
+      const secure = window.isSecureContext
+      window.dispatchEvent(
+        new CustomEvent('nodeterm:toast', {
+          detail: {
+            kind: 'error',
+            message: secure
+              ? 'Copy failed — the browser denied clipboard access. Click the page and try again.'
+              : 'Copy failed — the browser blocks clipboard access over plain http. Use https or localhost.'
+          }
+        })
+      )
+    }
     return false
   } finally {
     // A throw in here would ESCAPE the function and replace the return value (a `finally` outranks
@@ -173,12 +176,17 @@ export function buildStubApi(): Omit<
       // context (https or localhost); over plain http on a LAN it is undefined, and the old
       // optional-chained call copied nothing and told nobody. execCommand('copy') is deprecated but
       // is the only thing that works there.
-      writeText: (text: string): void => {
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-          void navigator.clipboard.writeText(text).catch(() => copyViaExecCommand(text))
-          return
+      writeText: async (text, options): Promise<boolean> => {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(text)
+            return true
+          } catch {
+            // Permission/focus can change between the capability probe and the write. The legacy
+            // click-driven route is still usable on plain HTTP and is the one honest fallback.
+          }
         }
-        copyViaExecCommand(text)
+        return copyViaExecCommand(text, options?.reportFailure !== false)
       },
       // A browser cannot place host-local file references on the viewer's OS clipboard.
       writeFiles: async (): Promise<boolean> => false
