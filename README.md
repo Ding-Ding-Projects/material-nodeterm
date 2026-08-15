@@ -258,6 +258,9 @@ build or the deployed site, never mocked up and never reused from upstream. The 
 | ![The Language settings section, offering English, Cantonese and Bilingual modes with two independent funny-level sliders](./docs/assets/shots/app-settings-language.png) | ![The command palette open over the app, listing create actions for terminals and each supported agent](./docs/assets/shots/app-03-palette.png) |
 | **Language** — three modes, and two funny-level sliders that change tone without changing what a message says. | **Command palette** — every command, destination and setting, with a persisted size. |
 
+| ![The nodeterm canvas showing a project with one terminal node, the sessions sidebar listing it, a minimap and the bottom dock](./docs/assets/shots/app-04-canvas.png) | ![The same project shown as a kanban board with Ungrouped, To Do, In Progress and Done columns, the terminal session appearing as a card in Ungrouped](./docs/assets/shots/app-05-kanban.png) |
+| **The canvas** — a project with a live terminal node, sessions sidebar, minimap and dock. | **The same project as a board** — cards *are* the session nodes; Ungrouped holds anything unassigned. |
+
 Also captured: [the appearance editor](./docs/assets/shots/app-settings-appearance-editor.png),
 [app name & logo](./docs/assets/shots/app-settings-app-identity.png),
 [scheduled settings](./docs/assets/shots/app-settings-schedule.png), and
@@ -277,9 +280,11 @@ Also captured: [the appearance editor](./docs/assets/shots/app-settings-appearan
 
 </details>
 
-**Not yet captured, and honestly absent rather than staged:** the canvas with live terminals and
-an agent mid-turn, the kanban board with real sessions, and the Squirrel installer's SmartScreen
-prompt. Those need a populated workspace or a real install, not just a launched app.
+**Not yet captured, and honestly absent rather than staged:** an agent mid-turn (the
+RUNNING / NEEDS YOU badge and a subagent fan-out), and the Squirrel installer's SmartScreen
+prompt. The canvas shot above shows a real, live terminal session, but its pane is empty — see
+[the manifest](./docs/assets/shots/README.md) for why, and for the two captures that were taken
+and discarded rather than shipped.
 
 ## Contributing
 

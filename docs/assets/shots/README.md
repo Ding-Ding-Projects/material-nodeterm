@@ -121,6 +121,8 @@ cropped, or otherwise edited after capture.
 | `app-settings-app-identity.png` | App rename + logo customization | heading `App name & logo` |
 | `app-settings-appearance-editor.png` | Per-element appearance editor | heading `Appearance editor` |
 | `app-settings-schedule.png` | Scheduled settings | heading `Schedule` |
+| `app-04-canvas.png` | A project on the canvas: one terminal node, the sessions sidebar, minimap and dock | project tab + `Terminal 1` in the sidebar |
+| `app-05-kanban.png` | The same project as a kanban board — the session as a card in Ungrouped | board columns rendered |
 
 - **Captured from:** the Electron app running out of this working tree at commit `489c71eeb8cc9f831dd054d4cf608377c82921a3`.
 - **Route:** the cheap Lowlevel MCP headless desktop (`NodetermShots`) — the app ran with a
@@ -171,10 +173,25 @@ That is what made every `app-*.png` here possible. It also incidentally proved t
 fix landed: the same archive contains `resources/session-host/`, the bundle that earlier
 packaging runs silently omitted.
 
-## What is still not captured
+## What is still not captured, and one caveat on what is
 
-- **The terminal/canvas surfaces in use** — a node running a live shell, an agent mid-turn,
-  the kanban board with real sessions. Those need a populated workspace, not just a launched
-  app, and are honestly absent rather than staged.
+- **A terminal showing shell output.** `app-04-canvas.png` is a real project with a real
+  terminal node and a live session (the sessions sidebar lists it, the pty is attached and the
+  cursor renders) — but the pane is empty. Keystrokes were driven in properly, including
+  dwelling past the node's hover-guard before clicking, and no shell text ever reached the
+  WebGL layer in this headless context. The shot is captioned for what it shows — the canvas
+  UI around a live session — and not for output it does not contain.
+- **An agent mid-turn**, with the RUNNING / NEEDS YOU badge and a subagent fan-out. That needs
+  a real agent CLI session, not just a spawned shell.
+- **The Squirrel installer's SmartScreen prompt**, which needs a real install.
 - **Light theme for the desktop app.** The shots above are the app's own default appearance.
+
+## A note on trusting these
+
+Two captures in this directory were taken, inspected, and thrown away rather than shipped: five
+settings shots that had the command palette left open over them from an earlier script, and one
+"canvas" shot whose DOM query counted three nodes while the picture was plainly still the
+welcome screen. Both were caught only by opening the PNG and looking at it. A capture script
+reporting success proves a file was written, never that the file shows what its name claims —
+so every image here was eyeballed before it was committed.
 
