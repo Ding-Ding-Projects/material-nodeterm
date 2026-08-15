@@ -60,13 +60,23 @@ export function buildManagedHookCommand(scriptPath: string): string {
   return `if [ -r ${q} ]; then sh ${q}; else cat >/dev/null 2>&1 || :; fi`
 }
 
-// The marker identifying OUR entry: the `agent-hooks/<scriptFile>` tail of the managed
-// command. A bare "agent-hooks" substring is NOT enough — other tools use the same dir
-// name (e.g. `~/.someapp/agent-hooks/claude-hook.sh`), and matching them would delete a
-// foreign app's hooks from any event we both subscribe to.
+// The marker identifying OUR entry: the `agent-hooks/<scriptFile>` (or, on win32,
+// `agent-hooks\<scriptFile>`) tail of the managed command. A bare "agent-hooks" substring is NOT
+// enough — other tools use the same dir name (e.g. `~/.someapp/agent-hooks/claude-hook.sh`), and
+// matching them would delete a foreign app's hooks from any event we both subscribe to.
+//
+// The extracted marker is later matched with a plain `.includes()` against OTHER commands built
+// the same way in this same process — i.e. through `scriptPathFor`'s `path.join`, which emits
+// `\`-separated paths on win32. Normalizing the marker's separator to `/` here used to make that
+// `.includes()` check compare a forward-slash marker against a backslash command on Windows,
+// which never matches: a second `installGrokHooks()` call could never recognize its own prior
+// entry, so installs piled up duplicates instead of replacing them, and `mergeManagedHook`'s sweep
+// of no-longer-subscribed events could never find (or remove) a managed entry either. Keep the
+// marker in whatever separator it was actually extracted with so the substring check matches
+// what is actually on disk.
 function managedMarkerFor(command: string): string {
   const m = command.match(/agent-hooks[\\/][^"'\s]+/)
-  return m ? m[0].replace(/\\/g, '/') : 'agent-hooks'
+  return m ? m[0] : 'agent-hooks'
 }
 
 /** A subscription's event name, whichever form it was declared in. */
@@ -171,7 +181,10 @@ export interface RemoveHooksOptions {
 
 export function removeHooksFrom(opts: RemoveHooksOptions): void {
   const { configPath, events, scriptFileName } = opts
-  const marker = `agent-hooks/${scriptFileName}`
+  // Match either separator: the command was built by `scriptPathFor`'s `path.join`, which emits
+  // `\`-joined paths on win32 — a marker hardcoded to `/` alone never matches there (see the
+  // `managedMarkerFor` note above for the identical failure this fix mirrors).
+  const markers = [`agent-hooks/${scriptFileName}`, `agent-hooks\\${scriptFileName}`]
   let config: Settings
   try {
     config = JSON.parse(readFileSync(configPath, 'utf8')) as Settings
@@ -182,7 +195,9 @@ export function removeHooksFrom(opts: RemoveHooksOptions): void {
   for (const e of events) {
     const ev = eventNameOf(e)
     if (!config.hooks[ev]) continue
-    config.hooks[ev] = config.hooks[ev].filter((d) => !d.hooks?.some((h) => h.command.includes(marker)))
+    config.hooks[ev] = config.hooks[ev].filter(
+      (d) => !d.hooks?.some((h) => markers.some((marker) => h.command.includes(marker)))
+    )
     if (config.hooks[ev].length === 0) delete config.hooks[ev]
   }
   try {
