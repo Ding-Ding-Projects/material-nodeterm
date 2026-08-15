@@ -804,6 +804,123 @@ export interface SpeechSettings {
 export type TerminalCursorStyle = 'block' | 'bar' | 'underline'
 export type TerminalCursorInactiveStyle = TerminalCursorStyle | 'outline' | 'none'
 
+/* -----------------------------------------------------------------------------------------------
+ * Per-element appearance customization (docs/appearance.md).
+ *
+ * One style bag shape (`AppearanceTextStyle`) covers every themeable UI-chrome element (tabs, node
+ * headers, panels, menus, notifications, the editor's own dialog). It is applied by
+ * `renderer/lib/appearance/apply.ts` through a single generated stylesheet keyed by
+ * `[data-appearance-id]`, so a new themeable element only has to carry that attribute — no new
+ * plumbing per element. Every property is OPTIONAL: unset means "inherit the platform default",
+ * never "off" — clearing a property in the editor removes the key entirely rather than writing a
+ * value that forces it back to a baseline, which is what lets "reset per property" mean anything.
+ */
+export type AppearanceUnderlineStyle = 'none' | 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy'
+export type AppearanceStrikethrough = 'none' | 'single' | 'double'
+export type AppearanceCapitalization = 'none' | 'uppercase' | 'lowercase' | 'capitalize' | 'small-caps'
+export type AppearanceVerticalAlign = 'baseline' | 'super' | 'sub'
+export type AppearanceTextAlign = 'left' | 'center' | 'right' | 'justify'
+export type AppearanceDirection = 'ltr' | 'rtl'
+
+/** Variable-font axis values (`font-variation-settings`). Not every installed font defines every
+ *  axis — an axis a font doesn't have is simply ignored by the text renderer, per CSS spec, so
+ *  the value is kept and reapplied rather than dropped even when it currently has no effect. */
+export interface AppearanceFontAxes {
+  wght?: number
+  wdth?: number
+  slnt?: number
+  ital?: number
+  opsz?: number
+}
+
+export interface AppearanceTextStyle {
+  fontFamily?: string
+  fontSizePx?: number
+  fontWeight?: number
+  fontAxes?: AppearanceFontAxes
+  italic?: boolean
+  underline?: AppearanceUnderlineStyle
+  underlineColor?: string
+  strikethrough?: AppearanceStrikethrough
+  overline?: boolean
+  capitalization?: AppearanceCapitalization
+  verticalAlign?: AppearanceVerticalAlign
+  baselineShiftPx?: number
+  color?: string
+  highlightColor?: string
+  outlineColor?: string
+  outlineWidthPx?: number
+  shadowColor?: string
+  shadowBlurPx?: number
+  shadowOffsetXPx?: number
+  shadowOffsetYPx?: number
+  glowColor?: string
+  glowBlurPx?: number
+  letterSpacingPx?: number
+  wordSpacingPx?: number
+  lineHeight?: number
+  direction?: AppearanceDirection
+  textAlign?: AppearanceTextAlign
+  backgroundColor?: string
+  borderColor?: string
+  borderRadiusPx?: number
+}
+
+/** A themed element as persisted in `Settings.elementAppearance`, keyed by a stable id
+ *  (`renderer/lib/appearance/registry.ts` → `appearanceId(kind, key)`). */
+export interface ElementAppearanceEntry {
+  /** Human label captured at first edit (e.g. the tab's name at the time) — shown in the
+   *  management list even after the element itself is renamed or deleted. */
+  label: string
+  /** Element kind ('tab' | 'node' | 'app', …) — informational, drives the management list's
+   *  grouping and the editor's title. */
+  kind: string
+  style: AppearanceTextStyle
+  /** Another element's id to inherit UNSET properties from (explicit inheritance). Resolved at
+   *  apply time; a cycle is treated as "no inheritance" defensively. */
+  inheritFrom?: string
+  updatedAt: number
+}
+
+/** A named, user-saved style that can be applied to any element and exported/imported as a
+ *  standalone JSON file (see docs/appearance.md § Presets). */
+export interface AppearancePreset {
+  id: string
+  name: string
+  style: AppearanceTextStyle
+  createdAt: number
+}
+
+/** Normalized crop rectangle, 0..1 relative to the SOURCE image's natural dimensions — resolution
+ *  independent, so re-processing at a different output size never has to rescale it. */
+export interface AppLogoCrop {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface AppLogoCustomImage {
+  /** Processed (cropped/composited) PNG, local data URL — never uploaded, never a remote asset. */
+  dataUrl: string
+  mime: string
+  /** Output pixel dimensions of `dataUrl` (post-processing, not the source file's). */
+  width: number
+  height: number
+  /** Original filename, kept only for the "Replace" UI's own label — never sent anywhere. */
+  sourceName: string
+  fit: 'contain' | 'cover' | 'fill'
+  /** Flattened backdrop for `contain`/transparent-unsupported previews (a hex or rgba() string). */
+  backgroundColor: string
+  crop: AppLogoCrop
+}
+
+export interface AppLogoSettings {
+  /** 'shipped' = the built-in mark; a preset id from `APP_LOGO_PRESETS`; or 'custom'. */
+  selection: string
+  customImage?: AppLogoCustomImage
+}
+
 /** User-configurable application settings (settings.json). */
 export interface Settings {
   fontSize: number
@@ -1050,6 +1167,18 @@ export interface Settings {
    *  strands a live session gets their canvas back without downgrading the app. Neither value ever
    *  admits a forged token. */
   hookIdentityStrict?: boolean
+  /** Per-element style overrides (Settings → Appearance → "Appearance editor"), keyed by
+   *  `appearanceId(kind, key)`. See the doc block above `AppearanceTextStyle`. */
+  elementAppearance: Record<string, ElementAppearanceEntry>
+  /** Named, user-saved styles — importable/exportable as a file, applicable to any element. */
+  appearancePresets: AppearancePreset[]
+  /** User-chosen display name for the app (title bar, brand mark, notifications, About). Empty =
+   *  the shipped name. NEVER read for anything that must identify the real product — see
+   *  docs/app-rename.md and `shared/appIdentity.ts`. */
+  appDisplayName: string
+  /** App-logo customization (Settings → Appearance → "App logo"). Presentation only — see
+   *  docs/app-logo.md for exactly what this can and cannot change. */
+  appLogo: AppLogoSettings
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -1138,6 +1267,10 @@ export const DEFAULT_SETTINGS: Settings = {
   notchWidth: 168,
   notchHoverExpand: true,
   speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
+  elementAppearance: {},
+  appearancePresets: [],
+  appDisplayName: '',
+  appLogo: { selection: 'shipped' },
 }
 
 export interface SettingsApi {

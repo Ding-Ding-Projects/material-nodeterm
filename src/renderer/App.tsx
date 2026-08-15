@@ -15,6 +15,9 @@ import { useSharedGlyph } from './canvas/SharedGlyphLayer'
 import { resolveTerminalRenderer } from '../shared/webgl'
 import { resolveTerminalTheme } from './terminal/themes'
 import { useAppTheme } from './state/useAppTheme'
+import { AppearanceStyleInjector } from './components/appearance/AppearanceStyleInjector'
+import { AppearanceEditorHost } from './components/appearance/AppearanceEditor'
+import { resolveAppDisplayName } from '../shared/appIdentity'
 
 export default function App() {
   // Apply the terminal-rendering setting to the two GPU coordinators, live. 'auto' is
@@ -57,12 +60,24 @@ export default function App() {
     useViewMode.getState().setDefaultView(defaultView === 'kanban' ? 'kanban' : 'canvas')
   }, [defaultView])
 
+  // The user's chosen display name (docs/app-rename.md) — DISPLAY only. The document title is the
+  // one piece of chrome every surface (desktop window, browser tab) shows without any component
+  // having to opt in.
+  const appDisplayName = useSettings((s) => s.settings.appDisplayName)
+  useEffect(() => {
+    document.title = resolveAppDisplayName(appDisplayName)
+  }, [appDisplayName])
+
   return (
     <SessionProvider session={localSession}>
       <ReactFlowProvider>
         <Canvas />
         {/* In-app window.prompt replacement (Electron has no prompt); driven by promptDialog(). */}
         <PromptDialogHost />
+        {/* Per-element appearance customization (docs/appearance.md): the generated stylesheet
+            plus the one shared anchored editor popover, both mounted once. */}
+        <AppearanceStyleInjector />
+        <AppearanceEditorHost />
       </ReactFlowProvider>
     </SessionProvider>
   )
