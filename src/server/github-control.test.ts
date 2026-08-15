@@ -24,7 +24,12 @@ describe('ServerGitHubSecretStore', () => {
 
     expect(store.availability).toBe('restricted-file')
     expect(await store.readForHost()).toBe('github_pat_secret')
-    expect((await fs.stat(path.join(userDataDir, 'github-issues-token.json'))).mode & 0o777).toBe(0o600)
+    // Windows has no owner/group/other split: chmod(0o600) there only clears the read-only DOS
+    // attribute (the owner-write bit is set), so stat() reports 0o666, never a POSIX-exact 0o600.
+    const expectedMode = process.platform === 'win32' ? 0o666 : 0o600
+    expect((await fs.stat(path.join(userDataDir, 'github-issues-token.json'))).mode & 0o777).toBe(
+      expectedMode
+    )
     await expect(fs.access(path.join(userDataDir, 'github-issues-token.json.tmp'))).rejects.toThrow()
   })
 

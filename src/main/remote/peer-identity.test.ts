@@ -66,7 +66,9 @@ describe('peer-identity: persistent client keypair', () => {
   it('writes the key file 0600', async () => {
     await loadOrCreatePeerKeyPair()
     const st = await fs.stat(peerPath())
-    expect(st.mode & 0o777).toBe(0o600)
+    // Windows has no owner/group/other split: chmod(0o600) there only clears the read-only DOS
+    // attribute (the owner-write bit is set), so stat() reports 0o666, never a POSIX-exact 0o600.
+    expect(st.mode & 0o777).toBe(process.platform === 'win32' ? 0o666 : 0o600)
   })
 
   it('encrypts the secret at rest when safeStorage is available', async () => {
@@ -169,13 +171,15 @@ describe('peer-identity: persistent client keypair', () => {
     encryptionAvailable = true // triggers the in-place migration write
     restart()
     await loadOrCreatePeerKeyPair()
-    expect((await fs.stat(peerPath())).mode & 0o777).toBe(0o600)
+    // 0o644 and 0o600 both carry the owner-write bit, so on Windows both map to the same
+    // "not read-only" state (0o666) and this "tightening" is a no-op there.
+    expect((await fs.stat(peerPath())).mode & 0o777).toBe(process.platform === 'win32' ? 0o666 : 0o600)
   })
 
   it('tightens a pre-existing 0644 file to 0600 when regenerating over it', async () => {
     await fs.writeFile(peerPath(), 'garbage', { encoding: 'utf-8', mode: 0o644 })
     await fs.chmod(peerPath(), 0o644)
     await loadOrCreatePeerKeyPair()
-    expect((await fs.stat(peerPath())).mode & 0o777).toBe(0o600)
+    expect((await fs.stat(peerPath())).mode & 0o777).toBe(process.platform === 'win32' ? 0o666 : 0o600)
   })
 })
