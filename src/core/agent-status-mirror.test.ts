@@ -227,6 +227,55 @@ describe('recordAgentEvent + atomic write', () => {
     await flush()
     expect(seen).toHaveLength(1)
   })
+
+  it('an older retrying flush cannot overwrite a newer mirror generation', async () => {
+    recordAgentEvent(ev({ nodeId: 'n1', state: 'working' }))
+
+    const realRename = fs.promises.rename
+    let firstAttempt = true
+    let firstRenameObserved!: () => void
+    let overlappingRenameObserved!: () => void
+    let releaseFirstRename!: () => void
+    const observed = new Promise<void>((resolve) => { firstRenameObserved = resolve })
+    const overlapped = new Promise<void>((resolve) => { overlappingRenameObserved = resolve })
+    const released = new Promise<void>((resolve) => { releaseFirstRename = resolve })
+    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (from, to) => {
+      if (firstAttempt) {
+        firstAttempt = false
+        firstRenameObserved()
+        await released
+        const error = new Error('injected sharing violation') as NodeJS.ErrnoException
+        error.code = 'EPERM'
+        throw error
+      }
+      overlappingRenameObserved()
+      return realRename(from, to)
+    })
+
+    let older: Promise<void> | undefined
+    let newer: Promise<void> | undefined
+    try {
+      older = flush()
+      await observed
+      recordAgentEvent(ev({ nodeId: 'n1', state: 'done' }))
+      newer = flush()
+      // With no FIFO, the newer write reaches rename while the older one is parked. Wait a
+      // bounded interval for that exact evidence before releasing the old writer; checking only
+      // final bytes was scheduler-dependent because either rename could happen to finish last.
+      const reachedRenameWhileOlderWasParked = await Promise.race([
+        overlapped.then(() => true),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 100))
+      ])
+      expect(reachedRenameWhileOlderWasParked).toBe(false)
+    } finally {
+      releaseFirstRename()
+      await Promise.allSettled([older, newer].filter((p): p is Promise<void> => p !== undefined))
+      renameSpy.mockRestore()
+    }
+
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as MirrorFile
+    expect(doc.nodes.n1.state).toBe('done')
+  })
 })
 
 describe('filterMirrorForNodes', () => {

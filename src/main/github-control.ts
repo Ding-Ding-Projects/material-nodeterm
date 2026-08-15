@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { renameAtomic } from '../core/fs-atomic'
+import { clearAtomicTarget, renameAtomic, sweepStaleTempFiles, tempNameFor } from '../core/fs-atomic'
 import type { GitHubSecretStore } from '../core/github/credentials'
 import type { GitHubSecretAvailability } from '../shared/github-issues'
 import { IPC } from '../shared/ipc'
@@ -20,7 +20,7 @@ type TokenDocument =
   | { version: 1; kind: 'restricted-file'; token: string }
 
 export class GitHubSecretError extends Error {
-  constructor(readonly code: 'invalid-token' | 'keyring-locked') {
+  constructor(readonly code: 'invalid-token' | 'keyring-locked' | 'clear-incomplete') {
     super(code)
   }
 }
@@ -29,61 +29,24 @@ function validToken(token: string): boolean {
   return token.trim() === token && token.length > 0 && token.length <= 4096 && !/[\r\n\0]/.test(token)
 }
 
-/** Paired with `process.pid` in the temp name below: the counter makes a name unique WITHIN this
- *  process, the pid makes it unique ACROSS processes (it restarts at 0 in every new one — and
- *  `NT_MULTI=1` without `NT_USER_DATA` skips the single-instance lock while keeping the default
- *  userData dir, so two instances can share this file, see src/main/index.ts). Same scheme as
- *  agent-status-mirror's local write. */
-let writeSeq = 0
-
-/**
- * Remove temp files no writer in THIS process owns: the legacy fixed `<file>.tmp` (written by
- * builds before per-call names) and any `<file>.<pid>.<seq>.tmp` whose pid is not ours. Best
- * effort — a failure here must never break a save.
- *
- * The token file is not config: an orphan here is a live PAT at 0600 that nothing will ever
- * overwrite, because a unique name is never written twice. So it has to be collected rather than
- * left. Temps bearing our own pid are untouchable: one may belong to a concurrent write sitting
- * between its `writeFile` and its `rename`, and deleting it would recreate the exact race the
- * unique names fixed. A foreign pid can in theory be a second LIVE process on the same dir; that
- * setup has no lock to begin with, and the worst case is that process's rename failing cleanly
- * (ENOENT, rethrown to its caller) instead of a forgotten PAT sitting on disk forever.
- */
-async function sweepStaleTmp(target: string): Promise<void> {
-  try {
-    const directory = path.dirname(target)
-    const base = path.basename(target)
-    for (const entry of await fs.readdir(directory)) {
-      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>'
-      const owner = /^\.(\d+)\.\d+$/.exec(middle)?.[1]
-      if (middle === '' || (owner && owner !== String(process.pid))) {
-        await fs.rm(path.join(directory, entry), { force: true }).catch(() => undefined)
-      }
-    }
-  } catch {
-    // A dir we cannot read is not a reason to fail (or skip) the write below.
-  }
-}
-
 async function atomicWrite(file: string, document: TokenDocument): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
-  await sweepStaleTmp(file)
+  await sweepStaleTempFiles(file)
   // The store's per-instance chain orders this write against its sibling mutations; the per-call
   // temp name covers the writers the chain cannot see — a second app process on the same
-  // userDataDir (every process's counter starts at 0, hence the pid) and a crash between
-  // tmp-write and rename. With a shared name one writer's rename publishes the other's
+  // userDataDir, even across a PID namespace, and a crash between tmp-write and rename. With a
+  // shared name one writer's rename publishes the other's
   // half-written PAT, or moves the file out from under it entirely and the loser's rename fails.
   // The rename itself now retries a transient Windows sharing-violation error — see src/core/fs-atomic.ts.
-  const temporary = `${file}.${process.pid}.${++writeSeq}.tmp`
+  const temporary = tempNameFor(file)
   try {
     await fs.writeFile(temporary, JSON.stringify(document), { encoding: 'utf-8', mode: 0o600 })
     await fs.chmod(temporary, 0o600)
     await renameAtomic(temporary, file)
   } catch (error) {
     // A failed write MUST remove its own temp, because here a leaked temp IS a leaked PAT: a
-    // unique name is never written again, so only this cleanup (or a later run's sweep above, once
-    // the pid is dead) will ever collect it. The error still propagates.
+    // unique name is never written again, so only this cleanup (or a later sweep after the age
+    // grace and an owner pid no longer visible here mark it abandoned) will collect it. The error propagates.
     await fs.rm(temporary, { force: true }).catch(() => {})
     throw error
   }
@@ -138,9 +101,8 @@ export class ElectronGitHubSecretStore implements GitHubSecretStore {
 
   clear(): Promise<void> {
     return this.chained(async () => {
-      // Sweep here too: clearing a token that leaves an orphan temp behind has not cleared anything.
-      await sweepStaleTmp(this.filePath)
-      await fs.rm(this.filePath, { force: true })
+      const result = await clearAtomicTarget(this.filePath)
+      if (!result.cleared) throw new GitHubSecretError('clear-incomplete')
     })
   }
 

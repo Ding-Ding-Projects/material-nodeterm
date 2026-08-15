@@ -13,7 +13,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from './platform'
-import { renameAtomic } from './fs-atomic'
+import { renameAtomic, tempNameFor } from './fs-atomic'
 
 export interface SealedEntry<TMeta> {
   meta: TMeta
@@ -42,7 +42,7 @@ function seals(): boolean {
  *  reader never sees a partial file, and two overlapping saves (renderer debounce + a shutdown
  *  flush) can never interleave their bytes. */
 async function persistFile(file: string, data: string): Promise<void> {
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+  const tmp = tempNameFor(file)
   await fs.mkdir(path.dirname(file), { recursive: true })
   try {
     await fs.writeFile(tmp, data, { mode: 0o600 })

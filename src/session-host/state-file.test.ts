@@ -23,14 +23,18 @@ afterEach(() => {
 })
 
 describe('session-host state publication', () => {
-  it('gives concurrent publishers different process-owned temp paths', () => {
+  it('gives colliding PID namespaces and module counters different temp paths', () => {
     const target = path.join(dir, 'session-host.json')
-    const a = sessionHostStateTempName(target, 101)
-    const b = sessionHostStateTempName(target, 202)
+    const sameNamespace = { pid: 1, sequence: 1 }
+    const defaultUuidA = sessionHostStateTempName(target, sameNamespace)
+    const defaultUuidB = sessionHostStateTempName(target, sameNamespace)
+    expect(defaultUuidA).not.toBe(defaultUuidB)
+    const a = sessionHostStateTempName(target, { ...sameNamespace, uuid: () => 'uuid-a' })
+    const b = sessionHostStateTempName(target, { ...sameNamespace, uuid: () => 'uuid-b' })
 
     expect(a).not.toBe(b)
-    expect(a).toContain('.101.')
-    expect(b).toContain('.202.')
+    expect(a).toContain('.1.1.uuid-a.tmp')
+    expect(b).toContain('.1.1.uuid-b.tmp')
     expect(a.endsWith('.tmp')).toBe(true)
     expect(b.endsWith('.tmp')).toBe(true)
   })
