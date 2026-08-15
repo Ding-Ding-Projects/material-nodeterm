@@ -1,7 +1,7 @@
 // "Pair this device" — the browser end of the desktop app's QR pairing flow.
 //
 // THE DIRECTION MATTERS, because it is the opposite of what people assume: the desktop app
-// (Herng Ha) GENERATES the QR, and this page SCANS it. Nothing is generated here.
+// GENERATES the QR, and this page SCANS it. Nothing is generated here.
 //
 // What the QR contains (built by src/main/pairing-core.ts `buildPairingPayload`):
 //     { v:1, host, port, user, token, pairPort, nodeterm:true, name, hostKey?, relay? }
