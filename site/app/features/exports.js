@@ -1,195 +1,95 @@
 // site/app/features/exports.js
 //
-// Three registered tabs: Notifications, Local history, and Export your
-// data. Notifications and history are real lists with the full bulk-action
-// contract (multi-select, honestly-scoped select-all, inverse selection, a
-// reviewable preview before anything destructive). The export panel offers
-// every format that can faithfully carry the data (shared/exportFormats.js)
-// and discloses what a lossy format will drop BEFORE the download runs —
-// never after.
+// The "Take it home" room: pick a pile of the page's own data, pick one of
+// ten shapes, and download it — with an explicit warning (and a second
+// confirming click) before saving into a shape that would lose a field.
+// Every list room's "Take this list home" menu action also lands here.
 
-import { h, injectStyleOnce } from '../shared/dom.js'
-import { asMountable } from '../shared/mountable.js'
-import { t, subscribeI18n, getLanguageMode, getFunnyLevel, getEmojiEnabled } from '../shared/i18n.js'
-import { createBulkList } from '../shared/bulkList.js'
-import { EXPORT_FORMATS, downloadFile } from '../shared/exportFormats.js'
-import { listNotifications, removeNotifications, clearNotifications, subscribeNotifications } from '../shared/notifications-state.js'
-import { listHistory, removeHistoryEntries, clearHistory, subscribeHistory } from '../shared/history-state.js'
-import { isEnabled as isSchoolModeEnabled, getDisplayName as schoolDisplayName } from '../shared/school-state.js'
-import { isEnabled as narratorEnabled, getLanguage as narratorLang, getVoiceUri, getRate, getPitch } from '../shared/narrator-state.js'
-import { hasVocabulary, getFileName as vocabFileName, getEntries as vocabEntries } from '../shared/vocabulary-state.js'
-import { listLocks } from '../shared/locks-state.js'
+import { registerRoom } from '../core/engine.js'
+import { EXPORT_FORMATS, emit } from '../shared/exportFormats.js'
+import { COVERAGE } from '../shared/data.js'
+import { esc, attr } from '../core/dom.js'
 
-injectStyleOnce(
-  'site-exports-style',
-  `
-  .site-export-section { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
-  .site-export-formats { display: flex; flex-wrap: wrap; gap: 8px; }
-  .site-export-formats button {
-    min-height: var(--touch-target, 44px); padding: 0 12px; border-radius: var(--md-shape-full, 999px);
-    border: 1px solid var(--md-outline, #79767e); background: var(--md-surface-container, #efeaf2);
-    color: var(--md-on-surface, #1c1b1f); cursor: pointer; font: inherit;
-  }
-  .site-export-lossnote {
-    font-size: 12px; border: 1px dashed var(--md-outline, #79767e); border-radius: var(--md-shape-sm, 8px);
-    padding: 8px; display: flex; flex-direction: column; gap: 6px;
-  }
-  `,
-)
-
-function collectSettingsRecords() {
+function datasetRecords(store, id) {
+  const s = store.state
+  if (id === 'notes') return s.notes.map((n) => ({ title: n.title, body: n.body, tag: n.tag, when: n.when }))
+  if (id === 'history') return s.history.map((h) => ({ title: h.title, body: h.body, when: h.when }))
+  if (id === 'coverage') return COVERAGE.map((c) => ({ promise: c[0], where: c[1], state: c[2] }))
   return [
-    { key: 'language.mode', value: getLanguageMode() },
-    { key: 'language.funnyLevel.english', value: getFunnyLevel('en') },
-    { key: 'language.funnyLevel.cantonese', value: getFunnyLevel('yue') },
-    { key: 'language.showEmojiInDialogs', value: getEmojiEnabled() },
-    { key: 'schoolMode.enabled', value: isSchoolModeEnabled() },
-    { key: 'schoolMode.displayName', value: schoolDisplayName() },
-    { key: 'narrator.enabled', value: narratorEnabled() },
-    { key: 'narrator.language', value: narratorLang() },
-    { key: 'narrator.voiceUri.english', value: getVoiceUri('en') || 'auto' },
-    { key: 'narrator.voiceUri.cantonese', value: getVoiceUri('yue') || 'auto' },
-    { key: 'narrator.rate', value: getRate() },
-    { key: 'narrator.pitch', value: getPitch() },
-    { key: 'vocabulary.loaded', value: hasVocabulary() },
-    { key: 'vocabulary.fileName', value: hasVocabulary() ? vocabFileName() : '' },
-    { key: 'vocabulary.entryCount', value: hasVocabulary() ? Object.keys(vocabEntries()).length : 0 },
-    { key: 'toyLocks.count', value: listLocks().length },
+    { setting: 'theme', value: s.theme }, { setting: 'language', value: s.lang },
+    { setting: 'silliness (English)', value: s.funnyEn }, { setting: 'silliness (Cantonese)', value: s.funnyYue },
+    { setting: 'emoji', value: s.emoji }, { setting: 'bigger text', value: s.bigText },
+    { setting: 'sounds', value: s.sound }, { setting: 'favourite colour', value: s.accent },
+    { setting: 'nickname', value: s.nick }, { setting: 'school mode', value: s.school },
+    { setting: 'narrator', value: s.narrate }, { setting: 'timer', value: s.schedOn ? s.schedTime + ' → ' + s.schedTheme : 'off' },
   ]
 }
 
-function buildExportSection(title, getRecords, filenameBase) {
-  const wrap = h('div', { class: 'site-export-section' })
-  wrap.appendChild(h('h4', {}, title))
-  const lossArea = h('div', {})
-  const btnRow = h(
-    'div',
-    { class: 'site-export-formats' },
-    EXPORT_FORMATS.map((fmt) =>
-      h(
-        'button',
-        {
-          type: 'button',
-          onClick: () => {
-            lossArea.textContent = ''
-            const records = getRecords()
-            if (fmt.lossy) {
-              lossArea.appendChild(
-                h('div', { class: 'site-export-lossnote' }, [
-                  h('span', {}, `⚠️ ${fmt.label} will lose: ${fmt.lossNote}`),
-                  h(
-                    'button',
-                    {
-                      type: 'button',
-                      onClick: () => {
-                        downloadFile(`${filenameBase}.${fmt.ext}`, fmt.encode(records), fmt.mime)
-                        lossArea.textContent = ''
-                      },
-                    },
-                    'Download anyway',
-                  ),
-                ]),
-              )
-            } else {
-              downloadFile(`${filenameBase}.${fmt.ext}`, fmt.encode(records), fmt.mime)
-            }
-          },
-        },
-        fmt.label,
-      ),
-    ),
-  )
-  wrap.appendChild(btnRow)
-  wrap.appendChild(lossArea)
-  return wrap
+export function registerExports(store, deps, registerAction, registerBinding) {
+  registerAction('export-pick-dataset', (s, id, el, h) => store.setState({ dataset: id, lossPending: null, lossNote: 'Now showing this pile. Pick a shape.' }, { persist: false }))
+  registerAction('export-format', (s, id, el, h) => {
+    const format = EXPORT_FORMATS.find((f) => f.id === id)
+    if (!format) return
+    if (format.loss) {
+      store.setState({ lossPending: format.id, lossNote: '⚠️ ' + format.loss, lossBad: true }, { persist: false })
+    } else {
+      h.download('nodeterm-' + s.state.dataset + '.' + format.id, emit(datasetRecords(store, s.state.dataset), format.id))
+      store.setState({ lossPending: null, lossNote: 'Saved as ' + format.label + '. That shape carries every single field.', lossBad: false }, { persist: false })
+    }
+  })
+  registerAction('export-loss-confirm', (s, id, el, h) => {
+    const format = EXPORT_FORMATS.find((f) => f.id === s.state.lossPending)
+    if (!format) return
+    h.download('nodeterm-' + s.state.dataset + '.' + format.id, emit(datasetRecords(store, s.state.dataset), format.id))
+    store.setState({ lossPending: null, lossNote: 'Saved as ' + format.label + ', with the loss above accepted.', lossBad: false }, { persist: false })
+  })
+  registerAction('export-loss-cancel', () => store.setState({ lossPending: null, lossNote: 'Nothing was saved. Pick a green shape to keep every field.', lossBad: false }, { persist: false }))
+
+  registerRoom('export', { render: (storeArg) => renderExport(storeArg, deps) })
 }
 
-function buildExportsPanel() {
-  const wrap = h('div', {})
-  function rebuild() {
-    wrap.textContent = ''
-    wrap.appendChild(h('h3', {}, t('exports.section.title')))
-    wrap.appendChild(h('p', {}, t('exports.help')))
-    wrap.appendChild(buildExportSection('Settings', collectSettingsRecords, 'nodeterm-site-settings'))
-    wrap.appendChild(buildExportSection('Notification history', listNotifications, 'nodeterm-site-notifications'))
-    wrap.appendChild(buildExportSection('Local version history', listHistory, 'nodeterm-site-history'))
-  }
-  rebuild()
-  subscribeI18n(rebuild)
-  return wrap
-}
-
-function buildNotificationsPanel() {
-  const wrap = h('div', {})
-  function rebuild() {
-    wrap.textContent = ''
-    wrap.appendChild(h('h3', {}, 'Notifications'))
-    wrap.appendChild(
-      h('p', {}, 'Dismissed notifications stay reviewable here. Multi-select to remove several at once, or clear everything.'),
-    )
-    const list = createBulkList({
-      getItems: () => listNotifications(),
-      getId: (n) => n.id,
-      getSearchText: (n) => n.title + ' ' + n.message,
-      renderRow: (n) => h('span', {}, `[${n.kind}] ${n.title ? n.title + ' — ' : ''}${n.message} (${new Date(n.at).toLocaleString()})`),
-      searchLabel: 'Search notifications',
-      emptyLabel: t('common.none'),
-      actions: [
-        { id: 'remove', label: 'Remove selected', destructive: true, run: (ids) => { removeNotifications(ids); rebuild() } },
-        { id: 'clear', label: 'Clear all', destructive: true, run: () => { clearNotifications(); rebuild() } },
-      ],
-    })
-    wrap.appendChild(list.root)
-  }
-  rebuild()
-  subscribeNotifications(rebuild)
-  subscribeI18n(rebuild)
-  return wrap
-}
-
-function buildHistoryPanel() {
-  const wrap = h('div', {})
-  function rebuild() {
-    wrap.textContent = ''
-    wrap.appendChild(h('h3', {}, 'Local version history'))
-    wrap.appendChild(h('p', {}, 'Every meaningful settings change on this site, recorded locally, oldest changes pruned automatically.'))
-    const list = createBulkList({
-      getItems: () => listHistory(),
-      getId: (n) => n.id,
-      getSearchText: (n) => n.description,
-      renderRow: (n) => h('span', {}, `${n.description} — ${new Date(n.at).toLocaleString()}`),
-      searchLabel: 'Search local history',
-      emptyLabel: t('common.none'),
-      actions: [
-        { id: 'remove', label: 'Remove selected', destructive: true, run: (ids) => { removeHistoryEntries(ids); rebuild() } },
-        { id: 'clear', label: 'Clear all', destructive: true, run: () => { clearHistory(); rebuild() } },
-      ],
-    })
-    wrap.appendChild(list.root)
-  }
-  rebuild()
-  subscribeHistory(rebuild)
-  subscribeI18n(rebuild)
-  return wrap
-}
-
-export function registerExports(api) {
-  if (typeof api.registerTab === 'function') {
-    api.registerTab({ id: 'notifications', title: 'Notifications', icon: '🔔', group: 'app', render: asMountable(buildNotificationsPanel) })
-    api.registerTab({ id: 'history', title: 'Local history', icon: '🕘', group: 'app', render: asMountable(buildHistoryPanel) })
-    api.registerTab({ id: 'exports', title: 'Export your data', icon: '⬇️', group: 'settings', render: asMountable(buildExportsPanel) })
-  }
-  if (typeof api.registerSetting === 'function') {
-    api.registerSetting({
-      id: 'export-data',
-      tabId: 'exports',
-      title: 'Export settings, notifications, and history',
-      describe: () => 'JSON, JSONL, YAML, TOML, XML, CSV, TSV, Markdown, or HTML.',
-      control: asMountable(buildExportsPanel),
-    })
-  }
-  if (typeof api.registerCommand === 'function') {
-    api.registerCommand({ id: 'clear-notifications', title: 'Clear notification history', run: () => clearNotifications() })
-    api.registerCommand({ id: 'clear-local-history', title: 'Clear local version history', run: () => clearHistory() })
-  }
+function renderExport(store, deps) {
+  const s = store.state
+  const datasets = [
+    ['settings', 'My settings'], ['notes', 'My messages'], ['history', 'My time machine'], ['coverage', 'The big checklist'],
+  ]
+  const preview = (() => {
+    try {
+      return emit(datasetRecords(store, s.dataset), s.lossPending || 'json').slice(0, 4000)
+    } catch (_err) {
+      return ''
+    }
+  })()
+  return `<div class="export-grid" style="animation:pop .2s ease">
+    <div class="card">
+      <h3 style="margin-bottom:10px;font-size:19px">1 · Pick your pile</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${datasets
+          .map(
+            ([id, label]) =>
+              `<button type="button" class="dataset-btn ${s.dataset === id ? 'is-active' : ''}" data-action="export-pick-dataset" data-id="${attr(id)}"><span style="flex:1;text-align:left;font-weight:700">${esc(label)}</span><span style="font-size:12px;color:var(--ink2)">${datasetRecords(store, id).length} rows</span></button>`,
+          )
+          .join('')}
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:10px;font-size:19px">2 · Pick a shape</h3>
+      <div class="format-grid">
+        ${EXPORT_FORMATS.map((f) => `<button type="button" class="format-btn ${f.loss ? 'is-lossy' : ''}" title="${attr(f.loss ? 'Heads up: ' + f.loss : 'Carries every field faithfully')}" data-action="export-format" data-id="${attr(f.id)}">${esc(f.label)}</button>`).join('')}
+      </div>
+      <div class="note-box ${s.lossBad ? 'is-bad' : ''}">${esc(s.lossNote)}</div>
+      ${
+        s.lossPending
+          ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button type="button" class="btn" style="background:var(--orange)" data-action="export-loss-confirm">Save it anyway</button>
+        <button type="button" class="btn-plain" data-action="export-loss-cancel">Never mind</button>
+      </div>`
+          : ''
+      }
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <h3 style="margin-bottom:10px;font-size:19px">3 · Have a look first 👀</h3>
+      <pre class="export-preview">${esc(preview)}</pre>
+    </div>
+  </div>`
 }
