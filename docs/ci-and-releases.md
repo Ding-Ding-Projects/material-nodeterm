@@ -1,0 +1,173 @@
+# CI and releases
+
+This document describes `.github/workflows/release.yml` (the build + release pipeline) and
+`.github/workflows/ci.yml` (a non-gating PR build check): what each one does, what it
+deliberately does **not** do, and the honest cost of that trade-off.
+
+## The governing policy
+
+**GitHub Actions runs no tests and no lint. Nothing in a workflow gates the release.**
+
+`release.yml` builds the app, packages a Windows installer, and publishes it as a GitHub
+Release — that is the whole job. A run fails only when the build, the packaging, or the
+publication itself fails. It does not run `npm test`, it does not run `npm run typecheck`,
+and it does not run a linter. This is a standing decision, not an oversight:
+
+- **What this costs.** With no gate in the pipeline, a release can ship from a commit whose
+  tests would have failed. The first thing that notices is a person running the installer,
+  not a red CI check. That is the accepted trade-off in exchange for artifacts reaching
+  people quickly and unconditionally, on every push.
+- **Where checking actually happens.** The repository's own test scripts
+  (`npm test`, `npm run typecheck`) still exist and are still meant to be run — just locally,
+  by whoever is changing the code, before they push. See `CONTRIBUTING.md`. A failing local
+  test is still a real defect to fix in the same change; it is simply never a required check
+  wired into a workflow, and its result is never implied by a release existing.
+- **`ci.yml` is not an exception to this.** It builds the app on a pull request (electron-vite
+  compile only — no tests, no type-check, no lint) purely as fast, disposable feedback. It has
+  no `needs:` relationship to `release.yml`, is not a required status check, and cancels a
+  superseded run outright (`concurrency: cancel-in-progress: true`) — safe only because it
+  never publishes anything. `release.yml` deliberately carries no such concurrency group:
+  cancelling a release mid-publish could strand a tag with no artifact attached to it.
+
+## What `release.yml` actually does
+
+Triggered by every `push` (no branch filter) and by `workflow_dispatch`, on `windows-latest`
+— Windows is the active delivery target for this project. One job:
+
+1. **Checkout** with full history (`fetch-depth: 0`) — needed for the line-count report's
+   `git blame` attribution and for an honest commit link in the release notes.
+2. **Record the workflow start time** via `gh api repos/.../actions/runs/<run id>` (GitHub's
+   own `run_started_at`). If this call fails (missing `actions: read` on a fallback token,
+   API hiccup) the step warns and leaves it unset — `release-notes.mjs` then reports the
+   start time as **missing**, never an estimate.
+3. **Install dependencies** — `npm ci`, which also runs the project's own `postinstall` hook
+   (`scripts/patch-node-pty.mjs` + `electron-rebuild -f -w node-pty,smart-whisper` against
+   this runner's Electron ABI). `windows-latest` already ships the Visual Studio Build Tools
+   and Python that native module compilation needs; nothing extra is bootstrapped for that.
+   If a future dependency needs a tool the runner image does not carry, add a check-then-
+   install step here, immediately before it is needed.
+4. **Build** — `npm run make-icon` then `npm run build` (electron-vite: main + preload +
+   renderer).
+5. **Compute a monotonic release tag** — `v<package.json version>-ci.<run number>`. GitHub
+   guarantees a workflow's own run number only ever increases and never repeats, so no two
+   runs can collide on a tag and no prior release is ever recycled or overwritten.
+6. **Package the Windows installer** — `electron-builder --win --publish never`, producing a
+   Squirrel.Windows installer (`Setup.exe`, `RELEASES`, the full `.nupkg`, and a delta
+   `.nupkg` on repeat versions) under `dist/squirrel-windows/`.
+7. **Verify the installer is unsigned** — reads its Authenticode signature and fails the run
+   if it is somehow signed (see [Signing](#signing) below).
+8. **Locate the release assets** and generate the release notes
+   (`scripts/release-notes.mjs`, embedding `scripts/count-lines.mjs`'s report — see
+   [Release notes content](#release-notes-content)).
+9. **Create (or, on an idempotent retry, update) the GitHub Release** for the computed tag,
+   targeting the exact built commit, non-draft, non-prerelease, from the start.
+10. **Upload the release assets** with `--clobber`, so a retry after a partial upload heals
+    itself instead of failing on "asset already exists".
+11. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
+    the collection and the upload — so a failed run still leaves the packaged output, the
+    generated notes, and the run context inspectable, without ever masking or reversing the
+    real pass/fail verdict of the steps above it. Only explicitly safe paths are copied: the
+    packaged installer output and the generated notes file — never `node_modules`, caches, or
+    the source tree.
+
+### Token resolution
+
+Every step in the job authenticates as
+`secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN` (job-level `env.GH_TOKEN`,
+read automatically by the `gh` CLI). None of the three is ever printed, logged, or echoed.
+
+## Signing
+
+**Code signing is permanently out of scope for this project.** The workflow never requests,
+purchases, generates, renews, stores, or uses a code-signing certificate, private key,
+timestamp credential, signing secret, or signer service — it never sets `CSC_LINK` or
+`CSC_KEY_PASSWORD`, so electron-builder has no certificate to sign with in the first place.
+The packaging step additionally sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so electron-builder
+cannot opportunistically pick one up from the runner's own certificate store, and
+`package.json`'s root `build.forceCodeSigning: false` (electron-builder's own documented
+default) means a build never aborts over a signing step it was never asked to perform. A
+dedicated verification step reads the built installer's actual Authenticode signature and
+fails the run if it is somehow signed — signing prohibition is enforced, not just documented.
+
+Every release's notes carry an explicit warning: **the installer is unsigned**, and running it
+will trigger Windows SmartScreen and the unknown-publisher warning. That is expected, not a
+sign of tampering; verify a download by checking the release's commit link and asset list
+instead of by a signature that does not exist.
+
+## Release notes content
+
+`scripts/release-notes.mjs` builds the full body of every published release. It never implies
+a check ran that did not, and it never estimates a missing timestamp — a missing value is
+printed as **missing**, not guessed at. It always includes:
+
+1. **End-to-end workflow timing** — `Workflow started` (from GitHub's own `run_started_at`,
+   or "missing" if that read failed), `Workflow completed` (stamped immediately before the
+   release is published — the closest a single-job workflow can get to "through the final
+   release-publication step"), and `Workflow duration` as a stable `HH:mm:ss`.
+2. **The project's line count at that exact commit**, via `scripts/count-lines.mjs` —
+   see below.
+3. **What actually ran** — an explicit statement that no tests, type-check, or lint ran in
+   this workflow, alongside the real list of steps that did (`npm ci`, `npm run make-icon`,
+   `npm run build`, `electron-builder --win`). This section exists specifically so a release
+   is never read as "passing" a check it never ran.
+4. **The unsigned-installer warning** described above.
+5. **The asset list** (installer filename + size), when the packaging step located any.
+
+### `scripts/count-lines.mjs`
+
+The repository's committed line counter (`node scripts/count-lines.mjs [ref]`, defaulting to
+`HEAD`). It is a plain, pure `computeLineCounts()` function plus a small CLI wrapper —
+`release-notes.mjs` imports the function directly rather than shelling out, so a standalone
+run of the counter and what a release actually reports can never drift apart.
+
+- **Categories, counted separately, total and non-blank:** `source`, `tests` (anything
+  matching `*.test.*`, `*.spec.*`, or under a `test(s)/`/`__tests__/` directory), `styles`
+  (`.css`/`.scss`/`.less`), `docs` (`.md`), `config` (`.json`/`.yml`/`.yaml`).
+- **Per-language split** — one row per recognized extension across the whole tree.
+- **Exclusion list, stated explicitly** rather than silently dropped: the npm-generated
+  `package-lock.json`, vendored license text under `resources/licenses/`, binary art assets
+  under `resources/mascot/` and `docs/assets/`, and prebuilt vendored binaries under
+  `resources/bin/`. Any tracked file with an extension the counter does not recognize (images,
+  fonts, `.plist`, `Dockerfile`, dotfiles, `.jsonl` fixtures, …) is listed separately as
+  uncounted rather than silently folded into either total.
+- **Project total vs. grand total.** This repository has no tracked vendored source subtree,
+  so the two are currently identical and the report says so plainly. The distinction is kept
+  in the output shape anyway, so a future vendored subtree cannot silently merge into the
+  project figure without the report's own structure forcing someone to notice.
+- **Attribution — agent-written vs. person-written, by *surviving* lines.** This is
+  deliberately **not** a sum of added lines from `git log`: a line written and later deleted
+  belongs to nobody, and churn is not authorship. Instead, every counted file is blamed
+  (`git blame --line-porcelain`) at the report's ref, and each surviving line is attributed to
+  the commit that introduced it. A commit counts as agent-written when its author name/email
+  matches a known automation identity, or its commit message carries a `Co-Authored-By:`
+  trailer naming one (case-insensitive match against `claude`, `codex`, `copilot`, `openai`,
+  `bot`, `[bot]`, `github-actions`, or `noreply@anthropic.com`). Every other attributable line
+  is a person's. The exact rule string is included in every report, so it can be checked
+  rather than taken on faith.
+- **Ref validation fails loudly.** A ref that does not resolve to a commit raises an error
+  instead of silently reporting every count as zero — an empty table and "there is nothing
+  here" must never be indistinguishable outcomes.
+
+Both `npm run make-icon` outputs and everything under `resources/` that is genuinely this
+project's own hand-written source (none currently, beyond the license/art exclusions above)
+stay in scope for the count; only the paths named above are excluded.
+
+## What is deliberately out of scope for this lane
+
+- **`security.yml`** (CodeQL + dependency review) is untouched. It runs on `pull_request`/
+  `push` to `main` and a weekly schedule, independently of `release.yml` — there is no
+  `needs:` relationship between them, and it does not gate the release pipeline. Whether
+  CodeQL/dependency-review themselves count as "release-gating checks" this policy targets is
+  a call for whoever owns that workflow to make explicitly; this document does not extend the
+  no-tests/no-lint policy to it by inference.
+- **macOS and Linux packaging** (the project's previous signed/notarized macOS release and
+  unsigned Linux release, including the Homebrew tap sync) have been removed from
+  `release.yml`. The active delivery scope for this project is Windows only. Historical
+  macOS/Linux release history remains on GitHub as a record; reopening cross-platform delivery
+  is a deliberate, explicit decision for later, not an oversight here.
+- **Windows app icon.** `package.json`'s `build.squirrelWindows.iconUrl` currently points at
+  `build/icon.png` on GitHub's raw content host, but `build/icon.png` is generated at build
+  time and is `.gitignore`d — that URL will not resolve today. This only affects the icon
+  Squirrel shows in Windows' "Apps & features" list (cosmetic; it does not fail packaging or
+  the release). A real, committed, multi-resolution `.ico` for this app is tracked as a
+  follow-up under the project's general app-icon/branding work, not this lane.
