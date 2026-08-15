@@ -67,17 +67,34 @@ export function shellPathNow(): string | null | undefined {
   return cachedShellPath
 }
 
+/**
+ * The bare-name candidates to try for `bin` in one PATH directory. On win32 a command is almost
+ * never spelled without its extension (`tmux`, not `tmux.exe`) — CMD/PowerShell resolve that via
+ * `PATHEXT`, but `fs.accessSync` does no such resolution, so a literal `path.join(dir, 'tmux')`
+ * never matches `tmux.exe` sitting right there. Elsewhere (macOS/Linux) extensions aren't a thing
+ * and `bin` is tried as-is, unchanged from before this existed.
+ */
+function candidateNames(bin: string): string[] {
+  if (os.platform() !== 'win32') return [bin]
+  if (/\.[^./\\]+$/.test(bin)) return [bin] // already has an extension — don't double up
+  const pathext = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
+  return [bin, ...pathext.map((ext) => bin + ext.toLowerCase())]
+}
+
 /** Walk a PATH string for an executable — sync but SUBPROCESS-FREE (one accessSync per entry),
  *  so it is safe on the main thread. Returns the first accessible match, or null. */
 export function findInPathString(bin: string, pathStr: string | null | undefined): string | null {
+  const names = candidateNames(bin)
   for (const dir of (pathStr ?? '').split(path.delimiter)) {
     if (!dir) continue
-    const candidate = path.join(dir, bin)
-    try {
-      fs.accessSync(candidate, fs.constants.X_OK)
-      return candidate
-    } catch {
-      // not here — keep looking
+    for (const name of names) {
+      const candidate = path.join(dir, name)
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK)
+        return candidate
+      } catch {
+        // not here — keep looking
+      }
     }
   }
   return null
@@ -99,4 +116,20 @@ export function findExecutableSync(bin: string, fallbacks: string[] = []): strin
     }
   }
   return null
+}
+
+/**
+ * Well-known install locations for the OpenSSH client tools, walked when neither the login-shell
+ * PATH (macOS/Linux) nor the inherited PATH (Windows — `resolveShellPath` never probes there, see
+ * above) had a hit. Windows 10 1809+ ships OpenSSH as an optional Windows feature installed under
+ * `%WINDIR%\System32\OpenSSH`, which is on the SYSTEM PATH for a normal user session but not
+ * necessarily inherited by a GUI app launched from Explorer/a shortcut — the same class of gap the
+ * macOS Homebrew paths returned here exist to cover.
+ */
+export function opensshFallbacks(bin: 'ssh' | 'scp'): string[] {
+  if (os.platform() === 'win32') {
+    const winDir = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows'
+    return [path.join(winDir, 'System32', 'OpenSSH', `${bin}.exe`)]
+  }
+  return [`/usr/bin/${bin}`, `/usr/local/bin/${bin}`, `/opt/homebrew/bin/${bin}`]
 }

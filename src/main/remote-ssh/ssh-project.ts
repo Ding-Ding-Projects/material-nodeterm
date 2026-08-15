@@ -7,7 +7,7 @@ import { getMainWindow, sendToMain } from '../main-window'
 import { parseLsDirs, posixQuote, quoteRemotePath, remoteTmuxConf, sshHostKey, type SshConnection } from '../../shared/ssh'
 import type { DownloadResult, SshPassphraseRequest, SshProjectStatusEvent } from '../../shared/types'
 import { candidateName, safeDownloadBasename } from '../../core/download-name'
-import { findExecutableSync, shellPathNow } from '../../core/exec-path'
+import { findExecutableSync, opensshFallbacks, shellPathNow } from '../../core/exec-path'
 import { isSafeRemoteHome } from '../../core/remote-safety'
 import { mediaCachePruneList, remoteMediaCacheName } from '../../core/remote-ssh/media-cache'
 import { allowMediaPath } from '../media-protocol'
@@ -238,11 +238,7 @@ interface Conn {
 let cachedSsh: string | null | undefined
 function sshBin(): string {
   if (cachedSsh !== undefined) return cachedSsh ?? 'ssh'
-  const found = findExecutableSync('ssh', [
-    '/usr/bin/ssh',
-    '/usr/local/bin/ssh',
-    '/opt/homebrew/bin/ssh'
-  ])
+  const found = findExecutableSync('ssh', opensshFallbacks('ssh'))
   if (found || shellPathNow() !== undefined) cachedSsh = found
   return found ?? 'ssh'
 }
@@ -251,11 +247,7 @@ function sshBin(): string {
 let cachedScp: string | null | undefined
 function scpBin(): string {
   if (cachedScp !== undefined) return cachedScp ?? 'scp'
-  const found = findExecutableSync('scp', [
-    '/usr/bin/scp',
-    '/usr/local/bin/scp',
-    '/opt/homebrew/bin/scp'
-  ])
+  const found = findExecutableSync('scp', opensshFallbacks('scp'))
   if (found || shellPathNow() !== undefined) cachedScp = found
   return found ?? 'scp'
 }

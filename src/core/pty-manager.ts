@@ -60,7 +60,13 @@ import { effectiveSize, type PtySize } from './pty-size'
 import { machOArch, archMismatch } from './macho-arch'
 import { writeScrollback, readScrollback, deleteScrollback } from './scrollback-store'
 import { claudeConfigDirFor } from './claude-config-dir'
-import { findExecutableSync, findInPathString, resolveShellPath, shellPathNow } from './exec-path'
+import {
+  findExecutableSync,
+  findInPathString,
+  opensshFallbacks,
+  resolveShellPath,
+  shellPathNow
+} from './exec-path'
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { NODE_ID_MAX, isSafeNodeId } from './remote-safety'
 import { presenceHub } from './presence/hub'
@@ -199,6 +205,16 @@ bind -T copy-mode-vi TripleClick1Pane send-keys -X select-line \\; send-keys -X 
  * through the now-resolved tmux.
  */
 function findTmux(resourcesPath?: string): string | null {
+  // Windows has none of `tmuxCandidatePaths`' targets (Homebrew, MacPorts, Nix, the distro
+  // `/usr/bin` family — all POSIX filesystem layouts) and no bundled tmux (macOS-only, see
+  // `bundledTmuxPath`'s doc comment; `scripts/build-tmux.mjs` never runs for a Windows package).
+  // Walking either list would just be `existsSync` calls against paths that can never resolve on
+  // this platform — skip straight to the PATH probe, the one route that can find a real tmux a
+  // Windows user installed themselves (WSL's own tmux is a different filesystem entirely and is
+  // never on the Windows PATH; MSYS2/Cygwin tmux, if the user put it there, is).
+  if (os.platform() === 'win32') {
+    return findInPathString('tmux', shellPathNow() ?? process.env.PATH)
+  }
   // BOTH lookups inside the guard: `os.homedir()` throws the same SystemError as `userInfo()` when
   // there is no passwd entry and no $HOME (some containers), and a thrown probe here would take
   // out tmux discovery entirely — degrading a machine that HAS tmux to the plain-shell fallback,
@@ -266,7 +282,7 @@ function findSsh(): string | null {
   // Subprocess-free (was a sync login-shell `command -v ssh` + an `ssh -V` spawn per fallback,
   // all blocking the main thread). A MISS is only memoized once the async login-shell PATH
   // probe has settled — before that a custom-location ssh would be cached away forever.
-  const found = findExecutableSync('ssh', ['/usr/bin/ssh', '/usr/local/bin/ssh', '/opt/homebrew/bin/ssh'])
+  const found = findExecutableSync('ssh', opensshFallbacks('ssh'))
   if (found || shellPathNow() !== undefined) cachedSsh = found
   return found
 }
@@ -274,6 +290,35 @@ function findSsh(): string | null {
 // resolveShellPath (the one async login-shell PATH probe) lives in exec-path.ts now, shared by
 // every module that used to spawn its own sync login shell. Prewarmed from init(); create()
 // awaits it, so terminals still always get the real PATH.
+
+/** Windows PowerShell always ships at this exact path (part of the OS since Vista) — the one
+ *  fallback that is always available, even when the PATH probe misses it. */
+const WIN_POWERSHELL_FALLBACK = (): string =>
+  `${process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows'}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`
+
+/** PowerShell 7+'s default per-machine install location — a fallback for the case where the
+ *  installer's PATH update hasn't reached this (GUI-launched) process's inherited environment. */
+const WIN_PWSH_FALLBACK = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
+/**
+ * The Windows session program when nothing else picked one (no explicit program, no
+ * `settings.defaultShell`): prefer PowerShell 7+ (`pwsh.exe` — the shell most developers actually
+ * want once they've installed it), then the Windows PowerShell every machine ships
+ * (`powershell.exe`), then whatever the environment itself calls its command processor
+ * (`COMSPEC` — normally `cmd.exe`, but respecting it rather than hardcoding keeps this correct on
+ * an environment that deliberately points it elsewhere), and only then a bare `cmd.exe` — the one
+ * binary guaranteed to exist on every Windows install, so this function can never return nothing.
+ */
+function resolveWindowsShell(): string {
+  const pathStr = shellPathNow() ?? process.env.PATH
+  const pwsh = findInPathString('pwsh', pathStr) ?? (fs.existsSync(WIN_PWSH_FALLBACK) ? WIN_PWSH_FALLBACK : null)
+  if (pwsh) return pwsh
+  const winPsFallback = WIN_POWERSHELL_FALLBACK()
+  const powershell =
+    findInPathString('powershell', pathStr) ?? (fs.existsSync(winPsFallback) ? winPsFallback : null)
+  if (powershell) return powershell
+  return process.env.COMSPEC || 'cmd.exe'
+}
 
 /**
  * A UTF-8 locale for spawned terminals, or null to leave the inherited locale untouched.
@@ -2104,11 +2149,13 @@ export class PtyManager {
         args.push(...programArgs)
       }
     } else {
+      // `process.env.SHELL` is a POSIX-only convention (unset on Windows outside a POSIX
+      // subsystem), so it never wins the win32 branch anyway — the ordering below just says so
+      // explicitly instead of relying on it being empty there.
       file =
         program ||
         settings.defaultShell ||
-        process.env.SHELL ||
-        (os.platform() === 'win32' ? 'powershell.exe' : 'bash')
+        (os.platform() === 'win32' ? resolveWindowsShell() : process.env.SHELL || 'bash')
       args = program ? programArgs : []
     }
 
