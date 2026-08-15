@@ -54,21 +54,27 @@ export const KIDS_DISCLOSURE =
  * agent act without asking, which is precisely the thing a child cannot be expected to supervise.
  * `acceptEdits` is refused for the same reason at smaller scale — it auto-approves file writes.
  *
- * `plan` is allowed and is the safest of the set (it proposes without acting). `manual` is
- * allowed because asking every time is exactly right here. `auto` is allowed but is the loosest
- * one on the list — see the note on `gateKidsPermissionMode`.
+ * `plan` is the safest of the set (it proposes without acting) and `manual` asks every time,
+ * which is exactly right here. Nothing else is allowed.
+ *
+ * `auto` USED TO BE on this list and is not any more. It is the app-wide default and it
+ * auto-approves most tool calls — this codebase's own notes describe it as overlapping Claude's
+ * `dontAsk` — so allowing it made the mode's headline promise ("agents cannot start in a mode
+ * that acts without asking") simply false. Worse, it was incoherent: the mode refused
+ * `acceptEdits`, which is NARROWER (file writes only), while permitting the broader one.
+ *
+ * The consequence is deliberate and worth stating: because `auto` is the default, turning kids
+ * mode on narrows nearly every session to `manual`. That is the mode doing its job, not a
+ * side effect — a child's agent asking before each action is the entire point.
  */
-export const KIDS_ALLOWED_PERMISSION_MODES: readonly AgentPermissionMode[] = [
-  'manual',
-  'plan',
-  'auto'
-]
+export const KIDS_ALLOWED_PERMISSION_MODES: readonly AgentPermissionMode[] = ['manual', 'plan']
 
 /** Modes kids mode refuses, with the reason each is refused — surfaced to the user, not hidden. */
 export const KIDS_REFUSED_PERMISSION_MODES: Readonly<Record<string, string>> = {
   bypassPermissions:
     'lets an agent act without asking at all — the one thing a child cannot supervise',
-  acceptEdits: 'auto-approves file changes, so edits happen with nobody looking'
+  acceptEdits: 'auto-approves file changes, so edits happen with nobody looking',
+  auto: 'auto-approves most actions, so a child would not see them coming'
 }
 
 /**

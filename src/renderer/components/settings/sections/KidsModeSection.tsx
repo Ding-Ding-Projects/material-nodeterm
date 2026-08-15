@@ -58,7 +58,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
       <SearchableRow {...ROWS.toggle}>
         <FieldRow
           label={enabled ? `${name} is on` : `${name} is off`}
-          description={`Keeps everything playful — dim sum, the funny levels and the language modes all stay — and adds limits instead: agents cannot start in a mode that acts without asking, and deleting a session always asks twice. It affects every app reading this machine's shared record, not just this one. Turning it OFF needs the grown-up PIN; turning it ON never does.`}
+          description={`Keeps everything playful — dim sum, the funny levels and the language modes all stay — and adds limits instead: agents cannot start in a mode that acts without asking, and deleting a session asks twice. It does not sandbox the terminal (see below). It affects every app reading this machine's shared record, not just this one. Turning it OFF needs the grown-up PIN; turning it ON never does.`}
           control={
             enabled ? (
               <div className="flex items-center gap-2">

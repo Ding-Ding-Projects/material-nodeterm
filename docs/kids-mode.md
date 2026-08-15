@@ -117,11 +117,22 @@ feature is *missing* from the other shell.
   under it, which needs a logged-in agent this environment does not have. Driving the palette
   headlessly to create a Claude node did not reliably land one, so this is stated as unverified
   rather than dressed up.
-- **Wider destructive coverage.** The gate is wired at the kanban session delete (see below). The
-  other destructive paths — project delete, worktree remove, notification bulk delete — already
-  open the super gate unconditionally, so kids mode adds nothing there. `GuardedAction` names six
-  actions; only `delete-node` currently consults the policy, because it was the only one that did
-  not already gate.
+- **Wider destructive coverage — and the earlier version of this bullet was WRONG.** It claimed
+  worktree removal "already opens the super gate unconditionally". It does not: it renders a plain
+  `ConfirmDialog` with `enterConfirms`, and its delete-from-disk option defaults to ON for a
+  worktree nodeterm created. A security review caught it. The true state:
+
+  | `GuardedAction` | today |
+  | --- | --- |
+  | `delete-node` | consults the policy ✅ |
+  | `delete-project` | already opens the super gate unconditionally ✅ |
+  | `remove-worktree` | **plain ConfirmDialog, Enter confirms, delete-from-disk pre-ticked** ❌ |
+  | `discard-changes` | bare `window.confirm()` ❌ |
+  | `revoke-device` | plain `ConfirmDialog` ❌ |
+  | `clear-history` | not wired ❌ |
+
+  So **three of six** are genuinely unprotected while kids mode is on, not one. Wiring them is
+  outstanding work, not a documented exemption.
 - **A security review**, before this is offered to anyone as child-safety. The survey that scoped
   the M3 overhaul was explicit that a child-facing gate in front of a real PTY needs its own review
   independent of any UI timeline.

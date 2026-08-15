@@ -30,6 +30,41 @@ const SCRYPT_KEYLEN = 32
 export const MIN_PIN_LENGTH = 4
 export const MAX_PIN_LENGTH = 128
 
+/**
+ * Brute-force throttling, and why it is not optional here.
+ *
+ * A four-digit PIN is 10^4. `disable(pin)` is exposed verbatim on the bridge
+ * (`window.nodeTerminal.kidsMode.disable`), Electron's default menu is deliberately left live so
+ * DevTools opens in a packaged build, and the Server Edition runs in an ordinary browser where
+ * DevTools cannot be disabled at all. Without a throttle, a console loop walks the whole keyspace
+ * in minutes — through the app's own front door, not through the disclosed "the terminal is not
+ * sandboxed" limit.
+ *
+ * The shape is lifted from `core/toylocks/toylock-service.ts`, which has had exactly this since it
+ * shipped — for a feature whose own header says it is NOT security. A child-facing lock having
+ * less protection than the toy one was the finding that prompted this.
+ *
+ * In memory on purpose: a restart clears it. That is the honest trade — persisting it would mean
+ * a lockout survivable only by deleting the shared directory, which is the very recovery path a
+ * locked-out adult needs. It costs an attacker an app restart per burst, and no more.
+ */
+const RATE_LIMIT_THRESHOLD = 3
+const RATE_LIMIT_MAX_MS = 30_000
+const rate = new Map<string, { fails: number; lastFailAt: number }>()
+
+/** How long this credential must wait before another attempt is even looked at. 0 = go ahead. */
+export function retryAfterMs(file: string, now = Date.now()): number {
+  const st = rate.get(file)
+  if (!st || st.fails < RATE_LIMIT_THRESHOLD) return 0
+  const wait = Math.min(RATE_LIMIT_MAX_MS, 500 * 2 ** (st.fails - RATE_LIMIT_THRESHOLD))
+  return Math.max(0, st.lastFailAt + wait - now)
+}
+
+/** Test seam: drop the throttle state. */
+export function resetRateLimitForTests(): void {
+  rate.clear()
+}
+
 export interface StoredCredential {
   version: 1
   /** base64 scrypt salt. */
@@ -93,9 +128,16 @@ export async function setCredential(file: string, pin: string): Promise<void> {
   await persistFile(file, JSON.stringify(body))
 }
 
-/** Verify a PIN. Returns false — never throws — for every failure mode, including an unreadable,
- *  malformed or unsealable credential. A mode that cannot verify stays locked. */
+/**
+ * Verify a PIN. Returns false — never throws — for every failure mode, including an unreadable,
+ * malformed or unsealable credential. A mode that cannot verify stays locked.
+ *
+ * Throttled: while a backoff is in effect this returns false WITHOUT looking at the credential at
+ * all, so a caller cannot distinguish "wrong PIN" from "still waiting" by timing. Use
+ * `retryAfterMs` to tell a user how long is left.
+ */
 export async function verifyPin(file: string, pin: string): Promise<boolean> {
+  if (retryAfterMs(file) > 0) return false
   let stored: StoredCredential
   try {
     stored = JSON.parse(await fs.readFile(file, 'utf-8')) as StoredCredential
@@ -115,8 +157,10 @@ export async function verifyPin(file: string, pin: string): Promise<boolean> {
     return false
   }
   const candidate = deriveHash(pin, Buffer.from(stored.salt, 'base64'))
-  if (expected.byteLength !== candidate.byteLength) return false
-  return timingSafeEqual(expected, candidate)
+  const ok = expected.byteLength === candidate.byteLength && timingSafeEqual(expected, candidate)
+  if (ok) rate.delete(file)
+  else rate.set(file, { fails: (rate.get(file)?.fails ?? 0) + 1, lastFailAt: Date.now() })
+  return ok
 }
 
 /** Shared PIN bounds check, so two modes cannot disagree about what a valid PIN is. */

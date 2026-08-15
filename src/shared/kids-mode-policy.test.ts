@@ -58,6 +58,25 @@ describe('permission modes', () => {
     }
   })
 
+  it('refuses auto — the promise on the toggle depends on it', () => {
+    // `auto` is the app-wide DEFAULT and auto-approves most tool calls, so while it was allowed
+    // the settings copy ("agents cannot start in a mode that acts without asking") was false. It
+    // was also incoherent: acceptEdits, which is NARROWER, was refused while auto was not.
+    const r = gateKidsPermissionMode('auto', true)
+    expect(r.mode).toBe('manual')
+    expect(r.changed).toBe(true)
+    expect(r.why).toMatch(/auto-approves/i)
+  })
+
+  it('allows nothing that acts without asking', () => {
+    // The invariant behind the toggle's wording. If a mode is ever added that auto-approves, this
+    // fails rather than the promise quietly becoming untrue.
+    const ACTS_WITHOUT_ASKING = ['auto', 'acceptEdits', 'bypassPermissions']
+    for (const m of ACTS_WITHOUT_ASKING) {
+      expect(KIDS_ALLOWED_PERMISSION_MODES, `${m} must not be allowed`).not.toContain(m)
+    }
+  })
+
   it('changes nothing at all when kids mode is off', () => {
     for (const m of ALL_PERMISSION_MODES) {
       const r = gateKidsPermissionMode(m, false)
