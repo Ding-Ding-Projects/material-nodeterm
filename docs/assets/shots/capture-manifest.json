@@ -1,6 +1,6 @@
 {
-  "commit": "84ef6d1447d605194ea214175ec22a8d4a26a4a9",
-  "capturedAt": "2026-08-15T15:34:21.229Z",
+  "commit": "d1f5d6f607b4ac21088b8a169b73dd9f01119ea1",
+  "capturedAt": "2026-08-15T16:16:21.499Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -11,31 +11,31 @@
     {
       "id": "app-01-launch",
       "title": "App at launch",
-      "bytes": 44581,
+      "bytes": 42723,
       "hadOpener": false
     },
     {
       "id": "app-02-settings",
       "title": "Settings",
-      "bytes": 114939,
+      "bytes": 115023,
       "hadOpener": true
     },
     {
       "id": "app-03-palette",
       "title": "Command palette",
-      "bytes": 70693,
+      "bytes": 68960,
       "hadOpener": true
     },
     {
       "id": "app-04-canvas",
       "title": "Canvas",
-      "bytes": 44581,
+      "bytes": 42723,
       "hadOpener": false
     },
     {
       "id": "app-05-kanban",
       "title": "Kanban board",
-      "bytes": 29738,
+      "bytes": 28042,
       "hadOpener": true
     }
   ],
