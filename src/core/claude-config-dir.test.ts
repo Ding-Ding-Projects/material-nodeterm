@@ -1,4 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// claudeConfigDirFor builds a LOCAL path with the platform's native `path.join`, which joins
+// with `\` on win32 — the userDataDir fixtures and expected values below are written in POSIX
+// form because what's under test (account-id validation, the claude-accounts/<id> join order) is
+// independent of the host's separator. Pin `path` to POSIX for this file only; production keeps
+// the real, platform-native module.
+vi.mock('path', async () => {
+  const actual = await vi.importActual<typeof import('path')>('path')
+  return { ...actual.posix, default: actual.posix }
+})
+
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
 import { claudeConfigDirFor } from './claude-config-dir'

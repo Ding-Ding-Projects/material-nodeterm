@@ -1,4 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// The LOCAL path builders under test (accountConfigDir, transcriptRootFor,
+// isSafeLocalTranscriptPath) build with the platform's native `path.join`/`path.sep`, which use
+// `\` on win32 — every fixture and expected value below is written in POSIX form (macOS-shaped
+// `/Users/x/...`) because what's under test is the join order / jail logic, not which separator
+// the host happens to use. Pin `path` to POSIX for this file only; production keeps the real,
+// platform-native module so a real Windows install still gets backslash paths. The REMOTE
+// functions (isSafeRemoteTranscriptPath, remoteAccountConfigDir*) already force POSIX explicitly
+// in the source (a remote host is always POSIX-shaped regardless of the local OS), so this mock
+// changes nothing for them.
+vi.mock('path', async () => {
+  const actual = await vi.importActual<typeof import('path')>('path')
+  return { ...actual.posix, default: actual.posix }
+})
+
 import {
   accountConfigDir,
   remoteAccountConfigDir,

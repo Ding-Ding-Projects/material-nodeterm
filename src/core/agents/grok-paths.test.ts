@@ -1,4 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// grokHomeDir/grokSessionsDir/grokSessionDir build LOCAL paths with the platform's native
+// `path.join`, which joins with `\` on win32 — this file's expected values are written in POSIX
+// form because the algorithm under test (join order, the ~/.grok default, the encoded-cwd
+// grouping) doesn't depend on which separator character the host happens to use. Pin `path` to
+// its POSIX behavior for this file so the assertions test that algorithm rather than the host OS.
+// Production code (which must keep using the real, platform-native `path` module so a real
+// Windows install gets backslash paths) is untouched — this only replaces what this test file's
+// own module graph sees when it imports 'path'.
+vi.mock('path', async () => {
+  const actual = await vi.importActual<typeof import('path')>('path')
+  return { ...actual.posix, default: actual.posix }
+})
+
 import {
   grokEncodedCwdDirName,
   grokHomeDir,

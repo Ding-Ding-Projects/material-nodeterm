@@ -5,6 +5,13 @@ import { sweepAckDir, createAckSweeper, type AckSweepFsLike } from './ack-sweep'
  * In-memory fs double for the sweeper. `dir` is a flat map of name → content; `mtime` advances on
  * every mutation so `createAckSweeper`'s dir-mtime gate can be exercised. `rm` records deletions.
  */
+// The real `sweepAckDir` builds `full` with the platform's own `path.join`, which joins with `\`
+// on win32 — so the basename extraction below must tolerate either separator, not just the POSIX
+// one this file's fixture paths are written with.
+function basename(p: string): string {
+  return p.split(/[/\\]/).pop() as string
+}
+
 function fakeFs(initial: Record<string, string>) {
   const files = new Map(Object.entries(initial))
   let mtimeMs = 1
@@ -12,14 +19,14 @@ function fakeFs(initial: Record<string, string>) {
   const fs: AckSweepFsLike = {
     readdirSync: (_dir) => [...files.keys()],
     readFileSync: (p, _e) => {
-      const name = p.split('/').pop() as string
+      const name = basename(p)
       if (readErrors.has(name)) throw new Error('EACCES')
       if (!files.has(name)) throw new Error('ENOENT')
       return files.get(name) as string
     },
     statSync: (_p) => ({ mtimeMs }),
     rmSync: (p, _o) => {
-      const name = p.split('/').pop() as string
+      const name = basename(p)
       if (files.delete(name)) mtimeMs++
     }
   }
