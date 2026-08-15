@@ -215,8 +215,20 @@ jobs:
         run: |
           # --clobber makes a retry of this step idempotent if a prior attempt uploaded
           # some but not all assets (network blip mid-upload, runner hiccup, etc.).
+          #
+          # STRIP THE CARRIAGE RETURN. `paths` is produced by the pwsh step above, so the
+          # multiline value arrives CRLF-terminated; `read -r` splits on \n and leaves the \r
+          # welded to the end of every path. The failure is deeply unhelpful — gh reports
+          #   no matches found for D:\...\node-terminal-0.3.0-full.nupkg
+          # with the offending character invisible and a stray newline in the message — for a
+          # file that exists and was verified to exist two steps earlier. Build succeeds,
+          # packaging succeeds, and the release publishes with zero assets attached.
           echo "$ASSET_PATHS" | while IFS= read -r path; do
+            path="${path%$'\r'}"
             [ -n "$path" ] || continue
+            # Fail loudly here rather than letting a vanished path fall through to `gh`, whose
+            # "no matches found" reads like a glob problem rather than a missing artifact.
+            [ -f "$path" ] || { echo "::error::expected release asset not found on disk: $path"; exit 1; }
             gh release upload "$RELEASE_TAG" "$path" --clobber --repo "$GITHUB_REPOSITORY"
           done
 
