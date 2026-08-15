@@ -1,4 +1,21 @@
-# Real captures — nodeterm published site
+# Real captures — nodeterm
+
+> **Re-taking these is now one command: `npm run shots -- --attach <port>`.**
+> `scripts/capture-shots.mjs` drives the built app over CDP, refuses to run against a build
+> older than its sources, FAILS when a required surface never opened (rather than filing the
+> previous screen under its name), and writes provenance to `capture-manifest.json` beside the
+> images. Read that manifest for the commit, method and viewport of the current set — it is
+> authoritative, and this document is the narrative around it.
+>
+> Two things it cannot manufacture and therefore skips by name: an agent mid-turn (needs a real
+> agent CLI session) and an SSH project (needs a reachable host). Both are listed as skips with
+> reasons rather than being silently absent.
+>
+> The app surfaces also need a project open before they show anything. The harness does not
+> create one — seed a project and a terminal node first, or `app-04-canvas` photographs an empty
+> welcome screen that is honest and useless.
+
+## Original notes
 
 Every image in this directory is a **real screen capture** — not a mockup, not a
 hand-edited image, and not reused from anywhere upstream. There are two sets:

@@ -1,0 +1,48 @@
+{
+  "commit": "7e9650942c4e0fd08c4ac2857d43c36e539c347d",
+  "capturedAt": "2026-08-15T14:56:27.826Z",
+  "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
+  "viewport": {
+    "width": 1600,
+    "height": 1000,
+    "deviceScaleFactor": 1
+  },
+  "captured": [
+    {
+      "id": "app-01-launch",
+      "title": "App at launch",
+      "bytes": 43758
+    },
+    {
+      "id": "app-02-settings",
+      "title": "Settings",
+      "bytes": 114939
+    },
+    {
+      "id": "app-03-palette",
+      "title": "Command palette",
+      "bytes": 69895
+    },
+    {
+      "id": "app-04-canvas",
+      "title": "Canvas",
+      "bytes": 43758
+    },
+    {
+      "id": "app-05-kanban",
+      "title": "Kanban board",
+      "bytes": 28931
+    }
+  ],
+  "skipped": [
+    {
+      "id": "app-agent-running",
+      "why": "needs a real agent CLI session"
+    },
+    {
+      "id": "app-ssh-project",
+      "why": "needs a reachable host and credentials"
+    }
+  ],
+  "failures": []
+}

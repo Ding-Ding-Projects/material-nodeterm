@@ -51,12 +51,47 @@ const only = typeof flag('only') === 'string' ? String(flag('only')).split(',') 
 // ---------------------------------------------------------------------
 // The surface list. REQUIRED failures fail the run — see rule 2.
 // ---------------------------------------------------------------------
+// `verify` is the load-bearing field, and its absence was a real defect in the first version of
+// this harness: it sent a chord, captured whatever was on screen, and reported success. Five
+// surfaces "captured", all of them the same wrong screen, zero failures reported — because
+// "the chord was dispatched" is not "the surface opened". Every entry now names a selector that
+// exists ONLY on that surface, and a capture whose selector is absent FAILS.
 const SURFACES = [
-  { id: 'app-01-launch', required: true, title: 'App at launch', open: null },
-  { id: 'app-02-settings', required: true, title: 'Settings', open: { key: 'comma', mod: true } },
-  { id: 'app-03-palette', required: true, title: 'Command palette', open: { key: 'k', mod: true } },
-  { id: 'app-04-canvas', required: true, title: 'Canvas with a live terminal node', open: null },
-  { id: 'app-05-kanban', required: true, title: 'Kanban board', open: { key: 'b', mod: true, shift: true } },
+  {
+    id: 'app-01-launch',
+    required: true,
+    title: 'App at launch',
+    open: null,
+    verify: '.tabbar'
+  },
+  {
+    id: 'app-02-settings',
+    required: true,
+    title: 'Settings',
+    open: { key: ',', code: 'Comma', vk: 188, ctrl: true },
+    verify: '[class*="settings"]'
+  },
+  {
+    id: 'app-03-palette',
+    required: true,
+    title: 'Command palette',
+    open: { key: 'k', code: 'KeyK', vk: 75, ctrl: true },
+    verify: '[class*="palette"]'
+  },
+  {
+    id: 'app-04-canvas',
+    required: true,
+    title: 'Canvas',
+    open: null,
+    verify: '.react-flow'
+  },
+  {
+    id: 'app-05-kanban',
+    required: true,
+    title: 'Kanban board',
+    open: { key: 'B', code: 'KeyB', vk: 66, ctrl: true, shift: true },
+    verify: '[class*="kanban"]'
+  },
   // Optional: these need state the harness cannot manufacture.
   { id: 'app-agent-running', required: false, title: 'Agent mid-turn', why: 'needs a real agent CLI session' },
   { id: 'app-ssh-project', required: false, title: 'SSH project', why: 'needs a reachable host and credentials' }
@@ -173,6 +208,19 @@ const captured = []
 const skipped = []
 const failures = []
 
+// Dismiss the first-run setup tour before anything else. A fresh Electron profile opens on it,
+// and every subsequent chord is swallowed by the overlay — which is how the first run of this
+// harness photographed the onboarding cover five times and reported five successes.
+{
+  const onb = await send('Runtime.evaluate', { returnByValue: true, expression: `(function(){
+    var skip = document.querySelector('.onb-skip');
+    if (skip) { skip.click(); return 'dismissed'; }
+    return document.querySelector('.onb') ? 'present-but-no-skip' : 'absent';
+  })()` })
+  console.log(`  setup tour: ${onb.result.value}`)
+  await sleep(1500)
+}
+
 for (const s of SURFACES) {
   if (only && !only.some((o) => s.id.includes(o))) continue
   if (!s.required) {
@@ -181,19 +229,40 @@ for (const s of SURFACES) {
   }
   try {
     if (s.open) {
-      // Chords go through the real key path so the app's own handlers run.
-      const mods = (s.open.mod ? 2 : 0) | (s.open.shift ? 8 : 0)
+      // Chords go through the real key path so the app's own handlers run. The code/vk pair is
+      // spelled out per surface rather than derived from the key — deriving it produced
+      // `code: 'KeyCOMMA'` and a virtual key code from a character, neither of which any handler
+      // recognises, so every chord silently did nothing.
+      const mods = (s.open.ctrl ? 2 : 0) | (s.open.shift ? 8 : 0)
       for (const type of ['keyDown', 'keyUp']) {
         await send('Input.dispatchKeyEvent', {
           type,
           modifiers: mods,
           key: s.open.key,
-          code: `Key${String(s.open.key).toUpperCase()}`,
-          windowsVirtualKeyCode: String(s.open.key).toUpperCase().charCodeAt(0)
+          code: s.open.code,
+          windowsVirtualKeyCode: s.open.vk,
+          nativeVirtualKeyCode: s.open.vk
         })
       }
-      await sleep(1200)
+      await sleep(1500)
     }
+
+    // THE CHECK THAT MAKES THIS HARNESS WORTH ANYTHING. Without it a chord that did nothing
+    // still yields a screenshot of the previous screen, filed under the new surface's name.
+    if (s.verify) {
+      const seen = await send('Runtime.evaluate', {
+        returnByValue: true,
+        expression: `!!document.querySelector(${JSON.stringify(s.verify)})`
+      })
+      if (seen.result.value !== true) {
+        failures.push({
+          id: s.id,
+          why: `surface never opened — "${s.verify}" is not in the DOM, so any capture here would be the previous screen under this name`
+        })
+        continue
+      }
+    }
+
     const shot = await send('Page.captureScreenshot', { format: 'png' })
     const buf = Buffer.from(shot.data, 'base64')
     if (looksBlank(buf)) {
@@ -232,6 +301,22 @@ writeFileSync(
     2
   ) + '\n'
 )
+
+// Two required surfaces that produce IDENTICAL bytes are not two surfaces. Either a chord did
+// nothing and the previous screen was filed under a second name, or the two entries genuinely
+// show the same view and one of them is misnamed. Both are worth knowing; neither is visible
+// from a success count. This is a warning rather than a failure, because there are legitimate
+// cases (the app at launch really is the canvas once a project is open).
+const byBytes = new Map()
+for (const c of captured) {
+  const same = byBytes.get(c.bytes)
+  if (same) {
+    console.warn(
+      `\n  ! ${c.id} and ${same} are byte-identical (${c.bytes} bytes) — they are the same view.\n` +
+        `    Either one is misnamed, or its opening step did nothing.`
+    )
+  } else byBytes.set(c.bytes, c.id)
+}
 
 console.log(`\ncaptured ${captured.length}  skipped ${skipped.length}  failed ${failures.length}`)
 for (const s of skipped) console.log(`  - skipped ${s.id}: ${s.why}`)
