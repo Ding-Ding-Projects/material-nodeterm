@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal DisableDelayedExpansion
 rem =============================================================================================
 rem build-installer.bat -- produces the Windows installer a person downloads: the same artifact
 rem CI publishes, through the same supported packaging path (electron-builder, Squirrel.Windows)
@@ -60,37 +60,10 @@ echo Tree state : %BUILD_TREE_STATE%
 echo.
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 0: preconditions that make the whole build impossible, checked in about a second.
-rem
-rem This script has MORE to lose than build.bat by skipping it: the packaging step is the long
-rem one, and both known blockers surface only after minutes of work -- a locked binary as an EPERM
-rem from npm or electron-rebuild that never names the app holding it, and the missing
-rem Spectre-mitigated libraries as four copies of MSB8040 well into the compile.
-rem
-rem Non-fatal by design when node is missing: the dependency phase installs node, so a machine
-rem without it yet must not be blocked by a check that needs it.
-rem ---------------------------------------------------------------------------------------------
-call :phase_begin "Preflight"
-where node >nul 2>&1
-if errorlevel 1 (
-    echo   node not on PATH yet - skipping the preflight; the dependency phase installs it.
-) else (
-    call node "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
-    if errorlevel 1 (
-        echo.
-        echo [FAILED] Preflight
-        echo   Dependency : a build precondition listed above
-        echo   Constraint : every precondition must hold before packaging starts
-        echo   Source     : "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
-        echo   Error      : see the numbered problems above - each names its own fix
-        exit /b 1
-    )
-)
-call :phase_end "Preflight"
-
-rem ---------------------------------------------------------------------------------------------
-rem Phase 1: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
-rem the two scripts can never silently drift apart.
+rem Phase 0: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
+rem the two scripts can never silently drift apart. That script bootstraps Node, then runs the
+rem Windows build preflight before npm ci/install; this ordering is what makes a truly fresh
+rem machine diagnosable instead of silently skipping a Node-powered preflight.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Dependencies"
 if "%NODETERM_SILENT%"=="1" (
@@ -110,7 +83,7 @@ if errorlevel 1 (
 call :phase_end "Dependencies"
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 2: package the installer through the project's own supported path. package.json's
+rem Phase 1: package the installer through the project's own supported path. package.json's
 rem "win" / "squirrelWindows" blocks pin forceCodeSigning / signExecutable / signAndEditExecutable
 rem to false, and this script never overrides that -- it is not this script's job to decide
 rem whether the org's permanent no-signing policy applies today.
@@ -133,7 +106,7 @@ if not "%DIST_EXIT%"=="0" (
 call :phase_end "Package (npm run dist:win)"
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 3: verify what was actually built, rather than trusting electron-builder's exit code
+rem Phase 2: verify what was actually built, rather than trusting electron-builder's exit code
 rem alone. electron-builder --win squirrel writes the setup executable, RELEASES, and the full
 rem .nupkg into dist/squirrel-windows/ (measured against this exact project).
 rem ---------------------------------------------------------------------------------------------
@@ -202,7 +175,23 @@ if "%NUPKG_COUNT%"=="0" (
     exit /b 1
 )
 
-for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -Path '%SETUP_EXE%').Hash.ToLower()"`) do set "SETUP_SHA256=%%H"
+rem Use .NET directly instead of Get-FileHash. A batch file launched from PowerShell 7 can inherit
+rem its PSModulePath; Windows PowerShell 5.1 then sees incompatible PowerShell 7 modules first and
+rem silently fails to auto-load Get-FileHash, leaving an empty digest on an otherwise green build.
+rem Pass the path through the environment, not PowerShell source, so an apostrophe in the checkout
+rem path is data rather than a broken quote (or executable text).
+set "NODETERM_HASH_FILE=%SETUP_EXE%"
+for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "$s=[Security.Cryptography.SHA256]::Create(); $f=[IO.File]::OpenRead($env:NODETERM_HASH_FILE); try { [BitConverter]::ToString($s.ComputeHash($f)).Replace('-','').ToLowerInvariant() } finally { $f.Dispose(); $s.Dispose() }"`) do set "SETUP_SHA256=%%H"
+set "NODETERM_HASH_FILE="
+if not defined SETUP_SHA256 (
+    echo.
+    echo [FAILED] Verify installer
+    echo   Dependency : SHA-256 digest of the Squirrel setup executable
+    echo   Constraint : hashing must produce exactly one non-empty digest
+    echo   Source     : "%SETUP_EXE%"
+    echo   Error      : PowerShell returned no digest
+    exit /b 1
+)
 
 call :phase_end "Verify installer"
 

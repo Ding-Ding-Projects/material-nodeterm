@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal DisableDelayedExpansion
 rem =============================================================================================
 rem build.bat -- takes a checkout with NOTHING installed to a built, runnable nodeterm.
 rem
@@ -31,38 +31,10 @@ echo Repository : %NODETERM_ROOT%
 echo.
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 0: preconditions that make the whole build impossible, checked in about a second.
-rem
-rem `npm ci` below removes node_modules wholesale, and Windows refuses to delete a binary that a
-rem live process has mapped -- so a forgotten dev window makes the install die on
-rem node_modules\electron\dist\electron.exe with npm's own EPERM, which never mentions the app
-rem holding it. Measured: this script failed exactly that way, and its report could only say "see
-rem the npm output above for the real cause". The preflight names the file and the PID instead.
-rem
-rem Non-fatal by design when node is missing: the dependency phase installs node, so a machine
-rem without it yet must not be blocked by a check that needs it.
-rem ---------------------------------------------------------------------------------------------
-call :phase_begin "Preflight"
-where node >nul 2>&1
-if errorlevel 1 (
-    echo   node not on PATH yet - skipping the preflight; the dependency phase installs it.
-) else (
-    call node "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
-    if errorlevel 1 (
-        echo.
-        echo [FAILED] Preflight
-        echo   Dependency : a build precondition listed above
-        echo   Constraint : every precondition must hold before npm ci removes node_modules
-        echo   Source     : "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
-        echo   Error      : see the numbered problems above - each names its own fix
-        exit /b 1
-    )
-)
-call :phase_end "Preflight"
-
-rem ---------------------------------------------------------------------------------------------
-rem Phase 1: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
-rem the two scripts can never silently drift apart.
+rem Phase 0: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
+rem the two scripts can never silently drift apart. That script bootstraps Node, then runs the
+rem Windows build preflight before npm ci/install; this ordering is what makes a truly fresh
+rem machine diagnosable instead of silently skipping a Node-powered preflight.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Dependencies"
 if "%NODETERM_SILENT%"=="1" (
@@ -82,7 +54,7 @@ if errorlevel 1 (
 call :phase_end "Dependencies"
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 2: build the real artifact through the project's own supported path.
+rem Phase 1: build the real artifact through the project's own supported path.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Build (npm run build)"
 pushd "%NODETERM_ROOT%"
@@ -115,7 +87,7 @@ echo Built output : %NODETERM_ROOT%\out
 echo.
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 3: offer to run it. This prompt is deliberately the LAST thing this script does, so a
+rem Phase 2: offer to run it. This prompt is deliberately the LAST thing this script does, so a
 rem failed build never gets as far as offering to launch nothing. Silent/CI runs never prompt and
 rem never launch a desktop GUI on somebody's behalf.
 rem ---------------------------------------------------------------------------------------------

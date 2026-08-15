@@ -131,11 +131,13 @@ gone.
 
 ## Building
 
-`npm run dist:win` and `npm run rebuild` preflight through
-[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs), which reports **every**
-failed precondition in one run — discovering them one at a time cost three separate multi-minute
-builds, and the first blocker hid the second entirely because the rebuild never reached the
-compile.
+`download-dependencies.bat` preflights through
+[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs) after it has made Node
+available but before npm replaces `node_modules`; `npm run dist:win` and `npm run rebuild` also
+invoke the same check. This reports **every** failed precondition in one run — discovering them one
+at a time cost three separate multi-minute builds, and the first blocker hid the second entirely
+because the rebuild never reached the compile. Running it after Node bootstrap matters: the old
+root-BAT placement skipped the check on a machine with no initial Node and went straight into npm.
 
 1. **A running instance holds `conpty.node`.** Windows will not delete a DLL mapped into a live
    process, so a forgotten `npm start` window makes electron-rebuild die with an `EPERM` about a
