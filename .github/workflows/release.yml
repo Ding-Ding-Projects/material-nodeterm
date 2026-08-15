@@ -16,6 +16,11 @@ name: Release
 # belongs on non-publishing validation workflows only (see ci.yml).
 on:
   push:
+    # BRANCHES ONLY — never tags. A bare `push:` also fires on tag pushes, and this workflow
+    # CREATES a tag per release, so each release triggered the next one: v0.3.0-ci.2 published a
+    # tag, that tag push started another run, which published v0.3.0-ci.3, and so on. It produced
+    # 17 releases in half an hour before anyone looked. Keep this filter.
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
