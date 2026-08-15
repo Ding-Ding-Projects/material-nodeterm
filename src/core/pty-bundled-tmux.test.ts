@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
+import os from 'os'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
 
@@ -13,6 +14,17 @@ import { fakePlatform } from './platform-fake'
  * started by whatever tmux the user installed. Choosing our binary over theirs could hand a new
  * client to an old running server ("server version is too old"). System-first ⇒ existing tmux
  * users see zero change; the bundle only rescues the tmux-less.
+ *
+ * THIS WHOLE SUITE IS INHERENTLY ABOUT macOS: every fixture here (`/opt/homebrew/bin/tmux`, an
+ * `.app/Contents/Resources` bundle path) is a macOS shape, and `findTmux()` deliberately SKIPS its
+ * whole system-candidate + bundled-binary walk on win32 (Windows has none of Homebrew/MacPorts/Nix
+ * and ships no bundled tmux — see the comment on `findTmux` in pty-manager.ts) — it goes straight
+ * to a PATH probe instead. Running this suite on a Windows CI/dev box therefore hit the win32
+ * short-circuit and got `null` back for every fixed/bundled path, which is a fact about the host
+ * running the suite, not about whether `findTmux()` is correct. State the platform explicitly
+ * rather than inheriting it: `os.platform()` is pinned to `'darwin'` for the whole describe block,
+ * so the suite exercises the exact macOS code path it is documenting on every host, including this
+ * one.
  */
 
 const probe = vi.hoisted(() => ({ shellPath: undefined as string | undefined }))
@@ -43,6 +55,11 @@ async function bootWith(present: string[], resourcesPath?: string) {
 describe('bundled tmux in findTmux', () => {
   beforeEach(() => {
     probe.shellPath = undefined
+    // See the file-level doc comment: this suite is macOS-specific by design (Homebrew paths, an
+    // `.app/Contents/Resources` bundle layout), and `findTmux()` takes an entirely different,
+    // win32-only branch that never looks at any of that. Pin the host platform so the suite means
+    // the same thing wherever it runs.
+    vi.spyOn(os, 'platform').mockReturnValue('darwin')
   })
   afterEach(() => {
     vi.restoreAllMocks()
