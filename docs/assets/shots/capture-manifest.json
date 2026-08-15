@@ -1,6 +1,6 @@
 {
-  "commit": "d48b94e03174ac4ec0ec0fe4a02a916248ea6490",
-  "capturedAt": "2026-08-15T16:36:11.771Z",
+  "commit": "b5815d21381bb8b578a09b2f7e4c1a98a815b325",
+  "capturedAt": "2026-08-15T20:20:39.692Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -11,37 +11,37 @@
     {
       "id": "app-01-launch",
       "title": "App at launch",
-      "bytes": 44574,
+      "bytes": 44539,
       "hadOpener": false
     },
     {
       "id": "app-02-settings",
       "title": "Settings",
-      "bytes": 115023,
+      "bytes": 115685,
       "hadOpener": true
     },
     {
       "id": "app-03-palette",
       "title": "Command palette",
-      "bytes": 70733,
+      "bytes": 70685,
       "hadOpener": true
     },
     {
       "id": "app-04-canvas",
       "title": "Canvas",
-      "bytes": 44574,
+      "bytes": 44539,
       "hadOpener": false
     },
     {
       "id": "app-05-kanban",
       "title": "Kanban board",
-      "bytes": 29754,
+      "bytes": 29714,
       "hadOpener": true
     },
     {
       "id": "app-settings-kids-mode",
       "title": "Settings — Kids mode",
-      "bytes": 84813,
+      "bytes": 86649,
       "hadOpener": true
     }
   ],
