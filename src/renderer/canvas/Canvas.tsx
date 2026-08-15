@@ -149,6 +149,8 @@ import { PtyPressureBanner } from '../components/PtyPressureBanner'
 import { ConflictBar } from '../components/ConflictBar'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { DestructiveConfirmGate } from '../components/DestructiveConfirmGate'
+import { requiresDestructiveGate } from '@shared/kids-mode-policy'
+import { useKidsMode } from '../state/kidsMode'
 import { NotificationCenter } from '../components/NotificationCenter'
 import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
 import { ConsentNotice } from '../remote/ConsentNotice'
@@ -6017,11 +6019,32 @@ export function Canvas() {
     [activeProjectId, emptyNodePos, setNodes, markDirty, seedBoard, api]
   )
 
-  // Delete a session from the board — same confirm + teardown as the canvas Delete key.
+  // Delete a session from the board.
+  //
+  // The comment here used to claim "same confirm as the canvas Delete key" and it was not true:
+  // the canvas key opens the two-key super gate (see `openDestructiveGate` above) while this
+  // opened a one-button confirm, for the identical action on the identical node. Kids mode is what
+  // surfaced it — routing the board through the gate meant reading what the board actually did.
+  //
+  // With kids mode OFF this is byte-identical to before, deliberately: silently tightening a
+  // confirmation for every existing user is a product decision, not a wiring fix. The mismatch is
+  // recorded rather than quietly resolved.
   const deleteNodeFromKanban = useCallback(
     (nodeId: string) => {
       const node = nodesRef.current.find((n) => n.id === nodeId)
       const label = (node?.data.title as string) || 'this session'
+
+      if (requiresDestructiveGate('delete-node', useKidsMode.getState().enabled).required) {
+        openDestructiveGate({
+          title: `Delete “${label}”`,
+          description:
+            'Its terminal session ends immediately, including anything still running inside it. This cannot be undone.',
+          affected: [label],
+          onConfirm: () => deleteNodes([nodeId])
+        })
+        return
+      }
+
       setConfirm({
         message: `Delete ${label}? Its terminal session will end.`,
         onConfirm: () => {
@@ -6030,7 +6053,7 @@ export function Canvas() {
         }
       })
     },
-    [deleteNodes]
+    [deleteNodes, openDestructiveGate]
   )
 
   // Persist a browser card's navigation (url/title) from the modal webview back to the node.

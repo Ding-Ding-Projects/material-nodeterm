@@ -112,9 +112,11 @@ feature is *missing* from the other shell.
 
 - **The settings surface.** The store, policy, IPC and both shells are wired; the section a user
   actually toggles it from is not built yet.
-- **The destructive gate.** `requiresDestructiveGate` is implemented and tested but is not yet
-  called from the destructive-action paths, so today it changes nothing. (`gateKidsPermissionMode`
-  IS now wired — see below.)
+- **Wider destructive coverage.** The gate is wired at the kanban session delete (see below). The
+  other destructive paths — project delete, worktree remove, notification bulk delete — already
+  open the super gate unconditionally, so kids mode adds nothing there. `GuardedAction` names six
+  actions; only `delete-node` currently consults the policy, because it was the only one that did
+  not already gate.
 - **A security review**, before this is offered to anyone as child-safety. The survey that scoped
   the M3 overhaul was explicit that a child-facing gate in front of a real PTY needs its own review
   independent of any UI timeline.
@@ -134,6 +136,18 @@ mode, not of which CLI implements it.
 resolver never produces a permissive mode while kids mode is on. Deleting the gate call turns four
 of those red; the policy's own unit tests stay green, which is exactly why the wiring needed its
 own coverage.
+
+## Where the destructive gate is applied
+
+`deleteNodeFromKanban` in `src/renderer/canvas/Canvas.tsx`. With kids mode ON it opens the two-key
+super-confirmation; with it OFF the behaviour is byte-identical to before.
+
+Wiring this surfaced a **pre-existing inconsistency**, which is recorded rather than quietly
+resolved: deleting a session from the canvas (the Delete key) has always opened the super gate,
+while deleting the same session from the board opened a one-button confirm — identical action,
+identical node, two different confirmations. Its comment even claimed they matched. Kids mode now
+makes them agree; making them agree for *everyone* is a product decision, not a wiring fix, so the
+off-path was left exactly as it was.
 
 ## Verifying a claim here
 
