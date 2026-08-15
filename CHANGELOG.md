@@ -10,28 +10,40 @@ below; earlier history is summarized and remains fully available via `git log`.
 
 ## [Unreleased]
 
-Commits:
-[`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0fd08c4ac2857d43c36e539c347d) — the token foundation ·
-[`84ef6d14`](https://github.com/eneskirca/nodeterm/commit/84ef6d1447d605194ea214175ec22a8d4a26a4a9) — the restyle it enabled
+Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0fd08c4ac2857d43c36e539c347d) · [`84ef6d14`](https://github.com/eneskirca/nodeterm/commit/84ef6d1447d605194ea214175ec22a8d4a26a4a9) · [`d1f5d6f6`](https://github.com/eneskirca/nodeterm/commit/d1f5d6f607b4ac21088b8a169b73dd9f01119ea1) · [`7bc7585b`](https://github.com/eneskirca/nodeterm/commit/7bc7585bf22a3805cd71a1310aa3ff07ef1262de) ·
+[`e041e3ac`](https://github.com/eneskirca/nodeterm/commit/e041e3acae1f38e1d86af35ed5f41489265f324c) · [`38e9ba3f`](https://github.com/eneskirca/nodeterm/commit/38e9ba3f4ffcbc01e873e5b18adbceab9b74ed39) · [`083b8fe1`](https://github.com/eneskirca/nodeterm/commit/083b8fe1da862e53e7b25ad32b74c7b39ec0b6f9) · [`59222942`](https://github.com/eneskirca/nodeterm/commit/59222942af3110004e7a8499630006a66fbf63c7) ·
+[`3d23696c`](https://github.com/eneskirca/nodeterm/commit/3d23696c82204c492da7666e21c1e1981b6268a7) · [`29e118fb`](https://github.com/eneskirca/nodeterm/commit/29e118fb6f94bb7901547359ede12857579a1bb3) · [`540d6898`](https://github.com/eneskirca/nodeterm/commit/540d6898f4dc275c4753b8d3d7506ffe5635cf1d)
 
 ### Added
 
-- the Material 3 token foundation, over the app's own palette — a full `--md-*` design-role
-  set (color roles plus a six-step shape scale), aliased to the app's existing colors in both
-  light and dark themes. No existing surface's appearance changes from this alone.
+- **Material 3 design tokens.** A full `--md-*` role set and a six-step shape scale in both light
+  and dark themes, mapped onto the app's own palette rather than replacing it. Nothing was renamed
+  or removed, so no existing surface changes appearance from this alone.
+- **Kids mode** — a friendlier, safer mode for a child, and the near-opposite of School mode: it
+  keeps all the playfulness and adds limits instead. Agents cannot start in a mode that acts
+  without asking, deleting a session from the board asks twice, and leaving the mode needs a
+  grown-up PIN. It is shared across every app on the machine, renamable, and honest on screen
+  about the one thing it cannot do — it does not sandbox the terminal.
 
 ### Changed
 
-- retheme the canvas zoom/lock rail, the minimap frame, the bottom dock, the settings-panel
-  switch, and the welcome screen onto the new M3 token roles, replacing one-off color and
-  corner-radius literals with `--md-*` aliases
+- Retheme onto the M3 roles: the canvas zoom/lock rail, the minimap frame, the bottom dock, the
+  settings switch, the welcome screen, the notification centre and the command palette. Visual
+  only — no layout, markup or behaviour changed, and every surface kept its full feature set.
 
 ### Fixed
 
-- three chrome highlights that were hardcoded to a fixed accent/danger color and never
-  followed the light theme or a custom accent color: the canvas lock button's active fill,
-  the dock's active-button fill, and the welcome screen's "remove recent project" hover fill
- 
+- **Seven chrome highlights were frozen to the dark theme** and never followed the light theme or
+  a user-chosen accent colour: the canvas lock button, the dock's active button, the welcome
+  screen's remove-recent hover, the palette's secondary hover, the success and error toast icons,
+  and an unread-row tint. All now derive from the real accent and danger colours.
+- **Three contrast failures**, each measured with real backdrop compositing rather than compared
+  as flat colours: the palette's secondary label (clickable text, was 4.41:1 in the light theme,
+  now 5.87:1), the canvas lock glyph (was 2.87:1, now 5.34:1), and the destructive bulk-action
+  button's border, which was effectively invisible at 1.56:1 and is now 3.20:1.
+- Deleting a session from the board and from the canvas now ask the same way while kids mode is
+  on. They had always differed — the canvas used the two-key confirmation, the board a single
+  button — despite a comment claiming they matched.
 
 ## [0.3.0] — 2026-08-12
 
