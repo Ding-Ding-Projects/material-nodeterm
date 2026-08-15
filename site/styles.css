@@ -1,13 +1,199 @@
+/* nodeterm.dev — Material Design 3 (M3) token system
+ * ----------------------------------------------------------------------
+ * Every color used on this page is a token defined here, never a literal
+ * hex baked into a component rule. The complete LIGHT palette lives on a
+ * bare :root; the DARK palette is defined exactly twice more — once for
+ * the system "prefers-color-scheme: dark" case (guarded so an explicit
+ * light choice always wins) and once for an explicit [data-theme="dark"]
+ * toggle (so the toggle wins in both directions). No color is ever given
+ * its only definition inside a media query.
+ *
+ * All assets referenced here (fonts, images, icons) are local files in
+ * this folder — no CDN, no remote font, no analytics, no third-party
+ * script of any kind.
+ */
+
 :root {
-  --bg: #0a0a0a;
-  --panel: #141416;
-  --border: rgba(255, 255, 255, 0.1);
-  --text: rgba(255, 255, 255, 0.94);
-  --dim: rgba(255, 255, 255, 0.52);
-  --accent: #0a84ff;
-  --grad-a: #a38dff;
-  --grad-b: #7a4bd0;
+  color-scheme: light;
+
+  /* --- M3 color roles (light) ------------------------------------- */
+  --md-primary: #6b4fd8;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #e7ddff;
+  --md-on-primary-container: #230a63;
+
+  --md-secondary: #0a84ff;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #d9e8ff;
+  --md-on-secondary-container: #002f5e;
+
+  --md-tertiary: #7d5260;
+  --md-on-tertiary: #ffffff;
+
+  --md-error: #ba1a1a;
+  --md-on-error: #ffffff;
+  --md-error-container: #ffdad6;
+  --md-on-error-container: #410002;
+
+  --md-surface: #fbf8fd;
+  --md-surface-dim: #ddd8e0;
+  --md-surface-bright: #fbf8fd;
+  --md-surface-container-lowest: #ffffff;
+  --md-surface-container-low: #f5f1f8;
+  --md-surface-container: #efeaf2;
+  --md-surface-container-high: #e9e4ec;
+  --md-surface-container-highest: #e3dee6;
+
+  --md-on-surface: #1c1b1f;
+  --md-on-surface-variant: #47454a;
+
+  --md-outline: #79767e;
+  --md-outline-variant: #cac4ce;
+
+  --md-inverse-surface: #313035;
+  --md-inverse-on-surface: #f4eff4;
+  --md-inverse-primary: #cfbdff;
+
+  --md-shadow: rgba(20, 12, 40, 0.28);
+  --md-scrim: rgba(0, 0, 0, 0.4);
+
+  /* Two hand-picked gradient stops used for the wordmark + hero accent.
+     Not a semantic role — decorative brand color, kept as its own token
+     so it's still defined once, here, and reused rather than repeated. */
+  --brand-grad-a: #a38dff;
+  --brand-grad-b: #7239c4;
+
+  /* --- Shape --------------------------------------------------------- */
+  --md-shape-xs: 4px;
+  --md-shape-sm: 8px;
+  --md-shape-md: 12px;
+  --md-shape-lg: 16px;
+  --md-shape-xl: 28px;
+  --md-shape-full: 999px;
+
+  /* --- Elevation (M3 uses tonal surfaces + soft shadow, not hard drop) */
+  --md-elevation-1: 0 1px 2px rgba(20, 12, 40, 0.14), 0 1px 3px 1px rgba(20, 12, 40, 0.08);
+  --md-elevation-2: 0 1px 2px rgba(20, 12, 40, 0.16), 0 2px 6px 2px rgba(20, 12, 40, 0.1);
+  --md-elevation-3: 0 4px 8px 3px rgba(20, 12, 40, 0.1), 0 1px 3px rgba(20, 12, 40, 0.18);
+
+  /* --- Motion ---------------------------------------------------------- */
+  --md-motion-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+  --md-motion-standard: 220ms cubic-bezier(0.2, 0, 0, 1);
+  --md-motion-emphasized: 380ms cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- Typography scale (system font stack — no bundled/remote font) --- */
+  --md-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --md-font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
+
+  /* Touch target floor per platform guidance; every tappable control on
+     this page is at least this tall/wide, including on narrow viewports. */
+  --touch-target: 44px;
 }
+
+/* Explicit system dark preference — only applies when the visitor has not
+   made an explicit in-page choice (that case is [data-theme="light"]). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --md-primary: #cfbdff;
+    --md-on-primary: #38108c;
+    --md-primary-container: #4f2da7;
+    --md-on-primary-container: #e7ddff;
+
+    --md-secondary: #a8c8ff;
+    --md-on-secondary: #003060;
+    --md-secondary-container: #0a4788;
+    --md-on-secondary-container: #d9e8ff;
+
+    --md-tertiary: #efb8c8;
+    --md-on-tertiary: #4a2532;
+
+    --md-error: #ffb4ab;
+    --md-on-error: #690005;
+    --md-error-container: #93000a;
+    --md-on-error-container: #ffdad6;
+
+    --md-surface: #141218;
+    --md-surface-dim: #141218;
+    --md-surface-bright: #3a383e;
+    --md-surface-container-lowest: #0f0d13;
+    --md-surface-container-low: #1d1b20;
+    --md-surface-container: #211f26;
+    --md-surface-container-high: #2b2930;
+    --md-surface-container-highest: #36343b;
+
+    --md-on-surface: #e6e0e9;
+    --md-on-surface-variant: #cac4ce;
+
+    --md-outline: #948f99;
+    --md-outline-variant: #49454e;
+
+    --md-inverse-surface: #e6e0e9;
+    --md-inverse-on-surface: #313035;
+    --md-inverse-primary: #6b4fd8;
+
+    --md-shadow: rgba(0, 0, 0, 0.6);
+    --md-scrim: rgba(0, 0, 0, 0.6);
+
+    --brand-grad-a: #cabbff;
+    --brand-grad-b: #9f7bef;
+  }
+}
+
+/* Explicit toggle — wins in both directions regardless of OS setting. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --md-primary: #cfbdff;
+  --md-on-primary: #38108c;
+  --md-primary-container: #4f2da7;
+  --md-on-primary-container: #e7ddff;
+
+  --md-secondary: #a8c8ff;
+  --md-on-secondary: #003060;
+  --md-secondary-container: #0a4788;
+  --md-on-secondary-container: #d9e8ff;
+
+  --md-tertiary: #efb8c8;
+  --md-on-tertiary: #4a2532;
+
+  --md-error: #ffb4ab;
+  --md-on-error: #690005;
+  --md-error-container: #93000a;
+  --md-on-error-container: #ffdad6;
+
+  --md-surface: #141218;
+  --md-surface-dim: #141218;
+  --md-surface-bright: #3a383e;
+  --md-surface-container-lowest: #0f0d13;
+  --md-surface-container-low: #1d1b20;
+  --md-surface-container: #211f26;
+  --md-surface-container-high: #2b2930;
+  --md-surface-container-highest: #36343b;
+
+  --md-on-surface: #e6e0e9;
+  --md-on-surface-variant: #cac4ce;
+
+  --md-outline: #948f99;
+  --md-outline-variant: #49454e;
+
+  --md-inverse-surface: #e6e0e9;
+  --md-inverse-on-surface: #313035;
+  --md-inverse-primary: #6b4fd8;
+
+  --md-shadow: rgba(0, 0, 0, 0.6);
+  --md-scrim: rgba(0, 0, 0, 0.6);
+
+  --brand-grad-a: #cabbff;
+  --brand-grad-b: #9f7bef;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+/* -------------------------------------------------------------------- */
 
 * {
   box-sizing: border-box;
@@ -15,16 +201,31 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  /* Explicit token background — the viewer/browser paints its own ground
+     behind the page, so this must never be left transparent. */
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: var(--md-font);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  overflow-x: hidden; /* the page BODY never scrolls sideways */
+  min-width: 320px;
 }
 
 a {
@@ -32,14 +233,21 @@ a {
   text-decoration: none;
 }
 
+:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+  border-radius: var(--md-shape-xs);
+}
+
 /* Subtle grid backdrop behind the hero */
 .grid-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-image: linear-gradient(var(--md-outline-variant) 1px, transparent 1px),
+    linear-gradient(90deg, var(--md-outline-variant) 1px, transparent 1px);
   background-size: 44px 44px;
+  opacity: 0.35;
   mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 30%, transparent 75%);
   -webkit-mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 30%, transparent 75%);
   pointer-events: none;
@@ -51,12 +259,13 @@ main,
   z-index: 1;
 }
 
-/* Nav */
+/* ----------------------------- Nav ----------------------------------- */
 .nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 28px;
+  gap: 12px;
+  padding: 14px 24px;
   max-width: 1180px;
   margin: 0 auto;
 }
@@ -67,50 +276,142 @@ main,
   gap: 10px;
   font-weight: 700;
   font-size: 17px;
+  min-height: var(--touch-target);
 }
 
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 8px;
   font-size: 14px;
-  color: var(--dim);
+  color: var(--md-on-surface-variant);
 }
 
-.nav-links > a:not(.btn):not(.star):hover {
-  color: var(--text);
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 10px;
+  border-radius: var(--md-shape-sm);
+  transition: background var(--md-motion-fast), color var(--md-motion-fast);
+}
+
+.nav-link:hover {
+  color: var(--md-on-surface);
+  background: var(--md-surface-container);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  border-radius: var(--md-shape-full);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  transition: background var(--md-motion-fast), color var(--md-motion-fast);
+}
+
+.icon-btn:hover {
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+}
+
+/* Theme toggle: shows the icon for the theme you'd SWITCH TO */
+.theme-toggle .icon-moon {
+  display: block;
+}
+.theme-toggle .icon-sun {
+  display: none;
+}
+:root[data-theme='dark'] .theme-toggle .icon-moon {
+  display: none;
+}
+:root[data-theme='dark'] .theme-toggle .icon-sun {
+  display: block;
 }
 
 .star {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  color: var(--text);
+  min-height: var(--touch-target);
+  padding: 0 14px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
   font-size: 13px;
   font-weight: 600;
+  transition: background var(--md-motion-fast);
 }
 
 .star:hover {
-  background: #18181b;
+  background: var(--md-surface-container);
 }
 
 .star svg {
   color: #e3b341;
 }
 
-/* Buttons */
+/* Mobile nav: a hamburger that reveals the link list as a full-width
+   panel. Hover-only affordances (like the desktop link row) always get a
+   tap equivalent — this IS that equivalent. */
+.nav-toggle {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+  .nav-links {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin: 8px 16px 0;
+    padding: 10px;
+    background: var(--md-surface-container);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+    box-shadow: var(--md-elevation-2);
+    display: none;
+  }
+  .nav-links.open {
+    display: flex;
+  }
+  .nav-links .nav-link,
+  .nav-links .star,
+  .nav-links .btn {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .nav {
+    position: relative;
+    flex-wrap: wrap;
+  }
+}
+
+/* --------------------------- Buttons (M3) ----------------------------- */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
-  border-radius: 11px;
+  min-height: var(--touch-target);
+  border-radius: var(--md-shape-full);
   font-weight: 600;
+  font-family: var(--md-font);
+  font-size: 14px;
   border: 1px solid transparent;
-  transition: background 0.15s, transform 0.05s, border-color 0.15s;
+  cursor: pointer;
+  transition: background var(--md-motion-fast), box-shadow var(--md-motion-fast), transform 0.05s;
   white-space: nowrap;
 }
 
@@ -119,74 +420,84 @@ main,
 }
 
 .btn-sm {
-  padding: 8px 14px;
+  padding: 0 16px;
   font-size: 13px;
-  border-radius: 9px;
 }
 
 .btn-lg {
-  padding: 14px 24px;
+  padding: 0 26px;
+  min-height: 52px;
   font-size: 15.5px;
 }
 
+/* M3 "filled" button */
 .btn-primary {
-  background: #fff;
-  color: #0a0a0a;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  box-shadow: var(--md-elevation-1);
 }
 
 .btn-primary:hover {
-  background: #e9e9ea;
+  box-shadow: var(--md-elevation-2);
+  filter: brightness(1.06);
 }
 
+/* M3 "outlined" button */
 .btn-secondary {
-  background: #18181b;
-  color: var(--text);
-  border-color: var(--border);
+  background: transparent;
+  color: var(--md-on-surface);
+  border-color: var(--md-outline);
 }
 
 .btn-secondary:hover {
-  background: #202024;
+  background: var(--md-surface-container);
 }
 
-/* Hero */
+.btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ---------------------------- Hero ------------------------------------ */
 .hero {
   max-width: 920px;
   margin: 0 auto;
-  padding: 70px 24px 40px;
+  padding: 56px 20px 40px;
   text-align: center;
 }
 
 .badge {
   display: inline-block;
-  padding: 6px 14px;
+  padding: 8px 16px;
   margin-bottom: 26px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
   font-size: 12.5px;
-  color: var(--dim);
-  background: rgba(255, 255, 255, 0.03);
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-low);
 }
 
 .hero h1 {
-  font-size: clamp(42px, 8vw, 80px);
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  margin: 0 0 22px;
+  font-size: clamp(34px, 8vw, 76px);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  margin: 0 0 20px;
   font-weight: 800;
 }
 
 .grad {
-  background: linear-gradient(120deg, var(--grad-a), var(--grad-b));
+  background: linear-gradient(120deg, var(--brand-grad-a), var(--brand-grad-b));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .lede {
-  max-width: 600px;
-  margin: 0 auto 36px;
-  font-size: 18px;
-  color: var(--dim);
+  max-width: 620px;
+  margin: 0 auto 34px;
+  font-size: 17px;
+  color: var(--md-on-surface-variant);
 }
 
 .cta {
@@ -199,27 +510,37 @@ main,
 .cta-meta {
   margin: 18px 0 0;
   font-size: 13px;
-  color: var(--dim);
+  color: var(--md-on-surface-variant);
 }
 
 .cta-meta a {
-  color: var(--text);
-  border-bottom: 1px solid var(--border);
+  color: var(--md-on-surface);
+  border-bottom: 1px solid var(--md-outline-variant);
   padding-bottom: 1px;
 }
 
 .cta-meta a:hover {
-  border-color: var(--text);
+  border-color: var(--md-on-surface);
+}
+
+.cta-secondary-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
 }
 
 /* Hero window frame */
 .window {
-  margin-top: 60px;
-  border-radius: 16px;
+  margin-top: 52px;
+  border-radius: var(--md-shape-xl);
   overflow: hidden;
-  border: 1px solid var(--border);
-  background: #141416;
-  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container);
+  box-shadow: var(--md-elevation-3);
 }
 
 .window img {
@@ -228,56 +549,169 @@ main,
   height: auto;
 }
 
-/* Features */
+/* -------------------------- Section shell ------------------------------ */
+section {
+  scroll-margin-top: 24px;
+}
+
+.section-eyebrow {
+  display: block;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-primary);
+  margin: 0 0 10px;
+}
+
+/* -------------------------- Features grid ------------------------------ */
 .features {
-  max-width: 1080px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 90px 24px;
+  padding: 70px 20px;
 }
 
 .features h2,
-.closer h2 {
+.closer h2,
+.docs h2,
+.surfaces h2 {
   text-align: center;
-  font-size: clamp(28px, 4vw, 38px);
+  font-size: clamp(26px, 4vw, 38px);
   letter-spacing: -0.02em;
-  margin: 0 0 48px;
+  margin: 0 0 16px;
   font-weight: 800;
+}
+
+.section-sub {
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 44px;
+  color: var(--md-on-surface-variant);
+  font-size: 15px;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
 }
 
+/* M3 "filled" card */
 .card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 22px;
-  transition: border-color 0.15s, transform 0.15s;
+  background: var(--md-surface-container);
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-lg);
+  padding: 20px;
+  transition: box-shadow var(--md-motion-standard), transform var(--md-motion-standard), background var(--md-motion-standard);
 }
 
 .card:hover {
-  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: var(--md-elevation-1);
   transform: translateY(-2px);
+  background: var(--md-surface-container-high);
 }
 
 .card h3 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: 15.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .card p {
   margin: 0;
-  color: var(--dim);
+  color: var(--md-on-surface-variant);
+  font-size: 13.5px;
+}
+
+/* --------------------------- Three surfaces ----------------------------- */
+.surfaces {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 70px 20px;
+}
+
+.surface-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.surface-card {
+  background: var(--md-surface-container-low);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+  padding: 24px;
+}
+
+.surface-card h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.surface-card p {
+  margin: 0 0 14px;
+  color: var(--md-on-surface-variant);
   font-size: 14px;
 }
 
-/* Closer */
+.surface-card code {
+  display: block;
+  overflow-x: auto; /* wide content scrolls in its own container, page does not */
+  padding: 10px 12px;
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono);
+  font-size: 12.5px;
+  white-space: pre;
+}
+
+/* ------------------------------ Docs ------------------------------------ */
+.docs {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 70px 20px;
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.doc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  min-height: var(--touch-target);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-lowest);
+  transition: border-color var(--md-motion-fast), background var(--md-motion-fast);
+}
+
+.doc-card:hover {
+  border-color: var(--md-primary);
+  background: var(--md-surface-container-low);
+}
+
+.doc-card strong {
+  font-size: 14px;
+}
+
+.doc-card span {
+  font-size: 12.5px;
+  color: var(--md-on-surface-variant);
+}
+
+/* ------------------------------ Closer ----------------------------------- */
 .closer {
   text-align: center;
-  padding: 80px 24px 100px;
+  padding: 76px 20px 96px;
 }
 
 .closer h2 {
@@ -285,19 +719,19 @@ main,
 }
 
 .closer p {
-  color: var(--dim);
-  font-size: 18px;
-  margin: 0 0 30px;
+  color: var(--md-on-surface-variant);
+  font-size: 17px;
+  margin: 0 0 28px;
 }
 
-/* Footer */
+/* ------------------------------ Footer ------------------------------------ */
 .foot {
   position: relative;
   z-index: 1;
-  border-top: 1px solid var(--border);
-  padding: 40px 24px;
+  border-top: 1px solid var(--md-outline-variant);
+  padding: 36px 20px;
   text-align: center;
-  color: var(--dim);
+  color: var(--md-on-surface-variant);
   font-size: 13px;
 }
 
@@ -306,22 +740,70 @@ main,
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--md-on-surface);
 }
 
 .foot-links {
   display: flex;
-  gap: 22px;
+  flex-wrap: wrap;
+  gap: 8px 20px;
   justify-content: center;
   margin: 16px 0;
 }
 
+.foot-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+}
+
 .foot-links a:hover {
-  color: var(--text);
+  color: var(--md-on-surface);
 }
 
 .legal {
   max-width: 640px;
   margin: 0 auto;
   line-height: 1.6;
+}
+
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin-top: 10px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline-variant);
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+/* ------------------------------ Utility ------------------------------------ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 100;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  padding: 10px 16px;
+  border-radius: var(--md-shape-sm);
+  transition: top var(--md-motion-fast);
+}
+
+.skip-link:focus {
+  top: 12px;
 }

@@ -6,17 +6,36 @@
     <title>nodeterm — your terminals on an infinite canvas</title>
     <meta
       name="description"
-      content="A node-based terminal manager for macOS. Multiple real terminals as draggable nodes on a single pan/zoom canvas — built for scattered, ADHD-friendly workflows."
+      content="A node-based terminal manager. Multiple real terminals as draggable nodes on a single pan/zoom canvas — desktop app, self-hosted browser edition, and an iOS companion, all on the same live sessions."
     />
     <meta property="og:title" content="nodeterm" />
     <meta property="og:description" content="Your terminals on an infinite canvas." />
     <meta property="og:image" content="https://nodeterm.dev/assets/hero.png" />
     <meta property="og:type" content="website" />
-    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="theme-color" content="#6b4fd8" />
     <link rel="icon" href="assets/nodeterm.png" />
     <link rel="stylesheet" href="styles.css" />
+    <!--
+      Theme is applied BEFORE first paint (inline, blocking) so a returning
+      visitor with a saved preference never sees a flash of the wrong
+      palette. No external script, no analytics — this file and styles.css
+      are the entire client-side footprint of this page.
+    -->
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') {
+            document.documentElement.setAttribute('data-theme', saved)
+          }
+        } catch (_) {
+          /* localStorage unavailable (private mode, etc.) — fall back to OS preference */
+        }
+      })()
+    </script>
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <div class="grid-bg"></div>
 
     <header class="nav">
@@ -24,13 +43,44 @@
         <img src="assets/mark.svg" alt="" width="26" height="26" />
         <span>nodeterm</span>
       </a>
-      <nav class="nav-links">
-        <a href="#features">Features</a>
-        <a href="https://github.com/eneskirca/nodeterm/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
-        <a class="star" href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener" aria-label="Star on GitHub">
+
+      <button
+        class="icon-btn nav-toggle"
+        id="nav-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="nav-links"
+        aria-label="Open menu"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+      </button>
+
+      <nav class="nav-links" id="nav-links">
+        <a class="nav-link" href="#features">Features</a>
+        <a class="nav-link" href="#surfaces">Three surfaces</a>
+        <a class="nav-link" href="#docs">Docs</a>
+        <a
+          class="nav-link"
+          href="https://github.com/eneskirca/nodeterm/blob/main/README.md"
+          target="_blank"
+          rel="noopener"
+          >README</a
+        >
+        <a class="star" href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener" aria-label="Star nodeterm on GitHub">
           <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
           <span>Star</span>
         </a>
+        <button class="icon-btn theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme">
+          <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 1 0 20.354 15.354Z" />
+          </svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path
+              d="M12 4.5a1 1 0 0 1-1-1V2a1 1 0 1 1 2 0v1.5a1 1 0 0 1-1 1Zm0 15a1 1 0 0 1 1 1V22a1 1 0 1 1-2 0v-1.5a1 1 0 0 1 1-1Zm9.5-6.5H20a1 1 0 1 1 0-2h1.5a1 1 0 1 1 0 2ZM4 12a1 1 0 0 1-1 1H1.5a1 1 0 1 1 0-2H3a1 1 0 0 1 1 1Zm13.02-6.02a1 1 0 0 1 0-1.42l1.06-1.06a1 1 0 0 1 1.42 1.42l-1.06 1.06a1 1 0 0 1-1.42 0ZM6.98 17.02a1 1 0 0 1 1.42 0 1 1 0 0 1 0 1.41l-1.06 1.07a1 1 0 1 1-1.42-1.42l1.06-1.06Zm10.04 0 1.06 1.06a1 1 0 1 1-1.42 1.42l-1.06-1.07a1 1 0 0 1 1.42-1.41ZM6.98 6.98 5.92 5.92A1 1 0 1 1 7.34 4.5l1.06 1.06a1 1 0 0 1-1.42 1.42ZM12 7.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"
+            />
+          </svg>
+        </button>
         <a class="btn btn-primary btn-sm" href="#download">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M7.25 1.75a.75.75 0 0 1 1.5 0v6.94l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75ZM2.75 13a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/></svg>
           Download
@@ -38,9 +88,9 @@
       </nav>
     </header>
 
-    <main>
+    <main id="main">
       <section class="hero">
-        <span class="badge">macOS · Apple Silicon &amp; Intel · Free</span>
+        <span class="badge">macOS · Apple Silicon &amp; Intel · Linux (x64) · Free</span>
         <h1>Your terminals on an<br /><span class="grad">infinite canvas.</span></h1>
         <p class="lede">
           Multiple real terminals as draggable nodes on a single pan/zoom canvas — a spatial
@@ -48,6 +98,15 @@
         </p>
 
         <div id="download" class="cta">
+          <!--
+            The primary button's href defaults to the GitHub Releases INDEX page — never a
+            guessed per-asset URL. The script below fetches the app's own published update
+            feed (updates/latest-mac.yml) at load time; only if that feed answers with a
+            real version + filename does the href become a direct, immutable release-asset
+            URL. If the feed can't be reached (not deployed yet, offline preview, etc.) the
+            button quietly stays pointed at the verifiable Releases index instead of ever
+            fabricating a download link.
+          -->
           <a id="dl-arm" class="btn btn-primary btn-lg" href="https://github.com/eneskirca/nodeterm/releases">
             <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M7.25 1.75a.75.75 0 0 1 1.5 0v6.94l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75ZM2.75 13a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/></svg>
             Download for Mac
@@ -61,49 +120,166 @@
           <a id="dl-arm2" href="https://github.com/eneskirca/nodeterm/releases">Apple Silicon</a>
           ·
           <a id="dl-intel" href="https://github.com/eneskirca/nodeterm/releases">Intel</a>
-          <span id="ver-meta">— free for personal use · macOS 12+</span>
+          <span id="ver-meta">— see GitHub Releases for the current build · macOS 12+</span>
+        </p>
+        <p class="cta-secondary-row">
+          <span>Linux (x64): AppImage &amp; .deb on
+            <a href="https://github.com/eneskirca/nodeterm/releases" target="_blank" rel="noopener">GitHub Releases</a></span>
+          <span>·</span>
+          <span>Homebrew: <code style="font-family: var(--md-font-mono)">brew install --cask nodeterm</code></span>
+          <span>·</span>
+          <span>Build from source — see the
+            <a href="https://github.com/eneskirca/nodeterm/blob/main/README.md#-build-from-source" target="_blank" rel="noopener">README</a></span>
         </p>
 
         <div class="window">
-          <img src="assets/hero.svg" alt="nodeterm canvas with terminal, Claude Code, sticky note, and editor nodes" />
+          <img src="assets/hero.svg" alt="nodeterm canvas with terminal, agent, sticky note, and editor nodes arranged spatially" />
         </div>
       </section>
 
       <section id="features" class="features">
+        <span class="section-eyebrow">Every feature, not a highlight reel</span>
         <h2>One canvas, every workflow</h2>
+        <p class="section-sub">
+          Each card below is a real, shipping capability — not marketing copy. See the
+          <a href="#docs">documentation section</a> for the full write-up of each one.
+        </p>
         <div class="grid">
           <article class="card">
             <h3>🖥 Real terminals as nodes</h3>
-            <p>Each node runs its own shell (PTY). Drag, resize, pan, and zoom freely.</p>
+            <p>Each node runs its own shell (PTY). Drag, resize, pan, and zoom freely on an infinite canvas.</p>
           </article>
           <article class="card">
-            <h3>♻️ Session continuity</h3>
-            <p>tmux keeps terminals — and running processes — alive across restarts.</p>
+            <h3>♻️ Session continuity (tmux)</h3>
+            <p>tmux keeps terminals — and their running processes — alive across restarts and even a machine reboot.</p>
           </article>
           <article class="card">
             <h3>🗂 Projects &amp; tabs</h3>
-            <p>Each project is its own canvas with its own working directory.</p>
+            <p>Each project is its own canvas with its own working directory; reorder, close, and reopen from history.</p>
           </article>
           <article class="card">
-            <h3>✦ Claude Code &amp; AI</h3>
-            <p>A one-click Claude Code node, plus AI commit messages and terminal names.</p>
+            <h3>🤖 Multi-agent support</h3>
+            <p>Claude Code, Codex, Gemini, opencode, Grok, and custom CLIs — one-click nodes with live status badges.</p>
+          </article>
+          <article class="card">
+            <h3>✦ Agent superpowers</h3>
+            <p>Context links between agents, branch a conversation, managed accounts, and agent-driven canvas control.</p>
           </article>
           <article class="card">
             <h3>✏️ Editor &amp; diff nodes</h3>
-            <p>Monaco editor and diff viewer right on the canvas, next to your shells.</p>
+            <p>Monaco editor and diff viewer right on the canvas, next to your shells — image previews too.</p>
           </article>
           <article class="card">
-            <h3>⎇ Source control</h3>
-            <p>File-level stage, diff, branch, commit, and push — backed by system git.</p>
+            <h3>⎇ Source control &amp; worktrees</h3>
+            <p>File-level stage, diff, branch, commit, push — plus one-step git worktrees bound to canvas frames.</p>
+          </article>
+          <article class="card">
+            <h3>🗂️ Kanban board</h3>
+            <p>Every project doubles as a Trello-style board — cards are your live sessions, dragged between columns.</p>
+          </article>
+          <article class="card">
+            <h3>📱 Remote &amp; SSH projects</h3>
+            <p>Open a project on a remote host over SSH; terminals, files, git, and the board all run there.</p>
+          </article>
+          <article class="card">
+            <h3>🌍 Server Edition</h3>
+            <p>The same canvas, self-hosted in any browser — reach your terminals and agents from anywhere.</p>
+          </article>
+          <article class="card">
+            <h3>🎙 Talk to your terminal</h3>
+            <p>On-device Whisper dictation: hold a chord, speak, review, then send — nothing auto-submits.</p>
           </article>
           <article class="card">
             <h3>⌘K Command palette</h3>
-            <p>Jump to any node, project, or action. Explorer, undo/redo, markdown view.</p>
+            <p>Jump to any node, project, or action. File explorer, undo/redo, and a markdown view.</p>
           </article>
           <article class="card">
             <h3>⬆️ Auto-updates</h3>
-            <p>The app updates itself and surfaces product news, right in the window.</p>
+            <p>The app checks its own update feed and surfaces product news, right in the window.</p>
           </article>
+          <article class="card">
+            <h3>📴 Offline-first &amp; local-first</h3>
+            <p>Projects persist to a plain JSON file next to your code — git-shareable, machine-portable.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="surfaces" class="surfaces">
+        <span class="section-eyebrow">One core, three shells</span>
+        <h2>The same sessions, wherever you are</h2>
+        <div class="surface-grid">
+          <div class="surface-card">
+            <h3>🖥 Desktop</h3>
+            <p>The primary app for macOS and Linux. Native window chrome, auto-update, and the full node set.</p>
+          </div>
+          <div class="surface-card">
+            <h3>🌍 Server Edition</h3>
+            <p>The identical renderer, self-hosted and served over plain HTTP/WebSocket to any browser.</p>
+            <code>npm run server:dev</code>
+          </div>
+          <div class="surface-card">
+            <h3>📱 Mobile companion</h3>
+            <p>An iOS app that attaches to the same live tmux sessions — watch an agent work, answer a prompt, or type from your phone.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="docs" class="docs">
+        <span class="section-eyebrow">Read before you build</span>
+        <h2>Documentation</h2>
+        <p class="section-sub">
+          Every feature has its own article: behaviour, configuration, failure modes, security
+          considerations, and how it's verified.
+        </p>
+        <div class="doc-grid">
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/README.md" target="_blank" rel="noopener">
+            <strong>📚 All feature docs</strong>
+            <span>Full index</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/terminals/README.md" target="_blank" rel="noopener">
+            <strong>🖥 Terminals</strong>
+            <span>Session continuity, tmux</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/canvas/README.md" target="_blank" rel="noopener">
+            <strong>🗺 Canvas</strong>
+            <span>Node kinds, lifecycle</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/projects/README.md" target="_blank" rel="noopener">
+            <strong>🗂 Projects</strong>
+            <span>Tabs, persistence</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/agents/README.md" target="_blank" rel="noopener">
+            <strong>🤖 Agents</strong>
+            <span>Claude, Codex, Gemini…</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/source-control/README.md" target="_blank" rel="noopener">
+            <strong>⎇ Source control</strong>
+            <span>Git panel, worktrees</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/kanban/README.md" target="_blank" rel="noopener">
+            <strong>🗂️ Kanban board</strong>
+            <span>Live session cards</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/remote/README.md" target="_blank" rel="noopener">
+            <strong>📡 Remote &amp; SSH</strong>
+            <span>SSH projects, Server Edition</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/speech/README.md" target="_blank" rel="noopener">
+            <strong>🎙 Speech</strong>
+            <span>Dictation</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/docs/features/packaging/README.md" target="_blank" rel="noopener">
+            <strong>📦 Packaging</strong>
+            <span>Builds, auto-update</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">
+            <strong>🤝 Contributing</strong>
+            <span>Setup, house rules</span>
+          </a>
+          <a class="doc-card" href="https://github.com/eneskirca/nodeterm/blob/main/CHANGELOG.md" target="_blank" rel="noopener">
+            <strong>📝 Changelog</strong>
+            <span>What shipped, when</span>
+          </a>
         </div>
       </section>
 
@@ -126,18 +302,59 @@
         <a href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener">GitHub</a>
         <a href="https://github.com/eneskirca/nodeterm/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
         <a href="https://github.com/eneskirca/nodeterm/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
+        <a href="https://github.com/eneskirca/nodeterm/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+        <a href="https://github.com/eneskirca/nodeterm/issues" target="_blank" rel="noopener">Support</a>
       </div>
       <p class="legal">
         <a href="https://mariadb.com/bsl11/" target="_blank" rel="noopener">BUSL-1.1</a> licensed. © <span id="year">2026</span> Enes Kirca.
         “Claude” and “Claude Code” are trademarks of Anthropic; nodeterm is not affiliated
         with or endorsed by Anthropic.
       </p>
+      <!--
+        This page documents the source tree's current package version. It is NOT a claim
+        that a signed/notarized installer for this exact version has shipped — check
+        GitHub Releases for what is actually downloadable right now.
+      -->
+      <p class="version-pill" id="doc-version">Documents nodeterm v0.3.0 (source)</p>
     </footer>
 
     <script>
-      // Point the download links at the latest release by reading the update feed.
-      // Falls back to the GitHub Releases page if the feed isn't reachable yet.
       document.getElementById('year').textContent = String(new Date().getFullYear())
+
+      // --- Mobile nav toggle (tap equivalent for the desktop hover row) ---
+      var navToggle = document.getElementById('nav-toggle')
+      var navLinks = document.getElementById('nav-links')
+      navToggle.addEventListener('click', function () {
+        var open = navLinks.classList.toggle('open')
+        navToggle.setAttribute('aria-expanded', String(open))
+        navToggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu')
+      })
+      navLinks.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', function () {
+          navLinks.classList.remove('open')
+          navToggle.setAttribute('aria-expanded', 'false')
+        })
+      })
+
+      // --- Theme toggle: explicit choice always overrides the OS setting ---
+      var themeToggle = document.getElementById('theme-toggle')
+      function currentTheme() {
+        var explicit = document.documentElement.getAttribute('data-theme')
+        if (explicit) return explicit
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      }
+      themeToggle.addEventListener('click', function () {
+        var next = currentTheme() === 'dark' ? 'light' : 'dark'
+        document.documentElement.setAttribute('data-theme', next)
+        try {
+          localStorage.setItem('nodeterm-theme', next)
+        } catch (_) {
+          /* private mode — theme still applies for this page load */
+        }
+      })
+
+      // --- Download button: point at the latest release by reading the update feed.
+      // Falls back to (and starts on) the GitHub Releases index — never a guessed URL. ---
       ;(async () => {
         try {
           const res = await fetch('updates/latest-mac.yml', { cache: 'no-cache' })
@@ -153,8 +370,7 @@
           }
           if (intel) document.getElementById('dl-intel').href = 'updates/' + intel
           if (ver) {
-            document.getElementById('ver-meta').textContent =
-              '— v' + ver + ' · free for personal use'
+            document.getElementById('ver-meta').textContent = '— v' + ver + ' · free for personal use'
           }
         } catch (_) {
           /* keep GitHub Releases fallback */
