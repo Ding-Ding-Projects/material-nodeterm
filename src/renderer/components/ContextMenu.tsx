@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { NODE_COLORS } from '../state/workspace'
 import { useMenuFlip } from '../ui/useMenuFlip'
+import { useMenuFilter, type MenuFilterItem } from './menu/useMenuFilter'
+import { FilterableMenuHeader } from './menu/FilterableMenu'
 
 export type MenuItem =
   | {
@@ -42,6 +44,18 @@ interface ContextMenuProps {
   scroll?: boolean
 }
 
+/** Below this count a filter field costs more space than it saves — see the CLAUDE.md note on
+ *  this exact trade-off. Menus at or under this size render exactly as before. */
+const FILTER_THRESHOLD = 6
+
+/** Only a fully flat menu (every entry is a plain clickable item — no submenu/colors/separator/
+ *  label mixed in) is filterable. Filtering a menu with sections would mean deciding what happens
+ *  to a group's label/separator once every row under it is filtered out — real UI work this lane
+ *  didn't attempt; those menus render exactly as they did before this change. */
+function isFilterable(items: MenuItem[]): boolean {
+  return items.length > FILTER_THRESHOLD && items.every((it) => !it.type || it.type === 'item')
+}
+
 /**
  * A right-click menu rendered in a body portal at fixed coordinates, so it is never
  * clipped or hidden behind the canvas. Closes on backdrop click.
@@ -59,6 +73,31 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
       : { top: flip.top, left: flip.left }
   // Index of the row whose submenu flyout is currently open (hover-driven).
   const [openSub, setOpenSub] = useState<number | null>(null)
+
+  const filterable = isFilterable(items)
+  // Hooks run every render regardless of `filterable` — only the array CONTENT differs — so the
+  // rules of hooks hold even though filtering is conditionally rendered below.
+  const filterItems: MenuFilterItem[] = filterable
+    ? items.map((it, i) => ({
+        id: String(i),
+        label: it.type === 'item' || !it.type ? it.label : '',
+        disabled: it.type === 'item' ? it.disabled : false
+      }))
+    : []
+  const menuFilter = useMenuFilter(filterItems, {
+    onActivate: (fi) => {
+      const item = items[Number(fi.id)]
+      if (item && (item.type === 'item' || !item.type)) {
+        item.onClick()
+        onClose()
+      }
+    },
+    onEmptyEscape: onClose
+  })
+  const visibleIndices = filterable
+    ? new Set(menuFilter.filtered.map((fi) => Number(fi.id)))
+    : null
+
   return createPortal(
     <>
       <div
@@ -73,7 +112,19 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
         style={menuStyle}
         onClick={(e) => e.stopPropagation()}
       >
+        {filterable && (
+          <FilterableMenuHeader
+            filter={menuFilter}
+            placeholder="Filter…"
+            regexLabel="Regex — this menu"
+            zIndex={(zIndex ?? 46) + 2}
+          />
+        )}
+        {filterable && menuFilter.filtered.length === 0 && (
+          <div className="ctx-empty">No matches</div>
+        )}
         {items.map((item, i) => {
+          if (visibleIndices && !visibleIndices.has(i)) return null
           if (item.type === 'separator') return <div key={i} className="ctx-sep" />
           if (item.type === 'label') return <div key={i} className="ctx-label">{item.label}</div>
           if (item.type === 'colors') {
@@ -133,9 +184,12 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
           return (
             <button
               key={i}
-              className={`ctx-item${item.danger ? ' danger' : ''}`}
+              className={`ctx-item${item.danger ? ' danger' : ''}${filterable && menuFilter.filtered[menuFilter.activeIndex]?.id === String(i) ? ' kbd-active' : ''}`}
               disabled={item.disabled}
               title={item.hint}
+              onMouseEnter={() => {
+                if (filterable) menuFilter.setActiveIndex(menuFilter.filtered.findIndex((fi) => fi.id === String(i)))
+              }}
               onClick={() => {
                 item.onClick()
                 onClose()

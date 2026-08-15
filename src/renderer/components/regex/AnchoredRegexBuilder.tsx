@@ -11,6 +11,10 @@ interface AnchoredRegexBuilderProps {
   /** Accessible label for the trigger button (defaults to a generic one — pass a field-specific
    *  label when several regex-capable fields exist on one screen, e.g. "Regex — Settings search"). */
   label?: string
+  /** Override the popover's stacking order — needed when the field lives inside something with
+   *  its own elevated z-index (a ContextMenu opened at z 80, say): the popover must paint ABOVE
+   *  the surface it's anchored inside of, or it renders invisible behind it. */
+  zIndex?: number
 }
 
 /**
@@ -18,7 +22,7 @@ interface AnchoredRegexBuilderProps {
  * the field that opens the FULL builder anchored right next to it — never a separate page or a
  * global dialog. One builder instance per field; nothing here is shared across fields.
  */
-export function AnchoredRegexBuilder({ search, fieldRef, label }: AnchoredRegexBuilderProps): React.JSX.Element {
+export function AnchoredRegexBuilder({ search, fieldRef, label, zIndex }: AnchoredRegexBuilderProps): React.JSX.Element {
   const ownTriggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const anchor = (fieldRef as RefObject<HTMLElement>) ?? ownTriggerRef
@@ -39,7 +43,7 @@ export function AnchoredRegexBuilder({ search, fieldRef, label }: AnchoredRegexB
       >
         .*
       </button>
-      <AnchoredPopover anchorRef={anchor} open={open} onClose={() => setOpen(false)}>
+      <AnchoredPopover anchorRef={anchor} open={open} onClose={() => setOpen(false)} zIndex={zIndex}>
         <RegexBuilder
           value={{ pattern: search.pattern, flags: search.flags }}
           onChange={(v) => {
