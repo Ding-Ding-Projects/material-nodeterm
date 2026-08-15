@@ -17,6 +17,8 @@ import type {
   WorkspaceMigrationKind
 } from '../shared/types'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
+import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
+import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -49,6 +51,18 @@ const subscribePeerPending = subscribe<[{ sas: string | null; id: string }]>(IPC
 
 // New relay tunnel (Stage 4). Non-per-id host events reuse the fan-out helper; per-connection
 // client events (sas/approved/frame/closed) attach directly per connectionId.
+const subscribeConverterItem = subscribe<[ConvertQueueItem]>(IPC.converterItem)
+const subscribeConverterSummary = subscribe<
+  [Pick<ConverterQueueState, 'running' | 'scanning' | 'concurrency' | 'total'>]
+>(IPC.converterSummary)
+const subscribeOllamaPullItem = subscribe<[PullQueueItem]>(IPC.ollamaPullItem)
+const subscribeOllamaPullSummary = subscribe<[Pick<PullQueueState, 'running' | 'concurrency'>]>(
+  IPC.ollamaPullSummary
+)
+const subscribeOllamaChatStream = subscribe<
+  [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
+>(IPC.ollamaChatStream)
+
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
 const subscribeRelayHostClosed = subscribe<[{ id: string }]>(IPC.relayHostClosed)
@@ -136,7 +150,8 @@ const api: NodeTerminalApi = {
   },
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),
-    selectFile: () => ipcRenderer.invoke(IPC.dialogSelectFile)
+    selectFile: () => ipcRenderer.invoke(IPC.dialogSelectFile),
+    selectFiles: () => ipcRenderer.invoke(IPC.dialogSelectFiles)
   },
   settings: {
     load: () => ipcRenderer.invoke(IPC.settingsLoad),
@@ -610,7 +625,59 @@ const api: NodeTerminalApi = {
     ipcRenderer.on(IPC.agentControl, handler)
     return () => ipcRenderer.removeListener(IPC.agentControl, handler)
   },
-  sendAgentControlResult: (payload) => ipcRenderer.send(IPC.agentControlResult, payload)
+  sendAgentControlResult: (payload) => ipcRenderer.send(IPC.agentControlResult, payload),
+  converter: {
+    catalog: () => ipcRenderer.invoke(IPC.converterCatalog),
+    detect: (path) => ipcRenderer.invoke(IPC.converterDetect, path),
+    preflight: (destDir) => ipcRenderer.invoke(IPC.converterPreflight, destDir),
+    state: (offset, limit) => ipcRenderer.invoke(IPC.converterState, offset, limit),
+    addFiles: (paths, destDir, adapterId, lossyAcknowledged) =>
+      ipcRenderer.invoke(IPC.converterAddFiles, paths, destDir, adapterId, lossyAcknowledged),
+    addFolder: (root, destDir, adapterId, opts) =>
+      ipcRenderer.invoke(IPC.converterAddFolder, root, destDir, adapterId, opts),
+    cancelScan: () => ipcRenderer.invoke(IPC.converterCancelScan),
+    resolvePending: (ids, opts) => ipcRenderer.invoke(IPC.converterResolvePending, ids, opts),
+    start: () => ipcRenderer.invoke(IPC.converterStart),
+    pause: () => ipcRenderer.invoke(IPC.converterPause),
+    cancelItem: (id) => ipcRenderer.invoke(IPC.converterCancelItem, id),
+    cancelAll: () => ipcRenderer.invoke(IPC.converterCancelAll),
+    retryItem: (id) => ipcRenderer.invoke(IPC.converterRetryItem, id),
+    removeItem: (id) => ipcRenderer.invoke(IPC.converterRemoveItem, id),
+    clearFinished: () => ipcRenderer.invoke(IPC.converterClearFinished),
+    setConcurrency: (n) => ipcRenderer.invoke(IPC.converterSetConcurrency, n),
+    onItem: (listener) => subscribeConverterItem(listener),
+    onSummary: (listener) => subscribeConverterSummary(listener)
+  },
+  ollama: {
+    status: () => ipcRenderer.invoke(IPC.ollamaStatus),
+    models: () => ipcRenderer.invoke(IPC.ollamaModels),
+    running: () => ipcRenderer.invoke(IPC.ollamaRunning),
+    show: (model) => ipcRenderer.invoke(IPC.ollamaShow, model),
+    deleteModel: (model) => ipcRenderer.invoke(IPC.ollamaDelete, model),
+    copyModel: (source, destination) => ipcRenderer.invoke(IPC.ollamaCopy, source, destination),
+    hardware: () => ipcRenderer.invoke(IPC.ollamaHardware),
+    fit: (refs) => ipcRenderer.invoke(IPC.ollamaFit, refs),
+    popularModels: () => ipcRenderer.invoke(IPC.ollamaPopularModels),
+    pullState: () => ipcRenderer.invoke(IPC.ollamaPullState),
+    pullEnqueue: (refs) => ipcRenderer.invoke(IPC.ollamaPullEnqueue, refs),
+    pullStart: () => ipcRenderer.invoke(IPC.ollamaPullStart),
+    pullPause: () => ipcRenderer.invoke(IPC.ollamaPullPause),
+    pullCancelItem: (id) => ipcRenderer.invoke(IPC.ollamaPullCancelItem, id),
+    pullRetryItem: (id) => ipcRenderer.invoke(IPC.ollamaPullRetryItem, id),
+    pullRemoveItem: (id) => ipcRenderer.invoke(IPC.ollamaPullRemoveItem, id),
+    pullSetConcurrency: (n) => ipcRenderer.invoke(IPC.ollamaPullSetConcurrency, n),
+    onPullItem: (listener) => subscribeOllamaPullItem(listener),
+    onPullSummary: (listener) => subscribeOllamaPullSummary(listener),
+    chatSessions: () => ipcRenderer.invoke(IPC.ollamaChatSessions),
+    chatGet: (id) => ipcRenderer.invoke(IPC.ollamaChatGet, id),
+    chatCreate: (model, systemPrompt) => ipcRenderer.invoke(IPC.ollamaChatCreate, model, systemPrompt),
+    chatRename: (id, title) => ipcRenderer.invoke(IPC.ollamaChatRename, id, title),
+    chatDelete: (id) => ipcRenderer.invoke(IPC.ollamaChatDelete, id),
+    chatExport: (id, format) => ipcRenderer.invoke(IPC.ollamaChatExport, id, format),
+    chatSend: (id, text) => ipcRenderer.invoke(IPC.ollamaChatSend, id, text),
+    chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
+    onChatStream: (listener) => subscribeOllamaChatStream(listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('nodeTerminal', api)

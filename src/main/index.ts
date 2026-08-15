@@ -9,6 +9,8 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, powerMoni
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
 import { registerFsHandlers } from '../core/fs-handlers'
+import { registerConverterIpc } from '../core/converter/register-ipc'
+import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
@@ -794,6 +796,12 @@ app.whenReady().then(async () => {
     localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId)
   })
 
+  // Universal file converter (docs/file-converter.md) + local Ollama suite manager
+  // (docs/ollama-manager.md) — both register on the shared CorePlatform, so the Server Edition
+  // gets the identical engine via src/server/handlers/index.ts's own call to these same functions.
+  registerConverterIpc(corePlatform)
+  registerOllamaIpc(corePlatform)
+
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
     platform: corePlatform,
@@ -891,6 +899,14 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.dialogSelectFile, async () => {
     const result = await dialog.showOpenDialog({ properties: ['openFile'] })
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  })
+
+  // Multi-file picker for the converter's "Add files…" — dialog:select-file above only ever
+  // returns one path. Electron-only: the Server Edition has no native file dialog and uses a plain
+  // <input type="file" multiple> instead (see FileConverterPanel.tsx).
+  ipcMain.handle(IPC.dialogSelectFiles, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths
   })
 
   // The hook server starts BEFORE the window exists: an SSH project the renderer auto-reconnects

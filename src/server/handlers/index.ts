@@ -6,6 +6,8 @@ import { DOWNLOAD_PATH, downloadName } from '../download'
 import { GitService } from '../../core/git-service'
 import { generateCommitMessage } from '../../core/commit-message'
 import { registerFsHandlers } from '../../core/fs-handlers'
+import { registerConverterIpc } from '../../core/converter/register-ipc'
+import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { claudeCliCaps, registerClaudeCliIpc } from '../../core/claude-cli'
 import { registerCodexIdentityIpc } from '../../core/codex-identity-caps'
 import { UNKNOWN_CODEX_IDENTITY_CAPS } from '@shared/types'
@@ -48,6 +50,12 @@ export function registerCoreHandlers(
       : undefined,
     localProjectCwd: deps.localProjectCwd
   })
+
+  // Universal file converter + local Ollama suite manager — the SAME registrars main/index.ts
+  // calls, over the SAME CorePlatform.handle seam, so the engine cannot drift between desktop and
+  // the browser. See docs/file-converter.md and docs/ollama-manager.md.
+  registerConverterIpc(platform)
+  registerOllamaIpc(platform)
 
   const gitService = new GitService()
   // registers all git:* channels via the global core platform().handle

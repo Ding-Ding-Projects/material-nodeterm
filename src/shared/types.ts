@@ -668,6 +668,10 @@ export interface DialogApi {
   selectFolder(): Promise<string | null>
   /** Opens a native file picker; returns the chosen path or null if cancelled. */
   selectFile(): Promise<string | null>
+  /** Opens a native MULTI-file picker (for the converter's "Add files…"); returns the chosen paths,
+   *  null if cancelled. Electron only — the Server Edition has no native dialog and returns null;
+   *  its FileConverterPanel uses a plain `<input type="file" multiple>` instead. */
+  selectFiles(): Promise<string[] | null>
 }
 
 export interface ClipboardApi {
@@ -2183,6 +2187,10 @@ export interface NodeTerminalApi {
   dialog: DialogApi
   settings: SettingsApi
   speech: SpeechApi
+  /** Universal file converter — docs/file-converter.md. */
+  converter: import('./converter').ConverterApi
+  /** Local Ollama suite manager — docs/ollama-manager.md. */
+  ollama: import('./ollama').OllamaApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

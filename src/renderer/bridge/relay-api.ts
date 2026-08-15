@@ -133,7 +133,11 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       const startDir = '/' // navigable up/down from the host root; no cross-call memory in v1
       return {
         selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: files.fs.list }),
-        selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: files.fs.list })
+        selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: files.fs.list }),
+        // No host-side multi-file picker over the relay in v1 (the in-app browser above is
+        // single-path only) — never fall back to a LOCAL multi-picker, which would pick paths on
+        // the wrong machine. FileConverterPanel treats a null resolution as "not available here".
+        selectFiles: () => Promise.resolve(null)
       }
     })(),
 
@@ -148,7 +152,15 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // Agent canvas-control (`agent:control`) is not wired over the relay (matches the Server
     // Edition); inert no-ops rather than a local subscription that never carries the host's events.
     onAgentControl: stub.onAgentControl,
-    sendAgentControlResult: stub.sendAgentControlResult
+    sendAgentControlResult: stub.sendAgentControlResult,
+    // The universal file converter and the local Ollama manager both operate on ONE machine's
+    // filesystem/Ollama install. `...local` would silently run them against THIS machine while the
+    // rest of the tab is the HOST's session — the wrong-machine failure this file's obligations
+    // exist to prevent — and there is no remote-routed core call for either yet. Refuse cleanly
+    // (E_UNSUPPORTED) rather than either wrong-machine option; a future pass can route these to the
+    // host the same way `fs`/`git` are routed above.
+    converter: stub.converter,
+    ollama: stub.ollama
   } satisfies NodeTerminalApi
 
   return {
