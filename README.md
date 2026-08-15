@@ -23,7 +23,10 @@ hidden tabs.
        '[.[].assets[] | select(.name|test("\\.(dmg|AppImage|deb)$")) | .download_count] | add' -->
 [![Downloads](https://img.shields.io/badge/downloads-1.2k-brightgreen)](https://github.com/eneskirca/nodeterm/releases)
 
-[Download](#-download) · [Docs](https://nodeterm.dev/docs) · [Features](#-features) · [Build from source](#-build-from-source) · [Architecture](#-architecture) · [License](#-license)
+**Install:** grab the latest build from **[nodeterm.dev](https://nodeterm.dev)**, or
+`brew install --cask nodeterm` on macOS — see [Download](#-download) for the full list.
+
+[Download](#-download) · [Site](https://nodeterm.dev) · [Feature docs](./docs/features/README.md) · [Features](#-features) · [Build from source](#-build-from-source) · [Contributing](#-contributing) · [License](#-license)
 
 </div>
 
@@ -47,8 +50,10 @@ three ways — as the **desktop app for macOS and Linux**, as a **self-hosted br
 you reach from anywhere (Server Edition), and an **iOS companion** that attaches to the
 same live sessions.
 
-📚 **Full documentation lives at [nodeterm.dev/docs](https://nodeterm.dev/docs)** — get
-started, concepts, agents, remote access, troubleshooting.
+📚 **Full documentation lives at [nodeterm.dev/docs](https://nodeterm.dev/docs)** and in this
+repository's [`docs/features/`](./docs/features/README.md) — get started, concepts, agents,
+remote access, troubleshooting, and one article per feature (behaviour, configuration, failure
+modes, security, verification).
 
 ## ✨ Features
 
@@ -118,14 +123,21 @@ then **Send** (nothing auto-submits). Your voice never leaves the machine.
 </tr>
 </table>
 
-### Node kinds
+<details>
+<summary><strong>Node kinds</strong> — terminal, agent, sticky, group, editor, diff, web/video</summary>
 
 🖥 **Terminal** (xterm + tmux, AI naming) · 🤖 **Agent** (Claude Code / Codex / Gemini /
-opencode / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂 **Group**
+opencode / Grok / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂 **Group**
 (bind to a **git worktree** for agent-per-branch) · ✏️ **Editor** (Monaco, ⌘S) ·
 🔀 **Diff** · 🌐 **Web / Video**
 
-### More
+See [`docs/features/canvas/node-kinds.md`](./docs/features/canvas/node-kinds.md) for the full
+write-up of every node kind.
+
+</details>
+
+<details>
+<summary><strong>More features</strong> — session continuity, worktrees, remote/SSH, GitHub Issues on the board, AI naming, command palette, and more</summary>
 
 - **Session continuity (tmux)** — terminals keep running across node remounts *and* full
   app restarts, including live processes; machine reboots restore scrollback and resume
@@ -154,7 +166,14 @@ opencode / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂
 - **Auto-update & in-app announcements** — the app checks a self-hosted feed and
   surfaces a "Restart to update" banner and product news.
 
-### 🌍 Server Edition — nodeterm in your browser
+Every one of these has its own article under
+[`docs/features/`](./docs/features/README.md), covering behaviour, configuration, failure
+modes, security considerations, and how it's verified.
+
+</details>
+
+<details>
+<summary><strong>🌍 Server Edition</strong> — the same canvas, self-hosted in any browser</summary>
 
 The same canvas runs headless on a Linux (or macOS) host and is used from any browser —
 so your terminals, editors, source control, board, and agents live on a server you reach
@@ -167,7 +186,9 @@ npm run server:dev     # build + serve; open http://127.0.0.1:8443 and set a pas
 
 Terminals, files/editor/diff, the full git panel, the kanban board, and agent-status
 badges all work in the browser today. See [`docs/SERVER.md`](./docs/SERVER.md) for the
-quickstart, security model, and current limitations.
+quickstart, security model, and current limitations, and
+[`docs/features/remote/server-edition.md`](./docs/features/remote/server-edition.md) for the
+feature-level write-up.
 
 #### 🔔 Get push notifications from any SSH host
 
@@ -183,6 +204,8 @@ curl -fsSL https://raw.githubusercontent.com/eneskirca/nodeterm/main/scripts/ins
 One line installs, builds, and runs it as a systemd service (`NODETERM_HEADLESS=1`); re-run it
 to update. See the [headless notification host](./docs/SERVER.md#headless-notification-host)
 section for details.
+
+</details>
 
 ## 📦 Download
 
@@ -207,6 +230,10 @@ detects your platform. Everything is also listed at
 - **iOS** — **nodeterm mobile** on the
   [App Store](https://apps.apple.com/app/nodeterm/id6790581233).
 
+> Builds are currently **unsigned/unnotarized** — see
+> [`docs/features/packaging/packaging-and-auto-update.md`](./docs/features/packaging/packaging-and-auto-update.md)
+> for what that means and the first-run workaround.
+
 ## 🛠 Build from source
 
 Requires Node.js 20+ on macOS or Linux (tmux recommended — it's what makes sessions
@@ -218,15 +245,17 @@ release job does this automatically), or just install tmux yourself.
 npm install        # deps + rebuilds node-pty against Electron's ABI (postinstall)
 npm run dev        # dev mode with renderer HMR
 npm run build      # production build into out/
-npm start          # preview the production build
+npm start           # preview the production build
 npm run typecheck  # fastest correctness gate
-npm test           # vitest unit + integration suite
-npm run dist       # local UNSIGNED .dmg into dist/ (smoke test)
-npm run dist:linux # AppImage + .deb into dist/ (on a Linux host)
-npm run server:dev # build + run the browser Server Edition (needs Node 22 + tmux)
+npm test            # vitest unit + integration suite
+npm run dist        # local UNSIGNED .dmg into dist/ (smoke test)
+npm run dist:linux  # AppImage + .deb into dist/ (on a Linux host)
+npm run server:dev  # build + run the browser Server Edition (needs Node 22 + tmux)
+npm run count-lines  # print the project's committed line-count table
 ```
 
-## ⌨️ Keyboard shortcuts
+<details>
+<summary><strong>⌨️ Keyboard shortcuts</strong></summary>
 
 | Shortcut | Action |
 | --- | --- |
@@ -241,7 +270,10 @@ npm run server:dev # build + run the browser Server Edition (needs Node 22 + tmu
 | `⌘,` | Settings · `⌘/` Shortcuts |
 | `Right-click` | Actions menu (empty space or node) |
 
-## 🏗 Architecture
+</details>
+
+<details>
+<summary><strong>🏗 Architecture</strong> — the process boundaries and the seams that keep three surfaces on one codebase</summary>
 
 - **Electron, three contexts** — `src/main` (the Electron shell), `src/preload` (the only
   bridge, `window.nodeTerminal`), `src/renderer` (React UI). `src/shared` holds the types
@@ -259,16 +291,35 @@ npm run server:dev # build + run the browser Server Edition (needs Node 22 + tmu
 - **Three surfaces** — the desktop app, the browser **Server Edition**, and the
   **mobile companion** (a separate SwiftUI repo) all ride the same core + transport seams.
 
-See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, and the design docs
-under [`docs/`](./docs) for deeper notes.
+See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, the design docs under
+[`docs/`](./docs) for deeper notes, and [`docs/features/`](./docs/features/README.md) for a
+feature-by-feature write-up covering behaviour, configuration, failure modes, security, and
+verification for each one. [`CLAUDE.md`](./CLAUDE.md) is the full deep-reference these
+summaries are distilled from.
+
+</details>
+
+## 📚 Documentation
+
+| Where | What's there |
+| --- | --- |
+| [nodeterm.dev](https://nodeterm.dev) | The landing page — pitch, download, and a documentation index. |
+| [`docs/features/`](./docs/features/README.md) | One article per feature: terminals, canvas, projects, agents, source control, kanban, remote/SSH, speech, packaging. |
+| [`docs/SERVER.md`](./docs/SERVER.md) | Server Edition quickstart, security model, current limitations. |
+| [`CLAUDE.md`](./CLAUDE.md) | The deep architecture reference, per subsystem, with reasoning and measurements. |
+| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Setup, process-boundary rules, and house rules for human contributors. |
+| [`AGENTS.md`](./AGENTS.md) | A **sanitized mirror** of this project's working conventions, written for AI coding agents — see the note at the top of that file for what "mirror" means here. |
+| [`CHANGELOG.md`](./CHANGELOG.md) | What shipped, when, generated from the real commit history. |
 
 ## 🤝 Contributing
 
 Issues and pull requests are welcome. **Start with [CONTRIBUTING.md](./CONTRIBUTING.md)** —
 setup, the process-boundary rules, and the house rules that come up in review.
-[CLAUDE.md](./CLAUDE.md) is the deep reference behind them (and is loaded automatically if
-you work with an AI coding agent). Questions or bug reports are also happy at
-[nodeterm.dev/support](https://nodeterm.dev/support) / support@nodeterm.dev. nodeterm is licensed under the
+[CLAUDE.md](./CLAUDE.md) is the deep reference behind them, and
+[AGENTS.md](./AGENTS.md) is a sanitized summary of the same conventions aimed at AI coding
+agents (both are loaded automatically by tools that support it). Questions or bug reports are
+also happy at [nodeterm.dev/support](https://nodeterm.dev/support) / support@nodeterm.dev.
+nodeterm is licensed under the
 [Business Source License 1.1](https://mariadb.com/bsl11/) — you can use, modify,
 and redistribute it freely, including in production, except offering it as a
 competing product or service (see [License](#-license)).
