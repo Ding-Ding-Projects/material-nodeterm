@@ -7,7 +7,13 @@ import { useExplorer } from '../state/explorer'
 import { sshFs } from '../terminal/ssh-fs'
 import { useSession } from '../session/session'
 import { promptDialog } from './promptDialog'
-import { ancestorDirs, createTargetDir, newEntryPath, parentDir } from '../lib/explorerCreate'
+import {
+  ancestorDirs,
+  createTargetDir,
+  newEntryPath,
+  parentDir,
+  revealTargets
+} from '../lib/explorerCreate'
 import { canRevealLocally, downloadRoute, triggerBrowserDownload } from '../lib/download'
 import { isBrowserRuntime } from '../bridge/runtime'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
@@ -377,20 +383,13 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
   useEffect(() => {
     const revealPath = reveal?.path
     if (!revealPath || !cwd) return
-    const base = cwd.replace(/\/$/, '')
-    const rel = revealPath.startsWith(base + '/') ? revealPath.slice(base.length + 1) : revealPath
-    // Reject paths that escape cwd (absolute outside it, or "../" traversal).
-    if (rel.startsWith('/') || rel.split('/').includes('..')) return
-    const abs = `${base}/${rel}`
-    const parts = rel.split('/')
-    const dirs = new Set<string>()
-    let acc = base
-    for (let i = 0; i < parts.length - 1; i++) {
-      acc = `${acc}/${parts[i]}`
-      dirs.add(acc)
-    }
-    useExplorer.getState().expandMany(project!.id, [...dirs])
-    setSelected(abs)
+    // The path arithmetic lives in `revealTargets` so it can be unit-tested — this version of it
+    // compared `revealPath.startsWith(base + '/')`, which is false for every backslash path, so
+    // reveal silently did nothing at all on Windows. See explorerCreate.ts for the full account.
+    const targets = revealTargets(cwd, revealPath)
+    if (!targets) return // outside cwd, or a traversal
+    useExplorer.getState().expandMany(project!.id, targets.dirs)
+    setSelected(targets.selected)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reveal?.nonce, cwd])
 

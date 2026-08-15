@@ -1,6 +1,12 @@
-// Pure path logic for Explorer/canvas "New File…" / "New Folder…" — kept out of the
-// components so name validation and expansion targets are unit-testable. Paths are
-// `/`-separated absolutes (remote SSH paths included); names come from a user prompt.
+// Pure path logic for the Explorer — "New File…" / "New Folder…" and reveal — kept out of the
+// components so name validation and expansion targets are unit-testable. Names come from a user
+// prompt; paths are `/`-separated (remote SSH paths included).
+//
+// One wrinkle the reveal helper below has to live with: on Windows the tree's ROOT is a native
+// path (`C:\Users\me\proj`) while every level under it is composed as `${parent}/${name}`, so a
+// real node path is legitimately MIXED — `C:\Users\me\proj/src/a.ts`. Windows accepts that for
+// filesystem calls, so the tree works; but anything comparing or splitting those paths has to
+// expect both separators.
 
 /** The directory a create targets: the clicked dir itself, or the clicked file's parent. */
 export function createTargetDir(path: string, isDir: boolean): string {
@@ -79,4 +85,56 @@ export function ancestorDirs(baseDir: string, name: string): string[] {
     out.push(acc)
   }
   return out
+}
+
+/** What a reveal should expand and select, or null when the path is not inside `cwd`. */
+export interface RevealTargets {
+  /** Ancestor directories to force-open, shallowest first, in the tree's own path convention. */
+  dirs: string[]
+  /** The node path to select — must match how the tree composes rows, or nothing highlights. */
+  selected: string
+}
+
+/**
+ * Resolve a reveal request into the directories to expand and the row to select.
+ *
+ * Every comparison here is separator-agnostic, because the inputs disagree by design: `cwd` is
+ * native (so `C:\Users\me\proj` on Windows), a path arriving from the filesystem or a dialog is
+ * native too, and a path arriving from a tree row is mixed. The previous version compared
+ * `revealPath.startsWith(base + '/')`, which is false for every backslash path — so on Windows
+ * `rel` became the WHOLE absolute path, its traversal guard (`rel.split('/')`) saw a single
+ * segment and found no `..`, and the effect went on to build `C:\proj/C:\proj\src\a.ts`, expand
+ * zero directories and select a row that does not exist. Reveal did nothing, silently.
+ *
+ * Output uses the tree's convention — native base, `/` for everything below — because these
+ * strings are matched against row keys, not handed to the filesystem.
+ */
+export function revealTargets(cwd: string, revealPath: string): RevealTargets | null {
+  const base = cwd.replace(/[\\/]+$/, '')
+  const slash = (p: string): string => p.replace(/\\/g, '/')
+  const nBase = slash(base)
+  const nPath = slash(revealPath)
+
+  // Case-insensitive only where the filesystem is: a Windows drive letter arriving as `c:` from
+  // one source and `C:` from another must still match, and NTFS would treat them as one path.
+  const insensitive = /^[A-Za-z]:/.test(nBase)
+  const eq = (a: string, b: string): boolean =>
+    insensitive ? a.toLowerCase() === b.toLowerCase() : a === b
+
+  const prefix = nBase + '/'
+  const rel = eq(nPath.slice(0, prefix.length), prefix) ? nPath.slice(prefix.length) : nPath
+
+  // Reject anything that is not inside cwd. `rel` is still absolute when the prefix did not
+  // match, which is exactly the case the old check missed on Windows.
+  if (!rel || rel.startsWith('/') || /^[A-Za-z]:/.test(rel)) return null
+  const parts = rel.split('/')
+  if (parts.some((p) => !p || p === '..')) return null
+
+  const dirs: string[] = []
+  let acc = base
+  for (const part of parts.slice(0, -1)) {
+    acc = `${acc}/${part}`
+    dirs.push(acc)
+  }
+  return { dirs, selected: `${base}/${rel}` }
 }

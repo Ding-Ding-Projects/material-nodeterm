@@ -64,6 +64,21 @@ by "must call the helper", because several stores build the same name inline and
 The last one is the serious one: it is user-typed input, and the guard refusing `../evil` while
 accepting `..\evil` is exactly what made it look like it worked.
 
+**Explorer reveal** was broken the same way and is now fixed. It compared
+`revealPath.startsWith(base + '/')` — false for every backslash path — so `rel` became the whole
+absolute path, the traversal guard split it on `/`, saw one segment with no `..` and let it
+through, and the effect built `C:\proj/C:\Users\me\proj\src\a.ts`, expanded no directories and
+selected a row that does not exist. Reveal did nothing, silently.
+
+The arithmetic now lives in `revealTargets`, where it is unit-tested — including the genuinely odd
+convention it has to honour: the tree's ROOT is a native path while every level below it is
+composed by the component as `${parent}/${name}`, so a real node path is legitimately **mixed**
+(`C:\Users\me\proj/src/a.ts`). That is not a bug — Windows accepts mixed separators, and these
+strings are matched against row keys rather than handed to the filesystem — but it means the
+helper must emit exactly that shape, and must compare case-insensitively under a drive letter
+(where NTFS does) while staying case-sensitive under a POSIX root (where `/home/Me` and `/home/me`
+are different directories).
+
 ### Delete-to-stop-something
 
 `removeRelayAdvertisement` was an unlink in a bare catch commented *"already absent — fine"*. True
@@ -104,9 +119,6 @@ compile.
   also what makes the fix non-trivial: the resolver must know which convention applies **per
   session**, not per platform, and a scanner matching `C:\…` risks linkifying prose. Pinned by
   tests in `file-links.test.ts` so the gap is visible rather than reading as an oversight.
-- **Explorer "reveal" does nothing on a Windows path.** `ExplorerPanel`'s reveal effect compares
-  `revealPath.startsWith(base + '/')`, which is false for backslash paths, then builds
-  `C:\proj/C:\proj\src\a.ts` and expands no directories. Not yet fixed.
 - **No packaged build has been launched.** Everything above is source-level or unit-tested. The
   runtime behaviour of a real installed Windows build — tmux absence and the session-host fallback
   in particular (see [windows-session-host.md](windows-session-host.md)) — is unverified.
