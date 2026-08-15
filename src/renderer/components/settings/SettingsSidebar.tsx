@@ -5,6 +5,7 @@ import { visibleSettingsGroups, type SettingsSectionId } from './nav'
 import { useI18n } from '@renderer/lib/i18n'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import type { RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
+import { useSchoolMode } from '../../state/schoolMode'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 const GROUPS = visibleSettingsGroups(isMac)
@@ -30,6 +31,9 @@ export function SettingsSidebar({
   // secondary on ONE line here (`ts`) rather than stacking a second row per item, which would
   // crowd badly. Contrast with LanguageSection's own body copy, which has room to stack.
   const { ts } = useI18n()
+  // Once School mode is renamed, the shipped "School mode" label must never surface anywhere —
+  // this is the one spot the sidebar nav's otherwise-static section titles need a live override.
+  const schoolModeName = useSchoolMode((s) => s.name)
   return (
     <aside className="flex w-[256px] shrink-0 flex-col border-r border-border bg-panel">
       <div
@@ -96,12 +100,22 @@ export function SettingsSidebar({
               {ts(`settings.group.${group.id}`, group.title)}
             </p>
             {group.sections.map((s) => {
+              const label = s.id === 'school-mode' ? schoolModeName : s.title
               const isActive = activeSectionId === s.id
-              // Match on the SHIPPED title, not the localized one: the nav catalogue and the
-              // section registry are keyed by it, so searching the translated string would make
-              // a row unfindable by the very name the rest of the app uses for it.
-              const dimmed = hasQuery && !matchesEntry(search, { title: s.title })
-              const sectionTitle = ts(`settings.section.${s.id}`, s.title)
+              // Two different titles on purpose.
+              //   DISPLAY: School mode shows its user-chosen `label` verbatim and is never routed
+              //     through `ts()` — the whole point of the rename is that the shipped name stops
+              //     existing for this user, and a localized shipped string would reintroduce it.
+              //     Every other section shows its localized title.
+              //   SEARCH: matched on the SHIPPED title, because the nav catalogue and the section
+              //     registry are keyed by it — searching the translated string would make a row
+              //     unfindable by the very name the rest of the app uses for it. School mode is
+              //     the exception again: it is matched on `label` ONLY, so typing the shipped
+              //     "School mode" cannot light up a row the user has renamed away from it.
+              const isSchoolMode = s.id === 'school-mode'
+              const sectionTitle = isSchoolMode ? label : ts(`settings.section.${s.id}`, s.title)
+              const searchTitle = isSchoolMode ? label : s.title
+              const dimmed = hasQuery && !matchesEntry(search, { title: searchTitle })
               return (
                 <button
                   key={s.id}

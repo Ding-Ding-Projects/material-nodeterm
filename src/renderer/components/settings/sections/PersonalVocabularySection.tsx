@@ -1,0 +1,108 @@
+import { useRef, useState } from 'react'
+import { usePersonalVocabulary } from '../../../state/personalVocabulary'
+import { useSchoolMode } from '../../../state/schoolMode'
+import { SettingsSection } from '../SettingsSection'
+import { SearchableRow } from '../SearchableRow'
+import { FieldRow } from '../FieldRow'
+import { Button } from '@renderer/ui/Button'
+import {
+  VOCAB_MAX_ENTRIES,
+  VOCAB_MAX_FILE_BYTES,
+  VOCAB_MAX_KEY_LENGTH,
+  VOCAB_MAX_VALUE_LENGTH
+} from '../../../lib/personalVocabulary/schema'
+
+const ROWS = {
+  upload: {
+    title: 'Personal vocabulary',
+    keywords: ['vocabulary', 'personal', 'json', 'upload', 'replace', 'terms', 'wording']
+  }
+}
+const ENTRIES = Object.values(ROWS)
+
+/** File-size limit as a human string, e.g. "256 KB". */
+function humanBytes(n: number): string {
+  return `${Math.round(n / 1024)} KB`
+}
+
+/**
+ * Settings surface for the local personal-vocabulary upload. See docs/personal-vocabulary.md.
+ * Always present (even with no file yet); fully OMITTED (not just disabled) while School mode
+ * is on, per that mode's contract — a rendered-but-inert control here would be more confusing
+ * than its absence, and the substitution itself is already suppressed while the mode is on.
+ */
+export function PersonalVocabularySection({ isActive }: { isActive: boolean }): React.JSX.Element | null {
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const status = usePersonalVocabulary((s) => s.status)
+  const entryCount = usePersonalVocabulary((s) => s.entryCount)
+  const lastError = usePersonalVocabulary((s) => s.lastError)
+  const upload = usePersonalVocabulary((s) => s.upload)
+  const clear = usePersonalVocabulary((s) => s.clear)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+
+  if (schoolModeEnabled) return null
+
+  const handleFile = (file: File): void => {
+    setBusy(true)
+    const reader = new FileReader()
+    reader.onload = () => {
+      setBusy(false)
+      const text = typeof reader.result === 'string' ? reader.result : ''
+      upload(text)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+    reader.onerror = () => {
+      setBusy(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+    reader.readAsText(file)
+  }
+
+  const statusLine =
+    status === 'loaded'
+      ? `Loaded — ${entryCount} ${entryCount === 1 ? 'term' : 'terms'} replaced across Settings labels.`
+      : status === 'invalid'
+        ? `Rejected: ${lastError ?? 'the file did not match the expected format.'}`
+        : 'No file loaded — original wording is shown everywhere.'
+
+  return (
+    <SettingsSection id="vocabulary" title="Personal vocabulary" isActive={isActive} searchEntries={ENTRIES}>
+      <SearchableRow {...ROWS.upload}>
+        <FieldRow
+          label="Local vocabulary file"
+          description={`Upload a small JSON file of your own term → replacement pairs; they apply to Settings labels and descriptions only. Nothing leaves this machine. Up to ${VOCAB_MAX_ENTRIES.toLocaleString()} entries, ${VOCAB_MAX_KEY_LENGTH}/${VOCAB_MAX_VALUE_LENGTH}-character keys/values, ${humanBytes(VOCAB_MAX_FILE_BYTES)} file size. See docs/personal-vocabulary.md for the exact JSON shape.`}
+          note={status === 'invalid' ? statusLine : undefined}
+          htmlFor="personal-vocabulary-file"
+          control={
+            <div className="flex flex-col items-end gap-2">
+              <input
+                ref={inputRef}
+                id="personal-vocabulary-file"
+                type="file"
+                accept="application/json,.json"
+                aria-label="Choose a personal vocabulary JSON file"
+                disabled={busy}
+                className="w-56 text-[13px] text-muted file:mr-2 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-panel-header file:px-2.5 file:py-1 file:text-[13px] file:text-text"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFile(file)
+                }}
+              />
+              {status === 'loaded' ? (
+                <Button
+                  onClick={() => {
+                    clear()
+                  }}
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+          }
+        />
+        {status !== 'invalid' ? <p className="text-[12px] leading-relaxed text-muted-2">{statusLine}</p> : null}
+      </SearchableRow>
+    </SettingsSection>
+  )
+}

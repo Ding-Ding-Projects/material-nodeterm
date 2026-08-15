@@ -29,6 +29,8 @@ import { UpdatesSection } from './sections/UpdatesSection'
 import { PrivacySection } from './sections/PrivacySection'
 import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
 import { LanguageSection } from './sections/LanguageSection'
+import { SchoolModeSection } from './sections/SchoolModeSection'
+import { PersonalVocabularySection } from './sections/PersonalVocabularySection'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -95,6 +97,8 @@ export function SettingsPage({
             <SshSection isActive={active === 'ssh'} />
             <UpdatesSection isActive={active === 'updates'} />
             <PrivacySection isActive={active === 'privacy'} />
+            <SchoolModeSection isActive={active === 'school-mode'} />
+            <PersonalVocabularySection isActive={active === 'vocabulary'} />
           </div>
         </main>
       </SettingsSearchContext.Provider>

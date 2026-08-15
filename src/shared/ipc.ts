@@ -231,6 +231,24 @@ export const IPC = {
   filesSaveCanvasImage: 'files:save-canvas-image',
   settingsLoad: 'settings:load',
   settingsSave: 'settings:save',
+  /** Read the shared School-mode record (`core/school-mode.ts`). Distinct from `settings:load`
+   *  on purpose: the record lives in a shared local application-data location outside any one
+   *  app's own userData, so several apps on the same machine can read/honor the same switch. */
+  schoolModeLoad: 'school-mode:load',
+  /** Turn the mode on. A `pin` is required only the FIRST time (no stored credential yet); it is
+   *  ignored on every later call. Never required to enter — this is a focus mode, not a lock. */
+  schoolModeEnable: 'school-mode:enable',
+  /** Turn the mode off. Requires the correct PIN, verified against the stored hash. */
+  schoolModeDisable: 'school-mode:disable',
+  /** Rename the mode's user-facing display name. No PIN required. */
+  schoolModeRename: 'school-mode:rename',
+  /** Change the unlock PIN. Requires the current one. */
+  schoolModeChangePin: 'school-mode:change-pin',
+  /** Whether an unlock PIN has ever been set on this machine. */
+  schoolModeHasCredential: 'school-mode:has-credential',
+  /** Shell → renderer (broadcast): the shared record changed — including a change made by
+   *  ANOTHER process watching the same shared file (live, no restart). Payload: SchoolModeRecord. */
+  schoolModeChanged: 'school-mode:changed',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',
