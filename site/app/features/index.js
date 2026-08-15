@@ -25,6 +25,7 @@ import { registerAuthenticator } from './authenticator.js'
 import { registerOllamaShop } from './ollama-shop.js'
 import { registerConverter } from './converter.js'
 import { registerPlayroom } from './playroom.js'
+import { registerPairDevice } from './pair-device.js'
 
 // Order matters only for the Settings room's card order and mirrors the
 // imported design's own settings-card order.
@@ -47,6 +48,7 @@ const FEATURE_REGISTRARS = [
   registerOllamaShop,
   registerConverter,
   registerPlayroom,
+  registerPairDevice,
 ]
 
 export function registerFeatures({ store, deps, registerAction, registerBinding }) {

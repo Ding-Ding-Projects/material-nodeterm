@@ -584,3 +584,28 @@ textarea.mono-area {
 
 /* horizontal-scroll containers never leak past the viewport */
 .mono-area, .export-preview { max-width: 100%; }
+
+/* ---- Pair a device (app/features/pair-device.js) ---------------------------------------- */
+.pair-room { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.pair-room h2 { margin: 0; }
+.pair-warn {
+  margin: 0; padding: 10px 12px; border: 3px solid var(--line); border-radius: var(--round-sm);
+  background: var(--sunk); color: var(--ink);
+}
+.pair-note { margin: 0; color: var(--ink2); font-size: 14px; }
+.pair-label { font-weight: 700; font-size: 14px; }
+.pair-paste {
+  width: 100%; padding: 10px; border: 3px solid var(--line); border-radius: var(--round-sm);
+  background: var(--paper2); color: var(--ink); font-family: var(--mono); font-size: 13px;
+  resize: vertical;
+}
+.pair-btn {
+  align-self: flex-start; min-height: 48px; padding: 0 18px; cursor: pointer;
+  border: 4px solid var(--line); border-radius: var(--round); background: var(--yellow);
+  color: var(--ink); font-family: var(--fun); font-weight: 700; font-size: 15px;
+  box-shadow: var(--shadow-sm);
+}
+.pair-btn:hover { background: var(--orange); }
+.pair-btn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+/* aria-live, so the result is announced rather than only seen. */
+.pair-status { margin: 0; min-height: 1.2em; color: var(--ink2); font-size: 14px; }

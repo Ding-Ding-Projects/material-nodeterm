@@ -493,10 +493,35 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
     const send = (res: ServerResponse, code: number, body = '', type?: string): void => {
       const headers: Record<string, string | number> = { 'Content-Length': Buffer.byteLength(body) }
       if (type) headers['Content-Type'] = type
+      // CORS, so a BROWSER can complete a pairing too — the Server Edition's own pairing page
+      // runs on a different origin (the LAN host serving the canvas) from this listener (the
+      // desktop that showed the QR), and without these headers the browser discards the reply
+      // before any of it is read.
+      //
+      // Why `*` is not a hole here: CORS is not the access control on this endpoint and never
+      // was. Authorization is the single-use `token` printed inside the QR, on a listener that
+      // exists for ten minutes and stops at the first success. An origin that does not have the
+      // token gets 403 with or without these headers, and an origin that DOES have it scanned
+      // the QR, which is exactly the capability the flow grants. Restricting the origin instead
+      // would break the real case (any LAN address may serve the canvas) while stopping nothing.
+      headers['Access-Control-Allow-Origin'] = '*'
       res.writeHead(code, headers).end(body)
     }
 
     async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+      // The browser sends a preflight before a JSON POST cross-origin. Answer it, or the real
+      // POST never leaves the page and the pairing looks like it silently did nothing.
+      if (req.method === 'OPTIONS' && req.url === '/pair') {
+        const headers: Record<string, string | number> = {
+          'Content-Length': 0,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'content-type',
+          'Access-Control-Max-Age': 600
+        }
+        res.writeHead(204, headers).end()
+        return
+      }
       if (req.method !== 'POST' || req.url !== '/pair') {
         send(res, 404)
         return
