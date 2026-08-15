@@ -11,7 +11,7 @@
 // never did. `TerminalNode` computes it as `isWindowsPlatform() && !remoteSession`.
 
 import { describe, expect, it } from 'vitest'
-import { matchFileTokens, resolveFileToken } from './file-links'
+import { makeDirListingLookup, matchFileTokens, resolveFileToken } from './file-links'
 
 const WIN = { windows: true } as const
 const CWD = String.raw`C:\Users\me\proj`
@@ -29,6 +29,10 @@ describe('matching Windows paths', () => {
 
   it('matches a multi-segment relative path', () => {
     expect(paths(String.raw`edited src\renderer\a.ts`)).toEqual([String.raw`src\renderer\a.ts`])
+  })
+
+  it('matches a forward-slash relative path emitted by Windows tools', () => {
+    expect(paths('edited src/renderer/a.ts')).toEqual(['src/renderer/a.ts'])
   })
 
   it('matches a dot-relative path', () => {
@@ -58,6 +62,11 @@ describe('matching Windows paths', () => {
 
   it('leaves URLs to the web-links addon', () => {
     expect(paths('open https://example.com/a/b')).toEqual([])
+  })
+
+  it('refuses a whole UNC token instead of relabelling its host as a cwd-relative directory', () => {
+    expect(paths(String.raw`opened \\server\share\a.ts`)).toEqual([])
+    expect(paths('opened //server/share/a.ts')).toEqual([])
   })
 
   it('strips trailing punctuation', () => {
@@ -135,5 +144,41 @@ describe('a path containing a space, which is not supported', () => {
     // while quietly breaking the tokens around it. Documented parity with the POSIX matcher.
     const got = matchFileTokens(String.raw`C:\Program Files\app\a.exe crashed`, WIN)
     expect(got.map((t) => t.path)).toEqual([String.raw`C:\Program`, String.raw`Files\app\a.exe`])
+  })
+})
+
+describe('Windows existence lookup', () => {
+  it('uses Windows separators and case-insensitive entry names', async () => {
+    const listed: string[] = []
+    const lookup = makeDirListingLookup(
+      async (dir) => {
+        listed.push(dir)
+        return [{ name: 'App.TSX', dir: false }]
+      },
+      3000,
+      () => WIN
+    )
+
+    await expect(lookup(String.raw`C:\Users\ME\src\app.tsx`)).resolves.toEqual({
+      exists: true,
+      dir: false
+    })
+    expect(listed).toEqual([String.raw`C:\Users\ME\src`])
+  })
+
+  it('shares a cached directory listing across Windows path casing', async () => {
+    let calls = 0
+    const lookup = makeDirListingLookup(
+      async () => {
+        calls++
+        return [{ name: 'a.ts', dir: false }]
+      },
+      3000,
+      () => WIN
+    )
+
+    await lookup('C:/Users/ME/src/a.ts')
+    await lookup('c:/users/me/SRC/A.TS')
+    expect(calls).toBe(1)
   })
 })

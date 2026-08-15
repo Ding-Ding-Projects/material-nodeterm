@@ -70,7 +70,11 @@ need it too, and wire it in the same change.
   and most of this was written on macOS, so the recurring defect is code that is genuinely correct
   on POSIX — `split('/')`, `startsWith('/')` as an is-absolute test, a bare `fs.rename`. Use
   `path.basename`/`join`/`sep`, publish files with `renameAtomic`, and write at least one test with
-  a real `C:\`-shaped input. Guards enforce some of this and will fail your PR.
+  a real `C:\`-shaped input. Guards enforce some of this and will fail your PR. In the Server
+  Edition and relay tabs, the browser's OS is NOT the filesystem's OS: obtain the dialect from the
+  core that owns the files, and keep an unobserved host unknown rather than guessing. Conversely,
+  on POSIX a backslash is legal filename text — do not treat both separators as interchangeable
+  unless the owning filesystem is known to be Windows.
 
 - **Building on Windows has two preconditions, and the BAT bootstrap checks both after installing
   Node but before npm can replace `node_modules`** (`npm run dist:win` also checks them up front).

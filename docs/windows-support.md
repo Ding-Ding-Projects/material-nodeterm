@@ -68,8 +68,9 @@ devices.
 rename anywhere in `src/core`, `src/main` or `src/server`.
 
 Five of those sites also shared a **fixed temp name**, so two writers could publish each other's
-half-written bytes. Fixed, and guarded by the property (a pid or a counter in the name) rather than
-by "must call the helper", because several stores build the same name inline and are correct.
+half-written bytes. Fixed, and guarded by the property (a pid, counter or per-call UUID in the
+name) rather than by "must call the helper", because several stores build the same name inline and
+are correct.
 
 ### Paths
 
@@ -104,22 +105,37 @@ The token matcher required a `/` and the resolver was POSIX throughout, so a Win
 never even tokenised — the feature was absent rather than wrong, failing *closed* with no link
 offered.
 
-`matchFileTokens` and `resolveFileToken` now take a `{ windows }` option, and the Windows matcher
-is a **separate** regex rather than a widened separator class: the POSIX path is what every
-existing user runs and stays byte-identical, and widening it would start matching Windows-shaped
-text inside a POSIX session, where it can only ever be wrong.
+`matchFileTokens` and `resolveFileToken` take a `{ windows }` option, and the Windows matcher is a
+**separate** regex rather than a widened separator class: the POSIX path is what every existing
+user runs and stays byte-identical, and widening it would start matching Windows-shaped text
+inside a POSIX session, where it can only ever be wrong. Within the Windows matcher, both slash
+styles are accepted (Windows tools emit both), and the parent-directory existence check compares
+entry names case-insensitively while keeping POSIX names case-sensitive.
 
-The gate is **per-session, not per-platform** — an SSH project's paths are POSIX however the client
-is spelled, so `TerminalNode` computes `isWindowsPlatform() && !remoteSession`. Getting that
-backwards would break the SSH links that already work in order to fix the local ones that never
-did.
+The gate is **per-filesystem host, not per-viewer**. A Windows browser may be looking at a Linux
+Server Edition (including one in a container), while a Linux browser may be looking at a Windows
+host; a relay guest and host can differ in the same way. `TerminalNode` therefore uses the
+core-bound `tmuxStatus().platform` fact for Server Edition and relay tabs. An SSH project's paths
+stay POSIX however the client is spelled. If the host-platform read fails, file links are absent
+for that connection — a failed read is not evidence that the host is Linux, and borrowing the
+browser's OS would open the wrong path dialect. The local desktop may use its viewer platform only
+because the viewer and filesystem core are the same process.
 
 Two deliberate limits. A **UNC path is refused** rather than half-handled: there is no drive to
 anchor on, its first two segments are a host and a share rather than directories, and resolving it
-would aim a directory listing at a network host. And **spaces are not part of a segment**, so
+would aim a directory listing at a network host. The tokenizer consumes and refuses the WHOLE UNC
+token; otherwise it can start after the two leading slashes and accidentally reinterpret
+`server\share\file` as a cwd-relative path, bypassing the resolver's refusal. And **spaces are not
+part of a segment**, so
 `C:\Program Files\…` does not link — an unquoted path in terminal output gives no way to tell where
 it ends, and allowing spaces made the matcher swallow the rest of the sentence. The POSIX matcher
 takes the same position, so this is parity rather than a Windows shortfall.
+
+The same host-dialect rule applies to media URLs. `mediaUrlFor` splits only on `path.sep`: splitting
+on both slash styles is required-looking on Windows but corrupts a legal POSIX filename containing
+a literal backslash (`/tmp/a\b.png`) into a different path (`/tmp/a/b.png`). The allowlist then
+correctly rejects the app's own file. The separator is injectable in the pure URL builder only so
+both host dialects are exercised on every test machine.
 
 ### Delete-to-stop-something
 
@@ -185,8 +201,11 @@ credential and shell-syntax cases continue to run under real Git Bash.
 - Use `path.basename` / `path.join` / `path.sep`. Never `split('/')`, never `startsWith('/')` as an
   is-absolute test.
 - Publish files with `renameAtomic`, never a bare `fs.rename`. A guard enforces it.
-- Ask whether the path is **local** (platform-native) or **remote** (always POSIX, even from a
-  Windows client). Getting that distinction wrong is how an SSH fix breaks local behaviour.
+- Ask which machine owns the filesystem. The browser/viewer OS is irrelevant for Server Edition
+  and relay tabs; SSH is POSIX even from a Windows client. Getting that distinction wrong is how an
+  SSH fix breaks local behaviour, or a Windows browser breaks links on a Linux container host.
+- On POSIX, `\` is filename text. Split on both separators only after the owning dialect is known
+  to be Windows.
 - Write at least one test with a real `C:\`-shaped input. Every defect on this page was invisible
   to a suite whose fixtures were all POSIX.
 - Use `String.raw` for backslash literals — except when the string ends in one, which a raw

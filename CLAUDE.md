@@ -562,8 +562,14 @@ session.
   all terminals — harmless in a plain shell). **Cmd (mac) / Ctrl+click** opens links in the
   output: URLs → default browser (`@xterm/addon-web-links`), file paths → editor node and
   directories → Explorer reveal (`terminal/file-links.ts`, existence-verified against the project
-  fs via cached parent-dir listings, with `path:line[:col]` compiler-output suffixes; relay-remote
-  nodes have no client fs so they are URL-only).
+  fs via cached parent-dir listings, with `path:line[:col]` compiler-output suffixes). The path
+  dialect follows the FILESYSTEM-OWNING CORE, not the viewer: desktop-local may use its own
+  platform, Server Edition and relay tabs use the core's reported `process.platform`, and SSH
+  projects are POSIX. A failed host-platform read disables file links for that connection — it
+  never guesses from the browser. Standalone `ssh` terminal nodes remain URL-only because they
+  have no remote fs API with which to verify a token; relay tabs do have a core-bound, jailed fs
+  API and therefore support file links. Windows existence matching is case-insensitive and accepts
+  both separators; UNC tokens are refused whole before they can be reinterpreted as cwd-relative.
 - **Agent** (`createAgentNode(agentId, …)`) — a terminal preset that runs an agent CLI as its
   `initialCommand` (runs once on open via `transport.write`, then cleared), with `data.agentId`
   set. Builtins (`claude`/`codex`/`gemini`) come from `AGENT_CONFIG` (clay color etc.).
