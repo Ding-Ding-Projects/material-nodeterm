@@ -70,7 +70,8 @@ function AccountUsageBlock({
   mode,
   accountId,
   selected,
-  onSelect
+  onSelect,
+  selectable
 }: {
   label: string
   email?: string
@@ -79,15 +80,10 @@ function AccountUsageBlock({
   accountId: string | undefined
   selected: boolean
   onSelect: (accountId: string | undefined) => void
+  selectable: boolean
 }) {
   return (
-    <button
-      type="button"
-      className="usage-account usage-account--selectable"
-      aria-pressed={selected}
-      title={selected ? 'Default for new sessions' : 'Use for new sessions'}
-      onClick={() => onSelect(accountId)}
-    >
+    <div className="usage-account">
       <span className="usage-account__label">
         <span>{label}</span>
         {selected && <span className="usage-account__default" aria-hidden>✓</span>}
@@ -98,7 +94,19 @@ function AccountUsageBlock({
       ))}
       {u && u.limits.length === 0 && <span className="usage-popover__empty">No usage data.</span>}
       {!u && <span className="usage-popover__empty usage-pill__pulse">···</span>}
-    </button>
+      {selectable && (
+        <button
+          type="button"
+          className="usage-account__select"
+          role="radio"
+          aria-checked={selected}
+          aria-label={`Use ${label} for new sessions`}
+          onClick={() => onSelect(accountId)}
+        >
+          Use for new sessions
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -116,24 +124,20 @@ function RemoteUsageBlock({
   mode,
   accountId,
   selected,
-  onSelect
+  onSelect,
+  selectable
 }: {
   row: RemoteAccountUsage
   mode: 'used' | 'remaining'
   accountId: string | undefined
   selected: boolean
   onSelect: (accountId: string | undefined) => void
+  selectable: boolean
 }) {
   if (row.usage.status === 'unavailable') return null
   const showHost = row.label !== row.hostKey
   return (
-    <button
-      type="button"
-      className="usage-account usage-account--selectable"
-      aria-pressed={selected}
-      title={selected ? 'Default for new sessions' : 'Use for new sessions'}
-      onClick={() => onSelect(accountId)}
-    >
+    <div className="usage-account">
       <span className="usage-account__label">
         <span>{row.label}</span>
         {selected && <span className="usage-account__default" aria-hidden>✓</span>}
@@ -150,7 +154,19 @@ function RemoteUsageBlock({
           {row.usage.status === 'error' ? 'Could not read usage on this host.' : 'No usage data.'}
         </span>
       )}
-    </button>
+      {selectable && (
+        <button
+          type="button"
+          className="usage-account__select"
+          role="radio"
+          aria-checked={selected}
+          aria-label={`Use ${row.label} for new sessions`}
+          onClick={() => onSelect(accountId)}
+        >
+          Use for new sessions
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -199,7 +215,9 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   const [providers, setProviders] = useState<ProviderUsage[]>([])
   const [remote, setRemote] = useState<RemoteAccountUsage[]>([])
   const popRef = useRef<HTMLDivElement>(null)
+  const pillRef = useRef<HTMLButtonElement>(null)
   const closeTimerRef = useRef<number | null>(null)
+  const suppressNextPillFocusRef = useRef(false)
 
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
@@ -297,6 +315,10 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   // travelling from the pill into it never leaves; only leaving the whole thing closes, and that
   // is delayed so a pointer clipping the corner on its way elsewhere doesn't snap it shut.
   const openNow = (): void => {
+    if (suppressNextPillFocusRef.current) {
+      suppressNextPillFocusRef.current = false
+      return
+    }
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
     closeTimerRef.current = null
     setOpen(true)
@@ -309,8 +331,24 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   const selectDefaultAccount = (accountId: string | undefined): void => {
     const projectId = useProjects.getState().activeProjectId
     if (!projectId) return
+    if (useProjects.getState().getProject(projectId)?.defaultAccountId === accountId) return
     useProjects.getState().setProjectDefaultAccount(projectId, accountId)
     markWorkspaceDirty()
+  }
+
+  const moveRadioFocus = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const radios = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="radio"]')]
+    const current = radios.indexOf(event.target as HTMLButtonElement)
+    if (current < 0 || radios.length < 2) return
+    let next = current
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = (current + 1) % radios.length
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = (current - 1 + radios.length) % radios.length
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = radios.length - 1
+    else return
+    event.preventDefault()
+    radios[next].focus()
+    radios[next].click()
   }
 
   // Settings → Usage toggles are a display choice, applied before any other rule — a hidden
@@ -329,6 +367,14 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   const claudeUsage = scoped.claude
   const visibleProviders = scoped.providers
   const visibleRemote = scoped.remote
+  const selectableRemote = visibleRemote.some((row) => row.accountId !== null)
+  const availableAccountIds =
+    scope.kind === 'local'
+      ? scoped.accounts.map((account) => account.id)
+      : visibleRemote.flatMap((row) => (row.accountId === null ? [] : [row.accountId]))
+  const effectiveDefault = availableAccountIds.includes(defaultAccountId ?? '')
+    ? defaultAccountId
+    : undefined
 
   // Only providers the user has actually enabled reach the pill; render whenever ANY of them
   // (Claude included) has something to say. Both rules are pure and pinned by tests — gating on
@@ -427,13 +473,9 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
           title is what answers "whose numbers are these?" without opening the popover. The trigger
           comes first so Tab enters an open popover before the refresh button. */}
       <button
+        ref={pillRef}
         className="usage-pill"
-        // Keyboard activation reports detail 0. Keep its focus-opened popover open, while a real
-        // pointer click retains the established open/close toggle.
-        onClick={(event) => {
-          if (event.detail === 0) setOpen(true)
-          else setOpen((v) => !v)
-        }}
+        onClick={() => setOpen((v) => !v)}
         onFocus={openNow}
         title={scope.kind === 'ssh' ? `Agent usage on ${scope.hostKey}` : 'Agent usage'}
       >
@@ -441,7 +483,16 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
         {pillBody}
       </button>
       {open && (
-        <div className="usage-popover">
+        <div
+          className="usage-popover"
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.preventDefault()
+            suppressNextPillFocusRef.current = true
+            setOpen(false)
+            pillRef.current?.focus()
+          }}
+        >
           <div className="usage-popover__head">
             <span className="usage-popover__title">✦ Usage</span>
             {/* Tracks whichever snapshot the panel is actually showing — the local poll's, or
@@ -455,7 +506,7 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
               host's numbers twice under two different headings. */}
           {scope.kind === 'local' &&
             (scoped.accounts.length > 0 && claudeUsage ? (
-              <>
+              <div role="radiogroup" aria-label="Default Claude account for new sessions" onKeyDown={moveRadioFocus}>
                 <AccountUsageBlock
                   mode={percentMode}
                   label={systemAccountDisplay(systemLabelSetting, claudeUsage.email)}
@@ -463,8 +514,9 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
                   email={systemLabelSetting.trim() ? (claudeUsage.email ?? undefined) : undefined}
                   u={claudeUsage}
                   accountId={undefined}
-                  selected={defaultAccountId === undefined}
+                  selected={effectiveDefault === undefined}
                   onSelect={selectDefaultAccount}
+                  selectable
                 />
                 {scoped.accounts.map((a) => (
                   <AccountUsageBlock
@@ -474,11 +526,12 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
                     email={a.email}
                     u={acctUsage[a.id] ?? null}
                     accountId={a.id}
-                    selected={defaultAccountId === a.id}
+                    selected={effectiveDefault === a.id}
                     onSelect={selectDefaultAccount}
+                    selectable
                   />
                 ))}
-              </>
+              </div>
             ) : (
               <>
                 {/* No Claude snapshot is available, but enabled providers may still have limits. */}
@@ -499,16 +552,33 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
             ))}
           {/* On an SSH project these are the whole panel; the host badge is what says the numbers
               were read somewhere other than this machine. */}
-          {visibleRemote.map((r) => (
-            <RemoteUsageBlock
-              key={`${r.hostKey}#${r.accountId ?? ''}`}
-              row={r}
-              mode={percentMode}
-              accountId={r.accountId ?? undefined}
-              selected={(r.accountId ?? undefined) === defaultAccountId}
-              onSelect={selectDefaultAccount}
-            />
-          ))}
+          {selectableRemote ? (
+            <div role="radiogroup" aria-label="Default Claude account for new sessions" onKeyDown={moveRadioFocus}>
+              {visibleRemote.map((r) => (
+                <RemoteUsageBlock
+                  key={`${r.hostKey}#${r.accountId ?? ''}`}
+                  row={r}
+                  mode={percentMode}
+                  accountId={r.accountId ?? undefined}
+                  selected={(r.accountId ?? undefined) === effectiveDefault}
+                  onSelect={selectDefaultAccount}
+                  selectable
+                />
+              ))}
+            </div>
+          ) : (
+            visibleRemote.map((r) => (
+              <RemoteUsageBlock
+                key={`${r.hostKey}#${r.accountId ?? ''}`}
+                row={r}
+                mode={percentMode}
+                accountId={r.accountId ?? undefined}
+                selected={(r.accountId ?? undefined) === effectiveDefault}
+                onSelect={selectDefaultAccount}
+                selectable={false}
+              />
+            ))
+          )}
           {scope.kind === 'ssh' && visibleRemote.length === 0 && (
             <div className="usage-popover__empty">
               No usage from this host yet — it is read once the project connects.
