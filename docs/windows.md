@@ -104,6 +104,26 @@ concern as every other executable lookup in this app). On Windows the well-known
 you've installed a different `ssh` (e.g. via Git for Windows or MSYS2) and it's on your PATH, that
 one is found first, exactly as on macOS/Linux.
 
+### Encrypted key passphrases are not prompted for on Windows
+
+On macOS and Linux, a key with a passphrase is handled by an `SSH_ASKPASS` helper: nodeterm
+generates a small POSIX shell script and serves the answer over a unix domain socket, so the
+prompt appears in the app instead of on a terminal nobody is watching.
+
+**Neither half of that works on Windows.** Windows OpenSSH will not execute a `.sh` helper, and
+Node cannot listen on a unix socket at a filesystem path there (it wants a `\\.\pipe\…` name), so
+the socket bind fails outright. The consequence is concrete: connecting with an encrypted key gets
+no prompt, and the connection fails rather than asking you for the passphrase.
+
+Until this is ported (a named pipe plus a `.bat`/`.exe` askpass helper), use one of:
+
+- an **unencrypted** key for the host, or
+- an agent that already holds the decrypted key — `ssh-agent` via the built-in **OpenSSH
+  Authentication Agent** service, or Pageant — since a key served by an agent never prompts.
+
+The test that covers this wiring is skipped by condition on Windows (`ssh-project.test.ts`) and
+still runs on macOS/Linux, so the POSIX path stays guarded.
+
 ## The unsigned-installer warning
 
 **Code signing is permanently out of scope for this project** (see `CLAUDE.md`'s "Permanent

@@ -1729,7 +1729,14 @@ describe('SshProjectManager', () => {
       await assertion
     })
 
-    it('attributes a cancel to the exact master pid through the real AskpassServer wiring', async () => {
+    // POSIX-only, and deliberately so: this exercises the REAL AskpassServer, which listens on a
+    // unix domain socket at a filesystem path. Node on Windows cannot listen on one of those —
+    // it wants a `\\.\pipe\…` name — so the bind fails with EACCES before any of this test's own
+    // logic runs. The feature itself is POSIX-shaped too (it hands ssh a generated `.sh` helper
+    // via SSH_ASKPASS, which Windows OpenSSH will not execute), so this is a real platform gap
+    // rather than a test artefact: see the SSH passphrase note in docs/windows.md. Skipped by
+    // condition rather than deleted, so it keeps running — and keeps guarding — on macOS/Linux.
+    it.skipIf(process.platform === 'win32')('attributes a cancel to the exact master pid through the real AskpassServer wiring', async () => {
       // Pins the production wiring `askpassWasCancelled: (pid) => askpassServer.wasCancelledBy(pid)`
       // together with a spawner handle that reports its child's pid, i.e. that connect() actually
       // threads master.pid() through. The different-pid case is the load-bearing half: had connect()
