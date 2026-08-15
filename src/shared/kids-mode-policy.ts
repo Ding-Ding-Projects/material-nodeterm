@@ -1,5 +1,11 @@
 // Kids mode — the safety policy, and the exact limits of what it can honestly promise.
 //
+// LIVES IN src/shared, NOT src/core, because BOTH sides need it: core enforces it at the process
+// boundary, and the renderer's permission-mode resolver applies it when building a launch command.
+// It is pure — no node:fs, no Electron, nothing but the agent config — so it costs the browser
+// bundle nothing. A copy on each side would be the drift this repo keeps getting bitten by, and
+// here a drift means the two sides disagreeing about what a child is allowed to run.
+//
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // READ THIS BEFORE CHANGING ANYTHING HERE.
 //
@@ -29,7 +35,7 @@ import {
   ALL_PERMISSION_MODES,
   isPermissionMode,
   type AgentPermissionMode
-} from '../shared/agents/config'
+} from './agents/config'
 
 /**
  * The one sentence every kids-mode surface must show, unstyled by the funny level.

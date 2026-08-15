@@ -521,19 +521,19 @@ const FEATURES = [
     label: 'Kids mode (separate from School mode)',
     files: [
       'src/core/kids-mode.ts',
-      'src/core/kids-mode-policy.ts',
+      'src/shared/kids-mode-policy.ts',
       'src/core/kids-mode.test.ts',
-      'src/core/kids-mode-policy.test.ts',
+      'src/shared/kids-mode-policy.test.ts',
       'src/renderer/state/kidsMode.ts',
       'src/shared/kids-mode-name.ts'
     ],
     contentChecks: [
       ['src/core/kids-mode.ts', 'export class KidsModeStore {'],
       // The honesty line is the reason this feature is defensible at all.
-      ['src/core/kids-mode-policy.ts', 'export const KIDS_DISCLOSURE ='],
-      ['src/core/kids-mode-policy.ts', 'does NOT sandbox'],
+      ['src/shared/kids-mode-policy.ts', 'export const KIDS_DISCLOSURE ='],
+      ['src/shared/kids-mode-policy.ts', 'does NOT sandbox'],
       // bypassPermissions must stay refused, and the refusal must carry a reason.
-      ['src/core/kids-mode-policy.ts', 'bypassPermissions:'],
+      ['src/shared/kids-mode-policy.ts', 'bypassPermissions:'],
       // Separate files from School mode — a shared one would let either PIN open both.
       ['src/core/kids-mode.ts', "'kids-mode.json'"],
       ['src/core/kids-mode.ts', "'kids-mode.credential.json'"],

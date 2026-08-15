@@ -112,12 +112,28 @@ feature is *missing* from the other shell.
 
 - **The settings surface.** The store, policy, IPC and both shells are wired; the section a user
   actually toggles it from is not built yet.
-- **Enforcement wiring.** `gateKidsPermissionMode` and `requiresDestructiveGate` are implemented and
-  tested but are not yet called from the agent-launch and destructive-action paths. Until they are,
-  the mode stores state and changes nothing — say so rather than implying otherwise.
+- **The destructive gate.** `requiresDestructiveGate` is implemented and tested but is not yet
+  called from the destructive-action paths, so today it changes nothing. (`gateKidsPermissionMode`
+  IS now wired — see below.)
 - **A security review**, before this is offered to anyone as child-safety. The survey that scoped
   the M3 overhaul was explicit that a child-facing gate in front of a real PTY needs its own review
   independent of any UI timeline.
+
+## Where the permission gate is actually applied
+
+`activePermissionMode()` in `src/renderer/state/permissionMode.ts` — the single funnel every agent
+launch site goes through. Kids mode runs **last**, after claude's CLI-version gate, because the two
+answer different questions: the version gate asks *can this CLI express the mode at all*, kids mode
+asks *should it be allowed to*. Running kids mode first would let a version downgrade re-widen a
+mode it had just refused.
+
+It is **agent-agnostic**, unlike the version gate. "May act without asking" is a property of the
+mode, not of which CLI implements it.
+
+`permissionMode.kids.test.ts` covers the wiring rather than the policy — including that the
+resolver never produces a permissive mode while kids mode is on. Deleting the gate call turns four
+of those red; the policy's own unit tests stay green, which is exactly why the wiring needed its
+own coverage.
 
 ## Verifying a claim here
 

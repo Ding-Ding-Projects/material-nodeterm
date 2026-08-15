@@ -9,6 +9,8 @@ import { UNKNOWN_CLAUDE_CLI_CAPS, type ClaudeCliCaps, type Project } from '@shar
 import { useProjects } from './projects'
 import { useSettings } from './settings'
 import { useSshConn, type SshAutoPermAnswer } from './sshConn'
+import { useKidsMode } from './kidsMode'
+import { gateKidsPermissionMode } from '@shared/kids-mode-policy'
 
 /**
  * Local Claude CLI capabilities, probed once per app run through `claude.cliCaps()` (main/server →
@@ -105,7 +107,16 @@ export function activePermissionMode(agentId: AgentId = 'claude'): AgentPermissi
   // the gate to it would downgrade a grok session to `default` on a machine whose CLAUDE is old —
   // or absent entirely. An agent that needs its own gate adds it here, beside this one, rather than
   // inheriting claude's.
-  return agentId === 'claude' ? gatePermissionMode(mode, autoSupportedFor(project)) : mode
+  const versionGated = agentId === 'claude' ? gatePermissionMode(mode, autoSupportedFor(project)) : mode
+
+  // Kids mode has the LAST word, and only ever narrows. It runs after the version gate rather
+  // than before it because the two answer different questions — the version gate asks "can this
+  // CLI express the mode at all", kids mode asks "should it be allowed to". Running kids mode
+  // first would let a version downgrade re-widen a mode it had just refused.
+  //
+  // It is agent-agnostic on purpose, unlike claude's version gate: "an agent may act without
+  // asking" is a property of the MODE, not of which CLI implements it.
+  return gateKidsPermissionMode(versionGated, useKidsMode.getState().enabled).mode
 }
 
 /** How long a launch on an SSH project may wait for the REMOTE probe's first answer. The probe

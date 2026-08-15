@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { ALL_PERMISSION_MODES } from '../shared/agents/config'
+import { ALL_PERMISSION_MODES } from './agents/config'
 import {
   KIDS_ALLOWED_PERMISSION_MODES,
   KIDS_DISCLOSURE,
