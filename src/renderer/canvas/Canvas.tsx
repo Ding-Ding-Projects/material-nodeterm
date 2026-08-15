@@ -40,7 +40,6 @@ import { MacWheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
 import { selectedLocalFilePaths } from './canvas-file-copy'
 import {
   canvasImagePasteArmedAfterKey,
-  canvasImportRefusal,
   guardedCanvasImagePlacements,
   isCanvasImageDropTarget
 } from './canvas-image-import'
@@ -3135,18 +3134,20 @@ export function Canvas() {
     async (files: File[], center: { x: number; y: number }, projectId: string) => {
       const images = canvasImageFiles(files)
       if (!images.length) return
-      // A relay tab writes here and reads on the peer, so the node could never render its own
-      // file — say so instead of creating it. Same fact, same source as the Cmd+C gate below.
-      const refusal = canvasImportRefusal(!!useProjects.getState().getProject(projectId)?.remote)
-      if (refusal) {
-        setCopyError(refusal)
-        return
-      }
+      // Canvas itself lives under the app's LOCAL provider; the ReactFlow subtree is where the
+      // active project's provider begins. Resolve by the originating project binding here, or a
+      // relay drop writes through the viewer's preload while its image node reads from the host.
+      const projectApi = sessionForProject(projectId).api
       const placements = await guardedCanvasImagePlacements(
         // Into the PROJECT's own `.nodeterm/images/`, not the 7-day uploads staging area: the node
         // that names this file is persisted in project.json, so the file has to outlive a week and
         // travel to whoever clones the repo.
-        () => localPathsForFiles(images, canvasImageSink(projectId)),
+        () =>
+          localPathsForFiles(
+            projectApi,
+            images,
+            canvasImageSink(projectApi, projectId)
+          ),
         projectId,
         () => useProjects.getState().activeProjectId,
         center
@@ -3251,9 +3252,12 @@ export function Canvas() {
       return
     }
     let cancelled = false
+    // Canvas is mounted under the local provider even for a relay tab; resolve the api from the
+    // project's runtime binding instead of using this component's outer/local `api`.
+    const projectApi = sessionForProject(project.id).api
     const index = project.ssh
-      ? window.nodeTerminal.sshFs.quickOpen(project.id, cwd)
-      : window.nodeTerminal.files.quickOpen(cwd)
+      ? projectApi.sshFs.quickOpen(project.id, cwd)
+      : projectApi.files.quickOpen(cwd)
     void index
       .catch(() => [] as string[])
       .then((files) => {

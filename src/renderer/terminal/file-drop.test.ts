@@ -3,11 +3,13 @@ import {
   canvasImageFiles,
   canvasImageSink,
   clipboardImages,
+  droppedPaths,
   escapeDroppedPath,
   localPathsForFiles,
   pasteHasText,
   pastedFiles,
-  uploadNameFor
+  uploadNameFor,
+  type FileDropApi
 } from './file-drop'
 
 describe('escapeDroppedPath', () => {
@@ -76,9 +78,7 @@ describe('canvasImageFiles', () => {
 describe('localPathsForFiles', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('routes pathless canvas bytes to the project image store, not the uploads staging area', async () => {
-    const saveUpload = vi.fn()
-    const saveCanvasImage = vi.fn().mockResolvedValue('/proj/.nodeterm/images/pasted.png')
+  const fileReader = (): void => {
     // The suite runs on the node environment, which has no FileReader; only the base64 handoff
     // matters here, so the read is the smallest stand-in that produces one.
     vi.stubGlobal(
@@ -93,36 +93,132 @@ describe('localPathsForFiles', () => {
         }
       }
     )
+  }
+
+  const api = (opts: {
+    getPathForFile?: (file: File) => string
+    saveUpload?: (name: string, data: string) => Promise<string | null>
+    saveUploadBlob?: (name: string, data: Blob) => Promise<string | null>
+    saveCanvasImage?: (projectId: string, name: string, data: string) => Promise<string | null>
+    uploadFile?: (projectId: string, localPath: string, name: string) => Promise<string | null>
+  }): FileDropApi =>
+    ({
+      getPathForFile: opts.getPathForFile ?? (() => ''),
+      files: {
+        saveUpload: opts.saveUpload ?? vi.fn(async () => null),
+        ...(opts.saveUploadBlob ? { saveUploadBlob: opts.saveUploadBlob } : {}),
+        saveCanvasImage: opts.saveCanvasImage ?? vi.fn(async () => null)
+      },
+      sshProject: {
+        uploadFile: opts.uploadFile ?? vi.fn(async () => null)
+      }
+    }) as unknown as FileDropApi
+
+  const forbidGlobalFileRouting = () => {
+    const getPathForFile = vi.fn(() => '/viewer/wrong-machine.png')
+    const saveUpload = vi.fn(async () => '/viewer/wrong-upload.png')
+    const saveCanvasImage = vi.fn(async () => '/viewer/wrong-canvas.png')
+    const uploadFile = vi.fn(async () => '/viewer/wrong-ssh.png')
     vi.stubGlobal('window', {
       nodeTerminal: {
-        // A clipboard screenshot: no OS path, so the sink is the only thing that decides where it
-        // lands — and a canvas node outlives the 7-day uploads sweep.
-        getPathForFile: () => null,
-        files: { saveUpload, saveCanvasImage }
+        getPathForFile,
+        files: { saveUpload, saveCanvasImage },
+        sshProject: { uploadFile }
       }
     })
+    return { getPathForFile, saveUpload, saveCanvasImage, uploadFile }
+  }
+
+  it('routes pathless canvas bytes through the active session api, never the global viewer api', async () => {
+    fileReader()
+    const global = forbidGlobalFileRouting()
+    const saveUpload = vi.fn()
+    const saveCanvasImage = vi.fn().mockResolvedValue('/proj/.nodeterm/images/pasted.png')
+    const active = api({ saveUpload, saveCanvasImage })
     const file = new File(['png'], 'pasted.png', { type: 'image/png' })
-    expect(await localPathsForFiles([file], canvasImageSink('project-a'))).toEqual([
+    expect(await localPathsForFiles(active, [file], canvasImageSink(active, 'project-a'))).toEqual([
       '/proj/.nodeterm/images/pasted.png'
     ])
     expect(saveCanvasImage).toHaveBeenCalledWith('project-a', 'pasted.png', expect.any(String))
     expect(saveUpload).not.toHaveBeenCalled()
+    expect(global.getPathForFile).not.toHaveBeenCalled()
+    expect(global.saveUpload).not.toHaveBeenCalled()
+    expect(global.saveCanvasImage).not.toHaveBeenCalled()
   })
 
-  it('reuses an Electron file path without shell escaping it, and never calls the sink', async () => {
+  it('uses a direct path only when the active session api says that path is usable', async () => {
+    const global = forbidGlobalFileRouting()
     const saveCanvasImage = vi.fn()
-    vi.stubGlobal('window', {
-      nodeTerminal: {
-        getPathForFile: () => '/tmp/My image.png',
-        files: { saveUpload: vi.fn(), saveCanvasImage }
-      }
-    })
+    const getPathForFile = vi.fn(() => '/active/My image.png')
+    const active = api({ getPathForFile, saveCanvasImage })
     const file = new File(['png'], 'My image.png', { type: 'image/png' })
     // A Finder drop already IS a file on this disk, so nothing is copied anywhere.
-    expect(await localPathsForFiles([file], canvasImageSink('project-a'))).toEqual([
-      '/tmp/My image.png'
+    expect(await localPathsForFiles(active, [file], canvasImageSink(active, 'project-a'))).toEqual([
+      '/active/My image.png'
     ])
+    expect(getPathForFile).toHaveBeenCalledWith(file)
     expect(saveCanvasImage).not.toHaveBeenCalled()
+    expect(global.getPathForFile).not.toHaveBeenCalled()
+  })
+
+  it('stages terminal bytes and SSH uploads through the active session api only', async () => {
+    fileReader()
+    const global = forbidGlobalFileRouting()
+    const saveUpload = vi.fn(async () => '/host/uploads/pasted.png')
+    const uploadFile = vi.fn(async () => '/ssh/home/.nodeterm/uploads/pasted.png')
+    const active = api({ saveUpload, uploadFile })
+    const file = new File(['png'], 'pasted.png', { type: 'image/png' })
+
+    await expect(
+      droppedPaths(active, [file], { sshRemoteTmux: false, projectId: '' })
+    ).resolves.toEqual(['/host/uploads/pasted.png'])
+    await expect(
+      droppedPaths(active, [file], { sshRemoteTmux: true, projectId: 'ssh-project' })
+    ).resolves.toEqual(['/ssh/home/.nodeterm/uploads/pasted.png'])
+
+    expect(saveUpload).toHaveBeenCalledTimes(2)
+    expect(uploadFile).toHaveBeenCalledWith(
+      'ssh-project',
+      '/host/uploads/pasted.png',
+      'pasted.png'
+    )
+    expect(global.getPathForFile).not.toHaveBeenCalled()
+    expect(global.saveUpload).not.toHaveBeenCalled()
+    expect(global.uploadFile).not.toHaveBeenCalled()
+  })
+
+  it('prefers the active Server Edition raw-Blob carrier without reading or base64-encoding', async () => {
+    const global = forbidGlobalFileRouting()
+    const saveUpload = vi.fn(async () => '/host/base64-should-not-run.png')
+    const saveUploadBlob = vi.fn(async () => '/host/raw/pasted.png')
+    const active = api({ saveUpload, saveUploadBlob })
+    const file = new File(['png'], 'pasted.png', { type: 'image/png' })
+
+    await expect(
+      droppedPaths(active, [file], { sshRemoteTmux: false, projectId: '' })
+    ).resolves.toEqual(['/host/raw/pasted.png'])
+    expect(saveUploadBlob).toHaveBeenCalledWith('pasted.png', file)
+    expect(saveUpload).not.toHaveBeenCalled()
+    expect(global.getPathForFile).not.toHaveBeenCalled()
+    expect(global.saveUpload).not.toHaveBeenCalled()
+  })
+
+  it('degrades a refused session SSH upload to no pasted path without falling back globally', async () => {
+    const global = forbidGlobalFileRouting()
+    const uploadFile = vi.fn(async () => {
+      throw Object.assign(new Error('unsupported'), { code: 'E_UNSUPPORTED' })
+    })
+    const active = api({
+      getPathForFile: () => '/host/uploads/pasted.png',
+      uploadFile
+    })
+    const file = new File(['png'], 'pasted.png', { type: 'image/png' })
+
+    await expect(
+      droppedPaths(active, [file], { sshRemoteTmux: true, projectId: 'ssh-project' })
+    ).resolves.toEqual([])
+    expect(uploadFile).toHaveBeenCalledTimes(1)
+    expect(global.uploadFile).not.toHaveBeenCalled()
   })
 })
 

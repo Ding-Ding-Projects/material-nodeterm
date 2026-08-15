@@ -44,6 +44,7 @@ import {
 } from './peer-registry'
 import { decodePtyData } from '../shared/rpc'
 import { allocateRelayClientId } from '../core/presence/hub'
+import { IPC } from '../shared/ipc'
 
 /** A relay peer id, as allocateRelayClientId() would mint it (≥ 1_000_000 — never a webContents id). */
 const PEER = 1_000_000
@@ -121,8 +122,46 @@ describe('electronPlatform + relay peers', () => {
       t: 'req', id: 9, method: 'githubControl:approve', args: []
     })).toEqual({
       t: 'res', id: 9, ok: false,
-      error: { code: 'E_FORBIDDEN', message: 'host-control method is not available to relay peers' }
+      error: { code: 'E_FORBIDDEN', message: 'method is not available to relay peers' }
     })
+  })
+
+  it('default-denies machine-global credential and restoration handlers before invocation', async () => {
+    const p = electronPlatform()
+    const reached: string[] = []
+    const authenticatorMethods: string[] = Object.values(IPC).flatMap((method) =>
+      typeof method === 'string' && method.startsWith('authenticator:') ? [method] : []
+    )
+    expect(authenticatorMethods).toHaveLength(9)
+    const denied = [
+      IPC.settingsLoad,
+      IPC.schoolModeDisable,
+      IPC.kidsModeChangePin,
+      IPC.scheduledSettingsSetHaToken,
+      IPC.licenseActivate,
+      IPC.usageSetProviderCookie,
+      IPC.toylockVerify,
+      ...authenticatorMethods,
+      IPC.contextLinkInfo,
+      IPC.transcriptSearch,
+      IPC.handoffBuild,
+      IPC.historyRestore
+    ]
+    for (const method of denied) p.handle(method, () => reached.push(method))
+
+    for (let i = 0; i < denied.length; i++) {
+      await expect(p.dispatch(PEER, {
+        t: 'req', id: 100 + i, method: denied[i]!, args: []
+      })).resolves.toMatchObject({
+        t: 'res', id: 100 + i, ok: false, error: { code: 'E_FORBIDDEN' }
+      })
+    }
+    expect(reached).toEqual([])
+
+    // The local renderer still reaches the same registration through Electron IPC. The allowlist
+    // belongs only to the raw relay dispatch path; it must not disable the host's own UI.
+    await h.handlers[IPC.authenticatorReveal]!({ sender: { id: 1 } }, 'entry-1')
+    expect(reached).toEqual([IPC.authenticatorReveal])
   })
 
   it('clientIds = webContents ids ++ peer ids', () => {
@@ -171,6 +210,49 @@ describe('electronPlatform + relay peers', () => {
       channel: 'presence:peer',
       args: [{ op: 'join' }]
     })
+  })
+
+  it('default-denies host-global outbound events while preserving the local renderer', () => {
+    const p = electronPlatform()
+    const s = peerSink()
+    registerPeerSink(PEER, s.sink)
+
+    const denied = [
+      IPC.usageUpdate,
+      IPC.licenseChanged,
+      IPC.schoolModeChanged,
+      IPC.kidsModeChanged,
+      IPC.scheduledSettingsActiveChange,
+      IPC.converterItem,
+      IPC.ollamaChatStream,
+      'future-credential:changed'
+    ]
+    for (const channel of denied) p.broadcast(channel, { secret: channel })
+    p.sendTo(PEER, IPC.usageUpdate, { email: 'host@example.test' })
+
+    expect(s.text).toEqual([])
+    expect(s.binary).toEqual([])
+    expect(h.sent).toEqual(
+      denied.map((channel) => ({ channel, args: [{ secret: channel }] }))
+    )
+  })
+
+  it('allows only reviewed dynamic relay event channels', () => {
+    const p = electronPlatform()
+    const s = peerSink()
+    registerPeerSink(PEER, s.sink)
+
+    p.sendTo(PEER, IPC.ptyExit('session-1'), 0)
+    p.sendTo(PEER, IPC.githubIssuesChanged('project-1'), [42])
+    p.sendTo(PEER, IPC.boardLogChanged('project-1'), 'project-1')
+    p.sendTo(PEER, IPC.ptyExit(''), 0)
+    p.sendTo(PEER, IPC.githubIssuesChanged(''), [99])
+
+    expect(s.text.map((json) => JSON.parse(json).channel)).toEqual([
+      IPC.ptyExit('session-1'),
+      IPC.githubIssuesChanged('project-1'),
+      IPC.boardLogChanged('project-1')
+    ])
   })
 
   it('one peer whose sink throws does not starve the other peers, the window, or the emitter', () => {
@@ -240,25 +322,36 @@ describe('electronPlatform.dispatch / cast (the peer inbound path)', () => {
     ).resolves.toEqual({ t: 'res', id: 8, ok: true, result: { senderId: peer, id: { name: 'A' } } })
   })
 
-  it('an unknown method answers E_NO_HANDLER (never hangs the peer)', async () => {
+  it('an allowed method with no handler answers E_NO_HANDLER (never hangs the peer)', async () => {
     const p = electronPlatform()
-    const res = await p.dispatch(PEER, { t: 'req', id: 1, method: 'nope', args: [] })
+    const res = await p.dispatch(PEER, { t: 'req', id: 1, method: IPC.fsExists, args: [] })
     expect(res).toMatchObject({ ok: false, error: { code: 'E_NO_HANDLER' } })
+  })
+
+  it('an unknown method is forbidden even if somebody registers it later', async () => {
+    const p = electronPlatform()
+    const fn = vi.fn(() => 'must-not-run')
+    p.handle('future-credential:reveal', fn)
+    const res = await p.dispatch(PEER, {
+      t: 'req', id: 11, method: 'future-credential:reveal', args: []
+    })
+    expect(res).toMatchObject({ ok: false, error: { code: 'E_FORBIDDEN' } })
+    expect(fn).not.toHaveBeenCalled()
   })
 
   it('a throwing handler answers an error frame, not a rejection', async () => {
     const p = electronPlatform()
-    p.handle('boom', () => {
+    p.handle(IPC.fsRead, () => {
       throw new Error('nope')
     })
-    const res = await p.dispatch(PEER, { t: 'req', id: 2, method: 'boom', args: [] })
+    const res = await p.dispatch(PEER, { t: 'req', id: 2, method: IPC.fsRead, args: [] })
     expect(res).toMatchObject({ ok: false, error: { code: 'E_HANDLER', message: 'nope' } })
   })
 
   it('a handler returning undefined answers null (JSON has no undefined)', async () => {
     const p = electronPlatform()
-    p.handle('void', () => undefined)
-    await expect(p.dispatch(PEER, { t: 'req', id: 3, method: 'void', args: [] })).resolves.toEqual({
+    p.handle(IPC.fsWrite, () => undefined)
+    await expect(p.dispatch(PEER, { t: 'req', id: 3, method: IPC.fsWrite, args: [] })).resolves.toEqual({
       t: 'res',
       id: 3,
       ok: true,
@@ -292,6 +385,14 @@ describe('electronPlatform.dispatch / cast (the peer inbound path)', () => {
   it('cast on a channel nobody listens to is a silent no-op', () => {
     const p = electronPlatform()
     expect(() => p.cast(PEER, 'nobody:home', [])).not.toThrow()
+  })
+
+  it('drops a forbidden raw cast before a registered listener can mutate host state', () => {
+    const p = electronPlatform()
+    const listener = vi.fn()
+    p.on(IPC.settingsSave, listener)
+    p.cast(PEER, IPC.settingsSave, [{ telemetryEnabled: false }])
+    expect(listener).not.toHaveBeenCalled()
   })
 
   it('recording the table does not change what the LOCAL window gets (still ipcMain)', async () => {

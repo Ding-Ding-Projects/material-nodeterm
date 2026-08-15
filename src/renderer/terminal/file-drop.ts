@@ -2,6 +2,8 @@
 // modal's co-attach terminal (ModalTerminal), so a file dropped onto or pasted into either becomes
 // a path the same way.
 
+import type { FilesApi, NodeTerminalApi, SshProjectApi } from '@shared/types'
+
 /** Backslash-escape shell-special characters, like a native terminal does on file drop. */
 export function escapeDroppedPath(p: string): string {
   return p.replace(/([ \t"'`\\()&;|<>$!*?[\]{}#~])/g, '\\$1')
@@ -138,8 +140,7 @@ const readAsBase64 = (file: File): Promise<string | null> =>
  * nothing. Everything else has bytes and no usable path — clipboard images have never been a file
  * anywhere, and a browser client's file lives on a different machine entirely — so the bytes are
  * written into the managed uploads dir over there and THAT path is what the terminal gets.
- */
-/**
+ *
  * Where bytes with no usable path get written. The default is the managed uploads staging area,
  * which is right for a terminal paste — the path is consumed within seconds. A CANVAS image is
  * remembered in project.json instead, so it passes a sink that writes somewhere equally durable
@@ -148,28 +149,60 @@ const readAsBase64 = (file: File): Promise<string | null> =>
  */
 export type UploadSink = (name: string, dataBase64: string) => Promise<string | null>
 
-const uploadsSink: UploadSink = (name, data) => window.nodeTerminal.files.saveUpload(name, data)
+/**
+ * The slice that resolves a viewer-held File into a path on the machine that owns the session.
+ * It is always passed in by the surface: a relay tab's api routes file writes to its HOST, while
+ * `window.nodeTerminal` would write on the viewing desktop and return a path the host cannot read.
+ */
+export type FileDropApi = Pick<NodeTerminalApi, 'getPathForFile'> & {
+  files: Pick<FilesApi, 'saveUpload' | 'saveCanvasImage'>
+  sshProject: Pick<SshProjectApi, 'uploadFile'>
+}
 
-/** Store into the project's own `.nodeterm/images/` — see core/canvas-images.ts for the fallbacks
- *  (SSH project / relay tab / cwd-less canvas all land in a durable app-local folder instead). */
+/** Server Edition adds this optional raw-Blob carrier. Keep the local structural type until every
+ *  supported client has picked up the optional FilesApi member; relay deliberately falls back to
+ *  its existing base64 RPC carrier. The HTTP implementation owns the shared 64 MiB precheck. */
+type BlobFilesApi = FileDropApi['files'] & {
+  saveUploadBlob?: (name: string, data: Blob) => Promise<string | null>
+}
+
+const uploadsSink = (api: FileDropApi): UploadSink =>
+  (name, data) => api.files.saveUpload(name, data)
+
+/** Store into the session host's project `.nodeterm/images/` — see core/canvas-images.ts for the
+ *  fallbacks (an SSH project or cwd-less canvas lands in that host's durable app-local folder). */
 export const canvasImageSink =
-  (projectId: string): UploadSink =>
+  (api: FileDropApi, projectId: string): UploadSink =>
   (name, data) =>
-    window.nodeTerminal.files.saveCanvasImage(projectId, name, data)
+    api.files.saveCanvasImage(projectId, name, data)
 
-async function localPathFor(file: File, sink: UploadSink): Promise<string | null> {
-  const direct = window.nodeTerminal.getPathForFile(file)
+async function localPathFor(
+  api: FileDropApi,
+  file: File,
+  sink: UploadSink,
+  blobSink?: (name: string, file: File) => Promise<string | null>
+): Promise<string | null> {
+  const direct = api.getPathForFile(file)
   if (direct) return direct
+  const name = uploadNameFor(file)
+  // Server Edition can POST the original Blob without FileReader's base64 expansion/copies. The
+  // optional carrier checks the shared size ceiling before reading or fetching. Desktop relay has
+  // no HTTP side channel, so it takes the legacy base64 RPC path below.
+  if (blobSink) return blobSink(name, file).catch(() => null)
   const data = await readAsBase64(file)
   if (!data) return null
-  return sink(uploadNameFor(file), data).catch(() => null)
+  return sink(name, data).catch(() => null)
 }
 
 async function localFilesWithPaths(
+  api: FileDropApi,
   files: File[],
-  sink: UploadSink
+  sink: UploadSink,
+  blobSink?: (name: string, file: File) => Promise<string | null>
 ): Promise<Array<{ file: File; path: string }>> {
-  const local = await Promise.all(files.map((f) => localPathFor(f, sink).catch(() => null)))
+  const local = await Promise.all(
+    files.map((f) => localPathFor(api, f, sink, blobSink).catch(() => null))
+  )
   return files
     .map((file, i) => ({ file, path: local[i] }))
     .filter((pair): pair is { file: File; path: string } => !!pair.path)
@@ -178,8 +211,12 @@ async function localFilesWithPaths(
 /** Resolve local/clipboard/browser files to raw local paths for non-terminal consumers. `sink` is
  *  required: only the caller knows how long the returned path has to stay true, and defaulting it
  *  to the 7-day staging area is exactly the wrong answer for the one caller there is. */
-export async function localPathsForFiles(files: File[], sink: UploadSink): Promise<string[]> {
-  return (await localFilesWithPaths(files, sink)).map((pair) => pair.path)
+export async function localPathsForFiles(
+  api: FileDropApi,
+  files: File[],
+  sink: UploadSink
+): Promise<string[]> {
+  return (await localFilesWithPaths(api, files, sink)).map((pair) => pair.path)
 }
 
 /**
@@ -189,14 +226,21 @@ export async function localPathsForFiles(files: File[], sink: UploadSink): Promi
  * that can't be resolved/uploaded are dropped from the result (never throws).
  */
 export async function droppedPaths(
+  api: FileDropApi,
   files: File[],
   opts: { sshRemoteTmux: boolean; projectId: string }
 ): Promise<string[]> {
-  const pairs = await localFilesWithPaths(files, uploadsSink)
+  const blobUpload = (api.files as BlobFilesApi).saveUploadBlob
+  const pairs = await localFilesWithPaths(
+    api,
+    files,
+    uploadsSink(api),
+    blobUpload ? (name, file) => blobUpload.call(api.files, name, file) : undefined
+  )
   if (!opts.sshRemoteTmux) return pairs.map((p) => escapeDroppedPath(p.path))
   const uploaded = await Promise.all(
     pairs.map((p) =>
-      window.nodeTerminal.sshProject
+      api.sshProject
         .uploadFile(opts.projectId, p.path, uploadNameFor(p.file))
         .catch(() => null)
     )

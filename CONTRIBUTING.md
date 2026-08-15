@@ -111,6 +111,22 @@ on the host too: we shipped the hook bearer that way and any other account on th
 it and open a terminal running an arbitrary command. Pass secrets by 0600 file or by **stdin**
 (`curl --config -`), and never add an argv fallback. See `docs/node-identity.md`.
 
+**Registering a CorePlatform handler does not authorize relay access.** The Server Edition and the
+desktop relay share the same handler-registration seam, but a relay peer may call or receive only
+the exact request/cast/event allowlists in `src/main/relay-rpc-policy.ts`. When adding a host-routed
+relay method or event, wire it in `src/renderer/bridge/relay-api.ts` and review/add that one channel
+to the allowlist in the same change. Machine-global namespaces — settings, licenses, usage
+credentials, School/Kids mode, scheduled-setting tokens, toy locks, and the authenticator — stay
+local and fail closed before a raw relay frame reaches their handler or a host-global broadcast
+reaches their socket. Do not replace this with a denylist: a newly registered credential service
+must be unreachable by default.
+
+**A File path is scoped to the machine that produced it.** File drop/paste helpers must take the
+active session API explicitly. Never use `window.nodeTerminal.getPathForFile` or global `files.*`
+from a session-bound surface: in a relay tab that turns a viewer-local path/write into text pasted
+into the host shell. Force byte upload through the session API, and visibly refuse any nested SSH
+case until a scoped host-side carrier exists.
+
 **Both raw listeners change together** — `src/main/index.ts` and `src/server/agent-status.ts`. A new
 field on a hook event that reaches only the desktop leaves the Server Edition quietly without the
 feature, and the boundary tests can only tell you an import is wrong, never that a field is missing.
