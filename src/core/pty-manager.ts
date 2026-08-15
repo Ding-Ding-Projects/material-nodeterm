@@ -84,6 +84,7 @@ import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
 import {
   createSessionHostPty,
   sessionHostCapture,
+  sessionHostHasSession,
   sessionHostKillSession,
   sessionHostListSessions,
   sessionHostPaneCommand,
@@ -332,6 +333,30 @@ function resolveWindowsShell(): string {
     findInPathString('powershell', pathStr) ?? (fs.existsSync(winPsFallback) ? winPsFallback : null)
   if (powershell) return powershell
   return process.env.COMSPEC || 'cmd.exe'
+}
+
+/**
+ * One local-shell resolver for BOTH direct node-pty and the persistent session-host backend.
+ * Keeping the fallback here prevents the two paths from drifting: the session host previously
+ * hardcoded `bash` even on Windows, while the direct path already knew how to find PowerShell or
+ * COMSPEC. Injectable platform leaves make the Windows decision behavior-testable on every CI OS.
+ */
+export function resolveLocalSessionShell(
+  program: string | undefined,
+  defaultShell: string | undefined,
+  deps: {
+    platform?: NodeJS.Platform
+    windowsShell?: () => string
+    posixShell?: string
+  } = {}
+): string {
+  if (program) return program
+  if (defaultShell) return defaultShell
+  if ((deps.platform ?? os.platform()) === 'win32') {
+    return (deps.windowsShell ?? resolveWindowsShell)()
+  }
+  const posixShell = deps.posixShell !== undefined ? deps.posixShell : process.env.SHELL
+  return posixShell || 'bash'
 }
 
 /**
@@ -1777,6 +1802,16 @@ export class PtyManager {
    * the caller treats it as a warm join and types nothing into it.
    */
   async sessionExists(persistKey: string): Promise<boolean> {
+    if (!this.tmuxPath) {
+      if (!this.getSettings().tmuxEnabled || !sessionHostSupported()) return false
+      try {
+        return await sessionHostHasSession(sessionName(persistKey))
+      } catch {
+        // Same fail-safe direction as the tmux probe below: an unavailable probe is not evidence
+        // that the live session is absent. A relay/phone must not cold-restore into it on a guess.
+        return true
+      }
+    }
     return this.tmuxSessionExists(persistKey)
   }
 
@@ -1832,7 +1867,14 @@ export class PtyManager {
    * live output. Empty string if tmux is unavailable or the session doesn't exist yet.
    */
   async captureSnapshot(persistKey: string): Promise<string> {
-    if (!this.tmuxPath) return ''
+    if (!this.tmuxPath) {
+      if (!this.getSettings().tmuxEnabled || !sessionHostSupported()) return ''
+      try {
+        return await sessionHostCapture(sessionName(persistKey), false)
+      } catch {
+        return ''
+      }
+    }
     try {
       const { stdout } = await runAsync(
         this.tmuxPath,
@@ -2079,6 +2121,8 @@ export class PtyManager {
     const reqShell = safeSessionProgram(options.shell)
     const program = reqShell === 'ssh' ? findSsh() ?? 'ssh' : reqShell
     const programArgs = options.shellArgs ?? []
+    const localSessionShell = resolveLocalSessionShell(program, settings.defaultShell)
+    const localSessionArgs = program ? programArgs : []
 
     // SSH project node: run `ssh -t '<remote tmux attach-or-create>'` as the PTY program. The
     // REMOTE tmux provides persistence (over the project's ControlMaster); the local PTY just
@@ -2217,11 +2261,8 @@ export class PtyManager {
       // `process.env.SHELL` is a POSIX-only convention (unset on Windows outside a POSIX
       // subsystem), so it never wins the win32 branch anyway — the ordering below just says so
       // explicitly instead of relying on it being empty there.
-      file =
-        program ||
-        settings.defaultShell ||
-        (os.platform() === 'win32' ? resolveWindowsShell() : process.env.SHELL || 'bash')
-      args = program ? programArgs : []
+      file = localSessionShell
+      args = localSessionArgs
     }
 
     let proc: pty.IPty
@@ -2233,7 +2274,14 @@ export class PtyManager {
       // degrades rather than blocking the create).
       proc = createSessionHostPty(
         sessionName(options.persistKey as string),
-        { cwd, shell: program || settings.defaultShell || 'bash', args: programArgs, env, cols: options.cols, rows: options.rows },
+        {
+          cwd,
+          shell: localSessionShell,
+          args: localSessionArgs,
+          env,
+          cols: options.cols,
+          rows: options.rows
+        },
         settings.tmuxScrollback
       ) as unknown as pty.IPty
     } else {

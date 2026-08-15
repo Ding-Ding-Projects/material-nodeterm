@@ -223,6 +223,16 @@ describes for tmux. See `docs/windows-session-host.md` for the full design; the 
 branches alongside the existing tmux CLI calls — everything below in this section still describes
 the tmux path exactly as before.
 
+Two session-host invariants are easy to lose in an innocent refactor. First,
+`@xterm/headless`'s `Terminal.write()` is asynchronous: `HostSession` serializes writes through an
+output tail, and warm attach/capture/resize/exit must await it before reading or disposing the
+screen. A fire-and-forget write races a stale or duplicated relay snapshot. Second, node-pty's
+pause actuator is global but its ownership is not: `PtyManager.pausedBy` arbitrates views inside
+one app process, and the host keeps a per-socket ledger across processes; `detach`/socket close
+returns only that connection's ticket and the final owner resumes. Also keep the backend parity
+leaves in `sessionExists`/`captureSnapshot`: relay and mobile attach use them before
+`attachDetached`, so a tmux-only implementation reports a live Windows session as fresh and blank.
+
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
 a generated config (`-f <userData>/tmux.conf`, so the user's `~/.tmux.conf` never

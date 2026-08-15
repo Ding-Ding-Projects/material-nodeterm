@@ -30,6 +30,7 @@ import {
 } from './protocol'
 import { HostSession } from './session'
 import { paneCommand as readPaneCommand } from './process-tree'
+import { publishSessionHostState } from './state-file'
 
 /** How long a session-less host lingers before exiting — mirrors tmux's own server lifetime rule
  *  ("the server exits when its last session dies"), plus a grace window so an app restart that
@@ -221,31 +222,52 @@ async function main(): Promise<void> {
   }
 
   /** Ends a session exactly once, however it ends (natural pty exit or an explicit kill), and
-   *  broadcasts the exit frame exactly once — see `HostSession.exited`. */
-  function endSession(session: HostSession, exitCode: number): void {
-    if (session.exited) return
+   *  broadcasts the exit frame exactly once — see `HostSession.exited`. Output already accepted
+   *  from node-pty drains through the emulator first, so subscribers cannot observe `exit` ahead
+   *  of the final data chunk and a kill acknowledgement cannot outrun that same drain. */
+  function endSession(session: HostSession, exitCode: number): Promise<void> {
+    if (session.ending) return session.ending
     session.exited = true
     sessions.delete(session.name)
-    broadcast(session, { type: 'exit', name: session.name, exitCode })
-    session.dispose()
-    scheduleGraceExitIfEmpty()
-    log(`session ended name=${session.name} exitCode=${exitCode}`)
+    session.ending = (async () => {
+      await session.settleOutput()
+      broadcast(session, { type: 'exit', name: session.name, exitCode })
+      session.dispose()
+      scheduleGraceExitIfEmpty()
+      log(`session ended name=${session.name} exitCode=${exitCode}`)
+    })()
+    return session.ending
   }
 
   function wireSession(session: HostSession): void {
     session.proc.onData((data) => {
-      void session.term.write(data)
-      broadcast(session, { type: 'data', name: session.name, data })
+      if (session.exited) return
+      void session.recordOutput(data).then(
+        () => broadcast(session, { type: 'data', name: session.name, data }),
+        (e) => {
+          // Delivery is still preferable to silently losing real PTY bytes if the screen mirror
+          // itself ever rejects. The queue recovers for later writes; a capture may omit this one.
+          log(`terminal mirror write failed name=${session.name}: ${String(e)}`)
+          broadcast(session, { type: 'data', name: session.name, data })
+        }
+      )
     })
-    session.proc.onExit(({ exitCode }) => endSession(session, exitCode))
+    session.proc.onExit(({ exitCode }) => void endSession(session, exitCode))
   }
 
   async function handleAttach(req: Extract<SessionHostRequest, { cmd: 'attach' }>, socket: net.Socket): Promise<AttachResult> {
     const existing = sessions.get(req.name)
     cancelGraceExit()
     if (existing && !existing.exited) {
+      // Add the new subscriber only AFTER the barrier+snapshot. Otherwise a pending chunk can be
+      // delivered live to this socket and then appear again in its warm-attach screen.
+      const screen = await existing.serialize()
+      // The process can exit while the async emulator drains. Do not serialize/dispose the stale
+      // object into a replacement session; retry the ordinary cold path instead.
+      if (existing.exited || sessions.get(req.name) !== existing) {
+        return handleAttach(req, socket)
+      }
       existing.subscribers.add(socket)
-      const screen = existing.term.serialize()
       log(`attach (warm) name=${req.name} subscribers=${existing.subscribers.size}`)
       return { fresh: false, screen: screen || undefined }
     }
@@ -278,27 +300,19 @@ async function main(): Promise<void> {
         } catch {
           /* pty may have just exited — resize on a dead pty is a no-op, not a caller error */
         }
-        s.term.resize(req.cols, req.rows)
+        await s.resize(req.cols, req.rows)
         return { ok: true }
       }
       case 'pause': {
         const s = sessions.get(req.name)
         if (!s || s.exited) return { ok: false, error: 'no such session' }
-        try {
-          s.proc.pause()
-        } catch {
-          /* already exited */
-        }
+        s.pauseFor(socket)
         return { ok: true }
       }
       case 'resume': {
         const s = sessions.get(req.name)
         if (!s || s.exited) return { ok: false, error: 'no such session' }
-        try {
-          s.proc.resume()
-        } catch {
-          /* already exited */
-        }
+        s.resumeFor(socket)
         return { ok: true }
       }
       case 'sendKeys': {
@@ -316,7 +330,10 @@ async function main(): Promise<void> {
       case 'capture': {
         const s = sessions.get(req.name)
         if (!s || s.exited) return { ok: true, result: { text: '' } satisfies CaptureResult }
-        const text = s.term.serialize(req.full ? undefined : 200)
+        const text = await s.serialize(req.full ? undefined : 200)
+        if (s.exited || sessions.get(req.name) !== s) {
+          return { ok: true, result: { text: '' } satisfies CaptureResult }
+        }
         return { ok: true, result: { text } satisfies CaptureResult }
       }
       case 'killSession': {
@@ -327,12 +344,12 @@ async function main(): Promise<void> {
           } catch {
             /* already dead */
           }
-          endSession(s, 0)
+          await endSession(s, 0)
         }
         return { ok: true }
       }
       case 'detach': {
-        sessions.get(req.name)?.subscribers.delete(socket)
+        sessions.get(req.name)?.detach(socket)
         return { ok: true }
       }
       case 'listSessions':
@@ -372,7 +389,9 @@ async function main(): Promise<void> {
     socket.on('close', () => {
       // A connection dropping is a DETACH, never a kill — sessions belong to the host, not to
       // any one connection. Mirrors tmux: closing a client's terminal only ends that client.
-      for (const session of sessions.values()) session.subscribers.delete(socket)
+      // `detach` also returns this socket's pause ticket; without that second half, a crashed
+      // viewer can leave the global node-pty actuator paused forever for every healthy viewer.
+      for (const session of sessions.values()) session.detach(socket)
     })
     socket.on('error', () => {
       /* the 'close' handler above still runs and does the real cleanup */
@@ -411,9 +430,10 @@ async function main(): Promise<void> {
       startedAt: Date.now(),
       protocolVersion: currentProtocolVersion()
     }
-    const tmp = `${paths.statePath}.tmp`
-    fs.writeFileSync(tmp, JSON.stringify(state))
-    fs.renameSync(tmp, paths.statePath) // atomic: replaces the empty startup-lock file
+    // Replace the empty startup-lock file atomically from a temp owned by THIS process. A fixed
+    // `.tmp` lets racing/stale-reclaim hosts publish or remove one another's bytes; a bare rename
+    // also loses the boot on Windows when a scanner briefly holds the state file open.
+    publishSessionHostState(paths.statePath, JSON.stringify(state))
     log(`listening pid=${process.pid} endpoint=${paths.endpoint}`)
     scheduleGraceExitIfEmpty() // a host with zero sessions ever attached still exits eventually
   })

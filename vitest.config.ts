@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     include: [
       'src/core/**/*.test.ts',
+      'src/session-host/**/*.test.ts',
       'src/shared/**/*.test.ts',
       'src/main/**/*.test.ts',
       'src/preload/**/*.test.ts',
