@@ -348,6 +348,9 @@ summaries are distilled from.
 | [`docs/dim-sum.md`](./docs/dim-sum.md) | The startup dim-sum surprise — what it is, when it fires, and why it has no off switch. |
 | [`docs/school-mode.md`](./docs/school-mode.md) | School mode — the shared switch, the rename, and the honest limits of a user-experience lock. |
 | [`docs/personal-vocabulary.md`](./docs/personal-vocabulary.md) | The local personal-vocabulary JSON upload — schema, bounds, and the local-only guarantee. |
+| [`docs/notifications.md`](./docs/notifications.md) | Non-blocking toasts and the reviewable notification centre — what is a toast vs a modal, and why. |
+| [`docs/command-palette.md`](./docs/command-palette.md) | The command palette (`⌘K` or `Ctrl+Shift+F`) — rich inline controls, teleport-to-element, persisted size. |
+| [`docs/destructive-confirmation.md`](./docs/destructive-confirmation.md) | The two-key + slider gate that stands in front of anything irreversible. |
 
 ## 🪟 Windows
 

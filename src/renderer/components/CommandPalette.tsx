@@ -1,9 +1,24 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { rankQuickOpenFiles, type QuickOpenIndexedFile } from '../lib/quickOpenSearch'
 import { IconEditor } from './icons'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+
+/**
+ * A row's LIVE, inline control — a setting result renders its own switch/select rather than a
+ * label describing it, and changing it goes through the SAME setter (persistence, validation,
+ * everything) the originating settings section uses. See docs/command-palette.md.
+ */
+export type CommandControl =
+  | { type: 'toggle'; checked: boolean; onToggle: (v: boolean) => void; ariaLabel?: string }
+  | {
+      type: 'select'
+      value: string
+      options: { label: string; value: string }[]
+      onChange: (v: string) => void
+      ariaLabel?: string
+    }
 
 export interface Command {
   id: string
@@ -25,6 +40,8 @@ export interface Command {
   onSecondary?: () => void
   /** Label for the secondary-action button (defaults to "Reveal"). */
   secondaryLabel?: string
+  /** An inline live control (switch, select, …) rendered on the row itself — see `CommandControl`. */
+  control?: CommandControl
 }
 
 interface CommandPaletteProps {
@@ -40,6 +57,12 @@ interface CommandPaletteProps {
   onQueryChange?: (q: string) => void
   /** Pre-filtered commands appended verbatim (NOT re-filtered) — e.g. transcript hits. */
   extraCommands?: Command[]
+}
+
+/** Bounded card vs. full window — a user choice, persisted (see docs/command-palette.md). */
+const SIZE_KEY = 'nodeterm.paletteSize'
+function loadPaletteSize(): 'card' | 'full' {
+  return localStorage.getItem(SIZE_KEY) === 'full' ? 'full' : 'card'
 }
 
 /** Case-insensitive subsequence match — "ntr" matches "New TeRminal". Used only in the default
@@ -122,10 +145,22 @@ export function CommandPalette({
     onClose()
   }
 
+  const [size, setSize] = useState<'card' | 'full'>(loadPaletteSize)
+  const toggleSize = () => {
+    setSize((s) => {
+      const next = s === 'card' ? 'full' : 'card'
+      localStorage.setItem(SIZE_KEY, next)
+      return next
+    })
+  }
+
   return createPortal(
     <div className="palette-overlay" onClick={onClose}>
-      <div className="palette" onClick={(e) => e.stopPropagation()}>
-        <div className="palette__input-row">
+      <div
+        className={`palette${size === 'full' ? ' palette--full' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="palette__header-row">
           <input
             ref={inputRef}
             className="palette__input"
@@ -136,6 +171,7 @@ export function CommandPalette({
             onChange={(e) => {
               setQuery(e.target.value)
               setActive(0)
+              onQueryChange?.(e.target.value)
             }}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') {
@@ -160,48 +196,182 @@ export function CommandPalette({
             }}
           />
           <AnchoredRegexBuilder search={field} fieldRef={inputRef} label="Regex — command palette" />
+          {/* Size is a user choice, persisted (localStorage) — default is the bounded card. */}
+          <button
+            className="palette__size-toggle"
+            title={size === 'card' ? 'Expand to full window' : 'Collapse to bounded card'}
+            onClick={toggleSize}
+          >
+            {size === 'card' ? '⤢' : '⤡'}
+          </button>
         </div>
         {field.error && <div className="palette__error">{field.error}</div>}
         <div className="palette__list">
           {items.length === 0 && <div className="palette__empty">No matches</div>}
           {items.map((c, i) => (
-            <div key={c.id} className="palette__row">
-              {c.section && c.section !== items[i - 1]?.section && (
-                <div className="palette__section">{c.section}</div>
-              )}
-              <button
-                className={`palette__item${i === active ? ' active' : ''}`}
-                onMouseEnter={() => setActive(i)}
-                onClick={() => run(c)}
-              >
-                <span className="palette__icon">{c.icon}</span>
-                <span className="palette__label">{c.label}</span>
-                {!labelHit(c) && contentHit(c) ? (
-                  <span className="palette__hint">found in output</span>
-                ) : (
-                  (c.hint ?? c.note) && (
-                    <span className="palette__hint">{c.hint ?? c.note}</span>
-                  )
-                )}
-                {c.onSecondary && (
-                  <span
-                    className="palette__secondary"
-                    title={c.secondaryLabel}
-                    onClick={(e) => {
-                      e.stopPropagation()
+            <PaletteRow
+              key={c.id}
+              c={c}
+              active={i === active}
+              showSection={c.section !== undefined && c.section !== items[i - 1]?.section}
+              labelHit={labelHit(c)}
+              contentHit={contentHit(c)}
+              onHover={() => setActive(i)}
+              onRun={() => run(c)}
+              onSecondary={
+                c.onSecondary
+                  ? () => {
                       c.onSecondary?.()
                       onClose()
-                    }}
-                  >
-                    ⤷
-                  </span>
-                )}
-              </button>
-            </div>
+                    }
+                  : undefined
+              }
+            />
           ))}
         </div>
       </div>
     </div>,
     document.body
+  )
+}
+
+/**
+ * One palette row. A row WITHOUT a `control` stays a `<button>` (unchanged historical markup —
+ * every existing command keeps its exact click/keyboard behavior). A row WITH one renders as a
+ * `role="option"` container instead, because the live control (a real switch) is itself an
+ * interactive element and HTML forbids nesting one inside a `<button>`. Enter/click on the row
+ * still runs the row's default action (for a toggle command that IS the toggle, so the row and
+ * its inline control can never disagree about what happened); clicking the control directly
+ * stops propagation so it fires exactly once.
+ */
+function PaletteRow({
+  c,
+  active,
+  showSection,
+  labelHit,
+  contentHit,
+  onHover,
+  onRun,
+  onSecondary
+}: {
+  c: Command
+  active: boolean
+  showSection: boolean
+  labelHit: boolean
+  contentHit: boolean
+  onHover: () => void
+  onRun: () => void
+  onSecondary?: () => void
+}): React.JSX.Element {
+  // Defer the live control's own construction until the row has actually scrolled into view —
+  // a palette with hundreds of setting rows must not instantiate hundreds of subscribed
+  // switches/selects up front. Ordinary rows (icon + label) stay cheap regardless of count.
+  const rowRef = useRef<HTMLDivElement>(null)
+  const [everVisible, setEverVisible] = useState(false)
+  useEffect(() => {
+    if (!c.control || everVisible) return
+    const el = rowRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setEverVisible(true)
+      },
+      { root: el.closest('.palette__list'), rootMargin: '200px 0px' }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [c.control, everVisible])
+
+  const body = (
+    <>
+      <span className="palette__icon">{c.icon}</span>
+      <span className="palette__label">{c.label}</span>
+      {!labelHit && contentHit ? (
+        <span className="palette__hint">found in output</span>
+      ) : (
+        (c.hint ?? c.note) && <span className="palette__hint">{c.hint ?? c.note}</span>
+      )}
+      {c.control && everVisible && (
+        <span className="palette__control" onClick={(e) => e.stopPropagation()}>
+          <InlineControl control={c.control} />
+        </span>
+      )}
+      {onSecondary && (
+        <span
+          className="palette__secondary"
+          title={c.secondaryLabel}
+          onClick={(e) => {
+            e.stopPropagation()
+            onSecondary()
+          }}
+        >
+          ⤷
+        </span>
+      )}
+    </>
+  )
+
+  return (
+    <div className="palette__row" ref={rowRef}>
+      {showSection && <div className="palette__section">{c.section}</div>}
+      {c.control ? (
+        <div
+          className={`palette__item palette__row--control${active ? ' active' : ''}`}
+          role="option"
+          aria-selected={active}
+          onMouseEnter={onHover}
+          onClick={onRun}
+        >
+          {body}
+        </div>
+      ) : (
+        <button
+          className={`palette__item${active ? ' active' : ''}`}
+          onMouseEnter={onHover}
+          onClick={onRun}
+        >
+          {body}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** The row's live control — a real switch (or, for `select`, a value that cycles through its
+ *  options on click) wired directly to the caller's setter. No local state: it always reflects
+ *  whatever the originating store currently holds, exactly like the settings-page control it
+ *  mirrors. */
+function InlineControl({ control }: { control: CommandControl }): React.JSX.Element {
+  if (control.type === 'toggle') {
+    return (
+      <span
+        role="switch"
+        aria-checked={control.checked}
+        aria-label={control.ariaLabel}
+        className={`palette__switch${control.checked ? ' on' : ''}`}
+        onClick={() => control.onToggle(!control.checked)}
+      >
+        <span className="palette__switch-thumb" />
+      </span>
+    )
+  }
+  const idx = Math.max(
+    0,
+    control.options.findIndex((o) => o.value === control.value)
+  )
+  const current = control.options[idx] ?? control.options[0]
+  return (
+    <span
+      role="button"
+      aria-label={control.ariaLabel}
+      className="palette__cycle"
+      title="Click to change"
+      onClick={() => {
+        const next = control.options[(idx + 1) % control.options.length]
+        if (next) control.onChange(next.value)
+      }}
+    >
+      {current?.label ?? ''}
+    </span>
   )
 }

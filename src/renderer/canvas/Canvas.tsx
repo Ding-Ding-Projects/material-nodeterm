@@ -84,6 +84,7 @@ import { ContextMenu, type MenuItem } from '../components/ContextMenu'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import {
   IconCollapse,
+  IconBellFilled,
   IconBranch,
   IconDuplicate,
   IconEditor,
@@ -142,6 +143,9 @@ import { TmuxBanner } from '../components/TmuxBanner'
 import { PtyPressureBanner } from '../components/PtyPressureBanner'
 import { ConflictBar } from '../components/ConflictBar'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { DestructiveConfirmGate } from '../components/DestructiveConfirmGate'
+import { NotificationCenter } from '../components/NotificationCenter'
+import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
@@ -409,6 +413,17 @@ interface ConfirmState {
   /** Set when an AGENT asked for this dialog: it is answered by an explicit click, never by an
    *  Enter the user aimed at their terminal (see components/confirm-key). */
   requestedBy?: string
+}
+/** One request for the destructive-action super-confirmation gate (two keys + full-range
+ *  slider) — see `DestructiveConfirmGate` and docs/destructive-confirmation.md. */
+interface DestructiveGateRequest {
+  title: string
+  description: string
+  affected?: string[]
+  confirmLabel?: string
+  anchor?: { x: number; y: number }
+  restoreFocusEl?: HTMLElement | null
+  onConfirm: () => void
 }
 interface RemoveState {
   groupId: string
@@ -785,6 +800,10 @@ export function Canvas() {
     }
   }, [])
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
+  // Screen coordinates of the click that most recently opened a NODE/selection context menu — a
+  // ref (not state) because `selectionItems`'s "Delete" onClick reads it later, after the menu
+  // has closed, and needs the value from THAT click, not a stale closure over `menu`.
+  const lastNodeMenuPosRef = useRef<{ x: number; y: number } | null>(null)
   const [remotePicker, setRemotePicker] = useState<{ x: number; y: number } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [fileIndex, setFileIndex] = useState<QuickOpenIndexedFile[]>([])
@@ -796,12 +815,22 @@ export function Canvas() {
   const [bufferCache, setBufferCache] = useState<Record<string, string>>({})
   const captureTsRef = useRef<Record<string, number>>({})
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [notifCenterOpen, setNotifCenterOpen] = useState(false)
+  const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
   const [phonePairAnchor, setPhonePairAnchor] = useState<{ right: number; bottom: number } | null>(null)
   // "+" opens the start screen (WelcomeScreen) on demand over existing projects.
   const [welcomeOpen, setWelcomeOpen] = useState(false)
   // Optional deep-link target when opening settings (e.g. RemotePicker → the SSH section).
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId | undefined>(undefined)
+  // Optional deep-link SEARCH seed — the command palette's "Open in Settings" teleport for one
+  // specific setting sets both this and `settingsSection` in the same click.
+  const [settingsQuery, setSettingsQuery] = useState<string | undefined>(undefined)
+  const openSettingsTo = useCallback((section: SettingsSectionId, query?: string) => {
+    setSettingsSection(section)
+    setSettingsQuery(query)
+    setSettingsOpen(true)
+  }, [])
   const [scOpen, setScOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   // First-run setup tour (agents / dictation / kanban / notifications) — see OnboardingFlow.
@@ -902,6 +931,11 @@ export function Canvas() {
   // A client has finished the handshake and is awaiting this host's approval (carries the SAS).
   const [pendingPeer, setPendingPeerState] = useState<PendingPeerState | null>(null)
   const [confirm, setConfirmState] = useState<ConfirmState | null>(null)
+  // The destructive-action super-confirmation gate (two keys + full-range slider) — see
+  // requestDeleteNodes / requestDeleteProject and docs/destructive-confirmation.md. Only one at
+  // a time, exactly like `confirm` above.
+  const [destructiveGate, setDestructiveGate] = useState<DestructiveGateRequest | null>(null)
+  const openDestructiveGate = useCallback((req: DestructiveGateRequest) => setDestructiveGate(req), [])
   // Node to center once its project finishes loading (cross-project notification click).
   const pendingFocusRef = useRef<string | null>(null)
   // One-shot: the next active-project load keeps the CURRENT camera instead of applying the
@@ -3862,6 +3896,32 @@ export function Canvas() {
     [setNodes, markDirty, refreshWorktreeStore, releaseWorktreeBinding]
   )
 
+  /**
+   * Node deletion goes through the destructive-action super-confirmation gate — one node or a
+   * whole bulk selection, from the keyboard (Delete/Backspace) or the right-click "Delete" item
+   * alike, so the two paths can never disagree about how carefully this is asked. `anchor`
+   * places the gate beside the control that asked for it (a right-click point); omitted for the
+   * keyboard path, which has no single obvious anchor, and falls back to a centered modal.
+   */
+  const requestDeleteNodes = useCallback(
+    (ids: string[], anchor?: { x: number; y: number }, restoreFocusEl?: HTMLElement | null) => {
+      if (!ids.length) return
+      const titles = ids
+        .map((id) => nodesRef.current.find((n) => n.id === id)?.data.title)
+        .filter((t): t is string => !!t)
+      openDestructiveGate({
+        title: ids.length > 1 ? `Delete ${ids.length} nodes` : `Delete “${titles[0] ?? 'node'}”`,
+        description:
+          'Every open terminal session in the selection ends immediately (including anything still running inside it). This cannot be undone.',
+        affected: titles.length ? titles : undefined,
+        anchor,
+        restoreFocusEl,
+        onConfirm: () => deleteNodes(ids)
+      })
+    },
+    [deleteNodes]
+  )
+
   // When an account is removed in Settings, patch the ACTIVE project's live nodes (the projects
   // store only holds the other projects' serialized copies). The account's login node is
   // permanently DELETED — left alive with its accountId cleared, a cold restart would respawn
@@ -3928,17 +3988,14 @@ export function Canvas() {
         return
       }
       e.preventDefault()
-      setConfirm({
-        message: `Delete ${ids.length} ${ids.length > 1 ? 'nodes' : 'node'}? Open terminal sessions will end.`,
-        onConfirm: () => {
-          deleteNodes(ids)
-          setConfirm(null)
-        }
-      })
+      // No single obvious anchor for a keyboard-triggered delete — falls back to a centered
+      // modal. `document.activeElement` (whatever had focus before Delete was pressed) gets the
+      // keyboard back once the gate closes.
+      requestDeleteNodes(ids, undefined, document.activeElement as HTMLElement | null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [deleteNodes, setLinkEdges, markDirty])
+  }, [requestDeleteNodes, setLinkEdges, markDirty])
 
   // Cmd/Ctrl+W (forwarded from main) closes the selected node(s) immediately, like the
   // node's × button. With nothing selected it falls back to closing the window.
@@ -4721,9 +4778,10 @@ export function Canvas() {
         const res = await branchClaudeSession(api, nodeId)
         if (!res.ok || !res.originalId) {
           const error = res.error ?? 'Branch failed.'
-          // The error dialog is for humans; agent-CLI calls get the error in the reply instead.
+          // A non-blocking toast, not a modal: there is nothing to decide here, only to report.
+          // Agent-CLI calls get the error in the reply instead (opts.interactive === false).
           if (opts?.interactive !== false) {
-            setConfirm({ message: error, alert: true, onConfirm: () => setConfirm(null) })
+            notify({ kind: 'error', title: 'Branch failed', body: error })
           }
           return { ok: false, error }
         }
@@ -4761,11 +4819,7 @@ export function Canvas() {
       const sourceAgentId = source.data.agentId
       const sessionId = useAgentStatus.getState().byId[sourceNodeId]?.sessionId
       if (!sourceAgentId || !sessionId) {
-        setConfirm({
-          message: 'Conversation not ready to transfer yet.',
-          alert: true,
-          onConfirm: () => setConfirm(null)
-        })
+        notify({ kind: 'warning', title: 'Conversation not ready to transfer yet.' })
         return
       }
       const res = await window.nodeTerminal.handoff.build(
@@ -4776,7 +4830,7 @@ export function Canvas() {
         source.data.accountId
       )
       if ('error' in res) {
-        setConfirm({ message: res.error, alert: true, onConfirm: () => setConfirm(null) })
+        notify({ kind: 'error', title: 'Transfer failed', body: res.error })
         return
       }
       // The file is context-budgeted by buildHandoff (long sessions: digest + verbatim tail,
@@ -4958,6 +5012,12 @@ export function Canvas() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        // The discoverable global palette shortcut (alongside ⌘K, which keeps working — existing
+        // muscle memory is never taken away). Chromium reserves Ctrl+Shift+C for its inspector;
+        // Ctrl+Shift+F is free on every platform this app ships to.
         e.preventDefault()
         setPaletteOpen((v) => !v)
       } else if ((e.metaKey || e.ctrlKey) && e.key === ',') {
@@ -5277,7 +5337,16 @@ export function Canvas() {
           })()
         : []),
       { type: 'separator' },
-      { label: 'Delete', icon: <IconTrash />, danger: true, onClick: () => deleteNodes(ids) }
+      {
+        label: 'Delete',
+        icon: <IconTrash />,
+        danger: true,
+        shortcut: ['Delete'],
+        // Goes through the same destructive-confirmation gate as the Delete/Backspace shortcut
+        // (previously this row deleted with NO confirmation at all — a right-click could nuke a
+        // whole selection in one click, unlike the keyboard path a few lines up).
+        onClick: () => requestDeleteNodes(ids, lastNodeMenuPosRef.current ?? undefined)
+      }
     ])
   }, [
     groupSelection,
@@ -5286,14 +5355,14 @@ export function Canvas() {
     setNodesColor,
     duplicateNodes,
     branchClaude,
+    requestDeleteNodes,
     transferConversation,
     agentIdOf,
     alignToGrid,
     toggleCollapseNodes,
     toggleMarkdown,
     reloadTerminals,
-    restartAgentNode,
-    deleteNodes
+    restartAgentNode
   ])
 
   /** "New <agent>" creation entries shared by the pane and group context menus.
@@ -5322,6 +5391,10 @@ export function Canvas() {
       // where this host's accounts come from — local accounts are correctly invisible here, and
       // a bare flat entry read as "multi-account is broken on SSH".
       const accountsHint = sshAccountsHint(project, accounts)
+      // ⌘⇧C spawns exactly this: `addAgentNode(settings.defaultAgent)` with no explicit account
+      // — shown on whichever row that resolves to, so the shortcut column never claims a
+      // binding for the wrong agent.
+      const shortcutAgent = useSettings.getState().settings.defaultAgent
       return [
         ...BUILTIN_AGENT_IDS.filter((aid) => !disabled.includes(aid)).map((aid): MenuItem => {
           // Claude gets an account picker submenu when ≥1 account exists; System = project
@@ -5335,6 +5408,7 @@ export function Canvas() {
                 {
                   label: withDefaultMark(systemLabel),
                   icon: <AgentIcon agentId="claude" />,
+                  shortcut: shortcutAgent === 'claude' ? ['⌘', '⇧', 'C'] : undefined,
                   onClick: () => addAgentNode('claude', at, groupId)
                 },
                 ...accounts.map(
@@ -5360,6 +5434,7 @@ export function Canvas() {
           return {
             label: `New ${AGENT_CONFIG[aid].label}`,
             icon: <AgentIcon agentId={aid} />,
+            shortcut: aid === shortcutAgent ? ['⌘', '⇧', 'C'] : undefined,
             onClick: () => addAgentNode(aid, at, groupId)
           }
         }),
@@ -5515,7 +5590,12 @@ export function Canvas() {
         y: e.clientY,
         items: [
           // Sessions: local terminal, agent CLIs, remote host.
-          { label: 'New terminal', icon: <IconTerminal />, onClick: () => addTerminal(at) },
+          {
+            label: 'New terminal',
+            icon: <IconTerminal />,
+            shortcut: ['⌘', 'T'],
+            onClick: () => addTerminal(at)
+          },
           ...agentCreationItems(at),
           {
             label: 'New remote…',
@@ -5544,7 +5624,7 @@ export function Canvas() {
           { type: 'separator' },
           // Canvas actions.
           { label: 'Select all', icon: <IconSelectAll />, onClick: selectAll },
-          { label: 'Fit view', icon: <IconFit />, onClick: fitAll },
+          { label: 'Fit view', icon: <IconFit />, shortcut: ['⇧', '1'], onClick: fitAll },
           // Project-wide: restart every idle agent CLI in place (new model pickup). Hidden on a
           // canvas with no restartable agent node — there it could only ever report "0 restarted".
           ...(hasRestartableAgents()
@@ -5583,6 +5663,7 @@ export function Canvas() {
   const onNodeContextMenu = useCallback(
     (e: React.MouseEvent, node: Node) => {
       e.preventDefault()
+      lastNodeMenuPosRef.current = { x: e.clientX, y: e.clientY }
       // For a group frame, remember WHERE inside it the user right-clicked so "New …" creation
       // entries can place the node at the cursor (parentInto converts to group-relative).
       const items =
@@ -5599,6 +5680,7 @@ export function Canvas() {
   const onSelectionContextMenu = useCallback(
     (e: React.MouseEvent, selected: Node[]) => {
       e.preventDefault()
+      lastNodeMenuPosRef.current = { x: e.clientX, y: e.clientY }
       setMenu({
         x: e.clientX,
         y: e.clientY,
@@ -8232,6 +8314,24 @@ export function Canvas() {
     [commitActiveToStore, writeDisk, disposeRelayTabForProject]
   )
 
+  // Permanent project deletion, ASKED FOR first — the "Recently closed" × used to delete on a
+  // single click with no confirmation of any kind (every terminal in the project, ended, no way
+  // back). Routes through the same destructive-confirmation gate as node deletion.
+  const requestDeleteProject = useCallback(
+    (id: string, name: string, anchorEl: HTMLElement) => {
+      const rect = anchorEl.getBoundingClientRect()
+      openDestructiveGate({
+        title: `Delete “${name}” permanently`,
+        description:
+          'Ends every terminal session in this project, including anything still running, and removes it from "Recently closed". This cannot be undone.',
+        anchor: { x: rect.left, y: rect.bottom + 6 },
+        restoreFocusEl: anchorEl,
+        onConfirm: () => deleteProject(id)
+      })
+    },
+    [deleteProject, openDestructiveGate]
+  )
+
   const now = useMemo(() => Date.now(), [transcriptHits])
   const transcriptCommands = useMemo<Command[]>(
     () =>
@@ -8340,6 +8440,103 @@ export function Canvas() {
           ]
         : [])
     ]
+
+    // ---- Settings & app surfaces (rich rows: a toggle result renders its LIVE switch inline,
+    // wired to the SAME setter — never persistence/localization/history of its own — the
+    // originating Settings section uses; ⤷/Cmd+Enter teleports to that exact row). See
+    // docs/command-palette.md. ----
+    const s = useSettings.getState().settings
+    const update = useSettings.getState().update
+    cmds.push(
+      {
+        id: 'open-settings',
+        label: 'Open Settings',
+        icon: <IconGear />,
+        run: () => setSettingsOpen(true)
+      },
+      {
+        id: 'open-notifications',
+        label: 'Open notification centre',
+        icon: <IconBellFilled />,
+        run: () => setNotifCenterOpen(true)
+      },
+      {
+        id: 'setting-notify-done',
+        label: 'Notify when a turn finishes in the background',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: s.notifyOnClaudeDone,
+          ariaLabel: 'Notify when a turn finishes in the background',
+          onToggle: (v) => update({ notifyOnClaudeDone: v, notifyConsentAsked: true })
+        },
+        run: () => update({ notifyOnClaudeDone: !s.notifyOnClaudeDone, notifyConsentAsked: true }),
+        onSecondary: () => openSettingsTo('notifications', 'Notify when a turn finishes'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-sound-effects',
+        label: 'Play a sound when a turn finishes or needs you',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: s.soundEffects,
+          ariaLabel: 'Sound effects',
+          onToggle: (v) => update({ soundEffects: v })
+        },
+        run: () => update({ soundEffects: !s.soundEffects }),
+        onSecondary: () => openSettingsTo('notifications', 'Play a sound'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-double-click-focus',
+        label: 'Double-click a node to center & focus it',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: s.doubleClickFocus,
+          ariaLabel: 'Double-click focus',
+          onToggle: (v) => update({ doubleClickFocus: v })
+        },
+        run: () => update({ doubleClickFocus: !s.doubleClickFocus }),
+        onSecondary: () => openSettingsTo('behavior', 'Double-click'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-snap-to-grid',
+        label: 'Snap nodes to the grid while dragging',
+        section: 'Settings',
+        icon: <IconGrid />,
+        control: {
+          type: 'toggle',
+          checked: s.snapToGrid,
+          ariaLabel: 'Snap to grid',
+          onToggle: (v) => update({ snapToGrid: v })
+        },
+        run: () => update({ snapToGrid: !s.snapToGrid }),
+        onSecondary: () => openSettingsTo('behavior', 'Snap'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-telemetry',
+        label: 'Share anonymous usage telemetry',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: s.telemetryEnabled,
+          ariaLabel: 'Telemetry',
+          onToggle: (v) => update({ telemetryEnabled: v })
+        },
+        run: () => update({ telemetryEnabled: !s.telemetryEnabled }),
+        onSecondary: () => openSettingsTo('privacy', 'telemetry'),
+        secondaryLabel: 'Open in Settings'
+      }
+    )
+
     const store = useProjects.getState()
     store.projects
       // Skip unavailable projects: activating one lets edits commit to the store but they're
@@ -8429,7 +8626,13 @@ export function Canvas() {
     addSshTerminal,
     hasRestartableAgents,
     restartIdleAgents,
-    zoomTo100
+    zoomTo100,
+    openSettingsTo,
+    // Not read directly in this closure (the body reads `useSettings.getState().settings` fresh
+    // on every call) — a dependency purely so a settings change while the palette is open
+    // rebuilds the list and the inline toggle rows' `checked` stays live rather than frozen at
+    // whatever it read when the palette was opened.
+    settings
   ])
 
   // Build the palette's command list only when its inputs change — the inline `buildCommands()`
@@ -8661,6 +8864,21 @@ export function Canvas() {
           <IconBranch />
         </button>
         <button
+          className="notif-bell"
+          title="Notifications"
+          aria-label={
+            unreadNotifCount > 0 ? `Notifications (${unreadNotifCount} unread)` : 'Notifications'
+          }
+          onClick={() => setNotifCenterOpen(true)}
+        >
+          <IconBellFilled />
+          {unreadNotifCount > 0 && (
+            <span className="notif-bell__badge" aria-hidden>
+              {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+            </span>
+          )}
+        </button>
+        <button
           title="Pair phone"
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect()
@@ -8869,7 +9087,7 @@ export function Canvas() {
             onConnectSsh={() => setSshDialogOpen(true)}
             closedProjects={closedProjects.map((p) => ({ id: p.id, name: p.name, cwd: p.cwd }))}
             onReopen={reopenProject}
-            onDeleteClosed={deleteProject}
+            onDeleteClosed={requestDeleteProject}
             onClose={hasProjects ? () => setWelcomeOpen(false) : undefined}
             overBoard={kanbanOpen}
           />
@@ -8945,7 +9163,33 @@ export function Canvas() {
       )}
 
       {settingsOpen && (
-        <SettingsPage onClose={() => setSettingsOpen(false)} initialSection={settingsSection} />
+        <SettingsPage
+          onClose={() => setSettingsOpen(false)}
+          initialSection={settingsSection}
+          initialQuery={settingsQuery}
+        />
+      )}
+
+      {notifCenterOpen && (
+        <NotificationCenter
+          onClose={() => setNotifCenterOpen(false)}
+          onRequestBulkDelete={(ids, anchorEl) => {
+            const rect = anchorEl.getBoundingClientRect()
+            openDestructiveGate({
+              title: ids.length > 1 ? `Delete ${ids.length} notifications` : 'Delete notification',
+              description:
+                'Permanently removes the selected notification(s) from history. This cannot be undone.',
+              affected: useNotifications
+                .getState()
+                .items.filter((n) => ids.includes(n.id))
+                .map((n) => n.title),
+              confirmLabel: 'Delete',
+              anchor: { x: rect.left, y: rect.bottom + 6 },
+              restoreFocusEl: anchorEl,
+              onConfirm: () => useNotifications.getState().removeMany(ids)
+            })
+          }}
+        />
       )}
 
       {scOpen && (
@@ -9058,6 +9302,22 @@ export function Canvas() {
             confirm.onCancel?.()
             setConfirm(null)
           }}
+        />
+      )}
+
+      {destructiveGate && (
+        <DestructiveConfirmGate
+          title={destructiveGate.title}
+          description={destructiveGate.description}
+          affected={destructiveGate.affected}
+          confirmLabel={destructiveGate.confirmLabel}
+          anchor={destructiveGate.anchor}
+          restoreFocusEl={destructiveGate.restoreFocusEl}
+          onConfirm={() => {
+            destructiveGate.onConfirm()
+            setDestructiveGate(null)
+          }}
+          onCancel={() => setDestructiveGate(null)}
         />
       )}
 

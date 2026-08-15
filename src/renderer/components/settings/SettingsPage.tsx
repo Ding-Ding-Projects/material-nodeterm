@@ -36,15 +36,27 @@ const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 export function SettingsPage({
   onClose,
-  initialSection
+  initialSection,
+  initialQuery
 }: {
   onClose: () => void
   /** Section to open on; lets callers deep-link (e.g. "Add SSH server…" → the SSH section). */
   initialSection?: SettingsSectionId
+  /**
+   * Pre-fills the sidebar search so the matching row(s) are the only ones left visible — the
+   * command palette's "Open in Settings" teleport for a specific setting uses this (see
+   * docs/command-palette.md). Read once on mount; this component is only ever mounted while
+   * open, so a fresh open always gets a fresh seed.
+   */
+  initialQuery?: string
 }): React.JSX.Element {
   const hydrate = useEntitlement((s) => s.hydrate)
   const [active, setActive] = useState<SettingsSectionId>(initialSection ?? FIRST_SECTION_ID)
-  const search = useRegexSearchField()
+  // Seeded, not a separate state: the palette's "Open in Settings" teleport pre-fills the same
+  // field the user then types in, so the regex field owns the value and there is no second
+  // source of truth to drift. `initial` is read once on mount, which is right — this component
+  // is only mounted while settings are open, so every fresh open gets a fresh seed.
+  const search = useRegexSearchField({ query: initialQuery })
   const searchState = useMemo(
     () => ({ mode: search.mode, query: search.query, pattern: search.pattern, flags: search.flags }),
     [search.mode, search.query, search.pattern, search.flags]
