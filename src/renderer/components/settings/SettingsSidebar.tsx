@@ -1,27 +1,31 @@
+import { useRef } from 'react'
 import { cn } from '@renderer/ui/cn'
 import { Input } from '@renderer/ui/Input'
 import { visibleSettingsGroups, type SettingsSectionId } from './nav'
 import { useI18n } from '@renderer/lib/i18n'
+import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
+import type { RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 const GROUPS = visibleSettingsGroups(isMac)
-import { matchesQuery } from './search'
+import { matchesEntry } from './search'
 import { SectionIcon } from './SettingsIcons'
 
 export function SettingsSidebar({
   activeSectionId,
-  query,
+  search,
   onSelect,
-  onQueryChange,
   onClose
 }: {
   activeSectionId: SettingsSectionId
-  query: string
+  search: RegexSearchFieldState
   onSelect: (id: SettingsSectionId) => void
-  onQueryChange: (q: string) => void
   onClose: () => void
 }): React.JSX.Element {
-  const hasQuery = query.trim() !== ''
+  const inputRef = useRef<HTMLInputElement>(null)
+  // `search.active` — not `value !== ''` — because in regex mode an INVALID pattern must not dim
+  // every row as though nothing matched; the field owns that distinction.
+  const hasQuery = search.active
   // Sidebar rows are compact (256px column, up to ~22 of them) — bilingual mode joins primary +
   // secondary on ONE line here (`ts`) rather than stacking a second row per item, which would
   // crowd badly. Contrast with LanguageSection's own body copy, which has room to stack.
@@ -47,29 +51,42 @@ export function SettingsSidebar({
       </div>
 
       <div className="px-3 pb-3">
-        <div className="relative">
-          <svg
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-2"
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          >
-            <circle cx="6" cy="6" r="4" />
-            <path d="M9.2 9.2 12 12" />
-          </svg>
-          <Input
-            className="h-8 w-full pl-8"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder={ts('settings.nav.search', 'Search settings')}
-            aria-label={ts('settings.nav.search', 'Search settings')}
+        <div className="relative flex items-center gap-1">
+          <div className="relative flex-1">
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-2"
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
+              <circle cx="6" cy="6" r="4" />
+              <path d="M9.2 9.2 12 12" />
+            </svg>
+            <Input
+              ref={inputRef}
+              className="h-8 w-full pl-8"
+              value={search.value}
+              onChange={(e) => search.setValue(e.target.value)}
+              placeholder={
+                search.mode === 'regex'
+                  ? ts('settings.nav.searchRegex', 'Search settings (regex)')
+                  : ts('settings.nav.search', 'Search settings')
+              }
+              aria-label={ts('settings.nav.search', 'Search settings')}
+            />
+          </div>
+          <AnchoredRegexBuilder
+            search={search}
+            fieldRef={inputRef}
+            label={ts('settings.nav.regexBuilder', 'Regex — settings search')}
           />
         </div>
+        {search.error && <p className="mt-1 px-1 text-[11px] leading-snug text-danger">{search.error}</p>}
       </div>
 
       <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
@@ -80,7 +97,10 @@ export function SettingsSidebar({
             </p>
             {group.sections.map((s) => {
               const isActive = activeSectionId === s.id
-              const dimmed = hasQuery && !matchesQuery(query, { title: s.title })
+              // Match on the SHIPPED title, not the localized one: the nav catalogue and the
+              // section registry are keyed by it, so searching the translated string would make
+              // a row unfindable by the very name the rest of the app uses for it.
+              const dimmed = hasQuery && !matchesEntry(search, { title: s.title })
               const sectionTitle = ts(`settings.section.${s.id}`, s.title)
               return (
                 <button

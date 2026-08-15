@@ -1731,6 +1731,12 @@ body,
   color: var(--accent-text);
 }
 
+.term-node__find-error {
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 .term-node__close {
   background: transparent;
   border: none;
@@ -2810,6 +2816,367 @@ body,
   border-radius: 50%;
   border: 1px solid rgba(var(--tint-rgb), 0.15);
   cursor: pointer;
+}
+
+/* ---- Anchored popover (regex builder, filterable-menu filter, …) ----
+   Attached to the field/button that opened it — never a detached modal. Paints its own solid
+   background/border/elevation (an overlay left transparent here would let the canvas or a
+   drawer's content read straight through the text on top) and is bounded by the viewport with
+   its OWN scroll container, so content past the visible height scrolls instead of being silently
+   clipped with no scrollbar to say anything is missing. */
+.anchored-pop__backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+}
+
+.anchored-pop {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  background: rgba(var(--menu-rgb), 0.98);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, calc(0.55 * var(--shadow-k)));
+  overflow: hidden;
+}
+
+.anchored-pop__scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ---- Regex builder ---- */
+.regex-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.regex-builder__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.regex-builder__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.regex-builder__engine {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: var(--muted);
+  cursor: help;
+}
+
+.regex-builder__note {
+  margin: -4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.regex-builder__pattern-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.regex-builder__slash {
+  color: var(--muted-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding-top: 2px;
+}
+
+.regex-builder__pattern {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.regex-builder__pattern.invalid {
+  color: var(--danger);
+}
+
+.regex-builder__error {
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.regex-builder__warn {
+  color: var(--warn);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.regex-builder__count {
+  align-self: flex-end;
+  font-size: 10px;
+  color: var(--muted-2);
+}
+
+.regex-builder__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.regex-builder__flag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+}
+
+.regex-builder__flag input {
+  cursor: pointer;
+}
+
+.regex-builder__flag-label {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.regex-builder__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.regex-builder__tab {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 10.5px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+
+.regex-builder__tab:hover {
+  background: var(--panel-header);
+  color: var(--text);
+}
+
+.regex-builder__tab.active {
+  background: var(--panel-header);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.regex-builder__tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.regex-builder__token {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.regex-builder__token:hover {
+  background: var(--panel-header);
+  border-color: var(--accent);
+}
+
+.regex-builder__sample-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.regex-builder__sample-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.regex-builder__sample {
+  resize: vertical;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.regex-builder__sample:focus {
+  border-color: var(--accent);
+}
+
+.regex-builder__status {
+  min-height: 14px;
+}
+
+.regex-builder__muted {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.regex-builder__preview {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.regex-builder__mark {
+  background: rgba(var(--tint-rgb, 255, 255, 255), 0.15);
+  color: var(--text);
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.regex-builder__matches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.regex-builder__match-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--surface-raised);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.regex-builder__match-index {
+  color: var(--muted-2);
+}
+
+.regex-builder__match-text {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.regex-builder__match-pos {
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.regex-builder__groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+}
+
+.regex-builder__group-chip {
+  background: var(--panel-header);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--muted);
+}
+
+.regex-builder__footer {
+  display: flex;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.regex-builder__copy,
+.regex-builder__done {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.regex-builder__copy:hover,
+.regex-builder__done:hover {
+  background: var(--panel-header);
+}
+
+.regex-builder__done {
+  margin-left: auto;
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---- Anchored regex-builder trigger (the small ".*" button beside a search field) ---- */
+.regex-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.regex-trigger:hover {
+  background: var(--panel-header);
+  color: var(--text);
+}
+
+.regex-trigger.active {
+  background: rgba(var(--accent-rgb, 10, 132, 255), 0.18);
+  border-color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---- Editor (Monaco) node ---- */

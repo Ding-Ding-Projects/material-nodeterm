@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useEntitlement } from '../../state/entitlement'
+import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { SettingsSearchContext } from './context'
 import { SettingsSidebar } from './SettingsSidebar'
 import { FIRST_SECTION_ID, type SettingsSectionId } from './nav'
@@ -40,7 +41,11 @@ export function SettingsPage({
 }): React.JSX.Element {
   const hydrate = useEntitlement((s) => s.hydrate)
   const [active, setActive] = useState<SettingsSectionId>(initialSection ?? FIRST_SECTION_ID)
-  const [query, setQuery] = useState('')
+  const search = useRegexSearchField()
+  const searchState = useMemo(
+    () => ({ mode: search.mode, query: search.query, pattern: search.pattern, flags: search.flags }),
+    [search.mode, search.query, search.pattern, search.flags]
+  )
 
   useEffect(() => {
     void hydrate()
@@ -61,14 +66,8 @@ export function SettingsPage({
 
   return createPortal(
     <div className="nt-settings fixed inset-0 z-[55] flex bg-bg text-text">
-      <SettingsSidebar
-        activeSectionId={active}
-        query={query}
-        onSelect={setActive}
-        onQueryChange={setQuery}
-        onClose={onClose}
-      />
-      <SettingsSearchContext.Provider value={query}>
+      <SettingsSidebar activeSectionId={active} search={search} onSelect={setActive} onClose={onClose} />
+      <SettingsSearchContext.Provider value={searchState}>
         <main className="min-w-0 flex-1 overflow-y-auto px-12 py-10">
           <div className="mx-auto max-w-[860px] space-y-10">
             <TerminalSection isActive={active === 'terminal'} />

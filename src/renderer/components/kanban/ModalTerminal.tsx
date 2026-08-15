@@ -121,8 +121,10 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
     open: searchOpen,
     readBuffer
   })
-  // MIRROR TerminalNode's findOpts — one source for the highlight colors.
+  // MIRROR TerminalNode's findOpts — one source for the highlight colors. `regex` mirrors the
+  // hook's own mode, same as the canvas node.
   const findOpts = {
+    regex: search.mode === 'regex',
     decorations: {
       matchBackground: '#ffd54f55',
       activeMatchBackground: '#ffb300',
@@ -132,12 +134,12 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
   }
   const handleNext = useCallback(() => {
     search.next()
-    if (search.query.trim()) searchAddonRef.current?.findNext(search.query, findOpts)
+    if (search.query.trim() && !search.error) searchAddonRef.current?.findNext(search.query, findOpts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search])
   const handlePrev = useCallback(() => {
     search.prev()
-    if (search.query.trim()) searchAddonRef.current?.findPrevious(search.query, findOpts)
+    if (search.query.trim() && !search.error) searchAddonRef.current?.findPrevious(search.query, findOpts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search])
 
@@ -457,6 +459,12 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
           current={search.current}
           onNext={handleNext}
           onPrev={handlePrev}
+          mode={search.mode}
+          onModeChange={search.setMode}
+          pattern={search.pattern}
+          flags={search.flags}
+          onFlagsChange={search.setFlags}
+          error={search.error}
           onClose={onCloseSearch}
         />
       )}
