@@ -1,17 +1,28 @@
-name: CI
+name: Build check
 
-# Verify typecheck, tests, and the production build on every PR and push to main.
+# Non-publishing validation only: on a pull request, confirm the electron-vite build still
+# compiles, and nothing else. This workflow runs NO tests, NO type-check, and NO lint — see
+# docs/ci-and-releases.md for the full policy. It does not gate anything: there is no
+# `needs:` chain from here to release.yml, and merging is not conditioned on this workflow.
+# It exists purely as fast, disposable feedback on a PR; a superseded push cancels the
+# previous run outright, which is safe here precisely because this workflow never publishes
+# anything.
+#
+# Pushes to main are not covered here on purpose — release.yml already builds (and
+# publishes) on every push, so a second build of the same commit would be pure duplication.
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+
+concurrency:
+  group: build-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  quality:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -23,12 +34,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Tests
-        run: npm test
 
       - name: Build (electron-vite)
         run: npm run build

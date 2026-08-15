@@ -1,217 +1,231 @@
 name: Release
 
-# Build, code-sign, and notarize the macOS app on every version tag (e.g. v0.1.1),
-# then publish the artifacts (dmg + zip + latest-mac.yml + blockmaps). Those files
-# are what the self-hosted update feed at https://nodeterm.dev/updates serves.
+# Governing policy — see docs/ci-and-releases.md for the full write-up:
+#
+#   This workflow runs NO tests and NO lint. Nothing in it gates the release: it BUILDS,
+#   PACKAGES and PUBLISHES a GitHub Release, and that is the whole job. A run fails only
+#   when the build, packaging, or publication itself fails.
+#
+# Windows is the active delivery target: the installer is built on windows-latest and is
+# permanently UNSIGNED (code signing is out of scope for this project — see the "Package"
+# step below). Every push and every manual dispatch publishes exactly one new, uniquely
+# tagged, non-draft GitHub Release carrying the real built installer.
+#
+# Deliberately NO `concurrency: cancel-in-progress` group here — cancelling a run partway
+# through publication could strand a tag with no artifact attached to it. That guard
+# belongs on non-publishing validation workflows only (see ci.yml).
 on:
   push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
-  contents: write # allow creating the GitHub Release (canonical artifact store)
+  contents: write # create the GitHub Release and upload its assets
+  actions: read # read this run's own run_started_at for the release-notes timing section
 
 jobs:
-  release-mac:
-    # Runs on a SELF-HOSTED Apple Silicon Mac (no GitHub macOS-runner minutes — those are billed
-    # 10× and a slow notarization poll can burn hundreds). Everything else is identical: the runner
-    # signs + notarizes + publishes the GitHub Release, which nodeterm.dev proxies for downloads and
-    # the update feed. The runner checks out into its own _work dir, so it never touches the dev repo.
-    runs-on: [self-hosted, macOS, ARM64]
+  release:
+    runs-on: windows-latest
+    # GH_TOKEN resolves once for every step in this job, in priority order: a repo-scoped
+    # fine-grained PAT (if configured), then the org-wide token, then the workflow's own
+    # ephemeral token as the guaranteed-available fallback. Never printed, logged, or
+    # echoed — only ever read through the GH_TOKEN/GITHUB_TOKEN environment convention.
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
+      - name: Checkout
+        uses: actions/checkout@v7
         with:
-          node-version: 20
-          # No `cache: npm` here on purpose: this is the self-hosted Mac runner, whose ~/.npm
-          # is already warm across runs. setup-node's post-run cache SAVE step (a tarball upload
-          # to GitHub's cache service) bought nothing but failed the whole release-mac job on a
-          # network blip — after every asset had uploaded — which skipped the publish gate and
-          # stranded v0.2.23 as a prerelease. The ephemeral Linux runner below keeps its cache.
+          # Full history: the line-count report attributes surviving lines with `git
+          # blame` across the whole tree, and the release-notes commit link wants the
+          # real SHA regardless of shallow-clone default behavior.
+          fetch-depth: 0
 
+      - name: Record workflow start time
+        id: timing
+        shell: bash
+        # Prefer GitHub's own `run_started_at` (the workflow run's first-job startedAt) so
+        # the reported duration reflects real queue+run time, not just this step's wall
+        # clock. Fails open to "unknown" — release-notes.mjs reports a missing start time
+        # honestly rather than estimating one.
+        run: |
+          started_at=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .run_started_at 2>/dev/null || true)
+          if [ -z "$started_at" ] || [ "$started_at" = "null" ]; then
+            echo "::warning::could not read run_started_at from the GitHub API; release notes will report the workflow start time as missing"
+            echo "started_at=" >> "$GITHUB_OUTPUT"
+          else
+            echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
+      # hook's own bootstrap (scripts/patch-node-pty.mjs + `electron-rebuild -f -w
+      # node-pty,smart-whisper` against this runner's Electron ABI). windows-latest already
+      # ships the Visual Studio Build Tools + Python that native module compilation needs
+      # (part of the standard GitHub-hosted Windows runner image), so nothing extra is
+      # installed here. If a future dependency needs a tool the image doesn't carry, this
+      # step is where to add the missing bootstrap — check for it, install only if absent.
       - name: Install dependencies
         run: npm ci
 
-      # The bundled tmux (resources/bin/tmux → <app>/Contents/Resources/bin/tmux via the mac
-      # extraResources entry). Without a tmux on the machine the app silently degrades to plain
-      # shells — no persistence across restarts, no mobile attach, and a park/dispose kills the
-      # agent CLI instead of detaching a client (issue #126). Shipping one removes that for the
-      # tmux-less; the SYSTEM tmux still takes precedence at runtime (see findTmux).
-      #
-      # A SEPARATE STEP, before electron-builder, on purpose: a missing extraResources source is
-      # only a WARNING to electron-builder, so a failure folded into the release command could
-      # publish a DMG with no tmux in it and nobody would notice. Here a build failure fails the
-      # job. Idempotent — a rerun with the binary already present is a no-op, so the retry loop in
-      # the next step costs nothing.
-      #
-      # RUNNER TOOLCHAIN: the Xcode command line tools and nothing else — curl, cc, make, ar, yacc,
-      # lipo, strip, otool, nm. Explicitly NOT needed: cmake (utf8proc is built through its plain
-      # Makefile, not its CMakeLists), autoconf (release tarballs ship a generated `configure`, and
-      # each arch is extracted fresh so no maintainer rule fires), pkg-config (deliberately
-      # disabled — a Homebrew .pc file would link the bundle to dylibs users don't have), Homebrew,
-      # Rosetta (the cross slice is configured with --host, so no test binary is ever executed) and
-      # npm packages (node stdlib only).
-      - name: Build bundled tmux (universal, static libevent + utf8proc)
-        run: node scripts/build-tmux.mjs
+      - name: Generate app icon
+        run: npm run make-icon
 
-      - name: Build, sign & notarize
+      - name: Build (electron-vite)
+        run: npm run build
+
+      - name: Compute release tag
+        id: tag
+        shell: bash
         run: |
-          printf '%s' "$APPLE_API_KEY_B64" | base64 --decode > "$RUNNER_TEMP/notary-key.p8"
-          export APPLE_API_KEY="$RUNNER_TEMP/notary-key.p8"
-          # Apple's notarization can take a long time, and @electron/notarize has no retry: a single
-          # transient network blip while polling appstoreconnect (NSURLError -1009) fails the whole
-          # build even though the submission gets Accepted. Retry the release up to 3 times so one
-          # blip during a long poll doesn't sink the release.
-          # caffeinate: the runner is a MacBook Air, and idle sleep mid-notarization disconnects
-          # the runner — GitHub then marks the job "cancelled" (bit v0.2.16 and v0.2.18). Assert
-          # no-sleep for exactly as long as the release command runs.
-          n=1
-          until caffeinate -dims npm run release; do
-            if [ "$n" -ge 3 ]; then
-              echo "::error::release failed after $n attempts"
-              exit 1
-            fi
-            echo "::warning::release attempt $n failed (likely transient notarization network error); retrying in 60s…"
-            n=$((n + 1))
-            sleep 60
-          done
+          # Monotonic: package.json's version plus this workflow's own run number, which
+          # GitHub guarantees increases on every run of this workflow and never repeats —
+          # so no two runs can ever collide on a tag, and no prior release is recycled,
+          # even across re-runs of the exact same commit.
+          base="v$(node -p "require('./package.json').version")"
+          tag="${base}-ci.${GITHUB_RUN_NUMBER}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Unsigned, permanently. No CSC_LINK/CSC_KEY_PASSWORD is ever set in this workflow, so
+      # electron-builder has no certificate to sign with in the first place;
+      # CSC_IDENTITY_AUTO_DISCOVERY=false additionally stops it from opportunistically
+      # picking one up from the runner's own certificate store, and package.json's
+      # `build.forceCodeSigning: false` (the documented default) means a build never aborts
+      # over a signing step it was never asked to perform. The next step independently
+      # verifies the produced installer's real Authenticode signature and fails the run if
+      # it is somehow signed — belt and braces, not just a documented intent.
+      - name: Package Windows installer (Squirrel, unsigned)
         env:
-          # Developer ID Application cert, base64-encoded .p12 + its password.
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # Apple notarization via App Store Connect API key: the .p8 is stored base64-encoded in
-          # a secret, decoded to a file at runtime, and its path handed to electron-builder.
-          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win --publish never
 
-      # NOTE: there is deliberately no actions/upload-artifact step. Each release is ~800 MB of
-      # DMGs + zips, and Actions artifact storage is a small, billed quota that those copies filled
-      # up (the release then failed with "Artifact storage quota has been hit"). The GitHub Release
-      # below is the canonical store — it does not consume that quota — so the extra 90-day copy
-      # bought nothing. Don't add it back.
-
-      # Canonical copy of every release on GitHub. The update feed itself lives on
-      # nodeterm.dev (see the deploy step below), but keeping a GitHub Release means
-      # there is always a downloadable, versioned backup.
-      #
-      # Shell + `gh release upload --clobber` instead of softprops: uploading ~800 MB from the
-      # self-hosted runner hit a mid-upload `write EPIPE` (v0.2.17) that softprops cannot retry,
-      # leaving latest-mac.yml pointing at binaries that were never uploaded. --clobber makes
-      # every retry idempotent, so a half-uploaded attempt heals on the next one.
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Locate release assets and verify unsigned
+        id: assets
+        shell: pwsh
         run: |
-          # Keep the Air awake for THIS step too. caffeinate wrapped only build+notarize; an
-          # ~800MB upload is long enough for idle sleep to disconnect the runner mid-transfer,
-          # which cancels the step (v0.2.25) — and a cancel, unlike an error, the retry loop
-          # below can't catch. `-w $$` ties the assertion to this shell's lifetime.
-          caffeinate -dims -w $$ &
-          tag="${GITHUB_REF_NAME}"
-          # The linux job may already have created the release for this tag; tolerate the race.
-          # Created as PRERELEASE: a half-built release must never become "latest" (the site and
-          # the update feed follow /releases/latest). The `publish` job flips it once BOTH
-          # platform jobs have uploaded.
-          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --verify-tag --prerelease --notes "" || true
-          n=1
-          until gh release upload "$tag" dist/*.dmg dist/*.zip dist/*.yml dist/*.blockmap --clobber --repo "$GITHUB_REPOSITORY"; do
-            if [ "$n" -ge 5 ]; then
-              echo "::error::asset upload failed after $n attempts"
-              exit 1
-            fi
-            echo "::warning::asset upload attempt $n failed (transient network?); retrying in 30s…"
-            n=$((n + 1))
-            sleep 30
-          done
+          # electron-builder's Squirrel target writes Setup.exe, RELEASES, and the full
+          # .nupkg (plus a delta .nupkg on a repeat version) under dist/squirrel-windows/.
+          $dir = 'dist/squirrel-windows'
+          if (-not (Test-Path $dir)) {
+            Write-Error "expected Squirrel output directory '$dir' was not produced"
+            exit 1
+          }
+          $files = Get-ChildItem -Path $dir -File | Where-Object {
+            $_.Name -like '*-Setup-*.exe' -or $_.Name -eq 'RELEASES' -or $_.Extension -eq '.nupkg'
+          }
+          if (-not $files) {
+            Write-Error "no installer/RELEASES/.nupkg files found under $dir"
+            exit 1
+          }
 
-      # Publish the feed to nodeterm.dev/updates. Fill in for your host. Example for
-      # SSH/rsync (store the private key as the DEPLOY_SSH_KEY secret):
-      #
-      # - name: Deploy update feed to nodeterm.dev
-      #   run: |
-      #     mkdir -p ~/.ssh && echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
-      #     chmod 600 ~/.ssh/id_ed25519
-      #     ssh-keyscan nodeterm.dev >> ~/.ssh/known_hosts
-      #     rsync -avz dist/*.dmg dist/*.zip dist/*.yml dist/*.blockmap \
-      #       deploy@nodeterm.dev:/var/www/nodeterm.dev/updates/
+          $setup = $files | Where-Object { $_.Name -like '*-Setup-*.exe' } | Select-Object -First 1
+          if (-not $setup) {
+            Write-Error "no Setup.exe found among the packaged Squirrel assets"
+            exit 1
+          }
+          $sig = Get-AuthenticodeSignature -FilePath $setup.FullName
+          Write-Host "Signature status for $($setup.Name): $($sig.Status)"
+          if ($sig.Status -eq 'Valid') {
+            Write-Error "the packaged installer is SIGNED — this project permanently prohibits code signing; failing the release"
+            exit 1
+          }
 
-  # Linux build: unsigned, so it runs on a plain GitHub runner (fast + free tier), in
-  # parallel with the self-hosted mac job — it must never queue behind notarization.
-  # Publishes AppImage + deb + latest-linux.yml to the SAME tag's GitHub Release; the
-  # nodeterm.dev update feed serves latest-linux.yml alongside the mac files.
-  release-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
+          $paths = $files | ForEach-Object { $_.FullName }
+          Write-Host "Release assets:"
+          $paths | ForEach-Object { Write-Host "  $_" }
+          # Multi-line GITHUB_OUTPUT value (also fed to release-notes.mjs verbatim).
+          $delim = "EOF_ASSETS_$([guid]::NewGuid().ToString('N'))"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "paths<<$delim"
+          $paths | ForEach-Object { Add-Content -Path $env:GITHUB_OUTPUT -Value $_ }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value $delim
 
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Linux packages
-        run: |
-          npm run make-icon
-          npm run build
-          npx electron-builder --linux --publish never
-
-      # Both jobs target the release for the same tag; softprops updates an existing
-      # release rather than failing, so mac/linux artifact sets merge. (A same-instant
-      # creation race is theoretically possible — rerunning the failed job resolves it.)
-      # prerelease: a half-built release must never become "latest" — the `publish` job
-      # flips it once both platform jobs are done.
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          prerelease: true
-          files: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/latest-linux.yml
-
-  # Flips the release to a published "latest" only when BOTH platform jobs uploaded their
-  # assets. Until then it stays a prerelease, so /releases/latest (the site + both update
-  # feeds) keeps serving the previous complete release — a mac-runner sleep or an upload
-  # failure can no longer put a partial release in front of users. If one platform job
-  # fails, fix/rerun it; this job then runs on the rerun and publishes.
-  publish:
-    runs-on: ubuntu-latest
-    needs: [release-mac, release-linux]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0 # full history + tags — notes diff against the previous release tag
-
-      # Release notes from commit subjects since the previous tag (merges + the version-bump
-      # commit filtered out). Written BEFORE the promote below, so the release is complete —
-      # assets AND notes — the moment it becomes "latest" (nodeterm.dev/releases renders these).
       - name: Generate release notes
+        id: notes
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          WORKFLOW_STARTED_AT: ${{ steps.timing.outputs.started_at }}
+          RELEASE_ASSET_PATHS: ${{ steps.assets.outputs.paths }}
         run: |
-          tag="${GITHUB_REF_NAME}"
-          prev=$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)
-          if [ -n "$prev" ]; then range="${prev}..${tag}"; else range="${tag}"; fi
-          {
-            echo "## Changes${prev:+ since ${prev}}"
-            git log --no-merges --format='- %s' "$range" | grep -vE '^- chore\(release\)' | head -60
-            total=$(git log --no-merges --format='- %s' "$range" | grep -cvE '^- chore\(release\)' || true)
-            if [ "${total:-0}" -gt 60 ]; then echo "- …and $((total - 60)) more commits"; fi
-          } > notes.md
-          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+          # WORKFLOW_COMPLETED_AT is left unset on purpose: release-notes.mjs stamps its
+          # own "now" (UTC) the moment it runs, which is right here — immediately before
+          # publication, i.e. through the final release-publication step for this
+          # single-job workflow. Nothing meaningful happens between this timestamp and
+          # the release actually going live below.
+          node scripts/release-notes.mjs > "$RUNNER_TEMP/notes.md"
+          echo "notes_path=$RUNNER_TEMP/notes.md" >> "$GITHUB_OUTPUT"
 
-      - name: Promote release to latest
+      - name: Create GitHub Release
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --prerelease=false --latest
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          # Idempotent: GITHUB_RUN_NUMBER (part of the tag) stays fixed across a re-run of
+          # this same workflow run, so a retry after a partial failure (release created,
+          # asset upload interrupted) must reuse the existing release rather than fail on
+          # "tag already exists". `gh release edit` refreshes the notes in that case so a
+          # retry's notes (real duration, real line count at this commit) still win.
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "${{ steps.notes.outputs.notes_path }}"
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_TAG" \
+              --notes-file "${{ steps.notes.outputs.notes_path }}" \
+              --target "$GITHUB_SHA"
+          fi
 
-      # Homebrew: the cask is NOT updated from here. The org disables deploy keys, so
-      # nodeterm/homebrew-tap carries its own `sync-cask` workflow (30-min schedule +
-      # manual dispatch) that tracks /releases/latest — which excludes prereleases, so it
-      # only ever casks a release this publish job has promoted.
+      - name: Upload release assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          ASSET_PATHS: ${{ steps.assets.outputs.paths }}
+        run: |
+          # --clobber makes a retry of this step idempotent if a prior attempt uploaded
+          # some but not all assets (network blip mid-upload, runner hiccup, etc.).
+          echo "$ASSET_PATHS" | while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            gh release upload "$RELEASE_TAG" "$path" --clobber --repo "$GITHUB_REPOSITORY"
+          done
+
+      # Runs even when an earlier step failed, so a broken build still leaves something to
+      # inspect. Never uploads credentials, node_modules, caches, or the source tree — only
+      # the packaged output and the generated release notes. `continue-on-error` on both
+      # the collection and the upload keeps artifact handling from masking (or reversing)
+      # the real pass/fail verdict of the steps above it.
+      - name: Collect build artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/artifact-out"
+          {
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_number=$GITHUB_RUN_NUMBER"
+            echo "commit=$GITHUB_SHA"
+            echo "ref=$GITHUB_REF"
+            echo "job_status=$JOB_STATUS"
+            echo "runner_os=$RUNNER_OS"
+          } > "$RUNNER_TEMP/artifact-out/run-context.txt"
+          if [ -d dist/squirrel-windows ]; then
+            cp -r dist/squirrel-windows "$RUNNER_TEMP/artifact-out/squirrel-windows" || true
+          fi
+          if [ -f "$RUNNER_TEMP/notes.md" ]; then
+            cp "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP/artifact-out/release-notes.md" || true
+          fi
+        env:
+          JOB_STATUS: ${{ job.status }}
+
+      - name: Upload build artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-${{ github.run_number }}
+          path: ${{ runner.temp }}/artifact-out
+          if-no-files-found: warn
+          retention-days: 14

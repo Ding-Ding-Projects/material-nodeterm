@@ -140,7 +140,13 @@ checklists for exactly this.
 
 ## Pull requests
 
-- Branch from `main`. CI runs `quality`, `CodeQL` and `Dependency review`; all three are required.
+- Branch from `main`. **GitHub Actions runs no tests, no type-check, and no lint** — see
+  [`docs/ci-and-releases.md`](docs/ci-and-releases.md) for the full policy. `ci.yml` builds the
+  app on your PR as fast disposable feedback (nothing required, nothing gated); `CodeQL` and
+  `Dependency review` still run and are worth reading if they flag something. **Run
+  `npm run typecheck` and `npm test` yourself before you push** — that is where checking
+  actually happens now, and a failing local test is still a real defect to fix in the same
+  change even though nothing in Actions will stop you from pushing it.
 - Explain **why**, not just what. If a decision has a trade-off, name it and say what you rejected.
 - If you measured something, put the numbers in — they save the next person the same afternoon.
 - Say what you did **not** verify. That is more useful than a confident summary.

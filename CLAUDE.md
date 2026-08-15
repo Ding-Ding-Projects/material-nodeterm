@@ -1738,6 +1738,14 @@ node-pty, output `dist/`). The app icon is generated from the nodeterm mark by
 (local **unsigned** arm64 `.dmg` smoke test). Production release signing/notarization and the
 update-feed hosting are handled outside this repo.
 
+**Windows** (the active delivery target for CI): `build.win` targets Squirrel.Windows
+(`build.squirrelWindows`), signing permanently disabled — no `CSC_LINK`/`CSC_KEY_PASSWORD` is
+ever set, `CSC_IDENTITY_AUTO_DISCOVERY=false` in CI, and root `build.forceCodeSigning: false`.
+`npm run dist:win` is the local smoke test. `.github/workflows/release.yml` builds + packages + publishes an unsigned Windows
+installer as a new GitHub Release on **every push** and on `workflow_dispatch` — it runs no
+tests and no lint; see `docs/ci-and-releases.md` for the full policy and
+`scripts/release-notes.mjs` / `scripts/count-lines.mjs` for what the release notes carry.
+
 Auto-update uses **electron-updater** (`src/main/updater.ts`, `initUpdater(win)` from `index.ts`):
 runs **only when `app.isPackaged`** (dev = no-op), checks on launch + every 6h, auto-downloads,
 forwards the lifecycle (`update-available` / `download-progress` / `update-downloaded` / errors)

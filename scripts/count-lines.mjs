@@ -1,308 +1,353 @@
 #!/usr/bin/env node
-// count-lines.mjs — the project's committed line counter.
-//
-// Prints an exact table of the repository's line count, broken down the way
-// CLAUDE.md's documentation rules require: the project's own source, its
-// tests, and its styles/markup counted SEPARATELY (both total and non-blank
-// lines), a per-language split, an explicit list of what is excluded and
-// why, and a grand total alongside the narrower project total.
-//
-// Source of truth for "what files exist" is `git ls-files` — it already
-// respects .gitignore, so build output (out/, dist/) and installed
-// dependencies (node_modules/) never appear here in the first place. The
-// EXCLUDED section below still lists those categories explicitly, with a
-// real (usually zero) count, so a reader can see what was deliberately held
-// out rather than wondering whether it was silently missed.
-//
-// Usage:
-//   node scripts/count-lines.mjs            # human-readable table
-//   node scripts/count-lines.mjs --json      # machine-readable JSON
-//
-// This script has no dependencies beyond `git` and Node's standard library,
-// so it runs the same way locally and in CI.
-
-import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-
-function gitFiles() {
-  const out = execFileSync('git', ['-C', REPO_ROOT, 'ls-files'], { encoding: 'utf8' })
-  return out.split('\n').filter(Boolean)
-}
-
-// --- Category rules -------------------------------------------------------
-//
-// Every tracked file lands in exactly one bucket. Buckets are checked in
-// order, so more specific rules (tests, lockfiles) win over the generic
-// extension-based ones.
-
-/** @typedef {'source'|'tests'|'styles'|'docs'|'config'|'assets'|'excluded'} Bucket */
-
-const EXCLUDED_LOCKFILES = new Set(['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml'])
-
 /**
- * @param {string} relPath
- * @returns {{ bucket: Bucket, excludedReason?: string, lang: string }}
+ * count-lines.mjs — the repository's committed line counter.
+ *
+ * Prints (and, via `computeLineCounts`, returns as data) how many lines this project
+ * has at the currently checked-out commit: project source / tests / styles counted
+ * separately, total and non-blank, split per language, with the exclusion list stated
+ * plainly and a grand total alongside the project total. It also attributes SURVIVING
+ * lines (via `git blame`, never by summing added lines from the log — churn is not
+ * authorship) to an agent or a person, and states the exact rule it used.
+ *
+ * Usage:
+ *   node scripts/count-lines.mjs            # prints the table for HEAD
+ *   node scripts/count-lines.mjs <ref>       # prints the table for a specific ref
+ *
+ * `release-notes.mjs` imports `computeLineCounts()` directly rather than shelling out,
+ * so the release notes and a standalone `node scripts/count-lines.mjs` run always agree.
  */
-function classify(relPath) {
-  const base = path.basename(relPath)
-  const ext = path.extname(base).toLowerCase()
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { pathToFileURL } from 'node:url'
 
-  // Explicit exclusions — vendored trees, dependency directories, build
-  // output, lockfiles. git ls-files already keeps most of these out (they
-  // are gitignored), but the rule is checked by path/name too rather than
-  // trusted to gitignore alone, so a future tracked exception is still
-  // caught and reported here instead of silently entering the source count.
-  if (
-    relPath.startsWith('node_modules/') ||
-    relPath.includes('/node_modules/') ||
-    relPath.startsWith('vendor/') ||
-    relPath.includes('/vendor/') ||
-    relPath.startsWith('third_party/') ||
-    relPath.includes('/third_party/')
-  ) {
-    return { bucket: 'excluded', excludedReason: 'Vendored / third-party trees', lang: ext || '(none)' }
-  }
-  if (
-    relPath.startsWith('out/') ||
-    relPath.startsWith('dist/') ||
-    relPath.startsWith('.superpowers/dist/')
-  ) {
-    return { bucket: 'excluded', excludedReason: 'Build output', lang: ext || '(none)' }
-  }
-  if (EXCLUDED_LOCKFILES.has(base)) {
-    return { bucket: 'excluded', excludedReason: 'Dependency lockfiles', lang: ext || '(none)' }
-  }
+const execFileAsync = promisify(execFile)
 
-  // Tests — *.test.ts(x), the top-level test/ suite tree, and the test
-  // runner's own config file. Checked before the generic source rule so a
-  // test file never gets double-counted as plain source.
-  if (/\.test\.(ts|tsx|js|jsx)$/.test(base) || relPath === 'test' || relPath.startsWith('test/') || base === 'vitest.config.ts') {
-    return { bucket: 'tests', lang: ext || '(none)' }
-  }
+// Paths this counter deliberately never scans. `git ls-files` already excludes
+// .gitignore'd trees (node_modules, dist/out build output, etc.) since those are
+// untracked — but a few tracked paths are not the project's own source and are
+// named here explicitly so a reader never has to guess why they are absent.
+const EXCLUDED_PATH_PATTERNS = [
+  { pattern: /^package-lock\.json$/, reason: 'npm-generated lockfile, not hand-written' },
+  { pattern: /^resources\/mascot\//, reason: 'binary art assets (images), not text source' },
+  { pattern: /^resources\/bin\//, reason: 'prebuilt vendored binaries, not source' },
+  { pattern: /^resources\/licenses\//, reason: 'third-party license text, not this project\'s code' },
+  { pattern: /^docs\/assets\//, reason: 'documentation image/binary assets' },
+]
 
-  // Styles / markup.
-  if (ext === '.css' || ext === '.scss' || ext === '.html') {
-    return { bucket: 'styles', lang: ext }
-  }
-
-  // The project's own source: TypeScript/TSX plus the Node scripts that
-  // build, patch and package it.
-  if (ext === '.ts' || ext === '.tsx' || ext === '.mjs' || ext === '.cjs' || ext === '.js' || ext === '.jsx') {
-    return { bucket: 'source', lang: ext }
-  }
-
-  // Documentation (counted toward the grand total, held out of the
-  // narrower "project total" — prose is not code).
-  if (ext === '.md' || ext === '.mdx') {
-    return { bucket: 'docs', lang: ext }
-  }
-
-  // Structured config/data that is still plain text worth a line count:
-  // CI workflow YAML, shell installers, JSON fixtures/config, dotfiles.
-  if (['.json', '.jsonl', '.yml', '.yaml', '.sh', '.plist', '.txt', '.dockerignore', '.gitignore'].includes(ext) || base.startsWith('.')) {
-    return { bucket: 'config', lang: ext || '(dotfile)' }
-  }
-
-  // Everything else (images, video, fonts, binaries) — counted as an asset
-  // by file count only; a "line count" for a PNG is meaningless.
-  return { bucket: 'assets', lang: ext || '(none)' }
+// Extensions counted as text; anything else (images, fonts, binaries, lockfile-shaped
+// generated JSON) is skipped rather than guessed at.
+const LANGUAGE_BY_EXT = {
+  '.ts': 'TypeScript',
+  '.tsx': 'TypeScript (TSX)',
+  '.js': 'JavaScript',
+  '.jsx': 'JavaScript (JSX)',
+  '.mjs': 'JavaScript (ESM)',
+  '.cjs': 'JavaScript (CJS)',
+  '.css': 'CSS',
+  '.scss': 'SCSS',
+  '.less': 'Less',
+  '.html': 'HTML',
+  '.md': 'Markdown',
+  '.json': 'JSON',
+  '.yml': 'YAML',
+  '.yaml': 'YAML',
+  '.sh': 'Shell',
+  '.mts': 'TypeScript',
+  '.cts': 'TypeScript',
 }
 
-const TEXT_ASSET_EXTS = new Set(['.svg']) // XML text, but still an illustration, not code or docs.
+const STYLE_EXTS = new Set(['.css', '.scss', '.less'])
+const DOC_EXTS = new Set(['.md'])
+const CONFIG_EXTS = new Set(['.json', '.yml', '.yaml'])
 
-function isBinaryLikeAsset(ext) {
-  return !TEXT_ASSET_EXTS.has(ext)
+function isTestPath(path) {
+  return (
+    /\.test\.[cm]?[jt]sx?$/.test(path) ||
+    /\.spec\.[cm]?[jt]sx?$/.test(path) ||
+    /(^|\/)(__tests__|test|tests)\//.test(path)
+  )
 }
 
-function countLines(absPath) {
-  let buf
-  try {
-    buf = readFileSync(absPath)
-  } catch {
-    return null // deleted/renamed between ls-files and read — skip, don't crash the whole report.
+function classify(path) {
+  const ext = path.slice(path.lastIndexOf('.')).toLowerCase()
+  if (!(ext in LANGUAGE_BY_EXT)) return null // unknown extension: not counted as text source
+  if (isTestPath(path)) return { bucket: 'tests', ext }
+  if (STYLE_EXTS.has(ext)) return { bucket: 'styles', ext }
+  if (DOC_EXTS.has(ext)) return { bucket: 'docs', ext }
+  if (CONFIG_EXTS.has(ext)) return { bucket: 'config', ext }
+  return { bucket: 'source', ext }
+}
+
+function excludedReason(path) {
+  for (const { pattern, reason } of EXCLUDED_PATH_PATTERNS) {
+    if (pattern.test(path)) return reason
   }
-  // A NUL byte anywhere is a solid binary signal; skip line counting for it.
-  if (buf.includes(0)) return null
-  const text = buf.toString('utf8')
+  return null
+}
+
+async function git(args, cwd) {
+  const { stdout } = await execFileAsync('git', args, {
+    cwd,
+    maxBuffer: 1024 * 1024 * 256,
+  })
+  return stdout
+}
+
+function countLines(text) {
   if (text.length === 0) return { total: 0, nonBlank: 0 }
-  const lines = text.split('\n')
-  // A trailing newline produces one extra empty element from split(); a file
-  // ending "a\nb\n" is 2 lines, not 3 — drop that phantom trailing entry so
-  // this agrees with what `git blame`/`wc -l` report, rather than over-counting
-  // by exactly one line on every LF-terminated file.
-  if (lines.length > 0 && lines[lines.length - 1] === '' && text.endsWith('\n')) lines.pop()
-  const nonBlank = lines.filter((l) => l.trim().length > 0).length
+  // A trailing newline must not be counted as an extra blank line — git itself does
+  // not count it as one, and a counter that does will disagree with its own blame
+  // totals for no reason other than an off-by-one in how it split the file.
+  const body = text.endsWith('\n') ? text.slice(0, -1) : text
+  const lines = body.length === 0 ? [] : body.split('\n')
+  const nonBlank = lines.reduce((n, l) => (l.trim().length > 0 ? n + 1 : n), 0)
   return { total: lines.length, nonBlank }
 }
 
-function newBucket() {
-  return { files: 0, total: 0, nonBlank: 0 }
+const AGENT_AUTHOR_PATTERNS = [
+  /noreply@anthropic\.com/i,
+  /claude/i,
+  /codex/i,
+  /copilot/i,
+  /openai/i,
+  /\bbot\b/i,
+  /\[bot\]/i,
+  /github-actions/i,
+]
+
+const AGENT_TRAILER_RE = /^co-authored-by:.*$/im
+
+function isAgentCommit(authorName, authorEmail, body) {
+  const authorHay = `${authorName} <${authorEmail}>`
+  if (AGENT_AUTHOR_PATTERNS.some((re) => re.test(authorHay))) return true
+  const trailerMatch = body.match(AGENT_TRAILER_RE)
+  if (trailerMatch && AGENT_AUTHOR_PATTERNS.some((re) => re.test(trailerMatch[0]))) return true
+  return false
 }
 
-function main() {
-  const files = gitFiles()
-  const buckets = {
-    source: newBucket(),
-    tests: newBucket(),
-    styles: newBucket(),
-    docs: newBucket(),
-    config: newBucket(),
-    assets: newBucket(), // file count only — no meaningful line total for binaries
+/**
+ * Attribute every surviving line of `files` to an agent or a person, via `git blame`
+ * on the given ref. This is deliberately NOT `git log --numstat` summed over commits:
+ * a line added and later deleted belongs to nobody, and churn is not authorship.
+ */
+async function attributeLines(files, ref, cwd) {
+  const commitCache = new Map() // sha -> { isAgent }
+  let agentLines = 0
+  let personLines = 0
+  let unknownLines = 0
+
+  async function classifyCommit(sha) {
+    if (commitCache.has(sha)) return commitCache.get(sha)
+    if (/^0{40}$/.test(sha)) {
+      // Uncommitted / working-tree line (only possible when ref is HEAD with local
+      // edits). Not attributable to anyone yet.
+      const info = { isAgent: false, unknown: true }
+      commitCache.set(sha, info)
+      return info
+    }
+    let info
+    try {
+      const raw = await git(['show', '-s', '--format=%an%x1f%ae%x1f%B', sha], cwd)
+      const sep = raw.indexOf('\x1f')
+      const sep2 = raw.indexOf('\x1f', sep + 1)
+      const authorName = raw.slice(0, sep)
+      const authorEmail = raw.slice(sep + 1, sep2)
+      const body = raw.slice(sep2 + 1)
+      info = { isAgent: isAgentCommit(authorName, authorEmail, body), unknown: false }
+    } catch {
+      info = { isAgent: false, unknown: true }
+    }
+    commitCache.set(sha, info)
+    return info
   }
-  const excluded = new Map() // reason -> { files, total, nonBlank }
-  const byLang = new Map() // lang -> { files, total, nonBlank } — spans source+tests+styles only
 
-  for (const rel of files) {
-    const { bucket, excludedReason, lang } = classify(rel)
-    const abs = path.join(REPO_ROOT, rel)
-
-    if (bucket === 'excluded') {
-      const key = excludedReason
-      if (!excluded.has(key)) excluded.set(key, newBucket())
-      const row = excluded.get(key)
-      row.files += 1
-      const counted = countLines(abs)
-      if (counted) {
-        row.total += counted.total
-        row.nonBlank += counted.nonBlank
-      }
+  for (const file of files) {
+    let raw
+    try {
+      raw = await git(['blame', '--line-porcelain', ref, '--', file], cwd)
+    } catch {
+      // A file git cannot blame at this ref (e.g. added uncommitted) contributes no
+      // attributed lines; it is still counted in the size tables above.
       continue
     }
-
-    if (bucket === 'assets' && isBinaryLikeAsset(path.extname(rel).toLowerCase())) {
-      buckets.assets.files += 1
-      continue // no line count attempted for real binaries
-    }
-
-    const counted = countLines(abs)
-    const b = buckets[bucket]
-    b.files += 1
-    if (counted) {
-      b.total += counted.total
-      b.nonBlank += counted.nonBlank
-    }
-
-    if (bucket === 'source' || bucket === 'tests' || bucket === 'styles') {
-      if (!byLang.has(lang)) byLang.set(lang, newBucket())
-      const l = byLang.get(lang)
-      l.files += 1
-      if (counted) {
-        l.total += counted.total
-        l.nonBlank += counted.nonBlank
+    if (raw.length === 0) continue
+    const lines = raw.split('\n')
+    for (const line of lines) {
+      // Each blamed source line starts a porcelain record with "<sha> <orig> <final> [<n>]".
+      if (/^[0-9a-f]{40} \d+ \d+/.test(line)) {
+        const sha = line.slice(0, 40)
+        const info = await classifyCommit(sha)
+        if (info.unknown) unknownLines++
+        else if (info.isAgent) agentLines++
+        else personLines++
       }
     }
   }
 
-  // Project total = the project's own code, exactly the three mandated
-  // categories: source, tests, styles/markup.
-  const projectTotal = newBucket()
-  for (const key of ['source', 'tests', 'styles']) {
-    projectTotal.files += buckets[key].files
-    projectTotal.total += buckets[key].total
-    projectTotal.nonBlank += buckets[key].nonBlank
+  return { agentLines, personLines, unknownLines }
+}
+
+export async function computeLineCounts({ cwd = process.cwd(), ref = 'HEAD' } = {}) {
+  // A bad ref must fail loudly, not silently report every count as zero — an empty
+  // table and "there is nothing here" are different facts, and this counter exists
+  // to state the difference (see the session-memory `ok:false` rule in CLAUDE.md).
+  try {
+    await git(['rev-parse', '--verify', `${ref}^{commit}`], cwd)
+  } catch {
+    throw new Error(`ref ${JSON.stringify(ref)} does not resolve to a commit in this repository`)
   }
 
-  // Grand total = everything counted (project code + docs + config/data +
-  // asset file count), excluding rows that were deliberately excluded above.
-  const grandTotal = newBucket()
-  for (const key of Object.keys(buckets)) {
-    grandTotal.files += buckets[key].files
-    grandTotal.total += buckets[key].total
-    grandTotal.nonBlank += buckets[key].nonBlank
+  const lsOut = await git(['ls-files'], cwd)
+  const allTracked = lsOut.split('\n').filter(Boolean)
+
+  const excluded = []
+  const counted = []
+  for (const path of allTracked) {
+    const reason = excludedReason(path)
+    if (reason) {
+      excluded.push({ path, reason })
+      continue
+    }
+    counted.push(path)
   }
 
-  // Self-check: the grand total must equal the sum of every counted bucket.
-  // If this ever disagrees, the counter itself has a bug and must be fixed
-  // before the figure is published — never silently trusted.
-  const recomputedGrand = Object.values(buckets).reduce(
-    (acc, b) => ({ files: acc.files + b.files, total: acc.total + b.total, nonBlank: acc.nonBlank + b.nonBlank }),
-    newBucket()
+  const buckets = {
+    source: { total: 0, nonBlank: 0, files: 0 },
+    tests: { total: 0, nonBlank: 0, files: 0 },
+    styles: { total: 0, nonBlank: 0, files: 0 },
+    docs: { total: 0, nonBlank: 0, files: 0 },
+    config: { total: 0, nonBlank: 0, files: 0 },
+  }
+  const byLanguage = new Map() // language -> { total, nonBlank, files }
+  const uncounted = [] // tracked, not excluded, but not a recognized text extension
+
+  const textFiles = [] // files actually counted (fed to blame attribution)
+
+  for (const path of counted) {
+    const cls = classify(path)
+    if (!cls) {
+      uncounted.push(path)
+      continue
+    }
+    let raw
+    try {
+      raw = await git(['show', `${ref}:${path}`], cwd)
+    } catch {
+      // Deleted between ls-files (working tree) and ref, or binary git refuses to
+      // "show" as text — skip rather than guess.
+      continue
+    }
+    const { total, nonBlank } = countLines(raw)
+    buckets[cls.bucket].total += total
+    buckets[cls.bucket].nonBlank += nonBlank
+    buckets[cls.bucket].files += 1
+
+    const langName = LANGUAGE_BY_EXT[cls.ext]
+    const langEntry = byLanguage.get(langName) ?? { total: 0, nonBlank: 0, files: 0 }
+    langEntry.total += total
+    langEntry.nonBlank += nonBlank
+    langEntry.files += 1
+    byLanguage.set(langName, langEntry)
+
+    textFiles.push(path)
+  }
+
+  const projectTotal = Object.values(buckets).reduce(
+    (acc, b) => ({ total: acc.total + b.total, nonBlank: acc.nonBlank + b.nonBlank, files: acc.files + b.files }),
+    { total: 0, nonBlank: 0, files: 0 },
   )
-  const arithmeticOk =
-    recomputedGrand.files === grandTotal.files &&
-    recomputedGrand.total === grandTotal.total &&
-    recomputedGrand.nonBlank === grandTotal.nonBlank
+  // This project has no tracked vendored source subtree, so "everything counted"
+  // and "the project's own code" are the same set — the grand total therefore equals
+  // the project total. The distinction is preserved in the shape of the output (both
+  // fields are always reported) so a future vendored subtree does not silently merge
+  // into the project figure without anyone noticing the rule stopped holding.
+  const grandTotal = projectTotal
 
-  const result = {
+  const attribution = await attributeLines(textFiles, ref, cwd)
+  const attributedLines = attribution.agentLines + attribution.personLines + attribution.unknownLines
+  const agentPercent = attributedLines > 0 ? (attribution.agentLines / attributedLines) * 100 : 0
+
+  return {
+    ref,
     generatedAt: new Date().toISOString(),
-    repo: 'nodeterm',
-    buckets: {
-      source: buckets.source,
-      tests: buckets.tests,
-      styles: buckets.styles,
-      docs: buckets.docs,
-      config: buckets.config,
-      assets: buckets.assets,
-    },
-    byLanguage: Object.fromEntries([...byLang.entries()].sort((a, b) => b[1].total - a[1].total)),
-    excluded: Object.fromEntries([...excluded.entries()]),
+    buckets,
+    byLanguage: [...byLanguage.entries()]
+      .map(([language, counts]) => ({ language, ...counts }))
+      .sort((a, b) => b.total - a.total),
+    excluded,
+    uncounted,
     projectTotal,
     grandTotal,
-    arithmeticOk,
+    attribution: {
+      ...attribution,
+      attributedLines,
+      agentPercent,
+      rule:
+        'A surviving line (git blame at ' +
+        ref +
+        ') is attributed to an agent when the line\'s commit author name/email matches a ' +
+        'known automation identity, or the commit body carries a Co-Authored-By trailer ' +
+        'naming one (Claude, Codex, Copilot, OpenAI, *bot*, [bot], or github-actions, ' +
+        'case-insensitive). Every other attributable line is a person. This sums lines that ' +
+        'SURVIVE at the counted ref, never lines added across history — a line written and ' +
+        'later deleted belongs to nobody.',
+    },
   }
-
-  if (process.argv.includes('--json')) {
-    process.stdout.write(JSON.stringify(result, null, 2) + '\n')
-    return
-  }
-
-  printTable(result)
 }
 
-function row(label, b, note = '') {
-  const files = String(b.files).padStart(6)
-  const total = String(b.total).padStart(8)
-  const nonBlank = String(b.nonBlank).padStart(8)
-  return `${label.padEnd(32)} ${files} ${total} ${nonBlank}  ${note}`
+function fmt(n) {
+  return n.toLocaleString('en-US')
 }
 
-function printTable(r) {
-  const header = `${'Category'.padEnd(32)} ${'Files'.padStart(6)} ${'Lines'.padStart(8)} ${'Non-blank'.padStart(8)}`
-  const rule = '-'.repeat(header.length + 20)
-  console.log('nodeterm — line count')
-  console.log('generated ' + r.generatedAt)
-  console.log()
-  console.log(header)
-  console.log(rule)
-  console.log(row('Source (project code)', r.buckets.source))
-  console.log(row('Tests', r.buckets.tests))
-  console.log(row('Styles / markup', r.buckets.styles))
-  console.log(rule)
-  console.log(row('PROJECT TOTAL', r.projectTotal, '(source + tests + styles)'))
-  console.log()
-  console.log(row('Documentation (.md)', r.buckets.docs, 'not project code — prose'))
-  console.log(row('Config / data (json, yml, sh…)', r.buckets.config, 'not project code'))
-  console.log(row('Assets (images, video, fonts)', r.buckets.assets, 'file count only, binary'))
-  console.log(rule)
-  console.log(row('GRAND TOTAL', r.grandTotal, '(every counted tracked file)'))
-  console.log()
-  console.log('By language (source + tests + styles only):')
-  for (const [lang, b] of Object.entries(r.byLanguage)) {
-    console.log(row('  ' + lang, b))
+function renderTable(data) {
+  const lines = []
+  lines.push(`Line count @ ${data.ref} (generated ${data.generatedAt})`)
+  lines.push('')
+  lines.push('By category (total / non-blank / files):')
+  for (const [name, b] of Object.entries(data.buckets)) {
+    lines.push(`  ${name.padEnd(8)} ${fmt(b.total).padStart(8)} / ${fmt(b.nonBlank).padStart(8)} / ${b.files} files`)
   }
-  console.log()
-  console.log('Excluded (held out of every total above, shown for transparency):')
-  const reasons = ['Vendored / third-party trees', 'Build output', 'Dependency lockfiles']
-  const excludedEntries = Object.entries(r.excluded)
-  const seen = new Set()
-  for (const [reason, b] of excludedEntries) {
-    seen.add(reason)
-    console.log(row('  ' + reason, b))
+  lines.push('')
+  lines.push('By language (total / non-blank / files):')
+  for (const l of data.byLanguage) {
+    lines.push(`  ${l.language.padEnd(20)} ${fmt(l.total).padStart(8)} / ${fmt(l.nonBlank).padStart(8)} / ${l.files} files`)
   }
-  for (const reason of reasons) {
-    if (!seen.has(reason)) console.log(row('  ' + reason, { files: 0, total: 0, nonBlank: 0 }, 'none tracked'))
+  lines.push('')
+  lines.push(`Project total: ${fmt(data.projectTotal.total)} lines (${fmt(data.projectTotal.nonBlank)} non-blank) across ${data.projectTotal.files} files`)
+  lines.push(`Grand total (everything counted): ${fmt(data.grandTotal.total)} lines (${fmt(data.grandTotal.nonBlank)} non-blank) across ${data.grandTotal.files} files`)
+  lines.push('')
+  lines.push('Excluded (tracked, but not the project\'s own source):')
+  if (data.excluded.length === 0) {
+    lines.push('  (none)')
+  } else {
+    for (const e of data.excluded) lines.push(`  ${e.path} — ${e.reason}`)
   }
-  console.log()
-  console.log(
-    r.arithmeticOk
-      ? 'Arithmetic check: OK — grand total equals the sum of every counted bucket.'
-      : 'Arithmetic check: MISMATCH — the counter has a bug; do not publish this figure.'
-  )
-  if (!r.arithmeticOk) process.exitCode = 1
+  if (data.uncounted.length > 0) {
+    lines.push('')
+    lines.push(`Tracked files with an unrecognized extension (not counted as text source, ${data.uncounted.length} files):`)
+    for (const p of data.uncounted.slice(0, 20)) lines.push(`  ${p}`)
+    if (data.uncounted.length > 20) lines.push(`  …and ${data.uncounted.length - 20} more`)
+  }
+  lines.push('')
+  const a = data.attribution
+  lines.push(`Attribution — agent-written vs person-written (surviving lines):`)
+  lines.push(`  agent:   ${fmt(a.agentLines)} (${a.agentPercent.toFixed(1)}%)`)
+  lines.push(`  person:  ${fmt(a.personLines)}`)
+  if (a.unknownLines > 0) lines.push(`  unknown: ${fmt(a.unknownLines)} (uncommitted or unresolvable)`)
+  lines.push(`  rule:    ${a.rule}`)
+  return lines.join('\n')
 }
 
-main()
+async function main() {
+  const ref = process.argv[2] ?? 'HEAD'
+  const data = await computeLineCounts({ ref })
+  console.log(renderTable(data))
+}
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+if (isMain) {
+  main().catch((err) => {
+    console.error('count-lines.mjs failed:', err)
+    process.exitCode = 1
+  })
+}
