@@ -38,57 +38,83 @@
     <a class="skip-link" href="#main">Skip to content</a>
     <div class="grid-bg"></div>
 
-    <header class="nav">
-      <a class="brand" href="/">
-        <img src="assets/mark.svg" alt="" width="26" height="26" />
-        <span>nodeterm</span>
-      </a>
+    <!--
+      THE SITE SHELL — browser-style tabbed navigation, not one long
+      scrolling page. #tab-rail docks to any edge (left by default; see
+      Settings → Appearance → "Tab strip position") and is built/kept in
+      sync entirely by app/core/tabs.js. #main below holds one tabpanel
+      per tab: statically authored ones (data-tab-panel="…", e.g.
+      "Overview" below) are adopted in place; feature modules and the
+      built-in Settings tab render into a panel created on demand.
+    -->
+    <div id="app-shell" class="app-shell" data-dock="left">
+      <div id="tab-rail-wrap" class="tab-rail-wrap">
+        <input
+          type="search"
+          id="tab-rail-search"
+          class="tab-rail-search"
+          placeholder="Search tabs…"
+          aria-label="Search the tab strip"
+        />
+        <nav id="tab-rail" class="tab-rail" role="tablist" aria-label="Site sections" aria-orientation="vertical"></nav>
+      </div>
 
-      <button
-        class="icon-btn nav-toggle"
-        id="nav-toggle"
-        type="button"
-        aria-expanded="false"
-        aria-controls="nav-links"
-        aria-label="Open menu"
-      >
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
-      </button>
+      <div class="app-main">
+        <header class="nav">
+          <a class="brand" href="./">
+            <img src="assets/mark.svg" alt="" width="26" height="26" />
+            <span>nodeterm</span>
+          </a>
 
-      <nav class="nav-links" id="nav-links">
-        <a class="nav-link" href="#features">Features</a>
-        <a class="nav-link" href="#surfaces">Three surfaces</a>
-        <a class="nav-link" href="#docs">Docs</a>
-        <a
-          class="nav-link"
-          href="https://github.com/eneskirca/nodeterm/blob/main/README.md"
-          target="_blank"
-          rel="noopener"
-          >README</a
-        >
-        <a class="star" href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener" aria-label="Star nodeterm on GitHub">
-          <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
-          <span>Star</span>
-        </a>
-        <button class="icon-btn theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme">
-          <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 1 0 20.354 15.354Z" />
-          </svg>
-          <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path
-              d="M12 4.5a1 1 0 0 1-1-1V2a1 1 0 1 1 2 0v1.5a1 1 0 0 1-1 1Zm0 15a1 1 0 0 1 1 1V22a1 1 0 1 1-2 0v-1.5a1 1 0 0 1 1-1Zm9.5-6.5H20a1 1 0 1 1 0-2h1.5a1 1 0 1 1 0 2ZM4 12a1 1 0 0 1-1 1H1.5a1 1 0 1 1 0-2H3a1 1 0 0 1 1 1Zm13.02-6.02a1 1 0 0 1 0-1.42l1.06-1.06a1 1 0 0 1 1.42 1.42l-1.06 1.06a1 1 0 0 1-1.42 0ZM6.98 17.02a1 1 0 0 1 1.42 0 1 1 0 0 1 0 1.41l-1.06 1.07a1 1 0 1 1-1.42-1.42l1.06-1.06Zm10.04 0 1.06 1.06a1 1 0 1 1-1.42 1.42l-1.06-1.07a1 1 0 0 1 1.42-1.41ZM6.98 6.98 5.92 5.92A1 1 0 1 1 7.34 4.5l1.06 1.06a1 1 0 0 1-1.42 1.42ZM12 7.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"
-            />
-          </svg>
-        </button>
-        <a class="btn btn-primary btn-sm" href="#download">
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M7.25 1.75a.75.75 0 0 1 1.5 0v6.94l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75ZM2.75 13a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/></svg>
-          Download
-        </a>
-      </nav>
-    </header>
+          <button
+            class="icon-btn nav-toggle"
+            id="nav-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="nav-links"
+            aria-label="Open menu"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+          </button>
 
-    <main id="main">
+          <nav class="nav-links" id="nav-links">
+            <a class="nav-link" href="#features">Features</a>
+            <a class="nav-link" href="#surfaces">Three surfaces</a>
+            <a class="nav-link" href="#docs">Docs</a>
+            <a
+              class="nav-link"
+              href="https://github.com/eneskirca/nodeterm/blob/main/README.md"
+              target="_blank"
+              rel="noopener"
+              >README</a
+            >
+            <a class="star" href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener" aria-label="Star nodeterm on GitHub">
+              <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+              <span>Star</span>
+            </a>
+            <button type="button" class="icon-btn" id="open-appearance" aria-label="Open appearance editor" title="Appearance editor">
+              🎨
+            </button>
+            <button class="icon-btn theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme">
+              <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 1 0 20.354 15.354Z" />
+              </svg>
+              <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path
+                  d="M12 4.5a1 1 0 0 1-1-1V2a1 1 0 1 1 2 0v1.5a1 1 0 0 1-1 1Zm0 15a1 1 0 0 1 1 1V22a1 1 0 1 1-2 0v-1.5a1 1 0 0 1 1-1Zm9.5-6.5H20a1 1 0 1 1 0-2h1.5a1 1 0 1 1 0 2ZM4 12a1 1 0 0 1-1 1H1.5a1 1 0 1 1 0-2H3a1 1 0 0 1 1 1Zm13.02-6.02a1 1 0 0 1 0-1.42l1.06-1.06a1 1 0 0 1 1.42 1.42l-1.06 1.06a1 1 0 0 1-1.42 0ZM6.98 17.02a1 1 0 0 1 1.42 0 1 1 0 0 1 0 1.41l-1.06 1.07a1 1 0 1 1-1.42-1.42l1.06-1.06Zm10.04 0 1.06 1.06a1 1 0 1 1-1.42 1.42l-1.06-1.07a1 1 0 0 1 1.42-1.41ZM6.98 6.98 5.92 5.92A1 1 0 1 1 7.34 4.5l1.06 1.06a1 1 0 0 1-1.42 1.42ZM12 7.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"
+                />
+              </svg>
+            </button>
+            <a class="btn btn-primary btn-sm" href="#download">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M7.25 1.75a.75.75 0 0 1 1.5 0v6.94l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75ZM2.75 13a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/></svg>
+              Download
+            </a>
+          </nav>
+        </header>
+
+        <main id="main">
+          <div id="tabpanel-overview" class="tabpanel" data-tab-panel="overview" data-tab-title="Overview" data-tab-icon="🏠" data-tab-order="0">
       <section class="hero">
         <span class="badge">macOS · Apple Silicon &amp; Intel · Linux (x64) · Free</span>
         <h1>Your terminals on an<br /><span class="grad">infinite canvas.</span></h1>
@@ -291,32 +317,47 @@
           Download nodeterm
         </a>
       </section>
-    </main>
+          </div>
+          <!--
+            Further tabpanels (Settings, and anything the site-content lane
+            registers via registerTab) are created here by app/core/tabs.js
+            on first open — nothing else needs to be authored in this file.
+          -->
+        </main>
 
-    <footer class="foot">
-      <div class="foot-brand">
-        <img src="assets/mark.svg" alt="" width="22" height="22" />
-        <span>nodeterm</span>
+        <footer class="foot">
+          <div class="foot-brand">
+            <img src="assets/mark.svg" alt="" width="22" height="22" />
+            <span>nodeterm</span>
+          </div>
+          <div class="foot-links">
+            <a href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/eneskirca/nodeterm/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+            <a href="https://github.com/eneskirca/nodeterm/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
+            <a href="https://github.com/eneskirca/nodeterm/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+            <a href="https://github.com/eneskirca/nodeterm/issues" target="_blank" rel="noopener">Support</a>
+          </div>
+          <p class="legal">
+            <a href="https://mariadb.com/bsl11/" target="_blank" rel="noopener">BUSL-1.1</a> licensed. © <span id="year">2026</span> Enes Kirca.
+            “Claude” and “Claude Code” are trademarks of Anthropic; nodeterm is not affiliated
+            with or endorsed by Anthropic.
+          </p>
+          <!--
+            This page documents the source tree's current package version. It is NOT a claim
+            that a signed/notarized installer for this exact version has shipped — check
+            GitHub Releases for what is actually downloadable right now.
+          -->
+          <p class="version-pill" id="doc-version">Documents nodeterm v0.3.0 (source)</p>
+        </footer>
       </div>
-      <div class="foot-links">
-        <a href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://github.com/eneskirca/nodeterm/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
-        <a href="https://github.com/eneskirca/nodeterm/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
-        <a href="https://github.com/eneskirca/nodeterm/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
-        <a href="https://github.com/eneskirca/nodeterm/issues" target="_blank" rel="noopener">Support</a>
-      </div>
-      <p class="legal">
-        <a href="https://mariadb.com/bsl11/" target="_blank" rel="noopener">BUSL-1.1</a> licensed. © <span id="year">2026</span> Enes Kirca.
-        “Claude” and “Claude Code” are trademarks of Anthropic; nodeterm is not affiliated
-        with or endorsed by Anthropic.
-      </p>
-      <!--
-        This page documents the source tree's current package version. It is NOT a claim
-        that a signed/notarized installer for this exact version has shipped — check
-        GitHub Releases for what is actually downloadable right now.
-      -->
-      <p class="version-pill" id="doc-version">Documents nodeterm v0.3.0 (source)</p>
-    </footer>
+      <!-- /.app-main -->
+    </div>
+    <!-- /#app-shell -->
+
+    <!-- Command palette (Ctrl/Cmd+Shift+F) — see app/core/palette.js -->
+    <div id="command-palette-root"></div>
+    <!-- Non-blocking notifications: toast stack + reviewable centre -->
+    <div id="notification-root"></div>
 
     <script>
       document.getElementById('year').textContent = String(new Date().getFullYear())
@@ -336,22 +377,10 @@
         })
       })
 
-      // --- Theme toggle: explicit choice always overrides the OS setting ---
-      var themeToggle = document.getElementById('theme-toggle')
-      function currentTheme() {
-        var explicit = document.documentElement.getAttribute('data-theme')
-        if (explicit) return explicit
-        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-      }
-      themeToggle.addEventListener('click', function () {
-        var next = currentTheme() === 'dark' ? 'light' : 'dark'
-        document.documentElement.setAttribute('data-theme', next)
-        try {
-          localStorage.setItem('nodeterm-theme', next)
-        } catch (_) {
-          /* private mode — theme still applies for this page load */
-        }
-      })
+      // Theme toggle click handling now lives in app/core/theme.js (module,
+      // loaded below) so the header button, the appearance editor, and the
+      // "toggle theme" command-palette entry all read/write the exact same
+      // settings-store value instead of three copies drifting apart.
 
       // --- Download button: point at the latest release by reading the update feed.
       // Falls back to (and starts on) the GitHub Releases index — never a guessed URL. ---
@@ -377,5 +406,14 @@
         }
       })()
     </script>
+
+    <!--
+      The site shell: registry, tabs, search + regex builder, command
+      palette, settings surface, notifications, appearance/color picker,
+      destructive-confirm gate, local version history. Owned by this lane.
+    -->
+    <script type="module" src="./app/core/app.js"></script>
+    <!-- feature modules — owned by the site-content lane -->
+    <script type="module" src="./app/features/index.js"></script>
   </body>
 </html>
