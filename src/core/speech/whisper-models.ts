@@ -1,6 +1,6 @@
 import { createWriteStream } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { Writable } from 'node:stream'
 import { WHISPER_DOWNLOAD_BASE, WHISPER_MODELS, whisperModel } from '../../shared/speech'
 
@@ -64,7 +64,11 @@ export class WhisperModelStore {
    * deterministic rm would ever find — sweep by prefix instead. */
   private async removeParts(id: string): Promise<void> {
     const base = this.modelPath(id)
-    const prefix = `${base.split('/').pop()}.part`
+    // basename(), not base.split('/').pop(): modelPath() is built with node:path's `join`,
+    // which on win32 joins with `\`, so a `.split('/')` on a path with no `/` in it at all
+    // returns the WHOLE absolute path — readdir() entries are bare filenames and none of them
+    // ever start with a full path, so this swept exactly zero orphaned .part files on Windows.
+    const prefix = `${basename(base)}.part`
     const entries = await readdir(this.dir).catch(() => [] as string[])
     await Promise.all(
       entries.filter((e) => e.startsWith(prefix)).map((e) => rm(join(this.dir, e), { force: true })),
