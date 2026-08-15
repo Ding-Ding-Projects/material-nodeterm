@@ -381,10 +381,20 @@ summaries are distilled from.
 
 Windows is a first-class desktop target: a Squirrel.Windows installer (`npm run dist:win`),
 PowerShell/cmd as the default shell, and a Material title bar with the native window buttons on
-the right. The one meaningful behavioral difference from macOS/Linux is that terminals run as a
-plain shell instead of a tmux session, so they don't survive an app restart — see
-[docs/windows.md](docs/windows.md) for the full picture (what degrades, the unsigned-installer
-SmartScreen warning, and how to get tmux-backed continuity anyway).
+the right.
+
+**Sessions survive an app restart on Windows too.** tmux does not exist there, so nodeterm ships
+its own equivalent: a small **session host** process that owns the PTYs, keeps a server-side
+terminal emulator for screen and scrollback, and outlives the app — so quitting nodeterm detaches
+rather than kills, and reopening reattaches to whatever was still running. If a real tmux *is*
+found (WSL, msys), it still wins.
+
+Two honest caveats, both smaller than the tmux gap they replace: if the **host process itself**
+dies, its sessions die with it (tmux's server is far more battle-tested), and a **machine reboot**
+ends them either way — the existing cold-restore path then replays the saved scrollback and
+resumes agent sessions. See [docs/windows-session-host.md](docs/windows-session-host.md) for the
+architecture and [docs/windows.md](docs/windows.md) for the rest, including the unsigned-installer
+SmartScreen warning.
 
 ### 🎨 Appearance & identity
 
