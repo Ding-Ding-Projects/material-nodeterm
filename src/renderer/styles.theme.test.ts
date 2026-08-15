@@ -24,8 +24,19 @@ const CSS = readFileSync(join(__dirname, 'styles.css'), 'utf8')
  */
 const LIGHT_BLOCK_START = CSS.search(/^:root\[data-theme='light'\]\s*\{/m)
 
-/** Everything before the end of the `:root[data-theme='light']` block — where literals belong. */
-const TOKEN_BLOCK_END = CSS.indexOf('\n}\n', LIGHT_BLOCK_START) + 3
+/**
+ * Everything before the end of the `:root[data-theme='light']` block — where literals belong.
+ *
+ * Found via regex, not a literal `'\n}\n'` `indexOf`: on a Windows checkout with
+ * `core.autocrlf=true` this file is CRLF (`\r\n}\r\n`), and the literal 3-byte LF sequence never
+ * occurs, so `indexOf` silently returned -1 and every test below the token block was measuring
+ * against an empty/garbage slice. `\r?` matches the LF-only case identically, so this is not a
+ * platform branch — it is the version of the search that was correct on both platforms all along.
+ */
+const CLOSE_BLOCK_RE = /\r?\n\}\r?\n/
+const closeMatch = CLOSE_BLOCK_RE.exec(CSS.slice(LIGHT_BLOCK_START))
+if (!closeMatch) throw new Error("could not find the end of the :root[data-theme='light'] block")
+const TOKEN_BLOCK_END = LIGHT_BLOCK_START + closeMatch.index + closeMatch[0].length
 const RULES = CSS.slice(TOKEN_BLOCK_END)
 
 /** The two token blocks, sliced once. */
