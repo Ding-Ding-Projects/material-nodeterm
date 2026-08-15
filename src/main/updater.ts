@@ -1,8 +1,14 @@
 // Auto-update orchestration. Windows artifacts use Squirrel.Windows and therefore Electron's
 // built-in autoUpdater; macOS/AppImage keep electron-updater's deliberately separate backend.
 import { app, autoUpdater as squirrelAutoUpdater, ipcMain, Notification } from 'electron'
+import fs from 'fs'
+import path from 'path'
 import { IPC } from '../shared/ipc'
-import { isManualUpdatePlatform, toUpdateAvailablePayload } from '../shared/update-platform'
+import {
+  isManualUpdatePlatform,
+  shouldEnableUpdater,
+  toUpdateAvailablePayload
+} from '../shared/update-platform'
 import { getMainWindow, sendToMain } from './main-window'
 import { retainUntilDismissed } from './notifications'
 import {
@@ -77,15 +83,55 @@ function loadBuilderAutoUpdater(): typeof import('electron-updater')['autoUpdate
 }
 
 /**
- * The window is resolved AT EVENT TIME—never captured in an updater closure. On macOS the window
- * can be recreated while an update downloads. Electron's `before-quit-for-update` event flips the
- * caller's quitting flag only after the updater has actually started, so a failed restart can retry.
+ * The `nodeTermUpdates` marker a LOCAL package carries in its packaged package.json, injected by
+ * the mac/Linux `dist`/`dist:linux` scripts via electron-builder's `extraMetadata`. `release` (the
+ * mac promotion build) and the Windows `dist:win` path — which is also this fork's real CI release
+ * build — never set it, so a promoted build of any kind is untouched and keeps updating itself.
+ *
+ * It exists because a locally packaged app is indistinguishable from a release at runtime —
+ * `app.isPackaged` is true for both — so it polled the production feed for a version that was
+ * never published there and logged a 404 on `latest*.yml` every six hours.
+ *
+ * The trade-off, stated plainly: a `dist`/`dist:linux` package can no longer smoke-test the
+ * updater wiring itself — a manual check there now answers "up to date" without going near the
+ * network. The old behaviour at least proved the wiring was live, at the cost of a recurring 404
+ * in every local build's log. Verifying the real feed is the job of a promoted package, which
+ * carries no marker.
+ */
+function packagedUpdateMode(): unknown {
+  if (!app.isPackaged) return undefined
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8')) as {
+      nodeTermUpdates?: unknown
+    }
+    return pkg.nodeTermUpdates
+  } catch (err) {
+    // A normal release without the marker must preserve the established updater behavior.
+    console.warn('[updater] could not read packaged update mode:', err)
+    return undefined
+  }
+}
+
+/**
+ * The window is resolved AT EVENT TIME (getMainWindow/sendToMain) — never captured in a closure.
+ * On macOS the window can be closed (the app lives on) and recreated from the dock, so a captured
+ * reference is a DESTROYED window: touching it throws `TypeError: Object has been destroyed`. That
+ * shipped — an update finishing downloading after a close→dock-reopen crashed the main process on
+ * `win.isFocused()`. Electron's `before-quit-for-update` event flips the caller's quitting flag
+ * only after the updater has actually started, so a failed restart can retry.
+ *
+ * @param onBeforeRestart Run right before `quitAndInstall()`. Required so the caller can flip its
+ *   "quitting" flag: `quitAndInstall()` closes all windows and only then calls `app.quit()`, but
+ *   our `win.on('close')` hides the window (keeps the app alive) unless we're already quitting — so
+ *   without this the window just hides, `app.quit()` never fires, and the update never installs.
  */
 export function initUpdater(onBeforeRestart?: () => void): void {
   const send = (channel: string, payload?: unknown) => sendToMain(channel, payload)
   ipcMain.handle(IPC.appGetVersion, () => app.getVersion())
 
-  if (!app.isPackaged) {
+  if (!shouldEnableUpdater(app.isPackaged, packagedUpdateMode())) {
+    // Dev and explicitly local/unsigned packages have no update channel. A manual check reports
+    // "up to date" for feedback; automatic networking and updater event wiring stay disabled.
     ipcMain.on(IPC.appRestartToUpdate, () => undefined)
     ipcMain.on(IPC.appCheckForUpdates, () => send(IPC.appUpdateNotAvailable))
     return
