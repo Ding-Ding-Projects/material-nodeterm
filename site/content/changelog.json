@@ -7,7 +7,7 @@
       "version": "0.3.0",
       "date": "2026-08-12",
       "commit": "cd0441b8b48f32ec11f7b94d24d23239e93a8da7",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/cd0441b8b48f32ec11f7b94d24d23239e93a8da7",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/cd0441b8b48f32ec11f7b94d24d23239e93a8da7",
       "categories": {
         "Added": [
           "build the bundled tmux with utf8proc (correct emoji widths)",
@@ -22,7 +22,7 @@
       "version": "0.2.47",
       "date": "2026-08-12",
       "commit": "003f83791bf59116ec91859981a4cc4bdbe09faf",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/003f83791bf59116ec91859981a4cc4bdbe09faf",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/003f83791bf59116ec91859981a4cc4bdbe09faf",
       "categories": {
         "Fixed": [
           "the panel reads phys_footprint on macOS, not ps's rss",
@@ -46,7 +46,7 @@
       "version": "0.2.46",
       "date": "2026-08-12",
       "commit": "90a8a29fc36bf40bc3c8e3a7573a73aee2a54ae9",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/90a8a29fc36bf40bc3c8e3a7573a73aee2a54ae9",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/90a8a29fc36bf40bc3c8e3a7573a73aee2a54ae9",
       "categories": {
         "Added": [
           "session memory panel with travel and kill",
@@ -101,7 +101,7 @@
       "version": "0.2.45",
       "date": "2026-08-12",
       "commit": "0ba1f599980e7a586389d0f075972fe74fb4d3a9",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/0ba1f599980e7a586389d0f075972fe74fb4d3a9",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/0ba1f599980e7a586389d0f075972fe74fb4d3a9",
       "categories": {
         "Fixed": [
           "patch node-pty's darwin fd leak locally (microsoft/node-pty#950)"
@@ -115,7 +115,7 @@
       "version": "0.2.44",
       "date": "2026-08-12",
       "commit": "9528d6a963b43bd2f277c2abc7f83796f7a327cd",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/9528d6a963b43bd2f277c2abc7f83796f7a327cd",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/9528d6a963b43bd2f277c2abc7f83796f7a327cd",
       "categories": {
         "Added": [
           "relay the phone's priorDeviceToken into the relay-device mint",
@@ -184,7 +184,7 @@
       "version": "0.2.43",
       "date": "2026-08-11",
       "commit": "b5ecd5110cb264af815b6a2c595b3155a3d3ee91",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/b5ecd5110cb264af815b6a2c595b3155a3d3ee91",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/b5ecd5110cb264af815b6a2c595b3155a3d3ee91",
       "categories": {
         "Added": [
           "tell the user when a corrupt index was backed up",
@@ -217,7 +217,7 @@
       "version": "0.2.42",
       "date": "2026-08-10",
       "commit": "4925d91c0dca5e48d8a66ad3749fdbb1f2ad1fc6",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/4925d91c0dca5e48d8a66ad3749fdbb1f2ad1fc6",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/4925d91c0dca5e48d8a66ad3749fdbb1f2ad1fc6",
       "categories": {
         "Added": [
           "advertise relay identity for late adoption; surface pairing relay result",
@@ -326,7 +326,7 @@
       "version": "0.2.41",
       "date": "2026-08-09",
       "commit": "5ad6a629f4cb72087548b00d554e7bf7766f3af2",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/5ad6a629f4cb72087548b00d554e7bf7766f3af2",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/5ad6a629f4cb72087548b00d554e7bf7766f3af2",
       "categories": {
         "Added": [
           "two-way GitHub Issues sync on the board (#90)"
@@ -350,7 +350,7 @@
       "version": "0.2.40",
       "date": "2026-08-09",
       "commit": "3e9c95a7fd2e61c8dcb4f95b41e6aa0b15473186",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/3e9c95a7fd2e61c8dcb4f95b41e6aa0b15473186",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/3e9c95a7fd2e61c8dcb4f95b41e6aa0b15473186",
       "categories": {
         "Added": [
           "hold SPACE to pan, like Figma (#86)",
@@ -375,7 +375,7 @@
       "version": "0.2.39",
       "date": "2026-08-07",
       "commit": "98234810ef16bbf0dddf1819f5d1462272eec3f8",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/98234810ef16bbf0dddf1819f5d1462272eec3f8",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/98234810ef16bbf0dddf1819f5d1462272eec3f8",
       "categories": {
         "Fixed": [
           "a terminal that failed to SPAWN says so instead of sitting black",
@@ -391,7 +391,7 @@
       "version": "0.2.38",
       "date": "2026-08-06",
       "commit": "4d18673f74d1f6c11aa385da54abe849201c5089",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/4d18673f74d1f6c11aa385da54abe849201c5089",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/4d18673f74d1f6c11aa385da54abe849201c5089",
       "categories": {
         "Fixed": [
           "stop the browser pasting the PRIMARY selection on middle click (#84)",
@@ -407,7 +407,7 @@
       "version": "0.2.37",
       "date": "2026-08-05",
       "commit": "eec630982df86201aa223a48e750fe65c01e58f3",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/eec630982df86201aa223a48e750fe65c01e58f3",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/eec630982df86201aa223a48e750fe65c01e58f3",
       "categories": {
         "Added": [
           "auto now means the shared renderer on macOS",
@@ -454,7 +454,7 @@
       "version": "0.2.36",
       "date": "2026-08-05",
       "commit": "d15c7aae4e40b820d7b521a92bee112fe48718cd",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/d15c7aae4e40b820d7b521a92bee112fe48718cd",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/d15c7aae4e40b820d7b521a92bee112fe48718cd",
       "categories": {
         "Added": [
           "LINEAR magnification above zoom 1 — GPU-mode parity when zoomed in",
@@ -530,7 +530,7 @@
       "version": "0.2.35",
       "date": "2026-08-04",
       "commit": "11e49907a827c7d7e244755191eb15b7473154cf",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/11e49907a827c7d7e244755191eb15b7473154cf",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/11e49907a827c7d7e244755191eb15b7473154cf",
       "categories": {
         "Added": [
           "enhance paste handling for images and text in browser",
@@ -556,7 +556,7 @@
       "version": "0.2.34",
       "date": "2026-08-03",
       "commit": "1734ed0077ce7f579b7adb3f48cc7e55b523ae75",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/1734ed0077ce7f579b7adb3f48cc7e55b523ae75",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/1734ed0077ce7f579b7adb3f48cc7e55b523ae75",
       "categories": {
         "Added": [
           "serve the askpass relay on a 0600 unix socket",
@@ -612,7 +612,7 @@
       "version": "0.2.33",
       "date": "2026-08-02",
       "commit": "d4fe5b4c019bdb6ccacec0ba7f23a0bd7718b0cb",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/d4fe5b4c019bdb6ccacec0ba7f23a0bd7718b0cb",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/d4fe5b4c019bdb6ccacec0ba7f23a0bd7718b0cb",
       "categories": {
         "Added": [
           "unify node tags into board labels + color-at-create + default view",
@@ -632,7 +632,7 @@
       "version": "0.2.32",
       "date": "2026-08-01",
       "commit": "97a7daa4fe578ee940fada1d7b3b80d6fda7d2a9",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/97a7daa4fe578ee940fada1d7b3b80d6fda7d2a9",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/97a7daa4fe578ee940fada1d7b3b80d6fda7d2a9",
       "categories": {
         "Added": [
           "one-shot mobile-launch announcement card",
@@ -651,7 +651,7 @@
       "version": "0.2.31",
       "date": "2026-07-30",
       "commit": "9bbb62df7312c2833c6fbce77ea12a2ba11d74a4",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/9bbb62df7312c2833c6fbce77ea12a2ba11d74a4",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/9bbb62df7312c2833c6fbce77ea12a2ba11d74a4",
       "categories": {
         "Added": [
           "GPU-rendering toggle (escape hatch for macOS window flicker)"
@@ -670,7 +670,7 @@
       "version": "0.2.30",
       "date": "2026-07-29",
       "commit": "0c206a198645c4baae6f8009ed80c0bba458118c",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/0c206a198645c4baae6f8009ed80c0bba458118c",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/0c206a198645c4baae6f8009ed80c0bba458118c",
       "categories": {
         "Added": [
           "Add to / Remove from .gitignore in SCM and Explorer context menus"
@@ -689,7 +689,7 @@
       "version": "0.2.29",
       "date": "2026-07-28",
       "commit": "40463a4f960d886c887cfbe599b010cd14507f24",
-      "commitUrl": "https://github.com/eneskirca/nodeterm/commit/40463a4f960d886c887cfbe599b010cd14507f24",
+      "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/40463a4f960d886c887cfbe599b010cd14507f24",
       "categories": {
         "Added": [
           "publish the agent's session name host-side, so every reader sees a /rename",
