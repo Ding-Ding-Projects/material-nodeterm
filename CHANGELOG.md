@@ -8,6 +8,31 @@ This project has shipped very frequently during active development — commonly 
 release per merged pull request. The 20 most recent releases are listed in full
 below; earlier history is summarized and remains fully available via `git log`.
 
+## [Unreleased]
+
+Commits:
+[`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0fd08c4ac2857d43c36e539c347d) — the token foundation ·
+[`84ef6d14`](https://github.com/eneskirca/nodeterm/commit/84ef6d1447d605194ea214175ec22a8d4a26a4a9) — the restyle it enabled
+
+### Added
+
+- the Material 3 token foundation, over the app's own palette — a full `--md-*` design-role
+  set (color roles plus a six-step shape scale), aliased to the app's existing colors in both
+  light and dark themes. No existing surface's appearance changes from this alone.
+
+### Changed
+
+- retheme the canvas zoom/lock rail, the minimap frame, the bottom dock, the settings-panel
+  switch, and the welcome screen onto the new M3 token roles, replacing one-off color and
+  corner-radius literals with `--md-*` aliases
+
+### Fixed
+
+- three chrome highlights that were hardcoded to a fixed accent/danger color and never
+  followed the light theme or a custom accent color: the canvas lock button's active fill,
+  the dock's active-button fill, and the welcome screen's "remove recent project" hover fill
+ 
+
 ## [0.3.0] — 2026-08-12
 
 Commit: [`cd0441b8b48f32ec11f7b94d24d23239e93a8da7`](https://github.com/eneskirca/nodeterm/commit/cd0441b8b48f32ec11f7b94d24d23239e93a8da7)

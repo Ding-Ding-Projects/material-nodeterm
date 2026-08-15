@@ -62,7 +62,10 @@ const SURFACES = [
     required: true,
     title: 'App at launch',
     open: null,
-    verify: '.tabbar'
+    verify: '.tabbar',
+    // The tab bar is present underneath the kanban overlay too, so without this a re-run that
+    // started with the board open photographed the BOARD under this name. Observed, not feared.
+    verifyAbsent: '[class*="kanban"]'
   },
   {
     id: 'app-02-settings',
@@ -83,13 +86,21 @@ const SURFACES = [
     required: true,
     title: 'Canvas',
     open: null,
-    verify: '.react-flow'
+    // NOT just '.react-flow'. The canvas stays MOUNTED underneath the kanban overlay by design —
+    // unmounting it would 0x0-resize every terminal and SIGWINCH the ptys — so its presence says
+    // nothing about what is on screen. This run photographed the BOARD under the canvas's name
+    // until the absence of the overlay was asserted too.
+    verify: '.react-flow',
+    verifyAbsent: '[class*="kanban"]'
   },
   {
     id: 'app-05-kanban',
     required: true,
     title: 'Kanban board',
-    open: { key: 'B', code: 'KeyB', vk: 66, ctrl: true, shift: true },
+    // Clicked, not chorded. The Ctrl+Shift+B chord does not survive CDP key dispatch here, and
+    // the toggle on the active project tab is the real user path anyway — a capture taken the
+    // way a person opens the surface is worth more than one taken through a synthetic chord.
+    open: { click: '.tab__board-toggle' },
     verify: '[class*="kanban"]'
   },
   // Optional: these need state the harness cannot manufacture.
@@ -221,6 +232,20 @@ const failures = []
   await sleep(1500)
 }
 
+// Return to a KNOWN BASE STATE before photographing anything. The previous run ends on the
+// kanban board (it is the last surface), and a board left open made the next run capture it
+// under two other surfaces' names. A harness whose output depends on how the last run finished
+// is not a harness. Close any overlay, then confirm.
+{
+  const closed = await send('Runtime.evaluate', { returnByValue: true, expression: `(function(){
+    var t = document.querySelector('.tab__board-toggle');
+    if (t && document.querySelector('[class*="kanban"]')) { t.click(); return 'board closed'; }
+    return 'already on the canvas';
+  })()` })
+  console.log(`  base state: ${closed.result.value}`)
+  await sleep(1200)
+}
+
 for (const s of SURFACES) {
   if (only && !only.some((o) => s.id.includes(o))) continue
   if (!s.required) {
@@ -228,7 +253,29 @@ for (const s of SURFACES) {
     continue
   }
   try {
-    if (s.open) {
+    // Is it already open? The board toggle is a TOGGLE: clicking it when the surface is already
+    // showing CLOSES it, which is exactly how a previously-successful run left the next one
+    // failing. Ensure the state; do not flip it.
+    let alreadyOpen = false
+    if (s.verify) {
+      const pre = await send('Runtime.evaluate', {
+        returnByValue: true,
+        expression: `!!document.querySelector(${JSON.stringify(s.verify)})${s.verifyAbsent ? ` && !document.querySelector(${JSON.stringify(s.verifyAbsent)})` : ''}`
+      })
+      alreadyOpen = pre.result.value === true
+    }
+
+    if (!alreadyOpen && s.open?.click) {
+      const clicked = await send('Runtime.evaluate', {
+        returnByValue: true,
+        expression: `(function(){var el=document.querySelector(${JSON.stringify(s.open.click)});if(!el)return false;el.click();return true})()`
+      })
+      if (clicked.result.value !== true) {
+        failures.push({ id: s.id, why: `opener "${s.open.click}" is not in the DOM` })
+        continue
+      }
+      await sleep(1500)
+    } else if (!alreadyOpen && s.open) {
       // Chords go through the real key path so the app's own handlers run. The code/vk pair is
       // spelled out per surface rather than derived from the key — deriving it produced
       // `code: 'KeyCOMMA'` and a virtual key code from a character, neither of which any handler
@@ -252,7 +299,7 @@ for (const s of SURFACES) {
     if (s.verify) {
       const seen = await send('Runtime.evaluate', {
         returnByValue: true,
-        expression: `!!document.querySelector(${JSON.stringify(s.verify)})`
+        expression: `!!document.querySelector(${JSON.stringify(s.verify)})${s.verifyAbsent ? ` && !document.querySelector(${JSON.stringify(s.verifyAbsent)})` : ''}`
       })
       if (seen.result.value !== true) {
         failures.push({
@@ -270,7 +317,7 @@ for (const s of SURFACES) {
       continue
     }
     writeFileSync(join(OUT, `${s.id}.png`), buf)
-    captured.push({ id: s.id, title: s.title, bytes: buf.length })
+    captured.push({ id: s.id, title: s.title, bytes: buf.length, hadOpener: !!s.open })
     console.log(`✓ ${s.id}.png  ${(buf.length / 1024).toFixed(0)} KB`)
     // Return to a known state so the next surface does not open on top of this one.
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
@@ -307,8 +354,12 @@ writeFileSync(
 // show the same view and one of them is misnamed. Both are worth knowing; neither is visible
 // from a success count. This is a warning rather than a failure, because there are legitimate
 // cases (the app at launch really is the canvas once a project is open).
+// Only surfaces that were SUPPOSED to differ. Two entries with no opening step photograph
+// whatever is on screen at that moment, so of course they match — `app-01-launch` and
+// `app-04-canvas` are legitimately one view once a project is open, and warning about that every
+// run is noise that teaches people to ignore the warning that matters.
 const byBytes = new Map()
-for (const c of captured) {
+for (const c of captured.filter((x) => x.hadOpener)) {
   const same = byBytes.get(c.bytes)
   if (same) {
     console.warn(
@@ -316,6 +367,15 @@ for (const c of captured) {
         `    Either one is misnamed, or its opening step did nothing.`
     )
   } else byBytes.set(c.bytes, c.id)
+}
+// Seed with the openerless ones too: a chorded surface whose chord did nothing lands on the
+// canvas, and matching THAT is the real signal this check exists for.
+for (const c of captured.filter((x) => !x.hadOpener)) {
+  const same = byBytes.get(c.bytes)
+  if (same && captured.find((x) => x.id === same)?.hadOpener) {
+    console.warn(`
+  ! ${same} is byte-identical to ${c.id} — its opening step did nothing.`)
+  }
 }
 
 console.log(`\ncaptured ${captured.length}  skipped ${skipped.length}  failed ${failures.length}`)
