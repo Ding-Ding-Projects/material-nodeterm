@@ -260,7 +260,9 @@ npm run server:dev # build + run the browser Server Edition (needs Node 22 + tmu
   **mobile companion** (a separate SwiftUI repo) all ride the same core + transport seams.
 
 See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, and the design docs
-under [`docs/`](./docs) for deeper notes.
+under [`docs/`](./docs) for deeper notes — including
+[the dim-sum surprise](./docs/dim-sum.md), [School mode](./docs/school-mode.md), and
+[personal vocabulary](./docs/personal-vocabulary.md).
 
 ## 🤝 Contributing
 
