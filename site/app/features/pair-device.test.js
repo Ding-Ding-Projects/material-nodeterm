@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { getRoom } from '../core/engine.js'
 import {
@@ -25,6 +26,21 @@ describe('Pages playground remote access routes', () => {
     expect(html).toContain(`href="${SERVER_EDITION_DOC_URL}"`)
     expect(html).toContain(`href="${IOS_APP_STORE_URL}"`)
     expect(html).toContain('including its Docker image')
+  })
+
+  it('publishes a loopback-only Docker recipe with an owner-only password file', () => {
+    const article = readFileSync(new URL('../../docs/server-edition.html', import.meta.url), 'utf8')
+    const recipe = [...article.matchAll(/<pre><code>([\s\S]*?)<\/code><\/pre>/g)]
+      .map((match) => match[1])
+      .join('\n')
+
+    expect(recipe).toContain('-p 127.0.0.1:8443:8443')
+    expect(recipe).toContain('--env-file ./nodeterm-server.env')
+    expect(recipe).toContain('chmod 600 nodeterm-server.env')
+    expect(recipe).toContain("read -rsp 'Initial password: '")
+    expect(recipe).not.toMatch(/(?:^|\s)-p 8443:8443(?:\s|$)/)
+    expect(recipe).not.toContain('-e NODETERM_SERVER_PASSWORD=')
+    expect(article).toContain('user-defined private Docker network')
   })
 
   it('states that this static tour does not perform the credential exchange', () => {
