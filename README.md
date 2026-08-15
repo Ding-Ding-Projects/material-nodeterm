@@ -333,6 +333,7 @@ summaries are distilled from.
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Setup, process-boundary rules, and house rules for human contributors. |
 | [`AGENTS.md`](./AGENTS.md) | A **sanitized mirror** of this project's working conventions, written for AI coding agents — see the note at the top of that file for what "mirror" means here. |
 | [`CHANGELOG.md`](./CHANGELOG.md) | What shipped, when, generated from the real commit history. |
+| [`docs/narrator.md`](./docs/narrator.md) | The spoken TTS narrator (Settings → Interface → Narrator) — voice pickers, queue and cooldown rules, failure modes. |
 
 ## 🤝 Contributing
 

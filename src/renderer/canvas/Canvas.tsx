@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { playSfx, primeSfx } from '@renderer/lib/sfx'
+import { narrate } from '@renderer/lib/narrator'
+import { agentDonePhrase, agentNeedsYouPhrase } from '@renderer/lib/narratorPhrases'
 import {
   addEdge,
   applyEdgeChanges,
@@ -971,6 +973,32 @@ export function Canvas() {
     const onToast = (e: Event): void => {
       const detail = (e as CustomEvent<{ kind: string; message: string }>).detail
       if (detail?.kind === 'error') setCopyError(detail.message)
+    }
+    window.addEventListener('nodeterm:toast', onToast)
+    return () => window.removeEventListener('nodeterm:toast', onToast)
+  }, [])
+  // Narrate app-level error toasts (a SEPARATE listener from the one above — several listeners on
+  // the same window event is fine, and this keeps narration wiring out of the copy-error state
+  // logic). These are free-text runtime messages with no hand-authored Cantonese translation, so
+  // `narrate()` falls back to speaking them in English even under a Cantonese-only preference
+  // (see narrator.ts `planUtterances` — never dropping the content wins over a language mismatch).
+  // `important: true` means the rate limiter can never swallow a failure the user needs to hear.
+  useEffect(() => {
+    const onToast = (e: Event): void => {
+      const detail = (e as CustomEvent<{ kind: string; message: string }>).detail
+      if (detail?.kind !== 'error' || !detail.message) return
+      const snd = useSettings.getState().settings
+      if (!snd.narratorEnabled) return
+      narrate({
+        category: 'app-error',
+        language: snd.narratorLanguage,
+        en: detail.message,
+        rate: snd.narratorRate,
+        pitch: snd.narratorPitch,
+        voiceEn: snd.narratorVoiceEn,
+        voiceYue: snd.narratorVoiceYue,
+        important: true
+      })
     }
     window.addEventListener('nodeterm:toast', onToast)
     return () => window.removeEventListener('nodeterm:toast', onToast)
@@ -7528,6 +7556,27 @@ export function Canvas() {
             sfxCooldownRef.current[e.nodeId] = t
             playSfx(sound, snd.soundVolume)
           }
+        }
+        // Narration: same "fires regardless of focus" reasoning as the chirp above — it's meant
+        // to be heard while you're looking at a DIFFERENT node, not just while the whole app is
+        // backgrounded (that's what the OS notification below is for). Categorized per-node so a
+        // busy canvas debounces/cools down per node rather than one node's chatter silencing
+        // another's.
+        if (snd.narratorEnabled) {
+          const phrase =
+            sound === 'done'
+              ? agentDonePhrase(agentLabel, contextFor(e.nodeId))
+              : agentNeedsYouPhrase(agentLabel, contextFor(e.nodeId))
+          narrate({
+            category: `agent-${sound}:${e.nodeId}`,
+            language: snd.narratorLanguage,
+            en: phrase.en,
+            yue: phrase.yue,
+            rate: snd.narratorRate,
+            pitch: snd.narratorPitch,
+            voiceEn: snd.narratorVoiceEn,
+            voiceYue: snd.narratorVoiceYue
+          })
         }
         // OS notification only when the whole window is in the background.
         if (document.hasFocus()) return
