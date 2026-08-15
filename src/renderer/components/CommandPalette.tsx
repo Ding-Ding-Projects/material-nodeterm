@@ -1,7 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { rankQuickOpenFiles, type QuickOpenIndexedFile } from '../lib/quickOpenSearch'
 import { IconEditor } from './icons'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 
 export interface Command {
   id: string
@@ -40,7 +42,8 @@ interface CommandPaletteProps {
   extraCommands?: Command[]
 }
 
-/** Case-insensitive subsequence match — "ntr" matches "New TeRminal". */
+/** Case-insensitive subsequence match — "ntr" matches "New TeRminal". Used only in the default
+ *  (plain-text) mode; regex mode uses a real pattern test instead. */
 function matches(label: string, q: string): boolean {
   if (!q) return true
   const s = label.toLowerCase()
@@ -53,7 +56,9 @@ function matches(label: string, q: string): boolean {
   return true
 }
 
-/** Cmd/Ctrl+K command palette: fuzzy-filter actions and jump targets, Enter to run. */
+/** Cmd/Ctrl+K command palette: fuzzy-filter actions and jump targets, Enter to run. Plain text is
+ *  a fuzzy subsequence match (the default); the `.*` toggle switches to a real regex test against
+ *  the same label+hint corpus, for when "starts with X" or "ends in .ts" beats fuzzy guessing. */
 export function CommandPalette({
   commands,
   onClose,
@@ -63,21 +68,33 @@ export function CommandPalette({
   onQueryChange,
   extraCommands
 }: CommandPaletteProps) {
-  const [query, setQuery] = useState('')
+  const field = useRegexSearchField()
+  const query = field.query
+  const inputRef = useRef<HTMLInputElement>(null)
   const [active, setActive] = useState(0)
 
-  // Fuzzy-match label+hint; also substring-match the body text (e.g. terminal output).
+  const setQuery = (q: string): void => {
+    field.setValue(q)
+    onQueryChange?.(q)
+  }
+
+  // Fuzzy-match label+hint in text mode, regex-test the same corpus in regex mode; also
+  // substring-match the body text (e.g. terminal output) either way.
   const contentHit = (c: Command) =>
-    query.length >= 2 && !!c.content && c.content.toLowerCase().includes(query.toLowerCase())
-  const labelHit = (c: Command) => matches(`${c.label} ${c.hint ?? ''}`, query)
+    field.value.length >= 2 && !!c.content && field.test(c.content)
+  const labelHit = (c: Command) => {
+    const label = `${c.label} ${c.hint ?? ''}`
+    return field.mode === 'text' ? matches(label, field.query) : field.test(label)
+  }
 
   const filtered = useMemo(
     () => commands.filter((c) => labelHit(c) || contentHit(c)).slice(0, 50),
-    [commands, query]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [commands, field.mode, field.query, field.pattern, field.flags]
   )
 
   const fileCommands = useMemo<Command[]>(() => {
-    if (!fileIndex || !onOpenFile || query.trim().length < 1) return []
+    if (!fileIndex || !onOpenFile || field.mode !== 'text' || query.trim().length < 1) return []
     return rankQuickOpenFiles(query, fileIndex, 20).map((r) => {
       const base = r.path.split('/').pop() ?? r.path
       const dir = r.path.slice(0, r.path.length - base.length).replace(/\/$/, '')
@@ -92,7 +109,7 @@ export function CommandPalette({
         secondaryLabel: 'Reveal in Explorer'
       }
     })
-  }, [fileIndex, onOpenFile, onRevealFile, query])
+  }, [fileIndex, onOpenFile, onRevealFile, query, field.mode])
 
   const items = useMemo(
     () => [...filtered, ...fileCommands, ...(extraCommands ?? [])],
@@ -108,39 +125,43 @@ export function CommandPalette({
   return createPortal(
     <div className="palette-overlay" onClick={onClose}>
       <div className="palette" onClick={(e) => e.stopPropagation()}>
-        <input
-          className="palette__input"
-          autoFocus
-          spellCheck={false}
-          placeholder="Type a command or name…"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setActive(0)
-            onQueryChange?.(e.target.value)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') {
-              e.preventDefault()
-              setActive((a) => Math.min(a + 1, items.length - 1))
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault()
-              setActive((a) => Math.max(a - 1, 0))
-            } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              const c = items[active]
-              if (c?.onSecondary) {
-                c.onSecondary()
+        <div className="palette__input-row">
+          <input
+            ref={inputRef}
+            className="palette__input"
+            autoFocus
+            spellCheck={false}
+            placeholder={field.mode === 'regex' ? 'Type a regex pattern…' : 'Type a command or name…'}
+            value={field.value}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setActive(0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setActive((a) => Math.min(a + 1, items.length - 1))
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setActive((a) => Math.max(a - 1, 0))
+              } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                const c = items[active]
+                if (c?.onSecondary) {
+                  c.onSecondary()
+                  onClose()
+                }
+              } else if (e.key === 'Enter') {
+                e.preventDefault()
+                run(items[active])
+              } else if (e.key === 'Escape') {
                 onClose()
               }
-            } else if (e.key === 'Enter') {
-              e.preventDefault()
-              run(items[active])
-            } else if (e.key === 'Escape') {
-              onClose()
-            }
-          }}
-        />
+            }}
+          />
+          <AnchoredRegexBuilder search={field} fieldRef={inputRef} label="Regex — command palette" />
+        </div>
+        {field.error && <div className="palette__error">{field.error}</div>}
         <div className="palette__list">
           {items.length === 0 && <div className="palette__empty">No matches</div>}
           {items.map((c, i) => (

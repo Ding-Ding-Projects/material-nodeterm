@@ -5242,14 +5242,30 @@ body,
   overflow: hidden;
 }
 
+.palette__input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-right: 10px;
+}
+
 .palette__input {
+  flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--border);
   color: var(--text);
   font-size: 15px;
   padding: 14px 16px;
   outline: none;
+}
+
+.palette__error {
+  padding: 0 16px 8px;
+  color: var(--danger);
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 
 .palette__list {
