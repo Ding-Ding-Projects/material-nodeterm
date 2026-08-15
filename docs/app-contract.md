@@ -150,6 +150,48 @@ the appearance editor, the infinite colour picker, app rename, app logo, toy loc
 authenticator, Support Tickets, exports, bulk actions, local history, the file converter, and the
 Ollama manager. All 36 rows currently pass (358 individual assertions).
 
+## The other half: proving controls DO something (`check-app-wired.mjs`)
+
+Everything above is a source scan. It proves a feature's file exists, exports what it should, and
+is referenced from somewhere real — and it would pass unchanged on an app whose every control was
+inert. So would every screenshot in `docs/assets/shots/`, which is the uncomfortable part: a
+convincing mock-up and a working app photograph identically.
+
+`npm run check:wired` drives the BUILT app over CDP and asserts a **consequence** for each case:
+
+| check | what it proves |
+|---|---|
+| Command palette | a nonsense query **narrows** the result list |
+| Settings toggle | a switch flips **and flips back** |
+| Canvas | a live viewport transform, which a static image cannot have |
+| Appearance | changing `--accent` moves a **consumer's computed colour** |
+| Preload bridge | `settings.load()` **round-trips to the main process** |
+
+Three rules it is built on, each of which it would be worthless without:
+
+1. **Assert a consequence, never the action.** "The click dispatched" is what the capture harness
+   already learned to distrust — its first version reported five successes while photographing the
+   same screen five times, having implemented "the chord was sent" as "the surface opened".
+2. **The before-value is part of the check.** `count > 0` passes on an app that ignored the click
+   and already had items. Every case reads state first, acts, then compares.
+3. **A check that cannot run is a failure.** "I could not find the control" and "the control does
+   nothing" are indistinguishable from outside, and only one is safe to ignore. This fired
+   immediately and correctly: the settings case looked for `input[type=checkbox]` and this app's
+   toggle is a `role="switch"` button. The harness was wrong, not the app — and it failed anyway,
+   which is what let me find out.
+
+**Verified by breaking the real thing.** Making `ui/Switch.tsx`'s `onClick` a no-op and rebuilding
+takes the run to 4/5 with the settings case red; restoring gives 5/5 back. That is the whole claim
+of this harness — that it can tell a wired control from a painted one — tested rather than asserted.
+
+**It cleans up after itself, and that mattered.** On Windows the app spawns a session host that
+outlives its parent *by design*. So a harness that only kills the app leaves one behind holding
+`node_modules\electron\dist\electron.exe` — and because `npm ci` deletes `node_modules` BEFORE
+installing, the next install failed and left the checkout gutted: no vitest, no react, no ws. The
+harness now snapshots this repo's Electron PIDs before launching and stops only the ones that
+appeared. Not "all Electron for this repo", which would take the developer's own running app with
+it.
+
 ## Deliberately not done here
 
 - **No test suite integration.** This is a standalone Node script, matching the site guard's
