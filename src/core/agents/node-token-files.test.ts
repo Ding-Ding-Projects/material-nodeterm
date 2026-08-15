@@ -24,7 +24,10 @@ afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
 describe('node token files', () => {
   it('writes 0600 files inside a 0700 dir and records materialisation', () => {
     expect(writeNodeTokenFile('node-1', 'kid.mac')).toBe(true)
-    expect(fs.statSync(nodeTokenDir()).mode & 0o777).toBe(0o700)
+    // NTFS has no POSIX owner/group/other bits — see node-auth-secret.test.ts's win32 note; there
+    // is no real 0700/0600 to observe there, only whatever `stat().mode` synthesizes from the DOS
+    // read-only attribute.
+    if (process.platform !== 'win32') expect(fs.statSync(nodeTokenDir()).mode & 0o777).toBe(0o700)
     // Derive the path from THIS test's mkdtemp root rather than through `nodeTokenDir()`. Same
     // path either way — `platform().userDataDir` is `dir` — but resolving it through module-level
     // platform state loses the mkdtemp provenance, and a file operation on a temp path with no
@@ -33,7 +36,7 @@ describe('node token files', () => {
     // and the contents belong to the SAME inode — the whole point of a 0600 credential file.
     const fd = fs.openSync(path.join(dir, 'node-tokens', 'node-1'), 'r')
     try {
-      expect(fs.fstatSync(fd).mode & 0o777).toBe(0o600)
+      if (process.platform !== 'win32') expect(fs.fstatSync(fd).mode & 0o777).toBe(0o600)
       expect(fs.readFileSync(fd, 'utf8')).toBe('kid.mac\n')
     } finally {
       fs.closeSync(fd)

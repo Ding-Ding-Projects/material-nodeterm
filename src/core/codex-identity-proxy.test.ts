@@ -164,7 +164,8 @@ describe('installCodexLauncher', () => {
   it('writes an executable launcher and answers with its path', () => {
     const file = installCodexLauncher()
     expect(file).toBe(path.join(codexLauncherDir(), 'nodeterm-codex'))
-    expect(fs.statSync(file as string).mode & 0o777).toBe(0o700)
+    // NTFS has no POSIX owner/group/other bits — see node-auth-secret.test.ts's win32 note.
+    if (process.platform !== 'win32') expect(fs.statSync(file as string).mode & 0o777).toBe(0o700)
   })
 
   it('answers null instead of throwing when it cannot be written', () => {

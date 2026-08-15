@@ -171,8 +171,11 @@ describe('codexManagedRuntimeInstalled', () => {
     const runtime = codexManagedRuntimePath(dir)
     fs.mkdirSync(path.dirname(runtime), { recursive: true })
     fs.writeFileSync(runtime, '#!/bin/sh\nexit 0\n', { mode: 0o644 })
-    // Present but not executable is not a runtime the daemon can exec, so it is still no.
-    expect(codexManagedRuntimeInstalled(dir)).toBe(false)
+    // Present but not executable is not a runtime the daemon can exec, so it is still no — but
+    // NTFS has no POSIX execute bit, so `accessSync(path, X_OK)` on win32 answers like a plain
+    // existence check regardless of mode, and there is no real "not executable yet present" state
+    // to observe there.
+    if (process.platform !== 'win32') expect(codexManagedRuntimeInstalled(dir)).toBe(false)
     fs.chmodSync(runtime, 0o755)
     expect(codexManagedRuntimeInstalled(dir)).toBe(true)
   })

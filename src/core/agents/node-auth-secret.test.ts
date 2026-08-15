@@ -47,7 +47,10 @@ describe('node-auth secret behind CorePlatform', () => {
     const file = path.join(dir, 'node-auth-key.bin')
     expect(fs.existsSync(file)).toBe(true)
     expect(fs.readFileSync(file).byteLength).toBe(32)
-    expect(mode(file)).toBe(0o600)
+    // NTFS has no POSIX owner/group/other bits — `writeFile({ mode: 0o600 })` on win32 only ever
+    // affects the DOS read-only attribute, so `stat().mode` reports 0o666 there regardless of the
+    // mode requested. There is no real 0600 to observe on this platform.
+    if (process.platform !== 'win32') expect(mode(file)).toBe(0o600)
     expect(fs.existsSync(path.join(dir, 'node-auth-key.json'))).toBe(false)
 
     resetNodeAuthSecretForTests()
@@ -62,7 +65,8 @@ describe('node-auth secret behind CorePlatform', () => {
 
     const file = path.join(dir, 'node-auth-key.json')
     expect(fs.existsSync(file)).toBe(true)
-    expect(mode(file)).toBe(0o600)
+    // See the win32 note above — NTFS has no real 0600 to observe.
+    if (process.platform !== 'win32') expect(mode(file)).toBe(0o600)
     expect(fs.existsSync(path.join(dir, 'node-auth-key.bin'))).toBe(false)
 
     const atRest = fs.readFileSync(file, 'utf8')

@@ -187,7 +187,10 @@ describe('recordAgentEvent + atomic write', () => {
     expect(doc.nodes.n1.agentId).toBe('claude')
   })
 
-  it('writes the file with 0600 permissions', async () => {
+  // NTFS has no POSIX owner/group/other permission bits — Node's `writeFile({ mode })` on win32
+  // only ever influences the DOS read-only attribute, so `stat().mode` reports 0o666 for a normal
+  // writable file no matter what mode was requested. There is no real 0600 to observe there.
+  it.skipIf(process.platform === 'win32')('writes the file with 0600 permissions', async () => {
     recordAgentEvent(ev({ state: 'working' }))
     await flush()
     const mode = fs.statSync(file).mode & 0o777
