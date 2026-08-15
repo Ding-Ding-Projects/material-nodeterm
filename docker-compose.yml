@@ -35,10 +35,17 @@ services:
     container_name: nodeterm-server
     restart: unless-stopped
     environment:
-      # Seeds the password on FIRST boot only; ignored once one is stored in /data. The wrappers
-      # generate a strong one into .env rather than shipping a default, because a default
-      # password on a box that serves shells is not a default, it is an open door.
-      NODETERM_SERVER_PASSWORD: ${NODETERM_SERVER_PASSWORD:?run ./host.sh (or host.bat) first — it generates this into .env}
+      # OPTIONAL, and empty by default on purpose.
+      #
+      # Leave it unset and the server boots UNCONFIGURED: it prints a one-time setup URL to the
+      # container log, and the first person to open that URL chooses their own password and can
+      # enrol a passkey. That is the better flow — the password is one the owner picked and
+      # typed, never a generated string that also sat in a file on disk.
+      #
+      # Set it only for an unattended deployment where nobody will read a log (a fleet rollout,
+      # a CI smoke test). It seeds FIRST boot only and is ignored once an account exists, so
+      # changing it later does nothing.
+      NODETERM_SERVER_PASSWORD: ${NODETERM_SERVER_PASSWORD:-}
       NODETERM_DATA_DIR: /data
       NODETERM_HOST: 0.0.0.0
       NODETERM_PORT: "8443"
@@ -65,7 +72,13 @@ services:
     depends_on:
       - nodeterm
     environment:
-      NODETERM_DOMAIN: ${NODETERM_DOMAIN:?set NODETERM_DOMAIN to the public hostname before using the tls profile}
+      # Plain default, NOT `${NODETERM_DOMAIN:?...}`. Compose interpolates and validates EVERY
+      # service in the file before it decides which profiles are active, so a required-variable
+      # marker here aborted `docker compose up` for the default (no-profile) case as well —
+      # "required variable NODETERM_DOMAIN is missing" while starting a stack that does not use
+      # Caddy at all. The check that matters lives in host.sh --tls, which refuses before
+      # starting; and Caddy itself fails loudly on an empty site address.
+      NODETERM_DOMAIN: ${NODETERM_DOMAIN:-}
     ports:
       - "80:80"
       - "443:443"
