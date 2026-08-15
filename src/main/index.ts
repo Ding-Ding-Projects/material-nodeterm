@@ -5,7 +5,19 @@ import { readFile } from 'fs/promises'
 import { statSync } from 'fs'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, powerMonitor, safeStorage, shell, systemPreferences } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  type BrowserWindowConstructorOptions,
+  clipboard,
+  dialog,
+  ipcMain,
+  Notification,
+  powerMonitor,
+  safeStorage,
+  shell,
+  systemPreferences
+} from 'electron'
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
 import { registerFsHandlers } from '../core/fs-handlers'
@@ -195,6 +207,14 @@ app.commandLine.appendSwitch('max-active-webgl-contexts', String(WEBGL_CONTEXT_C
 // at-rest encryption of that key.
 if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain')
 
+// Windows identifies apps by this id, not by exe path or window title — it decides whether a
+// desktop `Notification` actually shows (an unset AppUserModelID renders under a generic
+// "Electron" identity, or silently not at all on some builds) and whether the taskbar groups this
+// app's windows together instead of treating each launch as unrelated. Must match `build.appId`
+// in package.json so a Squirrel-installed build's shortcuts/notifications agree with what this
+// process claims to be.
+if (process.platform === 'win32') app.setAppUserModelId('com.nodeterm.app')
+
 // First thing in bootstrap: install the Electron CorePlatform so anything in src/core
 // (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI
 // userData override so userDataDir reads the final path; nothing consumes it yet.
@@ -369,14 +389,41 @@ if (process.platform !== 'win32' && typeof process.setFdLimit === 'function') {
 
 function createWindow(): BrowserWindow {
   // On Linux the window/taskbar icon is not supplied by an app bundle (unlike macOS),
-  // so set it explicitly from the bundled png (extraResources). mac/win are untouched —
-  // an icon there would do nothing useful and could clobber the bundled .icns.
-  const linuxIcon =
+  // so set it explicitly from the bundled png (extraResources). mac is untouched — an icon
+  // there would do nothing useful and could clobber the bundled .icns. A packaged Windows exe
+  // already carries `win.icon` (build/icon.ico) as a resource via electron-builder, so this is
+  // only needed there in an unpackaged dev run, where there is no such exe to carry one.
+  const platformIcon =
     process.platform === 'linux'
       ? app.isPackaged
         ? join(process.resourcesPath, 'icon.png')
         : join(__dirname, '../../build/icon.png')
-      : undefined
+      : process.platform === 'win32' && !app.isPackaged
+        ? join(__dirname, '../../build/icon.png') // BrowserWindow.icon accepts PNG fine; the
+          // .ico is only required for the exe/installer resource electron-builder embeds.
+        : undefined
+  // macOS gets the traffic lights integrated into our own top bar (`hiddenInset` + a custom
+  // `trafficLightPosition`), which is a look only macOS supports. Windows/Linux get the
+  // equivalent for THIS app's Material title bar: `hidden` removes the native title bar text and
+  // icon while keeping the native minimize/maximize/close buttons, and `titleBarOverlay` draws
+  // those buttons as an overlay on top of our page instead of a separate native strip above it —
+  // so our `.tabbar` really is the only chrome, on every platform, not just macOS. Electron only
+  // honours `titleBarOverlay` on Windows/Linux; `hiddenInset` is macOS-only and is ignored
+  // elsewhere, which is why this was already safe to leave unconditional before this branch.
+  const titleBarOptions: Pick<
+    BrowserWindowConstructorOptions,
+    'titleBarStyle' | 'trafficLightPosition' | 'titleBarOverlay'
+  > =
+    process.platform === 'win32'
+      ? {
+          titleBarStyle: 'hidden',
+          // Colors match the tab bar's own panel background/text (styles.css `--panel`/`--text`
+          // at the time this was written) so the native caption buttons don't look like a
+          // different app's chrome pasted on top. Height matches `.tabbar`'s 44px so the overlay
+          // buttons line up with our own row instead of floating over the canvas below it.
+          titleBarOverlay: { color: '#1a1a1e', symbolColor: '#e6e6e6', height: 44 }
+        }
+      : { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 15 } }
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -385,10 +432,8 @@ function createWindow(): BrowserWindow {
     // NT_MULTI instances are throwaway dev sandboxes: label the window so a second instance is
     // never mistaken for the real one (the dock already shows the Electron icon in dev).
     title: NT_MULTI ? 'node-terminal (test instance)' : 'node-terminal',
-    icon: linuxIcon,
-    // Integrate the macOS traffic lights into our top bar (modern Mac app look).
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 15 },
+    icon: platformIcon,
+    ...titleBarOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
