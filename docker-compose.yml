@@ -1,0 +1,81 @@
+# nodeterm Server Edition — one-command host.
+#
+#   ./host.sh          (macOS / Linux)      host.bat        (Windows)
+#
+# Those wrappers generate a password on first run and wait for the container to report healthy.
+# If you prefer to drive compose yourself:  docker compose up -d --build
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# THE SAFETY DECISION BAKED IN HERE, because it is the one that matters:
+#
+# The server refuses to bind a non-loopback address over plain HTTP (see resolveConfig in
+# src/server/config.ts) — plain HTTP on a public interface leaks the session cookie, and that
+# cookie is full access to every terminal on the host. The Dockerfile passes --insecure-http
+# because inside the compose network the traffic never touches a public interface.
+#
+# So the default `ports` mapping below binds to 127.0.0.1 ONLY. Out of the box this host is
+# reachable from the machine it runs on, and from anywhere else via an SSH tunnel:
+#
+#     ssh -N -L 8443:127.0.0.1:8443 you@your-host       then open http://127.0.0.1:8443
+#
+# To expose it publicly, do NOT change that binding to 0.0.0.0 — start the `tls` profile
+# instead, which puts Caddy in front with a real certificate and stops publishing the app port
+# at all:
+#
+#     NODETERM_DOMAIN=nodeterm.example.com docker compose --profile tls up -d --build
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+services:
+  nodeterm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nodeterm-server:local
+    container_name: nodeterm-server
+    restart: unless-stopped
+    environment:
+      # Seeds the password on FIRST boot only; ignored once one is stored in /data. The wrappers
+      # generate a strong one into .env rather than shipping a default, because a default
+      # password on a box that serves shells is not a default, it is an open door.
+      NODETERM_SERVER_PASSWORD: ${NODETERM_SERVER_PASSWORD:?run ./host.sh (or host.bat) first — it generates this into .env}
+      NODETERM_DATA_DIR: /data
+      NODETERM_HOST: 0.0.0.0
+      NODETERM_PORT: "8443"
+    volumes:
+      # Auth, the canvas, settings and scrollback snapshots. Without this every restart forgets
+      # the password and the workspace. A NAMED volume, not a bind mount: the container writes as
+      # its own user and a host-path mount invites permission mismatches on Linux.
+      - nodeterm-data:/data
+    ports:
+      # Loopback-only on purpose — see the note at the top. Override the host side with
+      # NODETERM_BIND if you know what you are doing (e.g. a private VPN address).
+      - "${NODETERM_BIND:-127.0.0.1}:${NODETERM_PUBLISH_PORT:-8443}:8443"
+    # The image already declares a HEALTHCHECK against /login (served without auth), so the
+    # wrappers can wait for "healthy" rather than sleeping and hoping.
+
+  # Real TLS, opt-in: `docker compose --profile tls up -d`. Caddy obtains and renews a
+  # certificate automatically for NODETERM_DOMAIN and speaks plain HTTP to nodeterm inside the
+  # compose network — exactly the reverse-proxy shape the server asks for.
+  caddy:
+    image: caddy:2-alpine
+    container_name: nodeterm-caddy
+    profiles: ["tls"]
+    restart: unless-stopped
+    depends_on:
+      - nodeterm
+    environment:
+      NODETERM_DOMAIN: ${NODETERM_DOMAIN:?set NODETERM_DOMAIN to the public hostname before using the tls profile}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  nodeterm-data:
+  caddy-data:
+  caddy-config:

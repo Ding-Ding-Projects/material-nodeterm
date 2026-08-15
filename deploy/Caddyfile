@@ -1,0 +1,22 @@
+# Used only by the `tls` compose profile — a public VPS with ports 80/443 reachable from the
+# internet, where Caddy can complete an ACME challenge and get a real certificate.
+#
+# It is NOT the right shape for a host that reaches the internet through a Cloudflare Tunnel (or
+# any other outbound-only tunnel): there is no inbound 80/443 to answer a challenge on, and the
+# tunnel already terminates TLS at the edge. For that, see deploy/cloudflared.md — the tunnel
+# points straight at the nodeterm container and Caddy is not used at all.
+
+{$NODETERM_DOMAIN} {
+	encode zstd gzip
+
+	# The app speaks plain HTTP inside the compose network. That is safe here and nowhere else:
+	# the hop is container-to-container, and the server sets the Secure cookie flag itself once
+	# it sees X-Forwarded-Proto: https, which reverse_proxy sets for us.
+	reverse_proxy nodeterm:8443 {
+		# WebSocket upgrade is not optional — the whole canvas, every terminal's output and the
+		# agent-status stream ride /ws. Without these the page loads and then does nothing,
+		# which reads as "the app is broken" rather than "the proxy dropped the upgrade".
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+	}
+}

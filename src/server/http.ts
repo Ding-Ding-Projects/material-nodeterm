@@ -11,6 +11,7 @@ import type { Auth } from './auth'
 import { proxyAuthAllowed, type TrustProxyConfig } from './proxy-trust'
 import { handleDownload } from './download'
 import type { DownloadTickets } from '../core/download-tickets'
+import { rpIdFromHost, verifyAssertion, verifyRegistration } from './webauthn'
 
 export const SESSION_COOKIE = 'nt_session'
 
@@ -108,6 +109,48 @@ function sendPage(res: http.ServerResponse, status: number, html: string): void 
 }
 
 /** Read a form-encoded POST body (capped) and decode into URLSearchParams. */
+/** The session token this request carries, or '' — passkey routes need it to tell "already
+ *  signed in, enrolling another key" from "anonymous". */
+function sessionFrom(req: http.IncomingMessage): string {
+  return sessionTokenFromCookie(req.headers.cookie) ?? ''
+}
+
+/**
+ * The origin the browser will have put in clientDataJSON.
+ *
+ * It must be derived from what the BROWSER saw, not from how this process is bound: behind a
+ * reverse proxy or a tunnel the page is https on a public name while the server speaks plain
+ * http to a container. Getting this wrong fails every passkey with "origin mismatch" on exactly
+ * the deployments the feature is for. X-Forwarded-Proto is only honoured when the proxy is
+ * trusted, which is the same rule the Secure cookie flag already follows.
+ */
+function originOf(req: http.IncomingMessage): string {
+  const host = req.headers.host || 'localhost'
+  const xfProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0]!.trim()
+  const proto = xfProto || ((req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http')
+  return `${proto}://${host}`
+}
+
+/** JSON body, bounded by the same limit as form bodies. */
+function readJson(req: http.IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    let aborted = false
+    req.on('data', (chunk: Buffer) => {
+      if (aborted) return
+      size += chunk.length
+      if (size > MAX_BODY_BYTES) { aborted = true; reject(new Error('body too large')); req.destroy(); return }
+      chunks.push(chunk)
+    })
+    req.on('end', () => {
+      if (aborted) return
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))) } catch (e) { reject(e) }
+    })
+    req.on('error', reject)
+  })
+}
+
 function readForm(req: http.IncomingMessage): Promise<URLSearchParams> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -155,9 +198,100 @@ const H1_STYLE = 'margin:0 0 4px;font-size:18px;font-weight:600'
 const SUB_STYLE = 'margin:0 0 16px;font-size:13px;color:#9aa0a6'
 const ERR_STYLE = 'margin:0 0 12px;font-size:13px;color:#f26d6d'
 
-function loginPage(hasError: boolean): string {
-  const errLine = hasError ? `<p style="${ERR_STYLE}">Wrong password. Try again.</p>` : ''
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in — nodeterm</title></head><body style="${PAGE_STYLE}"><form method="post" action="/auth/login" style="${CARD_STYLE}"><h1 style="${H1_STYLE}">nodeterm</h1><p style="${SUB_STYLE}">Sign in to continue</p>${errLine}<input style="${INPUT_STYLE}" type="password" name="password" placeholder="Password" autofocus autocomplete="current-password"><button style="${BUTTON_STYLE}" type="submit">Sign in</button></form></body></html>`
+/**
+ * Sign-in. A passkey is offered FIRST when one is enrolled, with the password kept underneath as
+ * the alternative rather than hidden behind a link — a self-hosted box whose only credential
+ * lives on one phone is a box that eventually locks its owner out, so the fallback stays in
+ * plain sight.
+ *
+ * The passkey button is rendered only when `hasPasskey` — an "unlock with a passkey" control on
+ * a server with none enrolled is a button that can only ever fail, which is exactly the
+ * decorative-control problem this project refuses everywhere else. It is also hidden when the
+ * browser has no WebAuthn at all, decided at runtime below rather than guessed at from a
+ * user-agent string.
+ */
+function loginPage(hasError: boolean, hasPasskey: boolean): string {
+  const errLine = hasError
+    ? `<p style="${ERR_STYLE}">That did not work. Try again.</p>`
+    : ''
+  const passkeyBlock = hasPasskey
+    ? `<div id="pk-wrap" hidden style="display:flex;flex-direction:column;gap:10px;margin-bottom:6px">
+         <button style="${BUTTON_STYLE}" type="button" id="pk-btn">Unlock with a passkey</button>
+         <p id="pk-err" style="${ERR_STYLE};display:none"></p>
+         <p style="${SUB_STYLE};margin:2px 0 0">or sign in with your password</p>
+       </div>`
+    : ''
+  const script = hasPasskey
+    ? `<script>
+(function () {
+  // Only reveal the passkey path if this browser can actually do it. Feature-detect; never
+  // sniff the user agent.
+  if (!window.PublicKeyCredential || !navigator.credentials) return;
+  var wrap = document.getElementById('pk-wrap');
+  var btn = document.getElementById('pk-btn');
+  var err = document.getElementById('pk-err');
+  wrap.hidden = false;
+  var b64u = function (buf) {
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+  var fromB64u = function (s) {
+    var t = s.replace(/-/g, '+').replace(/_/g, '/');
+    var bin = atob(t + '==='.slice((t.length + 3) % 4));
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out.buffer;
+  };
+  var fail = function (m) { err.textContent = m; err.style.display = 'block'; btn.disabled = false; btn.textContent = 'Unlock with a passkey'; };
+  btn.addEventListener('click', function () {
+    err.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Waiting for your passkey…';
+    fetch('/auth/passkey/login/options', { method: 'POST' })
+      .then(function (r) { if (!r.ok) throw new Error('options'); return r.json(); })
+      .then(function (o) {
+        return navigator.credentials.get({ publicKey: {
+          challenge: fromB64u(o.challenge),
+          rpId: o.rpId,
+          allowCredentials: (o.allowCredentials || []).map(function (c) { return { type: 'public-key', id: fromB64u(c.id) }; }),
+          userVerification: o.userVerification,
+          timeout: o.timeout
+        }}).then(function (cred) { return { cred: cred, challenge: o.challenge }; });
+      })
+      .then(function (x) {
+        if (!x.cred) throw new Error('cancelled');
+        return fetch('/auth/passkey/login/verify', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            id: x.cred.id,
+            challenge: x.challenge,
+            authenticatorData: b64u(x.cred.response.authenticatorData),
+            clientDataJSON: b64u(x.cred.response.clientDataJSON),
+            signature: b64u(x.cred.response.signature)
+          })
+        });
+      })
+      .then(function (r) {
+        if (r.ok) { window.location.href = '/'; return; }
+        // Say which of the two it is: an expired challenge is fixed by clicking again, a
+        // rejected signature is not, and one generic message sends people down the wrong path.
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          fail(j.error === 'challenge_expired' ? 'That took too long — tap to try again.'
+             : j.error === 'too_many_attempts' ? 'Too many attempts. Wait a minute and try again.'
+             : 'That passkey was not accepted. You can sign in with your password instead.');
+        });
+      })
+      .catch(function (e) {
+        // A user who dismisses the system prompt is not an error worth shouting about.
+        if (e && (e.name === 'NotAllowedError' || e.message === 'cancelled')) {
+          btn.disabled = false; btn.textContent = 'Unlock with a passkey'; return;
+        }
+        fail('Could not reach your passkey. Use your password instead.');
+      });
+  });
+})();
+</script>`
+    : ''
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in — nodeterm</title></head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">nodeterm</h1><p style="${SUB_STYLE}">Sign in to continue</p>${errLine}${passkeyBlock}<form method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:10px"><input style="${INPUT_STYLE}" type="password" name="password" placeholder="Password" autocomplete="current-password"><button style="${BUTTON_STYLE}" type="submit">Sign in</button></form></div>${script}</body></html>`
 }
 
 function setupNeedsTokenPage(): string {
@@ -420,7 +554,7 @@ export function createHttpHandler(
         redirect(res, 302, '/setup')
         return
       }
-      sendPage(res, 200, loginPage(url.searchParams.has('error')))
+      sendPage(res, 200, loginPage(url.searchParams.has('error'), auth.hasPasskey()))
       return
     }
 
@@ -473,6 +607,120 @@ export function createHttpHandler(
       }
       auth.recordLoginFailure()
       redirect(res, 303, '/login?error=1')
+      return
+    }
+
+    // ---- Passkeys (WebAuthn) ----------------------------------------------
+    //
+    // Four routes, two pairs: options -> verify, for register and for login. The options call
+    // mints a single-use challenge; the verify call consumes it. Nothing here is reachable
+    // before the account exists, so a passkey can never be the thing that CREATES the account —
+    // registration requires either an existing session or the one-time setup code.
+
+    if (pathname === '/auth/passkey/register/options' && method === 'POST') {
+      // Enrolling a key is an account change, so it needs proof you are already in: a live
+      // session, or the first-run setup code. Without this, anyone who reached the login page
+      // could bind their own authenticator and own the box.
+      const body = await readJson(req).catch(() => null)
+      const viaSetup = !auth.isConfigured() && auth.verifySetupToken(String((body as Record<string, unknown> | null)?.token ?? ''))
+      if (!viaSetup && !auth.validateSession(sessionFrom(req))) {
+        sendJson(res, 401, { error: 'unauthorized' })
+        return
+      }
+      const rpId = rpIdFromHost(req.headers.host || '')
+      sendJson(res, 200, {
+        challenge: auth.newChallenge(),
+        rp: { id: rpId, name: 'nodeterm' },
+        // One account, so a fixed user handle. It is not a secret and identifies nobody.
+        user: { id: Buffer.from('nodeterm').toString('base64url'), name: 'nodeterm', displayName: 'nodeterm' },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        // Exclude what is already enrolled so the same authenticator is not registered twice.
+        excludeCredentials: auth.listCredentials().map((c) => ({ type: 'public-key', id: c.id })),
+        authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+        attestation: 'none',
+        timeout: 120000
+      })
+      return
+    }
+
+    if (pathname === '/auth/passkey/register/verify' && method === 'POST') {
+      const body = (await readJson(req).catch(() => null)) as Record<string, string> | null
+      if (!body) { sendJson(res, 400, { error: 'bad_request' }); return }
+      const viaSetup = !auth.isConfigured() && auth.verifySetupToken(String(body.token ?? ''))
+      if (!viaSetup && !auth.validateSession(sessionFrom(req))) {
+        sendJson(res, 401, { error: 'unauthorized' })
+        return
+      }
+      if (!auth.consumeChallenge(String(body.challenge ?? ''))) {
+        sendJson(res, 400, { error: 'challenge_expired' })
+        return
+      }
+      try {
+        const cred = verifyRegistration({
+          attestationObject: String(body.attestationObject ?? ''),
+          clientDataJSON: String(body.clientDataJSON ?? ''),
+          expectedChallenge: String(body.challenge ?? ''),
+          expectedOrigin: originOf(req),
+          rpId: rpIdFromHost(req.headers.host || ''),
+          label: (String(body.label ?? '').trim() || 'Passkey').slice(0, 60)
+        })
+        auth.addCredential(cred)
+        sendJson(res, 200, { ok: true, id: cred.id, label: cred.label })
+      } catch (e) {
+        // The specific reason goes to the log, never to the caller: it describes exactly which
+        // check failed, which is a map for anyone probing.
+        console.warn('[passkey] registration rejected:', e instanceof Error ? e.message : e)
+        sendJson(res, 400, { error: 'registration_failed' })
+      }
+      return
+    }
+
+    if (pathname === '/auth/passkey/login/options' && method === 'POST') {
+      if (!auth.loginAllowed()) { sendJson(res, 429, { error: 'too_many_attempts' }); return }
+      sendJson(res, 200, {
+        challenge: auth.newChallenge(),
+        rpId: rpIdFromHost(req.headers.host || ''),
+        allowCredentials: auth.listCredentials().map((c) => ({ type: 'public-key', id: c.id })),
+        userVerification: 'preferred',
+        timeout: 120000
+      })
+      return
+    }
+
+    if (pathname === '/auth/passkey/login/verify' && method === 'POST') {
+      if (!auth.loginAllowed()) { sendJson(res, 429, { error: 'too_many_attempts' }); return }
+      const body = (await readJson(req).catch(() => null)) as Record<string, string> | null
+      if (!body) { sendJson(res, 400, { error: 'bad_request' }); return }
+      if (!auth.consumeChallenge(String(body.challenge ?? ''))) {
+        sendJson(res, 400, { error: 'challenge_expired' })
+        return
+      }
+      const cred = auth.listCredentials().find((c) => c.id === String(body.id ?? ''))
+      if (!cred) {
+        // Counts as a failure: otherwise an unknown id is a free, unthrottled probe.
+        auth.recordLoginFailure()
+        sendJson(res, 400, { error: 'unknown_credential' })
+        return
+      }
+      try {
+        const { newCounter } = verifyAssertion({
+          credential: cred,
+          authenticatorData: String(body.authenticatorData ?? ''),
+          clientDataJSON: String(body.clientDataJSON ?? ''),
+          signature: String(body.signature ?? ''),
+          expectedChallenge: String(body.challenge ?? ''),
+          expectedOrigin: originOf(req),
+          rpId: rpIdFromHost(req.headers.host || '')
+        })
+        auth.updateCredentialCounter(cred.id, newCounter)
+        auth.recordLoginSuccess()
+        setSessionCookie(req, res, auth.createSession())
+        sendJson(res, 200, { ok: true })
+      } catch (e) {
+        console.warn('[passkey] assertion rejected:', e instanceof Error ? e.message : e)
+        auth.recordLoginFailure()
+        sendJson(res, 400, { error: 'login_failed' })
+      }
       return
     }
 

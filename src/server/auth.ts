@@ -8,7 +8,13 @@ const SCRYPT_R = 8
 const SCRYPT_P = 1
 const SCRYPT_KEYLEN = 32
 
+import type { StoredCredential } from './webauthn'
+
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+/** A WebAuthn challenge is a freshness proof, not a session — it only has to survive the round
+ *  trip to the authenticator. Two minutes covers a user reaching for a phone or a hardware key;
+ *  anything longer just widens the window a captured challenge could be replayed in. */
+const CHALLENGE_TTL_MS = 2 * 60 * 1000
 export const LOCKOUT_MS = 60_000
 const MAX_FAILURES = 5
 
@@ -110,6 +116,98 @@ export class Auth {
     if (!this.verifySetupToken(candidate)) return false
     this.setupTokenValue = null
     return true
+  }
+
+  // ---- Passkeys ----------------------------------------------------------
+  //
+  // A passkey is a SECOND way into the one account this server has, alongside the password —
+  // not a second account. So credentials live in their own file beside auth.json and are not
+  // tied to a user record; there is only ever one user.
+  //
+  // The password is deliberately kept as the fallback rather than being disabled once a passkey
+  // exists. A passkey lives in one device's secure enclave or one password manager, and a server
+  // whose only credential is on a phone that fell in a river is a server nobody can reach. The
+  // recovery story for a self-hosted box is "you still know the password", and removing that to
+  // look more secure would make lockout the most likely outcome, not compromise.
+
+  private credentials: StoredCredential[] | null = null
+  /** Outstanding challenges, keyed by the challenge itself. In-memory only: a challenge is
+   *  single-use and short-lived, so surviving a restart is not a feature. */
+  private challenges = new Map<string, number>()
+
+  private get credentialsPath(): string {
+    return path.join(path.dirname(this.authPath), 'passkeys.json')
+  }
+
+  listCredentials(): StoredCredential[] {
+    if (this.credentials === null) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(this.credentialsPath, 'utf8'))
+        this.credentials = Array.isArray(raw) ? (raw as StoredCredential[]) : []
+      } catch {
+        this.credentials = []
+      }
+    }
+    return this.credentials
+  }
+
+  hasPasskey(): boolean {
+    return this.listCredentials().length > 0
+  }
+
+  private persistCredentials(): void {
+    const dir = path.dirname(this.credentialsPath)
+    fs.mkdirSync(dir, { recursive: true })
+    // 0600: a credential's PUBLIC key is not a secret, but the file also records which devices
+    // can open this host, which is not something to leave world-readable on a shared box.
+    fs.writeFileSync(this.credentialsPath, JSON.stringify(this.listCredentials(), null, 2), { mode: 0o600 })
+  }
+
+  addCredential(cred: StoredCredential): void {
+    const all = this.listCredentials()
+    // Re-registering the same authenticator replaces it rather than adding a duplicate that can
+    // never be told apart in the UI.
+    const i = all.findIndex((c) => c.id === cred.id)
+    if (i >= 0) all[i] = cred
+    else all.push(cred)
+    this.persistCredentials()
+  }
+
+  removeCredential(id: string): boolean {
+    const all = this.listCredentials()
+    const i = all.findIndex((c) => c.id === id)
+    if (i < 0) return false
+    all.splice(i, 1)
+    this.persistCredentials()
+    return true
+  }
+
+  updateCredentialCounter(id: string, counter: number): void {
+    const c = this.listCredentials().find((x) => x.id === id)
+    if (!c) return
+    c.counter = counter
+    this.persistCredentials()
+  }
+
+  /** Mint a single-use challenge. Returned base64url, which is the form WebAuthn compares. */
+  newChallenge(): string {
+    this.sweepChallenges()
+    const c = crypto.randomBytes(32).toString('base64url')
+    this.challenges.set(c, Date.now() + CHALLENGE_TTL_MS)
+    return c
+  }
+
+  /** Consume a challenge. Single-use by construction: a replayed assertion finds it gone. */
+  consumeChallenge(candidate: string): boolean {
+    this.sweepChallenges()
+    if (!candidate || !this.challenges.has(candidate)) return false
+    this.challenges.delete(candidate)
+    return true
+  }
+
+  private sweepChallenges(): void {
+    const now = Date.now()
+    for (const [k, exp] of this.challenges) if (exp <= now) this.challenges.delete(k)
   }
 
   // ---- Sessions ----------------------------------------------------------
