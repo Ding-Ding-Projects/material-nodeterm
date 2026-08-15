@@ -2,6 +2,7 @@ import { promises as fs, readFileSync } from 'fs'
 import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
+import { renameAtomic } from './fs-atomic'
 import { DEFAULT_SETTINGS, type Settings } from '../shared/types'
 import type { HistoryAction } from '../shared/local-history'
 
@@ -140,7 +141,8 @@ export class SettingsStore {
         // writer in this family already creates owner-only — this one was the outlier, which is
         // exactly what CodeQL's js/insecure-temporary-file was pointing at.
         await fs.writeFile(tmp, JSON.stringify(this.cache, null, 2), { encoding: 'utf-8', mode: 0o600 })
-        await fs.rename(tmp, this.filePath)
+        // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+        await renameAtomic(tmp, this.filePath)
       } catch (e) {
         // A unique name never self-heals the way the fixed one did (the next save just reused it),
         // so a failed write has to remove its own temp. The error still propagates, so a failed

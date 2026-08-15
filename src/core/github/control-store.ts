@@ -6,6 +6,7 @@ import type {
   GitHubProjectApproval
 } from '../../shared/github-issues'
 import { parseGitHubRepository } from './config'
+import { renameAtomic } from '../fs-atomic'
 
 const FILE_NAME = 'github-issues-control.json'
 const EMPTY_STATE: GitHubControlState = {
@@ -159,11 +160,12 @@ export class GitHubControlStore {
     // every write reaches here through THAT instance's mutate() writeQueue. A second instance on the
     // same dir, or a caller that skips the queue, needs a unique `<file>.<pid>.<seq>.tmp` name (see
     // workspace-store's writeAtomic) — otherwise two writers share this one temp and one rename
-    // publishes the other's half-written bytes.
+    // publishes the other's half-written bytes. The rename itself retries briefly on Windows if the
+    // destination is momentarily held open (see fs-atomic.ts).
     const temporary = `${this.filePath}.tmp`
     await fs.writeFile(temporary, JSON.stringify(state), { encoding: 'utf-8', mode: 0o600 })
     await fs.chmod(temporary, 0o600)
-    await fs.rename(temporary, this.filePath)
+    await renameAtomic(temporary, this.filePath)
     await fs.chmod(this.filePath, 0o600)
   }
 }

@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { renameAtomic } from '../core/fs-atomic'
 import type { GitHubSecretStore } from '../core/github/credentials'
 import type { CorePlatform } from '../core/platform'
 import type { GitHubHostController } from '../core/github/host'
@@ -86,6 +87,8 @@ export class ServerGitHubSecretStore implements GitHubSecretStore {
     // process on the same dir (every process's counter starts at 0, hence the pid) and a crash
     // between tmp-write and rename. With a shared name one writer's rename publishes the other's
     // half-written PAT, or moves the file out from under it entirely and the loser's rename fails.
+    // The rename itself now retries a transient Windows sharing-violation error — see
+    // src/core/fs-atomic.ts.
     const temporary = `${this.filePath}.${process.pid}.${++writeSeq}.tmp`
     try {
       await fs.writeFile(temporary, JSON.stringify({ version: 1, token }), {
@@ -93,7 +96,7 @@ export class ServerGitHubSecretStore implements GitHubSecretStore {
         mode: 0o600
       })
       await fs.chmod(temporary, 0o600)
-      await fs.rename(temporary, this.filePath)
+      await renameAtomic(temporary, this.filePath)
     } catch (error) {
       // A failed write MUST remove its own temp, because here a leaked temp IS a leaked PAT: a
       // unique name is never written again, so only this cleanup (or a later run's sweep above,

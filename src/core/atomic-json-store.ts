@@ -2,8 +2,9 @@
 // recovery" — shared by the converter queue and the Ollama pull queue so the same atomic-write +
 // corrupt-file-quarantine discipline lives in exactly one place.
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { renameAtomic } from './fs-atomic'
 
 export class AtomicJsonArrayStore<T> {
   constructor(private readonly file: string) {}
@@ -19,7 +20,7 @@ export class AtomicJsonArrayStore<T> {
       if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
       try {
         await mkdir(dirname(this.file), { recursive: true })
-        await rename(this.file, `${this.file}.corrupt-${Date.now()}`)
+        await renameAtomic(this.file, `${this.file}.corrupt-${Date.now()}`)
       } catch {
         // best-effort — start empty regardless
       }
@@ -36,6 +37,6 @@ export class AtomicJsonArrayStore<T> {
     await mkdir(dirname(this.file), { recursive: true })
     const tmp = `${this.file}.tmp-${process.pid}-${Date.now()}`
     await writeFile(tmp, JSON.stringify(items), 'utf8')
-    await rename(tmp, this.file)
+    await renameAtomic(tmp, this.file)
   }
 }

@@ -4,7 +4,7 @@
 // session file is written once the stream settles (done, stopped, or errored) rather than on every
 // token, so a fast model doesn't turn every response into dozens of disk writes.
 
-import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   OLLAMA_CHAT_DEFAULT_PARAMS,
@@ -14,6 +14,7 @@ import {
   type OllamaChatSessionSummary
 } from '../../shared/ollama'
 import type { OllamaClient } from './client'
+import { renameAtomic } from '../fs-atomic'
 
 let nextId = 1
 function freshId(): string {
@@ -56,7 +57,7 @@ export class OllamaChatStore {
     await mkdir(this.dir, { recursive: true })
     const tmp = `${this.fileFor(session.id)}.tmp-${process.pid}-${Date.now()}`
     await writeFile(tmp, JSON.stringify(session, null, 2), 'utf8')
-    await rename(tmp, this.fileFor(session.id))
+    await renameAtomic(tmp, this.fileFor(session.id))
   }
 
   async list(): Promise<OllamaChatSessionSummary[]> {

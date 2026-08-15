@@ -26,6 +26,14 @@
 // and the save was simply lost — intermittently, unreproducibly, and more often on exactly the
 // machines that are most protected.
 //
+// One file already knew. `src/core/github/cache.ts` carried a full write-up of this — naming
+// EPERM, naming NTFS, and citing a direct measurement: "two concurrent writers to one path failed
+// with EPERM in roughly 3 of 5 runs on this host" — and had its own bounded retry loop. It had had
+// it for some time. The knowledge sat in that one file and reached none of the other twenty-odd
+// stores doing the identical thing a few directories away, because a comment cannot propagate and
+// nothing scanned for the pattern. That is the argument for the guard test beside this file rather
+// than for another comment: a written explanation protects the file it is written in.
+//
 // The fix is the standard one: retry the rename briefly. Each attempt is still a single atomic
 // rename, so retrying cannot tear a write — it only tries the same indivisible operation again
 // once whoever held the destination has let go. The window these scanners hold is milliseconds.
@@ -38,7 +46,7 @@
 //     caller, and retrying only delays a clearer error. `ENOSPC` will not improve by waiting.
 //   - It does not swallow the final failure. The last error is thrown with its original code.
 
-import { promises as fs } from 'fs'
+import { promises as fs, renameSync } from 'fs'
 
 /**
  * Errors that mean "someone else has the destination open right now", rather than "this will
@@ -82,6 +90,40 @@ export async function renameAtomic(tmp: string, target: string): Promise<void> {
     }
   }
 }
+
+/**
+ * The synchronous twin, for the paths that cannot be async: hook installers that run during
+ * startup, the codex trust-hash write, the per-node token file. Same retry, same codes, same
+ * refusal to loop forever.
+ *
+ * It blocks the thread while it waits, which is the honest cost of a synchronous API and the
+ * reason the budget is the same ~310 ms rather than something more generous. `Atomics.wait` is a
+ * real sleep rather than a spin, so the wait does not also burn a core — Node permits it on the
+ * main thread (browsers do not).
+ *
+ * `rename` is a parameter only because a spy cannot be attached to an ESM namespace export, so a
+ * test has no other way to make this fail on a platform where it does not. Production never
+ * passes it. Injecting it here rather than exporting a mutable hook keeps the seam typed and
+ * visible, and keeps every other caller exercising the real default.
+ */
+export function renameAtomicSync(
+  tmp: string,
+  target: string,
+  rename: (from: string, to: string) => void = renameSync
+): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rename(tmp, target)
+      return
+    } catch (e) {
+      if (attempt >= RETRY_DELAYS_MS.length || !TRANSIENT.has(codeOf(e))) throw e
+      Atomics.wait(SLEEP_SLOT, 0, 0, RETRY_DELAYS_MS[attempt])
+    }
+  }
+}
+
+/** A slot that is never written, so `Atomics.wait` always waits out its full timeout. */
+const SLEEP_SLOT = new Int32Array(new SharedArrayBuffer(4))
 
 /** Paired with `process.pid` in the temp name below: the counter makes a name unique WITHIN this
  *  process, the pid makes it unique ACROSS processes (it restarts at 0 in every new one). */

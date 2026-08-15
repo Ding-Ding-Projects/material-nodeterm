@@ -13,6 +13,7 @@
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
+import { renameAtomic } from '../../core/fs-atomic'
 
 const FILE = path.join(os.homedir(), '.nodeterm', 'relay.json')
 
@@ -24,13 +25,14 @@ export interface RelayAdvertisement {
   hostDeviceId: string
 }
 
-/** Best-effort atomic write — a failed advertisement only means late adoption is unavailable. */
+/** Best-effort atomic write — a failed advertisement only means late adoption is unavailable.
+ *  The rename retries a transient Windows sharing-violation error — see src/core/fs-atomic.ts. */
 export async function writeRelayAdvertisement(ad: RelayAdvertisement): Promise<void> {
   try {
     await fs.mkdir(path.dirname(FILE), { recursive: true, mode: 0o700 })
     const tmp = `${FILE}.tmp`
     await fs.writeFile(tmp, JSON.stringify(ad, null, 2) + '\n', { mode: 0o600 })
-    await fs.rename(tmp, FILE)
+    await renameAtomic(tmp, FILE)
   } catch {
     // Advertisement is opportunistic; pairing-time provisioning still works.
   }

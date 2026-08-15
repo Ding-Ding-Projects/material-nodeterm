@@ -10,6 +10,7 @@ import { candidateName, safeDownloadBasename } from '../../core/download-name'
 import { findExecutableSync, opensshFallbacks, shellPathNow } from '../../core/exec-path'
 import { isSafeRemoteHome } from '../../core/remote-safety'
 import { mediaCachePruneList, remoteMediaCacheName } from '../../core/remote-ssh/media-cache'
+import { renameAtomic } from '../../core/fs-atomic'
 import { allowMediaPath } from '../media-protocol'
 import { remoteAccountConfigDir, isSupportedClaudeVersion } from '../../core/claude-accounts-core'
 import type { PushGrant } from '../../core/push-grants'
@@ -768,6 +769,8 @@ export class SshProjectManager {
    *  - **A failed transfer leaves no half-file under the real name.** scp writes to `<name>.part`
    *    (a `.part` DIRECTORY for `-r`) and it is renamed into place only on exit 0, the same
    *    write-then-rename discipline `sshWriteArgs` uses remotely. A failure unlinks the remains.
+   *    This local rename retries a transient Windows sharing-violation error — see
+   *    src/core/fs-atomic.ts.
    */
   async downloadFile(projectId: string, remotePath: string, destDir: string): Promise<DownloadResult> {
     const c = this.conns.get(projectId)
@@ -790,7 +793,7 @@ export class SshProjectManager {
         await fs.rm(partPath, { recursive: true, force: true }).catch(() => {})
         return { ok: false, error: 'The transfer failed. Is the file still there, and readable?' }
       }
-      await fs.rename(partPath, finalPath)
+      await renameAtomic(partPath, finalPath)
       return { ok: true, localPath: finalPath, dir: isDir }
     } catch {
       return { ok: false, error: 'The download could not be completed.' }
@@ -847,7 +850,8 @@ export class SshProjectManager {
       }
       await fs.mkdir(cacheDir, { recursive: true })
       // Same write-then-rename discipline as downloadFile: never leave a half-copied file
-      // under the final name, nt-media would happily serve a truncated video.
+      // under the final name, nt-media would happily serve a truncated video. This local
+      // rename retries a transient Windows sharing-violation error — see src/core/fs-atomic.ts.
       const partPath = `${dest}.part`
       await fs.rm(partPath, { force: true }).catch(() => {})
       const res = await this.r.runScp(scpDownArgs(c.conn, c.controlPath, remotePath, partPath, false))
@@ -855,7 +859,7 @@ export class SshProjectManager {
         await fs.rm(partPath, { force: true }).catch(() => {})
         return { ok: false, error: 'The transfer failed. Is the file still there, and readable?' }
       }
-      await fs.rename(partPath, dest)
+      await renameAtomic(partPath, dest)
       void this.pruneMediaCache(cacheDir, path.basename(dest))
       return { ok: true, localPath: dest }
     } catch {

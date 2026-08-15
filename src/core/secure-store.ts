@@ -13,6 +13,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from './platform'
+import { renameAtomic } from './fs-atomic'
 
 export interface SealedEntry<TMeta> {
   meta: TMeta
@@ -45,7 +46,8 @@ async function persistFile(file: string, data: string): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
   try {
     await fs.writeFile(tmp, data, { mode: 0o600 })
-    await fs.rename(tmp, file)
+    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+    await renameAtomic(tmp, file)
     await fs.chmod(file, 0o600)
   } finally {
     await fs.unlink(tmp).catch(() => {})

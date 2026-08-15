@@ -1823,6 +1823,29 @@ builds (unless `NODETERM_API_BASE` targets a local server). Schema example:
 ping to `api.nodeterm.dev/v1/telemetry` (version/OS on launch + daily), gated on
 `settings.telemetryEnabled` + the same build/DNT guards; toggle in Settings → Privacy.
 
+## Atomic writes (never a bare `fs.rename`)
+
+Every store persists temp-file-then-rename. That is correct on POSIX and **silently lossy on
+Windows**: `MoveFileEx` fails with `EPERM` whenever the destination is open by anyone at that
+instant, and what opens a file you just wrote is Defender's real-time scanner, the search indexer,
+OneDrive over a synced profile, or two of our own concurrent writers racing one destination. The
+save throws and the data is gone — intermittently, unreproducibly, and **more often on the machines
+that are best protected**.
+
+`renameAtomic` / `writeFileAtomic` (`src/core/fs-atomic.ts`) retry briefly. Each attempt is still
+one indivisible rename, so a retry cannot tear a write. They deliberately do NOT retry forever
+(several callers report a failed save as `persisted:false`, and that contract outranks a save that
+eventually lands), do not retry `ENOENT`/`ENOSPC`, do not branch on platform (or the behaviour under
+test on a Mac is not the behaviour shipped to Windows), and never swallow the final error.
+
+**Nothing in the toolchain catches the bare version.** 28 files had it, across three spellings — the user's canvas, their
+settings, their sealed credentials, their pinned devices — and every one of them reads as a correct
+atomic write, because on the platform most of this was written on it is one. The only signal in a
+6,000-test suite was one store's overlapping-saves test, red on Windows for that store's whole life.
+So it is enforced by scan: `src/core/fs-atomic.guard.test.ts` fails on any bare `fs.rename` outside
+the helper. Full write-up, including the separate shared-temp-name bug at the same sites:
+**`docs/atomic-writes.md`**.
+
 ## Conventions
 
 - **Two docs, two audiences — keep both.** This file holds the deep invariants with their

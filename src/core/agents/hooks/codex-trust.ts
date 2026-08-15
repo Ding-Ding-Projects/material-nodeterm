@@ -14,12 +14,12 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
-  renameSync,
   unlinkSync,
   writeFileSync
 } from 'fs'
 import { dirname, join } from 'path'
 import { createHash, randomUUID } from 'crypto'
+import { renameAtomicSync } from '../../fs-atomic'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
 // ~/.codex/config.toml under [hooks.state."<key>"]. Without it the hook is in
@@ -533,7 +533,7 @@ export function writeConfigAtomically(configPath: string, contents: string): voi
       // a plain copyFileSync is sufficient.)
       copyFileSync(configPath, `${configPath}.bak`)
     }
-    renameSync(tmpPath, configPath)
+    renameAtomicSync(tmpPath, configPath)
     renamed = true
   } finally {
     if (!renamed && existsSync(tmpPath)) {

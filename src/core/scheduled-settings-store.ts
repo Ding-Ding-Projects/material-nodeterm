@@ -2,6 +2,7 @@ import { promises as fs, readFileSync } from 'fs'
 import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
+import { renameAtomic } from './fs-atomic'
 import {
   defaultScheduledSettingsFile,
   normalizeScheduledSettingsFile,
@@ -76,7 +77,8 @@ export class ScheduledSettingsStore {
     const tmp = `${this.filePath}.${process.pid}.${++this.writeSeq}.tmp`
     try {
       await fs.writeFile(tmp, JSON.stringify(next, null, 2), { encoding: 'utf-8', mode: 0o600 })
-      await fs.rename(tmp, this.filePath)
+      // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+      await renameAtomic(tmp, this.filePath)
     } catch (e) {
       this.cache = previous // the write failed — don't let the in-memory cache lie about disk
       await fs.rm(tmp, { force: true }).catch(() => {})

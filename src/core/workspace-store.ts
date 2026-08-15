@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
+import { renameAtomic } from './fs-atomic'
 import {
   DEFAULT_PROJECT_ID, EMPTY_WORKSPACE,
   type BridgeLink, type CanvasNodeState, type Project, type Workspace, type WorkspaceV1
@@ -52,7 +53,8 @@ async function writeAtomic(filePath: string, content: string): Promise<void> {
   const tmp = `${filePath}.${process.pid}.${++tmpSeq}.tmp`
   try {
     await fs.writeFile(tmp, content, 'utf-8')
-    await fs.rename(tmp, filePath)
+    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+    await renameAtomic(tmp, filePath)
   } catch (e) {
     // A unique name never self-heals the way the old fixed one did (the next save just reused
     // it), so a failed write removes its own temp — project.json temps live in the USER'S repo,
@@ -169,7 +171,8 @@ export class WorkspaceStore {
       if (sideline) {
         const backup = `${path.basename(this.indexPath)}.corrupt-${Date.now()}`
         try {
-          await fs.rename(this.indexPath, path.join(platform().userDataDir, backup))
+          // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+          await renameAtomic(this.indexPath, path.join(platform().userDataDir, backup))
           // Only AFTER the rename succeeded: the note promises a backup exists.
           this.noteCorruptIndex(backup)
         } catch { /* best effort — never destroy data */ }
@@ -392,7 +395,8 @@ export class WorkspaceStore {
     } catch { /* not JSON — sideline below */ }
     if (sideline) {
       try {
-        await fs.rename(file, `${file}.corrupt-${Date.now()}`)
+        // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+        await renameAtomic(file, `${file}.corrupt-${Date.now()}`)
       } catch { /* best effort — never destroy data */ }
     }
     return null

@@ -4,10 +4,12 @@ import path from 'path'
 import { app, ipcMain } from 'electron'
 import { IPC } from '../shared/ipc'
 import { parseSshConfig, type ParsedSshHost, type SshServer } from '../shared/ssh'
+import { renameAtomic } from '../core/fs-atomic'
 
 /**
  * Stores saved SSH servers in ssh-servers.json. Keeps a synchronous cache so reads are
- * immediate; writes are atomic (temp + rename). The file path is injectable for tests.
+ * immediate; writes are atomic (temp + rename, retrying a transient Windows sharing-violation
+ * error — see src/core/fs-atomic.ts). The file path is injectable for tests.
  */
 export class SshStore {
   private cache: SshServer[] = []
@@ -55,7 +57,7 @@ export class SshStore {
         // 0o600: this holds the user's SSH host inventory (hosts/users/identity-file paths) —
         // owner read/write only, not world-readable.
         await fs.writeFile(tmp, snapshot, { encoding: 'utf-8', mode: 0o600 })
-        await fs.rename(tmp, this.path)
+        await renameAtomic(tmp, this.path)
       })
     return this.writeChain
   }

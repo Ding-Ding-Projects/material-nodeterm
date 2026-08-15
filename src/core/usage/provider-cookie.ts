@@ -17,6 +17,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
+import { renameAtomic } from '../fs-atomic'
 
 /** Owner read/write only. The whole reason these are separate files. */
 const MODE = 0o600
@@ -115,7 +116,8 @@ async function writeCookieNow(provider: CookieProvider, cookie: string): Promise
   const tmp = `${target}.${process.pid}.${++writeSeq}.tmp`
   try {
     await fs.writeFile(tmp, JSON.stringify({ cookie }), { encoding: 'utf-8', mode: MODE })
-    await fs.rename(tmp, target)
+    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+    await renameAtomic(tmp, target)
   } catch (e) {
     // A failed write MUST remove its own temp, because here a leaked temp IS a leaked cookie: a
     // unique name is never written again, so only this cleanup (or a later run's sweep above, once

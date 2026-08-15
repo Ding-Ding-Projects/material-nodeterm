@@ -2,7 +2,7 @@
 // crash-recoverable persistence (store.ts), paged folder discovery (fs-scan.ts), atomic writes,
 // pre-write validation, and the lossy/overwrite confirmation gate. See docs/file-converter.md.
 
-import { open, mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { open, mkdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
 import { access } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
@@ -22,6 +22,7 @@ import { sniffFormat } from './detect'
 import { DEFAULT_SKIP_DIRS, listTopLevelFiles, nextPage, walkFiles } from './fs-scan'
 import { getAdapter } from './registry'
 import { ConverterStore } from './store'
+import { renameAtomic } from '../fs-atomic'
 
 let nextId = 1
 function freshId(): string {
@@ -460,7 +461,7 @@ export class ConverterService {
       await mkdir(dirname(item.destPath), { recursive: true })
       const tmp = `${item.destPath}.part-${process.pid}-${Date.now()}`
       await writeFile(tmp, output)
-      await rename(tmp, item.destPath)
+      await renameAtomic(tmp, item.destPath)
     } catch (e) {
       return bail('failed', `Could not write output: ${(e as Error).message}`)
     }

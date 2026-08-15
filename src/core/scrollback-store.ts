@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { createHash } from 'crypto'
 import { platform } from './platform'
+import { renameAtomic } from './fs-atomic'
 
 // On a machine reboot the tmux server dies, so the live scrollback is lost. We persist a
 // byte-capped snapshot of each terminal's recent output to disk while it's running and replay
@@ -47,7 +48,8 @@ export async function writeScrollback(persistKey: string, data: string): Promise
   try {
     await fs.promises.mkdir(dir(), { recursive: true })
     await fs.promises.writeFile(tmp, trailing(data))
-    await fs.promises.rename(tmp, file)
+    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+    await renameAtomic(tmp, file)
   } catch {
     // best-effort: a failed snapshot just means no cold-restore replay for this node
     await fs.promises.rm(tmp, { force: true }).catch(() => {})

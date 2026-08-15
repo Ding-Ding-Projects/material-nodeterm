@@ -22,7 +22,6 @@ import {
   writeFileSync,
   mkdirSync,
   chmodSync,
-  renameSync,
   unlinkSync
 } from 'fs'
 import { randomUUID } from 'crypto'
@@ -37,6 +36,7 @@ import {
   type CodexEventLabel,
   type CodexTrustEntry
 } from './codex-trust'
+import { renameAtomicSync } from '../../fs-atomic'
 
 // Confirmed codex event set.
 export const CODEX_EVENTS = [
@@ -205,7 +205,7 @@ function writeHooksJson(file: string, config: HooksConfig): void {
   let renamed = false
   try {
     writeFileSync(tmp, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
-    renameSync(tmp, file)
+    renameAtomicSync(tmp, file)
     renamed = true
   } finally {
     if (!renamed && existsSync(tmp)) {
@@ -233,7 +233,7 @@ function writeManagedScript(file: string): void {
     } catch {
       /* fail open */
     }
-    renameSync(tmp, file)
+    renameAtomicSync(tmp, file)
     renamed = true
   } finally {
     if (!renamed && existsSync(tmp)) {

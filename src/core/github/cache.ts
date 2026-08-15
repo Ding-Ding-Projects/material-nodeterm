@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { GitHubIssue } from '../../shared/github-issues'
 import { parseGitHubRepository } from './config'
+import { renameAtomic } from '../fs-atomic'
 
 const DIRECTORY = 'github-issues-cache'
 const BINDING_DIRECTORY = 'github-issues-bindings'
@@ -51,12 +52,16 @@ let writeSeq = 0
  * `graceful-fs` exists); every other error — a real permission problem, a missing directory —
  * repeats immediately and still propagates on the first attempt. A no-op loop (one iteration, no
  * delay) on POSIX, where this path is not reachable at all.
+ *
+ * The inner rename itself now goes through the shared `renameAtomic` (src/core/fs-atomic.ts),
+ * which retries the same EPERM/EACCES/EBUSY class on its own short backoff — this function's outer
+ * loop is kept as an extra margin for the "two of our own writers" race this file documents above.
  */
 async function renameReplacing(from: string, to: string): Promise<void> {
   const attempts = process.platform === 'win32' ? 5 : 1
   for (let attempt = 1; ; attempt++) {
     try {
-      await fs.rename(from, to)
+      await renameAtomic(from, to)
       return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code

@@ -12,6 +12,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { normalizeClaude, type NormalizedAgentEvent } from '../../shared/agents/normalize'
+import { renameAtomic } from '../fs-atomic'
 
 /** pendingId shape the script generates (`<node>-<ms>-<pid>`) and the ONLY thing we interpolate
  *  into a filename. Validated everywhere a pendingId becomes a path so a forged value can't
@@ -36,7 +37,8 @@ export function pendingDir(homeDir: string = os.homedir()): string {
  * Write the one-line answer file for a held permission hook, atomically (tmp + rename, mode 0600).
  * Resolves true on success, false on an invalid pendingId or any fs error (fail-open — the hook
  * simply times out to the interactive prompt). The `decision` is written verbatim as the hook
- * script compares it against the literals `allow` / `deny`.
+ * script compares it against the literals `allow` / `deny`. The rename retries briefly on Windows
+ * if the destination is momentarily held open (see fs-atomic.ts).
  */
 export async function writePendingAnswerLocal(
   pendingId: string,
@@ -51,7 +53,7 @@ export async function writePendingAnswerLocal(
   try {
     await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 })
     await fs.promises.writeFile(tmp, decision, { mode: 0o600 })
-    await fs.promises.rename(tmp, file)
+    await renameAtomic(tmp, file)
     return true
   } catch {
     await fs.promises.rm(tmp, { force: true }).catch(() => {})

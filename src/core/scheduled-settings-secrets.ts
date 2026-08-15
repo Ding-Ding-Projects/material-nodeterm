@@ -12,6 +12,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from './platform'
+import { renameAtomic } from './fs-atomic'
 
 const DIR = 'scheduled-settings-secrets'
 
@@ -49,7 +50,8 @@ async function persistFile(file: string, data: string): Promise<void> {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
   try {
     await fs.writeFile(tmp, data, { encoding: 'utf-8', mode: 0o600 })
-    await fs.rename(tmp, file)
+    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
+    await renameAtomic(tmp, file)
   } catch (e) {
     await fs.rm(tmp, { force: true }).catch(() => {})
     throw e

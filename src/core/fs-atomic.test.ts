@@ -3,12 +3,12 @@
 // So the transient failure is injected rather than waited for.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { promises as fs } from 'fs'
+import { promises as fs, writeFileSync, readFileSync, renameSync } from 'fs'
 import { mkdtemp, readFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { renameAtomic, writeFileAtomic } from './fs-atomic'
+import { renameAtomic, renameAtomicSync, writeFileAtomic } from './fs-atomic'
 
 let dir: string
 beforeEach(async () => {
@@ -82,6 +82,94 @@ describe('renameAtomic survives a destination held open', () => {
     const err = await renameAtomic(join(dir, 'a'), join(dir, 'b')).catch((e) => e)
     expect(err.code, 'the original code must survive, not a wrapper').toBe('EPERM')
     expect(calls, 'bounded: five attempts, not an unbounded loop').toBe(5)
+  })
+})
+
+describe('renameAtomicSync', () => {
+  // The sync twin exists for paths that cannot be async — hook installers on the startup path, the
+  // codex trust-hash write, the per-node token file. It is easy to add the async helper and leave
+  // these behind, which is precisely what the first version of this work did: the guard knew only
+  // `fs.rename(` and stayed green over eight `renameSync` and destructured-`rename` sites.
+  //
+  // The rename is injected because a spy cannot be attached to an ESM namespace export — see the
+  // parameter's own comment in fs-atomic.ts.
+  it('retries a sharing violation and succeeds', () => {
+    const target = join(dir, 'store.json')
+    const tmp = join(dir, 'store.json.tmp')
+    writeFileSync(tmp, 'new')
+    let calls = 0
+    renameAtomicSync(tmp, target, (a, b) => {
+      // Two scanners in a row, then the handle is released.
+      if (++calls <= 2) throw errWithCode('EPERM')
+      renameSync(a, b)
+    })
+    expect(calls).toBe(3)
+    expect(readFileSync(target, 'utf-8')).toBe('new')
+  })
+
+  it.each(['EPERM', 'EACCES', 'EBUSY'])('treats %s as transient', (code) => {
+    const target = join(dir, 'store.json')
+    const tmp = join(dir, 'store.json.tmp')
+    writeFileSync(tmp, 'new')
+    let calls = 0
+    renameAtomicSync(tmp, target, (a, b) => {
+      if (++calls === 1) throw errWithCode(code)
+      renameSync(a, b)
+    })
+    expect(calls).toBe(2)
+  })
+
+  it('does not retry an error waiting cannot fix', () => {
+    let calls = 0
+    expect(() =>
+      renameAtomicSync(join(dir, 'a'), join(dir, 'b'), () => {
+        calls++
+        throw errWithCode('ENOENT')
+      })
+    ).toThrow(/ENOENT/)
+    expect(calls).toBe(1)
+  })
+
+  it('gives up rather than blocking forever, and rethrows the REAL error', () => {
+    // It blocks the thread while it waits, so an unbounded loop here would hang the app rather
+    // than merely losing a save.
+    let calls = 0
+    let err: NodeJS.ErrnoException | undefined
+    try {
+      renameAtomicSync(join(dir, 'a'), join(dir, 'b'), () => {
+        calls++
+        throw errWithCode('EPERM')
+      })
+    } catch (e) {
+      err = e as NodeJS.ErrnoException
+    }
+    expect(err?.code).toBe('EPERM')
+    expect(calls, 'bounded: five attempts').toBe(5)
+  })
+
+  it('actually waits between attempts, rather than spinning through instantly', () => {
+    // `Atomics.wait` is a real sleep. Swap it for a no-op and every retry fires in the same
+    // millisecond, which defeats the point — the destination needs TIME to be released.
+    const started = Date.now()
+    try {
+      renameAtomicSync(join(dir, 'a'), join(dir, 'b'), () => {
+        throw errWithCode('EPERM')
+      })
+    } catch {
+      /* expected */
+    }
+    // Four sleeps: 10 + 25 + 75 + 200. Asserting under the total to stay clear of timer slop.
+    expect(Date.now() - started).toBeGreaterThanOrEqual(200)
+  })
+
+  it('uses the real renameSync when nothing is injected', () => {
+    // The default parameter is the production path; without this the injected tests above would
+    // all pass while the shipped function renamed nothing.
+    const target = join(dir, 'real.json')
+    const tmp = join(dir, 'real.json.tmp')
+    writeFileSync(tmp, 'shipped')
+    renameAtomicSync(tmp, target)
+    expect(readFileSync(target, 'utf-8')).toBe('shipped')
   })
 })
 

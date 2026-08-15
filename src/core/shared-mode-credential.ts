@@ -25,6 +25,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 
 import { platform } from './platform'
+import { renameAtomic } from './fs-atomic'
 
 const SCRYPT_KEYLEN = 32
 export const MIN_PIN_LENGTH = 4
@@ -76,13 +77,14 @@ export interface StoredCredential {
 }
 
 /** Write bytes atomically: unique tmp at 0600, rename into place. A reader never observes a
- *  partial file, and a crash mid-write never corrupts the previous good copy. */
+ *  partial file, and a crash mid-write never corrupts the previous good copy. The rename retries
+ *  briefly on Windows if the destination is momentarily held open (see fs-atomic.ts). */
 export async function persistFile(file: string, data: string): Promise<void> {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
   await fs.mkdir(path.dirname(file), { recursive: true })
   try {
     await fs.writeFile(tmp, data, { mode: 0o600 })
-    await fs.rename(tmp, file)
+    await renameAtomic(tmp, file)
     await fs.chmod(file, 0o600).catch(() => {})
   } catch (e) {
     await fs.rm(tmp, { force: true }).catch(() => {})

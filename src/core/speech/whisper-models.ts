@@ -1,8 +1,9 @@
 import { createWriteStream } from 'node:fs'
-import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { Writable } from 'node:stream'
 import { WHISPER_DOWNLOAD_BASE, WHISPER_MODELS, whisperModel } from '../../shared/speech'
+import { renameAtomic } from '../fs-atomic'
 
 /** Downloads and manages the local ggml whisper models. The fences here are
  * lessons already paid for on iOS: a download streams to a per-download `<file>.part.<genId>`
@@ -102,7 +103,7 @@ export class WhisperModelStore {
       }
       await writer.close()
       if (abort.signal.aborted) throw new Error('download cancelled')
-      await rename(partPath, this.modelPath(id))
+      await renameAtomic(partPath, this.modelPath(id))
       this.onProgress?.(id, 100)
     } catch (err) {
       sink.destroy()

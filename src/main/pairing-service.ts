@@ -38,6 +38,7 @@ import type { Settings } from '../shared/types'
 import { publicKeyToB64, deriveSharedKey, encrypt, decrypt, type KeyPair } from './remote/e2ee'
 import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
+import { renameAtomic } from '../core/fs-atomic'
 
 const execFileAsync = promisify(execFile)
 
@@ -353,7 +354,8 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
    * per-call temp name covers the writers the chain cannot see — the host agent is a separate
    * PROCESS writing this same ~/.nodeterm (`writeSeq` stays module-level so a second service
    * instance in THIS process keeps counting instead of restarting into colliding names), and a
-   * crash between tmp-write and rename.
+   * crash between tmp-write and rename. The rename itself now retries a transient Windows
+   * sharing-violation error — see src/core/fs-atomic.ts.
    */
   async function writeAgentJson(obj: Record<string, unknown>): Promise<void> {
     await fs.mkdir(AGENT_DIR, { recursive: true, mode: 0o700 })
@@ -363,7 +365,7 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
     try {
       await fs.writeFile(tmp, JSON.stringify(obj, null, 2) + '\n', { mode: 0o600 })
       await fs.chmod(tmp, 0o600).catch(() => {})
-      await fs.rename(tmp, AGENT_JSON_PATH)
+      await renameAtomic(tmp, AGENT_JSON_PATH)
     } catch (e) {
       // A unique name never self-heals the way the fixed one did (the next write just reused it),
       // and here a leaked temp IS a leaked credential: only this cleanup — or a later run's sweep,
@@ -387,7 +389,8 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
    * writeAgentJson; the per-call temp name covers the chain-invisible writers and the crash
    * window — a spliced line is a key sshd rejects, i.e. the keys that were supposed to SURVIVE
    * the revoke stop working. No orphan sweep here (unlike agent.json): these are PUBLIC keys, so
-   * a stray temp is litter rather than a credential.
+   * a stray temp is litter rather than a credential. The rename itself now retries a transient
+   * Windows sharing-violation error — see src/core/fs-atomic.ts.
    */
   async function removeAuthorizedKeysForDevice(deviceId: string): Promise<void> {
     let content: string
@@ -402,7 +405,7 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
     try {
       await fs.writeFile(tmp, next, { mode: 0o600 })
       await fs.chmod(tmp, 0o600).catch(() => {})
-      await fs.rename(tmp, AUTH_KEYS_PATH)
+      await renameAtomic(tmp, AUTH_KEYS_PATH)
     } catch (e) {
       // A unique name never self-heals the way the fixed one did (the next write just reused it),
       // so a failed write has to remove its own temp — otherwise every failed revoke leaves

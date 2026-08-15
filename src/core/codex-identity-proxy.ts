@@ -27,13 +27,13 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  renameSync,
   unlinkSync,
   writeFileSync
 } from 'fs'
 import path from 'path'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { platform } from './platform'
+import { renameAtomicSync } from './fs-atomic'
 
 /**
  * How long the SERVER gives itself to mint a thread (`startCodexThreadAt`'s default).
@@ -202,7 +202,7 @@ export function writeCodexThreadIdentity(
       encoding: 'utf8',
       mode: 0o600
     })
-    renameSync(tmp, file)
+    renameAtomicSync(tmp, file)
     renamed = true
   } finally {
     if (!renamed) {

@@ -391,6 +391,20 @@ const FEATURES = [
     docs: ['docs/command-palette.md'],
   },
   {
+    id: 'atomic-writes',
+    label: 'Atomic writes that survive Windows',
+    files: ['src/core/fs-atomic.ts', 'src/core/fs-atomic.guard.test.ts'],
+    contentChecks: [
+      ['src/core/fs-atomic.ts', 'export async function renameAtomic'],
+      ['src/core/fs-atomic.ts', 'export async function writeFileAtomic'],
+      // The scan is the enforcement — without it the helper is a convention, and a convention is
+      // exactly what failed here for 23 stores. Needle carries a delimiter so a rename of the
+      // test's internals cannot satisfy it by substring.
+      ['src/core/fs-atomic.guard.test.ts', 'no bare rename, in ANY spelling, outside the helper'],
+    ],
+    docs: ['docs/atomic-writes.md'],
+  },
+  {
     id: 'destructive-confirmation',
     label: 'Destructive-action confirmation gate',
     files: [

@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { renameAtomic } from '../core/fs-atomic'
 import type { GitHubSecretStore } from '../core/github/credentials'
 import type { GitHubSecretAvailability } from '../shared/github-issues'
 import { IPC } from '../shared/ipc'
@@ -73,11 +74,12 @@ async function atomicWrite(file: string, document: TokenDocument): Promise<void>
   // userDataDir (every process's counter starts at 0, hence the pid) and a crash between
   // tmp-write and rename. With a shared name one writer's rename publishes the other's
   // half-written PAT, or moves the file out from under it entirely and the loser's rename fails.
+  // The rename itself now retries a transient Windows sharing-violation error — see src/core/fs-atomic.ts.
   const temporary = `${file}.${process.pid}.${++writeSeq}.tmp`
   try {
     await fs.writeFile(temporary, JSON.stringify(document), { encoding: 'utf-8', mode: 0o600 })
     await fs.chmod(temporary, 0o600)
-    await fs.rename(temporary, file)
+    await renameAtomic(temporary, file)
   } catch (error) {
     // A failed write MUST remove its own temp, because here a leaked temp IS a leaked PAT: a
     // unique name is never written again, so only this cleanup (or a later run's sweep above, once

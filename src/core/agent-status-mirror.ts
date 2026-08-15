@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { platform } from './platform'
+import { renameAtomic } from './fs-atomic'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentState, NormalizedAgentEvent } from '@shared/agents/normalize'
 import { WORKING_STALE_MS, isStaleWorking } from '@shared/agents/stale'
@@ -1558,7 +1559,8 @@ function scheduleWrite(): void {
   writeTimer.unref?.()
 }
 
-/** Prune + atomically write the file (tmp + rename, mode 0600). Best-effort. */
+/** Prune + atomically write the file (tmp + rename, mode 0600). Best-effort. The rename retries
+ *  briefly on Windows if the destination is momentarily held open (see fs-atomic.ts). */
 export async function flush(): Promise<void> {
   const file = resolveFile()
   if (!file) return
@@ -1579,7 +1581,7 @@ export async function flush(): Promise<void> {
   const tmp = `${file}.${process.pid}.${++writeSeq}.tmp`
   try {
     await fs.promises.writeFile(tmp, JSON.stringify(doc), { mode: 0o600 })
-    await fs.promises.rename(tmp, file)
+    await renameAtomic(tmp, file)
   } catch {
     await fs.promises.rm(tmp, { force: true }).catch(() => {})
   }
