@@ -6,7 +6,7 @@ deliberately does **not** do, and the honest cost of that trade-off.
 
 ## The governing policy
 
-**GitHub Actions runs no tests and no lint. Nothing in a workflow gates the release.**
+**GitHub Actions runs no tests, type-check or lint. Nothing in a workflow gates the release.**
 
 `release.yml` builds the app, packages a Windows installer, and publishes it as a GitHub
 Release — that is the whole job. A run fails only when the build, the packaging, or the
@@ -16,7 +16,7 @@ and it does not run a linter. This is a standing decision, not an oversight:
 - **What this costs.** With no gate in the pipeline, a release can ship from a commit whose
   tests would have failed. The first thing that notices is a person running the installer,
   not a red CI check. That is the accepted trade-off in exchange for artifacts reaching
-  people quickly and unconditionally, on every push.
+  people quickly and unconditionally, on every branch update push.
 - **Where checking actually happens.** The repository's own test scripts
   (`npm test`, `npm run typecheck`) still exist and are still meant to be run — just locally,
   by whoever is changing the code, before they push. See `CONTRIBUTING.md`. A failing local
@@ -26,13 +26,17 @@ and it does not run a linter. This is a standing decision, not an oversight:
   compile only — no tests, no type-check, no lint) purely as fast, disposable feedback. It has
   no `needs:` relationship to `release.yml`, is not a required status check, and cancels a
   superseded run outright (`concurrency: cancel-in-progress: true`) — safe only because it
-  never publishes anything. `release.yml` deliberately carries no such concurrency group:
-  cancelling a release mid-publish could strand a tag with no artifact attached to it.
+  never publishes anything. `release.yml` instead uses a non-cancelling group keyed by its
+  workflow name and run number. Attempts of one run cannot overlap, while different pushes do
+  not share a group and may build concurrently. A repository-wide release group is deliberately
+  rejected: GitHub keeps only one pending member of a concurrency group and cancels an older
+  pending member when a new one arrives, which would silently skip pushes.
 
 ## What `release.yml` actually does
 
-Triggered by every `push` (no branch filter) and by `workflow_dispatch`, on `windows-latest`
-— Windows is the active delivery target for this project. One job:
+Triggered by every **branch** `push` (`branches: ['**']`, so tag pushes cannot match) and by
+`workflow_dispatch`, on `windows-latest` — Windows is the active delivery target for this
+project. Branch-deletion events are ignored because they contain no commit to package. One job:
 
 1. **Checkout** with full history (`fetch-depth: 0`) — needed for the line-count report's
    `git blame` attribution and for an honest commit link in the release notes.
@@ -51,30 +55,82 @@ Triggered by every `push` (no branch filter) and by `workflow_dispatch`, on `win
 5. **Compute a monotonic release tag** — `v<package.json version>-ci.<run number>`. GitHub
    guarantees a workflow's own run number only ever increases and never repeats, so no two
    runs can collide on a tag and no prior release is ever recycled or overwritten.
-6. **Package the Windows installer** — `electron-builder --win --publish never`, producing a
-   Squirrel.Windows installer (`Setup.exe`, `RELEASES`, the full `.nupkg`, and a delta
-   `.nupkg` on repeat versions) under `dist/squirrel-windows/`.
-7. **Verify the installer is unsigned** — reads its Authenticode signature and fails the run
-   if it is somehow signed (see [Signing](#signing) below).
-8. **Locate the release assets** and generate the release notes
-   (`scripts/release-notes.mjs`, embedding `scripts/count-lines.mjs`'s report — see
-   [Release notes content](#release-notes-content)).
-9. **Create (or, on an idempotent retry, update) the GitHub Release** for the computed tag,
-   targeting the exact built commit, non-draft, non-prerelease, from the start.
-10. **Upload the release assets** with `--clobber`, so a retry after a partial upload heals
-    itself instead of failing on "asset already exists".
-11. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
+6. **Package only the Windows Squirrel target** —
+   `electron-builder --win squirrel --x64 --publish never`, producing `Setup.exe`, `RELEASES`,
+   the full `.nupkg` (and a delta `.nupkg` when present) under `dist/squirrel-windows/`.
+7. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: exactly one
+   setup executable, exactly one `RELEASES`, at least one full `.nupkg`, no empty assets, and
+   every package entry in `RELEASES` matching the file's SHA-1 and byte size. "The directory
+   contained something" is deliberately not enough.
+8. **Verify the setup is genuinely unsigned** — Authenticode must report exactly `NotSigned`.
+   An invalid, untrusted, or otherwise anomalous signature is not accepted as a synonym for
+   unsigned (see [Signing](#signing) below).
+9. **Stage one draft release** for the run's tag. A retry reuses its existing draft; a retry of
+   an already-successful run verifies the release tag still resolves to this run's exact commit,
+   then validates every public asset name and byte size before exiting without touching them.
+   This avoids `gh release upload --clobber`'s delete-before-replace behaviour ever operating on
+   a public asset.
+10. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
+    and expected names are replaced with `--clobber`. Any failure leaves a private draft, never
+    a public empty or partial release.
+11. **Generate the final release notes after upload** (`scripts/release-notes.mjs`, embedding
+    `scripts/count-lines.mjs`'s report — see [Release notes content](#release-notes-content)).
+12. **Read the draft back from GitHub and compare every expected name and byte size.** Only after
+    that exact remote inventory passes does one `gh release edit --draft=false` publish it. A
+    second read verifies the public transition retained the same complete inventory.
+13. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
     the collection and the upload — so a failed run still leaves the packaged output, the
     generated notes, and the run context inspectable, without ever masking or reversing the
     real pass/fail verdict of the steps above it. Only explicitly safe paths are copied: the
     packaged installer output and the generated notes file — never `node_modules`, caches, or
     the source tree.
 
+### Publication transaction and retries
+
+The public boundary is intentionally one-way: build → validate locally → create or reuse a
+**draft** → upload → validate remotely → publish. There is no command earlier in the job that can
+create a non-draft release. An upload failure can leave a draft for inspection, but it cannot
+expose an assetless release to downloaders.
+
+`GITHUB_RUN_NUMBER` stays fixed across attempts, so a rerun owns the same tag. The per-run
+concurrency key and `cancel-in-progress: false` prevent two attempts from mutating that draft at
+once. A completed rerun is also safe: it checks the tag's exact commit plus the public names and
+sizes, then reuses the release instead of applying `--clobber`, whose replacement sequence could
+otherwise remove a good public asset and then fail before uploading its replacement. Different
+run numbers own different tags and drafts, so concurrent pushes cannot collide.
+
+GitHub evaluates the workflow file from the pushed ref, not retroactively from `main`. Therefore
+this contract governs a branch only after that branch contains the corrected workflow. A
+read-only 2026-08-15 audit found 113 of 121 remote branches still carried a pre-change copy;
+updating or removing those refs is repository administration outside this code change, and no
+branch was modified here.
+
+The workflow contract is checked locally, never in Actions:
+
+```bash
+node scripts/check-release-workflow.mjs
+npx vitest run src/main/release-workflow-contract.test.ts \
+  src/main/release-assets-script.test.ts
+```
+
+The checker parses the YAML, follows invoked npm scripts, and verifies command ordering and draft
+state. Its gates deliberately mutate the trigger, tag guard, concurrency, package target, signing
+status, draft creation, upload retry, remote verification, and hidden package-script validation;
+source-text presence alone is not accepted as evidence.
+
 ### Token resolution
 
-Every step in the job authenticates as
-`secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN` (job-level `env.GH_TOKEN`,
-read automatically by the `gh` CLI). None of the three is ever printed, logged, or echoed.
+Only steps that call GitHub's API receive `GH_TOKEN`; dependency installation, repository
+scripts, compilation, and electron-builder do not. Checkout also uses
+`persist-credentials: false`, so it does not leave the contents-write token in git config.
+The timing read uses the short-lived `${{ github.token }}`. Release mutation steps prefer a
+step-scoped `${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}` because creating
+a release tag targeting a commit that changes `.github/workflows` may require workflow-write in
+addition to contents-write. A classic token therefore needs `repo` + `workflow`; a fine-grained
+token or GitHub App needs Contents: write and Workflows: write. No suitable custom secret is
+currently visible at repository scope, so publishing this workflow-changing commit on the live
+fork remains unverified. These tokens are never passed to `npm ci` or build subprocesses, but
+branch write access and workflow changes remain a trust boundary rather than a sandbox.
 
 ## Signing
 
@@ -83,11 +139,13 @@ purchases, generates, renews, stores, or uses a code-signing certificate, privat
 timestamp credential, signing secret, or signer service — it never sets `CSC_LINK` or
 `CSC_KEY_PASSWORD`, so electron-builder has no certificate to sign with in the first place.
 The packaging step additionally sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so electron-builder
-cannot opportunistically pick one up from the runner's own certificate store, and
-`package.json`'s root `build.forceCodeSigning: false` (electron-builder's own documented
-default) means a build never aborts over a signing step it was never asked to perform. A
+cannot opportunistically pick one up from the runner's own certificate store.
+`build.win.signExecutable: false` is the explicit no-sign control; resource editing remains on so
+the executable still receives its icon, name/version metadata, and execution level. Root
+`build.forceCodeSigning: false` permits the intended unsigned output. A
 dedicated verification step reads the built installer's actual Authenticode signature and
-fails the run if it is somehow signed — signing prohibition is enforced, not just documented.
+requires `NotSigned`; `Valid`, `HashMismatch`, `NotTrusted`, `UnknownError`, and every other
+status fail the run. Signing prohibition is enforced, not just documented.
 
 Every release's notes carry an explicit warning: **the installer is unsigned**, and running it
 will trigger Windows SmartScreen and the unknown-publisher warning. That is expected, not a
@@ -100,16 +158,16 @@ instead of by a signature that does not exist.
 a check ran that did not, and it never estimates a missing timestamp — a missing value is
 printed as **missing**, not guessed at. It always includes:
 
-1. **End-to-end workflow timing** — `Workflow started` (from GitHub's own `run_started_at`,
-   or "missing" if that read failed), `Workflow completed` (stamped immediately before the
-   release is published — the closest a single-job workflow can get to "through the final
-   release-publication step"), and `Workflow duration` as a stable `HH:mm:ss`.
+1. **Release-preparation timing** — `Workflow started` (from GitHub's own `run_started_at`,
+   or "missing" if that read failed), `Release notes generated` (stamped after asset upload),
+   and `Elapsed to release notes` as a stable `HH:mm:ss`. It deliberately does not call this
+   workflow completion: remote verification, publication, and the public post-check follow.
 2. **The project's line count at that exact commit**, via `scripts/count-lines.mjs` —
    see below.
 3. **What actually ran** — an explicit statement that no tests, type-check, or lint ran in
    this workflow, alongside the real list of steps that did (`npm ci`, `npm run make-icon`,
-   `npm run build`, `electron-builder --win`). This section exists specifically so a release
-   is never read as "passing" a check it never ran.
+   `npm run build`, `electron-builder --win squirrel --x64 --publish never`). This section exists
+   specifically so a release is never read as "passing" a check it never ran.
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
 
@@ -181,21 +239,19 @@ loop:
    already-published tags checking out their own, unfixed, copy of the file. The branch filter
    is necessary but was not, by itself, sufficient to end an already-running loop.
 
-**The workflow is currently disabled** (`gh workflow list --all` reports it
-`disabled_manually`). It stays that way until it is deliberately re-enabled after this fix has
-been reviewed — re-enabling it is not part of this change.
+**The workflow was manually disabled to stop that incident and has since been re-enabled.**
+A read-only `gh workflow list --all` check on 2026-08-15 reports `Release` as `active`; this
+change does not enable, disable, trigger, or otherwise mutate the live workflow.
 
 ### The fail-fast tag guard
 
 The branch filter closes the trigger for new pushes, but it lives in the same file it is meant
-to protect: nothing stops a future edit from loosening it, a `workflow_dispatch` from being
-aimed at a tag ref (which GitHub allows), or an old/reverted copy of the workflow from being the
-one that executes if the loop ever restarts through some other path. So the release job's very
-first step is a redundant, independent check: `if: github.ref_type == 'tag'` fails the run in
-seconds, before checkout or any dependency install, with an explicit error naming the reason.
-It costs nothing on every normal branch-push or `workflow_dispatch` run (the condition is false
-and the step is skipped), and it means a tag-triggered run can never again get far enough to
-publish anything, regardless of what the trigger filter says at that ref.
+to protect: a future edit could loosen the trigger while accidentally leaving the job runnable,
+or a `workflow_dispatch` could target a tag ref. So the release job's very first step is a
+redundant check: `if: github.ref_type == 'tag'` fails before checkout or dependency install. It
+protects only refs whose own workflow copy contains the guard. A genuinely old/reverted copy
+without it is not retroactively protected; disabling the workflow or updating/removing the unsafe
+ref remains the remedy. On a normal branch run the condition is false and the step is skipped.
 
 ### The honest cost of an ungated pipeline, restated
 
@@ -225,9 +281,8 @@ that is known to make it self-perpetuating.
   `release.yml`. The active delivery scope for this project is Windows only. Historical
   macOS/Linux release history remains on GitHub as a record; reopening cross-platform delivery
   is a deliberate, explicit decision for later, not an oversight here.
-- **Windows app icon.** `package.json`'s `build.squirrelWindows.iconUrl` currently points at
-  `build/icon.png` on GitHub's raw content host, but `build/icon.png` is generated at build
-  time and is `.gitignore`d — that URL will not resolve today. This only affects the icon
-  Squirrel shows in Windows' "Apps & features" list (cosmetic; it does not fail packaging or
-  the release). A real, committed, multi-resolution `.ico` for this app is tracked as a
-  follow-up under the project's general app-icon/branding work, not this lane.
+- **Windows app icon URL.** No `build.squirrelWindows.iconUrl` is configured. Electron-builder
+  derives a repository URL for the generated build-resource icon, but that file is ignored and
+  the derived URL may not resolve. This only affects the icon Squirrel shows in Windows'
+  "Apps & features" list (cosmetic; it does not fail packaging or the release). A real,
+  committed, multi-resolution `.ico` remains branding follow-up work.

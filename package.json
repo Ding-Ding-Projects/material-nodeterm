@@ -139,8 +139,7 @@
         }
       ],
       "forceCodeSigning": false,
-      "signExecutable": false,
-      "signAndEditExecutable": false
+      "signExecutable": false
     },
     "squirrelWindows": {
       "artifactName": "${productName}-Setup-${version}.${ext}"
@@ -186,6 +185,7 @@
     "electron-builder-squirrel-windows": "^26.15.3",
     "electron-vite": "^5.0.0",
     "esbuild": "^0.28.2",
+    "js-yaml": "^4.1.0",
     "jsdom": "^30.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

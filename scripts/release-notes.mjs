@@ -1,20 +1,21 @@
 #!/usr/bin/env node
 /**
  * release-notes.mjs — builds the body of the GitHub Release the CI workflow publishes
- * on every push. Prints markdown to stdout; the workflow redirects it to a file and
- * hands that file to `gh release create --notes-file`.
+ * on each branch push whose ref carries the workflow. Prints markdown to stdout; the workflow
+ * redirects it to a file, attaches it to the verified draft, then makes that draft public.
  *
  * This script never claims a check ran that did not, and it never estimates a missing
  * timestamp — see docs/ci-and-releases.md for the governing policy: this workflow runs
- * no tests and no lint, and nothing here gates the release.
+ * no tests, type-check or lint, and nothing here gates the release.
  *
  * Environment (all read at run time; every one has a documented fallback so the script
  * can also be run by hand for a dry-run preview):
  *   RELEASE_TAG              the tag this release publishes under
  *   WORKFLOW_STARTED_AT      ISO-8601 UTC — the workflow run's first-job startedAt
  *                             (GitHub's own `run_started_at`). Reported as "missing" if unset.
- *   WORKFLOW_COMPLETED_AT    ISO-8601 UTC — captured just before this script runs, i.e.
- *                             through the final release-publication step. Defaults to "now".
+ *   RELEASE_NOTES_GENERATED_AT
+ *                            ISO-8601 UTC — when note generation begins. Defaults to "now";
+ *                             verification and publication happen afterward.
  *   GITHUB_REPOSITORY        "owner/repo", for the commit link. Optional.
  *   GITHUB_SHA               the built commit. Optional.
  *   RELEASE_ASSET_PATHS      newline-separated list of installer file paths to list with
@@ -70,27 +71,27 @@ async function listAssets() {
 
 function renderTimingSection() {
   const startedRaw = process.env.WORKFLOW_STARTED_AT
-  const completedRaw = process.env.WORKFLOW_COMPLETED_AT ?? new Date().toISOString()
+  const generatedRaw = process.env.RELEASE_NOTES_GENERATED_AT ?? new Date().toISOString()
 
-  const lines = ['## Workflow timing', '']
+  const lines = ['## Release preparation timing', '']
   if (!startedRaw) {
     lines.push('- **Workflow started:** missing (the run-start timestamp could not be read)')
-    lines.push(`- **Workflow completed:** ${completedRaw}`)
-    lines.push('- **Workflow duration:** missing (cannot compute without a start time)')
+    lines.push(`- **Release notes generated:** ${generatedRaw}`)
+    lines.push('- **Elapsed to release notes:** missing (cannot compute without a start time)')
     return lines.join('\n')
   }
   const started = new Date(startedRaw)
-  const completed = new Date(completedRaw)
+  const generated = new Date(generatedRaw)
   if (Number.isNaN(started.getTime())) {
     lines.push(`- **Workflow started:** missing (unparsable value: ${JSON.stringify(startedRaw)})`)
-    lines.push(`- **Workflow completed:** ${completedRaw}`)
-    lines.push('- **Workflow duration:** missing (cannot compute without a valid start time)')
+    lines.push(`- **Release notes generated:** ${generatedRaw}`)
+    lines.push('- **Elapsed to release notes:** missing (cannot compute without a valid start time)')
     return lines.join('\n')
   }
-  const durationMs = completed.getTime() - started.getTime()
+  const durationMs = generated.getTime() - started.getTime()
   lines.push(`- **Workflow started:** ${started.toISOString()}`)
-  lines.push(`- **Workflow completed:** ${completed.toISOString()}`)
-  lines.push(`- **Workflow duration:** ${fmtDurationMs(durationMs)} (HH:mm:ss)`)
+  lines.push(`- **Release notes generated:** ${generated.toISOString()}`)
+  lines.push(`- **Elapsed to release notes:** ${fmtDurationMs(durationMs)} (HH:mm:ss)`)
   return lines.join('\n')
 }
 
@@ -148,8 +149,8 @@ function renderChecksSection() {
     '## What actually ran',
     '',
     '> [!IMPORTANT]',
-    '> This workflow runs **no tests and no lint**. Nothing in it gates this release — a run',
-    '> only fails when the build, packaging, or publication itself fails. See',
+    '> This workflow runs **no tests, type-check or lint**. Nothing in it gates this release —',
+    '> a run only fails when the build, packaging, or publication itself fails. See',
     '> [`docs/ci-and-releases.md`](https://github.com/' +
       (process.env.GITHUB_REPOSITORY ?? 'Ding-Ding-Projects/material-nodeterm') +
       '/blob/main/docs/ci-and-releases.md) for the full policy.',
@@ -161,7 +162,8 @@ function renderChecksSection() {
     '  patch + native rebuild of `node-pty` for this runner\'s Electron ABI.',
     '- `npm run make-icon` — regenerated the app icon.',
     '- `npm run build` (electron-vite) — compiled the main, preload, and renderer bundles.',
-    '- `electron-builder --win` — packaged the Windows Squirrel installer (unsigned; see below).',
+    '- `electron-builder --win squirrel --x64 --publish never` — packaged the Windows Squirrel',
+    '  installer (unsigned; see below).',
     '',
     '**Not run here:** unit/integration tests (`npm test`), type-check (`npm run typecheck`),',
     'lint. Those are run locally by whoever changes the code, and their real results are',
