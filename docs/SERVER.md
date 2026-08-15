@@ -352,6 +352,11 @@ Two intentional departures from `docs/superpowers/specs/2026-07-10-server-editio
 
 ## Phase 2 limitations
 
+- **Desktop phone pairing is intentionally unavailable.** The Server Edition browser is already
+  attached to this host and has no desktop one-shot LAN listener or local OS SSH-key store. Its
+  bridge declares `pairing.supported = false`; the quick action is hidden and Settings → Phone
+  shows the deliberate desktop-only route. Headless mobile push uses the separate SSH-possession
+  grant flow documented above.
 - **Terminal-only.** Terminal nodes work (spawn, I/O, resize, tmux continuity). The
   git panel, source control, Monaco editor/diff nodes, SDK chat node, agent-status
   badges/hooks, and the folder picker are **not** wired into the server bridge yet —

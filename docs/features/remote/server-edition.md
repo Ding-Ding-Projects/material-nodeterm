@@ -36,6 +36,11 @@ service; re-running the same script updates it in place.
 
 ## Failure modes
 
+- **Phone pairing is desktop-host-only.** Server Edition has no desktop LAN pairing listener or
+  local OS SSH-key store, so the browser bridge reports `pairing.supported = false`. The quick
+  pairing button is absent and Settings → Phone explains where to pair instead of calling
+  rejecting stubs. A Docker deployment is already the host the browser is attached to; mobile
+  push registration for that host follows the SSH-possession grant documented in `docs/SERVER.md`.
 - **The browser's own capabilities are missing something the desktop app assumes** (a
   filesystem dialog, for instance): the affected feature degrades to a documented in-browser
   equivalent (an in-app folder browser instead of the OS-native file picker) rather than

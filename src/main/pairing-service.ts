@@ -2,10 +2,11 @@
 //
 // start() mints a one-time token, opens a single-shot LAN HTTP listener on a random port, and
 // returns the JSON payload (for the renderer to render as a QR) plus whether SSH looks reachable.
-// The phone scans the QR, generates an Ed25519 keypair on-device, and POSTs {token, publicKey}
-// to http://<host>:<pairPort>/pair. On a token match we append the key to ~/.ssh/authorized_keys
-// and stop the listener. The private key never leaves the phone; the only secret in the QR is the
-// single-use token.
+// The phone scans the QR, generates an Ed25519 keypair on-device, and seals {token, publicKey}
+// into the advertised host key's mandatory {epk,box} envelope before POSTing it to /pair. On a
+// token match we append the key to ~/.ssh/authorized_keys and return the new bearer credentials
+// only inside an authenticated response box. The private key never leaves the phone; the only
+// secret in the QR is the single-use token.
 //
 // Pure bits (payload build, key validation, LAN-IPv4 pick) live in `pairing-core.ts` so they're
 // unit-tested without spinning up a server.
@@ -35,19 +36,21 @@ import {
   type RelayPairingBlock
 } from './pairing-core'
 import type { Settings } from '../shared/types'
-import { publicKeyToB64, deriveSharedKey, encrypt, decrypt, type KeyPair } from './remote/e2ee'
+import { publicKeyToB64, type KeyPair } from './remote/e2ee'
 import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
 import { renameAtomic } from '../core/fs-atomic'
+import { openPairingEnvelope, sealPairingResponse } from './pairing-envelope'
 
 const execFileAsync = promisify(execFile)
 
 /**
- * Optional relay dependencies injected into the pairing service. When present AND phone access is
- * enabled, a successful LAN pair ALSO provisions the phone for the relay (a device token +
- * the host's relay identity), so it can reach this Mac from anywhere. Injected (not imported) so
- * `pairing-core` stays pure and this stays testable. Absent / any failure ⇒ LAN-only (the phone
- * still pairs; it just won't get relay access).
+ * Host-identity and optional relay dependencies injected into the pairing service. The host-key
+ * provider is mandatory because it authenticates and encrypts the LAN exchange. When phone access
+ * is enabled, a successful LAN pair also provisions the phone for the relay (a device token + the
+ * host's relay identity), so it can reach this Mac from anywhere. Injected (not imported) so
+ * `pairing-core` stays pure and this stays testable. A relay mint failure still degrades to LAN-only;
+ * a missing host-key provider refuses to start.
  */
 export interface PairingRelayDeps {
   getSettings(): Settings
@@ -116,29 +119,25 @@ async function mintRelayDevice(
 }
 
 /**
- * Compute this host's relay reachability block WITHOUT any network call (just the host key →
- * hostId), so the QR renders instantly. Returns null (LAN-only) when phone access is off or
- * blocked in dev.
+ * Compute this host's relay reachability block WITHOUT any network call (just the already-loaded
+ * host key → hostId), so the QR renders instantly. Returns null (LAN-only) when phone access is
+ * off or blocked in dev.
  */
 async function buildRelayContext(
-  deps: PairingRelayDeps | undefined
+  deps: PairingRelayDeps,
+  hostKeys: KeyPair
 ): Promise<{ block: RelayPairingBlock; entitlement: string | null } | null> {
-  if (!deps || !deps.relayAllowed()) return null
+  if (!deps.relayAllowed()) return null
   if (!deps.getSettings().phoneAccessEnabled) return null
   const entitlement = deps.getEntitlement() // null on free tier → mint by deviceId
-  try {
-    const keys = await deps.loadHostKeyPair()
-    const hostPublicKeyB64 = publicKeyToB64(keys.publicKey)
-    return {
-      block: {
-        hostId: hostIdFromPublicKeyB64(hostPublicKeyB64),
-        hostPublicKeyB64,
-        relayEndpoint: deps.relayEndpoint
-      },
-      entitlement
-    }
-  } catch {
-    return null
+  const hostPublicKeyB64 = publicKeyToB64(hostKeys.publicKey)
+  return {
+    block: {
+      hostId: hostIdFromPublicKeyB64(hostPublicKeyB64),
+      hostPublicKeyB64,
+      relayEndpoint: deps.relayEndpoint
+    },
+    entitlement
   }
 }
 
@@ -158,9 +157,8 @@ const SHORT_CODE_MAX_ATTEMPTS = 5
 export interface PairingStartResult {
   /** The single-line JSON to encode into the QR. */
   payload: string
-  /** Six-digit code for typing in by hand, for a device that cannot scan (Safari has no QR
-   *  reader) or a camera that will not focus. Same listener, same ten-minute window, but
-   *  attempt-capped because six digits is small. */
+  /** Compatibility credential accepted only inside an authenticated envelope. Same listener and
+   *  ten-minute window, but attempt-capped because six digits is small. */
   shortCode: string
   /** Where to type it — the LAN address and port the listener is on. */
   manualHost: string
@@ -322,10 +320,40 @@ function readBody(req: IncomingMessage): Promise<string> {
   })
 }
 
-export function createPairingService(relayDeps?: PairingRelayDeps): PairingService {
-  let server: Server | null = null
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let onDoneCb: ((result: PairingDone) => void) | null = null
+/** @internal A deterministic barrier for the accepted-socket race test. */
+export interface PairingServiceTestHooks {
+  onPairRequestAccepted?(): void
+  sealResponse?(
+    response: Record<string, unknown>,
+    sharedKey: Uint8Array
+  ): { box: string }
+}
+
+interface PairingAttempt {
+  /** Synchronous latch: once true, no request belonging to this attempt may reach a write. */
+  settled: boolean
+  /** Completion/cancellation is separate from settlement while the winning request persists. */
+  done: boolean
+  server: Server | null
+  timer: ReturnType<typeof setTimeout> | null
+  onDone: ((result: PairingDone) => void) | null
+}
+
+/**
+ * A request may proceed before settlement, while the request that synchronously claimed the
+ * attempt may finish only until cancellation/completion. Keeping this policy in one guard makes
+ * every accepted-socket gate fail together under mutation instead of accidentally testing one of
+ * several redundant checks.
+ */
+function attemptAllowsRequest(attempt: PairingAttempt, ownsClaim = false): boolean {
+  return !attempt.done && (ownsClaim || !attempt.settled)
+}
+
+export function createPairingService(
+  relayDeps?: PairingRelayDeps,
+  testHooks: PairingServiceTestHooks = {}
+): PairingService {
+  let activeAttempt: PairingAttempt | null = null
 
   /**
    * Serializes every mutation of agent.json / authorized_keys. Both are read-modify-write over a
@@ -416,39 +444,107 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
     await fs.chmod(AUTH_KEYS_PATH, 0o600).catch(() => {})
   }
 
-  const cleanup = (): void => {
-    if (timer) {
-      clearTimeout(timer)
-      timer = null
+  const closeAttemptResources = (attempt: PairingAttempt): void => {
+    if (attempt.timer) {
+      clearTimeout(attempt.timer)
+      attempt.timer = null
     }
-    if (server) {
-      server.close()
-      server = null
+    if (attempt.server) {
+      attempt.server.close()
+      attempt.server = null
     }
   }
 
-  // Fire the completion callback exactly once, then tear everything down.
-  const finish = (result: PairingDone): void => {
-    const cb = onDoneCb
-    onDoneCb = null
-    cleanup()
+  /** Cancel without notifying the renderer (stop/new start), but poison every accepted request. */
+  const cancelAttempt = (attempt: PairingAttempt): void => {
+    if (attempt.done) return
+    attempt.settled = true
+    attempt.done = true
+    attempt.onDone = null
+    closeAttemptResources(attempt)
+    if (activeAttempt === attempt) activeAttempt = null
+  }
+
+  /** Fire this attempt's completion callback exactly once, then tear its own resources down. */
+  const finishAttempt = (attempt: PairingAttempt, result: PairingDone): void => {
+    if (attempt.done) return
+    attempt.settled = true
+    attempt.done = true
+    const cb = attempt.onDone
+    attempt.onDone = null
+    closeAttemptResources(attempt)
+    if (activeAttempt === attempt) activeAttempt = null
     cb?.(result)
+  }
+
+  /**
+   * Claim the single success path synchronously, before its first persistence await. Closing the
+   * listener stops new sockets; the settled bit is what stops sockets HTTP already accepted.
+   */
+  const claimAttempt = (attempt: PairingAttempt): boolean => {
+    if (!attemptAllowsRequest(attempt)) return false
+    attempt.settled = true
+    closeAttemptResources(attempt)
+    return true
   }
 
   const start = async (onDone: (result: PairingDone) => void): Promise<PairingStartResult> => {
     // A prior in-flight pairing is cancelled silently (no onDone) before starting a new one.
-    onDoneCb = null
-    cleanup()
-    onDoneCb = onDone
+    if (activeAttempt) cancelAttempt(activeAttempt)
+    const attempt: PairingAttempt = {
+      settled: false,
+      done: false,
+      server: null,
+      timer: null,
+      onDone
+    }
+    activeAttempt = attempt
 
     const host = pickLanIPv4(os.networkInterfaces())
     if (!host) {
-      onDoneCb = null
+      cancelAttempt(attempt)
       throw new Error("Couldn't detect a LAN IP address — connect to Wi-Fi and try again.")
     }
+    // The QR's hostKey is what authenticates and encrypts the entire LAN exchange. Starting a
+    // listener without it would force clients onto the retired plaintext path, where agentToken
+    // and relayDeviceToken are long-lived bearer credentials. Fail before binding any port.
+    if (!relayDeps) {
+      cancelAttempt(attempt)
+      throw new Error('Secure pairing is unavailable — this build has no host-key provider.')
+    }
+    const deps = relayDeps
+    let hostKeys: KeyPair
+    try {
+      hostKeys = await deps.loadHostKeyPair()
+    } catch {
+      cancelAttempt(attempt)
+      throw new Error(
+        'Secure pairing is unavailable because this machine\'s host key could not be loaded.'
+      )
+    }
+    if (attempt.done || activeAttempt !== attempt) {
+      throw new Error('Pairing start was cancelled.')
+    }
+    const hostKey = publicKeyToB64(hostKeys.publicKey)
+    let name: string
+    let sshOpen: boolean
+    let relayCtx: { block: RelayPairingBlock; entitlement: string | null } | null
+    try {
+      ;[name, sshOpen, relayCtx] = await Promise.all([
+        computerName(),
+        probeSsh(),
+        buildRelayContext(deps, hostKeys)
+      ])
+    } catch (err) {
+      cancelAttempt(attempt)
+      throw err
+    }
+    if (attempt.done || activeAttempt !== attempt) {
+      throw new Error('Pairing start was cancelled.')
+    }
     const token = randomBytes(24).toString('base64url')
-    // A SHORT code for manual entry, beside the long token the QR carries. Six digits is what a
-    // person will actually retype off a screen; the QR keeps the full-entropy token.
+    // A SHORT compatibility code beside the full-entropy token the QR carries. It is accepted only
+    // inside an authenticated envelope; there is no plaintext manual/browser path.
     //
     // Six digits is 10^6, which is brute-forceable in minutes over a LAN if nothing stops it —
     // so the short path is attempt-capped below (SHORT_CODE_MAX_ATTEMPTS) and dies with the
@@ -461,38 +557,28 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
     const srv = createServer((req: IncomingMessage, res: ServerResponse) => {
       void handleRequest(req, res)
     })
-    server = srv
+    attempt.server = srv
 
     // Bind a random high port on all interfaces (0.0.0.0) so the phone on the LAN can reach it.
-    await new Promise<void>((resolve, reject) => {
-      srv.once('error', reject)
-      srv.listen(0, '0.0.0.0', () => {
-        srv.removeListener('error', reject)
-        resolve()
+    try {
+      await new Promise<void>((resolve, reject) => {
+        srv.once('error', reject)
+        srv.listen(0, '0.0.0.0', () => {
+          srv.removeListener('error', reject)
+          resolve()
+        })
       })
-    })
+    } catch (err) {
+      cancelAttempt(attempt)
+      throw err
+    }
+    if (attempt.done || activeAttempt !== attempt) {
+      closeAttemptResources(attempt)
+      throw new Error('Pairing start was cancelled.')
+    }
 
     const addr = srv.address()
     const pairPort = typeof addr === 'object' && addr ? addr.port : 0
-    const [name, sshOpen] = await Promise.all([computerName(), probeSsh()])
-    // Relay reachability (network-free) — embedded in the QR so the phone can reach us over the
-    // relay too. Also reused in handleRequest to mint the phone's device token. LAN-only when null.
-    const relayCtx = await buildRelayContext(relayDeps)
-    // The host's NaCl box keypair — its public key rides the QR as `hostKey` (authenticated by
-    // being shown on this screen), so a new phone can E2EE the whole /pair exchange to it. Loaded
-    // once here and reused to decrypt the request in handleRequest. If the key can't be loaded we
-    // simply omit `hostKey` → the phone falls back to plaintext (never fail pairing over this).
-    let hostKeys: KeyPair | null = null
-    let hostKey: string | undefined
-    if (relayDeps) {
-      try {
-        hostKeys = await relayDeps.loadHostKeyPair()
-        hostKey = publicKeyToB64(hostKeys.publicKey)
-      } catch {
-        hostKeys = null
-        hostKey = undefined
-      }
-    }
     const payload = buildPairingPayload({
       host,
       port: 22,
@@ -504,35 +590,43 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
       relay: relayCtx?.block
     })
 
-    // Give up after 2 minutes with a timeout result.
-    timer = setTimeout(() => finish({ ok: false }), PAIR_TIMEOUT_MS)
-    timer.unref?.()
+    // Give up after ten minutes with a timeout result.
+    attempt.timer = setTimeout(() => finishAttempt(attempt, { ok: false }), PAIR_TIMEOUT_MS)
+    attempt.timer.unref?.()
 
     // The phone reads /pair responses off a raw TCP socket (ATS blocks URLSession for bare-IP
     // HTTP) and takes everything after the header block as the body, so every response must be
     // framed with an explicit Content-Length — otherwise Node chunks the HTTP/1.1 response and
     // the chunk-framing bytes corrupt the body on the phone.
     const send = (res: ServerResponse, code: number, body = '', type?: string): void => {
+      if (res.destroyed || res.headersSent) return
       const headers: Record<string, string | number> = { 'Content-Length': Buffer.byteLength(body) }
       if (type) headers['Content-Type'] = type
-      // CORS, so a BROWSER can complete a pairing too — the Server Edition's own pairing page
-      // runs on a different origin (the LAN host serving the canvas) from this listener (the
-      // desktop that showed the QR), and without these headers the browser discards the reply
-      // before any of it is read.
+      // Keep the listener usable by an authenticated cross-origin client that implements the same
+      // mandatory encrypted envelope. Server Edition does not expose this desktop-host capability.
       //
-      // Why `*` is not a hole here: CORS is not the access control on this endpoint and never
-      // was. Authorization is the single-use `token` printed inside the QR, on a listener that
-      // exists for ten minutes and stops at the first success. An origin that does not have the
-      // token gets 403 with or without these headers, and an origin that DOES have it scanned
-      // the QR, which is exactly the capability the flow grants. Restricting the origin instead
-      // would break the real case (any LAN address may serve the canvas) while stopping nothing.
+      // Why `*` is not a hole here: CORS is not the access control. The host-key-authenticated box
+      // protects the one-time token and request, and the listener exists for ten minutes and stops
+      // at the first success. Restricting an origin would not authenticate a client or a device.
       headers['Access-Control-Allow-Origin'] = '*'
       res.writeHead(code, headers).end(body)
     }
 
+    /** Drain the body so an accepted keep-alive socket cannot remain parked after settlement. */
+    const rejectSettled = (req: IncomingMessage, res: ServerResponse): void => {
+      req.resume()
+      send(res, 409, 'pairing window is closed')
+    }
+
     async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-      // The browser sends a preflight before a JSON POST cross-origin. Answer it, or the real
-      // POST never leaves the page and the pairing looks like it silently did nothing.
+      // server.close() stops new connections but does NOT cancel sockets HTTP already accepted.
+      // This check is deliberately before readBody's first await (and before route handling); the
+      // second check below catches a request parked inside readBody when another request settled.
+      if (!attemptAllowsRequest(attempt)) {
+        rejectSettled(req, res)
+        return
+      }
+      // An authenticated browser client sends a preflight before a cross-origin JSON POST.
       if (req.method === 'OPTIONS' && req.url === '/pair') {
         const headers: Record<string, string | number> = {
           'Content-Length': 0,
@@ -548,61 +642,26 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
         send(res, 404)
         return
       }
+      testHooks.onPairRequestAccepted?.()
       try {
         const raw = await readBody(req)
-        let outer: { epk?: unknown; box?: unknown } & Record<string, unknown>
+        if (!attemptAllowsRequest(attempt)) {
+          rejectSettled(req, res)
+          return
+        }
+        let outer: unknown
         try {
           outer = JSON.parse(raw)
         } catch {
           send(res, 400, 'bad json')
           return
         }
-        // E2EE branch: when the phone sealed the request to our host key, the outer body is
-        // {epk, box}. Derive the shared key from the ephemeral public key + our secret and open
-        // the box to recover the SAME {token, publicKey, deviceId} JSON. A present-but-undecryptable
-        // envelope is a hard 400 — we never fall through to parsing ciphertext as plaintext.
-        let body: {
-          token?: unknown
-          publicKey?: unknown
-          deviceName?: unknown
-          deviceId?: unknown
-          priorDeviceToken?: unknown
+        const opened = openPairingEnvelope(outer, hostKeys)
+        if (!opened.ok) {
+          send(res, 400, opened.reason)
+          return
         }
-        let sealed: Uint8Array | null = null // the shared key, set only on the encrypted path
-        if (typeof outer.epk === 'string') {
-          if (!hostKeys) {
-            send(res, 400, 'no host key')
-            return
-          }
-          let shared: Uint8Array
-          try {
-            shared = deriveSharedKey(outer.epk, hostKeys.secretKey)
-          } catch {
-            send(res, 400, 'bad epk')
-            return
-          }
-          const boxB64 = typeof outer.box === 'string' ? outer.box : ''
-          const plain = decrypt(Uint8Array.from(Buffer.from(boxB64, 'base64')), shared)
-          if (!plain) {
-            send(res, 400, 'decrypt failed')
-            return
-          }
-          try {
-            body = JSON.parse(Buffer.from(plain).toString('utf8'))
-          } catch {
-            send(res, 400, 'bad json')
-            return
-          }
-          sealed = shared
-        } else {
-          body = outer as {
-            token?: unknown
-            publicKey?: unknown
-            deviceName?: unknown
-            deviceId?: unknown
-            priorDeviceToken?: unknown
-          }
-        }
+        const { body, sharedKey } = opened
         // Either credential opens the pairing: the QR's full token, or the six-digit code the
         // user typed. Compared in constant time — a short code is exactly the case where a
         // byte-at-a-time timing oracle would turn 10^6 guesses into 60.
@@ -628,8 +687,11 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
           if (shortAttempts >= SHORT_CODE_MAX_ATTEMPTS) {
             // Stop the whole listener rather than just refusing this request. A pairing window
             // that keeps answering after five wrong codes is a window someone is working on.
+            // Latch BEFORE responding/closing: accepted sockets can otherwise cross their
+            // readBody await after server.close() and successfully write with the right token.
+            attempt.settled = true
             send(res, 429, 'too many attempts — press Pair again for a fresh code')
-            finish({ ok: false })
+            finishAttempt(attempt, { ok: false })
             return
           }
           send(res, 403, 'bad token')
@@ -640,24 +702,18 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
           send(res, 400, 'unexpected key type')
           return
         }
+        // The winner claims the attempt synchronously. Two correct requests that finish parsing
+        // together cannot both cross the first persistence await, and a request already accepted
+        // before the fifth wrong code cannot wake later and become the winner.
+        if (!claimAttempt(attempt)) {
+          rejectSettled(req, res)
+          return
+        }
         // Mint a device identity: the deviceId stamps the key line (attributable + revocable);
         // the agentToken is the phone's bearer for the host-agent WebSocket (stored in its Keychain).
         const deviceId = randomUUID()
         const agentToken = randomBytes(24).toString('base64url')
         const name = normalizeDeviceName(body.deviceName)
-        // One unit, and queued behind any in-flight revoke: a pairing that interleaves with one
-        // would either append onto the inode the revoke is about to rename over, or lose its
-        // agent.json entry to the revoke's stale read.
-        await serialize(async () => {
-          await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
-          await persistDevice({
-            id: deviceId,
-            name,
-            token: agentToken,
-            pairedAt: Date.now(),
-            lastSeenAt: 0
-          })
-        })
         // Provision relay access for the phone when enabled + Pro. Any failure ⇒ LAN-only: we
         // never fail the pairing over a relay hiccup (the phone still got its SSH key installed).
         let relayFields: { relay?: RelayPairingBlock; relayDeviceToken?: string } = {}
@@ -666,7 +722,7 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
             typeof body.deviceId === 'string' && body.deviceId.trim()
               ? body.deviceId.trim()
               : deviceId
-          const minted = await mintRelayDevice(relayDeps!.apiBase, {
+          const minted = await mintRelayDevice(deps.apiBase, {
             entitlement: relayCtx.entitlement,
             deviceId: phoneDeviceId,
             hostPublicKeyB64: relayCtx.block.hostPublicKeyB64,
@@ -681,36 +737,48 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
             }
           }
         }
-        // Build the response exactly as before; wrap it in the box only when the request was
-        // encrypted (same shared key), so the relay device token never crosses the LAN in cleartext.
-        const responseObj = { ok: true, deviceId, agentToken, ...relayFields }
-        if (sealed) {
-          const respBox = encrypt(
-            Uint8Array.from(Buffer.from(JSON.stringify(responseObj), 'utf8')),
-            sealed
-          )
-          send(
-            res,
-            200,
-            JSON.stringify({ box: Buffer.from(respBox).toString('base64') }),
-            'application/json'
-          )
-        } else {
-          send(res, 200, JSON.stringify(responseObj), 'application/json')
+        if (!attemptAllowsRequest(attempt, true)) {
+          rejectSettled(req, res)
+          return
         }
-        finish({
+        // Seal BEFORE any filesystem write. If encryption/randomness is unavailable, no SSH key
+        // or bearer record is installed for a client that can never receive its credentials.
+        const responseObj = { ok: true, deviceId, agentToken, ...relayFields }
+        const sealedResponse = (testHooks.sealResponse ?? sealPairingResponse)(responseObj, sharedKey)
+        // One unit, and queued behind any in-flight revoke: a pairing that interleaves with one
+        // would either append onto the inode the revoke is about to rename over, or lose its
+        // agent.json entry to the revoke's stale read.
+        await serialize(async () => {
+          await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
+          await persistDevice({
+            id: deviceId,
+            name,
+            token: agentToken,
+            pairedAt: Date.now(),
+            lastSeenAt: 0
+          })
+        })
+        send(res, 200, JSON.stringify(sealedResponse), 'application/json')
+        finishAttempt(attempt, {
           ok: true,
           relay: relayCtx
             ? relayFields.relayDeviceToken
               ? 'ok'
               : 'failed'
-            : relayDeps && !relayDeps.relayAllowed()
+            : !deps.relayAllowed()
               ? 'dev'
               : 'off'
         })
       } catch (err) {
+        if (attempt.done) {
+          rejectSettled(req, res)
+          return
+        }
         send(res, 500, 'pairing failed')
         console.warn('[pairing] request failed:', err)
+        // A winning request owns the now-closed attempt. If it cannot seal or persist, report a
+        // failed completion rather than leaving the renderer waiting on a listener that is gone.
+        if (attempt.settled) finishAttempt(attempt, { ok: false })
       }
     }
 
@@ -719,13 +787,12 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
       shortCode,
       manualHost: `${host}:${pairPort}`,
       sshOpen,
-      relayPlan: relayCtx ? 'ok' : relayDeps && !relayDeps.relayAllowed() ? 'dev' : 'off'
+      relayPlan: relayCtx ? 'ok' : !deps.relayAllowed() ? 'dev' : 'off'
     }
   }
 
   const stop = (): void => {
-    onDoneCb = null
-    cleanup()
+    if (activeAttempt) cancelAttempt(activeAttempt)
   }
 
   const listDevices = async (): Promise<PublicDevice[]> => {

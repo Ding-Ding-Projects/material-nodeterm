@@ -1714,6 +1714,19 @@ again; the grace window was never the thing that was wrong.
 
 ## Remote access (phone relay) — free, not Pro
 
+**LAN pairing is encrypted or it does not start.** `pairing-service.ts` loads the host's persistent
+NaCl key before binding the one-shot HTTP listener and advertises that public key as `hostKey` in
+the QR. `/pair` accepts only `{epk,box}`: the request (one-time token + SSH public key) and the
+success response (including `agentToken` and an optional `relayDeviceToken`) are authenticated and
+encrypted under the ephemeral-client/host shared key. There is no plaintext-success compatibility
+path; a missing/locked host key, malformed envelope, bad MAC, or response-encryption failure must
+produce no credential write. The attempt's synchronous `settled` latch is separate from
+`server.close()` because Node keeps already-accepted sockets alive: the fifth wrong short code and
+the first valid request latch before any persistence await, so a parked request cannot wake later
+and write. **Server Edition deliberately does not host this desktop LAN listener** —
+`PairingApi.supported` is false in the browser bridge, the quick action is absent, and Settings
+shows an explicit desktop-only explanation.
+
 - Phone relay remote access ("Reach this Mac from anywhere") is a **Core (free) feature** as of
   2026-08-01 — the iOS app is itself paid, so a desktop Pro gate double-charged the same feature.
   The former Pro gate AND the free-tier monthly quota (`core/relay-quota.ts`, `RelayQuotaBanner`,

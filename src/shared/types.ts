@@ -2483,16 +2483,19 @@ export interface PairedDevice {
 
 /** Phone-pairing (nodeterm iOS "scan a QR" flow) bridge. */
 export interface PairingApi {
+  /** False on Server Edition, where the browser is already attached to its host and no desktop
+   *  LAN listener / OS SSH-key store exists. UI must show a deliberate degrade, not call stubs. */
+  readonly supported: boolean
   /** Start the one-shot LAN listener; resolves with the QR payload + an SSH-reachable hint. */
   start(): Promise<{
     payload: string
     sshOpen: boolean
     relayPlan?: 'ok' | 'dev' | 'off'
-    /** Six-digit code for typing in by hand — for a device with no camera, a browser with no QR
-     *  reader (Safari has none), or a camera that simply will not focus. Same listener and same
-     *  ten-minute window as the QR, but attempt-capped, because six digits is a small number. */
+    /** Compatibility credential accepted only inside the hostKey-authenticated envelope. The UI
+     *  does not advertise it as a plaintext browser fallback. Attempt-capped because six digits
+     *  is a small number. */
     shortCode?: string
-    /** The `host:port` the code is typed at. */
+    /** The LAN listener address (diagnostic/compatibility metadata). */
     manualHost?: string
   }>
   /** Cancel an in-flight pairing (e.g. when the settings section unmounts). */

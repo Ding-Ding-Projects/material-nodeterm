@@ -376,6 +376,9 @@ export function buildStubApi(): Omit<
       build: U('handoff.build')
     },
     pairing: {
+      // Explicit capability bit consumed before the Phone UI mounts any effects. The rejecting
+      // methods stay as a second boundary in case a future caller ignores the capability.
+      supported: false,
       start: U('pairing.start'),
       stop: U('pairing.stop'),
       onDone: noopUnsub,

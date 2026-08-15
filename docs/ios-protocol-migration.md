@@ -40,6 +40,29 @@ alone.
 
 ---
 
+## 0. LAN bootstrap pairing — mandatory encrypted envelope
+
+The desktop's version-1 QR now always includes `hostKey`, the standard-base64 NaCl box public key
+for the host identity. The phone must use a fresh ephemeral box keypair for each attempt, derive
+`sharedKey = nacl.box.before(hostKey, ephemeralSecretKey)`, and send this exact outer JSON shape:
+
+```json
+{ "epk": "<standard-base64 ephemeral public key>", "box": "<standard-base64 nonce || ciphertext || mac>" }
+```
+
+The decrypted request body remains `{token, publicKey, deviceName?, deviceId?,
+priorDeviceToken?}`. The successful HTTP response has exactly one outer field, `box`, encrypted
+under the same shared key; decrypting it yields `{ok, deviceId, agentToken, relay?,
+relayDeviceToken?}`. The SSH public key and every returned bearer therefore stay inside
+authenticated ciphertext.
+
+There is no plaintext `{token,publicKey}` compatibility path. A missing `hostKey`, malformed or
+non-canonical base64, an invalid ephemeral key, a failed MAC, or an unsealable response is a hard
+pairing failure and must not be retried as plaintext. Older clients must adopt this bootstrap wire
+contract before pairing with a current desktop build.
+
+---
+
 ## What changed and why
 
 | Layer | Before (opcode dialect) | After (rpc.ts tunnel) |
