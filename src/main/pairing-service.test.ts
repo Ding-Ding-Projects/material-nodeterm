@@ -347,6 +347,36 @@ describe('revokeDevice', () => {
     expect(deviceIds()).toEqual(['dev-a'])
   })
 
+  it.each(['EACCES', 'EIO'])(
+    'does not hide a live SSH key when authorized_keys read fails with %s',
+    async (code) => {
+      const beforeKeys = authKeys()
+      const beforeRegistry = readFileSync(AGENT_JSON, 'utf8')
+      const realReadFile = fs.readFile
+      const write = vi.spyOn(fs, 'writeFile')
+      vi.spyOn(fs, 'readFile').mockImplementation((async (file: any, ...rest: any[]) => {
+        if (String(file) === AUTH_KEYS) {
+          throw Object.assign(new Error(`${code}: authorized_keys read failed`), { code })
+        }
+        return (realReadFile as any)(file, ...rest)
+      }) as any)
+
+      await expect(newService().revokeDevice('dev-a')).rejects.toThrow(code)
+
+      expect(authKeys()).toBe(beforeKeys)
+      expect(readFileSync(AGENT_JSON, 'utf8')).toBe(beforeRegistry)
+      expect(write).not.toHaveBeenCalled()
+    }
+  )
+
+  it('treats ENOENT as the only safe absent authorized_keys file', async () => {
+    rmSync(AUTH_KEYS)
+
+    await newService().revokeDevice('dev-a')
+
+    expect(deviceIds()).toEqual(['dev-b'])
+  })
+
   it('revokes the SSH key first, so a mid-revoke failure leaves access cut and the device retryable', async () => {
     // Order matters on partial failure. authorized_keys is full shell access; agent.json is the
     // host-agent bearer token and the visible device list. If the SSH key is removed FIRST, a

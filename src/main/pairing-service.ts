@@ -437,8 +437,14 @@ export function createPairingService(
     let content: string
     try {
       content = await fs.readFile(AUTH_KEYS_PATH, 'utf8')
-    } catch {
-      return // no file → nothing to revoke
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code
+      if (code === 'ENOENT') return // confirmed absent → nothing to revoke
+      // "Could not check" is not "no key": continuing would hide the registry entry while an
+      // unreadable authorized_keys file may still contain a live full-shell credential.
+      throw new Error(`Could not read authorized_keys${code ? ` (${code})` : ''}.`, {
+        cause: error
+      })
     }
     const next = filterAuthorizedKeys(content, deviceId)
     if (next === content) return

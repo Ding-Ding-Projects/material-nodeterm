@@ -1735,6 +1735,9 @@ grants no SSH access, while a later append/chmod failure leaves any possibly-liv
 by a visible, revocable device entry. The encrypted bearer response is not sent on either failure.
 Pairing completion carries a distinct failure reason, and Settings refreshes the registry even on
 failure so a partial grant is immediately reported and can be revoked rather than called a timeout.
+Revocation has the same absence rule on `authorized_keys`: only `ENOENT` permits the registry entry
+to be removed without a key-file rewrite. `EACCES`, `EIO`, and unknown read failures leave both the
+key and its visible device entry unchanged, so a possibly-live SSH credential is never hidden.
 
 - Phone relay remote access ("Reach this Mac from anywhere") is a **Core (free) feature** as of
   2026-08-01 — the iOS app is itself paid, so a desktop Pro gate double-charged the same feature.
