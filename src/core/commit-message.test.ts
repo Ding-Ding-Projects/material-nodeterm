@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import fs from 'fs'
 import os from 'os'
+import path from 'path'
 import { localAgentCwd } from './commit-message'
 
 /**
@@ -44,7 +46,7 @@ describe('runAgent — where the agent is actually spawned', () => {
     // FIRST, before the mock: this file imports `commit-message` statically for `localAgentCwd`, so
     // without a reset the dynamic import below would hand back that already-loaded instance — the
     // one that closed over the REAL `spawn` at import time. The mock would then be installed and
-    // never consulted, and the test would silently run `sh` for real and observe nothing.
+    // never consulted, and the test would silently run the configured command and observe nothing.
     vi.resetModules()
     let seen: string | undefined
     vi.doMock('child_process', async () => {
@@ -54,6 +56,9 @@ describe('runAgent — where the agent is actually spawned', () => {
         default: actual,
         spawn: (_bin: string, _args: string[], opts: { cwd: string }) => {
           seen = opts.cwd
+          // A mocked spawn would otherwise accept a POSIX-only path on Windows and let the cwd
+          // assertion certify a directory the real child_process API could never enter.
+          expect(fs.statSync(opts.cwd).isDirectory()).toBe(true)
           // The narrowest fake that lets `spawnAgent`'s promise settle: streams it reads, and a
           // close event carrying a usable message so the run does not take the error path.
           const listeners: Record<string, Array<(...a: unknown[]) => void>> = {}
@@ -77,18 +82,24 @@ describe('runAgent — where the agent is actually spawned', () => {
     const remoteGit = await import('./remote-ssh/remote-git')
     remoteGit.setGitRemoteResolver(remote ? () => ({}) as never : null)
     const { runAgent } = await import('./commit-message')
-    // `sh` rather than the claude/codex branches: `planAgent` resolves a real binary before
-    // spawning, and this test is about the cwd, not about what is installed on the test machine.
+    // `node` rather than the claude/codex branches: `planAgent` resolves a real bare executable
+    // before spawning, and Node is necessarily available to the process running this test.
     await runAgent('prompt', cwd, {
       commitAgent: 'custom',
-      commitAgentCommand: 'sh',
+      commitAgentCommand: 'node',
       commitPromptExtra: ''
     } as never)
     return seen
   }
 
   it('spawns in the project folder for a local project', async () => {
-    expect(await spawnCwdFor('/tmp', false)).toBe('/tmp')
+    const localDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-commit-message-'))
+    try {
+      expect(path.dirname(localDir)).toBe(os.tmpdir())
+      expect(await spawnCwdFor(localDir, false)).toBe(localDir)
+    } finally {
+      fs.rmSync(localDir, { recursive: true, force: true })
+    }
   })
 
   it('does NOT spawn in an SSH project’s remote path — that is the ENOENT', async () => {
