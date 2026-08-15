@@ -12,7 +12,7 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
 import { connect as netConnect } from 'net'
-import { randomBytes, randomUUID } from 'crypto'
+import { randomBytes, randomInt, randomUUID, timingSafeEqual } from 'crypto'
 import { promises as fs } from 'fs'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
@@ -150,9 +150,19 @@ const SSH_PROBE_MS = 500
 /** Reject oversized POST bodies (a public key line is well under this). */
 const MAX_BODY_BYTES = 64 * 1024
 
+/** Wrong codes tolerated before the pairing window closes itself. Five is enough for a
+ *  mistyped digit and nowhere near enough to walk 10^6. */
+const SHORT_CODE_MAX_ATTEMPTS = 5
+
 export interface PairingStartResult {
   /** The single-line JSON to encode into the QR. */
   payload: string
+  /** Six-digit code for typing in by hand, for a device that cannot scan (Safari has no QR
+   *  reader) or a camera that will not focus. Same listener, same ten-minute window, but
+   *  attempt-capped because six digits is small. */
+  shortCode: string
+  /** Where to type it — the LAN address and port the listener is on. */
+  manualHost: string
   /** True when 127.0.0.1:22 accepted a connection — sshd is (probably) running. */
   sshOpen: boolean
   /** What the QR on screen will mint: 'ok' = carries a relay block, 'dev' = unpackaged build
@@ -434,6 +444,15 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
       throw new Error("Couldn't detect a LAN IP address — connect to Wi-Fi and try again.")
     }
     const token = randomBytes(24).toString('base64url')
+    // A SHORT code for manual entry, beside the long token the QR carries. Six digits is what a
+    // person will actually retype off a screen; the QR keeps the full-entropy token.
+    //
+    // Six digits is 10^6, which is brute-forceable in minutes over a LAN if nothing stops it —
+    // so the short path is attempt-capped below (SHORT_CODE_MAX_ATTEMPTS) and dies with the
+    // listener's existing ten-minute window. The cap, not the length, is what makes this safe;
+    // without it this would be the weakest way into the machine.
+    const shortCode = String(randomInt(0, 1_000_000)).padStart(6, '0')
+    let shortAttempts = 0
     const user = os.userInfo().username
 
     const srv = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -581,7 +600,35 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
             priorDeviceToken?: unknown
           }
         }
-        if (body.token !== token) {
+        // Either credential opens the pairing: the QR's full token, or the six-digit code the
+        // user typed. Compared in constant time — a short code is exactly the case where a
+        // byte-at-a-time timing oracle would turn 10^6 guesses into 60.
+        const supplied = typeof body.token === 'string' ? body.token : ''
+        const eq = (a: string, b: string): boolean => {
+          const ab = Buffer.from(a)
+          const bb = Buffer.from(b)
+          return ab.length === bb.length && timingSafeEqual(ab, bb)
+        }
+        const byToken = eq(supplied, token)
+        const byShort = !byToken && eq(supplied, shortCode)
+
+        if (byShort) {
+          shortAttempts += 1
+        } else if (!byToken) {
+          // A wrong value counts against the short-code budget too. Otherwise the cap is trivially
+          // sidestepped: guess six digits, and if it fails claim you were attempting the long
+          // token instead.
+          shortAttempts += 1
+        }
+
+        if (!byToken && !byShort) {
+          if (shortAttempts >= SHORT_CODE_MAX_ATTEMPTS) {
+            // Stop the whole listener rather than just refusing this request. A pairing window
+            // that keeps answering after five wrong codes is a window someone is working on.
+            send(res, 429, 'too many attempts — press Pair again for a fresh code')
+            finish({ ok: false })
+            return
+          }
           send(res, 403, 'bad token')
           return
         }
@@ -666,6 +713,8 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
 
     return {
       payload,
+      shortCode,
+      manualHost: `${host}:${pairPort}`,
       sshOpen,
       relayPlan: relayCtx ? 'ok' : relayDeps && !relayDeps.relayAllowed() ? 'dev' : 'off'
     }

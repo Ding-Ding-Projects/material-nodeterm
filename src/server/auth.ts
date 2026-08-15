@@ -9,6 +9,7 @@ const SCRYPT_P = 1
 const SCRYPT_KEYLEN = 32
 
 import type { StoredCredential } from './webauthn'
+import { UnlockLadder, nextLockoutMs } from '../core/unlock-ladder'
 
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 /** A WebAuthn challenge is a freshness proof, not a session — it only has to survive the round
@@ -42,10 +43,26 @@ export class Auth {
 
   private failures = 0
   private lockedUntil = 0
+  /** Consecutive lockouts, for the exponential backoff. Reset only by a real sign-in. */
+  private lockoutStreak = 0
+
+  /**
+   * The unlock ladder — dim sum, then maths, then whack-a-mole — offered while locked out.
+   *
+   * It can end the CURRENT wait and nothing else: it never authenticates, never returns extra
+   * password attempts, and never softens the exponential backoff below. The full reasoning lives
+   * in src/core/unlock-ladder.ts; the two rules that matter here are that `clearLockoutByLadder`
+   * touches `lockedUntil` alone, and that `lockoutStreak` survives it.
+   */
+  readonly ladder: UnlockLadder
+
+  /** School mode removes every dim-sum surface, so the ladder must start at maths under it. */
+  private schoolMode: () => boolean = () => false
 
   constructor(dataDir: string) {
     this.authPath = path.join(dataDir, 'auth.json')
     this.sessionsPath = path.join(dataDir, 'sessions.json')
+    this.ladder = new UnlockLadder({ schoolMode: () => this.schoolMode() })
   }
 
   // ---- Configuration / password ------------------------------------------
@@ -259,20 +276,51 @@ export class Auth {
 
   // ---- Rate limiting -----------------------------------------------------
 
+  /** Let the server tell auth whether School mode is on, without auth importing the store. */
+  setSchoolModeSource(fn: () => boolean): void {
+    this.schoolMode = fn
+  }
+
   loginAllowed(): boolean {
     return Date.now() >= this.lockedUntil
+  }
+
+  /** Milliseconds still to wait, or 0. What the lockout screen counts down. */
+  lockoutRemainingMs(): number {
+    return Math.max(0, this.lockedUntil - Date.now())
   }
 
   recordLoginFailure(): void {
     this.failures += 1
     if (this.failures >= MAX_FAILURES) {
-      this.lockedUntil = Date.now() + LOCKOUT_MS
+      // Each consecutive lockout lasts twice as long as the last, capped at an hour. The flat
+      // sixty seconds this replaced was the same price for the first wrong guess and the five
+      // hundredth, which is no price at all for a script.
+      this.lockedUntil = Date.now() + nextLockoutMs(this.lockoutStreak, LOCKOUT_MS)
+      this.lockoutStreak += 1
       this.failures = 0
+      // A fresh lockout is a fresh climb: dim sum again from the top. The ladder's own rolling
+      // budget deliberately survives this, so repeated lockouts cannot mint unlimited climbs.
+      this.ladder.reset()
     }
   }
 
   recordLoginSuccess(): void {
     this.failures = 0
+    this.lockedUntil = 0
+    this.lockoutStreak = 0
+    this.ladder.reset()
+  }
+
+  /**
+   * End the current wait because the ladder was cleared.
+   *
+   * Deliberately narrow: it moves `lockedUntil` and NOTHING else. `failures` is already zero (it
+   * is zeroed when the lockout starts), so the user gets exactly the attempts waiting would have
+   * given them — never more. `lockoutStreak` is untouched, so the next lockout is still twice as
+   * long as this one. Widening this method is how the ladder would stop being safe.
+   */
+  clearLockoutByLadder(): void {
     this.lockedUntil = 0
   }
 }

@@ -169,6 +169,13 @@ export async function startServer(
   settingsStore.registerIpc()
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
+  // School mode removes every dim-sum surface, and the unlock ladder's first rung is a dim-sum
+  // question. Read through a closure rather than at boot: the mode is a live, shared switch that
+  // an app already running must pick up without a restart, and a value captured here would leave
+  // the lockout screen serving dumplings inside a mode whose whole point is that they do not
+  // exist. The ladder then starts at maths instead — absent, not disabled-with-an-explanation,
+  // because naming the hidden thing is exactly what School mode forbids.
+  auth.setSchoolModeSource(() => schoolModeStore.get().enabled)
   scheduledSettingsStore.init()
   scheduledSettingsStore.registerIpc()
   scheduledSettingsService.start()

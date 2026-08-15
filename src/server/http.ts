@@ -12,6 +12,7 @@ import { proxyAuthAllowed, type TrustProxyConfig } from './proxy-trust'
 import { handleDownload } from './download'
 import type { DownloadTickets } from '../core/download-tickets'
 import { rpIdFromHost, verifyAssertion, verifyRegistration } from './webauthn'
+import type { LadderAnswer, LadderRung } from '../core/unlock-ladder'
 
 export const SESSION_COOKIE = 'nt_session'
 
@@ -294,6 +295,186 @@ function loginPage(hasError: boolean, hasPasskey: boolean): string {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in — nodeterm</title></head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">nodeterm</h1><p style="${SUB_STYLE}">Sign in to continue</p>${errLine}${passkeyBlock}<form method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:10px"><input style="${INPUT_STYLE}" type="password" name="password" placeholder="Password" autocomplete="current-password"><button style="${BUTTON_STYLE}" type="submit">Sign in</button></form></div>${script}</body></html>`
 }
 
+/**
+ * The lockout screen, and the unlock ladder that lets someone play their way out of the wait.
+ *
+ * The ladder is an ALTERNATIVE to waiting, never a way in: clearing it ends the countdown and
+ * returns the user to the ordinary password form, which they still have to pass. Every question
+ * is generated and graded by the server (src/core/unlock-ladder.ts); this page only draws what it
+ * is handed and posts back what the user did.
+ *
+ * Written without a single JS template literal on purpose — the whole script is embedded in a TS
+ * template literal, so a stray dollar-brace inside it would be interpolated at build time rather
+ * than reaching the browser.
+ */
+function lockedPage(remainingMs: number, ladderOffered: boolean): string {
+  const secs = Math.ceil(remainingMs / 1000)
+  const offer = ladderOffered
+    ? `<button style="${BUTTON_STYLE}" type="button" id="lad-start">Play your way out</button>
+       <p style="${SUB_STYLE};margin:6px 0 0">Win and the wait ends. You will still need your password.</p>`
+    : `<p style="${SUB_STYLE};margin:6px 0 0">No shortcuts left for now — the clock is the way through.</p>`
+
+  const script = ladderOffered
+    ? `<script>
+(function () {
+  var box = document.getElementById('lad-box');
+  var startBtn = document.getElementById('lad-start');
+  var note = document.getElementById('lad-note');
+
+  function say(t) { if (note) note.textContent = t; }
+  function post(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json().catch(function () { return {}; }); });
+  }
+  function done(msg) {
+    box.innerHTML = '<p style="${SUB_STYLE}">' + msg + '</p>';
+    setTimeout(function () { location.href = '/login'; }, 1200);
+  }
+  function draw(c) {
+    if (!c || !c.kind) { box.innerHTML = ''; return; }
+    if (c.kind === 'dimsum') return drawDimSum(c);
+    if (c.kind === 'math') return drawMath(c);
+    return drawWhack(c);
+  }
+
+  function drawDimSum(c) {
+    var h = '<p style="${SUB_STYLE}">Which dim sum is this?</p>';
+    h += '<p style="font-size:34px;margin:6px 0 12px;text-align:center">' + c.prompt + '</p>';
+    h += '<div style="display:flex;flex-direction:column;gap:8px">';
+    for (var i = 0; i < c.choices.length; i++) {
+      h += '<button type="button" style="${BUTTON_STYLE}" data-choice="' + i + '"></button>';
+    }
+    h += '</div>';
+    box.innerHTML = h;
+    var bs = box.querySelectorAll('[data-choice]');
+    for (var j = 0; j < bs.length; j++) {
+      // textContent, not string concatenation into innerHTML: a dish name is server data and
+      // this page must not grow an injection point for the sake of four buttons.
+      bs[j].textContent = c.choices[j];
+      bs[j].addEventListener('click', function (e) {
+        var k = Number(e.currentTarget.getAttribute('data-choice'));
+        answer({ kind: 'dimsum', nonce: c.nonce, choice: c.choices[k] });
+      });
+    }
+  }
+
+  function drawMath(c) {
+    var h = '<p style="${SUB_STYLE}">Ten easy sums. All ten, or it is whack-a-mole.</p>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">';
+    for (var i = 0; i < c.questions.length; i++) {
+      h += '<label style="display:flex;align-items:center;gap:6px;font-size:15px">' +
+           '<span data-q="' + i + '" style="min-width:78px"></span>' +
+           '<input data-m="' + i + '" inputmode="numeric" style="${INPUT_STYLE};width:68px;padding:6px"></label>';
+    }
+    h += '</div><button type="button" style="${BUTTON_STYLE}" id="lad-math-go">Check</button>';
+    box.innerHTML = h;
+    for (var q = 0; q < c.questions.length; q++) {
+      box.querySelector('[data-q="' + q + '"]').textContent = c.questions[q] + ' =';
+    }
+    document.getElementById('lad-math-go').addEventListener('click', function () {
+      var out = [];
+      for (var i = 0; i < c.questions.length; i++) {
+        var el = box.querySelector('[data-m="' + i + '"]');
+        out.push(Number(el && el.value));
+      }
+      answer({ kind: 'math', nonce: c.nonce, answers: out });
+    });
+  }
+
+  function drawWhack(c) {
+    var need = c.requiredHits;
+    var h = '<p style="${SUB_STYLE}">Last chance: hit ' + need + ' moles.</p>';
+    h += '<p id="lad-score" style="text-align:center;font-size:15px;margin:6px 0">0 / ' + need + '</p>';
+    h += '<div style="display:grid;grid-template-columns:repeat(' + c.gridSize +
+         ',1fr);gap:8px;margin:8px 0">';
+    for (var i = 0; i < c.gridSize * c.gridSize; i++) {
+      h += '<button type="button" data-cell="' + i +
+           '" style="aspect-ratio:1;border-radius:12px;border:1px solid rgba(255,255,255,.14);' +
+           'background:rgba(255,255,255,.05);font-size:26px;cursor:pointer"></button>';
+    }
+    h += '</div>';
+    box.innerHTML = h;
+
+    var started = Date.now();
+    var hits = [];
+    var live = {};
+    var cells = box.querySelectorAll('[data-cell]');
+    var score = document.getElementById('lad-score');
+
+    for (var k = 0; k < cells.length; k++) {
+      cells[k].addEventListener('click', function (e) {
+        var cell = Number(e.currentTarget.getAttribute('data-cell'));
+        if (!live[cell]) return;
+        hits.push({ cell: cell, atMs: Date.now() - started });
+        // The on-screen score is encouragement only. The server regrades every hit against the
+        // schedule it issued, so an edited counter buys nothing.
+        score.textContent = hits.length + ' / ' + need;
+        e.currentTarget.textContent = '';
+        live[cell] = false;
+      });
+    }
+
+    c.moles.forEach(function (m) {
+      setTimeout(function () {
+        var el = box.querySelector('[data-cell="' + m.cell + '"]');
+        if (!el) return;
+        el.textContent = '\\uD83D\\uDC2D';
+        live[m.cell] = true;
+      }, m.showAtMs);
+      setTimeout(function () {
+        var el = box.querySelector('[data-cell="' + m.cell + '"]');
+        if (el && live[m.cell]) el.textContent = '';
+        live[m.cell] = false;
+      }, m.hideAtMs);
+    });
+
+    // A touch past the round's own length, because the server refuses a submission that arrives
+    // before the round could possibly have finished.
+    setTimeout(function () {
+      answer({ kind: 'whack', nonce: c.nonce, hits: hits });
+    }, c.durationMs + 300);
+  }
+
+  function answer(a) {
+    say('');
+    post('/auth/unlock/verify', a).then(function (v) {
+      if (v && v.cleared) { done(v.message || 'Unlocked.'); return; }
+      say((v && v.message) || 'That did not work.');
+      if (v && v.next) {
+        post('/auth/unlock/challenge', { rung: v.next }).then(draw);
+      } else {
+        box.innerHTML = '';
+      }
+    });
+  }
+
+  startBtn.addEventListener('click', function () {
+    startBtn.remove();
+    post('/auth/unlock/challenge', {}).then(function (c) {
+      if (!c || !c.kind) { say('No shortcuts left — wait it out.'); return; }
+      draw(c);
+    });
+  });
+})();
+</script>`
+    : ''
+
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Locked out — nodeterm</title></head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">Locked out</h1><p style="${SUB_STYLE}">Too many wrong passwords. Try again in <strong id="lad-clock">${secs}</strong>s.</p>${offer}<p id="lad-note" style="${ERR_STYLE}"></p><div id="lad-box"></div></div><script>
+(function () {
+  var left = ${secs};
+  var el = document.getElementById('lad-clock');
+  var t = setInterval(function () {
+    left -= 1;
+    if (el) el.textContent = String(Math.max(0, left));
+    if (left <= 0) { clearInterval(t); location.href = '/login'; }
+  }, 1000);
+})();
+</script>${script}</body></html>`
+}
+
 function setupNeedsTokenPage(): string {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up — nodeterm</title></head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">Set up nodeterm</h1><p style="${SUB_STYLE}">Open the setup link printed in the server console — it carries a one-time token. This page can't be used without it.</p></div></body></html>`
 }
@@ -554,7 +735,57 @@ export function createHttpHandler(
         redirect(res, 302, '/setup')
         return
       }
+      if (!auth.loginAllowed()) {
+        // A password box that silently refuses every entry reads as a broken server. Show the
+        // wait, and the way to skip it.
+        sendPage(res, 200, lockedPage(auth.lockoutRemainingMs(), auth.ladder.available()))
+        return
+      }
       sendPage(res, 200, loginPage(url.searchParams.has('error'), auth.hasPasskey()))
+      return
+    }
+
+    // ---- Unlock ladder ----------------------------------------------------
+    //
+    // Reachable ONLY while locked out, and it grants exactly one thing: an end to the current
+    // wait. It issues no session, sets no cookie, and never touches the password or the attempt
+    // budget. See src/core/unlock-ladder.ts for why each rung is shaped the way it is.
+
+    if (pathname === '/auth/unlock/challenge' && method === 'POST') {
+      if (auth.loginAllowed()) {
+        // Not locked out, so there is no wait to skip. Refusing here also stops the ladder being
+        // farmed for free challenges while the account is perfectly usable.
+        sendJson(res, 409, { error: 'not_locked' })
+        return
+      }
+      const body = (await readJson(req).catch(() => null)) as { rung?: unknown } | null
+      const asked = body?.rung
+      const rung =
+        asked === 'math' || asked === 'whack' || asked === 'dimsum' ? (asked as LadderRung) : undefined
+      const challenge = auth.ladder.issue(rung)
+      if (!challenge) {
+        sendJson(res, 429, { error: 'no_ladder', message: 'No shortcuts left — wait it out.' })
+        return
+      }
+      sendJson(res, 200, challenge)
+      return
+    }
+
+    if (pathname === '/auth/unlock/verify' && method === 'POST') {
+      if (auth.loginAllowed()) {
+        sendJson(res, 409, { error: 'not_locked' })
+        return
+      }
+      const body = (await readJson(req).catch(() => null)) as LadderAnswer | null
+      if (!body || typeof body.nonce !== 'string') {
+        sendJson(res, 400, { error: 'bad_request' })
+        return
+      }
+      const verdict = auth.ladder.verify(body)
+      // The ONE effect a cleared ladder has. No session, no cookie, no extra attempts — the user
+      // lands back on the ordinary password form.
+      if (verdict.cleared) auth.clearLockoutByLadder()
+      sendJson(res, 200, verdict)
       return
     }
 

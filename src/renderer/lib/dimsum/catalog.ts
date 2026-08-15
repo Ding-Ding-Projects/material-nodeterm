@@ -7,6 +7,7 @@ import cheungFun from '../../assets/dimsum/cheung-fun.svg'
 import springRoll from '../../assets/dimsum/spring-roll.svg'
 import sesameBall from '../../assets/dimsum/sesame-ball.svg'
 import loMaiGai from '../../assets/dimsum/lo-mai-gai.svg'
+import { DIM_SUM_NAMES } from '@shared/dimsum-names'
 
 /**
  * The dim-sum surprise's dish catalog. Every image is an ORIGINAL illustration bundled as a
@@ -23,17 +24,26 @@ export interface DimSumDish {
   image: string
 }
 
-export const DIM_SUM_CATALOG: readonly DimSumDish[] = [
-  { id: 'har-gow', name: { en: 'Shrimp dumpling', zhHant: '蝦餃' }, image: harGow },
-  { id: 'siu-mai', name: { en: 'Pork & shrimp dumpling', zhHant: '燒賣' }, image: siuMai },
-  { id: 'char-siu-bao', name: { en: 'BBQ pork bun', zhHant: '叉燒包' }, image: charSiuBao },
-  { id: 'egg-tart', name: { en: 'Egg tart', zhHant: '蛋撻' }, image: eggTart },
-  { id: 'turnip-cake', name: { en: 'Turnip cake', zhHant: '蘿蔔糕' }, image: turnipCake },
-  { id: 'cheung-fun', name: { en: 'Rice noodle roll', zhHant: '腸粉' }, image: cheungFun },
-  { id: 'spring-roll', name: { en: 'Spring roll', zhHant: '春卷' }, image: springRoll },
-  { id: 'sesame-ball', name: { en: 'Sesame ball', zhHant: '煎堆' }, image: sesameBall },
-  { id: 'lo-mai-gai', name: { en: 'Sticky rice in lotus leaf', zhHant: '糯米雞' }, image: loMaiGai }
-]
+/** id → bundled local illustration. Kept HERE rather than in the shared name table because a
+ *  Vite `?asset` import only resolves in the renderer build; the server quizzes on names alone. */
+const IMAGES: Record<string, string> = {
+  'har-gow': harGow,
+  'siu-mai': siuMai,
+  'char-siu-bao': charSiuBao,
+  'egg-tart': eggTart,
+  'turnip-cake': turnipCake,
+  'cheung-fun': cheungFun,
+  'spring-roll': springRoll,
+  'sesame-ball': sesameBall,
+  'lo-mai-gai': loMaiGai
+}
+
+// Derived from the ONE shared name table, so the surprise and the unlock ladder's dim-sum
+// question can never disagree about which dishes exist or what they are called. A dish added to
+// the table without an illustration is dropped here rather than rendering a broken image.
+export const DIM_SUM_CATALOG: readonly DimSumDish[] = DIM_SUM_NAMES.filter((d) => IMAGES[d.id]).map(
+  (d) => ({ id: d.id, name: { en: d.en, zhHant: d.zhHant }, image: IMAGES[d.id] })
+)
 
 /** Bilingual label, e.g. "Shrimp dumpling · 蝦餃" — the dish's name stays this exact pair
  *  regardless of the active language mode or funny level. */
