@@ -22,6 +22,7 @@ import {
   type NotifyPayload,
   type UpdatePolicy
 } from '../../shared/types'
+import type { HistoryListResult } from '../../shared/local-history'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 
 /** Reject with a coded error the RPC layer + renderer recognize (renderer degrades silently). */
@@ -258,6 +259,47 @@ export function buildStubApi(): Omit<
       // measure" — the one honest answer, and never mistakable for "nothing is using memory".
       read: () => Promise.resolve({ ok: false, rows: [], mem: null }),
       host: () => Promise.resolve(null)
+    },
+    vscode: {
+      // Overridden by the real WS-backed namespace in ws-bridge (registered on the server shell
+      // too — see core/vscode-handlers.ts). The stub's own answer is "not found", which is what a
+      // caller sees only before the socket has connected.
+      detect: () => Promise.resolve([]),
+      open: U('vscode.open')
+    },
+    // The Server Edition's REAL "export.saveText": there is no native Save-As dialog on a
+    // headless server, so a browser download (Blob + a synthetic `<a download>` click) IS the
+    // correct, final implementation here — never overridden by ws-bridge. See
+    // src/renderer/lib/exportSave.ts for the identical trick used elsewhere in the renderer;
+    // duplicated here (rather than imported) to keep this file's existing convention of being
+    // self-contained DOM fallbacks (see `copyViaExecCommand` above).
+    export: {
+      saveText: (filename: string, content: string, mimeType: string) => {
+        try {
+          const url = URL.createObjectURL(new Blob([content], { type: `${mimeType};charset=utf-8` }))
+          const a = document.createElement('a')
+          a.href = url
+          a.download = filename
+          a.rel = 'noopener'
+          a.click()
+          setTimeout(() => URL.revokeObjectURL(url), 30_000)
+          // No `path`: the browser chose the download folder, and there is nothing on this
+          // process's filesystem for "Open in Visual Studio Code" to open.
+          return Promise.resolve({ ok: true })
+        } catch (e) {
+          return Promise.resolve({ ok: false, error: e instanceof Error ? e.message : String(e) })
+        }
+      }
+    },
+    history: {
+      // Overridden by the real WS-backed namespace in ws-bridge (registered on the server shell
+      // too — see core/local-history-handlers.ts). The explicit return-type annotation matters
+      // here (unlike most stubs in this file): `HistoryListResult` is a discriminated union on
+      // `ok`, and without it the object literal's `ok: false` would widen to plain `boolean` and
+      // stop matching either union member.
+      list: (): Promise<HistoryListResult> =>
+        Promise.resolve({ ok: false, error: 'History is not connected yet.' }),
+      restore: U('history.restore')
     },
     codex: {
       // Overridden by the real WS-backed namespace in ws-bridge. The stub's answer is the same

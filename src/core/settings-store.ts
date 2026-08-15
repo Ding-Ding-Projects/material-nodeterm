@@ -3,6 +3,7 @@ import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
 import { DEFAULT_SETTINGS, type Settings } from '../shared/types'
+import type { HistoryAction } from '../shared/local-history'
 
 /**
  * Merge a possibly-partial/legacy `Settings` object over `DEFAULT_SETTINGS`. A plain
@@ -49,6 +50,15 @@ export class SettingsStore {
    *  wins the disk while the last CALL wins the cache — and they can disagree until next boot.
    *  Each caller still sees only ITS OWN save's failure. */
   private saveChain: Promise<unknown> = Promise.resolve()
+  /** Local, git-backed version history hook (see core/local-history.ts, wired in
+   *  src/main/index.ts / src/server/handlers/index.ts). Optional so this store keeps working —
+   *  identically to before this feature existed — when no recorder is wired (e.g. in tests). Never
+   *  allowed to fail a save: see the try/catch around every call site below. */
+  private historyRecorder?: (
+    before: Settings,
+    after: Settings,
+    override?: { action: HistoryAction; label: string }
+  ) => void
 
   private get filePath(): string {
     return path.join(platform().userDataDir, 'settings.json')
@@ -60,6 +70,26 @@ export class SettingsStore {
   onChange(cb: (s: Settings) => void): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)
+  }
+
+  /** Wire a local-history recorder. Called once at boot (both shells) — see
+   *  local-history-handlers.ts's restore hook, which is the OTHER half of this: a restore calls
+   *  `applyRestoredSettings`, which reaches `saveNow` with an explicit override so the new
+   *  revision is labelled "Restored…" instead of running back through the generic diff. */
+  setHistoryRecorder(
+    fn: (before: Settings, after: Settings, override?: { action: HistoryAction; label: string }) => void
+  ): void {
+    this.historyRecorder = fn
+  }
+
+  /** Apply a restored settings object as a NEW save (never a history rewrite — see
+   *  core/local-history.ts's append-only rule). `label` is normally "Restored settings to
+   *  <shortsha>"; the action is always 'restored' regardless of what the generic diff would have
+   *  said, so the history's own action filter can find restores as their own category. */
+  async applyRestoredSettings(settings: Settings, label: string): Promise<void> {
+    const run = this.saveChain.then(() => this.saveNow(settings, { action: 'restored', label }))
+    this.saveChain = run.catch(() => {})
+    return run
   }
 
   /** Load synchronously into cache (call after app is ready). */
@@ -85,8 +115,12 @@ export class SettingsStore {
     })
   }
 
-  private async saveNow(settings: Settings): Promise<void> {
+  private async saveNow(
+    settings: Settings,
+    historyOverride?: { action: HistoryAction; label: string }
+  ): Promise<void> {
     {
+      const before = this.cache
       this.cache = mergeSettings(settings)
       // Atomic write (temp + rename) so a mid-write crash can't corrupt settings.json. The temp
       // name is unique per call because nothing serializes this handler and its callers overlap:
@@ -122,6 +156,15 @@ export class SettingsStore {
         } catch {
           // A listener must never break a settings save (or its siblings).
         }
+      }
+      // Rule 1 from local-history.ts's header: a history write must never fail the save itself.
+      // The recorder function is ALSO wrapped internally (LocalHistoryStore.record never throws),
+      // but this catch covers a bad recorder implementation too — belt and braces around the one
+      // guarantee this feature is not allowed to break.
+      try {
+        this.historyRecorder?.(before, this.cache, historyOverride)
+      } catch {
+        // See above.
       }
     }
   }

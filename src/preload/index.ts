@@ -16,6 +16,7 @@ import type {
   Workspace,
   WorkspaceMigrationKind
 } from '../shared/types'
+import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
@@ -398,6 +399,23 @@ const api: NodeTerminalApi = {
   sessionMemory: {
     read: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemory, q),
     host: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemoryHost, q)
+  },
+  vscode: {
+    detect: () => ipcRenderer.invoke(IPC.vscodeDetect),
+    open: (path: string) => ipcRenderer.invoke(IPC.vscodeOpen, path)
+  },
+  // Desktop's real "export.saveText": a native Save-As dialog + write, returning the chosen
+  // path so the caller can offer "Open in Visual Studio Code" on it. `mimeType` travels for
+  // parity with the Server Edition's Blob-download fallback (stubs.ts); the native path does not
+  // need it (the OS's Save dialog is filename-driven, not MIME-driven).
+  export: {
+    saveText: (filename: string, content: string, mimeType: string) =>
+      ipcRenderer.invoke(IPC.exportSaveText, filename, content, mimeType)
+  },
+  history: {
+    list: (domain: string, filters?: HistoryFilters) =>
+      ipcRenderer.invoke(IPC.historyList, domain, filters),
+    restore: (domain: string, sha: string) => ipcRenderer.invoke(IPC.historyRestore, domain, sha)
   },
   context: {
     onUpdate: (listener) => {

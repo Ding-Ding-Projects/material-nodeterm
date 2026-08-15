@@ -51,6 +51,8 @@ import {
   type WorkspaceApi
 } from '../../shared/types'
 import type { PeerIdentity } from '../../shared/presence'
+import type { VsCodeInstall, VsCodeOpenResult } from '../../shared/vscode'
+import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from '../../shared/local-history'
 import { buildStubApi } from './stubs'
 import { mountPickerRoot, openDirectoryPicker } from './dialog-picker'
 import { encodePcmForWire } from './speech-encode'
@@ -649,6 +651,31 @@ export function buildSessionMemoryApi(client: RpcClient): Pick<NodeTerminalApi, 
   }
 }
 
+/** Real, not a stub: `registerVsCodeHandlers` runs in the server shell too (server/handlers/
+ *  index.ts), so `detect`/`open` act on the machine actually running the Server Edition — the
+ *  same machine the browser is talking to. */
+export function buildVsCodeApi(client: RpcClient): Pick<NodeTerminalApi, 'vscode'> {
+  return {
+    vscode: {
+      detect: () => client.request(IPC.vscodeDetect) as Promise<VsCodeInstall[]>,
+      open: (path: string) => client.request(IPC.vscodeOpen, path) as Promise<VsCodeOpenResult>
+    }
+  }
+}
+
+/** Real, not a stub: `registerLocalHistoryHandlers` runs in the server shell too, over the same
+ *  git-backed store the desktop shell writes to (its own userDataDir, on the server machine). */
+export function buildLocalHistoryApi(client: RpcClient): Pick<NodeTerminalApi, 'history'> {
+  return {
+    history: {
+      list: (domain: string, filters?: HistoryFilters) =>
+        client.request(IPC.historyList, domain, filters) as Promise<HistoryListResult>,
+      restore: (domain: string, sha: string) =>
+        client.request(IPC.historyRestore, domain, sha) as Promise<HistoryRestoreResult>
+    }
+  }
+}
+
 /**
  * Build the `claude` namespace over an RpcClient. `cliCaps` is a REAL handler on the server
  * (`registerClaudeCliIpc` runs in the server shell too), so the browser resolves the very same
@@ -837,6 +864,8 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
+    ...buildVsCodeApi(client),
+    ...buildLocalHistoryApi(client),
     ...buildGitHubApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the

@@ -21,6 +21,7 @@ export type SettingsSectionId =
   | 'ssh'
   | 'updates'
   | 'privacy'
+  | 'history'
 
 export interface SettingsSectionRef {
   id: SettingsSectionId
@@ -87,7 +88,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     sections: [
       { id: 'license', title: 'License' },
       { id: 'updates', title: 'Updates' },
-      { id: 'privacy', title: 'Privacy' }
+      { id: 'privacy', title: 'Privacy' },
+      { id: 'history', title: 'History' }
     ]
   }
 ]

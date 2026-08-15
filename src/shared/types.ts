@@ -7,6 +7,8 @@ import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
+import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
+import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 
 export interface PtyCreateOptions {
   shell?: string
@@ -1657,6 +1659,38 @@ export interface SessionMemoryApi {
   host(q?: SessionMemoryQuery): Promise<MemInfo | null>
 }
 
+/** "Open in Visual Studio Code" — src/core/vscode-detect.ts. Registered on BOTH shells via the
+ *  generic platform.handle seam (src/core/vscode-handlers.ts), so it always opens on the machine
+ *  actually running the shell that answers the call. */
+export interface VsCodeApi {
+  /** Every verified VS Code install found on this machine (empty array = none found). */
+  detect(): Promise<VsCodeInstall[]>
+  /** Open a file or folder. A folder opens as the WORKSPACE ROOT (VS Code's own behaviour for a
+   *  directory argument) so the file tree is usable, not a single loose editor tab. */
+  open(path: string): Promise<VsCodeOpenResult>
+}
+
+/** Save exported TEXT content to disk, and report whether the result has a real filesystem path
+ *  ("Open in Visual Studio Code" is only offered when it does). See docs/exports.md. */
+export interface ExportApi {
+  /** Desktop: a native Save-As dialog + write, resolving the chosen absolute path. Server
+   *  Edition/browser: a plain Blob download — the browser chooses the destination, so `path` is
+   *  omitted (there is nothing on this process's filesystem to open in VS Code). */
+  saveText(
+    filename: string,
+    content: string,
+    mimeType: string
+  ): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>
+}
+
+/** Local, git-backed version history for a user-managed record this app owns — settings today
+ *  (src/core/local-history.ts, docs/local-history.md). Registered on BOTH shells. */
+export interface LocalHistoryApi {
+  list(domain: string, filters?: HistoryFilters): Promise<HistoryListResult>
+  /** Apply an old revision as a NEW save (append-only — see local-history.ts's header). */
+  restore(domain: string, sha: string): Promise<HistoryRestoreResult>
+}
+
 /** Claude Code subscription usage snapshot for the bottom-left indicator. */
 export interface ClaudeUsage {
   /**
@@ -2202,6 +2236,9 @@ export interface NodeTerminalApi {
   githubControl: import('./github-issues').GitHubControlApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
+  vscode: VsCodeApi
+  export: ExportApi
+  history: LocalHistoryApi
   context: ContextApi
   canvas: CanvasApi
   codex: CodexApi

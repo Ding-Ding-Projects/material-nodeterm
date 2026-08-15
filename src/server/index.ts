@@ -226,7 +226,8 @@ export async function startServer(
   const { gitService } = registerCoreHandlers(platform, {
     getSettings: () => settingsStore.get(),
     downloadTickets,
-    localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId)
+    localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId),
+    settingsStore
   })
   const github = registerGitHubIntegration({
     platform,

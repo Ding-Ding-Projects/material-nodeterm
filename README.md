@@ -153,6 +153,15 @@ opencode / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂
   **undo/redo**, and a native macOS dark UI.
 - **Auto-update & in-app announcements** — the app checks a self-hosted feed and
   surfaces a "Restart to update" banner and product news.
+- **Export everything, in every format** — session memory, local settings history and
+  every other list this app owns exports to JSON, JSONL, YAML, TOML, XML, CSV, TSV,
+  Markdown, HTML or SQL, with a disclosure shown *before* the export runs for any
+  format that cannot carry a field faithfully. See [`docs/exports.md`](./docs/exports.md).
+- **Bulk actions everywhere** — click, shift-click, select-all/invert, and a reviewable
+  preview before anything runs. See [`docs/bulk-actions.md`](./docs/bulk-actions.md).
+- **Local settings history** — every settings save (accounts, custom agents, everything
+  else) is snapshotted in an isolated local git repository, labelled by what changed, and
+  restorable as a new, undoable revision. See [`docs/local-history.md`](./docs/local-history.md).
 
 ### 🌍 Server Edition — nodeterm in your browser
 
