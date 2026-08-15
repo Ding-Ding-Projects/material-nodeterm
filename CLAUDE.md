@@ -1727,6 +1727,19 @@ again; the grace window was never the thing that was wrong.
   the relay server may rate-limit free hosts independently — a client-side gate must NOT be
   reintroduced to work around a backend refusal (fix the backend policy instead).
 
+**Approved-device persistence has one mutation funnel** (`src/main/remote/approved-devices.ts`). The
+standing phone host, mutual-trust settlement and revocation all change the same pin list. Atomic
+temp+rename protects bytes, but it cannot protect a stale snapshot: an approval for device B used to
+load `[A]`, a revoke could publish `[]`, and the delayed approval could then publish `[A,B]`, silently
+resurrecting revoked device A. Every writer now passes its `pinDevice` / `unpinDevice` intent to
+`mutateApprovedDevices`, which serializes the complete read-modify-write decision; the full-snapshot
+writer is deliberately private. The loader returns empty only for `ENOENT`. Invalid JSON, an invalid
+shape, permissions and other I/O failures reject and preserve the existing bytes — a failed read is
+not an empty trust list. A failed pin remains safe for the current explicitly-approved session (the
+next reconnect asks again); a failed revoke still cuts the live socket and reports
+`persisted:false`. Normal packaged operation is single-instance; the dev-only `NT_MULTI=1` flow must
+keep using a distinct `NT_USER_DATA` per instance because this queue is process-local.
+
 ## The unlock ladder (Server Edition lockout)
 
 Five wrong passwords locks the account, and instead of a bare countdown the lockout screen offers a

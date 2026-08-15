@@ -46,14 +46,15 @@ vi.mock('../main-window', () => ({
   mainWindowClientIds: () => h.clientIds
 }))
 
-// The on-disk pin store, in memory (the trust gate's default load/save path). Each side pins the
+// The on-disk pin store, in memory (the trust gate's default mutation path). Each side pins the
 // OTHER end's key here.
 import { emptyApprovedDevices, type ApprovedDevices } from './approved-devices-core'
 let disk: ApprovedDevices = emptyApprovedDevices()
 vi.mock('./approved-devices', () => ({
   loadApprovedDevices: async () => disk,
-  saveApprovedDevices: async (s: ApprovedDevices) => {
-    disk = s
+  mutateApprovedDevices: async (mutation: (store: ApprovedDevices) => ApprovedDevices) => {
+    disk = mutation(disk)
+    return disk
   }
 }))
 
