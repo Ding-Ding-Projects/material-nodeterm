@@ -48,3 +48,53 @@ mkdirSync('build', { recursive: true })
 const png = await sharp(Buffer.from(svg)).png().toBuffer()
 writeFileSync('build/icon.png', png)
 console.log('wrote build/icon.png (1024x1024)')
+
+// --- Windows .ico (multi-resolution) ---
+//
+// electron-builder's `win.icon` (and Squirrel.Windows, which reads the same option) expects a
+// real ICO container, not a PNG wearing a `.ico` extension — Explorer, the taskbar and
+// "Programs and Features" each pick a different frame by SIZE, and a single-frame file just
+// gets stretched/blurred everywhere but the one size it happens to match.
+//
+// Windows Vista+ accepts PNG-COMPRESSED frames packed directly inside an ICO container (no
+// BMP/DIB re-encoding required), so this renders the same SVG mark at each standard size and
+// writes a small hand-rolled ICO container around the PNGs — no extra npm dependency for
+// something this documented (MS-ICO: a 6-byte ICONDIR header, then one 16-byte ICONDIRENTRY per
+// frame, then the frame bytes back to back).
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
+
+/** Pack PNG buffers (one per size, same order as `sizes`) into a Windows ICO file buffer. */
+function packIco(sizes, pngBuffers) {
+  const HEADER_BYTES = 6
+  const ENTRY_BYTES = 16
+  const dir = Buffer.alloc(HEADER_BYTES)
+  dir.writeUInt16LE(0, 0) // reserved, must be 0
+  dir.writeUInt16LE(1, 2) // image type: 1 = icon
+  dir.writeUInt16LE(sizes.length, 4) // frame count
+
+  const entries = []
+  let offset = HEADER_BYTES + ENTRY_BYTES * sizes.length
+  for (let i = 0; i < sizes.length; i++) {
+    const size = sizes[i]
+    const data = pngBuffers[i]
+    const entry = Buffer.alloc(ENTRY_BYTES)
+    // Width/height are single bytes; the ICO format's documented escape is 0 == 256px.
+    entry.writeUInt8(size >= 256 ? 0 : size, 0)
+    entry.writeUInt8(size >= 256 ? 0 : size, 1)
+    entry.writeUInt8(0, 2) // color count: 0 = no palette (true color)
+    entry.writeUInt8(0, 3) // reserved, must be 0
+    entry.writeUInt16LE(1, 4) // color planes
+    entry.writeUInt16LE(32, 6) // bits per pixel (32 = RGBA)
+    entry.writeUInt32LE(data.length, 8) // size of this frame's data
+    entry.writeUInt32LE(offset, 12) // offset of this frame's data from file start
+    entries.push(entry)
+    offset += data.length
+  }
+  return Buffer.concat([dir, ...entries, ...pngBuffers])
+}
+
+const icoFrames = await Promise.all(
+  ICO_SIZES.map((size) => sharp(Buffer.from(svg)).resize(size, size).png().toBuffer())
+)
+writeFileSync('build/icon.ico', packIco(ICO_SIZES, icoFrames))
+console.log(`wrote build/icon.ico (${ICO_SIZES.join('/')}px frames)`)
