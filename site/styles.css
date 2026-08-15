@@ -393,6 +393,21 @@ button { touch-action: manipulation; }
 .row-item__meta { font-size: 12px; color: var(--faint); }
 .row-item__text { font-size: 13.5px; color: var(--ink2); margin-top: 2px; white-space: pre-wrap; }
 .row-item__right { font-family: var(--mono); font-size: 16px; font-weight: 800; align-self: center; letter-spacing: 0.08em; }
+/* A row that links somewhere: the pick button and the "open it" link are two separate targets
+   sitting side by side, so neither can be hit by accident. The link is a full-height 48px column
+   — comfortably past the 44px touch minimum on a phone, where this row is the whole width of the
+   screen and a mis-tap means losing your place. */
+.row-item-wrap { display: flex; align-items: stretch; gap: 8px; }
+.row-item-wrap > .row-item { flex: 1 1 auto; min-width: 0; }
+.row-item__open {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  width: 48px; min-height: 48px; text-decoration: none;
+  font-family: var(--mono); font-size: 18px; font-weight: 800; color: var(--ink);
+  background: var(--paper2); border: 4px solid var(--line); border-radius: var(--round);
+  box-shadow: var(--shadow-sm);
+}
+.row-item__open:hover { background: var(--yellow); }
+.row-item__open:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 .list-footnote { margin: 14px 2px 0; font-size: 12.5px; color: var(--ink2); max-width: 760px; line-height: 1.6; }
 .add-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; padding: 12px; background: var(--sunk); border: 4px dashed var(--line); border-radius: var(--round); }
 .add-row input { flex: 1 1 200px; height: 46px; border: 3px solid var(--line); border-radius: 12px; background: var(--card); padding: 0 10px; }
@@ -466,11 +481,37 @@ textarea.mono-area {
 
 /* ================= OVERLAYS ================= */
 .menu-scrim { position: fixed; inset: 0; z-index: 80; }
-.menu-panel { position: fixed; width: 276px; padding: 10px; background: var(--card); border: 4px solid var(--line); border-radius: 18px; box-shadow: 8px 8px 0 var(--line); z-index: 81; }
+/* Bounded by the viewport in BOTH axes, because a context menu is positioned at the tap point and
+   a phone has very little room in either direction.
+   - width: a flat 276px is wider than the gap left beside a tap near the right edge of a 320px
+     screen, so it clamps to the viewport instead.
+   - height: `max-height` is set INLINE by render.js to `100dvh - top - 8px`, i.e. exactly the room
+     left below wherever the menu opened, so the panel can never run off the bottom. It was
+     previously unbounded while the JS clamped `top` against an assumed 360px panel; the real panel
+     is ~392px (title + search + a 300px list + padding), so on a 667px-tall phone the last 32px —
+     including the final menu item — sat off-screen with no way to reach it. `dvh` rather than `vh`
+     so a mobile browser's collapsing address bar does not reintroduce the same overflow.
+   `overscroll-behavior` keeps a flick inside a scrolled menu from scrolling the page underneath. */
+.menu-panel {
+  position: fixed;
+  width: min(276px, calc(100vw - 16px));
+  padding: 10px;
+  background: var(--card);
+  border: 4px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 8px 8px 0 var(--line);
+  z-index: 81;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .menu-panel__title { font-family: var(--fun); font-size: 13px; font-weight: 800; padding: 0 4px 6px; }
 .menu-panel__search { display: flex; align-items: center; gap: 0; height: 40px; background: var(--paper2); border: 3px solid var(--line); border-radius: 999px; overflow: hidden; margin-bottom: 8px; }
 .menu-panel__search input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; outline: none; font-size: 13px; font-weight: 600; }
-.menu-panel__list { max-height: 300px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+/* Cap the LIST against the viewport too, not just a flat 300px: on a short screen (a landscape
+   phone is ~375px tall) a 300px list plus the title and search bar cannot fit, and the panel would
+   have to scroll its own scroller. `45dvh` keeps the list the thing that scrolls in the normal
+   case, and lets the panel's own bound take over only when there is genuinely no room. */
+.menu-panel__list { max-height: min(300px, 45dvh); overflow: auto; display: flex; flex-direction: column; gap: 4px; }
 .menu-item {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 10px;
   border: 3px solid var(--line); border-radius: 12px; background: var(--paper2); cursor: pointer;

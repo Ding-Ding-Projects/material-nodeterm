@@ -300,7 +300,7 @@ function renderHomeRoom(store) {
 function rowItem(state, row) {
   const picked = !!state.picked[row.id]
   const name = row.title + (picked ? ', picked' : '') + (row.tag ? ', ' + row.tag : '') + (row.body ? '. ' + row.body : '')
-  return `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${attr(name)}" data-action="toggle-pick" data-id="${attr(row.id)}" data-menu-kind="row" data-menu-label="${attr(row.title)}" data-menu-extra='${attr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '' }))}'>
+  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${attr(name)}" data-action="toggle-pick" data-id="${attr(row.id)}" data-menu-kind="row" data-menu-label="${attr(row.title)}" data-menu-extra='${attr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '' }))}'>
     <span class="row-item__check ${picked ? 'is-picked' : ''}" aria-hidden="true">${picked ? '✔' : ''}</span>
     ${row.img ? `<img src="${attr(row.img)}" alt="" width="44" height="44" aria-hidden="true" style="flex:0 0 auto;border:3px solid var(--line);border-radius:12px;background:var(--paper2)" />` : ''}
     <span class="row-item__body" aria-hidden="true">
@@ -311,8 +311,27 @@ function rowItem(state, row) {
       </span>
       <span class="row-item__text">${esc(row.body)}</span>
     </span>
-    ${row.right ? `<span class="row-item__right" aria-hidden="true">${esc(row.right)}</span>` : ''}
+    ${row.right && !row.docHref ? `<span class="row-item__right" aria-hidden="true">${esc(row.right)}</span>` : ''}
   </button>`
+  // A row that HAS somewhere to go gets a real link to go there.
+  //
+  // The guide-book rows carried a `docHref` to the actual article, rendered a `→`, and said "read
+  // the full article at docs/<x>.html" — while the whole row was a single pick-for-export button
+  // and the `→` was aria-hidden decoration. So the one thing the row invited you to do was the one
+  // thing it could not do: the article was unreachable except by leaving and finding
+  // docs/index.html by hand, which the footnote then apologised for.
+  //
+  // An anchor, not a button with a click handler: middle-click, ⌘/Ctrl-click and "open in new tab"
+  // all have to work, and only a real href gives you those. It sits OUTSIDE the pick button
+  // because an <a> inside a <button> is invalid HTML and browsers do unpredictable things with it.
+  // Picking and opening stay two visibly separate targets, each its own tap area.
+  if (!row.docHref) return btn
+  return `<span class="row-item-wrap">
+    ${btn}
+    <a class="row-item__open" href="${attr(row.docHref)}" aria-label="Read the ${attr(row.title)} guide page">
+      <span aria-hidden="true">${esc(row.right || '→')}</span>
+    </a>
+  </span>`
 }
 
 function renderListRoom(store, room) {
@@ -421,7 +440,7 @@ function renderMenu(store) {
   const mm = makeMatcher(s, 'menu', s.menuQuery)
   const items = (store.menuItemsCache || []).filter((m) => mm(m.label + ' ' + (m.hint || '')))
   return `<div class="menu-scrim" data-action="close-menu"></div>
-  <div class="menu-panel" role="menu" style="left:${s.menuX}px;top:${s.menuY}px" data-stop-menu-close="1">
+  <div class="menu-panel" role="menu" style="left:${s.menuX}px;top:${s.menuY}px;max-height:calc(100dvh - ${s.menuY}px - 8px)" data-stop-menu-close="1">
     <div class="menu-panel__title">Menu for ${esc(s.menuLabel || 'this')}</div>
     <div class="menu-panel__search">
       <span aria-hidden="true" style="padding:0 4px 0 10px">🔍</span>

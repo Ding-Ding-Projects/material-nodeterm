@@ -21,6 +21,7 @@ export function registerDocs(store, deps, registerAction, registerBinding) {
         docHref: './docs/' + d[2] + '.html',
       })),
     emptyText: 'No guide page matches that.',
-    footnote: () => 'Click a row to pick it (for export). Right-click a row for “Open this on GitHub”, or open ./docs/index.html to actually read the articles.',
+    footnote: () =>
+      'Tap → to read a page. Click the row itself to pick it (for export), or right-click a row for “Open this on GitHub”.',
   })
 }

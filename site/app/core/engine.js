@@ -182,8 +182,15 @@ export function openMenu(store, clientX, clientY, kind, label, extra) {
   store.setState(
     {
       menuOpen: true,
-      menuX: Math.max(8, Math.min(clientX, w - 292)),
-      menuY: Math.max(8, Math.min(clientY, h - 360)),
+      // Clamp only enough to keep the menu's TOP-LEFT on screen and leave it somewhere usable to
+      // grow. The panel's own CSS is what actually guarantees it fits: `width` clamps to the
+      // viewport and `max-height` is set inline to the room remaining below `menuY`. This used to
+      // subtract a hard-coded 360px "panel height" that was simply wrong (the panel is ~392px),
+      // which pushed the last menu item off the bottom of a normal phone.
+      menuX: Math.max(8, Math.min(clientX, w - 8 - Math.min(276, w - 16))),
+      // Keep at least ~140px of room below the tap so the menu is not a one-line sliver, but never
+      // push it above 8px — on a very short viewport the max-height simply takes over.
+      menuY: Math.max(8, Math.min(clientY, Math.max(8, h - 140))),
       menuKind: kind,
       menuLabel: label || '',
       menuQuery: '',
