@@ -25,6 +25,7 @@
     "make-icon": "node scripts/make-icon.mjs",
     "make-social": "node scripts/make-social.mjs",
     "count-lines": "node scripts/count-lines.mjs",
+    "check:app-contract": "node scripts/check-app-contract.mjs",
     "dist": "npm run make-icon && npm run build && electron-builder --mac --arm64 -c.mac.identity=null -c.mac.notarize=false",
     "dist:linux": "npm run make-icon && npm run build && electron-builder --linux",
     "dist:win": "npm run make-icon && npm run build && electron-builder --win squirrel --x64 --publish never",
