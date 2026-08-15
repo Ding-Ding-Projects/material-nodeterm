@@ -115,6 +115,9 @@ it and open a terminal running an arbitrary command. Pass secrets by 0600 file o
 advertise the host's NaCl public key; the client POSTs `{epk,box}`, and the success response is a
 single encrypted `box`. If the host key or encryption is unavailable, pairing refuses before it
 writes an SSH key or bearer. Never restore the old `{token,publicKey}` plaintext fallback.
+Only `ENOENT` proves the pairing registry absent: corrupt, wrongly-shaped, or unreadable
+`agent.json` must propagate without rewrite. Register a paired device before activating its SSH
+key, so every possibly-live key remains visible and revocable even when the second write fails.
 
 **Both raw listeners change together** — `src/main/index.ts` and `src/server/agent-status.ts`. A new
 field on a hook event that reaches only the desktop leaves the Server Edition quietly without the

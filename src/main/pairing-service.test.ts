@@ -169,6 +169,19 @@ function gateReads(watched: string[]): void {
   }) as any)
 }
 
+/** Make only the authoritative agent.json read fail; authorized_keys remains a real file. */
+function failAgentJsonReads(code?: string): ReturnType<typeof vi.spyOn> {
+  const realReadFile = fs.readFile
+  return vi.spyOn(fs, 'readFile').mockImplementation((async (p: any, ...rest: any[]) => {
+    if (String(p) === AGENT_JSON) {
+      const error = new Error(`${code ?? 'unknown'} read failure`) as NodeJS.ErrnoException
+      if (code) error.code = code
+      throw error
+    }
+    return (realReadFile as any)(p, ...rest)
+  }) as any)
+}
+
 /** A key line the phone could really have sent: OpenSSH wire format the validator decodes. */
 function freshEd25519Line(): string {
   const name = Buffer.from('ssh-ed25519', 'ascii')
@@ -374,6 +387,59 @@ describe('revokeDevice', () => {
   })
 })
 
+describe('agent.json read safety', () => {
+  it('treats ENOENT, and only ENOENT, as an absent registry', async () => {
+    rmSync(AGENT_JSON)
+
+    await expect(newService().listDevices()).resolves.toEqual([])
+  })
+
+  it('preserves malformed JSON byte-for-byte instead of degrading it to an empty registry', async () => {
+    const malformed = '{"devices":['
+    writeFileSync(AGENT_JSON, malformed)
+
+    await expect(newService().listDevices()).rejects.toThrow(/invalid JSON/)
+    expect(readFileSync(AGENT_JSON, 'utf8')).toBe(malformed)
+  })
+
+  it.each([
+    ['an array root', '[]', /JSON object/],
+    ['a non-array devices field', '{"devices":{}}', /devices.*array/]
+  ])('rejects %s without rewriting it', async (_label, bytes, expected) => {
+    writeFileSync(AGENT_JSON, bytes)
+
+    await expect(newService().listDevices()).rejects.toThrow(expected)
+    expect(readFileSync(AGENT_JSON, 'utf8')).toBe(bytes)
+  })
+
+  it.each([
+    ['EACCES', /EACCES/],
+    ['EIO', /EIO/],
+    [undefined, /Could not read agent\.json/]
+  ])('propagates a %s read failure instead of claiming no devices', async (code, expected) => {
+    failAgentJsonReads(code)
+
+    await expect(newService().listDevices()).rejects.toThrow(expected)
+    expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
+  })
+
+  it('does not rewrite agent.json when a revoke hits a failed authoritative read', async () => {
+    const before = readFileSync(AGENT_JSON, 'utf8')
+    const write = vi.spyOn(fs, 'writeFile')
+    failAgentJsonReads('EIO')
+
+    await expect(newService().revokeDevice('dev-a')).rejects.toThrow(/EIO/)
+
+    expect(readFileSync(AGENT_JSON, 'utf8')).toBe(before)
+    expect(
+      write.mock.calls.some(([file]) => String(file).includes('agent.json'))
+    ).toBe(false)
+    // Revocation remains fail-safe: full SSH access is cut even though the registry stays visible
+    // for a later retry.
+    expect(authKeys()).not.toContain('nodeterm-ios-dev-a')
+  })
+})
+
 describe('secure pairing listener', () => {
   it('refuses to start instead of advertising a plaintext fallback when the host key is unavailable', async () => {
     const done = vi.fn()
@@ -495,7 +561,134 @@ describe('secure pairing listener', () => {
       expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
       expect(authKeys()).toBe(`${KEY_OTHER}\n${KEY_A}\n${KEY_B}\n`)
       expect(done).toHaveBeenCalledOnce()
-      expect(done).toHaveBeenCalledWith({ ok: false })
+      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'failed' })
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('preserves a malformed registry and grants no SSH key during pairing', async () => {
+    const malformed = '{"devices":['
+    writeFileSync(AGENT_JSON, malformed)
+    const done = vi.fn()
+    const append = vi.spyOn(fs, 'appendFile')
+    const write = vi.spyOn(fs, 'writeFile')
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const service = newService()
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+
+      const response = await postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Unreadable Registry Phone'
+      })
+
+      expect(response).toMatchObject({ status: 500, text: 'pairing failed' })
+      expect(readFileSync(AGENT_JSON, 'utf8')).toBe(malformed)
+      expect(append).not.toHaveBeenCalled()
+      expect(write).not.toHaveBeenCalled()
+      expect(done).toHaveBeenCalledOnce()
+      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'failed' })
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('does not activate an SSH key when registry publication fails', async () => {
+    const beforeRegistry = readFileSync(AGENT_JSON, 'utf8')
+    const beforeKeys = authKeys()
+    const done = vi.fn()
+    const append = vi.spyOn(fs, 'appendFile')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const realRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (String(to) === AGENT_JSON) {
+        throw Object.assign(new Error('EXDEV: registry publish failed'), { code: 'EXDEV' })
+      }
+      return realRename(from, to)
+    })
+    const service = newService()
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+
+      const response = await postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Failed Registry Phone'
+      })
+
+      expect(response).toMatchObject({ status: 500, text: 'pairing failed' })
+      expect(readFileSync(AGENT_JSON, 'utf8')).toBe(beforeRegistry)
+      expect(authKeys()).toBe(beforeKeys)
+      expect(append).not.toHaveBeenCalled()
+      expect((await fs.readdir(path.dirname(AGENT_JSON))).filter((name) => name.endsWith('.tmp'))).toEqual([])
+      expect(warn).toHaveBeenCalledWith('[pairing] request failed:', expect.any(Error))
+      expect(done).toHaveBeenCalledOnce()
+      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'failed' })
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('keeps a partially activated SSH key visible and revocable when key finalization fails', async () => {
+    const done = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const realChmod = fs.chmod.bind(fs)
+    const chmod = vi.spyOn(fs, 'chmod').mockImplementation(async (file, mode) => {
+      if (String(file) === AUTH_KEYS && mode === 0o600) {
+        throw Object.assign(new Error('EACCES: key chmod failed'), { code: 'EACCES' })
+      }
+      return realChmod(file, mode)
+    })
+    const service = newService()
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+
+      const response = await postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Retryable Phone'
+      })
+
+      expect(response).toMatchObject({ status: 500, text: 'pairing failed' })
+      const entry = ((agentJson().devices as DeviceEntry[]) ?? []).find(
+        (candidate) => candidate.name === 'Retryable Phone'
+      )
+      expect(entry).toBeDefined()
+      expect(response.text).not.toContain(entry!.token)
+      expect(authKeys()).toContain(`nodeterm-ios-${entry!.id}`)
+      expect(await service.listDevices()).toContainEqual({
+        id: entry!.id,
+        name: entry!.name,
+        pairedAt: entry!.pairedAt,
+        lastSeenAt: entry!.lastSeenAt
+      })
+      expect(warn).toHaveBeenCalledWith('[pairing] request failed:', expect.any(Error))
+      expect(done).toHaveBeenCalledOnce()
+      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'failed' })
+
+      // The failed chmod happened after append. Keep the registry until an explicit revoke can
+      // remove both the possibly-live key and its bearer record.
+      chmod.mockRestore()
+      await service.revokeDevice(entry!.id)
+      expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
+      expect(authKeys()).not.toContain(`nodeterm-ios-${entry!.id}`)
     } finally {
       service.stop()
     }
@@ -550,7 +743,7 @@ describe('secure pairing listener', () => {
         text: 'pairing window is closed'
       })
       expect(done).toHaveBeenCalledOnce()
-      expect(done).toHaveBeenCalledWith({ ok: false })
+      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'attempts' })
       expect(append).not.toHaveBeenCalled()
       expect(write).not.toHaveBeenCalled()
       expect(deviceIds()).toEqual(['dev-a', 'dev-b'])

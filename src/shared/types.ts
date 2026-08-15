@@ -2481,6 +2481,15 @@ export interface PairedDevice {
   lastSeenAt: number
 }
 
+/** One-shot pairing completion delivered from the desktop host to every renderer surface. */
+export type PairingDoneResult = {
+  ok: boolean
+  /** Present on ok=false so persistence/security failures are never mislabeled as timeouts. */
+  reason?: 'timeout' | 'attempts' | 'failed'
+  /** Present on ok=true: whether the phone also received a usable relay leg. */
+  relay?: 'ok' | 'off' | 'failed' | 'dev'
+}
+
 /** Phone-pairing (nodeterm iOS "scan a QR" flow) bridge. */
 export interface PairingApi {
   /** False on Server Edition, where the browser is already attached to its host and no desktop
@@ -2500,8 +2509,8 @@ export interface PairingApi {
   }>
   /** Cancel an in-flight pairing (e.g. when the settings section unmounts). */
   stop(): Promise<void>
-  /** Fires once when pairing finishes (ok=true paired, ok=false timeout). Returns unsubscribe. */
-  onDone(cb: (result: { ok: boolean; relay?: 'ok' | 'off' | 'failed' | 'dev' }) => void): () => void
+  /** Fires once when pairing finishes. Failure reasons keep a commit error distinct from timeout. */
+  onDone(cb: (result: PairingDoneResult) => void): () => void
   /** Live re-probe of 127.0.0.1:22, so the Remote Login warning can clear the moment the user
    *  flips the toggle in System Settings (polled by the UI only while the warning is showing). */
   probeSsh(): Promise<boolean>

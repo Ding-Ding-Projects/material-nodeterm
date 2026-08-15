@@ -35,7 +35,7 @@ import {
   type PublicDevice,
   type RelayPairingBlock
 } from './pairing-core'
-import type { Settings } from '../shared/types'
+import type { PairingDoneResult, Settings } from '../shared/types'
 import { publicKeyToB64, type KeyPair } from './remote/e2ee'
 import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
@@ -170,16 +170,8 @@ export interface PairingStartResult {
   relayPlan: 'ok' | 'dev' | 'off'
 }
 
-/** Fired once when pairing finishes: ok=true → a key was installed, ok=false → timeout/cancel. */
-export type PairingDone = {
-  ok: boolean
-  /** Only on ok=true: did the pairing come with a relay leg? 'off' = toggle disabled,
-   *  'failed' = enabled but the mint failed (the SILENT LAN-only degrade that cost a
-   *  field debugging session — surface it, never swallow it), 'dev' = unpackaged build,
-   *  where relayAllowed() disables the relay regardless of the toggle — a self-builder
-   *  running `npm run dev` would otherwise read 'off' while staring at an ON toggle. */
-  relay?: 'ok' | 'off' | 'failed' | 'dev'
-}
+/** Fired once when pairing finishes; re-exported for main-side callers and tests. */
+export type PairingDone = PairingDoneResult
 
 export interface PairingService {
   /** Begin pairing; resolves once the listener is up. `onDone` fires exactly once later. */
@@ -199,14 +191,35 @@ const AGENT_DIR = path.join(os.homedir(), '.nodeterm')
 const AGENT_JSON_PATH = path.join(AGENT_DIR, 'agent.json')
 const AUTH_KEYS_PATH = path.join(os.homedir(), '.ssh', 'authorized_keys')
 
-/** Read + parse ~/.nodeterm/agent.json; returns {} when absent or malformed. */
+/**
+ * Read + parse ~/.nodeterm/agent.json. Only ENOENT proves absence: malformed bytes, a wrong root
+ * shape, and read failures must propagate so a caller can never overwrite an unreadable registry
+ * with a newly-created "empty" one.
+ */
 async function readAgentJson(): Promise<Record<string, unknown>> {
+  let raw: string
   try {
-    const parsed = JSON.parse(await fs.readFile(AGENT_JSON_PATH, 'utf8'))
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
-  } catch {
-    return {}
+    raw = await fs.readFile(AGENT_JSON_PATH, 'utf8')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code === 'ENOENT') return {}
+    throw new Error(`Could not read agent.json${code ? ` (${code})` : ''}.`, { cause: error })
   }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (error) {
+    throw new Error('agent.json contains invalid JSON.', { cause: error })
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('agent.json must contain a JSON object.')
+  }
+  const obj = parsed as Record<string, unknown>
+  if ('devices' in obj && !Array.isArray(obj.devices)) {
+    throw new Error('agent.json "devices" must be an array when present.')
+  }
+  return obj
 }
 
 /** Paired with `process.pid` in the temp names below: the counter makes a name unique WITHIN this
@@ -591,7 +604,10 @@ export function createPairingService(
     })
 
     // Give up after ten minutes with a timeout result.
-    attempt.timer = setTimeout(() => finishAttempt(attempt, { ok: false }), PAIR_TIMEOUT_MS)
+    attempt.timer = setTimeout(
+      () => finishAttempt(attempt, { ok: false, reason: 'timeout' }),
+      PAIR_TIMEOUT_MS
+    )
     attempt.timer.unref?.()
 
     // The phone reads /pair responses off a raw TCP socket (ATS blocks URLSession for bare-IP
@@ -691,7 +707,7 @@ export function createPairingService(
             // readBody await after server.close() and successfully write with the right token.
             attempt.settled = true
             send(res, 429, 'too many attempts — press Pair again for a fresh code')
-            finishAttempt(attempt, { ok: false })
+            finishAttempt(attempt, { ok: false, reason: 'attempts' })
             return
           }
           send(res, 403, 'bad token')
@@ -745,11 +761,11 @@ export function createPairingService(
         // or bearer record is installed for a client that can never receive its credentials.
         const responseObj = { ok: true, deviceId, agentToken, ...relayFields }
         const sealedResponse = (testHooks.sealResponse ?? sealPairingResponse)(responseObj, sharedKey)
-        // One unit, and queued behind any in-flight revoke: a pairing that interleaves with one
-        // would either append onto the inode the revoke is about to rename over, or lose its
-        // agent.json entry to the revoke's stale read.
+        // One unit, and queued behind any in-flight revoke. Publish the registry FIRST, then grant
+        // SSH. If the registry write fails, no live key exists. If key append/chmod fails after a
+        // partial append, the device remains visible and revocable; rolling the registry back
+        // would turn that potentially-live key into the untracked credential this order prevents.
         await serialize(async () => {
-          await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
           await persistDevice({
             id: deviceId,
             name,
@@ -757,6 +773,7 @@ export function createPairingService(
             pairedAt: Date.now(),
             lastSeenAt: 0
           })
+          await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
         })
         send(res, 200, JSON.stringify(sealedResponse), 'application/json')
         finishAttempt(attempt, {
@@ -778,7 +795,7 @@ export function createPairingService(
         console.warn('[pairing] request failed:', err)
         // A winning request owns the now-closed attempt. If it cannot seal or persist, report a
         // failed completion rather than leaving the renderer waiting on a listener that is gone.
-        if (attempt.settled) finishAttempt(attempt, { ok: false })
+        if (attempt.settled) finishAttempt(attempt, { ok: false, reason: 'failed' })
       }
     }
 

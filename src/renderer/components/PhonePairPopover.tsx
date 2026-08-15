@@ -128,10 +128,22 @@ export function PhonePairPopover({
               Show a new code
             </button>
           </>
+        ) : phase === 'failed' ? (
+          <>
+            <div className="phone-pair__warn">{error}</div>
+            <button className="phone-pair__btn" disabled={busy} onClick={() => void start()}>
+              Try pairing again
+            </button>
+            <button className="phone-pair__link" onClick={onOpenSettings}>
+              Review paired devices
+            </button>
+          </>
         ) : (
           <div className="phone-pair__hint">{busy ? 'Starting…' : error || 'Starting…'}</div>
         )}
-        {error && phase !== 'idle' ? <div className="phone-pair__warn">{error}</div> : null}
+        {error && phase !== 'idle' && phase !== 'failed' ? (
+          <div className="phone-pair__warn">{error}</div>
+        ) : null}
 
         <div className="phone-pair__divider" />
 

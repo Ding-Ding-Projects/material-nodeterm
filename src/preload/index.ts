@@ -4,6 +4,7 @@ import type {
   CanvasMutation,
   CanvasState,
   NodeTerminalApi,
+  PairingDoneResult,
   Project,
   PtyCreateOptions,
   PtyPressure,
@@ -600,7 +601,7 @@ const api: NodeTerminalApi = {
     start: () => ipcRenderer.invoke(IPC.pairingStart),
     stop: () => ipcRenderer.invoke(IPC.pairingStop),
     onDone: (cb) => {
-      const handler = (_e: unknown, result: { ok: boolean }) => cb(result)
+      const handler = (_e: unknown, result: PairingDoneResult) => cb(result)
       ipcRenderer.on(IPC.pairingDone, handler)
       return () => ipcRenderer.removeListener(IPC.pairingDone, handler)
     },

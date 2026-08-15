@@ -169,7 +169,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
             encrypted to the host key inside this QR.
           </p>
 
-          {phase === 'idle' || phase === 'timeout' ? (
+          {phase === 'idle' || phase === 'timeout' || phase === 'failed' ? (
             <div className="space-y-3">
               {phase === 'timeout' ? (
                 <p className="text-sm text-muted">
@@ -178,7 +178,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                 </p>
               ) : null}
               <Button variant="primary" disabled={busy} onClick={() => void start()}>
-                {busy ? 'Starting…' : 'Start pairing'}
+                {busy ? 'Starting…' : phase === 'idle' ? 'Start pairing' : 'Try pairing again'}
               </Button>
             </div>
           ) : null}

@@ -1727,6 +1727,15 @@ and write. **Server Edition deliberately does not host this desktop LAN listener
 `PairingApi.supported` is false in the browser bridge, the quick action is absent, and Settings
 shows an explicit desktop-only explanation.
 
+The pairing registry is also the revocation authority, so its read and write ordering is
+security-sensitive. Only `ENOENT` means `agent.json` is absent; invalid JSON, a wrong root/devices
+shape, `EACCES`, `EIO`, and every other read failure propagate without rewriting the file. A new
+pairing publishes its device entry before appending `authorized_keys`. Thus a registry failure
+grants no SSH access, while a later append/chmod failure leaves any possibly-live key represented
+by a visible, revocable device entry. The encrypted bearer response is not sent on either failure.
+Pairing completion carries a distinct failure reason, and Settings refreshes the registry even on
+failure so a partial grant is immediately reported and can be revoked rather than called a timeout.
+
 - Phone relay remote access ("Reach this Mac from anywhere") is a **Core (free) feature** as of
   2026-08-01 — the iOS app is itself paid, so a desktop Pro gate double-charged the same feature.
   The former Pro gate AND the free-tier monthly quota (`core/relay-quota.ts`, `RelayQuotaBanner`,
