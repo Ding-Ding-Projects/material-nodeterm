@@ -105,6 +105,33 @@ vi.mock('child_process', () => {
   return { execFile, execFileSync: (): string => '' }
 })
 
+/**
+ * `findTmux()` (pty-manager.ts) takes an entirely different branch on win32 — a bare PATH probe,
+ * skipping every POSIX fixed-candidate and bundled-binary check, because Windows has none of those
+ * targets (see the doc comment on `findTmux`). This suite is not ABOUT that branch difference
+ * (unlike pty-bundled-tmux.test.ts, which is deliberately win32-vs-darwin) — it is ordinary
+ * tmux-session-management logic, driven entirely through the `child_process`/`node-pty` mocks
+ * above, that must behave the same on every host. Running it on a machine with no real `tmux` on
+ * PATH hit the win32 short-circuit and got `null` back for `findTmux()`, silently downgrading
+ * every "tmux-backed" manager here to the plain-shell fallback (`findTmux`'s OWN fallback, not a
+ * failure) — a fact about the host running the suite, not about the logic under test. Also
+ * `resolveShellPath()` itself skips the login-shell probe entirely on win32 (real, unmocked
+ * `os.platform()` check), so `env.PATH` never became the fixed value these tests expect either.
+ * Give both a fixed, POSIX-shaped answer, on win32 ONLY — POSIX keeps its real implementation
+ * (fixed candidates → PATH → bundled), byte-identical to before this mock existed.
+ */
+vi.mock('./exec-path', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./exec-path')>()
+  if (process.platform !== 'win32') return actual
+  return {
+    ...actual,
+    resolveShellPath: () => Promise.resolve('/usr/bin:/bin'),
+    shellPathNow: () => '/usr/bin:/bin',
+    findInPathString: (bin: string, pathStr: string | null | undefined) =>
+      bin === 'tmux' ? '/usr/bin/tmux' : actual.findInPathString(bin, pathStr)
+  }
+})
+
 const SOLO = 42
 
 /**
