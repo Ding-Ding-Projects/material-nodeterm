@@ -256,6 +256,11 @@ Mirrors tmux's server lifetime rule as closely as a different OS allows:
   (`session-host/state-file.ts`, kept local so the standalone bundle does not import `src/core`). A
   fixed `<state>.tmp` lets a stale-lock reclaim collide with another publisher, and a bare rename
   loses startup when a Windows scanner briefly holds the destination open.
+  Binding the pipe/socket is not the success boundary: token write and atomic state publication
+  must both finish. If either fails, the host closes its listener, destroys any socket from that
+  pre-publication window, removes its owned token/state/endpoint, and exits nonzero. This catch is
+  explicit because the daemon's `uncaughtException` hook is diagnostic and suppresses Node's
+  default fatal exit; letting publication throw into it creates an undiscoverable orphan host.
 
 The spawned program follows the same resolver as a direct local PTY. With no explicit program and
 an empty `settings.defaultShell`, Windows selects PowerShell 7, then built-in Windows PowerShell,

@@ -254,6 +254,11 @@ delayed old-generation exit arrive after the same socket has attached to its rep
 retirement wait and replacement claim are serialized per name: two attach requests waking from one
 `ending` promise must not both create. Grace-exit cancellation happens inside that claim *after*
 the wait, because retirement can schedule a fresh empty-host timer before the waiter resumes.
+Startup is not successful merely because the socket bound: token and atomic state publication must
+both complete. A publication exception is caught inside the listen callback, all pre-publication
+sockets are destroyed, the listener and owned token/state/endpoint are closed or removed, and the
+host exits nonzero. Do not rely on an uncaught exception here; the daemon's diagnostic handler logs
+those and intentionally prevents Node's default fatal exit.
 
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
