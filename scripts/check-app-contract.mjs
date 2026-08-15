@@ -853,6 +853,43 @@ if (stylesText.includes('data-md-theme')) {
   pass(`M3 foundation: 'data-md-theme' does not appear in ${STYLES_FILE} (this app uses 'data-theme')`)
 }
 
+
+// ---------------------------------------------------------------------
+// The stylesheet is structurally sound.
+// ---------------------------------------------------------------------
+//
+// Cheap, and it catches a class of damage that every other signal misses. A dangling `*/` left by
+// an edit that replaced one line of a two-line comment broke the stylesheet outright — and tsc was
+// clean, 5,142 tests passed, and this guard was green over it, because none of them parse CSS.
+// Only `npm run build` failed, ~40 seconds later.
+//
+// These three checks take milliseconds and fail on exactly that, so the feedback arrives before a
+// build does. They do not replace the build; they front-run it.
+{
+  const cssPath = 'src/renderer/styles.css'
+  const css = readText(cssPath)
+  checkedCount += 1
+  if (css == null) {
+    fail(`Stylesheet: cannot read ${cssPath}`)
+  } else {
+    const opens = (css.match(/\/\*/g) || []).length
+    const closes = (css.match(/\*\//g) || []).length
+    const braceOpen = (css.match(/\{/g) || []).length
+    const braceClose = (css.match(/\}/g) || []).length
+    // Strip complete comments, then any surviving terminator is an orphan.
+    const stray = (css.replace(/\/\*[\s\S]*?\*\//g, '').match(/\*\//g) || []).length
+    const problems = []
+    if (opens !== closes) problems.push(`${opens} \`/*\` vs ${closes} \`*/\``)
+    if (stray > 0) problems.push(`${stray} dangling \`*/\` outside any comment`)
+    if (braceOpen !== braceClose) problems.push(`${braceOpen} \`{\` vs ${braceClose} \`}\``)
+    if (problems.length) {
+      fail(`Stylesheet is structurally broken (${problems.join('; ')}) — it will fail the build, which is the only other thing that would notice`)
+    } else {
+      pass(`Stylesheet: ${opens} comments and ${braceOpen} rules all balanced, no dangling terminators`)
+    }
+  }
+}
+
 // ---------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------

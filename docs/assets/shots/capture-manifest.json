@@ -1,6 +1,6 @@
 {
-  "commit": "d1f5d6f607b4ac21088b8a169b73dd9f01119ea1",
-  "capturedAt": "2026-08-15T16:16:21.499Z",
+  "commit": "7bc7585bf22a3805cd71a1310aa3ff07ef1262de",
+  "capturedAt": "2026-08-15T16:29:51.301Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
