@@ -110,9 +110,13 @@ feature is *missing* from the other shell.
 
 ## Still outstanding
 
-- **An agent launched under the mode.** The permission gate is unit-tested at the resolver and the
-  mode is verified end to end in a running build (below), but nobody has yet watched a real agent
-  CLI start with the narrowed flag. That is the one step still proven by construction.
+- **A real agent CLI observed starting with the narrowed flag.** Everything up to the command
+  line is now verified — the resolver narrows it (unit test), every launch site goes through the
+  resolver (`permissionMode.funnel.test.ts`, which fails if any site reads the raw setting), and
+  the mode itself works in a running build. What remains unobserved is the CLI actually launching
+  under it, which needs a logged-in agent this environment does not have. Driving the palette
+  headlessly to create a Claude node did not reliably land one, so this is stated as unverified
+  rather than dressed up.
 - **Wider destructive coverage.** The gate is wired at the kanban session delete (see below). The
   other destructive paths — project delete, worktree remove, notification bulk delete — already
   open the super gate unconditionally, so kids mode adds nothing there. `GuardedAction` names six
@@ -168,6 +172,21 @@ What was observed, through the real IPC and the real UI:
 | the settings UI flipped ON with no reload | the renderer store hydrated **and** is subscribed to the shared record |
 | the disclosure is on screen | not merely in the source — the whole basis for offering this |
 | the refused modes render with their reasons | generated from the policy table, not retyped |
+
+And the command-line chain, verified statically because every link is source-level:
+
+```
+settings / project override
+  -> resolvePermissionMode
+  -> gatePermissionMode        (claude CLI version)
+  -> gateKidsPermissionMode    (kids mode — LAST, so it can only narrow)
+  -> withPermissionMode        -> the flag on the command line
+```
+
+`permissionMode.funnel.test.ts` asserts nothing bypasses it: no file outside a named allow-list
+reads `settings.claudePermissionMode`, the gate is applied to the RETURNED value, and no
+`withPermissionMode` call passes a hardcoded mode. Probed by adding a bypassing launch site (red)
+and by unwiring the gate (red).
 
 ## Verifying a claim here
 
