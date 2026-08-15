@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import path from 'path'
 import type { CanvasNodeState, Project, Workspace } from '../shared/types'
 import {
   toPortableNodes, resolveNodes, projectToFile, fileToProject, framingViewport,
@@ -21,7 +22,10 @@ describe('portable node cwds', () => {
     const nodes = [node({ cwd: '/Users/enes/projects/foo/sub' })]
     const portable = toPortableNodes(nodes, '/Users/enes/projects/foo')
     expect(portable[0].cwd).toBe('./sub')
-    expect(resolveNodes(portable, '/mnt/other/foo')[0].cwd).toBe('/mnt/other/foo/sub')
+    // resolveNodes rejoins the portable "./…" suffix with path.join, which is platform-native
+    // (win32 joins with `\`) — on Windows that produces `\mnt\other\foo\sub`, so the expected
+    // value has to be built the same way rather than hard-coded with `/`.
+    expect(resolveNodes(portable, '/mnt/other/foo')[0].cwd).toBe(path.join('/mnt/other/foo', 'sub'))
   })
   it('the root itself becomes "." ', () => {
     const portable = toPortableNodes([node({ cwd: '/a/b' })], '/a/b')
@@ -59,7 +63,8 @@ describe('projectToFile / fileToProject round-trip', () => {
       id: 'p1', cwd: '/new/root', closed: true, defaultAccountId: 'acct1', dinoHighScore: 7,
       viewport: { x: 5, y: 6, zoom: 2 }
     })
-    expect(back.nodes[0]).toMatchObject({ cwd: '/new/root/x', agentId: 'claude', accountId: 'acct1' })
+    // Same path.join platform-native separator as above.
+    expect(back.nodes[0]).toMatchObject({ cwd: path.join('/new/root', 'x'), agentId: 'claude', accountId: 'acct1' })
     expect(back.unavailable).toBeUndefined()
   })
 })

@@ -183,8 +183,11 @@ describe('fetchRemoteSessionMemory', () => {
   })
 })
 
-// The command is generated shell that no compiler checks. Run it for real.
-describe('remoteSessionMemoryCommand under /bin/sh', () => {
+// The command is generated shell that no compiler checks. Run it for real — which needs a real
+// /bin/sh: execFile('/bin/sh', …) is an absolute POSIX path handed straight to child_process, and
+// win32 node resolves it as a literal executable name rather than searching PATH, so there is no
+// "/bin/sh" to find on Windows. Skipped there rather than failing on that environment gap.
+describe.skipIf(process.platform === 'win32')('remoteSessionMemoryCommand under /bin/sh', () => {
   let dir: string
   // Every temp dir is registered here and removed in afterAll, so a FAILING assertion cannot leak
   // one into tmpdir (an inline rmSync after the expects never runs when an expect throws).

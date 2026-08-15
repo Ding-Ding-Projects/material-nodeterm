@@ -59,7 +59,11 @@ describe('locateRemoteTranscriptCommand', () => {
     expect(locateRemoteTranscriptCommand([], '/w', SID)).toBeNull()
   })
 
-  it('finds the transcript at the exact cwd path', async () => {
+  // Every case below actually runs the generated command through a real /bin/sh (see the file
+  // header). That is an absolute POSIX path handed straight to child_process — win32 node
+  // resolves it as a literal executable name, and there is no "/bin/sh" on Windows — so each is
+  // skipped there rather than failing on an environment gap the command itself doesn't have.
+  it.skipIf(process.platform === 'win32')('finds the transcript at the exact cwd path', async () => {
     const cwd = '/srv/app.v2'
     const p = `${home}/.claude/projects/${encodeTranscriptDir(cwd)}/${SID}.jsonl`
     touch(p)
@@ -67,7 +71,7 @@ describe('locateRemoteTranscriptCommand', () => {
     expect(parseLocatedTranscript(await sh(cmd))).toBe(p)
   })
 
-  it('falls back to the glob when the session lives under a DIFFERENT cwd', async () => {
+  it.skipIf(process.platform === 'win32')('falls back to the glob when the session lives under a DIFFERENT cwd', async () => {
     // The node's cwd and the session's cwd disagree (the user cd'ed) — the exact probe misses.
     const sid = '11111111-1111-4111-8111-111111111111'
     const p = `${home}/.claude/projects/-srv-elsewhere/${sid}.jsonl`
@@ -76,7 +80,7 @@ describe('locateRemoteTranscriptCommand', () => {
     expect(parseLocatedTranscript(await sh(cmd))).toBe(p)
   })
 
-  it('prefers the managed account root over the system one', async () => {
+  it.skipIf(process.platform === 'win32')('prefers the managed account root over the system one', async () => {
     const sid = '22222222-2222-4222-8222-222222222222'
     const accDir = `${home}/.nodeterm/claude-accounts/acc1`
     const cwd = '/srv/shared'
@@ -89,7 +93,7 @@ describe('locateRemoteTranscriptCommand', () => {
 
   // A clean miss must EXIT 0: main reads the path only when `code === 0`, and an ssh call that
   // reports failure for "this session has no transcript" is indistinguishable from a dead master.
-  it('prints nothing and exits 0 when the session is on no root', async () => {
+  it.skipIf(process.platform === 'win32')('prints nothing and exits 0 when the session is on no root', async () => {
     const cmd = locateRemoteTranscriptCommand(
       [`${home}/.nowhere/projects`],
       '/srv/app',
@@ -100,7 +104,7 @@ describe('locateRemoteTranscriptCommand', () => {
     expect(parseLocatedTranscript(stdout)).toBeUndefined()
   })
 
-  it('survives a home directory with a space (quoting, not word splitting)', async () => {
+  it.skipIf(process.platform === 'win32')('survives a home directory with a space (quoting, not word splitting)', async () => {
     const spaced = fs.mkdtempSync(path.join(os.tmpdir(), 'nt space '))
     try {
       const cwd = '/srv/app'

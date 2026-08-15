@@ -56,7 +56,13 @@ function callShim(
   })
 }
 
-describe('canvas-control shim', () => {
+// Every case below invokes the real POSIX shim through `run('/bin/sh', [shim, ...])`. That is an
+// absolute POSIX path handed straight to child_process — win32 node resolves it as a literal
+// executable name rather than searching PATH, and there is no "/bin/sh" on Windows (Git for
+// Windows' sh.exe lives at a drive-letter path, not that one) — so every case here would fail
+// with ENOENT before the shim itself was ever exercised. Only `parseControlBody`, at the bottom
+// of this file, is a pure function and still runs on every platform.
+describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
   beforeAll(() => {
     received = []
   })
@@ -200,7 +206,9 @@ describe('canvas-control shim', () => {
 // The branch every SSH project actually uses. On a remote host there is no loopback port to
 // reach the desktop on — only the reverse-forwarded unix socket — so if this branch is broken
 // the feature is broken on exactly the surface it was built for, and nowhere else.
-describe('canvas-control shim over a unix socket', () => {
+// Also needs the real /bin/sh shim above, AND an AF_UNIX-path http.Server (`server.listen(sock)`
+// with a filesystem path) — neither is available through node's plain win32 http module.
+describe.skipIf(process.platform === 'win32')('canvas-control shim over a unix socket', () => {
   let sock = ''
   let server: import('node:http').Server
   // A holder plus an accessor rather than a bare `let`: clearing it in one test would otherwise
@@ -282,7 +290,8 @@ describe('canvas-control shim over a unix socket', () => {
 // One environment fact, stated once: curl DROPS a header whose value is empty (`-H "X: ${empty}"`
 // sends nothing at all). That is the contract we want — absent and empty are the same `legacy` to
 // the server — so "empty header" below is read as `headers[...] ?? ''`.
-describe('canvas-control shim presents the per-node token', () => {
+// Same /bin/sh + AF_UNIX-socket dependency as above.
+describe.skipIf(process.platform === 'win32')('canvas-control shim presents the per-node token', () => {
   const seen: { path: string; nodeToken: string }[] = []
   let tcp: import('node:http').Server
   let unix: import('node:http').Server
@@ -377,7 +386,9 @@ describe('canvas-control shim presents the per-node token', () => {
 // The shim below is a PASSTHROUGH — it records argv + stdin, then execs the REAL curl — so each
 // case proves the credential left argv AND that the server still received it. Asserting only the
 // server's headers would pass with the leak completely intact.
-describe('canvas-control shim keeps credentials off curl\'s command line', () => {
+// Same /bin/sh + AF_UNIX-socket dependency as above, plus a real `curl` on PATH — none of which
+// this environment has.
+describe.skipIf(process.platform === 'win32')('canvas-control shim keeps credentials off curl\'s command line', () => {
   const seen: { hookToken: string; nodeToken: string }[] = []
   let tcp: import('node:http').Server
   let unix: import('node:http').Server

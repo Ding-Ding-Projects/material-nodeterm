@@ -1,4 +1,5 @@
 import os from 'os'
+import path from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   controlPathFor,
@@ -58,7 +59,10 @@ describe('controlPathFor', () => {
     // Regression: macOS userData is `~/Library/Application Support/<app>` — too long for a unix
     // socket (sun_path 104, minus ssh's ~17-char bind suffix) AND has a space ssh's `-o` rejects.
     const cp = controlPathFor('a-fairly-long-project-id-0123456789')
-    expect(cp.startsWith(`${os.homedir()}/.nodeterm/ssh-cm/`)).toBe(true)
+    // controlPathFor is built with path.join, which is platform-native (win32 joins with `\`),
+    // so the expected prefix has to be built the same way rather than hard-coded with `/` — a
+    // literal forward-slash prefix never matches on Windows even though the function is correct.
+    expect(cp.startsWith(path.join(os.homedir(), '.nodeterm', 'ssh-cm') + path.sep)).toBe(true)
     expect(cp.endsWith('.sock')).toBe(true)
     expect(cp).not.toContain(' ')
     // Must stay well under 104 even after ssh appends its ~17-char temp suffix while binding.

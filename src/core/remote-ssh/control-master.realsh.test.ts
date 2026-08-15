@@ -105,7 +105,14 @@ const PAYLOADS: Record<string, string> = {
   replDollar: 'n1$$'
 }
 
-describe('REAL sh: a payload node id is one literal argument, never command structure', () => {
+// Every test in this file runs the built command line through a REAL /bin/sh
+// (execFileSync('/bin/sh', …)). That is an absolute POSIX path handed straight to
+// child_process — node on win32 resolves it as a literal executable name, and there is no
+// "/bin/sh" on Windows (Git for Windows' sh.exe lives at a drive-letter path, not that one), so
+// every case here would fail with ENOENT before a single payload was ever tested. The security
+// property itself is still proven — by control-master.injection.test.ts's hand-rolled parser —
+// just not against a real shell on this platform.
+describe.skipIf(process.platform === 'win32')('REAL sh: a payload node id is one literal argument, never command structure', () => {
   for (const [name, payload] of Object.entries(PAYLOADS)) {
     it(`${name}: ${JSON.stringify(payload)}`, () => {
       const { argv, markers, extraStdout } = runReal(build(payload))
@@ -125,7 +132,7 @@ describe('REAL sh: a payload node id is one literal argument, never command stru
  * Each uses a node id that passes `isSafeNodeId` — the escape rides a different project.json field
  * — so they are regressions against the splice, not against the id validator.
  */
-describe('REAL sh: the four vectors that survived the first fix', () => {
+describe.skipIf(process.platform === 'win32')('REAL sh: the four vectors that survived the first fix', () => {
   it('A: node.data.agentId carries the escape, node id is legitimate', () => {
     expect(isSafeNodeId('term-mabc-3')).toBe(true)
     const cmd = remoteTmuxPtyArgs(

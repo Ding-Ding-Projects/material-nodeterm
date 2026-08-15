@@ -156,7 +156,11 @@ describe('remoteUsageCommand', () => {
   })
 })
 
-describe('the generated command, run by /bin/sh', () => {
+// execFile('/bin/sh', …) hands node an absolute POSIX path as a literal executable name; win32
+// node resolves it directly rather than searching PATH, and there is no "/bin/sh" on Windows. The
+// pure builders above (remoteUsageCommand, remoteUsageTargets, parseRemoteUsageOutput) still run
+// everywhere; only running the generated shell for real needs skipping here.
+describe.skipIf(process.platform === 'win32')('the generated command, run by /bin/sh', () => {
   it('reads the system account and returns the usage payload', async () => {
     writeCreds(path.join(home, '.claude'), 'tok-system')
     fs.writeFileSync(

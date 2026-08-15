@@ -2,7 +2,7 @@
 // Files are served ONLY if they are on the per-session allowlist (path jail), so the
 // renderer/agent can never read an arbitrary local file. Supports HTTP Range so <video> seeks.
 import { createReadStream, mkdirSync, writeFileSync, promises as fsp } from 'fs'
-import { normalize } from 'path'
+import { join, normalize, sep } from 'path'
 import { app, protocol } from 'electron'
 
 export const MEDIA_SCHEME = 'nt-media'
@@ -52,7 +52,11 @@ export function allowMediaPath(absPath: string): string {
 
 /** The per-session directory holding agent-authored HTML (served under a restrictive CSP). */
 function agentWebDir(): string {
-  return `${app.getPath('userData')}/agent-web`
+  // path.join (not a manual `/` template) — on win32 this must come out backslash-normalized,
+  // the same as `abs` below (resolveMediaPath's `normalize()` output), or the isAgentHtml
+  // startsWith check never matches on Windows and every agent-authored HTML file is served
+  // WITHOUT the restrictive CSP that keeps it from exfiltrating or reading sibling files.
+  return join(app.getPath('userData'), 'agent-web')
 }
 
 // Restrictive CSP for agent-authored HTML: render + inline scripts/styles/media, but NO
@@ -70,7 +74,7 @@ const agentHtmlPaths: string[] = []
 export function writeAgentHtml(html: string): string {
   const d = agentWebDir()
   mkdirSync(d, { recursive: true })
-  const p = `${d}/${Date.now().toString(36)}-${++htmlSeq}.html`
+  const p = join(d, `${Date.now().toString(36)}-${++htmlSeq}.html`)
   writeFileSync(p, html, { encoding: 'utf8', mode: 0o600 })
   allowMediaPath(p)
   agentHtmlPaths.push(p)
@@ -88,7 +92,7 @@ async function pruneStaleAgentHtml(): Promise<void> {
   const d = agentWebDir()
   try {
     for (const f of await fsp.readdir(d)) {
-      if (f.endsWith('.html')) await fsp.rm(`${d}/${f}`, { force: true })
+      if (f.endsWith('.html')) await fsp.rm(join(d, f), { force: true })
     }
   } catch {
     // dir may not exist yet
@@ -128,7 +132,7 @@ export function initMediaProtocol(): void {
       return new Response('Not found', { status: 404 })
     }
     // Agent-authored HTML gets a restrictive CSP; video/image files get none (unchanged).
-    const isAgentHtml = abs.startsWith(agentWebDir() + '/')
+    const isAgentHtml = abs.startsWith(agentWebDir() + sep)
     const range = req.headers.get('range')
     const m = range && /bytes=(\d*)-(\d*)/.exec(range)
     if (m) {
