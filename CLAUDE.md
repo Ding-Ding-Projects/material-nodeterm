@@ -234,7 +234,10 @@ leaves in `sessionExists`/`captureSnapshot`: relay and mobile attach use them be
 `attachDetached`, so a tmux-only implementation reports a live Windows session as fresh and blank.
 The host also keeps an exited generation in its session map until that output tail, exit broadcast
 and disposal finish. Protocol events carry only the session name, so reusing it earlier lets a
-delayed old-generation exit arrive after the same socket has attached to its replacement.
+delayed old-generation exit arrive after the same socket has attached to its replacement. The
+retirement wait and replacement claim are serialized per name: two attach requests waking from one
+`ending` promise must not both create. Grace-exit cancellation happens inside that claim *after*
+the wait, because retirement can schedule a fresh empty-host timer before the waiter resumes.
 
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
