@@ -1,6 +1,7 @@
 import { cn } from '@renderer/ui/cn'
 import { Input } from '@renderer/ui/Input'
 import { visibleSettingsGroups, type SettingsSectionId } from './nav'
+import { useI18n } from '@renderer/lib/i18n'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 const GROUPS = visibleSettingsGroups(isMac)
@@ -21,6 +22,10 @@ export function SettingsSidebar({
   onClose: () => void
 }): React.JSX.Element {
   const hasQuery = query.trim() !== ''
+  // Sidebar rows are compact (256px column, up to ~22 of them) — bilingual mode joins primary +
+  // secondary on ONE line here (`ts`) rather than stacking a second row per item, which would
+  // crowd badly. Contrast with LanguageSection's own body copy, which has room to stack.
+  const { ts } = useI18n()
   return (
     <aside className="flex w-[256px] shrink-0 flex-col border-r border-border bg-panel">
       <div
@@ -30,14 +35,14 @@ export function SettingsSidebar({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Back to app"
+          aria-label={ts('settings.nav.backToApp', 'Back to app')}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           className="flex items-center gap-1.5 rounded-md border-0 bg-transparent px-1.5 py-1 text-sm font-medium text-muted outline-none transition-colors hover:bg-fill-weak hover:text-text"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M8.5 3.5 5 7l3.5 3.5" />
           </svg>
-          Back to app
+          {ts('settings.nav.backToApp', 'Back to app')}
         </button>
       </div>
 
@@ -61,8 +66,8 @@ export function SettingsSidebar({
             className="h-8 w-full pl-8"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search settings"
-            aria-label="Search settings"
+            placeholder={ts('settings.nav.search', 'Search settings')}
+            aria-label={ts('settings.nav.search', 'Search settings')}
           />
         </div>
       </div>
@@ -71,11 +76,12 @@ export function SettingsSidebar({
         {GROUPS.map((group) => (
           <div key={group.id} className="space-y-0.5">
             <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-2">
-              {group.title}
+              {ts(`settings.group.${group.id}`, group.title)}
             </p>
             {group.sections.map((s) => {
               const isActive = activeSectionId === s.id
               const dimmed = hasQuery && !matchesQuery(query, { title: s.title })
+              const sectionTitle = ts(`settings.section.${s.id}`, s.title)
               return (
                 <button
                   key={s.id}
@@ -98,7 +104,7 @@ export function SettingsSidebar({
                   >
                     <SectionIcon id={s.id} />
                   </span>
-                  <span className="truncate">{s.title}</span>
+                  <span className="truncate">{sectionTitle}</span>
                 </button>
               )
             })}

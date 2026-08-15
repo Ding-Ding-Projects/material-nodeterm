@@ -26,6 +26,7 @@ import { SshSection } from './sections/SshSection'
 import { UpdatesSection } from './sections/UpdatesSection'
 import { PrivacySection } from './sections/PrivacySection'
 import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
+import { LanguageSection } from './sections/LanguageSection'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -77,6 +78,7 @@ export function SettingsPage({
             {isMac && <NotchSection isActive={active === 'notch'} />}
             <PhoneSection isActive={active === 'phone'} />
             <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />
+            <LanguageSection isActive={active === 'language'} />
             <AgentsSection isActive={active === 'agents'} />
             <UsageSection isActive={active === 'usage'} />
             <AccountsSection isActive={active === 'accounts'} />

@@ -21,6 +21,7 @@ export type SettingsSectionId =
   | 'ssh'
   | 'updates'
   | 'privacy'
+  | 'language'
 
 export interface SettingsSectionRef {
   id: SettingsSectionId
@@ -67,7 +68,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'appearance', title: 'Appearance' },
       { id: 'notch', title: 'Notch', macOnly: true },
       { id: 'notifications', title: 'Notifications' },
-      { id: 'speech', title: 'Speech' }
+      { id: 'speech', title: 'Speech' },
+      { id: 'language', title: 'Language' }
     ]
   },
   {
