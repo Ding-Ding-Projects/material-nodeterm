@@ -260,7 +260,10 @@ npm run server:dev # build + run the browser Server Edition (needs Node 22 + tmu
   **mobile companion** (a separate SwiftUI repo) all ride the same core + transport seams.
 
 See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, and the design docs
-under [`docs/`](./docs) for deeper notes.
+under [`docs/`](./docs) for deeper notes — including
+[non-blocking notifications](./docs/notifications.md),
+the [command palette](./docs/command-palette.md) (`⌘K` or `Ctrl+Shift+F`), and
+[destructive-action confirmation](./docs/destructive-confirmation.md).
 
 ## 🤝 Contributing
 

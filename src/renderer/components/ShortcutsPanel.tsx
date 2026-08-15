@@ -25,6 +25,7 @@ function buildSections(dictationKeys: string[], dictationLabel: string): { title
       title: 'General',
       rows: [
         { keys: ['⌘', 'K'], label: 'Command palette' },
+        { keys: ['⌘', '⇧', 'F'], label: 'Command palette (alternate)' },
         { keys: ['⌘', ','], label: 'Settings' },
         { keys: ['⌘', '/'], label: 'This shortcuts panel' },
         // Desktop only: browsers own Cmd/Ctrl+1-9 for tab switching and a page cannot take it
@@ -41,6 +42,7 @@ function buildSections(dictationKeys: string[], dictationLabel: string): { title
         { keys: ['⌘', 'T'], label: 'New terminal' },
         { keys: ['⌘', '⇧', 'C'], label: 'New Claude Code' },
         { keys: ['⌘', 'W'], label: 'Close selected node' },
+        { keys: ['Delete'], label: 'Delete selected node(s) — asks first' },
         { keys: ['Right-click'], label: 'Actions menu (empty space or node)' },
         { keys: ['Left-drag'], label: 'Box-select (touch to select)' },
         { keys: ['Middle / Right-drag'], label: 'Pan the canvas' },

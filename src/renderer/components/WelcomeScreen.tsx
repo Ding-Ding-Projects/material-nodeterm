@@ -10,8 +10,12 @@ interface WelcomeScreenProps {
   closedProjects?: { id: string; name: string; cwd?: string }[]
   /** Reopen a closed project (restores its nodes + sessions). */
   onReopen?: (id: string) => void
-  /** Permanently delete a closed project (ends its tmux sessions). */
-  onDeleteClosed?: (id: string) => void
+  /**
+   * Request permanent deletion of a closed project (ends its tmux sessions — irreversible).
+   * The button element is handed along so the caller can anchor a destructive-confirmation
+   * gate beside it rather than deleting on a single click.
+   */
+  onDeleteClosed?: (id: string, name: string, anchorEl: HTMLElement) => void
   /**
    * When provided, the screen is dismissable (opened on demand via "+", over existing projects)
    * — adds a close button, Escape, and click-outside. Omitted for the permanent no-projects screen.
@@ -154,10 +158,10 @@ export function WelcomeScreen({
                   <button
                     className="welcome__recent-del"
                     title="Delete permanently (ends its sessions)"
-                    aria-label="Delete permanently"
+                    aria-label={`Delete “${p.name}” permanently`}
                     onClick={(e) => {
                       e.stopPropagation()
-                      onDeleteClosed(p.id)
+                      onDeleteClosed(p.id, p.name, e.currentTarget)
                     }}
                   >
                     ×

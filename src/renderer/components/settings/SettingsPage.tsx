@@ -31,15 +31,23 @@ const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 export function SettingsPage({
   onClose,
-  initialSection
+  initialSection,
+  initialQuery
 }: {
   onClose: () => void
   /** Section to open on; lets callers deep-link (e.g. "Add SSH server…" → the SSH section). */
   initialSection?: SettingsSectionId
+  /**
+   * Pre-fills the sidebar search so the matching row(s) are the only ones left visible — the
+   * command palette's "Open in Settings" teleport for a specific setting uses this (see
+   * docs/command-palette.md). Read once on mount; this component is only ever mounted while
+   * open, so a fresh open always gets a fresh seed.
+   */
+  initialQuery?: string
 }): React.JSX.Element {
   const hydrate = useEntitlement((s) => s.hydrate)
   const [active, setActive] = useState<SettingsSectionId>(initialSection ?? FIRST_SECTION_ID)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery ?? '')
 
   useEffect(() => {
     void hydrate()

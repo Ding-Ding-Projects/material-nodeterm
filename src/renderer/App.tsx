@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { Canvas } from './canvas/Canvas'
 import { PromptDialogHost } from './components/promptDialog'
+import { NotificationToasts } from './components/NotificationToasts'
 import { SessionProvider } from './session/session'
 import { localSession } from './session/localSession'
 import { useSettings } from './state/settings'
@@ -63,6 +64,9 @@ export default function App() {
         <Canvas />
         {/* In-app window.prompt replacement (Electron has no prompt); driven by promptDialog(). */}
         <PromptDialogHost />
+        {/* Non-blocking corner-anchored toast stack — mounted once, app-wide. See
+            docs/notifications.md. */}
+        <NotificationToasts />
       </ReactFlowProvider>
     </SessionProvider>
   )
