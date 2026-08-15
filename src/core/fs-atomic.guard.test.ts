@@ -1,7 +1,8 @@
-// No store may publish a file with a bare `fs.rename`.
+// Two rules, both about temp-then-rename, both invisible for the life of the project:
+//   1. no store publishes with a bare rename (any spelling) — the Windows data-loss bug;
+//   2. no store builds a temp name two writers can share — the corruption bug beside it.
 //
-// This exists because the defect it guards was invisible for the life of the project. Twenty-three
-// files wrote temp-then-rename, which is correct on POSIX and silently lossy on Windows: the rename
+// Twenty-eight files wrote temp-then-rename, which is correct on POSIX and silently lossy on Windows: the rename
 // fails with EPERM whenever anything has the destination open, and the things that open a file we
 // just wrote are Defender, the search indexer, OneDrive, and our own concurrent writers. See
 // `fs-atomic.ts` for the full account.
@@ -138,5 +139,49 @@ describe('every store publishes through renameAtomic', () => {
     // Must not be satisfied by a longer member that merely contains the name.
     expect(importsFromFs("import { renameAtomic } from './fs-atomic'", 'rename')).toBe(false)
     expect(importsFromFs("import { renameSync } from 'fs'", 'rename')).toBe(false)
+  })
+})
+
+describe('no store publishes through a shared temp name', () => {
+  const files = ROOTS.flatMap((r) => sources(r))
+
+  it('every temp path carries a pid or a counter', () => {
+    // The second bug at the same sites, independent of the platform question: a FIXED temp name
+    // means two writers share one path, so one rename publishes the other's half-written bytes —
+    // or moves the temp out from under it, and the loser fails with a confusing ENOENT.
+    //
+    // Five sites had it, and each had a reason it was thought safe: "only one instance exists",
+    // "the write queue serializes this". Every one of those was true within one PROCESS and
+    // silent about a second. The Server Edition takes a --data-dir, so two can be aimed at one
+    // directory; scrollback-store had a counter and no pid, which is that gap exactly.
+    //
+    // Deliberately NOT "must call tempNameFor": several stores build the same pid+counter name
+    // inline and are perfectly correct. The rule is the property, not the helper.
+    const offenders: string[] = []
+    for (const f of files) {
+      const text = readFileSync(f, 'utf8')
+      const rel = f.slice(f.indexOf('src') + 4)
+      if (rel.endsWith('core\fs-atomic.ts')) continue
+      for (const m of text.matchAll(/^\s*(?:const|let)\s+\w+\s*=\s*`([^`]*\.tmp)`/gm)) {
+        if (/\$\{[^}]*\b(pid|Seq|seq|randomUUID|uuid)\b|Date\.now/.test(m[1])) continue
+        offenders.push(`${rel}  \`${m[1]}\``)
+      }
+    }
+    expect(
+      offenders,
+      'these build a temp path two writers can share — use tempNameFor() from core/fs-atomic.ts, ' +
+        'and remember a unique name must be cleaned up on failure because it never self-heals ' +
+        'the way a fixed one did'
+    ).toEqual([])
+  })
+
+  it('the needle tells a shared name from a safe one', () => {
+    const shared = /^\s*(?:const|let)\s+\w+\s*=\s*`([^`]*\.tmp)`/m
+    const safe = (n: string): boolean =>
+      /\$\{[^}]*\b(pid|Seq|seq|randomUUID|uuid)\b|Date\.now/.test(n)
+    expect(shared.test('  const tmp = `${this.path}.tmp`')).toBe(true)
+    expect(safe('${this.path}.tmp')).toBe(false)
+    expect(safe('${file}.${process.pid}.${++writeSeq}.tmp')).toBe(true)
+    expect(safe('${f}.${Date.now()}.tmp')).toBe(true)
   })
 })

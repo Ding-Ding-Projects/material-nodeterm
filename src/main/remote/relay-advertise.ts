@@ -13,7 +13,7 @@
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
-import { renameAtomic } from '../../core/fs-atomic'
+import { renameAtomic, tempNameFor } from '../../core/fs-atomic'
 
 const FILE = path.join(os.homedir(), '.nodeterm', 'relay.json')
 
@@ -28,13 +28,18 @@ export interface RelayAdvertisement {
 /** Best-effort atomic write — a failed advertisement only means late adoption is unavailable.
  *  The rename retries a transient Windows sharing-violation error — see src/core/fs-atomic.ts. */
 export async function writeRelayAdvertisement(ad: RelayAdvertisement): Promise<void> {
+  // Unique per call. This is invoked fire-and-forget with nothing queueing it, so two
+  // advertisements in flight shared one temp path and could publish each other's bytes. Declared
+  // outside the try so the existing catch can remove it — a unique name never self-heals the way
+  // the fixed one did, where the next write simply overwrote the litter.
+  const tmp = tempNameFor(FILE)
   try {
     await fs.mkdir(path.dirname(FILE), { recursive: true, mode: 0o700 })
-    const tmp = `${FILE}.tmp`
     await fs.writeFile(tmp, JSON.stringify(ad, null, 2) + '\n', { mode: 0o600 })
     await renameAtomic(tmp, FILE)
   } catch {
     // Advertisement is opportunistic; pairing-time provisioning still works.
+    await fs.rm(tmp, { force: true }).catch(() => {})
   }
 }
 

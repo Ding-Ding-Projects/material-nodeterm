@@ -4,7 +4,7 @@ import path from 'path'
 import { app, ipcMain } from 'electron'
 import { IPC } from '../shared/ipc'
 import { parseSshConfig, type ParsedSshHost, type SshServer } from '../shared/ssh'
-import { renameAtomic } from '../core/fs-atomic'
+import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 
 /**
  * Stores saved SSH servers in ssh-servers.json. Keeps a synchronous cache so reads are
@@ -50,14 +50,22 @@ export class SshStore {
     // Snapshot the cache now; chain after any in-flight write so the shared temp
     // file is never written/renamed by two flushes at once.
     const snapshot = JSON.stringify(this.cache, null, 2)
-    const tmp = `${this.path}.tmp`
+    // Unique per call. `writeChain` serializes writes within this instance, but not across a
+    // second process on the same file — and this store's own test constructs two instances
+    // against one path, which is exactly the race a shared name loses.
+    const tmp = tempNameFor(this.path)
     this.writeChain = this.writeChain
       .catch(() => {})
       .then(async () => {
         // 0o600: this holds the user's SSH host inventory (hosts/users/identity-file paths) —
         // owner read/write only, not world-readable.
-        await fs.writeFile(tmp, snapshot, { encoding: 'utf-8', mode: 0o600 })
-        await renameAtomic(tmp, this.path)
+        try {
+          await fs.writeFile(tmp, snapshot, { encoding: 'utf-8', mode: 0o600 })
+          await renameAtomic(tmp, this.path)
+        } catch (e) {
+          await fs.rm(tmp, { force: true }).catch(() => {})
+          throw e
+        }
       })
     return this.writeChain
   }

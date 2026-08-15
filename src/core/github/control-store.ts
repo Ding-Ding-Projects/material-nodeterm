@@ -6,7 +6,7 @@ import type {
   GitHubProjectApproval
 } from '../../shared/github-issues'
 import { parseGitHubRepository } from './config'
-import { renameAtomic } from '../fs-atomic'
+import { renameAtomic, tempNameFor } from '../fs-atomic'
 
 const FILE_NAME = 'github-issues-control.json'
 const EMPTY_STATE: GitHubControlState = {
@@ -162,10 +162,23 @@ export class GitHubControlStore {
     // workspace-store's writeAtomic) — otherwise two writers share this one temp and one rename
     // publishes the other's half-written bytes. The rename itself retries briefly on Windows if the
     // destination is momentarily held open (see fs-atomic.ts).
-    const temporary = `${this.filePath}.tmp`
-    await fs.writeFile(temporary, JSON.stringify(state), { encoding: 'utf-8', mode: 0o600 })
-    await fs.chmod(temporary, 0o600)
-    await renameAtomic(temporary, this.filePath)
-    await fs.chmod(this.filePath, 0o600)
+    // Unique per call rather than a fixed `<file>.tmp`. The old comment reasoned that one store
+    // instance per data dir plus the write queue made a shared name safe — true within ONE
+    // process, and silent about a second one. The Server Edition takes a --data-dir, so two
+    // processes can be aimed at this directory, and this file holds a GitHub token.
+    const temporary = tempNameFor(this.filePath)
+    try {
+      await fs.writeFile(temporary, JSON.stringify(state), { encoding: 'utf-8', mode: 0o600 })
+      // chmod the TEMP before publishing: `mode` on writeFile is masked by umask, and this must
+      // already be 0600 at the instant it becomes visible under its real name.
+      await fs.chmod(temporary, 0o600)
+      await renameAtomic(temporary, this.filePath)
+      await fs.chmod(this.filePath, 0o600)
+    } catch (e) {
+      // A unique name never self-heals the way the fixed one did, so a failed write removes its
+      // own temp — which here means not leaving a readable token behind.
+      await fs.rm(temporary, { force: true }).catch(() => {})
+      throw e
+    }
   }
 }

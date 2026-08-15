@@ -130,6 +130,29 @@ const SLEEP_SLOT = new Int32Array(new SharedArrayBuffer(4))
 let writeSeq = 0
 
 /**
+ * A temp path for publishing over `target`, unique per call.
+ *
+ * The second bug that lives at every temp-then-rename site, independent of the platform question
+ * above: a **fixed** name (always `<file>.tmp`). Two writers then share one temp path, so one
+ * writer's rename publishes the other's half-written bytes — or moves the temp out from under it,
+ * and the loser fails with a confusing `ENOENT` that says nothing about what actually happened.
+ *
+ * Both halves of the name matter and for different reasons. The counter separates writers inside
+ * one process. The pid separates PROCESSES, which is the case that looks impossible until it is
+ * not: the Server Edition takes a `--data-dir`, so two servers can be pointed at one directory,
+ * and a desktop app can share it too. Several stores here reasoned "only one instance exists" and
+ * were right about their own process and silent about the other one. `scrollback-store` had the
+ * counter and no pid, which is exactly that gap.
+ *
+ * The cost of uniqueness is that a temp never self-heals the way a fixed one did, where the next
+ * save simply overwrote the litter. Every caller therefore owes its own cleanup on failure —
+ * `writeFileAtomic` does it for you, and a site that builds its own sequence must do it by hand.
+ */
+export function tempNameFor(target: string): string {
+  return `${target}.${process.pid}.${++writeSeq}.tmp`
+}
+
+/**
  * Write `data` to `target` atomically: unique temp file, then a retrying rename.
  *
  * The temp name is unique per call, which matters wherever more than one writer can reach a store

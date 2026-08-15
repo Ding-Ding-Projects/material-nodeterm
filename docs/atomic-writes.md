@@ -81,9 +81,23 @@ Independent of the platform question: a **fixed** temp name (always `<file>.tmp`
 concurrent writers. One writer's rename then publishes the other's half-written bytes, or moves the
 temp out from under it so the loser fails with a confusing `ENOENT`.
 
-`writeFileAtomic` generates a per-call unique name (`<target>.<pid>.<seq>.tmp`) — the counter makes
-it unique within the process, the pid across processes. A store with more than one un-queued writer
-needs this as well as the retry; they fix different things.
+`writeFileAtomic` and `tempNameFor` generate a per-call unique name
+(`<target>.<pid>.<seq>.tmp`). Both halves matter and for different reasons: the counter separates
+writers inside one process, the pid separates PROCESSES.
+
+Five sites had a shared name, and each had a reason it was thought safe — "only one instance
+exists", "the write queue serializes this". Every one of those was true within one process and
+silent about a second, and a second is not hypothetical: the Server Edition takes a `--data-dir`,
+so two servers can be aimed at one directory and a desktop app can share it. `scrollback-store`
+had a counter and no pid, which is that gap precisely.
+
+**A unique name owes cleanup.** A fixed name self-healed — the next save simply overwrote the
+litter. A unique one does not, so every caller must remove its own temp on failure.
+`writeFileAtomic` does that for you; three of the five sites built their own sequence and had no
+cleanup at all, so it was added with the rename.
+
+The guard checks the PROPERTY, not the helper: several stores build the same pid+counter name
+inline and are perfectly correct.
 
 ## The rule, and how it is enforced
 
