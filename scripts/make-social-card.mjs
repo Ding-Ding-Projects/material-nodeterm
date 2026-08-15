@@ -5,12 +5,19 @@
 //
 // Two sizes, because the two consumers want different aspect ratios:
 //
-//   site/assets/social-card.png     1200x630  — the page's og:image, the widely-safe OG size
-//   docs/assets/social-preview.png  1280x640  — GitHub's repository Social preview upload
+//   ./social-preview.png            1280x640  — GitHub's repository Social preview upload
+//   ./social-card.png               1200x630  — the master og:image, the widely-safe OG size
+//   site/assets/social-card.png     1200x630  — a byte-identical copy, because Pages serves site/
 //
-// The two live in different trees on purpose: the OG card must be SERVED, and the Pages workflow
-// publishes `site/` alone, so a card sitting in docs/ would be a meta tag pointing at a 404. The
-// GitHub preview is uploaded by hand and never served, so it stays with the other docs assets.
+// BOTH MASTERS SIT IN THE REPOSITORY ROOT, beside the README. The GitHub upload cannot be
+// scripted (see the note at the bottom), so the last step is always a person opening a folder
+// and dragging an image in — and a path four directories deep turns that into a hunt, which is a
+// step that quietly does not happen.
+//
+// The third file exists only because the Pages workflow publishes `site/` alone, so a meta tag
+// pointing at a root file would 404. It is written from the SAME buffer in the same run, and the
+// site contract guard asserts the two are byte-identical — two copies of a picture are two
+// pictures that will disagree eventually unless something checks.
 //
 // WHY THIS IS GENERATED FROM A REAL CAPTURE. The rule is that the graphic must show the actual
 // product, and the failure it exists to prevent is a card that could belong to any project: a
@@ -23,7 +30,7 @@
 // you do, remember the crawler-cache rule: unfurlers hold an image URL for a long time, so a
 // MEANINGFUL change wants a new filename, not an overwrite nobody downstream will notice.
 
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import sharp from 'sharp'
@@ -31,7 +38,6 @@ import sharp from 'sharp'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SHOT = join(ROOT, 'docs/assets/shots/app-04-canvas.png')
 const SITE_ASSETS = join(ROOT, 'site/assets')
-const DOCS_ASSETS = join(ROOT, 'docs/assets')
 
 /** The app's own dark chrome, so the card reads as the product rather than as marketing. */
 const BG_TOP = '#17171c'
@@ -133,19 +139,21 @@ if (!existsSync(SHOT)) {
 }
 
 mkdirSync(SITE_ASSETS, { recursive: true })
-mkdirSync(DOCS_ASSETS, { recursive: true })
 
-const targets = [
-  [SITE_ASSETS, 'site/assets', 'social-card.png', 1200, 630, 'og:image, served by Pages'],
-  [DOCS_ASSETS, 'docs/assets', 'social-preview.png', 1280, 640, 'GitHub Social preview (manual upload)']
-]
+// The GitHub preview: root only, never served.
+const preview = await card(1280, 640)
+await sharp(preview).toFile(join(ROOT, 'social-preview.png'))
+console.log(`✓ ./social-preview.png       1280x640  ${(preview.length / 1024).toFixed(0)} KB  — GitHub Social preview (upload by hand)`)
 
-for (const [dir, label, name, w, h, why] of targets) {
-  const buf = await card(w, h)
-  await sharp(buf).toFile(join(dir, name))
-  console.log(`✓ ${label}/${name}  ${w}x${h}  ${(buf.length / 1024).toFixed(0)} KB  — ${why}`)
-}
+// The OG card: written once, then placed twice from the SAME buffer — root master and served
+// copy. Writing the identical bytes rather than re-rendering is what makes "byte-identical" a
+// fact instead of a hope; two renders of the same SVG are not guaranteed to match byte for byte.
+const cardBuf = await card(1200, 630)
+await sharp(cardBuf).toFile(join(ROOT, 'social-card.png'))
+console.log(`✓ ./social-card.png          1200x630  ${(cardBuf.length / 1024).toFixed(0)} KB  — og:image master`)
+writeFileSync(join(SITE_ASSETS, 'social-card.png'), readFileSync(join(ROOT, 'social-card.png')))
+console.log('✓ site/assets/social-card.png          byte-identical copy — Pages publishes site/ only')
 
-console.log('\nThe page tags point at social-card.png. social-preview.png must be uploaded by hand:')
-console.log('  GitHub is the only consumer that cannot be scripted — its social-preview upload is')
-console.log('  not in the public REST API, so `gh` cannot set it. Settings -> General -> Social preview.')
+console.log('\nOne step left, and it is the one that cannot be scripted:')
+console.log('  GitHub -> Settings -> General -> Social preview -> upload ./social-preview.png')
+console.log('  (that upload is not in the public REST API, so gh cannot do it)')

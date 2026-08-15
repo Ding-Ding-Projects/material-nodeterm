@@ -569,10 +569,33 @@ if (cdnHits.length > 0) {
     fail(`Shared-link embed: og:image points at "${img}", which is not a file under site/ — the Pages workflow publishes site/ only, so this would 404`)
   }
 
-  // And the GitHub repository social preview, which is a manual upload but whose ASSET must be
-  // committed so it is versioned and reviewable rather than living only in a settings page.
-  requireFileExists('docs/assets/social-preview.png', 'Shared-link embed')
+  // The masters live in the REPOSITORY ROOT. GitHub's social-preview upload cannot be scripted,
+  // so the last step is always a person opening a folder and dragging an image in — and a path
+  // four directories deep turns that into a hunt, which is a step that quietly does not happen.
+  requireFileExists('social-preview.png', 'Shared-link embed')
+  requireFileExists('social-card.png', 'Shared-link embed')
   requireFileExists('scripts/make-social-card.mjs', 'Shared-link embed')
+
+  // The served copy exists only because Pages publishes `site/` alone, and two copies of a
+  // picture are two pictures that will disagree eventually. One generator writes both from the
+  // same buffer; this is the check that keeps that true.
+  checkedCount += 1
+  const master = join(REPO_ROOT, 'social-card.png')
+  const served = join(REPO_ROOT, 'site/assets/social-card.png')
+  if (existsSync(master) && existsSync(served)) {
+    const a = readFileSync(master)
+    const b = readFileSync(served)
+    if (a.equals(b)) {
+      pass('Shared-link embed: the served og:image is byte-identical to the root master')
+    } else {
+      fail(
+        'Shared-link embed: site/assets/social-card.png has drifted from the root social-card.png — ' +
+          're-run `npm run make-social-card`, which writes both from one buffer'
+      )
+    }
+  } else {
+    fail('Shared-link embed: expected both social-card.png (root master) and site/assets/social-card.png (served copy)')
+  }
 }
 
 // ---------------------------------------------------------------------
