@@ -26,6 +26,7 @@
     "count-lines": "node scripts/count-lines.mjs",
     "dist": "npm run make-icon && electron-vite build && electron-builder --mac --arm64 -c.mac.identity=null -c.mac.notarize=false",
     "dist:linux": "npm run make-icon && electron-vite build && electron-builder --linux",
+    "dist:win": "npm run make-icon && electron-vite build && electron-builder --win squirrel",
     "release": "npm run make-icon && electron-vite build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper"
   },
@@ -50,6 +51,23 @@
         "to": "icon.png"
       }
     ],
+    "win": {
+      "target": [
+        {
+          "target": "squirrel",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "forceCodeSigning": false,
+      "signAndEditExecutable": false,
+      "signExecutable": false
+    },
+    "squirrelWindows": {
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
     "linux": {
       "target": [
         {

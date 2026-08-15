@@ -258,6 +258,25 @@ npm run server:dev  # build + run the browser Server Edition (needs Node 22 + tm
 npm run count-lines  # print the project's committed line-count table
 ```
 
+### One-click build scripts
+
+For a checkout with nothing installed, three scripts at the repository root take it all the way
+to a running app or an installer, installing every dependency they need along the way (never
+requiring administrator/sudo rights when a user-scoped install exists):
+
+| Script | What it does |
+| --- | --- |
+| `download-dependencies.bat` / `.sh` | Installs Node.js (if missing) and runs `npm ci` / `npm install`. |
+| `build.bat` / `.sh` | Runs the script above, builds `out/`, then offers to launch the app. |
+| `build-installer.bat` / `.sh` | Runs the script above, then packages and verifies the platform installer (Squirrel.Windows on Windows, dmg+zip on macOS, AppImage+deb on Linux) — **unsigned**, since code signing is permanently out of scope for this project. |
+
+All three accept `/s` on Windows or `-s`/`--silent` on macOS/Linux (also `SILENT=1` in the
+environment) for a fully non-interactive run that exits non-zero on the first real failure.
+**Always invoke the `.bat` files by absolute path** — see `docs/building.md` for why a relative
+invocation can fail on a hardened Windows machine even though the file exists.
+
+Full contract, exact flags, and every failure message: **[`docs/building.md`](docs/building.md)**.
+
 <details>
 <summary><strong>⌨️ Keyboard shortcuts</strong></summary>
 
