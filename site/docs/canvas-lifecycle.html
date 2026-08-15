@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Canvas &amp; node lifecycle — nodeterm docs</title>
+    <meta name="description" content="The canvas is a pan/zoom React Flow surface. Nodes are the single live source of truth for what exists — there is no separate store to fall out of sync with it." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Canvas</p>
+      <h1>Canvas &amp; node lifecycle</h1>
+      <p>The canvas is a pan/zoom React Flow surface. Nodes are the single live source of truth for what exists — there is no separate store to fall out of sync with it.</p>
+
+      <h2>Behaviour</h2>
+      <p>Unmounting a terminal node (a project switch, most commonly) doesn't tear it down immediately — it's parked: the xterm instance and its PTY client stay alive, just detached from the DOM, so remounting shortly afterward is instant and exact. Only after a park window elapses does the real teardown happen, detaching the PTY client while the underlying tmux session keeps running. A node that stays fully offscreen for long enough (configurable, default on) is released in place: its renderer is torn down but the node stays on the canvas as a plate, reviving the moment it's approached again.</p>
+
+      <h2>Configuration</h2>
+      <p>The offscreen-release timer, terminal GPU rendering mode, and default node size are all in Settings.</p>
+
+      <h2>Failure modes</h2>
+      <p>A memory-reclaiming action that kills a PTY client is only free when tmux is genuinely underneath it — on the plain-shell fallback, that PTY <em>is</em> the shell, so the same call would kill whatever process is running inside it. Every lever that reclaims terminal memory checks whether the session actually has live work in progress before it acts.</p>
+
+      <h2>Security considerations</h2>
+      <p>Not applicable beyond what's already covered under terminal sessions and node kinds — the canvas itself holds no secrets of its own.</p>
+
+      <h2>Verification</h2>
+      <p>Park/release/revive timing is covered by dedicated tests asserting the two invariants that matter most: the visibility observer must survive the exact re-render that would otherwise kill it, and the "protect live work" gate must never guess a session is safe to kill when it doesn't actually know.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./terminal-sessions.html">Terminal sessions &amp; continuity</a></li>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./projects-and-tabs.html">Projects &amp; tabs</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

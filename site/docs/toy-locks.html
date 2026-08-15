@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Toy locks — nodeterm docs</title>
+    <meta name="description" content="Lock any of this site's own panels behind a password — just for fun, never for security. Each lock has its own independent credential; there is no master password." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">This site</p>
+      <h1>Toy locks</h1>
+      <p>Lock any of this site's own panels behind a password — just for fun, never for security. Each lock has its own independent credential; there is no master password.</p>
+
+      <h2>Behaviour</h2>
+      <p>Two of this site's own panels — Personal vocabulary and Narrator — are wired as real lockable surfaces, demonstrating the mechanism concretely rather than as a list that only manages itself. A locked, not-yet-unlocked surface stays honest in search: it's still reachable, and opening it shows a plain unlock prompt rather than doing nothing or pretending the surface doesn't exist.</p>
+
+      <h2>Configuration</h2>
+      <p>Locks are tracked as a real, enumerable, individually removable list with its own search — multi-select several at once to re-lock or remove them in bulk.</p>
+
+      <h2>Failure modes</h2>
+      <p>Forgetting a lock's password is recovered the same way as School mode's PIN: clearing this site's browser storage removes every lock along with everything else — stated directly on every unlock prompt.</p>
+
+      <h2>Security considerations</h2>
+      <p>This is explicitly not a security boundary and never claims to be — it does not protect, secure, or encrypt anything, at any funny level. Password verification uses <code>crypto.subtle</code> against a per-lock stored hash, never a stored plaintext password.</p>
+
+      <h2>Verification</h2>
+      <p>Unlocking a session is intentionally not persisted — a page reload re-locks everything, which is the honest behaviour for a toy lock with no real session concept.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./school-mode.html">School mode</a></li>
+        <li><a href="./personal-vocabulary.html">Personal vocabulary</a></li>
+        <li><a href="./narrator.html">Narrator</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>School mode — nodeterm docs</title>
+    <meta name="description" content="A user-experience lock, not a security boundary. Turning it on forces English and makes the Cantonese, bilingual, funny-level, and dim-sum-surprise controls behave as if they were never installed at all." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">This site</p>
+      <h1>School mode</h1>
+      <p>A user-experience lock, not a security boundary. Turning it on forces English and makes the Cantonese, bilingual, funny-level, and dim-sum-surprise controls behave as if they were never installed at all.</p>
+
+      <h2>Behaviour</h2>
+      <p>While on, the language-mode radios, both funny-level sliders, and the dim-sum surprise are hidden entirely rather than merely disabled — this site's other feature modules check School mode's state on every render and simply don't build that part of their UI when it's active. Turning School mode off requires a PIN, verified against a locally stored hash; the PIN itself is never stored anywhere.</p>
+        <p>It's user-renamable. After a rename, the shipped name "School mode" is never shown again anywhere on the site — every surface reads the current, live display name rather than a cached copy of the original.</p>
+
+      <h2>Configuration</h2>
+      <p>Set a PIN before turning School mode on for the first time — there's no way to turn it back off without one, aside from the recovery route below.</p>
+
+      <h2>Failure modes</h2>
+      <p>Forgotten the PIN? Clearing this site's browser storage (your browser's "clear site data" for this page) resets School mode along with every other setting on this page — that route is stated directly on the control itself, every time it's shown.</p>
+
+      <h2>Security considerations</h2>
+      <p>This is explicitly <strong>not</strong> security. It never claims to protect, secure, or encrypt anything, at any funny level — it's a self-imposed speed bump, exactly like a parental-control toggle that the same person who set it can always remove.</p>
+
+      <h2>Verification</h2>
+      <p>The PIN is checked with <code>crypto.subtle</code> against a stored hash, never against a stored plaintext PIN — inspectable directly in <code>site/app/shared/school-state.js</code>.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./language-modes.html">Language modes, funny levels &amp; emoji</a></li>
+        <li><a href="./toy-locks.html">Toy locks</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

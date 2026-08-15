@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Windows support — nodeterm docs</title>
+    <meta name="description" content="nodeterm ships as a native Windows desktop app alongside macOS and Linux, using the same Electron shell and the same tmux-backed terminal model." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Platforms</p>
+      <h1>Windows support</h1>
+      <p>nodeterm ships as a native Windows desktop app alongside macOS and Linux, using the same Electron shell and the same tmux-backed terminal model.</p>
+
+      <h2>Behaviour</h2>
+      <p>The Windows build uses a frameless window with its own Material-Design title bar rather than the OS default chrome, matching the macOS and Linux builds. Terminal sessions on Windows still go through tmux where a compatible tmux binary is available (via WSL or a bundled build); where it isn't, sessions fall back to a plain shell with no cross-restart continuity, exactly as on any other platform without tmux.</p>
+
+      <h2>Configuration</h2>
+      <p>Default shell selection (PowerShell, cmd, WSL) lives in Settings, alongside the same tmux/scrollback options every platform shares.</p>
+
+      <h2>Failure modes</h2>
+      <p>Windows path handling — drive letters, backslashes, reparse points — is the most common source of platform-specific bugs in file and git operations; every path-handling code path is expected to be exercised on Windows specifically rather than assumed to work by analogy with POSIX behaviour.</p>
+
+      <h2>Security considerations</h2>
+      <p>No code-signing is applied to Windows builds under the project's current release policy; installers are unsigned and may trigger the OS's unknown-publisher warning. This is disclosed, not hidden, in the release notes for each build.</p>
+
+      <h2>Verification</h2>
+      <p>Exercised through the project's own build scripts (<code>build.bat</code>, <code>build-installer.bat</code>) which install every toolchain dependency themselves and produce a real, installable artifact rather than a developer-only dev-mode build.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./packaging-updates.html">Packaging &amp; auto-update</a></li>
+        <li><a href="./terminal-sessions.html">Terminal sessions &amp; continuity</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

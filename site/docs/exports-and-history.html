@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Exports, notifications &amp; local history — nodeterm docs</title>
+    <meta name="description" content="Every notification and every meaningful settings change on this site is recorded locally and stays reviewable — with full bulk-select actions — and every one of those data sets can be exported in whichever format best represents it." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">This site</p>
+      <h1>Exports, notifications &amp; local history</h1>
+      <p>Every notification and every meaningful settings change on this site is recorded locally and stays reviewable — with full bulk-select actions — and every one of those data sets can be exported in whichever format best represents it.</p>
+
+      <h2>Behaviour</h2>
+      <p>Notifications (success/info messages, and warnings/errors that persist until dismissed) stay reviewable in a Notifications panel after they disappear from the corner toast stack. A separate Local history panel records a plain, human-readable description of every meaningful settings change — a language mode switch, a vocabulary file loaded, a lock created — oldest entries pruned automatically once the cap is reached.</p>
+        <p>Both lists get the full bulk-action contract: multi-select with shift-click ranges, a select-all that states what it means, inverse selection, and a reviewable count-and-preview before anything destructive runs.</p>
+
+      <h2>Configuration</h2>
+      <p>The Export panel offers your settings, notification history, and local history each in JSON, JSONL, YAML, TOML, XML, CSV, TSV, Markdown, and HTML — whichever format best fits how you want to use the data next.</p>
+
+      <h2>Failure modes</h2>
+      <p>A format that can't faithfully represent nested data (CSV, TSV, Markdown, HTML) discloses exactly what it will flatten <em>before</em> the download runs, never after.</p>
+
+      <h2>Security considerations</h2>
+      <p>Nothing here is uploaded — every export is generated in this browser and handed to you as a local file download.</p>
+
+      <h2>Verification</h2>
+      <p>All encoders live in one shared module, <code>site/app/shared/exportFormats.js</code>, so every export surface on this site uses exactly the same, single implementation of each format rather than nine slightly-different CSV writers.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./language-modes.html">Language modes, funny levels &amp; emoji</a></li>
+        <li><a href="./changelog-viewer.html">Changelog viewer</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Node kinds — nodeterm docs</title>
+    <meta name="description" content="Every object on the canvas is a React Flow custom node of one of five kinds: terminal, sticky, group, editor, or diff." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Canvas</p>
+      <h1>Node kinds</h1>
+      <p>Every object on the canvas is a React Flow custom node of one of five kinds: terminal, sticky, group, editor, or diff.</p>
+
+      <h2>Behaviour</h2>
+      <ul>
+          <li><strong>terminal</strong> — a real shell (xterm + tmux). Agent nodes are a preset of this kind that launch an agent CLI as their first command.</li>
+          <li><strong>sticky</strong> — a colored, collapsible text note that can be linked to a terminal node to attach the note as live context.</li>
+          <li><strong>group</strong> — a real parent/child frame; frames can nest to any depth and can be bound to a git worktree, so every node created inside one inherits that worktree's path as its working directory.</li>
+          <li><strong>editor</strong> — a Monaco code editor bound to a file path, with an image-preview mode for common image formats.</li>
+          <li><strong>diff</strong> — a read-only Monaco diff view comparing a file's staged or unstaged changes.</li>
+        </ul>
+
+      <h2>Configuration</h2>
+      <p>Default node size for new terminal and agent nodes is set once in Settings and applies to every subsequently created node; existing nodes keep whatever size they were last resized to.</p>
+
+      <h2>Failure modes</h2>
+      <p>A node's id must never change once created — it is also the tmux session name for terminal nodes, so changing it would orphan the running session from the node that used to own it.</p>
+
+      <h2>Security considerations</h2>
+      <p>Editor and diff nodes read and write real files on disk (or on a remote host for SSH projects) — the same access any local editor would have, no more and no less.</p>
+
+      <h2>Verification</h2>
+      <p>Each node kind has its own focused test coverage for creation, persistence, and its kind-specific behaviour (e.g. the diff node's staged/unstaged toggle, the group node's re-fit-to-children logic).</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./canvas-lifecycle.html">Canvas &amp; node lifecycle</a></li>
+        <li><a href="./source-control-worktrees.html">Source control &amp; worktrees</a></li>
+        <li><a href="./agent-support.html">Agent support</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

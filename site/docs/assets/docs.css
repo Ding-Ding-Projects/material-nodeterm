@@ -1,0 +1,111 @@
+/* site/docs/assets/docs.css
+ *
+ * Article layout for the per-feature documentation pages under site/docs/.
+ * This file owns article typography and structure only — it never
+ * redefines a color token. Every color it uses is one of the M3 custom
+ * properties already defined on :root by ../../styles.css (light palette
+ * on bare :root, dark palette guarded for prefers-color-scheme and for the
+ * explicit [data-theme] toggle) — that file is REFERENCED via a normal
+ * <link>, never edited, so both files draw from the same one token
+ * definition and can never drift into two different themes.
+ */
+
+.doc-body {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+  font: 16px/1.65 var(--md-font);
+  color: var(--md-on-surface);
+}
+
+.doc-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 16px 20px 0;
+}
+.doc-topbar a {
+  color: var(--md-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+.doc-topbar a:hover,
+.doc-topbar a:focus-visible {
+  text-decoration: underline;
+}
+
+.doc-body h1 {
+  font-size: 1.9rem;
+  margin: 8px 0 4px;
+}
+.doc-body .doc-kicker {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--md-on-surface-variant);
+}
+.doc-body h2 {
+  font-size: 1.25rem;
+  margin: 32px 0 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+.doc-body p {
+  margin: 0 0 12px;
+}
+.doc-body ul,
+.doc-body ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+.doc-body li {
+  margin: 4px 0;
+}
+.doc-body code {
+  font-family: var(--md-font-mono);
+  background: var(--md-surface-container-high);
+  padding: 1px 5px;
+  border-radius: var(--md-shape-xs);
+  font-size: 0.92em;
+}
+.doc-body a {
+  color: var(--md-primary);
+}
+
+.doc-suggested {
+  margin-top: 40px;
+  padding: 16px;
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container-low);
+}
+.doc-suggested h2 {
+  border-top: none;
+  margin-top: 0;
+}
+.doc-suggested ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.doc-suggested a {
+  text-decoration: none;
+  font-weight: 600;
+}
+.doc-suggested a:hover,
+.doc-suggested a:focus-visible {
+  text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .doc-body {
+    padding: 24px 14px 60px;
+  }
+  .doc-body h1 {
+    font-size: 1.5rem;
+  }
+}

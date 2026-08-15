@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Server Edition — nodeterm docs</title>
+    <meta name="description" content="The same canvas, self-hosted on a plain HTTP/WebSocket server and served to any browser — reach your terminals and agents from anywhere without installing the desktop app on the client." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Remote</p>
+      <h1>Server Edition</h1>
+      <p>The same canvas, self-hosted on a plain HTTP/WebSocket server and served to any browser — reach your terminals and agents from anywhere without installing the desktop app on the client.</p>
+
+      <h2>Behaviour</h2>
+      <p>The Server Edition boots the identical core services the desktop app uses, behind a browser-side bridge that speaks the same protocol a real remote transport would. Editor, diff, and source-control nodes work in the browser exactly as they do on desktop; a folder/file picker replaces the native OS dialog, since a browser can't open one.</p>
+
+      <h2>Configuration</h2>
+      <p>Single-user authentication (a password plus an httpOnly session cookie, with an Origin check) protects the server; there's no multi-user account system.</p>
+
+      <h2>Failure modes</h2>
+      <p>A feature added to the desktop shell must be added to the server shell too, or it silently doesn't exist there — the project's own boundary tests enforce that core logic never imports Electron directly, but they can't detect a feature that was simply never wired into the server's side of the bridge.</p>
+
+      <h2>Security considerations</h2>
+      <p>The server listens on plain HTTP by default for local/trusted-network use; putting it on the open internet is the operator's responsibility to secure (a reverse proxy with TLS, for instance) the same way it would be for any self-hosted service.</p>
+
+      <h2>Verification</h2>
+      <p>Covered by its own smoke tests plus the shared no-Electron-import boundary test that fails the build if server code ever reaches for something Electron-only.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./remote-ssh-projects.html">Remote &amp; SSH projects</a></li>
+        <li><a href="./terminal-sessions.html">Terminal sessions &amp; continuity</a></li>
+        <li><a href="./packaging-updates.html">Packaging &amp; auto-update</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

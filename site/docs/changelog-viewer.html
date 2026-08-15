@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Changelog viewer — nodeterm docs</title>
+    <meta name="description" content="Every recorded release, generated from the repository's real CHANGELOG.md — never invented — with a date-range filter, a full-text search wired to an anchored regex builder, and a commit link on every entry." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">This site</p>
+      <h1>Changelog viewer</h1>
+      <p>Every recorded release, generated from the repository's real CHANGELOG.md — never invented — with a date-range filter, a full-text search wired to an anchored regex builder, and a commit link on every entry.</p>
+
+      <h2>Behaviour</h2>
+      <p>The date range and the text search compose rather than override each other — narrowing one never silently resets the other. Every entry links its exact commit SHA back to the repository, so a claim in the changelog is always one click from the code that made it.</p>
+
+      <h2>Configuration</h2>
+      <p>Range presets (last 30 days, last 90 days, all time) sit beside a native date-range picker, which already accepts both a locale-formatted date and a typed ISO date without any extra parsing on this site's part.</p>
+
+      <h2>Failure modes</h2>
+      <p>A start date after the end date shows an inline note and zero results rather than silently swapping the two values or throwing.</p>
+
+      <h2>Security considerations</h2>
+      <p>Regex evaluation in the search field is local only — nothing is sent anywhere — and every pattern and sample is length-capped before it's ever compiled.</p>
+
+      <h2>Verification</h2>
+      <p>The underlying data file, <code>site/content/changelog.json</code>, is generated directly from <code>CHANGELOG.md</code>'s real entries; a parse that can't confirm a version, date, and commit for an entry drops it rather than emitting a partial or fabricated record.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./exports-and-history.html">Exports, notifications &amp; local history</a></li>
+        <li><a href="./language-modes.html">Language modes, funny levels &amp; emoji</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

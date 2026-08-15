@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Documentation — nodeterm</title>
+    <meta name="description" content="Every nodeterm feature, documented: behaviour, configuration, failure modes, security considerations, and verification." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Documentation</p>
+      <h1>Every feature, documented</h1>
+      <p>Behaviour, configuration, failure modes, security considerations, and how each feature is verified — for the desktop/Server Edition app and for this site's own controls.</p>
+      <h2>The app</h2>
+      <ul>
+        <li><a href="./terminal-sessions.html">Terminal sessions &amp; continuity</a></li>
+        <li><a href="./windows-support.html">Windows support</a></li>
+        <li><a href="./projects-and-tabs.html">Projects &amp; tabs</a></li>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./agent-support.html">Agent support</a></li>
+        <li><a href="./canvas-lifecycle.html">Canvas &amp; node lifecycle</a></li>
+        <li><a href="./source-control-worktrees.html">Source control &amp; worktrees</a></li>
+        <li><a href="./kanban-board.html">Kanban board</a></li>
+        <li><a href="./remote-ssh-projects.html">Remote &amp; SSH projects</a></li>
+        <li><a href="./server-edition.html">Server Edition</a></li>
+        <li><a href="./speech-dictation.html">Speech / dictation</a></li>
+        <li><a href="./packaging-updates.html">Packaging &amp; auto-update</a></li>
+      </ul>
+      <h2>This site</h2>
+      <ul>
+        <li><a href="./language-modes.html">Language modes, funny levels &amp; emoji</a></li>
+        <li><a href="./school-mode.html">School mode</a></li>
+        <li><a href="./personal-vocabulary.html">Personal vocabulary</a></li>
+        <li><a href="./dim-sum-surprise.html">Dim sum surprise</a></li>
+        <li><a href="./narrator.html">Narrator</a></li>
+        <li><a href="./toy-locks.html">Toy locks</a></li>
+        <li><a href="./exports-and-history.html">Exports, notifications &amp; local history</a></li>
+        <li><a href="./changelog-viewer.html">Changelog viewer</a></li>
+      </ul>
+    </article>
+  </body>
+</html>
