@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { TranscriptLine } from '@shared/types'
 import { useSession } from '../session/session'
+import { useRegexSearchField, type SearchMode } from '../lib/regex/useRegexSearchField'
+import { compileForInlineFilter } from '../lib/regex/safety'
 
 export interface SearchSnippet {
   source: 'terminal' | 'claude'
@@ -28,6 +30,9 @@ interface Args {
 }
 
 export interface TerminalSearch {
+  /** The active search term shown in the field — the plain query in text mode, the pattern
+   *  source in regex mode. Also what's handed to xterm's own SearchAddon for the on-screen
+   *  highlight (see TerminalNode's `findOpts`/`handleNext`/`handlePrev`). */
   query: string
   setQuery: (q: string) => void
   matchCount: number
@@ -35,6 +40,14 @@ export interface TerminalSearch {
   current: SearchSnippet | null
   next: () => void
   prev: () => void
+  /** Plain text (default) vs regex — an explicit opt-in, per field. */
+  mode: SearchMode
+  setMode: (m: SearchMode) => void
+  pattern: string
+  flags: string
+  setFlags: (f: string) => void
+  /** Compile/safety error for the current regex pattern, or null. */
+  error: string | null
 }
 
 export function useTerminalSearch({
@@ -49,15 +62,15 @@ export function useTerminalSearch({
   // The node's core api — the tmux capture must run on the core that owns the session.
   // (Hook, so this runs in the calling component's context; the value is session-stable.)
   const { api } = useSession()
-  const [query, setQuery] = useState('')
+  const field = useRegexSearchField()
   const [cursor, setCursor] = useState(0) // 0-based index into `matches`
   const [source, setSource] = useState<SearchSnippet[]>([])
 
-  // Build the snapshot index when the bar opens; clear it when it closes.
+  // Build the snapshot index when the bar opens; clear it (and the query) when it closes.
   useEffect(() => {
     if (!open) {
       setSource([])
-      setQuery('')
+      field.reset()
       setCursor(0)
       return
     }
@@ -98,21 +111,43 @@ export function useTerminalSearch({
       cancelled = true
     }
     // readBuffer must be stable (useCallback in the caller) to avoid rebuilds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, open, nodeId, sessionId, cwd, accountId, searchTranscript, readBuffer])
 
   // Lowercase once per snapshot, not per keystroke — the snapshot can be tens of thousands of
   // lines (full scrollback + transcript), and re-lowercasing all of it on every typed character
-  // made find-as-you-type O(lines × keystrokes).
+  // made find-as-you-type O(lines × keystrokes) in plain-text mode.
   const lowerSource = useMemo(() => source.map((s) => s.text.toLowerCase()), [source])
+
+  // Regex mode compiles ONCE per pattern/flags change, not once per line — same rationale as the
+  // lowercased index above. A pattern the safety heuristic refuses (or that fails to compile)
+  // falls open here too: no filtering rather than a silent hang or a scary "0 matches" for a
+  // pattern the user hasn't finished typing yet.
+  const compiled = useMemo(
+    () => (field.mode === 'regex' ? compileForInlineFilter(field.pattern, field.flags) : null),
+    [field.mode, field.pattern, field.flags]
+  )
+
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return [] as number[]
+    if (field.mode === 'text') {
+      const q = field.query.trim().toLowerCase()
+      if (!q) return [] as number[]
+      const out: number[] = []
+      for (let i = 0; i < lowerSource.length; i++) {
+        if (lowerSource[i].includes(q)) out.push(i)
+      }
+      return out
+    }
+    if (!field.pattern.trim() || !compiled) return [] as number[]
     const out: number[] = []
-    for (let i = 0; i < lowerSource.length; i++) {
-      if (lowerSource[i].includes(q)) out.push(i)
+    for (let i = 0; i < source.length; i++) {
+      // Fresh RegExp per line: a `g`-flagged instance carries lastIndex across `.test()` calls,
+      // which would silently skip alternating matches when reused across lines.
+      const re = new RegExp(compiled.source, compiled.flags)
+      if (re.test(source[i].text)) out.push(i)
     }
     return out
-  }, [query, lowerSource])
+  }, [field.mode, field.query, field.pattern, lowerSource, source, compiled])
 
   // Reset the cursor to the first match whenever the result set changes.
   // `matches` is a fresh array on every query/source change (useMemo), so this
@@ -126,12 +161,18 @@ export function useTerminalSearch({
   const current = matchCount ? source[matches[safeCursor]] : null
 
   return {
-    query,
-    setQuery,
+    query: field.value,
+    setQuery: field.setValue,
     matchCount,
     matchIndex: matchCount ? safeCursor + 1 : 0,
     current,
     next: () => setCursor((c) => (matchCount ? (c + 1) % matchCount : 0)),
-    prev: () => setCursor((c) => (matchCount ? (c - 1 + matchCount) % matchCount : 0))
+    prev: () => setCursor((c) => (matchCount ? (c - 1 + matchCount) % matchCount : 0)),
+    mode: field.mode,
+    setMode: field.setMode,
+    pattern: field.pattern,
+    flags: field.flags,
+    setFlags: field.setFlags,
+    error: field.error
   }
 }

@@ -1463,8 +1463,11 @@ export function TerminalNode({
   })
 
   // Single source of truth for the on-screen highlight colors (used by both the
-  // initial-highlight effect and the prev/next nav handlers below).
+  // initial-highlight effect and the prev/next nav handlers below). `regex` mirrors the hook's
+  // own mode so xterm's on-screen highlight and the hook's own match count agree about what
+  // "matches" even means right now.
   const findOpts = {
+    regex: search.mode === 'regex',
     decorations: {
       matchBackground: '#ffd54f55',
       activeMatchBackground: '#ffb300',
@@ -1478,11 +1481,11 @@ export function TerminalNode({
   // xterm can't highlight) — that's expected; this only tracks navigation direction.
   const handleNext = useCallback(() => {
     search.next()
-    if (search.query.trim()) searchAddonRef.current?.findNext(search.query, findOpts)
+    if (search.query.trim() && !search.error) searchAddonRef.current?.findNext(search.query, findOpts)
   }, [search])
   const handlePrev = useCallback(() => {
     search.prev()
-    if (search.query.trim()) searchAddonRef.current?.findPrevious(search.query, findOpts)
+    if (search.query.trim() && !search.error) searchAddonRef.current?.findPrevious(search.query, findOpts)
   }, [search])
 
   // The link handles are added/positioned dynamically; make React Flow re-measure them so edges
@@ -3885,12 +3888,13 @@ export function TerminalNode({
   useEffect(() => {
     const sa = searchAddonRef.current
     if (!sa) return
-    if (!searchOpen || !search.query.trim()) {
+    if (!searchOpen || !search.query.trim() || search.error) {
       sa.clearDecorations()
       return
     }
     sa.findNext(search.query, findOpts)
-  }, [search.query, searchOpen])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.query, search.mode, search.error, searchOpen])
 
   // Cmd/Ctrl+F toggles the find-bar while this node is hovered. No main-process interception
   // needed (the Electron renderer has no native find UI), unlike Cmd+M.
@@ -4303,6 +4307,12 @@ export function TerminalNode({
           current={search.current}
           onNext={handleNext}
           onPrev={handlePrev}
+          mode={search.mode}
+          onModeChange={search.setMode}
+          pattern={search.pattern}
+          flags={search.flags}
+          onFlagsChange={search.setFlags}
+          error={search.error}
           onClose={() => setSearchOpen(false)}
         />
       )}
