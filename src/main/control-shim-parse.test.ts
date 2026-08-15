@@ -15,6 +15,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { CONTROL_SHIM_SCRIPT } from './canvas-control-core'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS,
+  pathForPosixShell,
+  posixShellScriptArgs
+} from '../core/testing/posix-shell'
 
 let dir = ''
 
@@ -22,17 +29,21 @@ let dir = ''
 const run = (args: string[]): string[] => {
   const log = path.join(dir, 'argv.log')
   fs.writeFileSync(log, '')
-  execFileSync('sh', [path.join(dir, 'shim.sh'), ...args], {
-    env: {
-      PATH: `${path.join(dir, 'bin')}:${process.env.PATH ?? ''}`,
-      NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_HOOK_PORT: '1',
-      NODETERM_NODE_ID: 'n1',
-      NT_ARGV_LOG: log,
-      HOME: dir
-    },
-    encoding: 'utf8'
-  })
+  execFileSync(
+    REAL_POSIX_SHELL,
+    posixShellScriptArgs(path.join(dir, 'shim.sh'), args, path.join(dir, 'bin')),
+    {
+      env: environmentForPosixShell({
+        PATH: process.env.PATH ?? '',
+        NODETERM_CANVAS_CONTROL: '1',
+        NODETERM_HOOK_PORT: '1',
+        NODETERM_NODE_ID: 'n1',
+        NT_ARGV_LOG: pathForPosixShell(log),
+        HOME: pathForPosixShell(dir)
+      }),
+      encoding: 'utf8'
+    }
+  )
   // One argv element per line; keep only the translated pairs (`nodeId=…` and curl's own flags
   // are not part of what this file is about).
   return fs
@@ -56,7 +67,7 @@ beforeAll(() => {
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }))
 
-describe('the control shim translates flags', () => {
+describe('the control shim translates flags', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('a --flag followed by another --flag does NOT eat it', () => {
     // THE BUG: this used to yield ['arg.read=--node'] and `b1` was lost with no error anywhere.
     expect(run(['browser', '--read', '--node', 'b1'])).toEqual(['arg.read=', 'arg.node=b1'])

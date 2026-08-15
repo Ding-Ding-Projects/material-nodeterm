@@ -9,6 +9,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { codexThreadIdentityResolverSh } from './codex-thread-identity-sh'
+import { REAL_SHELL_TEST_TIMEOUT_MS } from './testing/posix-shell'
 
 const run = promisify(execFile)
 
@@ -60,7 +61,7 @@ async function resolve(env: Record<string, string>): Promise<string> {
   return stdout.trim()
 }
 
-describe('codex thread identity prelude', () => {
+describe('codex thread identity prelude', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('is valid POSIX sh', async () => {
     await expect(run(SH, ['-n', script])).resolves.toBeTruthy()
   })

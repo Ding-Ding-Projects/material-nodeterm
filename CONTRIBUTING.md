@@ -105,6 +105,13 @@ come from git-shared JSON and can end up interpolated into a shell command line.
 `/bin/sh` against a fixture tree. A composed fixture will not tell you that `echo ##MEM` prints an
 empty line because `#` starts a comment.
 
+On Windows, keep those tests real rather than blanket-skipping them. Use
+`src/core/testing/posix-shell.ts`: it resolves Git Bash from Git's own installation, translates
+native fixture paths to the shell's `/c/...` spelling, and puts fake tools ahead of Git Bash's
+bundled tools *after* the shell initializes. Passing a native `C:\...` path into generated shell,
+or prepending a fake `curl` only to the parent process's PATH, silently exercises the wrong file.
+Only behavior that fundamentally requires an AF_UNIX socket should use an explicit Windows skip.
+
 **Credentials never ride argv — local or SSH.** Not a tmux `-e` pair, not `curl -H`, not a remote
 command string. `/proc/<pid>/cmdline` is mode 444 on a stock Linux, and a remote command line is argv
 on the host too: we shipped the hook bearer that way and any other account on the machine could read
