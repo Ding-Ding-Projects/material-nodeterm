@@ -259,8 +259,9 @@ npm run server:dev # build + run the browser Server Edition (needs Node 22 + tmu
 - **Three surfaces** — the desktop app, the browser **Server Edition**, and the
   **mobile companion** (a separate SwiftUI repo) all ride the same core + transport seams.
 
-See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, and the design docs
-under [`docs/`](./docs) for deeper notes.
+See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, [`docs/narrator.md`](./docs/narrator.md)
+for the spoken TTS narrator (Settings → Interface → Narrator), and the design docs under
+[`docs/`](./docs) for deeper notes.
 
 ## 🤝 Contributing
 
