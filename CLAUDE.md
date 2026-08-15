@@ -248,6 +248,9 @@ one app process, and the host keeps a per-socket ledger across processes; `detac
 returns only that connection's ticket and the final owner resumes. Also keep the backend parity
 leaves in `sessionExists`/`captureSnapshot`: relay and mobile attach use them before
 `attachDetached`, so a tmux-only implementation reports a live Windows session as fresh and blank.
+The host also keeps an exited generation in its session map until that output tail, exit broadcast
+and disposal finish. Protocol events carry only the session name, so reusing it earlier lets a
+delayed old-generation exit arrive after the same socket has attached to its replacement.
 
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with

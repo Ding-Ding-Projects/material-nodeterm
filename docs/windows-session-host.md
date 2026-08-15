@@ -198,6 +198,12 @@ already observed, and an attach racing a pending write can get the same chunk on
 its seed. The new socket joins the subscriber set only *after* the barrier and snapshot, which is
 the other half of avoiding that duplicate.
 
+The same name is also a generation boundary. Data and exit events contain a session name but no
+generation id, so an exiting `HostSession` remains registered until its queued output, final exit
+broadcast and disposal complete. A same-name attach waits on that retirement promise before it can
+spawn a replacement. The old socket may therefore see its old exit before the new attach response,
+but the replacement can never receive an indistinguishable delayed exit from its predecessor.
+
 ### Reconnect (a dropped client connection is not a dead session)
 
 Sessions live in the host process, not in the client. If the Electron-main-side connection drops
