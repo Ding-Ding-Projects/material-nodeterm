@@ -66,6 +66,12 @@ need it too, and wire it in the same change.
 
 ## House rules
 
+- **Anything path-shaped: read `docs/windows-support.md` first.** Windows is the delivery target
+  and most of this was written on macOS, so the recurring defect is code that is genuinely correct
+  on POSIX — `split('/')`, `startsWith('/')` as an is-absolute test, a bare `fs.rename`. Use
+  `path.basename`/`join`/`sep`, publish files with `renameAtomic`, and write at least one test with
+  a real `C:\`-shaped input. Guards enforce some of this and will fail your PR.
+
 - **Building on Windows has two preconditions, and `npm run dist:win` checks both up front.**
   Close every running instance of the app first: Windows will not delete a DLL a live process has
   loaded, so a dev window you forgot about makes the build die with an `EPERM` about a `.node`

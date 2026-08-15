@@ -1823,6 +1823,19 @@ builds (unless `NODETERM_API_BASE` targets a local server). Schema example:
 ping to `api.nodeterm.dev/v1/telemetry` (version/OS on launch + daily), gated on
 `settings.telemetryEnabled` + the same build/DNT guards; toggle in Settings → Privacy.
 
+## Windows support
+
+**`docs/windows-support.md` is the single page for this** — what is fixed, what is still missing,
+and the pattern behind it. Read it before touching anything path-shaped.
+
+The theme, because it recurs: almost every Windows defect found so far is code that is genuinely
+CORRECT on POSIX. `fs.rename` is atomic; `split('/')` splits a path; `startsWith('/')` means
+absolute; a bare catch on unlink means "already gone". Each is true on the platform most of this
+was written on and false on the one it ships to, so none of them looks wrong to a reviewer, a type
+checker, or a suite whose fixtures are POSIX paths. Twice now, one file in the tree already
+documented the trap and none of the twenty others doing the same thing knew — which is why these
+are enforced by scanning guards rather than by comments.
+
 ## Building on Windows: close the app first
 
 `npm run dist:win` and `npm run rebuild` both run electron-rebuild, which deletes and recompiles
