@@ -34,6 +34,15 @@
       <h2>Configuration</h2>
       <p>Single-user authentication (a password plus an httpOnly session cookie, with an Origin check) protects the server; there's no multi-user account system.</p>
 
+      <h2>Docker quickstart</h2>
+      <pre><code>docker build -t nodeterm-server .
+docker run -d -p 8443:8443 \
+  -e NODETERM_SERVER_PASSWORD='choose-a-strong-one' \
+  -v nodeterm-data:/data \
+  nodeterm-server</code></pre>
+      <p>Open the host's own URL after it starts; the static project tour is not a proxy or pairing client. Keep <code>/data</code> on a volume so authentication, the workspace, and scrollback snapshots survive a container replacement.</p>
+      <p>Terminate TLS in a reverse proxy and do not expose the image's plain HTTP port directly to the public internet. A container restart also ends processes and the in-container tmux server; persisted scrollback and resumable-agent metadata support cold restore, but they cannot keep a running process alive through the restart.</p>
+
       <h2>Failure modes</h2>
       <p>A feature added to the desktop shell must be added to the server shell too, or it silently doesn't exist there — the project's own boundary tests enforce that core logic never imports Electron directly, but they can't detect a feature that was simply never wired into the server's side of the bridge.</p>
 

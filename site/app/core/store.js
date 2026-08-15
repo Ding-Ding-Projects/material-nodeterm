@@ -100,7 +100,7 @@ export function createStore() {
   function setState(patch, opts) {
     const p = typeof patch === 'function' ? patch(state) : patch
     Object.assign(state, p)
-    if (opts && opts.persist !== false && Object.keys(p).some((k) => PERSISTED_KEYS.includes(k))) persist()
+    if (opts?.persist !== false && Object.keys(p).some((k) => PERSISTED_KEYS.includes(k))) persist()
     scheduleRender()
   }
 
@@ -127,6 +127,10 @@ export function makeMatcher(state, key, query) {
       const re = new RegExp(q.slice(0, 200), flags)
       return (t) => {
         try {
+          // `g` and `y` make RegExp.test() advance lastIndex. A search predicate must be pure:
+          // asking about the same row twice cannot alternate true/false because another row ran
+          // first. Reset for every candidate while preserving the flags the user explicitly chose.
+          re.lastIndex = 0
           return re.test(String(t))
         } catch (_err) {
           return true

@@ -181,7 +181,7 @@ const FEATURES = [
     // ES-module graph and served a BLANK site. `node --check` passed (syntax is not resolution),
     // this guard passed, and the server returned 200. Only a browser console showed it.
     id: 'pair-device',
-    label: 'Pair a device',
+    label: 'Remote access routes',
     file: 'site/app/features/pair-device.js',
     exportName: 'registerPairDevice',
     contentChecks: [
@@ -693,7 +693,12 @@ const NON_FEATURE_MODULES = new Map([
   const FEATURES_DIR = join(SITE_DIR, 'app', 'features')
   let modules = []
   try {
-    modules = readdirSync(FEATURES_DIR).filter((f) => f.endsWith('.js'))
+    // Runtime tests sit beside the unbundled JS they exercise. They are not registrar modules and
+    // never enter FEATURE_REGISTRARS, so counting them here makes adding behavioral coverage look
+    // like an unregistered product feature. Keep the production inventory strict and explicit.
+    modules = readdirSync(FEATURES_DIR).filter(
+      (f) => f.endsWith('.js') && !f.endsWith('.test.js'),
+    )
   } catch {
     fail('Inventory completeness: cannot read site/app/features — the scan below would pass vacuously')
   }
