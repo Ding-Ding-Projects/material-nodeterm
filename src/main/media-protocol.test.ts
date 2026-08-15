@@ -15,12 +15,12 @@ describe('resolveMediaPath (path jail)', () => {
   const allow = new Set([n('/projects/app/clip.mp4'), n('/projects/app/out.html')])
 
   it('returns the absolute path for an allowed file', () => {
-    const url = mediaUrlFor('/projects/app/clip.mp4')
+    const url = mediaUrlFor('/projects/app/clip.mp4', '/')
     expect(resolveMediaPath(new URL(url).pathname, allow)).toBe(n('/projects/app/clip.mp4'))
   })
 
   it('rejects a path not on the allowlist', () => {
-    const url = mediaUrlFor('/etc/passwd')
+    const url = mediaUrlFor('/etc/passwd', '/')
     expect(resolveMediaPath(new URL(url).pathname, allow)).toBeNull()
   })
 
@@ -30,15 +30,21 @@ describe('resolveMediaPath (path jail)', () => {
 
   it('round-trips paths with spaces/unicode via mediaUrlFor', () => {
     const allow2 = new Set([n('/a b/çlip.mp4')])
-    const url = mediaUrlFor('/a b/çlip.mp4')
+    const url = mediaUrlFor('/a b/çlip.mp4', '/')
     expect(resolveMediaPath(new URL(url).pathname, allow2)).toBe(n('/a b/çlip.mp4'))
   })
 
   it('round-trips a path containing ? through mediaUrlFor', () => {
     const original = '/projects/app/q?x&y#z.mp4'
     const allow3 = new Set([n(original)])
-    const url = mediaUrlFor(original)
+    const url = mediaUrlFor(original, '/')
     expect(resolveMediaPath(new URL(url).pathname, allow3)).toBe(n(original))
+  })
+
+  it('preserves a POSIX filename containing a literal backslash', () => {
+    const original = String.raw`/projects/app/name\part.png`
+    const url = mediaUrlFor(original, '/')
+    expect(decodeURIComponent(new URL(url).pathname)).toBe(original)
   })
 })
 
@@ -52,14 +58,14 @@ describe('a Windows absolute path round-trips through the URL', () => {
   const WIN = String.raw`C:\Users\me\pics\a.png`
 
   it('the URL has a real pathname, not a mangled authority', () => {
-    const url = new URL(mediaUrlFor(WIN))
+    const url = new URL(mediaUrlFor(WIN, '\\'))
     expect(url.pathname, 'a drive letter must not end up in the authority').toMatch(/^\/C(:|%3A)\//i)
     expect(url.host).toBe('media')
   })
 
   it.runIf(process.platform === 'win32')('resolves back to the allowlisted path', () => {
     const allow = new Set([n(WIN)])
-    const url = mediaUrlFor(n(WIN))
+    const url = mediaUrlFor(n(WIN), '\\')
     expect(resolveMediaPath(new URL(url).pathname, allow)).toBe(n(WIN))
   })
 
@@ -83,12 +89,12 @@ describe('a Windows absolute path round-trips through the URL', () => {
   it('still refuses a path that is not on the allowlist', () => {
     // The strip must not widen the jail: normalize + the allowlist check still decide.
     const allow = new Set([n(WIN)])
-    const evil = mediaUrlFor(String.raw`C:\Users\me\..\..\Windows\System32\config\SAM`)
+    const evil = mediaUrlFor(String.raw`C:\Users\me\..\..\Windows\System32\config\SAM`, '\\')
     expect(resolveMediaPath(new URL(evil).pathname, allow)).toBeNull()
   })
 
   it('a segment with URL-reserved characters still round-trips', () => {
-    const url = new URL(mediaUrlFor(String.raw`C:\Users\me\a#b?c&d.png`))
+    const url = new URL(mediaUrlFor(String.raw`C:\Users\me\a#b?c&d.png`, '\\'))
     expect(decodeURIComponent(url.pathname)).toContain('a#b?c&d.png')
   })
 })

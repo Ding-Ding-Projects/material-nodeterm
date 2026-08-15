@@ -39,17 +39,18 @@ const TOKEN_RE =
   /(?:(?:\.{1,2}\/|\/)?[\w.@+-]+(?:\/[\w.@+~-]+)+|(?:\.{1,2}\/|\/)[\w.@+-]+)(?::\d+(?::\d+)?)?/g
 
 /**
- * The same shape with `\` as the separator, plus a drive prefix. Used ONLY for a local session on
- * a Windows desktop — never for an SSH project, whose paths are POSIX however the desktop is
- * spelled, and never on macOS or Linux.
+ * The same shape with Windows separators, plus drive and UNC prefixes. Used ONLY when the
+ * filesystem-owning core reports Windows — never just because the viewing browser is on Windows,
+ * and never for an SSH project, whose paths are POSIX however the viewer is spelled.
  *
  * A SEPARATE regex rather than widening TOKEN_RE's separator class, deliberately: the POSIX path
  * is what every existing user runs, and it stays byte-identical. Widening it would also start
  * matching Windows-shaped text inside a POSIX session, where it can only ever be wrong.
  *
- * Three alternatives, in order: a drive-absolute path, a `.\`/`..\`-prefixed relative, or a plain
- * multi-segment relative. A bare single word is deliberately not a token — `readme` in a sentence
- * is not a path, and TOKEN_RE takes the same position for POSIX.
+ * Four alternatives, in order: a UNC path (consumed whole so it can be refused), a drive-absolute
+ * path, a dot-prefixed relative, or a plain multi-segment relative. Both separators are accepted,
+ * because Windows tools emit both. A bare single word is deliberately not a token — `readme` in a
+ * sentence is not a path, and TOKEN_RE takes the same position for POSIX.
  *
  * SPACES ARE NOT PART OF A SEGMENT, even though `C:\Program Files\…` is everywhere on Windows.
  * An unquoted path in terminal output gives no way to tell where it ends, so allowing spaces made
@@ -59,11 +60,11 @@ const TOKEN_RE =
  * position, so this is parity rather than a Windows-specific shortfall.
  */
 const WIN_TOKEN_RE =
-  /(?:[A-Za-z]:[\\/][\w.@+~-]*(?:[\\/][\w.@+~-]+)*|\.{1,2}\\[\w.@+~-]+(?:\\[\w.@+~-]+)*|[\w.@+-]+(?:\\[\w.@+~-]+)+)(?::\d+(?::\d+)?)?/g
+  /(?:(?:\\\\|\/\/)[\w.@+~-]+[\\/][\w.@+~-]+(?:[\\/][\w.@+~-]+)*|[A-Za-z]:[\\/][\w.@+~-]*(?:[\\/][\w.@+~-]+)*|\.{1,2}[\\/][\w.@+~-]+(?:[\\/][\w.@+~-]+)*|[\w.@+-]+(?:[\\/][\w.@+~-]+)+)(?::\d+(?::\d+)?)?/g
 const SUFFIX_RE = /^(.*?):(\d+)(?::\d+)?$/
 const TRAILING_PUNCT = /[.,;:!?'")\]}>]+$/
-/** `C:\…`, `C:/…`, or a UNC `\\host\share`. */
-const WIN_ABSOLUTE_RE = /^(?:[A-Za-z]:[\\/]|\\\\)/
+/** `C:\…`, `C:/…`, or a UNC `\\host\share` / `//host/share`. */
+const WIN_ABSOLUTE_RE = /^(?:[A-Za-z]:[\\/]|\\\\|\/\/)/
 
 export interface PathConventionOpts {
   /** Match and resolve Windows-shaped paths. Off by default, so POSIX behaviour is unchanged. */
@@ -116,6 +117,10 @@ function matchWindowsFileTokens(lineText: string): FileToken[] {
     text = text.replace(TRAILING_PUNCT, '')
     if (text.length < 3) continue
     let path = text
+    // Refuse the WHOLE UNC token here. Without the explicit UNC alternative in WIN_TOKEN_RE the
+    // matcher started two characters in (`server\share\a.ts`), turning the network path into a
+    // relative path under cwd and bypassing resolveWindowsFileToken's UNC refusal.
+    if (/^(?:\\\\|\/\/)/.test(path)) continue
     let line: number | undefined
     const suffix = SUFFIX_RE.exec(text)
     // `C:\src\a.ts:12` splits correctly because SUFFIX_RE anchors the digits at the END — the
@@ -204,7 +209,7 @@ export function resolveFileToken(
  */
 function resolveWindowsFileToken(path: string, cwd: string | undefined): string | null {
   const slash = (p: string): string => p.replace(/\\/g, '/')
-  if (path.startsWith('\\\\')) return null // UNC — see above
+  if (/^(?:\\\\|\/\/)/.test(path)) return null // UNC — see above
   const abs = /^[A-Za-z]:[\\/]/.test(path)
   const raw = abs ? slash(path) : cwd ? `${slash(cwd).replace(/\/+$/, '')}/${slash(path)}` : null
   if (!raw) return null
@@ -225,9 +230,11 @@ function resolveWindowsFileToken(path: string, cwd: string | undefined): string 
 
 export interface FileLinkDeps {
   getCwd(): string | undefined
-  /** Local session on a Windows desktop. NOT simply "the desktop is Windows": an SSH project's
-   *  paths are POSIX however the client is spelled, so this is a per-SESSION fact. */
+  /** Static compatibility option for direct unit consumers. Live terminals use `convention`. */
   windows?: boolean
+  /** Dynamic host decision. `null` means the owning core's dialect was not observed, so file
+   *  links fail closed instead of borrowing the browser's OS. Takes precedence over `windows`. */
+  convention?: () => PathConventionOpts | null
   lookup(abs: string): Promise<{ exists: boolean; dir: boolean }>
   activate(abs: string, dir: boolean): void
 }
@@ -312,7 +319,7 @@ function tokenRange(
   }
 }
 
-/** xterm link provider for file paths. Register once per (non-relay) terminal. */
+/** xterm link provider for file paths. Register once per terminal with a reachable filesystem. */
 export function createFileLinkProvider(term: Terminal, deps: FileLinkDeps): ILinkProvider {
   return {
     provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
@@ -323,7 +330,12 @@ export function createFileLinkProvider(term: Terminal, deps: FileLinkDeps): ILin
         callback(undefined)
         return
       }
-      const tokens = matchFileTokens(logical.text, { windows: deps.windows })
+      const convention = deps.convention ? deps.convention() : { windows: deps.windows }
+      if (!convention) {
+        callback(undefined)
+        return
+      }
+      const tokens = matchFileTokens(logical.text, convention)
       if (!tokens.length) {
         callback(undefined)
         return
@@ -331,7 +343,7 @@ export function createFileLinkProvider(term: Terminal, deps: FileLinkDeps): ILin
       const cols = term.cols
       void Promise.all(
         tokens.map(async (t): Promise<ILink | null> => {
-          const abs = resolveFileToken(t.path, deps.getCwd(), { windows: deps.windows })
+          const abs = resolveFileToken(t.path, deps.getCwd(), convention)
           if (!abs) return null
           const found = await deps.lookup(abs)
           if (!found.exists) return null
@@ -383,20 +395,38 @@ export function createUrlLinkProvider(term: Terminal, openUrl: (url: string) => 
 /** Existence+dir-ness via cached parent-dir listings (one list covers all siblings). */
 export function makeDirListingLookup(
   list: (dir: string) => Promise<Array<{ name: string; dir: boolean }>>,
-  ttlMs = 3000
+  ttlMs = 3000,
+  convention: () => PathConventionOpts | null = () => ({})
 ): (abs: string) => Promise<{ exists: boolean; dir: boolean }> {
   const cache = new Map<string, { at: number; entries: Array<{ name: string; dir: boolean }> }>()
   return async (abs) => {
-    const i = abs.lastIndexOf('/')
+    const opts = convention()
+    if (!opts) return { exists: false, dir: false }
+    // On POSIX a backslash is legal filename text, not a separator. Only the Windows dialect may
+    // split on it; resolved Windows tokens normally use `/`, but accepting a native path here keeps
+    // this boundary honest if another caller supplies one later.
+    const i = opts.windows
+      ? Math.max(abs.lastIndexOf('/'), abs.lastIndexOf('\\'))
+      : abs.lastIndexOf('/')
     // `C:/a.ts` splits to a dir of `C:`, which on Windows means "the current directory on drive
     // C" rather than its root — a listing of somewhere else entirely. Keep the separator.
-    const dir = i <= 0 ? '/' : /^[A-Za-z]:$/.test(abs.slice(0, i)) ? abs.slice(0, i) + '/' : abs.slice(0, i)
+    const separator = i >= 0 ? abs[i] : '/'
+    const dir =
+      i <= 0
+        ? '/'
+        : /^[A-Za-z]:$/.test(abs.slice(0, i))
+          ? abs.slice(0, i) + separator
+          : abs.slice(0, i)
     const name = abs.slice(i + 1)
-    const hit = cache.get(dir)
+    const cacheKey = opts.windows ? dir.toLowerCase() : dir
+    const hit = cache.get(cacheKey)
     const entries =
       hit && Date.now() - hit.at < ttlMs ? hit.entries : await list(dir).catch(() => [])
-    if (!hit || Date.now() - (hit?.at ?? 0) >= ttlMs) cache.set(dir, { at: Date.now(), entries })
-    const e = entries.find((x) => x.name === name)
+    if (!hit || Date.now() - (hit?.at ?? 0) >= ttlMs)
+      cache.set(cacheKey, { at: Date.now(), entries })
+    const e = entries.find((x) =>
+      opts.windows ? x.name.toLowerCase() === name.toLowerCase() : x.name === name
+    )
     return { exists: !!e, dir: !!e?.dir }
   }
 }
@@ -422,12 +452,14 @@ function bufferPosFromEvent(term: Terminal, ev: MouseEvent): { col: number; row:
 
 export interface LinkClickDeps {
   getCwd(): string | undefined
-  /** See FileLinkDeps.windows — a per-SESSION fact, not a per-platform one. */
+  /** See FileLinkDeps.windows. */
   windows?: boolean
+  /** See FileLinkDeps.convention. */
+  convention?: () => PathConventionOpts | null
   lookup(abs: string): Promise<{ exists: boolean; dir: boolean }>
   activateFile(abs: string, dir: boolean): void
   openUrl(url: string): void
-  /** false for relay-remote nodes (no client fs) — they stay URL-only. */
+  /** False while no correctly-routed filesystem/dialect is available. */
   fileEnabled(): boolean
 }
 
@@ -471,9 +503,11 @@ export function installLinkClickFallback(
       }
     }
     if (!deps.fileEnabled()) return
-    for (const t of matchFileTokens(logical.text, { windows: deps.windows })) {
+    const convention = deps.convention ? deps.convention() : { windows: deps.windows }
+    if (!convention) return
+    for (const t of matchFileTokens(logical.text, convention)) {
       if (inRange(t.startIndex, t.text.length)) {
-        const abs = resolveFileToken(t.path, deps.getCwd(), { windows: deps.windows })
+        const abs = resolveFileToken(t.path, deps.getCwd(), convention)
         if (!abs) return
         // Swallow the click NOW so tmux never gets the mouse report; existence is async and a
         // Cmd/Ctrl+click on a path-shaped token is a deliberate open regardless of the outcome.
