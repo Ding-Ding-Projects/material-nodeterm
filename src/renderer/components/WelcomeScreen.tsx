@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { useI18n } from '@renderer/lib/i18n'
+import { Localized } from '@renderer/ui/Localized'
 
 interface WelcomeScreenProps {
   onNewProject: () => void
@@ -37,6 +39,7 @@ export function WelcomeScreen({
   onClose,
   overBoard
 }: WelcomeScreenProps) {
+  const { ts } = useI18n()
   useEffect(() => {
     if (!onClose) return
     const onKey = (e: KeyboardEvent) => {
@@ -54,8 +57,8 @@ export function WelcomeScreen({
       {onClose && (
         <button
           onClick={onClose}
-          title="Close"
-          aria-label="Close"
+          title={ts('welcome.close', 'Close')}
+          aria-label={ts('welcome.close', 'Close')}
           style={{
             position: 'absolute',
             top: 16,
@@ -94,7 +97,12 @@ export function WelcomeScreen({
         </svg>
         <span className="welcome__name">nodeterm</span>
       </div>
-      <p className="welcome__tagline">A canvas of terminals. Start a project to begin.</p>
+      <Localized
+        id="welcome.tagline"
+        fallback="A canvas of terminals. Start a project to begin."
+        as="p"
+        className="welcome__tagline"
+      />
 
       <div className="welcome__cards">
         <button className="welcome__card" onClick={onNewProject}>
@@ -102,14 +110,14 @@ export function WelcomeScreen({
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <path d="M12 11v5M9.5 13.5h5" />
           </svg>
-          <span>New project</span>
+          <span>{ts('welcome.card.newProject', 'New project')}</span>
         </button>
 
         <button className="welcome__card" onClick={onOpenFolder}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
           </svg>
-          <span>Open folder…</span>
+          <span>{ts('welcome.card.openFolder', 'Open folder…')}</span>
         </button>
 
         <button className="welcome__card" onClick={onCloneRepo}>
@@ -117,7 +125,7 @@ export function WelcomeScreen({
             <path d="M12 3v10M8 9l4 4 4-4" />
             <path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
           </svg>
-          <span>Clone repo…</span>
+          <span>{ts('welcome.card.cloneRepo', 'Clone repo…')}</span>
         </button>
 
         <button className="welcome__card" onClick={onConnectSsh}>
@@ -125,13 +133,15 @@ export function WelcomeScreen({
             <rect x="3" y="5" width="18" height="14" rx="2" />
             <path d="M7 10l3 2-3 2M13 14h4" />
           </svg>
-          <span>Connect over SSH…</span>
+          <span>{ts('welcome.card.connectSsh', 'Connect over SSH…')}</span>
         </button>
       </div>
 
       {closedProjects.length > 0 && (
         <div className="welcome__recent">
-          <div className="welcome__recent-title">Recently closed</div>
+          <div className="welcome__recent-title">
+            {ts('welcome.recent.title', 'Recently closed')}
+          </div>
           <div className="welcome__recent-list">
             {closedProjects.map((p) => (
               <div
@@ -153,8 +163,8 @@ export function WelcomeScreen({
                 {onDeleteClosed && (
                   <button
                     className="welcome__recent-del"
-                    title="Delete permanently (ends its sessions)"
-                    aria-label="Delete permanently"
+                    title={ts('welcome.recent.deleteTitle', 'Delete permanently (ends its sessions)')}
+                    aria-label={ts('welcome.recent.deleteTitle', 'Delete permanently (ends its sessions)')}
                     onClick={(e) => {
                       e.stopPropagation()
                       onDeleteClosed(p.id)

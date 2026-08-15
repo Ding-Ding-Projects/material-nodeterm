@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { confirmKeyAction } from './confirm-key'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
+import { useI18n } from '@renderer/lib/i18n'
 
 interface ConfirmDialogProps {
   message: string
@@ -39,7 +40,7 @@ export function ConfirmDialog({
   message,
   body,
   confirmLabel,
-  cancelLabel = 'Cancel',
+  cancelLabel,
   danger: dangerProp,
   alert = false,
   option,
@@ -47,10 +48,18 @@ export function ConfirmDialog({
   onConfirm,
   onCancel
 }: ConfirmDialogProps) {
+  const { ts, emoji } = useI18n()
   // An alert has nothing destructive to warn about and nothing to cancel; anything else keeps the
   // historical destructive defaults ("Delete", danger styling, focus parked on the safe button).
+  // Only the component's OWN defaults are localized here — a caller-supplied label (e.g. "Remove
+  // worktree") is that caller's copy and passes through untouched.
   const danger = dangerProp ?? !alert
-  const confirmText = confirmLabel ?? (alert ? 'OK' : 'Delete')
+  const cancelText = cancelLabel ?? ts('dialog.confirm.cancel', 'Cancel')
+  const confirmText =
+    confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete'))
+  // Non-semantic decoration only (Settings → Language → "Show emojis…"): purely visual, never
+  // part of the accessible name, and never a substitute for the message's actual words.
+  const emojiChar = emoji(alert ? 'ℹ️' : danger ? '🗑️' : '❓')
   // One id per instance, for the lifetime of the component (mount order == paint order == stack).
   const idRef = useRef<string>()
   if (!idRef.current) idRef.current = nextDialogId()
@@ -92,7 +101,14 @@ export function ConfirmDialog({
     <div className="confirm-overlay" onClick={onCancel}>
       <div className="confirm" ref={boxRef} onClick={(e) => e.stopPropagation()}>
         {body}
-        <p className="confirm__msg">{message}</p>
+        <p className="confirm__msg">
+          {emojiChar && (
+            <span aria-hidden="true">
+              {emojiChar}{' '}
+            </span>
+          )}
+          {message}
+        </p>
         {option && (
           <label className="confirm__option">
             <input
@@ -109,7 +125,7 @@ export function ConfirmDialog({
               harmless one the primary action may keep it. */}
           {!alert && (
             <button className="confirm__btn" autoFocus={danger} onClick={onCancel}>
-              {cancelLabel}
+              {cancelText}
             </button>
           )}
           <button

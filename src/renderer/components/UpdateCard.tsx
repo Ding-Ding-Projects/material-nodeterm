@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UpdateProgress } from '@shared/types'
+import { useI18n } from '@renderer/lib/i18n'
 
 // The full updater lifecycle as one status union, driving a fixed bottom-right card.
 // `checking` is only ever shown for a user-initiated manual check; automatic checks stay
@@ -21,6 +22,7 @@ export function UpdateCard(): JSX.Element | null {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [minimized, setMinimized] = useState(false)
   const upToDateTimer = useRef<number | null>(null)
+  const { t, ts } = useI18n()
 
   useEffect(() => {
     const offAvailable = window.nodeTerminal.updates.onAvailable((info) => {
@@ -113,14 +115,14 @@ export function UpdateCard(): JSX.Element | null {
       status.kind === 'available'
         ? `${Math.round(status.percent)}%`
         : status.kind === 'downloaded'
-          ? 'Ready'
+          ? ts('update.pill.ready', 'Ready')
           : status.kind === 'error'
             ? '!'
             : '…'
     return (
       <button
         className="update-card update-card--pill"
-        title="Show update"
+        title={ts('update.title.manual', 'Update available')}
         onClick={() => setMinimized(false)}
       >
         <span className="update-card__dot" />
@@ -131,18 +133,18 @@ export function UpdateCard(): JSX.Element | null {
 
   const title =
     status.kind === 'checking'
-      ? 'Checking for updates…'
+      ? ts('update.title.checking', 'Checking for updates…')
       : status.kind === 'available'
-        ? 'Downloading Update'
+        ? ts('update.title.downloading', 'Downloading Update')
         : status.kind === 'manual'
-          ? 'Update available'
+          ? ts('update.title.manual', 'Update available')
           : status.kind === 'downloaded'
-          ? 'Update ready'
-          : status.kind === 'upToDate'
-            ? "You're up to date"
-            : status.kind === 'required'
-              ? 'Update required'
-              : 'Update failed'
+            ? ts('update.title.ready', 'Update ready')
+            : status.kind === 'upToDate'
+              ? ts('update.title.upToDate', "You're up to date")
+              : status.kind === 'required'
+                ? ts('update.title.required', 'Update required')
+                : ts('update.title.error', 'Update failed')
 
   const canMinimize = status.kind === 'available' || status.kind === 'downloaded'
   const canDismiss =
@@ -151,78 +153,121 @@ export function UpdateCard(): JSX.Element | null {
     status.kind === 'upToDate' ||
     status.kind === 'error'
 
+  const minSupportedClause =
+    status.kind === 'required' && status.minSupported
+      ? t('update.minSupportedClause', ' (minimum {minSupported})', {
+          minSupported: status.minSupported
+        }).primary
+      : ''
+
   return (
     <div className="update-card">
       <div className="update-card__head">
         <span className="update-card__title">{title}</span>
         {canMinimize && (
-          <button className="update-card__icon" title="Minimize" onClick={() => setMinimized(true)}>
+          <button
+            className="update-card__icon"
+            title={ts('update.minimize', 'Minimize')}
+            onClick={() => setMinimized(true)}
+          >
             —
           </button>
         )}
         {canDismiss && (
-          <button className="update-card__icon" title="Dismiss" onClick={dismiss}>
+          <button
+            className="update-card__icon"
+            title={ts('announce.dismiss', 'Dismiss')}
+            onClick={dismiss}
+          >
             ✕
           </button>
         )}
       </div>
 
       {status.kind === 'checking' && (
-        <p className="update-card__body">Looking for a newer version…</p>
+        <p className="update-card__body">
+          {ts('update.body.checking', 'Looking for a newer version…')}
+        </p>
       )}
 
       {status.kind === 'available' && (
         <>
-          <p className="update-card__body">nodeterm v{status.version} is downloading.</p>
+          <p className="update-card__body">
+            {t('update.body.downloading', 'nodeterm v{version} is downloading.', {
+              version: status.version
+            }).primary}
+          </p>
           <button className="update-card__link" onClick={openReleases}>
-            Release notes
+            {ts('update.releaseNotes', 'Release notes')}
           </button>
           <div className="update-card__bar">
             <div className="update-card__bar-fill" style={{ width: `${status.percent}%` }} />
           </div>
-          <p className="update-card__pct">Downloading… {Math.round(status.percent)}%</p>
+          <p className="update-card__pct">
+            {
+              t('update.downloadingPct', 'Downloading… {percent}%', {
+                percent: String(Math.round(status.percent))
+              }).primary
+            }
+          </p>
         </>
       )}
 
       {status.kind === 'manual' && (
         <>
           <p className="update-card__body">
-            nodeterm v{status.version} is available. Download it to update.
+            {
+              t(
+                'update.body.manual',
+                'nodeterm v{version} is available. Download it to update.',
+                { version: status.version }
+              ).primary
+            }
           </p>
           <button className="update-card__btn" onClick={openReleases}>
-            Download
+            {ts('update.download', 'Download')}
           </button>
         </>
       )}
 
       {status.kind === 'downloaded' && (
         <>
-          <p className="update-card__body">nodeterm v{status.version} is ready to install.</p>
+          <p className="update-card__body">
+            {t('update.body.ready', 'nodeterm v{version} is ready to install.', {
+              version: status.version
+            }).primary}
+          </p>
           <button className="update-card__link" onClick={openReleases}>
-            Release notes
+            {ts('update.releaseNotes', 'Release notes')}
           </button>
           <button
             className="update-card__btn"
             onClick={() => window.nodeTerminal.updates.restart()}
           >
-            Restart to update
+            {ts('update.restart', 'Restart to update')}
           </button>
         </>
       )}
 
       {status.kind === 'upToDate' && (
-        <p className="update-card__body">nodeterm is on the latest version.</p>
+        <p className="update-card__body">
+          {ts('update.body.upToDate', 'nodeterm is on the latest version.')}
+        </p>
       )}
 
       {status.kind === 'required' && (
         <>
           <p className="update-card__body">
-            This version is no longer supported
-            {status.minSupported ? ` (minimum ${status.minSupported})` : ''}. Please update to
-            continue.
+            {
+              t(
+                'update.body.required',
+                'This version is no longer supported{minSupportedClause}. Please update to continue.',
+                { minSupportedClause }
+              ).primary
+            }
           </p>
           <button className="update-card__btn" onClick={() => window.nodeTerminal.updates.check()}>
-            Update now
+            {ts('update.updateNow', 'Update now')}
           </button>
         </>
       )}
@@ -231,7 +276,7 @@ export function UpdateCard(): JSX.Element | null {
         <>
           <p className="update-card__body">{status.message}</p>
           <button className="update-card__link" onClick={openReleases}>
-            Download manually
+            {ts('update.downloadManually', 'Download manually')}
           </button>
         </>
       )}
