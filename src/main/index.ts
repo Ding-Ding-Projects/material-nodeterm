@@ -1,7 +1,7 @@
 import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { readFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import { statSync } from 'fs'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
@@ -23,6 +23,11 @@ import { writeFilesToClipboard } from './clipboard-files'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerVsCodeHandlers } from '../core/vscode-handlers'
+import { LocalHistoryStore } from '../core/local-history'
+import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
+import { describeSettingsChange } from '../shared/settings-diff'
+import type { Settings } from '../shared/types'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
@@ -587,6 +592,62 @@ app.whenReady().then(async () => {
   scheduledSettingsStore.init()
   scheduledSettingsStore.registerIpc()
   scheduledSettingsService.start()
+  // Local, git-backed settings history (docs/local-history.md). One append-only revision per
+  // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
+  // shell that saves settings, rather than re-derived per process.
+  const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
+  settingsStore.setHistoryRecorder((before, after, override) => {
+    if (override) {
+      void localHistoryStore.record({
+        domain: 'settings',
+        filename: 'settings.json',
+        content: JSON.stringify(after, null, 2),
+        label: override.label,
+        action: override.action
+      })
+      return
+    }
+    const change = describeSettingsChange(before, after)
+    if (!change) return
+    void localHistoryStore.record({
+      domain: 'settings',
+      filename: 'settings.json',
+      content: JSON.stringify(after, null, 2),
+      label: change.label,
+      action: change.action
+    })
+  })
+  registerLocalHistoryHandlers(corePlatform, {
+    historyStore: localHistoryStore,
+    domainFilenames: { settings: 'settings.json' },
+    restoreHandlers: {
+      settings: async (content: string, sha: string) => {
+        const parsed = JSON.parse(content) as Settings
+        await settingsStore.applyRestoredSettings(parsed, `Restored settings to ${sha.slice(0, 7)}`)
+      }
+    }
+  })
+  registerVsCodeHandlers(corePlatform)
+  ipcMain.handle(
+    IPC.exportSaveText,
+    async (_e, suggestedFilename: string, content: string): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }> => {
+      // `getMainWindow()` returns the narrow structural `MainWindowLike` (a testability seam),
+      // not a real BrowserWindow — and `showSaveDialog` needs the real thing to parent a sheet.
+      // Ask Electron directly, exactly as the app-close handler below does, and fall back to the
+      // parentless overload rather than casting the seam away.
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null
+      const result = win
+        ? await dialog.showSaveDialog(win, { defaultPath: suggestedFilename })
+        : await dialog.showSaveDialog({ defaultPath: suggestedFilename })
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+      try {
+        await writeFile(result.filePath, content, 'utf-8')
+        return { ok: true, path: result.filePath }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
   sshStore.registerIpc()
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()

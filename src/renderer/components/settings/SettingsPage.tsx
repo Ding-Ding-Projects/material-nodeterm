@@ -34,6 +34,7 @@ import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
 import { LanguageSection } from './sections/LanguageSection'
 import { SchoolModeSection } from './sections/SchoolModeSection'
 import { PersonalVocabularySection } from './sections/PersonalVocabularySection'
+import { LocalHistorySection } from './sections/LocalHistorySection'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -120,6 +121,7 @@ export function SettingsPage({
             <PrivacySection isActive={active === 'privacy'} />
             <SchoolModeSection isActive={active === 'school-mode'} />
             <PersonalVocabularySection isActive={active === 'vocabulary'} />
+            <LocalHistorySection isActive={active === 'history'} />
           </div>
         </main>
       </SettingsSearchContext.Provider>

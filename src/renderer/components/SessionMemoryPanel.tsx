@@ -9,14 +9,29 @@
 //      never enters the agent-status map at all.
 //   3. Every row is rendered. A cap would have to announce itself.
 
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AgentState } from '@shared/agents/normalize'
 import { formatBytes } from '@shared/fsLimits'
+import type { ExportTable } from '@shared/export'
+import { buildTableExport } from '@shared/export'
 import { useAgentStatus } from '../state/agentStatus'
 import { useProjects } from '../state/projects'
 import { useSessionMemory } from '../state/sessionMemory'
-import { resolveSessionRows, totalMb } from '../lib/sessionMemoryRows'
+import { resolveSessionRows, totalMb, type SessionMemoryView } from '../lib/sessionMemoryRows'
 import { usageScopeKey } from '../lib/usageScope'
+import {
+  clearSelection,
+  emptySelection,
+  invertSelection,
+  isSelected,
+  selectAll,
+  selectRange,
+  toggleOne,
+  pruneSelection,
+  type BulkSelectionState
+} from '../lib/bulkSelection'
+import { BulkActionBar, type BulkAction } from './BulkActionBar'
+import { ExportMenu } from './ExportMenu'
 
 export interface SessionMemoryPanelProps {
   /** Travel to the node behind a row. Canvas passes `travelToNode`, so a CLOSED project's tab is
@@ -26,6 +41,37 @@ export interface SessionMemoryPanelProps {
    *  Canvas re-resolves the owner at click time and only uses this for the wording. */
   onKillSession: (nodeId: string, orphan: boolean) => void
   onClose: () => void
+}
+
+/** The panel as an exportable table — every column a row shows, so the export matches the screen.
+ *  Bulk-select-and-export builds this from just the selected rows; the header's "Export…" builds
+ *  it from every row CURRENTLY on screen (`measured` rows only — see the ExportMenu wiring below). */
+function toExportTable(views: readonly SessionMemoryView[]): ExportTable {
+  return {
+    name: 'session_memory',
+    columns: [
+      { key: 'title', label: 'Title' },
+      { key: 'command', label: 'Command' },
+      { key: 'totalMb', label: 'Total MB' },
+      { key: 'childrenMb', label: 'Children MB' },
+      { key: 'childCount', label: 'Child processes' },
+      { key: 'project', label: 'Project' },
+      { key: 'orphan', label: 'Orphan (no node on any canvas)' },
+      { key: 'session', label: 'tmux session' },
+      { key: 'nodeId', label: 'Node id' }
+    ],
+    rows: views.map((v) => ({
+      title: v.title,
+      command: v.row.command,
+      totalMb: v.row.totalMb,
+      childrenMb: v.row.childrenMb,
+      childCount: v.row.childCount,
+      project: v.projectName,
+      orphan: v.orphan,
+      session: v.row.session,
+      nodeId: v.row.nodeId
+    }))
+  }
 }
 
 /** Every number in this feature is MB; `formatBytes` speaks bytes. One formatter, so the panel's
@@ -89,6 +135,41 @@ export function SessionMemoryPanel({
     [rows, projects, states]
   )
 
+  // Bulk selection (see docs/bulk-actions.md). Keyed by nodeId — `resolveSessionRows` gives an
+  // orphan row its session name as a stand-in id (`SessionMemoryRow.nodeId` is always populated),
+  // so it stays a stable key across a sweep even for a row with no canvas node behind it.
+  const [selection, setSelection] = useState<BulkSelectionState>(emptySelection())
+  const visibleIds = useMemo(() => views.map((v) => v.row.nodeId), [views])
+  // A refresh can drop a row (the session ended elsewhere) — prune rather than let a stale id
+  // linger in the "N selected" count forever.
+  useEffect(() => {
+    setSelection((s) => pruneSelection(s, visibleIds))
+  }, [visibleIds])
+  const [exportResult, setExportResult] = useState<string | null>(null)
+
+  const bulkActions: BulkAction<SessionMemoryView>[] = useMemo(
+    () => [
+      {
+        id: 'export-selected',
+        label: 'Export selected (CSV)',
+        describe: (v) => `${v.title} — ${formatMb(v.row.totalMb)}`,
+        run: async (items) => {
+          const built = buildTableExport(toExportTable(items), 'csv')
+          const result = await window.nodeTerminal.export.saveText(built.filename, built.content, built.mimeType)
+          if (!result.ok) {
+            if (result.canceled) return { succeeded: [], failed: [] }
+            return {
+              succeeded: [],
+              failed: items.map((item) => ({ item, reason: result.error ?? 'Save failed.' }))
+            }
+          }
+          return { succeeded: items, failed: [] }
+        }
+      }
+    ],
+    []
+  )
+
   // The sweep runs on OPEN (the panel is unmounted while closed) and on ⟳ — never on a timer, and
   // never from the pill: it walks the whole process table, and on an SSH scope that is an ssh exec
   // plus a `ps` of somebody else's machine. The project id is explicit, because the store's
@@ -126,10 +207,51 @@ export function SessionMemoryPanel({
     body = <div className="sessmem-panel__note">No sessions are running here.</div>
   } else {
     body = (
+      <>
+        <div className="sessmem-panel__export">
+          <ExportMenu kind="tabular" label="session memory" build={(format) => buildTableExport(toExportTable(views), format)} />
+        </div>
+        <BulkActionBar<SessionMemoryView>
+          visible={views}
+          idOf={(v) => v.row.nodeId}
+          selectedIds={selection.selected}
+          onSelectAll={() => setSelection(selectAll(visibleIds))}
+          onInvert={() => setSelection(invertSelection(selection, visibleIds))}
+          onClear={() => setSelection(clearSelection())}
+          actions={bulkActions}
+          onActionComplete={(_id, result) => {
+            const parts: string[] = []
+            if (result.succeeded.length > 0) parts.push(`${result.succeeded.length} exported`)
+            if (result.failed.length > 0) parts.push(`${result.failed.length} failed`)
+            setExportResult(parts.length > 0 ? parts.join(', ') : null)
+            if (parts.length > 0) setTimeout(() => setExportResult(null), 6000)
+          }}
+        />
+        {exportResult && (
+          <div className="sessmem-panel__toast" role="status" aria-live="polite">
+            {exportResult}
+          </div>
+        )}
       <ul className="sessmem-panel__rows">
         {/* Every row, in core's order (already sorted by total, descending). */}
         {views.map((v) => (
           <li key={v.row.session} className="sessmem-row">
+            <input
+              type="checkbox"
+              className="sessmem-row__select"
+              checked={isSelected(selection, v.row.nodeId)}
+              aria-label={`Select ${v.title}`}
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  setSelection((s) => selectRange(s, v.row.nodeId, visibleIds))
+                } else {
+                  setSelection((s) => toggleOne(s, v.row.nodeId))
+                }
+              }}
+              // The checkbox's own click already toggled the selection above; onChange would
+              // fire a second, redundant toggle on some browsers' checkbox semantics.
+              onChange={() => {}}
+            />
             <button
               className="sessmem-row__main"
               // Nothing to travel to. The guard inside is not redundant: `disabled` is the DOM's
@@ -173,6 +295,7 @@ export function SessionMemoryPanel({
           </li>
         ))}
       </ul>
+      </>
     )
   }
 

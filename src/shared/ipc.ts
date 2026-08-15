@@ -485,5 +485,19 @@ export const IPC = {
   ollamaChatStop: 'ollama:chat-stop',
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
-  ollamaChatStream: 'ollama:chat-stream'
+  ollamaChatStream: 'ollama:chat-stream',
+  // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
+  // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
+  // whichever machine is actually running the shell (this desktop, or the Server Edition host).
+  vscodeDetect: 'vscode:detect',
+  vscodeOpen: 'vscode:open',
+  // Save exported text content to disk. Desktop: a real native Save-As dialog + write, returning
+  // the chosen path. Electron-only — see src/main/index.ts; the Server Edition/browser build
+  // falls back to a plain Blob download in the renderer (src/renderer/lib/exportSave.ts), which
+  // has no path to hand back, so "Open in Visual Studio Code" is disabled there.
+  exportSaveText: 'export:save-text',
+  // Local, git-backed version history for user-managed records this app owns (settings today —
+  // see src/core/local-history.ts, docs/local-history.md). Registered on BOTH shells.
+  historyList: 'history:list',
+  historyRestore: 'history:restore'
 } as const

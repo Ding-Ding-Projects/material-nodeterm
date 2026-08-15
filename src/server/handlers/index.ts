@@ -8,6 +8,11 @@ import { generateCommitMessage } from '../../core/commit-message'
 import { registerFsHandlers } from '../../core/fs-handlers'
 import { registerConverterIpc } from '../../core/converter/register-ipc'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
+import { registerVsCodeHandlers } from '../../core/vscode-handlers'
+import { LocalHistoryStore } from '../../core/local-history'
+import { registerLocalHistoryHandlers } from '../../core/local-history-handlers'
+import type { SettingsStore } from '../../core/settings-store'
+import { describeSettingsChange } from '../../shared/settings-diff'
 import { claudeCliCaps, registerClaudeCliIpc } from '../../core/claude-cli'
 import { registerCodexIdentityIpc } from '../../core/codex-identity-caps'
 import { UNKNOWN_CODEX_IDENTITY_CAPS } from '@shared/types'
@@ -29,6 +34,10 @@ export function registerCoreHandlers(
     downloadTickets?: DownloadTickets
     /** See fs-handlers' dep of the same name — the canvas-image write directory. */
     localProjectCwd?: (projectId: string) => string | undefined
+    /** Present so this registrar can wire the settings history recorder AND the restore path
+     *  (core/local-history.ts). Optional only for tests that construct this registrar without a
+     *  real SettingsStore; the server's own boot (src/server/index.ts) always supplies it. */
+    settingsStore?: SettingsStore
   }
 ): { gitService: GitService } {
   // Explorer downloads: mint a one-shot ticket over this (authenticated) channel; the transfer
@@ -56,6 +65,46 @@ export function registerCoreHandlers(
   // the browser. See docs/file-converter.md and docs/ollama-manager.md.
   registerConverterIpc(platform)
   registerOllamaIpc(platform)
+  // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
+  // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
+  // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).
+  registerVsCodeHandlers(platform)
+  const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
+  if (deps.settingsStore) {
+    const settingsStore = deps.settingsStore
+    settingsStore.setHistoryRecorder((before, after, override) => {
+      if (override) {
+        void localHistoryStore.record({
+          domain: 'settings',
+          filename: 'settings.json',
+          content: JSON.stringify(after, null, 2),
+          label: override.label,
+          action: override.action
+        })
+        return
+      }
+      const change = describeSettingsChange(before, after)
+      if (!change) return
+      void localHistoryStore.record({
+        domain: 'settings',
+        filename: 'settings.json',
+        content: JSON.stringify(after, null, 2),
+        label: change.label,
+        action: change.action
+      })
+    })
+  }
+  registerLocalHistoryHandlers(platform, {
+    historyStore: localHistoryStore,
+    domainFilenames: { settings: 'settings.json' },
+    restoreHandlers: {
+      settings: async (content: string, sha: string) => {
+        if (!deps.settingsStore) throw new Error('Settings history is unavailable.')
+        const parsed = JSON.parse(content) as Settings
+        await deps.settingsStore.applyRestoredSettings(parsed, `Restored settings to ${sha.slice(0, 7)}`)
+      }
+    }
+  })
 
   const gitService = new GitService()
   // registers all git:* channels via the global core platform().handle

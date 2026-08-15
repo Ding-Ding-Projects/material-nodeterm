@@ -135,6 +135,14 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M10 6a2.6 2.6 0 0 1 0 4M11.8 4.2a5.2 5.2 0 0 1 0 7.6" />
     </>
   ),
+  // A clock with a counter-clockwise arrow — "go back to how it was", not "what time is it".
+  history: (
+    <>
+      <path d="M2.8 7.4a5.4 5.4 0 1 0 1.7-3.6L2.6 5.6" />
+      <path d="M2.4 2.8v3h3" />
+      <path d="M8 5.2v3l2 1.2" />
+    </>
+  ),
   // A paint roller over a rectangle — editing how one ELEMENT looks, as opposed to `appearance`'s
   // whole-theme disc.
   'appearance-editor': (
