@@ -117,8 +117,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       onChanged: (projectId, cb) => files.boardLog.onChanged(projectId, cb)
     },
 
-    // `settings` stays LOCAL (font/cursor/theme render in YOUR window). It came in via `...local`;
-    // `real.settings` is deliberately left unused so a remote tab never adopts the host's prefs.
+    // `settings` (and `scheduledSettings` alongside it) stays LOCAL (font/cursor/theme render in
+    // YOUR window, on YOUR schedule). It came in via `...local`; `real.settings` is deliberately
+    // left unused so a remote tab never adopts the host's prefs or the host's schedule.
 
     // `dialog` REFINES Task 5's coarse "dialog → local". `selectFolder`/`selectFile` are the only
     // members `DialogApi` exposes, and in a remote tab BOTH are host-path pickers, not local ones:

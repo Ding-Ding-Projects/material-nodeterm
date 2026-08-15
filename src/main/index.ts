@@ -16,6 +16,8 @@ import { PtyManager } from '../core/pty-manager'
 import { WorkspaceStore } from '../core/workspace-store'
 import { WorkspaceWatcher } from '../core/workspace-watcher'
 import { SettingsStore } from '../core/settings-store'
+import { ScheduledSettingsStore } from '../core/scheduled-settings-store'
+import { ScheduledSettingsService } from '../core/scheduled-settings-service'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
 import { GitService } from '../core/git-service'
@@ -217,6 +219,8 @@ function isSafeExternalUrl(url: unknown): url is string {
 }
 
 const settingsStore = new SettingsStore()
+const scheduledSettingsStore = new ScheduledSettingsStore()
+const scheduledSettingsService = new ScheduledSettingsService(scheduledSettingsStore)
 const sshStore = new SshStore()
 const ptyManager = new PtyManager()
 // Dictation: local whisper.cpp models live under userData, one dir per install (same convention
@@ -529,6 +533,9 @@ app.whenReady().then(async () => {
 
   settingsStore.init()
   settingsStore.registerIpc()
+  scheduledSettingsStore.init()
+  scheduledSettingsStore.registerIpc()
+  scheduledSettingsService.start()
   sshStore.registerIpc()
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()
@@ -2333,6 +2340,7 @@ let quitFlushed = false
 app.on('before-quit', (e) => {
   quitting = true // from here on, window close-events must NOT be turned into hide
   destroyNotchHud()
+  scheduledSettingsService.stop()
   workspaceWatcher.dispose()
   if (quitFlushed) {
     // Second pass (the deferred app.quit() below): the flush had its chance — drop the masters.

@@ -1145,6 +1145,31 @@ export interface SettingsApi {
   save(settings: Settings): Promise<void>
 }
 
+/** Scheduled settings (docs/scheduled-settings.md): schedule an appearance override for a
+ *  date+time window, gated by a local switch, an HTTPS API, or a Home Assistant boolean entity.
+ *  All network access and the periodic evaluator live in the main process (or the Server
+ *  Edition's equivalent boundary) — the renderer only ever reads the resolved result. */
+export interface ScheduledSettingsApi {
+  load(): Promise<import('./scheduled-settings').ScheduledSettingsFile>
+  /** `{ok:false, error}` on a bounds/shape violation — never thrown. */
+  save(
+    file: import('./scheduled-settings').ScheduledSettingsFile
+  ): Promise<{ ok: boolean; error?: string }>
+  /** Store (`token`) or clear (`null`) the Home Assistant access token for one rule. The token is
+   *  never read back over IPC — see `tokenStatus`. */
+  setHomeAssistantToken(ruleId: string, token: string | null): Promise<void>
+  /** Which rule ids currently have a Home Assistant token stored (a status dot, never the token). */
+  tokenStatus(): Promise<Record<string, boolean>>
+  /** Force-refresh one rule's external source right now (the Settings UI's "Retry" action). */
+  refreshRule(ruleId: string): Promise<void>
+  /** One-shot read of the current resolution — for a UI that mounts after the first push. */
+  activeState(): Promise<import('./scheduled-settings').ScheduledSettingsActiveState>
+  /** Fires whenever the resolved schedule changes. Returns unsubscribe. */
+  onActiveChange(
+    cb: (state: import('./scheduled-settings').ScheduledSettingsActiveState) => void
+  ): () => void
+}
+
 /** A downloadable whisper model plus its on-disk status, as returned by `speech.models()`. */
 export interface SpeechModelInfo extends WhisperModelInfo {
   downloaded: boolean
@@ -2182,6 +2207,7 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   dialog: DialogApi
   settings: SettingsApi
+  scheduledSettings: ScheduledSettingsApi
   speech: SpeechApi
   ssh: SshApi
   sshProject: SshProjectApi

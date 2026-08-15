@@ -16,6 +16,7 @@ import type {
   Workspace,
   WorkspaceMigrationKind
 } from '../shared/types'
+import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
@@ -52,6 +53,13 @@ const subscribePeerPending = subscribe<[{ sas: string | null; id: string }]>(IPC
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
 const subscribeRelayHostClosed = subscribe<[{ id: string }]>(IPC.relayHostClosed)
+
+// Scheduled settings (docs/scheduled-settings.md): the resolved-schedule push can have more than
+// one subscriber at once (the Settings → Schedule panel AND the always-mounted apply-controller in
+// Canvas.tsx), so it goes through the fan-out helper like the other broadcast channels above.
+const subscribeScheduledSettingsActive = subscribe<[ScheduledSettingsActiveState]>(
+  IPC.scheduledSettingsActiveChange
+)
 
 const api: NodeTerminalApi = {
   pty: {
@@ -141,6 +149,16 @@ const api: NodeTerminalApi = {
   settings: {
     load: () => ipcRenderer.invoke(IPC.settingsLoad),
     save: (settings) => ipcRenderer.invoke(IPC.settingsSave, settings)
+  },
+  scheduledSettings: {
+    load: () => ipcRenderer.invoke(IPC.scheduledSettingsLoad),
+    save: (file: ScheduledSettingsFile) => ipcRenderer.invoke(IPC.scheduledSettingsSave, file),
+    setHomeAssistantToken: (ruleId: string, token: string | null) =>
+      ipcRenderer.invoke(IPC.scheduledSettingsSetHaToken, ruleId, token),
+    tokenStatus: () => ipcRenderer.invoke(IPC.scheduledSettingsTokenStatus),
+    refreshRule: (ruleId: string) => ipcRenderer.invoke(IPC.scheduledSettingsRefreshRule, ruleId),
+    activeState: () => ipcRenderer.invoke(IPC.scheduledSettingsActiveState),
+    onActiveChange: subscribeScheduledSettingsActive
   },
   githubIssues: {
     subscribe: (projectId) => ipcRenderer.invoke(IPC.githubIssuesSubscribe, { projectId }),
