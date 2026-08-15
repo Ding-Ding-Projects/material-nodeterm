@@ -391,6 +391,39 @@ const FEATURES = [
     docs: ['docs/command-palette.md'],
   },
   {
+    // Shipped: docs/team-presence.md records "Stage 1, Stage 2 and Stage 3 landed".
+    id: 'team-presence',
+    label: 'Team presence',
+    files: [
+      'src/core/presence/hub.ts',
+      'src/renderer/components/PresenceLayer.tsx',
+      'src/renderer/components/PresenceChips.tsx',
+    ],
+    contentChecks: [
+      ['src/renderer/components/PresenceLayer.tsx', 'export function PresenceLayer'],
+      ['src/renderer/components/PresenceChips.tsx', 'export function PresenceChips'],
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'PresenceLayer' },
+    docs: ['docs/team-presence.md'],
+  },
+  {
+    // macOS-only by nature, but a shipped surface with its own settings section — so it is a
+    // contract like any other. A feature that exists on only one platform still has to exist.
+    id: 'notch-hud',
+    label: 'Notch HUD (macOS)',
+    files: ['src/main/notch-hud.ts', 'src/renderer/components/settings/sections/NotchSection.tsx'],
+    contentChecks: [['src/main/notch-hud.ts', 'export function initNotchHud']],
+    settingsSection: 'notch',
+    docs: ['docs/notch-hud.md'],
+  },
+  {
+    id: 'agent-mascots',
+    label: 'Walking agent mascots',
+    files: ['src/renderer/nodes/AgentMascot.tsx'],
+    contentChecks: [['src/renderer/nodes/AgentMascot.tsx', 'export function AgentMascot']],
+    docs: ['docs/mascot-sprites.md'],
+  },
+  {
     // Named in the shared instructions as mandatory and explicitly NOT opt-out-able, and it had
     // code and a doc but no row here for the entire time this guard has existed. That is the exact
     // failure the header comment warns about: a list that only validates what it already knows
@@ -948,6 +981,83 @@ if (stylesText.includes('data-md-theme')) {
       fail(`Stylesheet is structurally broken (${problems.join('; ')}) — it will fail the build, which is the only other thing that would notice`)
     } else {
       pass(`Stylesheet: ${opens} comments and ${braceOpen} rules all balanced, no dangling terminators`)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
+// The inventory's OWN completeness
+// ---------------------------------------------------------------------
+//
+// Everything above checks that each listed feature is present. Nothing checked that the LIST is
+// complete — and it was not: dim-sum (named in the shared instructions as mandatory and not
+// opt-out-able), session memory, team presence, the notch HUD and the agent mascots all had code,
+// a doc, and no row. The guard passed the whole time, because a list that only validates what it
+// already knows about cannot notice what nobody added to it. That is the failure this file's own
+// header warns about, one level up.
+//
+// So: every `docs/*.md` must either be referenced by a feature row, or be named below as
+// deliberately not a feature contract, WITH a reason. A new feature doc goes red until someone
+// decides which it is. That is the whole mechanism — it cannot spot a feature that has no doc
+// either, but this project documents features as it ships them, so a doc is the earliest artifact
+// a scan can catch.
+const NON_FEATURE_DOCS = new Map([
+  ['app-contract.md', 'this guard\'s own documentation'],
+  ['app-design-tokens.md', 'design-token reference, not a user-facing surface'],
+  ['building.md', 'build process'],
+  ['ci-and-releases.md', 'release process'],
+  ['codex-shared-identity.md', 'agent internals — the agent-support row covers the surface'],
+  ['gemini-agent.md', 'per-agent write-up — see the agent-support row'],
+  ['grok-agent.md', 'per-agent write-up — see the agent-support row'],
+  ['hook-reply-approvals.md', 'agent hook internals'],
+  ['node-identity.md', 'agent hook credential internals'],
+  ['ssh-agent-skills.md', 'agent internals on the remote-ssh surface'],
+  ['github-issues-kanban.md', 'workflow note for maintainers, not an app surface'],
+  ['ios-protocol-migration.md', 'the mobile companion lives in a separate repo'],
+  ['mobile-usage-inbox.md', 'the mobile companion lives in a separate repo'],
+  ['remote-sessions.md', 'design notes behind the remote-ssh row'],
+  ['site.md', 'the Pages site has its own guard: scripts/check-site-contract.mjs'],
+  ['site-features.md', 'the Pages site has its own guard: scripts/check-site-contract.mjs'],
+  ['troubleshooting-codex-snap.md', 'troubleshooting note'],
+  ['windows.md', 'platform guide for users'],
+  ['windows-support.md', 'platform guide for contributors']
+])
+
+{
+  const referenced = new Set()
+  for (const f of FEATURES) for (const d of f.docs ?? []) {
+    referenced.add((Array.isArray(d) ? d[0] : d).replace(/^docs\//, ''))
+  }
+  let docFiles = []
+  try {
+    docFiles = readdirSync(join(REPO_ROOT, 'docs')).filter((f) => f.endsWith('.md'))
+  } catch {
+    fail('Inventory completeness: cannot read docs/ — the scan below would pass vacuously')
+  }
+  checkedCount += 1
+  if (docFiles.length < 20) {
+    // A scan that finds almost nothing reports clean. Same class of silent failure as the bug.
+    fail(`Inventory completeness: only ${docFiles.length} docs found — that is not the docs/ tree`)
+  } else {
+    const orphans = docFiles.filter((d) => !referenced.has(d) && !NON_FEATURE_DOCS.has(d))
+    if (orphans.length) {
+      fail(
+        `Inventory completeness: ${orphans.length} doc(s) describe something with no feature row ` +
+          `and no stated reason — ${orphans.join(', ')}. Add a FEATURES row, or add it to ` +
+          `NON_FEATURE_DOCS with why it is not a contract.`,
+      )
+    } else {
+      pass(
+        `Inventory completeness: all ${docFiles.length} docs are either a feature row or explicitly not a contract`,
+      )
+    }
+    // A stale exemption is its own drift: it stops anyone noticing the doc was deleted.
+    checkedCount += 1
+    const goneExemptions = [...NON_FEATURE_DOCS.keys()].filter((d) => !docFiles.includes(d))
+    if (goneExemptions.length) {
+      fail(`Inventory completeness: NON_FEATURE_DOCS names ${goneExemptions.join(', ')}, which no longer exist`)
+    } else {
+      pass(`Inventory completeness: no stale entries in NON_FEATURE_DOCS`)
     }
   }
 }
