@@ -245,6 +245,11 @@ describe('settings:save atomic write', () => {
     await fake.handlers[IPC.settingsSave]({ ...DEFAULT_SETTINGS, fontSize: 19 })
 
     const mode = (await fs.stat(path.join(dir, 'settings.json'))).mode & 0o777
-    expect(mode).toBe(0o600)
+    // NTFS has no POSIX rwx triad, and node's fs mode support on Windows only ever toggles the
+    // read-only attribute ("the distinction among the permissions of group, owner, or others is
+    // not implemented" — node:fs docs) — 0o600 always reports back as 0o666 there. The strongest
+    // available assertion on win32 is that the file was not left read-only.
+    if (process.platform === 'win32') expect(mode & 0o200).not.toBe(0)
+    else expect(mode).toBe(0o600)
   })
 })

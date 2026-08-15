@@ -47,7 +47,12 @@ describe('ElectronGitHubSecretStore', () => {
     await store.save('github_pat_secret')
 
     expect(store.availability).toBe('restricted-file')
-    expect((await fs.stat(path.join(userDataDir, 'github-issues-token.json'))).mode & 0o777).toBe(0o600)
+    const mode = (await fs.stat(path.join(userDataDir, 'github-issues-token.json'))).mode & 0o777
+    // NTFS has no POSIX rwx triad — node's fs mode support on Windows only toggles the read-only
+    // attribute (0o600 always reports back as 0o666 there). The strongest available assertion on
+    // win32 is that the file was not left read-only.
+    if (process.platform === 'win32') expect(mode & 0o200).not.toBe(0)
+    else expect(mode).toBe(0o600)
     expect(await store.readForHost()).toBe('github_pat_secret')
   })
 

@@ -167,7 +167,11 @@ describe('minimax cookie storage', () => {
     // permissions, and this value is a live bearer credential, not config.
     await writeProviderCookie('minimax', '_token=abc')
     const mode = fs.statSync(path.join(dir, 'minimax-cookie.json')).mode & 0o777
-    expect(mode).toBe(0o600)
+    // NTFS has no POSIX rwx triad — node's fs mode support on Windows only toggles the read-only
+    // attribute (0o600 always reports back as 0o666 there). The strongest available assertion on
+    // win32 is that the file was not left read-only.
+    if (process.platform === 'win32') expect(mode & 0o200).not.toBe(0)
+    else expect(mode).toBe(0o600)
     expect(fs.existsSync(path.join(dir, 'settings.json'))).toBe(false)
   })
 
