@@ -1,11 +1,14 @@
-# Keep the build context to what `npm run build` + `npm run server:build` actually read:
-# src/, package*.json, the tsconfigs and electron.vite.config.ts.
+# Keep the build context to what the image build actually reads: application sources/config,
+# package manifests, and the runtime entrypoint under deploy/.
 node_modules
 out
 dist
 .git
 .claude
 .nodeterm
+/.env
+/.env.bak
+/.nodeterm-env-*
 build
 site
 docs

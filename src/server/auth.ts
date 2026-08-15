@@ -80,6 +80,9 @@ export class Auth {
   }
 
   setPassword(password: string): void {
+    // The setup route validates this too, but environment seeds and programmatic callers bypass
+    // that route. Keep the account invariant at the operation that actually persists a password.
+    if (password.length < 8) throw new Error('Server passwords must be at least 8 characters')
     const salt = crypto.randomBytes(16)
     const hash = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, {
       N: SCRYPT_N,

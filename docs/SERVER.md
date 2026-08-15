@@ -302,12 +302,20 @@ produces a slim runtime image with `tmux`, `git` and `curl` (the managed hook sc
 through curl). Any Dockerfile-based PaaS (Dokploy, Coolify, plain compose) can deploy it:
 
 ```bash
-docker build -t nodeterm-server .
-docker run -d -p 8443:8443 \
-  -e NODETERM_SERVER_PASSWORD='choose-a-strong-one' \
-  -v nodeterm-data:/data \
-  nodeterm-server
+./host.sh             # macOS / Linux
+host.bat              # Windows
 ```
+
+Both wrappers generate a random first-boot password into the ignored root `.env`, restrict that
+file to the current user (`0600` or a Windows ACL), build through Compose, and wait for the image's
+real `/login` health check. They refuse an inherited `NODETERM_SERVER_PASSWORD`, because Compose
+would let it silently override the credential the wrapper just advertised from `.env`. To drive the
+image directly, pass a password of at least eight characters through an owner-only `--env-file`
+(never as a literal command-line argument), or omit it and use the one-time setup URL from
+`docker logs`. The wrappers require a local Docker socket: their loopback URL, TLS readiness probe,
+and SSH hint all refer to the machine on which the wrapper itself runs. They also pin the Compose
+file, project name, env file and profiles, then export exactly the loopback bind, port and password
+they validated; inherited Compose controls are rejected rather than allowed to redirect the stack.
 
 On Dokploy specifically: create an app from this repo (Dockerfile build), attach a volume at
 `/data`, set `NODETERM_SERVER_PASSWORD`, and point a domain at container port `8443` — Traefik
@@ -316,21 +324,37 @@ and the clipboard runs in a secure context.
 
 Things the image decides for you (see the Dockerfile comments for the full why):
 
-- **node-pty is compiled against Node's ABI, not Electron's.** The repo's `postinstall` runs
-  `electron-rebuild`, which targets Electron — every install in the image uses
-  `--ignore-scripts` plus an explicit `npm rebuild node-pty`. Don't "simplify" that away.
+- **Both native addons are compiled against Node's ABI, not Electron's.** The repo's `postinstall`
+  runs `electron-rebuild`, which targets Electron — every install in the image uses
+  `--ignore-scripts` plus an explicit `npm rebuild node-pty smart-whisper`. Rebuilding only
+  node-pty leaves terminals healthy but browser dictation unable to load its native binding.
+- **The server process is unprivileged.** The entrypoint starts as root, repairs only root-owned
+  uid/gid entries on the literal `/data` filesystem for compatibility with the older image, then
+  immediately `exec`s Node as uid 1000. It never follows an operator-supplied `NODETERM_DATA_DIR`.
 - **`--insecure-http` is passed** because the container must bind `0.0.0.0` for the proxy to
   reach it, and TLS lives in the proxy. Never publish the port directly on a public interface.
 - **A container restart/redeploy kills the tmux server** (it lives inside the container). The
   cold-restore path bridges it — scrollback replays from the `/data` snapshot and resumable
   agents relaunch with `--resume` — but running processes die with each deploy. This is the one
   behavioral difference from a long-lived host install, where only a machine reboot does that.
-- **`/data` must be a volume** — auth, sessions, workspace and scrollback snapshots live there;
-  without it every restart forgets the password and the canvas.
+- **Reuse a `/data` volume across replacements** — auth, sessions, workspace and scrollback
+  snapshots live there. A same-container restart keeps its writable layer, but a replacement or
+  redeploy without the same volume loses the password and canvas.
 
 Agent CLIs (`claude` etc.) are not baked into the image — install them into the running
 container (or extend the image) and authenticate inside a terminal node; their config lives
 under the container user's home, so consider a volume there too if you rely on them.
+
+Run the full repeatable image check after Docker/Compose/host changes:
+
+```bash
+node scripts/test-docker-host.mjs
+```
+
+It builds the real image, checks `/login`, both renderer/server bundles, `node-pty` and
+`smart-whisper`, verifies PID 1 is uid 1000, observes a clean SIGTERM exit, then proves auth and a
+data marker survive a restart and complete container recreation. It creates uniquely named test
+resources and removes only those resources when it finishes.
 
 ### CSP
 
