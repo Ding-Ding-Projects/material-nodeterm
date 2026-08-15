@@ -345,6 +345,9 @@ summaries are distilled from.
 | [`AGENTS.md`](./AGENTS.md) | A **sanitized mirror** of this project's working conventions, written for AI coding agents — see the note at the top of that file for what "mirror" means here. |
 | [`CHANGELOG.md`](./CHANGELOG.md) | What shipped, when, generated from the real commit history. |
 | [`docs/narrator.md`](./docs/narrator.md) | The spoken TTS narrator (Settings → Interface → Narrator) — voice pickers, queue and cooldown rules, failure modes. |
+| [`docs/dim-sum.md`](./docs/dim-sum.md) | The startup dim-sum surprise — what it is, when it fires, and why it has no off switch. |
+| [`docs/school-mode.md`](./docs/school-mode.md) | School mode — the shared switch, the rename, and the honest limits of a user-experience lock. |
+| [`docs/personal-vocabulary.md`](./docs/personal-vocabulary.md) | The local personal-vocabulary JSON upload — schema, bounds, and the local-only guarantee. |
 
 ## 🪟 Windows
 
