@@ -176,6 +176,21 @@ const FEATURES = [
     ],
   },
   {
+    // Added after the completeness check below found it had no row — which is not an academic
+    // gap: this exact file once imported a module that does not exist, which killed the whole
+    // ES-module graph and served a BLANK site. `node --check` passed (syntax is not resolution),
+    // this guard passed, and the server returned 200. Only a browser console showed it.
+    id: 'pair-device',
+    label: 'Pair a device',
+    file: 'site/app/features/pair-device.js',
+    exportName: 'registerPairDevice',
+    contentChecks: [
+      // The import that broke it. Asserting the real one is present means the same mistake fails
+      // here rather than in production.
+      ['site/app/features/pair-device.js', "from '../core/engine.js'"],
+    ],
+  },
+  {
     id: 'dim-sum-surprise',
     label: 'Dim sum surprise',
     file: 'site/app/features/dimsum.js',
@@ -648,6 +663,69 @@ if (cdnHits.length > 0) {
     for (const m of missing) fail(`Broken module import (the page will be blank): ${m}`)
   } else {
     pass(`Module graph: all ${importCount} relative imports across site/ resolve to real files`)
+  }
+}
+
+// ---------------------------------------------------------------------
+// The inventory's OWN completeness
+// ---------------------------------------------------------------------
+//
+// Everything above checks that each listed feature is present. Nothing checked that the LIST was
+// complete, and the sibling guard (check-app-contract.mjs) was found with FIVE shipped features
+// missing from its list, passing cleanly the whole time. A list that only validates what it
+// already knows about cannot notice what nobody added to it.
+//
+// This found two here, and one of them matters: `pair-device.js` had no row — and it is the exact
+// file whose unresolvable import blanked the ENTIRE site earlier, undetected by this guard, by
+// `node --check` (syntax is not resolution), and by a 200 response from the server. The one
+// feature nobody was watching is the one that took the site down.
+//
+// The check reads the ROWS, not this file's source text. Scanning the source would let a module
+// count as covered because its name appears in a comment — which is precisely what hid these two,
+// since the header above mentions `site/app/features/index.js`. Worse, every NON_FEATURE_MODULES
+// key is written in this file too, so the exemption map would have been redundant with the check
+// it is meant to qualify: a guard whose two halves cannot disagree only looks like it has two.
+const NON_FEATURE_MODULES = new Map([
+  ['index.js', 'the registrar barrel (FEATURE_REGISTRARS) — it wires features rather than being one'],
+])
+
+{
+  const FEATURES_DIR = join(SITE_DIR, 'app', 'features')
+  let modules = []
+  try {
+    modules = readdirSync(FEATURES_DIR).filter((f) => f.endsWith('.js'))
+  } catch {
+    fail('Inventory completeness: cannot read site/app/features — the scan below would pass vacuously')
+  }
+  checkedCount += 1
+  if (modules.length < 10) {
+    // A scan that finds almost nothing reports clean — the same silent failure this guard exists
+    // to prevent, one level up.
+    fail(`Inventory completeness: only ${modules.length} feature modules found — that is not the features directory`)
+  } else {
+    const rowFiles = new Set(
+      FEATURES.flatMap((f) => [f.file, ...(f.contentChecks ?? []).map(([p]) => p)])
+        .filter(Boolean)
+        .map((p) => p.split('/').pop()),
+    )
+    const orphans = modules.filter((m) => !rowFiles.has(m) && !NON_FEATURE_MODULES.has(m))
+    if (orphans.length) {
+      fail(
+        `Inventory completeness: ${orphans.length} feature module(s) have no row and no stated ` +
+          `reason — ${orphans.join(', ')}. Add a FEATURES row, or add it to NON_FEATURE_MODULES ` +
+          `with why it is not a contract.`,
+      )
+    } else {
+      pass(`Inventory completeness: all ${modules.length} feature modules are covered by a row`)
+    }
+    // A stale exemption is its own drift — it stops anyone noticing the module was deleted.
+    checkedCount += 1
+    const gone = [...NON_FEATURE_MODULES.keys()].filter((m) => !modules.includes(m))
+    if (gone.length) {
+      fail(`Inventory completeness: NON_FEATURE_MODULES names ${gone.join(', ')}, which no longer exist`)
+    } else {
+      pass('Inventory completeness: no stale entries in NON_FEATURE_MODULES')
+    }
   }
 }
 
