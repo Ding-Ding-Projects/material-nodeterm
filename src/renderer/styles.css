@@ -47,6 +47,24 @@
   --warn: #ff9f0a;
   --caution: #ffd60a;
   --success: #32d74b;
+  /* RGB triplets of the three hues above, for the call sites that need a tint rather than the
+     solid colour. They are separate tokens because CSS cannot take an alpha of an existing hex
+     variable — the same reason `--tint-rgb` exists. Keep each in step with the hex above it in
+     BOTH themes; the light theme redefines all of them together.
+     (Written without a literal variable reference on purpose: styles.theme.test.ts scans this
+     file for referenced-but-undefined tokens, and it reads comments too.) */
+  --accent-rgb: 10, 132, 255;
+  --danger-rgb: 255, 69, 58;
+  --warn-rgb: 255, 159, 10;
+  /* The monospace stack, defined once so the terminal, code blocks and the converter's byte
+     previews cannot drift apart. */
+  --mono-font: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  /* The raised knob on a switch or slider. White is the conventional answer on a coloured track
+     in BOTH themes, so this is not a colour that changes — it is a colour that CAN change. Left
+     as a bare `#fff` it is an un-themed near-white surface, which is exactly what
+     styles.theme.test.ts refuses: a theme that wanted a tinted knob would have to hunt down each
+     call site instead of setting one token. */
+  --knob: #fff;
 
   /* THE CANVAS. Deliberately blacker than `--bg` in dark — the nodes are the content and the
      field behind them recedes. In light it has to go the other way, off-white and slightly
@@ -155,6 +173,16 @@
   --warn: #a85c00;
   --caution: #806100;
   --success: #1f7a38;
+  /* Triplets for the darkened light-theme hues — see the dark block's note. Left out, the tinted
+     call sites would keep painting the DARK theme's brighter hues onto a white field. */
+  --accent-rgb: 0, 122, 255;
+  --danger-rgb: 198, 42, 31;
+  --warn-rgb: 168, 92, 0;
+  /* Same white knob on this theme too — a switch/slider thumb sits on its own coloured track, not
+     on the page, so it does not need to darken the way the status hues above do. Restated here
+     rather than inherited because the light theme is required to override every colour token, so
+     that "did anyone think about this one?" is answered explicitly for each. */
+  --knob: #fff;
   /* Same story for the working clay: #d97757 is tuned for a dark field and measures 2.7:1 against
      these surfaces — under this palette's 4.3 floor, and it is rendered as TEXT (the badge count),
      not just a dot. Darkened at the same hue (15°) into the band the other status hues occupy,
@@ -11573,7 +11601,7 @@ body,
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--knob);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   transition: transform 120ms ease;
 }
@@ -11678,7 +11706,7 @@ body,
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--knob);
   border: 1px solid rgba(0, 0, 0, 0.3);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   margin-top: -2px;
