@@ -132,6 +132,11 @@ import { markMobileLaunchSeen, shouldShowMobileLaunch } from '../lib/mobileLaunc
 import type { DictationTarget } from '../components/DictationOverlay'
 import { describeOs, REPO_URL } from '../lib/bugReport'
 import { shouldReleasePaneFocus } from '../lib/paneFocus'
+import {
+  adoptedNodesNotice,
+  decideExternalChange,
+  mergeIncomingNodes
+} from '../lib/externalChange'
 import { viewportAtZoom1 } from '../lib/zoomReset'
 import { isSpaceRelease, spacePanKeydown } from '../lib/spacePan'
 import { UpdateCard } from '../components/UpdateCard'
@@ -185,6 +190,7 @@ import { sshFs } from '../terminal/ssh-fs'
 import {
   agentHibernateFns,
   agentRestartFn,
+  guardConcurrentRestart,
   planBulkRestart,
   restartEligibility,
   settleRestart,
@@ -277,6 +283,7 @@ import { buildBackgroundLinkMaps, buildContextLinkNote, buildLinkMap, buildNoteP
 import { dependencyEdges, launchesToFire, unmetDeps, type ArmedNode } from '../lib/pendingLaunch'
 import { freeSpot } from '../lib/placement'
 import { pushSessionRename } from '../lib/sessionRename'
+import { oneLine } from '@shared/one-line'
 import { parseLenses, verifyLensPrompt, verifySynthesisPrompt } from '../lib/verifyPanel'
 import { useSettings } from '../state/settings'
 import { activePermissionMode } from '../state/permissionMode'
@@ -314,6 +321,10 @@ import { createCanvasOrder, createReconnectWatch, type CanvasOrder } from '@shar
 import { createMutationGuard } from '@shared/canvas-mutations'
 import { chordHeld, isHoldChord, isModifierEventKey, matchesShortcut } from '@shared/shortcut'
 
+// The dispatch below is the CONSUMER of the confirm-gated set. Before this import the set named
+// write/close as "the confirm-gated pair" from inside `src/main` — which this project cannot see —
+// while the gating lived in two hand-written blocks here, so the set decided nothing.
+import { isDestructiveVerb } from '@shared/control-verbs'
 import { canvasSyncTarget } from './collab-sync'
 import {
   applyCanvasMutation,
@@ -701,9 +712,12 @@ export function Canvas() {
   // give the debounced-autosave effect a dependency that CHANGES in that case — `dirty` stays true
   // throughout, so without it the effect would never re-arm. Rare, so a re-render costs nothing.
   const [resaveTick, setResaveTick] = useState(0)
-  // The active project's .nodeterm file changed on disk while we have unsaved local edits
-  // (the user must pick a side). One-shot v2→v3 migration note (dismissible strip).
-  const [conflict, setConflict] = useState<Project | null>(null)
+  // The active project's .nodeterm file changed on disk while we have unsaved local edits AND it
+  // changed something we also hold (the user must pick a side for that half). `added` counts the
+  // nodes that arrived with it and were already adopted onto the canvas — they are never part of
+  // the choice (see adoptIncomingNodes), only of the sentence, so the bar cannot imply that
+  // "Keep my version" would throw a live session away. One-shot v2→v3 migration note (dismissible strip).
+  const [conflict, setConflict] = useState<{ project: Project; added: number } | null>(null)
   const [migrationNote, setMigrationNote] = useState<string | null>(null)
   // A local edit team-sync cannot carry (a node over MUTATION_MAX_BYTES — in practice a sticky
   // whose body someone pasted a document into). The reflector refuses it SILENTLY, so the user is
@@ -1972,7 +1986,31 @@ export function Canvas() {
     useProjects.getState().requestReload()
   }, [])
 
-  // Outside edits to a project's .nodeterm file (git pull / sync / teammate / another machine).
+  /** Put nodes that arrived from ANOTHER device onto the live canvas immediately.
+   *
+   *  Called for every external change while dirty — bar or no bar. An incoming node id nothing here
+   *  holds cannot collide with a local edit, and unlike a git pull nobody re-emits it: the phone
+   *  appends the session it started straight into project.json (`appendProjectNode`) and then
+   *  forgets about it. Leaving it parked behind the conflict bar meant "Keep my version" — or just
+   *  switching tabs, which drops the bar and lets the next whole-workspace save write our canvas
+   *  over disk — deleted a node whose tmux session is still running, headless and unreachable. */
+  const adoptIncomingNodes = useCallback(
+    (added: CanvasNodeState[]) => {
+      if (!added.length) return
+      const next = mergeIncomingNodes(nodesRef.current, nodeStatesToFlow(added))
+      if (next === nodesRef.current) return
+      nodesRef.current = next
+      setNodes(next)
+      // The adopted nodes only exist on disk in the version we did NOT take: count them as an edit
+      // so the next save writes them back out under our canvas too.
+      bumpDirty()
+      setNotice({ kind: 'info', text: adoptedNodesNotice(added.length) })
+    },
+    [setNodes, bumpDirty]
+  )
+
+  // Outside edits to a project's .nodeterm file (git pull / sync / teammate / another machine /
+  // the phone registering a session it started).
   useEffect(() => {
     return api.workspace.onExternalChange((project) => {
       const { activeProjectId: current } = useProjects.getState()
@@ -1981,16 +2019,41 @@ export function Canvas() {
         useProjects.getState().replaceProject(project)
         return
       }
-      if (!dirtyRef.current) {
-        // Active but no unsaved local edits: reload in place.
+      // `base` is our last-known DISK state (the store copy is written by a load or a commit+save);
+      // React Flow holds the live, possibly dirty canvas. Both are needed to tell "the file only
+      // grew a node" from "the file and I disagree about the same nodes".
+      const decision = decideExternalChange({
+        dirty: dirtyRef.current,
+        base: useProjects.getState().getProject(project.id),
+        incoming: project,
+        liveNodeIds: nodesRef.current.map((n) => n.id)
+      })
+      if (decision.kind === 'reload') {
+        // Active but no unsaved local edits: reload in place (the incoming file already carries any
+        // added nodes, so nothing extra to adopt).
         useProjects.getState().replaceProject(project)
         reloadActiveProject()
         return
       }
-      // Active with unsaved local edits: let the user pick a side.
-      setConflict(project)
+      // Dirty. Whatever happens to the overlapping half, the sessions registered elsewhere are ours
+      // to keep — they are the only part of this payload nobody can produce a second time.
+      adoptIncomingNodes(decision.added)
+      if (decision.kind === 'conflict') {
+        // Something we also hold changed on disk: let the user pick a side for THAT half. The bar
+        // keeps its documented meaning (the discarded disk side is re-fetchable — a git pull, a
+        // teammate's commit), and it now names what already landed on the canvas behind it.
+        setConflict({ project, added: decision.added.length })
+        return
+      }
+      if (decision.kind === 'merge') {
+        // Purely additive: the store's baseline can safely move to the disk version (it differs
+        // from our last save only by the nodes we just adopted). No bar — there is nothing to
+        // choose between.
+        useProjects.getState().replaceProject(project)
+      }
+      // 'ignore': a self-write echo / a change we already hold. Nothing to do, and above all no bar.
     })
-  }, [reloadActiveProject])
+  }, [reloadActiveProject, adoptIncomingNodes])
 
   // One-shot note after an on-disk migration (dismissible, non-blocking strip). Both kinds change
   // where the user's data lives, so neither may happen silently.
@@ -2018,6 +2081,14 @@ export function Canvas() {
   // switches projects first, drop it: commitActiveToStore already preserved the local edits in
   // the store, so the next save keeps our version — resolving the stale bar against a different
   // active project would be wrong.
+  //
+  // Dropping it IS an implicit "keep mine", and that was a data-loss path while an incoming node
+  // could sit behind the bar. It no longer can: nodes registered from another device are adopted
+  // onto the canvas before the bar is ever raised (see adoptIncomingNodes), so what a switch
+  // discards is only the overlapping half — a git pull / a teammate's commit, which is still in the
+  // remote and re-fetchable. Parking the bar across the switch would not have saved anything
+  // either: `writeDisk` saves the WHOLE workspace from the store, so the overwrite happens at the
+  // next save of ANY project, not at the moment the bar disappears.
   useEffect(() => {
     setConflict(null)
   }, [activeProjectId])
@@ -5993,6 +6064,75 @@ export function Canvas() {
       const reply = (r: { ok: boolean; message?: string; result?: unknown; error?: string }) =>
         api.sendAgentControlResult({ requestId, ...r })
 
+      // ── Agent messaging (`send`/`reply`) — handled BEFORE the source-routing machinery ──────
+      // These are STORE_ANSWERED_VERBS (lib/controlRouting): routing by source must never travel
+      // to the sender's project (G5 — an off-canvas orchestrator would otherwise yank the human's
+      // view on every message and clear an unread badge via `setActive` on the way), and the
+      // delivery goes to a tmux PANE, not to a canvas, so no live canvas is needed at either end.
+      // The renderer's whole job here: validate the arguments, check the SOURCE is a
+      // control-capable agent, and forward to main — where the scope check, the per-project
+      // switch, flow control and the pane probes all run against main's own stores
+      // (src/main/agent-messaging.ts).
+      if (verb === 'send' || verb === 'reply' || verb === 'notify') {
+        const targetId = (args.node ?? '').trim()
+        if (!targetId) {
+          reply({ ok: false, error: `${verb} requires --node` })
+          return
+        }
+        // notify is APP-OWNED TEXT ONLY (#98's rule, kept verbatim): the caller cannot smuggle a
+        // prompt through its arguments. The body itself is substituted in MAIN (NOTIFY_BODY) —
+        // this refusal is the polite half, that substitution is the boundary.
+        if (verb === 'notify' && args.text) {
+          reply({ ok: false, error: 'notify does not accept --text' })
+          return
+        }
+        if (verb !== 'notify' && !args.text) {
+          reply({ ok: false, error: `${verb} requires --text` })
+          return
+        }
+        const live = nodesRef.current.find((n) => n.id === sourceNodeId)
+        const stored = useProjects
+          .getState()
+          .projects.flatMap((p) => p.nodes)
+          .find((n) => n.id === sourceNodeId)
+        if (!live && !stored) {
+          reply({ ok: false, error: 'source node is not in any open project' })
+          return
+        }
+        const srcAgent = (live?.data.agentId ?? stored?.agentId) as string | undefined
+        if (!sourceIsControlCapable(srcAgent)) {
+          reply({ ok: false, error: 'source node is not a control-capable agent' })
+          return
+        }
+        // The SAME per-node lock every renderer-driven run that types into the target pane takes
+        // (restart, hibernate-exit, wake-resume, the confirmed `write`). Main serialises
+        // deliveries against each other; this lock serialises them against those runs — a
+        // delivery must never land inside a wake's un-submitted resume line.
+        let delivered: { ok: boolean; message?: string; result?: unknown; error?: string } | null =
+          null
+        const outcome = await guardConcurrentRestart(targetId, async () => {
+          delivered = await api.agentMessage.deliver({
+            verb,
+            sourceNodeId,
+            targetNodeId: targetId,
+            body: args.text ?? ''
+          })
+          return 'done' as const
+        })()
+        if (outcome === 'not-eligible') {
+          // The guard's own word for "that node is mid-restart/mid-wake": a retryable refusal in
+          // the same dialect main renders, so the caller learns the same way in both cases.
+          reply({
+            ok: false,
+            error:
+              'targetBusy: the target is mid-restart or mid-wake. Retryable — wait, then try once more.'
+          })
+          return
+        }
+        reply(delivered ?? { ok: false, error: 'delivery produced no reply' })
+        return
+      }
+
       // Which canvas answers? React Flow holds only the ACTIVE project's nodes, but every OTHER
       // project's tmux sessions keep running and are re-adopted on the next app start — so after a
       // restart the agents of every project the app did NOT come up on were answered by a canvas
@@ -6926,7 +7066,13 @@ export function Canvas() {
           }
           case 'rename': {
             const id = args.node ?? ''
-            const title = (args.title ?? '').trim()
+            // `oneLine`, not `.trim()`: this is the door the agent-supplied title comes through,
+            // and the title does not stop here — it is composed into the submitted `/rename` line
+            // (which `renameCommand` also strips, since a title reaches that from the workspace
+            // file and from `generateName` too), quoted into the context-link note pushed into a
+            // THIRD session, and read back by the phone, push alerts and the board log. Landing it
+            // clean at the door is what keeps a control character out of all of them at once.
+            const title = oneLine(args.title ?? '')
             const target = nodesRef.current.find((nd) => nd.id === id)
             if (!target) {
               reply({ ok: false, error: `rename: no node with id ${id}` })
@@ -6957,7 +7103,15 @@ export function Canvas() {
             // mounted on top of a destructive one (the worktree-removal confirm) turned an Enter
             // aimed at THIS harmless prompt into a deletion. `confirmBusy` covers every confirm
             // state, not just `confirm`. Reject instead.
-            if (confirmBusy()) {
+            //
+            // `isDestructiveVerb` is read here rather than restated: until this line the set was
+            // read by nothing but its own unit test, while TOLERANT_CONTROL_VERBS' doc comment,
+            // hook-server's buildPtyEnv note and docs/node-identity.md:65 all named it as the
+            // confirm-gated set. Reading it is what ties the two together — it does not make the
+            // dialog below conditional on the set, and adding a verb to the set would not give
+            // that verb a dialog. See `src/shared/control-verbs.ts` for what this does and does
+            // not buy.
+            if (isDestructiveVerb(verb) && confirmBusy()) {
               reply({ ok: false, error: 'a confirmation is already pending — try again' })
               return
             }
@@ -6968,16 +7122,36 @@ export function Canvas() {
               requestedBy: srcTitle,
               onConfirm: async () => {
                 setConfirm(null)
-                try {
-                  const ok = await api.pty.sendText(args.node, args.text ?? '')
-                  reply({
-                    ok,
-                    message: ok ? 'sent' : 'failed',
-                    error: ok ? undefined : 'sendText failed'
-                  })
-                } catch (e) {
-                  reply({ ok: false, error: String(e) })
+                // The SAME per-node lock the restart, hibernate-exit and wake-resume runs take.
+                // Its doc comment spells out why they take it: a second write arriving while a
+                // line sits un-submitted in the pane is spliced into that line. Every other
+                // `api.pty.sendText` caller was outside the lock, this one included, so a
+                // confirmed `write` could land in the middle of a hibernate exit's blind
+                // KILL_LINE + `/exit` (agent-restart.ts) or into an echo-verified launch line
+                // still waiting on its verification (command-delivery.ts). The dialog makes that
+                // rare, not impossible — the human confirms on their own clock, not the pane's.
+                let thrown: string | null = null
+                const outcome = await guardConcurrentRestart(args.node, async () => {
+                  try {
+                    const ok = await api.pty.sendText(args.node, args.text ?? '')
+                    return ok ? ('sent' as const) : ('failed' as const)
+                  } catch (e) {
+                    thrown = String(e)
+                    return 'failed' as const
+                  }
+                })()
+                if (outcome === 'not-eligible') {
+                  // A distinct, retryable refusal rather than a corrupted pane. `not-eligible` is
+                  // the guard's own word for "that node is mid-run"; the run holding it will
+                  // finish and the agent can send again.
+                  reply({ ok: false, error: 'target is busy with a restart or wake — try again' })
+                  return
                 }
+                reply({
+                  ok: outcome === 'sent',
+                  message: outcome === 'sent' ? 'sent' : 'failed',
+                  error: outcome === 'sent' ? undefined : (thrown ?? 'sendText failed')
+                })
               },
               onCancel: () => reply({ ok: false, error: 'denied by user' })
             })
@@ -6989,8 +7163,9 @@ export function Canvas() {
               return
             }
             // One confirm dialog at a time (see `write`): reject rather than orphan a pending one —
-            // or stack this one over a destructive dialog the user then cannot see.
-            if (confirmBusy()) {
+            // or stack this one over a destructive dialog the user then cannot see. Gated on the
+            // shared set for the same reason `write` is.
+            if (isDestructiveVerb(verb) && confirmBusy()) {
               reply({ ok: false, error: 'a confirmation is already pending — try again' })
               return
             }
@@ -7511,7 +7686,10 @@ export function Canvas() {
           const stuckRescueSkip = e.idle === true && cs.byId[e.nodeId]?.state !== 'working'
           // `pendingId` (deterministic approvals) rides a `blocked` event; the store keeps it only
           // while blocked so the header's Approve/Deny buttons appear + vanish with the state.
-          if (e.state && !stuckRescueSkip) cs.setState(e.nodeId, e.state, e.agentId, e.newTurn, e.pendingId)
+          // `e.verified` is the identity evidence for this very transition (hook-server labels it);
+          // it was in scope here and dropped on the floor before the store had a field for it.
+          if (e.state && !stuckRescueSkip)
+            cs.setState(e.nodeId, e.state, e.agentId, e.newTurn, e.pendingId, e.verified)
           if (e.newTurn) an.clearForParent(e.nodeId) // genuine new turn → drop the previous fan-out
           if (e.newTurn && e.task) {
             // Prompt-prefix fallback for /loop|/schedule|/cron when the natural-language
@@ -8439,8 +8617,9 @@ export function Canvas() {
         )}
         {conflict && (
           <ConflictBar
+            addedCount={conflict.added}
             onReload={() => {
-              useProjects.getState().replaceProject(conflict)
+              useProjects.getState().replaceProject(conflict.project)
               // The canvas now matches disk exactly → no local unsaved edits. Clear dirty so the
               // re-armed autosave (conflict just went null) can't turn around and overwrite the
               // just-reloaded disk version.

@@ -17,6 +17,8 @@ import {
   IDENTITY_RESTART_NOTE,
   IDENTITY_UNMINTABLE_NOTE,
   IDENTITY_UNMINTABLE_WARN_NOTE,
+  STRICT_CONTROL_REFUSAL,
+  STRICT_CONTROL_VERBS,
   type IdentityDecision
 } from './node-identity-policy'
 
@@ -34,7 +36,10 @@ const SLOWLORIS_MS = 2000
 // OUTSIDE core, so a future core-side handler with no bound of its own would inherit an unbounded
 // socket if this were `setTimeout(0)`. 130s sits comfortably above that, so in the desktop the
 // handler's own timeout always wins and this only ever fires as a backstop.
-const CONTROL_CEILING_MS = 130_000
+// Exported so a caller that parks on this socket can assert its own deadline sits under it by
+// RUNNING the comparison rather than by copying the number into a comment (the delivery receipt,
+// `agent-message.ts`, does exactly that).
+export const CONTROL_CEILING_MS = 130_000
 
 // The context-link handler has no timeout of its own, and its remote leg reads over an SSH
 // ControlMaster that can wedge (ConnectTimeout only covers the connect). Race it so the agent
@@ -124,6 +129,21 @@ export function parseControlBody(
 }
 
 /**
+ * `X-Nodeterm-Hook-Client` → the posting script's revision, or `undefined`.
+ *
+ * Strict on purpose: only an unsigned decimal integer counts. Anything else — a version string
+ * someone thought would be friendlier, a duplicated header (node hands those over as an array,
+ * which is not a string and so lands here as undefined), an empty value — is "no stamp", which is
+ * the same answer a pre-#195 script gives. Guessing a number out of "v3-beta" would be inventing
+ * evidence for a gate.
+ */
+function parseClientRevision(raw: string | string[] | undefined): number | undefined {
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw.trim())) return undefined
+  const n = Number(raw.trim())
+  return Number.isSafeInteger(n) ? n : undefined
+}
+
+/**
  * What the hook server knows about the POST an event arrived on, beyond the event itself.
  *
  * `verified` = the caller presented a per-node token THIS instance minted for THAT node id. It is
@@ -134,6 +154,32 @@ export function parseControlBody(
 export interface HookEventMeta {
   verified: boolean
 }
+
+/**
+ * Control verbs that admit ONLY a `verified` caller — the agent-messaging verbs.
+ *
+ * A route that admits only `verified` is untouched by the foreign-kid escape: an invented kid is
+ * FOREIGN, therefore `legacy` (invariant 3, required or cross-instance failover dies), therefore
+ * never `verified` (node-identity-policy.ts, `verifyNodeToken`'s foreign-kid rule). The escape
+ * defeats the latch and the window. It does not defeat this.
+ *
+ * Deliberately NOT routed through controlPolicy: `settings.hookIdentityStrict: false` releases the
+ * latch and the dated cutoff, and it must never release these. There is no upgrade population to
+ * protect — the routes are new — which is the one place in the whole control surface where
+ * fail-closed from day one costs nobody anything.
+ *
+ * Consulted in the `/control/` route BEFORE `identityGate`'s decision is, so no future change to
+ * the policy table can widen it; `messaging-verified-only.test.ts` drives the route on both sides
+ * of every hatch and is the test that fails if either half of this comment stops being true.
+ */
+export const requiresVerified: ReadonlySet<string> = new Set(['send', 'reply', 'notify'])
+
+/**
+ * The refusal for a messaging verb: one sentence, no diagnosis, no hint about tokens or restarts —
+ * the same posture as STRICT_CONTROL_REFUSAL, for the same reason. Advice here is advice to an
+ * attacker and a lie to nobody else.
+ */
+export const MESSAGING_CONTROL_REFUSAL = 'Agent messaging refused.'
 
 class HookServer {
   private server: Server | null = null
@@ -438,13 +484,33 @@ class HookServer {
             res.end()
             return
           }
+          // VERIFIED-ONLY VERBS, decided on the VERDICT and never on the decision: the policy's
+          // `decision` is what the escape hatch and the warning window can reach, and neither may
+          // reach these. See `requiresVerified` for the whole argument.
+          if (requiresVerified.has(verb) && verdict !== 'verified') {
+            if (wantsText) {
+              res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+              res.end(`${MESSAGING_CONTROL_REFUSAL}\n`)
+            } else {
+              res.writeHead(403, { 'content-type': 'application/json' })
+              res.end(JSON.stringify({ ok: false, error: MESSAGING_CONTROL_REFUSAL }))
+            }
+            return
+          }
           if (decision === 'refuse') {
             // The route's own refusal shape, so the sh shim (which prints any non-200 body to
             // stderr and exits 1) shows the sentence and nothing else.
             // Which sentence: a node in a case-folding collision group, or with an id
             // `isSafeNodeId` refuses, can NEVER pick up an identity, and telling it to restart is
             // an instruction to loop forever. See `identityRefusalNote`.
-            const note = this.identityRefusalNote(nodeId)
+            //
+            // A STRICT verb answers with its own flat sentence instead: those refusals are not a
+            // rollout accident to be talked through, they are the designed state for anything but
+            // a verified caller, and naming tokens or restarts there is advice to whoever is
+            // probing. See STRICT_CONTROL_VERBS.
+            const note = STRICT_CONTROL_VERBS.has(verb)
+              ? STRICT_CONTROL_REFUSAL
+              : this.identityRefusalNote(nodeId)
             if (wantsText) {
               res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
               res.end(`${note}\n`)
@@ -463,9 +529,13 @@ class HookServer {
           // The POSIX-sh shim asks for text/plain: it has no JSON parser, so the server does the
           // rendering the Node CLI used to do client-side. Everything else keeps the JSON shape.
           if (wantsText) {
+            // A FAILURE may now carry both: `error` is the machine-readable name a JSON client
+            // keys on, `message` the sentence a human (or a language model) reads. The text
+            // dialect has no fields, so it prefers the sentence and falls back to the name — which
+            // is what every existing handler still sends, so this is inert for all of them.
             const text = result.ok
               ? result.message ?? JSON.stringify(result.result ?? {})
-              : result.error ?? 'control request failed'
+              : result.message ?? result.error ?? 'control request failed'
             res.writeHead(result.ok ? 200 : 400, { 'content-type': 'text/plain; charset=utf-8' })
             res.end(note ? `${note}\n${text}\n` : `${text}\n`)
             return
@@ -545,6 +615,13 @@ class HookServer {
         }
         const verified = verdict === 'verified'
         if (verified) this.provenNodes.add(nodeId)
+        // WHICH CLIENT posted. A LABEL like `verified`, and for the same reason a second one was
+        // needed: an old managed script and a current one whose token file is missing send exactly
+        // the same bytes otherwise (the `version` form field is sourced from the endpoint file, so
+        // it reports OUR protocol version, not the client's). Absent or unparseable stays
+        // `undefined` — never 0 — because "no stamp" and "revision zero" are different claims and
+        // only the first one is true of a pre-#195 script.
+        const clientRevision = parseClientRevision(req.headers['x-nodeterm-hook-client'])
         if (agentId && nodeId && form.payload) {
           let payload: Record<string, unknown> = {}
           try {
@@ -566,7 +643,7 @@ class HookServer {
           // transcript_path). Inside the try so a throwing raw listener still ends 204.
           this.rawListener?.(agentId, nodeId, payload, { verified })
           const normalized = normalizeFor(agentId, { nodeId, agentId, payload })
-          if (normalized && this.listener) this.listener({ ...normalized, verified })
+          if (normalized && this.listener) this.listener({ ...normalized, verified, clientRevision })
         }
         res.writeHead(204)
         res.end()
@@ -813,7 +890,8 @@ class HookServer {
       // `-e` argv into a long-lived tmux CLIENT process whose /proc/<pid>/cmdline is mode 444 on a
       // stock Linux (no hidepid), so any unprivileged local user read a live app-wide bearer and
       // could drive canvas control — including `open-terminal --cmd`, which is NOT in the
-      // confirm-gated DESTRUCTIVE set. Every client already sources the 0600 endpoint file FIRST
+      // confirm-gated DESTRUCTIVE_VERBS set (src/shared/control-verbs.ts). Every client already
+      // sources the 0600 endpoint file FIRST
       // and prefers it, so nothing legitimate loses anything: the only regression surface is a
       // session whose endpoint file is unreadable AND whose env held a good token, a state that
       // means the data dir has vanished and the hook is meant to be inert anyway.

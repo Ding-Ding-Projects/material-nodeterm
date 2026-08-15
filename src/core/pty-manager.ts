@@ -26,12 +26,17 @@ import {
   localKillSockets,
   localTmuxKillArgs,
   remoteTmuxPtyArgs,
-  remoteTmuxSendKeysArgs,
+  remotePasteDelivery,
+  remoteFramedDelivery,
   remoteCapturePaneArgs,
   remotePaneCommandArgs,
+  remotePaneOwnerArgs,
+  remoteForegroundArgvArgs,
   remotePaneCursorArgs
 } from './remote-ssh/control-master'
 import { parsePaneCursor } from './pane-cursor'
+import { PANE_OWNER_FMT, foregroundArgvArgs, paneOwnerFrom, parsePaneOwner } from './agents/pane-owner'
+import type { PaneOwner } from '../shared/agents/pane-owner-predicate'
 import { readSpawnResources, spawnResourceNote } from './spawn-resources'
 import {
   primePtyCeiling,
@@ -42,9 +47,15 @@ import {
 } from './pty-devices'
 import { REAP_SWEEP_MS, shouldReap } from './pty-reap'
 import { ControlModeClient, type ControlSpawn } from './tmux-control-client'
-import { TMUX_SOCKET, sessionName, isSessionName } from './tmux-naming'
+import {
+  TMUX_SOCKET,
+  sessionName,
+  isSessionName,
+  localPasteDelivery,
+  localFramedDelivery,
+  runPasteDelivery
+} from './tmux-naming'
 import { encodeSendKeysHex } from './tmux-control'
-import { bracketedInjection } from './paste-injection'
 import { releasePty, type ReleasablePty } from './pty-release'
 import { effectiveSize, type PtySize } from './pty-size'
 import { machOArch, archMismatch } from './macho-arch'
@@ -60,6 +71,7 @@ import {
   installCodexLauncher
 } from './codex-identity-proxy'
 import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents/node-token-service'
+import { clearNode as clearNodeAgentStatus } from './agent-status-mirror'
 import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
@@ -111,6 +123,32 @@ const runAsync = ((file: string, args: readonly string[], opts?: object) =>
     timeout: PROC_TIMEOUT_MS,
     ...(opts ?? {})
   } as never)) as unknown as typeof execFileAsync
+
+/**
+ * `runAsync`, with a payload written to the child's STDIN.
+ *
+ * The delivery path (`sendText`) puts the text in `tmux load-buffer -`'s stdin rather than in an
+ * argument — no payload on a command line, and no MAX_ARG_STRLEN ceiling (measured: 300 KB in one
+ * argument is "Argument list too long"; the same over stdin lands intact).
+ *
+ * `execFile`'s promise carries the ChildProcess as `.child`, so this stays inside the one bounded
+ * wrapper every other side-call uses instead of hand-rolling a spawn: same `PROC_TIMEOUT_MS`, same
+ * rejection on a non-zero exit. An EPIPE on the write (the child died before reading) is swallowed
+ * here on purpose — the process result is the authority, and an unhandled 'error' on the stream
+ * would take the main process down instead of failing this one call.
+ */
+function runWithStdin(file: string, args: readonly string[], input: string): Promise<unknown> {
+  const p = execFileAsync(file, args as string[], { timeout: PROC_TIMEOUT_MS } as never)
+  const child = (p as unknown as { child: import('child_process').ChildProcess }).child
+  const stdin = child.stdin
+  if (stdin) {
+    stdin.on('error', () => {
+      /* child gone; the exit code below is what decides success */
+    })
+    stdin.end(input)
+  }
+  return p as unknown as Promise<unknown>
+}
 
 // Minimal tmux config so the user's ~/.tmux.conf never interferes. The tmux server
 // (under our socket) keeps sessions alive while no client is attached, which is what
@@ -1005,7 +1043,7 @@ export class PtyManager {
    *    is a name we have no claim to (a remote node's local orphan, another machine's idea of it, a
    *    session someone else made). An unknown key is not evidence of a session.
    *  - a node whose record says `remote`: its tmux is on the far host. Reaching it means the
-   *    project's ControlMaster (`remoteTmuxSendKeysArgs`), not this channel; refusing is the honest
+   *    project's ControlMaster (`remoteTmuxPasteArgs`), not this channel; refusing is the honest
    *    answer until that exists.
    */
   async backgroundWrite(persistKey: string, data: string): Promise<boolean> {
@@ -2783,50 +2821,53 @@ export class PtyManager {
    *
    * An SSH-project node has no LOCAL tmux session to target (its pty program is `ssh -t '<remote
    * attach>'`) — so if the node's LIVE session is registered with `sshRemote`, this runs the
-   * remote counterpart instead (`remoteTmuxSendKeysArgs`, over the project's ControlMaster),
+   * remote counterpart instead (`remoteTmuxPasteArgs`, over the project's ControlMaster),
    * mirroring how `remoteSessionExists` reuses `findSsh()` + `runAsync`. A node with no live
    * session at all (nothing mounted right now) still falls through to the local path and returns
    * false there, same as before this change — reaching a currently-unmounted SSH node's remote
    * session is not supported.
+   *
+   * ── DELIVERY: TMUX FRAMES THE PASTE, WE DO NOT ─────────────────────────────────────────────────
+   *
+   * Both paths are now one `tmux load-buffer - ; … ; paste-buffer -d -p -r ; send-keys Enter`
+   * invocation with the payload on STDIN. `localTmuxPasteArgs` carries the whole measurement: the
+   * old `#{bracket_paste_flag}` probe needed tmux 3.7 and, on every older tmux, quietly delivered
+   * raw newlines into the app instead of a paste; `paste-buffer -p` asks the pane itself and has
+   * done since tmux 1.7.
+   *
+   * ── WHY THIS METHOD IS ONLY A DISPATCHER ───────────────────────────────────────────────────────
+   *
+   * Everything decided per write — `sanitizePasteText`, the empty-body case, the per-call buffer
+   * name, and the buffer sweep when the paste fails — lives in `localPasteDelivery` /
+   * `remotePasteDelivery` / `runPasteDelivery`, which a real-tmux test drives DIRECTLY.
+   *
+   * That is a correction, not a preference. The first version of this change inlined those
+   * decisions here and let the test rebuild them in its own helper. Both sides were green and two
+   * mutations survived a full run: deleting the empty-body branch, and deleting the sanitize call.
+   * A test that re-implements what it is testing cannot notice the original being removed. So the
+   * composition is exported, both callers use it, and the only thing left in this method is which
+   * transport runs it.
    */
   async sendText(persistKey: string, text: string, opts?: { enter?: boolean }): Promise<boolean> {
     const enter = opts?.enter ?? true
     const target = sessionName(persistKey)
     const sshRemote = this.sessionByPersistKey(persistKey)?.sshRemote
-    if (sshRemote) {
-      const ssh = findSsh()
-      if (!ssh) return false
-      try {
-        await runAsync(ssh, remoteTmuxSendKeysArgs(sshRemote.conn, sshRemote.controlPath, target, text, enter))
-        return true
-      } catch {
-        return false
-      }
-    }
-    if (!this.tmuxPath) return false
     try {
-      if (await this.bracketPasteRequested(target)) {
-        // Paste-aware target (agent TUIs, multiplexers like herdr): one atomic write — the
-        // text framed in paste markers plus the Enter — so the composer sees a definitive
-        // paste boundary and the Enter can never be re-chunked into the paste (issue #47).
-        await runAsync(this.tmuxPath, [
-          '-L',
-          TMUX_SOCKET,
-          'send-keys',
-          '-t',
-          target,
-          '-l',
-          bracketedInjection(text, enter)
-        ])
-        return true
+      if (sshRemote) {
+        const ssh = findSsh()
+        if (!ssh) return false
+        const plan = remotePasteDelivery(sshRemote.conn, sshRemote.controlPath, target, text, enter)
+        if (!plan) return true
+        return await runPasteDelivery(plan, (args, input) => runWithStdin(ssh, args, input))
       }
-      // The literal text and the Enter (when sent) must go in order, so await sequentially.
-      await runAsync(this.tmuxPath, ['-L', TMUX_SOCKET, 'send-keys', '-t', target, '-l', text])
-      if (enter) {
-        await runAsync(this.tmuxPath, ['-L', TMUX_SOCKET, 'send-keys', '-t', target, 'Enter'])
-      }
-      return true
+      if (!this.tmuxPath) return false
+      const tmuxPath = this.tmuxPath
+      const plan = localPasteDelivery(TMUX_SOCKET, target, text, enter)
+      if (!plan) return true
+      return await runPasteDelivery(plan, (args, input) => runWithStdin(tmuxPath, args, input))
     } catch {
+      // Only a builder throwing (an unsafe target) reaches here — `runPasteDelivery` answers false
+      // rather than throwing, precisely so the sweep cannot be skipped by an early exit.
       return false
     }
   }
@@ -2876,27 +2917,122 @@ export class PtyManager {
   }
 
   /**
-   * Did the application in this pane request bracketed-paste mode? tmux tracks the DECSET
-   * 2004 state per pane and exposes it as `bracket_paste_flag`. Unknown — query fails, old
-   * tmux without the format — reads as false, so delivery degrades to the legacy two-step
-   * path rather than sending paste markers an unaware app would render as garbage input.
+   * WHO owns a node's pane right now, read from the kernel: the pane's pid and tty from tmux, then
+   * the full argv of the tty's FOREGROUND PROCESS GROUP. `paneCommand` above answers one name —
+   * `node`, for every npm-installed agent CLI — which is not enough to decide whether a message may
+   * be delivered into a pane. This is (see `src/core/agents/pane-owner.ts` for the measurement).
+   *
+   * Mirrors `paneCommand`'s dispatch exactly, including the SSH branch over the project's
+   * ControlMaster, and its failure contract exactly: no live session, no tmux, no ssh, a throw, an
+   * empty read, a `ps` that lists nothing, an unsafe tty — every one of them answers `null` rather
+   * than throwing or returning a partial object, because unknown is never evidence of a particular
+   * command. Deliberately has NO deadline of its own: the caller bounds it (`probeWithin`), the
+   * same way the restart poll bounds `paneCommand`.
+   *
+   * Two round-trips, not one: tmux does not know the foreground process group (`#{pane_pid}` is the
+   * shell it forked, which is usually NOT in it), so the tty has to come back before `ps` can be
+   * asked about it. On the SSH leg both ride the same ControlMaster — and both are `ssh` children
+   * that outlive the caller's 2s deadline (they are reaped at `PROC_TIMEOUT_MS`), so a caller that
+   * retries `unknown` on a short timer stacks them. See `agents/pane-probe.ts` for why that needs a
+   * circuit breaker rather than a shorter timeout.
+   *
+   * `remotePaneOwnerArgs` splices the session id unquoted (`-t ${sessionId}`), exactly as every
+   * sibling builder does. That is safe only because `sessionName()` sanitises to `[A-Za-z0-9_-]`
+   * before it ever gets here — the guarantee lives THERE, not in this call.
    */
-  private async bracketPasteRequested(target: string): Promise<boolean> {
-    if (!this.tmuxPath) return false
+  async paneOwner(persistKey: string): Promise<PaneOwner | null> {
+    const target = sessionName(persistKey)
+    const sshRemote = this.sessionByPersistKey(persistKey)?.sshRemote
     try {
-      const { stdout } = await runAsync(this.tmuxPath, [
+      if (sshRemote) {
+        const ssh = findSsh()
+        if (!ssh) return null
+        const first = await runAsync(
+          ssh,
+          remotePaneOwnerArgs(sshRemote.conn, sshRemote.controlPath, target)
+        )
+        const identity = parsePaneOwner(first.stdout)
+        if (!identity) return null
+        const psArgs = remoteForegroundArgvArgs(sshRemote.conn, sshRemote.controlPath, identity.tty)
+        if (!psArgs) return null
+        const second = await runAsync(ssh, psArgs)
+        return paneOwnerFrom(identity, second.stdout)
+      }
+      if (!this.tmuxPath) return null
+      const first = await runAsync(this.tmuxPath, [
         '-L',
         TMUX_SOCKET,
         'display-message',
         '-p',
         '-t',
         target,
-        '#{bracket_paste_flag}'
+        PANE_OWNER_FMT
       ])
-      return stdout.trim() === '1'
+      const identity = parsePaneOwner(first.stdout)
+      if (!identity) return null
+      const call = foregroundArgvArgs(identity.tty)
+      if (!call) return null
+      const second = await runAsync(call.bin, call.args)
+      return paneOwnerFrom(identity, second.stdout)
     } catch {
+      return null
+    }
+  }
+
+  /**
+   * DELETED: `bracketPasteRequested`.
+   *
+   * It read `#{bracket_paste_flag}`, a format that first shipped in TMUX 3.7 (2026-06-26). On
+   * every earlier tmux — Ubuntu 24.04's 3.4, 22.04's 3.2a, Debian 12/13's 3.3a/3.5a, Ubuntu
+   * 26.04's 3.6a, and whatever an SSH target happens to run — it expanded to the empty string,
+   * so the probe answered "not paste-aware" for every pane on earth and the delivery mangled
+   * every multi-line write. `paste-buffer -p` asks the pane's real state, inside tmux, with no
+   * version floor; there is nothing left for this method to be right about. Do not reintroduce
+   * it as a "capability check": on a pre-3.7 tmux it cannot distinguish "the app did not ask"
+   * from "I cannot ask", which is exactly the confusion that shipped the bug.
+   */
+
+  /**
+   * Deliver one ALREADY-FRAMED payload — the agent-messaging envelope, composed by
+   * `bracketedInjection` in `deliverAgentMessage` — into a node's pane, local or SSH.
+   *
+   * A two-line dispatcher over `localFramedDelivery` / `remoteFramedDelivery`, exactly as
+   * `sendText` is over its plans and for the same reason: the composition (the no-sanitize rule,
+   * the well-formed-frame assertion, the per-call buffer, the failure sweep) lives in the plan
+   * builders, where `agent-message.realtty.test.ts` drives the local one against a real tmux and
+   * a real bash. NOT `sendText`: that path sanitizes structurally, which would strip the ESC
+   * bytes that ARE this payload's frame.
+   */
+  async sendFramedPayload(persistKey: string, payload: string): Promise<boolean> {
+    const target = sessionName(persistKey)
+    const sshRemote = this.sessionByPersistKey(persistKey)?.sshRemote
+    try {
+      if (sshRemote) {
+        const ssh = findSsh()
+        if (!ssh) return false
+        const plan = remoteFramedDelivery(sshRemote.conn, sshRemote.controlPath, target, payload)
+        if (!plan) return false
+        return await runPasteDelivery(plan, (args, input) => runWithStdin(ssh, args, input))
+      }
+      if (!this.tmuxPath) return false
+      const tmuxPath = this.tmuxPath
+      const plan = localFramedDelivery(TMUX_SOCKET, target, payload)
+      if (!plan) return false
+      return await runPasteDelivery(plan, (args, input) => runWithStdin(tmuxPath, args, input))
+    } catch {
+      // A builder throwing (unsafe target, an unframed payload) lands here; `runPasteDelivery`
+      // itself answers false rather than throwing, so the buffer sweep is never skipped.
       return false
     }
+  }
+
+  /**
+   * Does a live session exist for this node in THIS process right now? The messaging delivery's
+   * `targetLive` fact — deliberately not derived from an unreadable pane (see `DeliveryRequest`):
+   * only "no session is registered" may be reported as "the node is gone".
+   */
+  hasLiveSession(persistKey: string): boolean {
+    return !!this.sessionByPersistKey(persistKey)
   }
 
   /**
@@ -3070,6 +3206,23 @@ export class PtyManager {
     // after the sweep would close most of it, but it depends on respawn ordering and still leaves a
     // gap; not sweeping leaves none, and there is nothing stale to clean up.
     if (intent === 'delete') sweepNodeToken(persistKey)
+    // The node's agent-status goes with it — and, like the token, ONLY on a delete: a RECYCLE keeps
+    // the node (the worktree move replaces this session, and the respawned agent re-asserts state
+    // onto the SAME entry), so clearing there would blank a live badge and end a Live Activity for
+    // a node that is still on the canvas.
+    //
+    // Deleting a node used to tell the mirror nothing at all — `clearNode` had no production caller
+    // — so the surfaces the mirror feeds kept rendering a node that no longer exists: the notch HUD
+    // held its needs-you/done row until the 6 h prune (its title collapsing to the literal
+    // 'Session' once the entry behind it aged out), the phone's Inbox cards for it were never
+    // resolved, and its Live Activity was never ended.
+    //
+    // Wired HERE rather than in each shell's `pty:destroy` listener because this is the one core
+    // chokepoint every permanent delete funnels through (wire handler → endFromClient → endSession,
+    // plus the internal `destroySession`), and both shells register it via `registerIpc()`. The
+    // shells' own listeners are the wrong seam twice over: they are registered for `pty:recycle`
+    // too, and there are two of them to keep in step.
+    if (intent === 'delete') clearNodeAgentStatus(persistKey)
     if (sshRemote) {
       // Remote (ssh-project) node: end the REMOTE session.
       const ssh = findSsh()

@@ -2,14 +2,20 @@ import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
 import { readFile } from 'fs/promises'
-import { statSync } from 'fs'
+import { existsSync, statSync } from 'fs'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, powerMonitor, safeStorage, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, powerMonitor, safeStorage, shell, systemPreferences, webContents } from 'electron'
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
 import { registerFsHandlers } from '../core/fs-handlers'
-import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
+import {
+  registerBrowserGuest,
+  type BrowserGuest,
+  type BrowserSurfaceKind
+} from './browser-guest-registry'
+import { appendBoardLogVia, registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
+import { deliverFromControl, isDeliverRequest, onMessagingAgentEvent } from './agent-messaging'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
 import { PtyManager } from '../core/pty-manager'
@@ -35,6 +41,7 @@ import {
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
 import { setMainWindow, getMainWindow, sendToMain, shouldHideOnClose, createCrashReloadPolicy } from './main-window'
+import { installKeydownIntercepts } from './keydown-intercept'
 import {
   initNotchHud,
   applyNotchHudSettings,
@@ -103,13 +110,16 @@ import { createRemoteContextTail } from './remote-context-tail'
 import { createRemoteSubagentTail } from './remote-subagent-tail'
 import { RemoteFile, type RemoteFileRef } from './remote-ssh/remote-file'
 import {
+  checkMasterArgs,
   childArgs,
+  controlPathFor,
   parseRemoteSessionNames,
   remoteListSessionsArgs,
   remotePaneCommandArgs
 } from '../core/remote-ssh/control-master'
+import { planRemoteWorkspacePoll } from './remote-workspace-poll'
 import { sessionName } from '../core/tmux-naming'
-import { posixQuote } from '../shared/ssh'
+import { posixQuote, type SshConnection } from '../shared/ssh'
 import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
@@ -322,8 +332,10 @@ let activeRemote: { cwd: string; ref: GitRemoteRef } | null = null
 // True from the first before-quit on: lets window close-events through (see hide-on-close).
 let quitting = false
 
-// Browser <webview> guest webContents id → its browser node id (for new-window capture).
-const browserGuests = new Map<number, string>()
+// Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
+// belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
+// lands here — see `registerBrowserGuest`.
+const browserGuests = new Map<number, BrowserGuest>()
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
 // Without this, a node closed mid-run never emits SessionEnd/PostToolUse, so context-tail (1s
@@ -470,32 +482,10 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  // Intercept Cmd/Ctrl+M (default = minimize) and route it to the renderer for the
-  // markdown-view toggle instead.
-  win.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown' || !(input.meta || input.control)) return
-    const key = input.key.toLowerCase()
-    if (key === 'm') {
-      event.preventDefault()
-      win.webContents.send(IPC.appToggleMarkdown)
-    } else if (key === 'w' && !input.shift) {
-      // Repurpose Cmd/Ctrl+W: the renderer closes the selected node(s); if none are
-      // selected it asks us to close the window (the standard behavior).
-      event.preventDefault()
-      win.webContents.send(IPC.appCloseNode)
-    } else if (input.code === 'Digit0' && !input.shift && !input.alt) {
-      // Repurpose Cmd/Ctrl+0 the same way. We never call `Menu.setApplicationMenu`, so Electron
-      // installs its DEFAULT menu, whose View → Actual Size binds this accelerator to `resetZoom`
-      // — the window's page zoom, not the canvas's. A menu accelerator is handled before the page
-      // sees the key, so without this the renderer's Digit0 branch would simply never run on the
-      // desktop. `before-input-event`'s preventDefault suppresses both the menu item and the page
-      // event, so exactly one thing happens: the canvas goes to 100%.
-      event.preventDefault()
-      // Auto-repeat is dropped here rather than in the renderer, so a held chord cannot restart
-      // the 200ms zoom tween — the same rule `zoomShortcutChord` applies to the keydown path.
-      if (!input.isAutoRepeat) win.webContents.send(IPC.appZoomActualSize)
-    }
-  })
+  // Steal ⌘M / ⌘W / ⌘0 back from Electron's default application menu (minimize / close /
+  // resetZoom) and forward each to the renderer instead. The decision — and, importantly, what it
+  // must REFUSE — is in `keydown-intercept.ts`, where it can be pressed by a test.
+  installKeydownIntercepts(win)
 
   // Open external links in the system browser — only safe schemes (no file://, no custom
   // protocol handlers). Reachable from remotely-fetched announcement URLs and rendered
@@ -540,7 +530,7 @@ app.whenReady().then(async () => {
     // (never a real popup). Only http(s); other schemes are dropped. The map is consulted
     // live at call time, so a guest registered later (on dom-ready) is seen when a popup fires.
     contents.setWindowOpenHandler(({ url }) => {
-      const sourceNodeId = browserGuests.get(contents.id)
+      const sourceNodeId = browserGuests.get(contents.id)?.nodeId
       if (sourceNodeId && /^https?:\/\//i.test(url)) {
         sendToMain(IPC.browserNewWindow, { url, sourceNodeId })
       }
@@ -591,9 +581,24 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.mediaAllow, (_e, absPath: string) => allowMediaPath(absPath))
   ipcMain.handle(IPC.mediaWriteHtml, (_e, html: string) => writeAgentHtml(html))
 
-  ipcMain.on(IPC.browserRegister, (_e, webContentsId: number, nodeId: string) => {
-    browserGuests.set(webContentsId, nodeId)
-  })
+  ipcMain.on(
+    IPC.browserRegister,
+    (_e, webContentsId: number, nodeId: string, surface?: BrowserSurfaceKind) => {
+      // `surface` is passed through UNCHANGED, including when it is absent. Both mount sites
+      // (BrowserNode and the kanban CardModal) still send two arguments, so today it is always
+      // absent — and defaulting it to 'canvas' here would record every modal guest as a canvas
+      // guest, which is a false claim a later reverse lookup cannot detect. See `BrowserGuest`.
+      if (
+        !registerBrowserGuest(browserGuests, webContentsId, nodeId, surface, (id) =>
+          webContents.fromId(id) ?? null
+        )
+      ) {
+        // Loud, because the symptom otherwise is "popups from this node stopped opening" with
+        // nothing anywhere to explain it.
+        console.warn('[browser] refused guest registration', { webContentsId, nodeId, surface })
+      }
+    }
+  )
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
     browserGuests.delete(webContentsId)
   })
@@ -874,7 +879,9 @@ app.whenReady().then(async () => {
   // a desktop router that adds SSH routing on top of the local-cwd/unsupported the server also does.
   // A connected SSH project (refForProject → a ref with a remoteCwd) reads/writes/fingerprints over
   // its ControlMaster; anything else falls to the local folder cwd, then unsupported.
-  registerBoardLogHandlers(corePlatform, {
+  // Extracted so the agent-messaging delivery trace can append THROUGH the same router the IPC
+  // handler uses (appendBoardLogVia) instead of restating the local/remote/unsupported decision.
+  const boardLogRouter = {
     route: (projectId: string): BoardLogRoute => {
       const ref = sshProjectManager?.refForProject(projectId)
       if (ref?.remoteCwd) {
@@ -902,6 +909,31 @@ app.whenReady().then(async () => {
       if (cwd) return { kind: 'local', cwd }
       return { kind: 'unsupported' }
     }
+  }
+  registerBoardLogHandlers(corePlatform, boardLogRouter)
+
+  // Agent messaging (the `send`/`reply` control verbs). Canvas.tsx forwards the validated verb
+  // here; everything that authorizes or performs the delivery reads MAIN's stores. See
+  // src/main/agent-messaging.ts for the whole map.
+  ipcMain.handle(IPC.agentMessageDeliver, async (_e, raw: unknown) => {
+    if (!isDeliverRequest(raw))
+      return { ok: false, error: 'malformed agent-message request. Do not retry.' }
+    const { reply } = await deliverFromControl(raw, {
+      paneOwner: (id) => ptyManager.paneOwner(id),
+      sendFramedPayload: (id, payload) => ptyManager.sendFramedPayload(id, payload),
+      hasLiveSession: (id) => ptyManager.hasLiveSession(id),
+      projects: () => workspaceStore.persistedCanvases(),
+      isRemoteNode: (id) => !!ptyManager.sshRemoteForNode(id),
+      // GLOBAL CONSTRAINT 11: every delivery path is gated behind the per-project switch, OFF by
+      // default. The switch itself (Project/ProjectFileV1 `agentMessaging`, validated `=== true`
+      // against a hostile project.json, plus the Settings row) is PR 6 — until it lands, nothing
+      // can turn messaging on, and every delivery answers `notPermitted (switch-off)`. PR 6
+      // replaces this closure with the validated read; it must not weaken the `=== true` rule.
+      messagingEnabled: () => false,
+      customAgents: () => settingsStore.get().customAgents,
+      appendBoardLog: (projectId, entry) => appendBoardLogVia(boardLogRouter, projectId, entry)
+    })
+    return reply
   })
 
   ipcMain.handle(IPC.dialogSelectFolder, async () => {
@@ -1580,6 +1612,9 @@ app.whenReady().then(async () => {
     sendToMain(IPC.agentStatus, enriched)
     // Feed the macOS Notch HUD its prompt (ev.task on newTurn) + subagent grouping (no-op off/non-darwin).
     notchHudOnAgentEvent(enriched)
+    // Agent messaging taps the SAME stream: the sender's newTurn resets its fan-out budget, and
+    // an open delivery receipt watch is satisfied by the target's verified advance.
+    onMessagingAgentEvent(enriched)
   }
   hookServer.setListener(emitAgentStatus)
   // Deterministic hook-reply approvals (docs/hook-reply-approvals.md): the canvas Approve/Deny
@@ -2121,8 +2156,12 @@ app.whenReady().then(async () => {
   // the canvas adopts the node live).
   const hostBridge = {
     git: gitService,
-    registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string }) =>
-      workspaceStore.appendRemoteNode(projectId, node),
+    // `accountId` = the managed Claude account the phone launched the session under. It has to be
+    // declared here too, or the wire's honest shape stops at this boundary (see RemoteNodeInput).
+    registerNode: (
+      projectId: string,
+      node: { id: string; title?: string; agentId?: string; accountId?: string }
+    ) => workspaceStore.appendRemoteNode(projectId, node),
     // Jail roots beyond the active canvas: the phone browses EVERY project (projects.list), so
     // its fs/git access spans every local project root — not just the tab the desktop happens
     // to have focused (that gap read as "cwd is outside the shared project roots" on the phone).
@@ -2284,18 +2323,73 @@ app.whenReady().then(async () => {
   // the live canvas without a reconnect. Read-only unless a mirror write is owed
   // (pushIfStanding:false), one `cat` per project per tick over the ControlMaster. The in-flight
   // set keeps a hung read from stacking a second poll on the same project.
+  //
+  // A project only HAS a master because the renderer's active-project effect connected it, which
+  // left every background / never-opened SSH tab permanently unpolled: a session the phone
+  // registered into one of them showed up only when the user happened to click that tab. So each
+  // tick also sweeps the unconnected ones — REUSE-ONLY (see remote-workspace-poll.ts): a master
+  // that is already running is adopted, a host with no live socket is never dialed.
   {
     const REMOTE_WORKSPACE_POLL_MS = 15_000
+    /** How long a cached ssh endpoint map may be reused before it is re-read from the index. */
+    const SSH_ENDPOINT_TTL_MS = 5 * 60_000
     const inFlight = new Set<string>()
+    let endpoints = new Map<string, { conn: SshConnection; remoteCwd: string }>()
+    let endpointsAt = 0
+    /** The project's connection spec, from the workspace index. Loaded lazily and only when an
+     *  adoption candidate exists, so a workspace with no orphan sockets never pays for it. */
+    const endpointFor = async (
+      projectId: string
+    ): Promise<{ conn: SshConnection; remoteCwd: string } | undefined> => {
+      if (Date.now() - endpointsAt > SSH_ENDPOINT_TTL_MS) {
+        try {
+          // sideline:false — a read-only caller must never rename a mid-merge project.json.
+          const workspace = await workspaceStore.load({ sideline: false })
+          endpoints = new Map(
+            workspace.projects
+              .filter((p) => p.ssh)
+              .map((p) => [p.id, { conn: p.ssh!.server, remoteCwd: p.ssh!.remoteCwd }] as const)
+          )
+          endpointsAt = Date.now()
+        } catch { /* keep the previous map: a failed read is not evidence the endpoints changed */ }
+      }
+      return endpoints.get(projectId)
+    }
     setInterval(() => {
-      for (const projectId of workspaceStore.sshProjectIds()) {
-        if (inFlight.has(projectId) || !sshProjectManager?.refForProject(projectId)) continue
+      const mgr = sshProjectManager
+      if (!mgr) return
+      const plan = planRemoteWorkspacePoll({
+        sshProjectIds: workspaceStore.sshProjectIds(),
+        hasLiveRef: (projectId) => !!mgr.refForProject(projectId),
+        busy: (projectId) => inFlight.has(projectId),
+        // Reuse-only gate: no socket file ⇒ no master to adopt ⇒ this project is left alone.
+        hasControlSocket: (projectId) => existsSync(controlPathFor(projectId))
+      })
+      for (const projectId of plan.poll) {
         inFlight.add(projectId)
         void workspaceStore
           .refreshSshProject(projectId, { pushIfStanding: false })
           .then((adopted) => {
             if (adopted) sendToMain(IPC.workspaceExternalChange, adopted)
           })
+          .catch(() => { /* fail-open: the next tick retries */ })
+          .finally(() => inFlight.delete(projectId))
+      }
+      for (const projectId of plan.adopt) {
+        inFlight.add(projectId)
+        void (async () => {
+          const endpoint = await endpointFor(projectId)
+          if (!endpoint) return
+          // Ask the socket itself before touching connect(): a leftover file whose master is gone
+          // would otherwise send connect() down the DIAL path — the one thing this sweep must not
+          // do. `-O check` speaks to the local mux socket only; with no master it fails at once
+          // without opening a connection.
+          const { code } = await mgr.sshRun(checkMasterArgs(endpoint.conn, controlPathFor(projectId)))
+          if (code !== 0) return
+          // Live master → connect() takes its reuse branch (no new auth, no passphrase prompt) and
+          // registers the ref, so the NEXT tick simply polls this project like any other.
+          await mgr.connect(projectId, endpoint.conn, endpoint.remoteCwd)
+        })()
           .catch(() => { /* fail-open: the next tick retries */ })
           .finally(() => inFlight.delete(projectId))
       }
