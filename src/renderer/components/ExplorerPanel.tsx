@@ -10,6 +10,8 @@ import { promptDialog } from './promptDialog'
 import { ancestorDirs, createTargetDir, newEntryPath, parentDir } from '../lib/explorerCreate'
 import { canRevealLocally, downloadRoute, triggerBrowserDownload } from '../lib/download'
 import { isBrowserRuntime } from '../bridge/runtime'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 
 export interface ExplorerPanelProps {
   onClose: () => void
@@ -81,7 +83,8 @@ function TreeEntry({
   onOpenFile,
   onSelect,
   onDownload,
-  rowDl
+  rowDl,
+  filterTest
 }: {
   entry: DirEntry
   path: string
@@ -99,6 +102,14 @@ function TreeEntry({
   /** Download state per path — the whole map, so a row deep in the tree sees its own entry
    *  without every level having to thread a single value down. */
   rowDl: Record<string, RowDownloadState>
+  /**
+   * The Explorer's own filter/regex field, or undefined when the filter is empty (no filtering
+   * at all — the common case). Applied to FILE rows only: the tree is lazy-loaded, so a
+   * directory whose children haven't been fetched yet can't be judged as "no matches inside" —
+   * hiding it would make a real match unreachable. Directories therefore always stay visible
+   * while a filter is active; only non-matching files are hidden.
+   */
+  filterTest?: (name: string) => boolean
 }) {
   const open = useExplorer((s) => (s.expandedByProject[projectId] ?? []).includes(path))
   const [children, setChildren] = useState<DirEntry[] | null>(null)
@@ -151,6 +162,10 @@ function TreeEntry({
       onSelect(path)
     }
   }, [entry.dir, selected, path, onOpenFile, onSelect, toggleDir])
+
+  // Files hide when they don't match an active filter; directories never do (see the doc comment
+  // on `filterTest` above — the tree is lazy and a collapsed match would otherwise be unreachable).
+  if (!entry.dir && filterTest && !filterTest(entry.name)) return null
 
   return (
     <>
@@ -205,6 +220,7 @@ function TreeEntry({
             onSelect={onSelect}
             onDownload={onDownload}
             rowDl={rowDl}
+            filterTest={filterTest}
           />
         ))}
     </>
@@ -220,6 +236,11 @@ function TreeEntry({
  * root cwd isn't known client-side. A relay tab reaches the host fs through its bridged session api
  * (the same seam TerminalNode/EditorNode use), not a separate per-connection fs client. */
 export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProps) {
+  // Filters visible FILE rows by name (plain text, or regex via the `.*` trigger). See the
+  // `filterTest` doc comment on TreeEntry for why directories are never hidden by it.
+  const filter = useRegexSearchField()
+  const filterInputRef = useRef<HTMLInputElement>(null)
+  const filterTest = filter.active ? filter.test : undefined
   const project = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
   // SSH projects browse the REMOTE filesystem: root at the project's `remoteCwd` and list over the
   // ControlMaster via `sshFs`. Local (and relay) projects keep the local fs rooted at `cwd`.
@@ -465,33 +486,53 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
         )}
 
         {cwd && (
-          <div
-            className="drawer__body ex-body"
-            onContextMenu={(e) => {
-              if (e.target !== e.currentTarget || !cwd) return
-              e.preventDefault()
-              setMenu({ x: e.clientX, y: e.clientY, path: cwd, dir: true })
-            }}
-          >
-            {roots?.length === 0 && <p className="set-note">Empty folder.</p>}
-            {roots?.map((e) => (
-              <TreeEntry
-                key={e.name}
-                entry={e}
-                path={`${cwd}/${e.name}`}
-                depth={0}
-                fs={fs}
-                projectId={project!.id}
-                version={version}
-                selected={selected}
-                onContext={onContext}
-                onOpenFile={handleOpenFile}
-                onSelect={setSelected}
-                onDownload={onDownload}
-                rowDl={rowDl}
+          <>
+            <div className="ex-filter-row">
+              <input
+                ref={filterInputRef}
+                className="ex-filter-input"
+                value={filter.value}
+                spellCheck={false}
+                placeholder={filter.mode === 'regex' ? 'Filter files (regex)…' : 'Filter files…'}
+                onChange={(e) => filter.setValue(e.target.value)}
               />
-            ))}
-          </div>
+              <AnchoredRegexBuilder search={filter} fieldRef={filterInputRef} label="Regex — Explorer filter" />
+            </div>
+            {filter.error && <p className="ex-filter-error">{filter.error}</p>}
+            {filter.active && (
+              <p className="ex-filter-note">
+                Showing files matching your filter. Expand folders to search inside them.
+              </p>
+            )}
+            <div
+              className="drawer__body ex-body"
+              onContextMenu={(e) => {
+                if (e.target !== e.currentTarget || !cwd) return
+                e.preventDefault()
+                setMenu({ x: e.clientX, y: e.clientY, path: cwd, dir: true })
+              }}
+            >
+              {roots?.length === 0 && <p className="set-note">Empty folder.</p>}
+              {roots?.map((e) => (
+                <TreeEntry
+                  key={e.name}
+                  entry={e}
+                  path={`${cwd}/${e.name}`}
+                  depth={0}
+                  fs={fs}
+                  projectId={project!.id}
+                  version={version}
+                  selected={selected}
+                  onContext={onContext}
+                  onOpenFile={handleOpenFile}
+                  onSelect={setSelected}
+                  onDownload={onDownload}
+                  rowDl={rowDl}
+                  filterTest={filterTest}
+                />
+              ))}
+            </div>
+          </>
         )}
 
         {downloads.length > 0 && (

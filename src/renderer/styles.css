@@ -3846,6 +3846,47 @@ body,
   padding: 8px 16px 24px;
 }
 
+.ex-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ex-filter-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 0 8px;
+  outline: none;
+}
+
+.ex-filter-input:focus {
+  border-color: var(--accent);
+}
+
+.ex-filter-error {
+  margin: 0;
+  padding: 4px 12px 0;
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.ex-filter-note {
+  margin: 0;
+  padding: 4px 12px 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
 .drawer__body section {
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
