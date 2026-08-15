@@ -807,3 +807,1049 @@ section {
 .skip-link:focus {
   top: 12px;
 }
+
+/* =======================================================================
+ * SITE SHELL — tabbed navigation, search + regex builder, command
+ * palette, settings surface, notifications, appearance editor, and the
+ * destructive-confirm gate. Everything below is driven by site/app/core/
+ * — see docs/site.md for the full contract each piece implements.
+ * ===================================================================== */
+
+/* --------------------------- Danger button ----------------------------- */
+.btn-danger {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+  border-color: transparent;
+}
+.btn-danger:hover {
+  filter: brightness(1.05);
+}
+
+/* ------------------------------ App shell ------------------------------- */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+.app-shell[data-dock='left'] {
+  flex-direction: row;
+}
+.app-shell[data-dock='right'] {
+  flex-direction: row-reverse;
+}
+.app-shell[data-dock='top'] {
+  flex-direction: column;
+}
+.app-shell[data-dock='bottom'] {
+  flex-direction: column-reverse;
+}
+
+.app-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --------------------------- Tab rail (strip) --------------------------- */
+.tab-rail-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--md-surface-container-low);
+  border-right: 1px solid var(--md-outline-variant);
+  overflow: hidden;
+}
+.app-shell[data-dock='left'] .tab-rail-wrap {
+  width: 208px;
+  border-right: 1px solid var(--md-outline-variant);
+  border-bottom: none;
+}
+.app-shell[data-dock='right'] .tab-rail-wrap {
+  width: 208px;
+  border-left: 1px solid var(--md-outline-variant);
+  border-right: none;
+}
+.app-shell[data-dock='top'] .tab-rail-wrap,
+.app-shell[data-dock='bottom'] .tab-rail-wrap {
+  width: 100%;
+  height: auto;
+  flex-direction: row;
+  align-items: center;
+  border-right: none;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.app-shell[data-dock='bottom'] .tab-rail-wrap {
+  border-bottom: none;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.tab-rail-search {
+  margin: 8px;
+  padding: 8px 10px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  font-size: 13px;
+  min-height: var(--touch-target);
+}
+.app-shell[data-dock='top'] .tab-rail-search,
+.app-shell[data-dock='bottom'] .tab-rail-search {
+  width: 180px;
+  flex: 0 0 auto;
+}
+
+.tab-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 12px;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.app-shell[data-dock='top'] .tab-rail,
+.app-shell[data-dock='bottom'] .tab-rail {
+  flex-direction: row;
+  align-items: center;
+  padding: 4px 8px;
+  overflow-x: hidden;
+}
+
+.tab-rail__tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--touch-target);
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--md-shape-sm);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: left;
+  flex: 0 0 auto;
+}
+.tab-rail__tab:hover {
+  background: var(--md-surface-container);
+}
+.tab-rail__tab.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-weight: 600;
+}
+.tab-rail__tab.is-pinned {
+  border-left: 3px solid var(--md-primary);
+}
+.app-shell[data-dock='top'] .tab-rail__tab.is-pinned,
+.app-shell[data-dock='bottom'] .tab-rail__tab.is-pinned {
+  border-left: none;
+  border-top: 3px solid var(--md-primary);
+}
+.tab-rail__icon {
+  font-size: 16px;
+}
+.tab-rail__pin {
+  font-size: 11px;
+  opacity: 0.8;
+}
+.tab-rail__more {
+  min-height: var(--touch-target);
+  padding: 0 12px;
+  border: 1px dashed var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  align-self: center;
+  margin-top: 6px;
+}
+.app-shell[data-dock='top'] .tab-rail__more,
+.app-shell[data-dock='bottom'] .tab-rail__more {
+  margin-top: 0;
+  margin-left: 6px;
+}
+.tab-rail__more:hover {
+  background: var(--md-surface-container);
+}
+
+.tabpanel {
+  outline: none;
+}
+
+/* Below this width the strip collapses to a compact bottom icon bar
+   regardless of the chosen dock edge — see the matching isNarrowViewport()
+   check in tabs.js, which keeps aria-orientation and arrow-key handling
+   in sync with this same breakpoint rather than the stored preference. */
+@media (max-width: 767px) {
+  .app-shell {
+    flex-direction: column !important;
+  }
+  .tab-rail-wrap {
+    order: 2;
+    width: 100% !important;
+    height: auto !important;
+    flex-direction: row !important;
+    border: none !important;
+    border-top: 1px solid var(--md-outline-variant) !important;
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+  }
+  .app-main {
+    order: 1;
+  }
+  .tab-rail {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    padding: 4px 6px;
+  }
+  .tab-rail__label {
+    display: none;
+  }
+  .tab-rail__tab {
+    padding: 0 10px;
+    min-width: var(--touch-target);
+    justify-content: center;
+  }
+  .tab-rail-search {
+    display: none; /* the overflow "More" search still reaches every tab */
+  }
+}
+
+/* Teleport highlight — the command palette's "reveal" briefly marks the
+   element it just scrolled to and focused. */
+.teleport-highlight {
+  outline: 3px solid var(--md-primary) !important;
+  outline-offset: 2px;
+  border-radius: var(--md-shape-sm);
+  transition: outline-color var(--md-motion-standard);
+}
+
+/* --------------------------- Generic menu -------------------------------
+ * Used by the tab strip's right-click menu, its overflow "More" list, and
+ * anything else that opens a small anchored, filterable menu.
+ */
+.menu__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: transparent;
+}
+.menu {
+  position: fixed;
+  z-index: 61;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-md);
+  box-shadow: var(--md-elevation-3);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.menu__filter {
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+}
+.menu__item {
+  min-height: 40px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--md-shape-xs);
+  background: transparent;
+  color: var(--md-on-surface);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu__item:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.menu__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.menu__empty {
+  padding: 10px;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+
+/* -------------------- Anchored search + regex builder -------------------- */
+.anchored-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+.anchored-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.anchored-search__toggle {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+.anchored-search__toggle:hover,
+.anchored-search__toggle[aria-expanded='true'] {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.anchored-search__popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 62;
+  width: min(320px, 90vw);
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-md);
+  box-shadow: var(--md-elevation-3);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.anchored-search__mode {
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
+}
+.anchored-search__pattern {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: 6px 10px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono);
+  font-size: 13px;
+}
+.anchored-search__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 12.5px;
+}
+.anchored-search__feedback {
+  font-size: 12.5px;
+  color: var(--md-on-surface-variant);
+}
+.anchored-search__feedback.is-error {
+  color: var(--md-error);
+}
+.anchored-search__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ------------------------------ Command palette -------------------------- */
+.palette__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: var(--md-scrim);
+}
+.palette {
+  position: fixed;
+  z-index: 71;
+  left: 50%;
+  top: 12vh;
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 32px));
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-lg);
+  box-shadow: var(--md-elevation-3);
+  overflow: hidden;
+}
+.palette--full {
+  top: 4vh;
+  width: min(1100px, calc(100vw - 24px));
+  max-height: 92vh;
+}
+.palette__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.palette__search {
+  flex: 1 1 auto;
+  min-height: var(--touch-target);
+  padding: 8px 12px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  font-size: 14px;
+}
+.palette__size {
+  flex: 0 0 auto;
+}
+.palette__list {
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.palette__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--md-shape-sm);
+  outline-offset: -2px;
+}
+.palette__row:focus-visible {
+  outline: 2px solid var(--md-primary);
+}
+.palette__row-main {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--touch-target);
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--md-shape-sm);
+  background: transparent;
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.palette__row-main:hover {
+  background: var(--md-surface-container);
+}
+.palette__row-icon {
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+.palette__row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.palette__row-text strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette__row-sub {
+  font-size: 11.5px;
+  color: var(--md-on-surface-variant);
+}
+.palette__row-control {
+  flex: 0 0 auto;
+  padding-right: 8px;
+}
+.palette__empty {
+  padding: 16px;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+}
+
+/* ------------------------------ Settings surface -------------------------- */
+.settings-surface {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+.settings-surface__header h2 {
+  margin: 0 0 4px;
+}
+.settings-surface__sub {
+  color: var(--md-on-surface-variant);
+  margin: 0 0 20px;
+}
+.settings-surface__search {
+  margin-bottom: 20px;
+  max-width: 420px;
+}
+.settings-surface__search input {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: 8px 12px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  font-size: 14px;
+}
+.settings-surface__body {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+.settings-subrail {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 16px;
+}
+.settings-subrail__tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--touch-target);
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--md-shape-sm);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-subrail__tab[aria-selected='true'] {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-weight: 600;
+}
+.settings-subrail__hit {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border-radius: var(--md-shape-full);
+  font-size: 11px;
+  padding: 1px 7px;
+  margin-left: 8px;
+}
+.settings-panels {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+@media (max-width: 767px) {
+  .settings-surface__body {
+    flex-direction: column;
+  }
+  .settings-subrail {
+    flex-direction: row;
+    overflow-x: auto;
+    position: static;
+    width: 100%;
+  }
+}
+
+.settings-row {
+  background: var(--md-surface-container-low);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  padding: 14px 16px;
+}
+.settings-row__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-row__title {
+  font-weight: 600;
+  flex: 1 1 auto;
+}
+.settings-row__info {
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  font-size: 15px;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+}
+.settings-row__desc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+.settings-row__desc p {
+  margin: 0 0 4px;
+}
+.settings-row__provenance {
+  font-style: italic;
+}
+.settings-row__control {
+  margin-top: 10px;
+}
+.settings-row__control select,
+.settings-row__control input[type='text'] {
+  min-height: var(--touch-target);
+  padding: 6px 10px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+}
+.settings-empty {
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.history-row {
+  display: flex;
+  gap: 10px;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container);
+}
+.history-row__action {
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--md-on-secondary-container);
+  background: var(--md-secondary-container);
+  padding: 2px 6px;
+  border-radius: var(--md-shape-xs);
+  align-self: flex-start;
+}
+.history-row__title {
+  flex: 1 1 auto;
+}
+.history-row__when {
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+}
+
+/* ------------------------------ Notifications ----------------------------- */
+.toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 76px; /* stacks above the always-visible notification bell */
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-inverse-surface);
+  color: var(--md-inverse-on-surface);
+  box-shadow: var(--md-elevation-3);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.toast--leaving {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.toast--warning {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.toast--error {
+  background: var(--md-error);
+  color: var(--md-on-error);
+}
+.toast__text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.toast__title {
+  font-size: 13.5px;
+}
+.toast__dismiss {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  min-width: 28px;
+  min-height: 28px;
+}
+.toast__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.toast__action {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: var(--md-shape-full);
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.notification-bell {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 79;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: var(--md-elevation-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+}
+.notification-bell__count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--md-error);
+  color: var(--md-on-error);
+  border-radius: var(--md-shape-full);
+  font-size: 10px;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+.notification-centre {
+  position: fixed;
+  right: 16px;
+  bottom: 76px;
+  z-index: 81;
+  width: min(380px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-lg);
+  box-shadow: var(--md-elevation-3);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.notification-centre__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.notification-centre__header h3 {
+  margin: 0;
+}
+.notification-centre__filter {
+  min-height: var(--touch-target);
+  padding: 8px 10px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  font-size: 13px;
+}
+.notification-centre__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.notification-centre__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.notification-centre__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px;
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container);
+  cursor: pointer;
+}
+.notification-centre__row-text {
+  flex: 1 1 auto;
+}
+.notification-centre__when {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+/* ---------------------- Destructive-action confirm gate -------------------- */
+.confirm-gate__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--md-scrim);
+}
+.confirm-gate {
+  z-index: 91;
+  width: min(420px, calc(100vw - 32px));
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-lg);
+  box-shadow: var(--md-elevation-3);
+  padding: 20px;
+  border: 2px solid var(--md-error);
+}
+.confirm-gate__title {
+  margin: 0 0 8px;
+  color: var(--md-error);
+}
+.confirm-gate__desc {
+  font-size: 13.5px;
+  color: var(--md-on-surface-variant);
+  margin: 0 0 16px;
+}
+.confirm-gate__keys {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.confirm-gate__key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.confirm-gate__slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.confirm-gate__slider {
+  width: 100%;
+}
+.confirm-gate__slider-label {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+.confirm-gate__progress {
+  height: 8px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container);
+  overflow: hidden;
+  margin-bottom: 14px;
+  position: relative;
+}
+.confirm-gate__progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--md-error);
+  transition: width 0.05s linear;
+}
+.confirm-gate__progress-bar--done {
+  background: var(--md-primary);
+}
+.confirm-gate__progress span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--md-on-surface-variant);
+}
+.confirm-gate__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ----------------------------- Appearance editor --------------------------- */
+.appearance-editor__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--md-scrim);
+}
+.appearance-editor {
+  z-index: 91;
+  width: min(360px, calc(100vw - 32px));
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-lg);
+  box-shadow: var(--md-elevation-3);
+  padding: 16px;
+}
+.appearance-editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.appearance-editor__head h3 {
+  margin: 0;
+}
+.appearance-editor__footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.color-picker {
+  position: relative;
+  margin-bottom: 10px;
+}
+.color-picker__field {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  border-radius: var(--md-shape-sm);
+  cursor: crosshair;
+  touch-action: none;
+}
+.color-picker__field-cursor {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  transform: translate(-7px, -7px);
+  pointer-events: none;
+}
+.color-picker__hue {
+  position: relative;
+  margin-top: 10px;
+  height: 16px;
+  border-radius: var(--md-shape-full);
+  background: linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red);
+  cursor: pointer;
+  touch-action: none;
+}
+.color-picker__hue-cursor {
+  position: absolute;
+  top: -3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  transform: translateX(-11px);
+  pointer-events: none;
+}
+.color-picker__swatch {
+  margin-top: 10px;
+  height: 28px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline-variant);
+}
+.color-picker__numeric {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+.color-picker__numeric label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--md-on-surface-variant);
+}
+.color-picker__numeric input {
+  min-height: 32px;
+  padding: 4px 6px;
+  border-radius: var(--md-shape-xs);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono);
+}
+.color-picker__translator {
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--md-outline-variant);
+  padding-top: 8px;
+  margin-bottom: 8px;
+}
+.color-picker__translator-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+.color-picker__translator-row span {
+  color: var(--md-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.color-picker__translator-row code {
+  font-family: var(--md-font-mono);
+  overflow-x: auto;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.color-picker__contrast {
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+  margin-bottom: 6px;
+}
+.color-picker__gamut {
+  font-size: 11px;
+  color: var(--md-error);
+  margin-bottom: 6px;
+}
