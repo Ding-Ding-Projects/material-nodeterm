@@ -49,7 +49,7 @@ describe('GitHubIssuesSection', () => {
     root = createRoot(host)
     await act(async () => {
       root.render(
-        <SettingsSearchContext.Provider value={query}>
+        <SettingsSearchContext.Provider value={{ mode: 'text', query, pattern: '', flags: 'i' }}>
           <GitHubIssuesSection isActive />
         </SettingsSearchContext.Provider>
       )

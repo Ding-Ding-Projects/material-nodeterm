@@ -1,26 +1,28 @@
+import { useRef } from 'react'
 import { cn } from '@renderer/ui/cn'
 import { Input } from '@renderer/ui/Input'
 import { visibleSettingsGroups, type SettingsSectionId } from './nav'
+import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
+import type { RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 const GROUPS = visibleSettingsGroups(isMac)
-import { matchesQuery } from './search'
+import { matchesEntry } from './search'
 import { SectionIcon } from './SettingsIcons'
 
 export function SettingsSidebar({
   activeSectionId,
-  query,
+  search,
   onSelect,
-  onQueryChange,
   onClose
 }: {
   activeSectionId: SettingsSectionId
-  query: string
+  search: RegexSearchFieldState
   onSelect: (id: SettingsSectionId) => void
-  onQueryChange: (q: string) => void
   onClose: () => void
 }): React.JSX.Element {
-  const hasQuery = query.trim() !== ''
+  const inputRef = useRef<HTMLInputElement>(null)
+  const hasQuery = search.active
   return (
     <aside className="flex w-[256px] shrink-0 flex-col border-r border-border bg-panel">
       <div
@@ -42,29 +44,34 @@ export function SettingsSidebar({
       </div>
 
       <div className="px-3 pb-3">
-        <div className="relative">
-          <svg
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-2"
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          >
-            <circle cx="6" cy="6" r="4" />
-            <path d="M9.2 9.2 12 12" />
-          </svg>
-          <Input
-            className="h-8 w-full pl-8"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search settings"
-            aria-label="Search settings"
-          />
+        <div className="relative flex items-center gap-1">
+          <div className="relative flex-1">
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-2"
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
+              <circle cx="6" cy="6" r="4" />
+              <path d="M9.2 9.2 12 12" />
+            </svg>
+            <Input
+              ref={inputRef}
+              className="h-8 w-full pl-8"
+              value={search.value}
+              onChange={(e) => search.setValue(e.target.value)}
+              placeholder={search.mode === 'regex' ? 'Search settings (regex)' : 'Search settings'}
+              aria-label="Search settings"
+            />
+          </div>
+          <AnchoredRegexBuilder search={search} fieldRef={inputRef} label="Regex — settings search" />
         </div>
+        {search.error && <p className="mt-1 px-1 text-[11px] leading-snug text-danger">{search.error}</p>}
       </div>
 
       <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
@@ -75,7 +82,7 @@ export function SettingsSidebar({
             </p>
             {group.sections.map((s) => {
               const isActive = activeSectionId === s.id
-              const dimmed = hasQuery && !matchesQuery(query, { title: s.title })
+              const dimmed = hasQuery && !matchesEntry(search, { title: s.title })
               return (
                 <button
                   key={s.id}
