@@ -127,11 +127,14 @@ opencode / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂
 
 ### More
 
-- **Session continuity (tmux)** — terminals keep running across node remounts *and* full
-  app restarts, including live processes; machine reboots restore scrollback and resume
-  agent sessions (`claude --resume`). The macOS app **ships its own tmux**, so this works
-  with nothing installed; a tmux already on your system is always used in preference to it,
-  and terminals opened before an upgrade stay as they were until you refresh the node.
+- **Session continuity (tmux, or the built-in session host on Windows)** — terminals keep
+  running across node remounts *and* full app restarts, including live processes; machine
+  reboots restore scrollback and resume agent sessions (`claude --resume`). The macOS app
+  **ships its own tmux**, so this works with nothing installed; a tmux already on your
+  system is always used in preference to it, and terminals opened before an upgrade stay as
+  they were until you refresh the node. On Windows, where tmux does not exist, the app runs
+  its own standalone **session host** instead — see
+  [`docs/windows-session-host.md`](./docs/windows-session-host.md).
 - **Talk to your terminal** — on-device Whisper dictation (⌘⇧D): speak, review, send.
 - **Agent superpowers** — **context links** so agent nodes read each other's transcripts
   on demand; Claude-only **branch a conversation** and **managed accounts** for several
