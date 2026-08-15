@@ -152,6 +152,66 @@ Both `npm run make-icon` outputs and everything under `resources/` that is genui
 project's own hand-written source (none currently, beyond the license/art exclusions above)
 stay in scope for the count; only the paths named above are excluded.
 
+## The tag-trigger loop (2026-08-15) and how it was actually stopped
+
+`release.yml` used to trigger on a bare `push:` — no branch filter — and every successful run
+**publishes a tag**. A bare `push:` trigger fires on a tag push exactly the same as a branch
+push, so the workflow was, unintentionally, its own trigger: a run published `v0.3.0-ci.2`, the
+push of that tag started another run, which published `v0.3.0-ci.3`, and so on with no upper
+bound. By the time anyone noticed and manually disabled the workflow in GitHub Actions,
+`gh release list` showed **43** tagged releases and `gh run list --workflow=release.yml` showed
+**85** runs of it — every one of them `failure` or `cancelled`, none reaching the packaging step
+cleanly — spanning about an hour. None of the 43 releases carried an installer: the build was
+failing the whole time on an unrelated broken stylesheet (since fixed), so every run died before
+the packaging step that would have attached one, but the release-creation step in whichever
+workflow version that run happened to be executing had already run by then.
+
+**Why a `main`-branch fix alone could not stop it.** A GitHub Actions workflow run checks out and
+executes the copy of the workflow file that lives at the ref that triggered it. A run triggered
+by tag `v0.3.0-ci.7` runs `v0.3.0-ci.7`'s `.github/workflows/release.yml`, not whatever is
+current on `main` — so pushing a fix to `main` could not reach, or stop, runs that were already
+being triggered by tags created before the fix existed. Only two things actually stopped the
+loop:
+
+1. **The trigger fix**, `on.push.branches: ['**']` (see the comment on that block) — this stops
+   any *new* tag from starting a *new* run, but only for runs that check out a workflow file
+   which already contains this filter.
+2. **Manually disabling the workflow** in GitHub Actions (`gh workflow disable release.yml` or
+   the Actions UI) — this is what actually stopped runs that were still being triggered by
+   already-published tags checking out their own, unfixed, copy of the file. The branch filter
+   is necessary but was not, by itself, sufficient to end an already-running loop.
+
+**The workflow is currently disabled** (`gh workflow list --all` reports it
+`disabled_manually`). It stays that way until it is deliberately re-enabled after this fix has
+been reviewed — re-enabling it is not part of this change.
+
+### The fail-fast tag guard
+
+The branch filter closes the trigger for new pushes, but it lives in the same file it is meant
+to protect: nothing stops a future edit from loosening it, a `workflow_dispatch` from being
+aimed at a tag ref (which GitHub allows), or an old/reverted copy of the workflow from being the
+one that executes if the loop ever restarts through some other path. So the release job's very
+first step is a redundant, independent check: `if: github.ref_type == 'tag'` fails the run in
+seconds, before checkout or any dependency install, with an explicit error naming the reason.
+It costs nothing on every normal branch-push or `workflow_dispatch` run (the condition is false
+and the step is skipped), and it means a tag-triggered run can never again get far enough to
+publish anything, regardless of what the trigger filter says at that ref.
+
+### The honest cost of an ungated pipeline, restated
+
+The "governing policy" section above already names the trade-off this project has chosen: no
+test, type-check, or lint gate on the release pipeline, so a broken commit can reach a published
+release before a human notices. The tag-trigger loop is what that trade-off looks like when it
+goes wrong in the *other* direction the policy did not originally anticipate: not "one bad build
+shipped once," but a runaway trigger turning one broken build into dozens of empty releases in
+under an hour, entirely unattended, because nothing in the pipeline's own design could tell it to
+stop. An ungated pipeline is not just a pipeline that might publish something broken — it is a
+pipeline that, absent an explicit guard, has no internal reason to publish exactly one thing per
+change instead of an unbounded number. The fail-fast tag guard above is that explicit reason,
+made cheap and redundant on purpose: it does not reintroduce a quality gate (nothing here runs a
+test or a linter), it only guarantees the release job cannot be *entered* by the one trigger shape
+that is known to make it self-perpetuating.
+
 ## What is deliberately out of scope for this lane
 
 - **`security.yml`** (CodeQL + dependency review) is untouched. It runs on `pull_request`/

@@ -18,8 +18,13 @@ on:
   push:
     # BRANCHES ONLY — never tags. A bare `push:` also fires on tag pushes, and this workflow
     # CREATES a tag per release, so each release triggered the next one: v0.3.0-ci.2 published a
-    # tag, that tag push started another run, which published v0.3.0-ci.3, and so on. It produced
-    # 17 releases in half an hour before anyone looked. Keep this filter.
+    # tag, that tag push started another run, which published v0.3.0-ci.3, and so on. A run
+    # triggered by a tag checks out and executes *that tag's own copy* of this file, so early
+    # fixes on `main` could not stop runs already replaying against older tags — only manually
+    # disabling the whole workflow in GitHub Actions did. By the time it was disabled, `gh
+    # release list` showed 43 tagged releases and `gh run list --workflow=release.yml` showed 85
+    # runs (all failure/cancelled — none reached the packaging step cleanly) spanning about an
+    # hour. Keep this filter.
     branches: ['**']
   workflow_dispatch:
 
@@ -37,6 +42,24 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
+      # Second line of defense against the exact loop this workflow already caused once
+      # (see the `on.push.branches` comment above and docs/ci-and-releases.md): this
+      # workflow PUBLISHES a tag every time it runs, so a run triggered by a TAG push
+      # would trigger the next run, which publishes the next tag, forever. The branch
+      # filter is the primary fix, but a run triggered by a tag checks out and executes
+      # *that tag's* copy of this file — so a future edit that reintroduces a tag trigger,
+      # a manual `workflow_dispatch` aimed at a tag ref, or an old/reverted workflow file
+      # replaying against a tag can all still re-enter the loop, unprotected by a filter
+      # that only lives in the current branch's file. This step is cheap (no checkout, no
+      # dependencies) and runs before anything expensive, so it fails the run in seconds
+      # with a clear reason instead of silently starting the loop again.
+      - name: Refuse to run against a tag ref (release-loop guard)
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          echo "::error::This workflow must never run against a tag ref (got ref_type=tag, ref=${GITHUB_REF}). This workflow publishes a tag on every run, so a tag-triggered run re-enters the exact publish loop described in docs/ci-and-releases.md. Refusing to continue."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
