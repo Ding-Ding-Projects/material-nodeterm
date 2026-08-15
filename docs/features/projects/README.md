@@ -1,0 +1,10 @@
+# Projects
+
+A project is one canvas — one page of nodes, with its own working directory and its own tab.
+
+- [Projects & tabs](./projects-and-tabs.md) — how projects are created, switched, closed,
+  reopened, and persisted to disk; how a project binds to a folder.
+
+See also [Canvas](../canvas/README.md) for what lives inside a project, and
+[Source control](../source-control/README.md) for how a project's working directory relates to
+git worktrees.

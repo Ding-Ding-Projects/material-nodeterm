@@ -1,0 +1,49 @@
+# nodeterm feature documentation
+
+Every feature nodeterm ships has its own article in a category below: what it does, how to
+configure it, how it fails, what it means for security, and how it's verified. This index is
+the front door — start here, or jump straight to a category.
+
+If you are new to the project, read [`../../README.md`](../../README.md) first for the pitch
+and the install line, then come back here for depth. [`../../CLAUDE.md`](../../CLAUDE.md) is
+the deep architecture reference these articles are distilled from.
+
+## Categories
+
+| Category | What's in it |
+| --- | --- |
+| [Terminals](./terminals/README.md) | Real shells as nodes, tmux session continuity across restarts and reboots. |
+| [Canvas](./canvas/README.md) | The pan/zoom surface, every node kind, and the terminal-node lifecycle. |
+| [Projects](./projects/README.md) | Projects as tabs, per-project canvases, persistence and folder binding. |
+| [Agents](./agents/README.md) | Claude Code, Codex, Gemini, opencode, Grok and custom agent CLIs as nodes. |
+| [Source control](./source-control/README.md) | The git panel, and git worktrees bound to canvas group frames. |
+| [Kanban](./kanban/README.md) | The Trello-style board that mirrors a project's live sessions as cards. |
+| [Remote & SSH](./remote/README.md) | Opening a project on a remote host, and the self-hosted browser edition. |
+| [Speech](./speech/README.md) | On-device dictation into any terminal. |
+| [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
+
+## How these articles are organized
+
+Every article follows the same shape, so you can skim for the part you need:
+
+- **Behaviour** — what happens, in plain terms, including the non-obvious parts.
+- **Configuration** — the settings that change it, and their defaults.
+- **Failure modes** — what happens when something is missing, unreachable, or wrong, and how
+  that is reported (nodeterm's own rule throughout the codebase: a failed read is never
+  reported as "there is nothing" — the two are different facts).
+- **Security considerations** — anything that touches credentials, local files, or another
+  machine.
+- **Verification** — how to check the feature actually works, for yourself or in review.
+- **Suggested articles** — where to go next.
+
+## Three surfaces
+
+Most features exist on more than one of nodeterm's three shells, and behave slightly
+differently (or not at all) on each:
+
+1. **Desktop** — the Electron app for macOS and Linux.
+2. **Server Edition** — the same renderer, self-hosted and reached from any browser.
+3. **Mobile companion** — a separate iOS app that attaches to the same live sessions.
+
+Each article says explicitly which surfaces a feature reaches and how it degrades on the
+others, rather than assuming "the app" means only the desktop build.
