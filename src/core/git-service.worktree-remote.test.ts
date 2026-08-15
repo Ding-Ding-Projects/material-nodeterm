@@ -20,6 +20,16 @@ import { setGitRemoteResolver } from './remote-ssh/remote-git'
 
 const svc = new GitService()
 
+/**
+ * `git worktree list --porcelain` prints paths with FORWARD slashes even on Windows (verified:
+ * `C:/Users/…`, not `C:\Users\…`) — git's own textual output is always POSIX-shaped, regardless of
+ * host OS. `repo` here is a native Node path (`fs.realpathSync`/`path.join`, backslash-joined on
+ * win32), so a byte-for-byte comparison against the parsed entry is a platform assumption baked
+ * into the fixture, not a real behavioral difference. Normalize both sides for the comparison; a
+ * no-op on POSIX, where the two were already identical.
+ */
+const normSlash = (p: string): string => p.replace(/\\/g, '/')
+
 /** Make the resolver claim exactly `repoPath` — i.e. "this repo lives on an SSH host". */
 function claimAsRemote(repoPath: string): void {
   setGitRemoteResolver((cwd) =>
@@ -47,7 +57,7 @@ describe('worktree ops on a LOCAL repo (no remote claims it)', () => {
   it('still reach real git — the remote guard does not swallow the local path', async () => {
     const listed = await svc.worktreeList(repo)
     expect(listed.ok).toBe(true)
-    expect(listed.entries.map((e) => e.path)).toEqual([repo])
+    expect(listed.entries.map((e) => normSlash(e.path))).toEqual([normSlash(repo)])
     // The main checkout is on disk, so the `pathExists` fallback must NOT call it prunable.
     expect(listed.entries[0].prunable).toBeFalsy()
   })
@@ -104,7 +114,7 @@ describe('worktree ops on a REMOTE repo', () => {
     // …and the repo is untouched: still exactly one (local) worktree once the claim is dropped.
     setGitRemoteResolver(null)
     const listed = await svc.worktreeList(repo)
-    expect(listed.entries.map((e) => e.path)).toEqual([repo])
+    expect(listed.entries.map((e) => normSlash(e.path))).toEqual([normSlash(repo)])
   })
 })
 
@@ -118,6 +128,11 @@ describe('history routing', () => {
     expect(r.items.map((i) => i.subject)).toContain('init')
   })
 
+  // The `h` host below is deliberately unresolvable, so `ControlMaster=auto`'s real fallback
+  // connection has to fail a genuine DNS lookup before this settles — measured at ~7.3s on this
+  // Windows host (vs. vitest's 5s default), against a near-instant "unknown host" on a POSIX
+  // resolver. Same eventual failure either way; only the OS's own DNS-negative timing differs, so
+  // the fix is headroom on the clock, not a different expectation.
   it('a remote-claimed repo never gets LOCAL git run against its (remote) path', async () => {
     claimAsRemote(repo) // bogus master socket → the remote git fails
     // The invariant is "the local repo's commits are never served as if they were the host's".
@@ -126,5 +141,5 @@ describe('history routing', () => {
     const r = await svc.history(repo).catch(() => ({ items: [] }))
     expect(r.items.map((i) => i.subject)).not.toContain('init')
     expect(r.items).toHaveLength(0)
-  })
+  }, 15_000)
 })
