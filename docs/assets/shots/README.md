@@ -1,9 +1,14 @@
 # Real captures — nodeterm published site
 
-Every image in this directory is a **real screen capture** of the live, deployed
-nodeterm documentation/landing site — **not** a mockup, not a hand-edited image, and not
-reused from anywhere upstream. None of the desktop Electron app's screens are represented
-here; see "Why not the desktop app" below for the exact, measured reason.
+Every image in this directory is a **real screen capture** — not a mockup, not a
+hand-edited image, and not reused from anywhere upstream. There are two sets:
+
+- `site-*.png` — the live, deployed documentation/landing site.
+- `app-*.png` — the **desktop Electron app**, captured from a real running build.
+
+The desktop set was blocked for most of this work and is no longer; the section
+"How the desktop app became capturable" below records exactly what the blocker was
+and how it was worked around, because the workaround is reusable.
 
 ## Source and commit
 
@@ -101,3 +106,75 @@ sections of `CLAUDE.md`), so it is captured in full instead.
 All twelve images are lossless PNG, taken via `Page.captureScreenshot` at
 `deviceScaleFactor: 1` (390-wide capture at `deviceScaleFactor: 2`), and none were resized,
 cropped, or otherwise edited after capture.
+
+---
+
+## The desktop app set (`app-*.png`)
+
+| File | Surface | Verified by |
+| --- | --- | --- |
+| `app-01-launch.png` | First screen of the built app | `document.title === 'nodeterm'`, canvas present |
+| `app-02-settings.png` | Settings surface — sidebar nav, search + its regex affordance | rendered heading |
+| `app-03-palette.png` | Command palette | `.palette` present |
+| `app-settings-language.png` | Language modes + both funny-level sliders | heading `Language` |
+| `app-settings-narrator.png` | Narrator — per-language voice pickers, live status line | heading `Narrator` |
+| `app-settings-app-identity.png` | App rename + logo customization | heading `App name & logo` |
+| `app-settings-appearance-editor.png` | Per-element appearance editor | heading `Appearance editor` |
+| `app-settings-schedule.png` | Scheduled settings | heading `Schedule` |
+
+- **Captured from:** the Electron app running out of this working tree at commit `489c71eeb8cc9f831dd054d4cf608377c82921a3`.
+- **Route:** the cheap Lowlevel MCP headless desktop (`NodetermShots`) — the app ran with a
+  real GUI on an off-screen Win32 desktop, so the visible desktop, cursor and focus were
+  never touched. Frames were taken over the Chrome DevTools Protocol
+  (`--remote-debugging-port=9400` -> `Page.captureScreenshot`), which this repository's own
+  notes record as the route that works for an Electron target — `screenshot(hwnd=...)` does
+  not.
+- **Each shot is gated on the surface actually rendering.** The script reads back the panel's
+  own heading first and *skips* rather than shooting if it is absent, and refuses to shoot at
+  all while a palette or other overlay is on top. That check earned its keep immediately: the
+  first run of the settings-section batch produced five images with the command palette left
+  open over them from an earlier script. They were discarded and retaken, not shipped.
+
+## How the desktop app became capturable
+
+For most of this work the app could not be launched here at all: its main process requires
+`node-pty`, whose native module **will not compile on this machine**. The exact error is
+MSBuild `MSB8040` — the Spectre-mitigated VC libraries are not installed in this toolchain —
+and installing them means modifying somebody's Visual Studio installation, which is out of
+scope for an automated pass.
+
+Two lesser traps were diagnosed on the way and are worth writing down, because both cost real
+time and neither is obvious from the error text:
+
+- `NoDefaultCurrentDirectoryInExePath=1` is set on this machine, which makes `cmd /c` refuse
+  to run a batch file from the current directory. `node-pty`'s bundled winpty build shells out
+  to `GetCommitHash.bat` exactly that way, so `node-gyp configure` failed with
+  "'GetCommitHash.bat' is not recognized" for a file that plainly exists. Running under
+  `env -u NoDefaultCurrentDirectoryInExePath` fixes it — and `configure` then succeeds, which
+  is how the *real* blocker (MSB8040, at the compile step) was finally reached.
+- MSYS bash rewrites a leading `/` in an argument, so `-- /p:SpectreMitigation=false` arrived
+  as `p:SpectreMitigation=false`. `MSYS_NO_PATHCONV=1` prevents that. (It did not help in the
+  end — node-gyp consumes `--` arguments at configure time, not as MSBuild properties — but
+  the mangling is a real trap that will bite the next person.)
+
+**The workaround: take the binary that CI already built.** The release workflow builds on
+`windows-latest`, which has the full toolchain, and the resulting `.nupkg` is an ordinary ZIP
+containing the compiled module. So:
+
+1. `gh release download <tag> --pattern '*.nupkg'`
+2. extract `lib/net45/resources/app.asar.unpacked/node_modules/node-pty/` over the local
+   `node_modules/node-pty/`
+3. confirm it actually works before trusting it — spawn a real pty from plain Node and check
+   for a pid and returned bytes, rather than assuming a file on disk means a working module.
+
+That is what made every `app-*.png` here possible. It also incidentally proved the packaging
+fix landed: the same archive contains `resources/session-host/`, the bundle that earlier
+packaging runs silently omitted.
+
+## What is still not captured
+
+- **The terminal/canvas surfaces in use** — a node running a live shell, an agent mid-turn,
+  the kanban board with real sessions. Those need a populated workspace, not just a launched
+  app, and are honestly absent rather than staged.
+- **Light theme for the desktop app.** The shots above are the app's own default appearance.
+

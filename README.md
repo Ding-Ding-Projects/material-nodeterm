@@ -243,22 +243,43 @@ package-manager `PATH` refresh race): [`docs/building.md`](./docs/building.md).
 
 ## Screenshots
 
-**Pending.** This fork's own screenshots have not been captured yet: on the machine this README
-was written on, the Electron app cannot be launched, because `node-pty`'s native module fails to
-build (MSBuild error MSB8040 — the required Spectre-mitigated MSVC libraries are not installed
-in that toolchain). Every image the upstream project's README used shows *their* build and
-branding, so none of them are reused here — that would be a false claim about what this fork
-looks like.
+Real captures of the built app and the live site — every image below was taken from a running
+build or the deployed site, never mocked up and never reused from upstream. The full manifest
+(what each shows, the commit, the exact capture method) is in
+[`docs/assets/shots/README.md`](./docs/assets/shots/README.md).
 
-Once a working build is available, real captures of the following surfaces belong here:
+<details>
+<summary><strong>The desktop app</strong> — settings, the command palette, and the features this fork adds</summary>
 
-- The canvas — terminal, agent, sticky, group, editor and diff nodes arranged spatially
-- Agent status — the RUNNING / NEEDS YOU badge flip, a subagent fan-out, the context meter
-- The kanban board and a live card modal
-- The Windows build — the Squirrel installer, the native title bar, and the SmartScreen prompt
-- The Server Edition, open in a browser
-- The appearance editor and the infinite colour picker
-- The dictation overlay
+| | |
+| --- | --- |
+| ![The nodeterm settings surface, showing the sidebar navigation with Agents selected, per-agent enable/default controls for Claude Code, Codex, Gemini, opencode and Grok, and the permission-mode explanation](./docs/assets/shots/app-02-settings.png) | ![The Narrator settings section: a master toggle that is off by default, a narrated-language choice of English, Cantonese or Both, and two separate voice pickers each set to Choose automatically](./docs/assets/shots/app-settings-narrator.png) |
+| **Settings** — the tabbed surface, its search field with the regex-builder affordance beside it, and per-agent capability controls. | **Narrator** — off by default, with a *separate* voice picker per language and a live line saying which voice will actually speak. |
+| ![The Language settings section, offering English, Cantonese and Bilingual modes with two independent funny-level sliders](./docs/assets/shots/app-settings-language.png) | ![The command palette open over the app, listing create actions for terminals and each supported agent](./docs/assets/shots/app-03-palette.png) |
+| **Language** — three modes, and two funny-level sliders that change tone without changing what a message says. | **Command palette** — every command, destination and setting, with a persisted size. |
+
+Also captured: [the appearance editor](./docs/assets/shots/app-settings-appearance-editor.png),
+[app name & logo](./docs/assets/shots/app-settings-app-identity.png),
+[scheduled settings](./docs/assets/shots/app-settings-schedule.png), and
+[the app at launch](./docs/assets/shots/app-01-launch.png).
+
+</details>
+
+<details>
+<summary><strong>The site</strong> — light and dark, the regex builder, and a phone layout</summary>
+
+| | |
+| --- | --- |
+| ![The nodeterm site home page in its light theme](./docs/assets/shots/site-home-light.png) | ![The same site home page in its dark theme](./docs/assets/shots/site-home-dark.png) |
+| **Home, light.** | **Home, dark.** |
+| ![A search field on the site with the anchored regex builder open beside it](./docs/assets/shots/site-search-regex-builder.png) | ![The site rendered at a 390px-wide phone viewport](./docs/assets/shots/site-narrow-390.png) |
+| **The regex builder**, anchored to the field it belongs to. | **390px phone width** — measured to have no sideways scroll. |
+
+</details>
+
+**Not yet captured, and honestly absent rather than staged:** the canvas with live terminals and
+an agent mid-turn, the kanban board with real sessions, and the Squirrel installer's SmartScreen
+prompt. Those need a populated workspace or a real install, not just a launched app.
 
 ## Contributing
 
