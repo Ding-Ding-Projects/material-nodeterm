@@ -1,10 +1,18 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { promises as fs, type FSWatcher, watch } from 'fs'
 import os from 'os'
 import path from 'path'
 import { IPC } from '../shared/ipc'
 import type { SchoolModeRecord } from '../shared/types'
 import { platform } from './platform'
+import {
+  MAX_PIN_LENGTH,
+  MIN_PIN_LENGTH,
+  hasCredential as credentialExists,
+  isAcceptablePin,
+  persistFile,
+  setCredential as writeCredential,
+  verifyPin as checkPin
+} from './shared-mode-credential'
 
 /**
  * "School mode" — a self-imposed, USER-EXPERIENCE switch, not a security boundary. While on,
@@ -36,24 +44,11 @@ import { platform } from './platform'
  * must name this path in plain words — see docs/school-mode.md.
  */
 
-const SCRYPT_KEYLEN = 32
-const MIN_PIN_LENGTH = 4
-const MAX_PIN_LENGTH = 128
 const MAX_NAME_LENGTH = 80
 
 export const DEFAULT_SCHOOL_MODE_NAME = 'School mode'
 
 const DEFAULT_RECORD: SchoolModeRecord = { version: 1, enabled: false, name: DEFAULT_SCHOOL_MODE_NAME }
-
-interface StoredCredential {
-  version: 1
-  /** base64 scrypt salt. */
-  salt: string
-  /** base64 scrypt hash — sealed (via the platform's sealSecret) when `sealed` is true, raw
-   *  base64 bytes when it is not. Never a stored plaintext PIN, either way. */
-  hash: string
-  sealed: boolean
-}
 
 /** `~/.nodeterm/shared` — a location any locally installed app in this family can read, distinct
  *  from Electron's per-app `userData` dir (which `platform().userDataDir` resolves to). */
@@ -65,38 +60,6 @@ function recordFile(): string {
 }
 function credentialFile(): string {
   return path.join(sharedDir(), 'school-mode.credential.json')
-}
-
-/** Write bytes atomically: unique tmp with 0600, rename into place. A reader never observes a
- *  partial file, and a crash mid-write never corrupts the previous good record. Mirrors the
- *  pattern in core/agents/node-auth-secret.ts and core/settings-store.ts. */
-async function persistFile(file: string, data: string): Promise<void> {
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
-  await fs.mkdir(path.dirname(file), { recursive: true })
-  try {
-    await fs.writeFile(tmp, data, { mode: 0o600 })
-    await fs.rename(tmp, file)
-    await fs.chmod(file, 0o600).catch(() => {})
-  } catch (e) {
-    await fs.rm(tmp, { force: true }).catch(() => {})
-    throw e
-  }
-}
-
-/** Whether this shell can seal secrets at rest. Throws on a shell wired with exactly one of the
- *  two hooks — a programming error, same contract `node-auth-secret.ts` enforces. */
-function seals(): boolean {
-  const p = platform()
-  const hasSeal = typeof p.sealSecret === 'function'
-  const hasUnseal = typeof p.unsealSecret === 'function'
-  if (hasSeal !== hasUnseal) {
-    throw new Error('CorePlatform must supply both sealSecret and unsealSecret, or neither')
-  }
-  return hasSeal
-}
-
-function deriveHash(pin: string, salt: Buffer): Buffer {
-  return scryptSync(pin, salt, SCRYPT_KEYLEN)
 }
 
 function isValidRecord(v: unknown): v is SchoolModeRecord {
@@ -205,53 +168,15 @@ export class SchoolModeStore {
   }
 
   async hasCredential(): Promise<boolean> {
-    try {
-      await fs.access(credentialFile())
-      return true
-    } catch {
-      return false
-    }
+    return credentialExists(credentialFile())
   }
 
   private async setCredential(pin: string): Promise<void> {
-    const salt = randomBytes(16)
-    const hash = deriveHash(pin, salt)
-    const sealedOk = seals()
-    const hashB64 = hash.toString('base64')
-    // sealSecret encrypts the UTF-8 CONTENT of the buffer it is given (see platform-electron.ts),
-    // so binary hash bytes must be base64-encoded into an ASCII string FIRST — sealing the raw
-    // bytes directly would corrupt them (not every byte sequence is valid UTF-8). Mirrors
-    // core/agents/node-auth-secret.ts exactly.
-    const hashOut = sealedOk
-      ? platform().sealSecret!(Buffer.from(hashB64, 'utf8')).toString('base64')
-      : hashB64
-    const body: StoredCredential = { version: 1, salt: salt.toString('base64'), hash: hashOut, sealed: sealedOk }
-    await persistFile(credentialFile(), JSON.stringify(body))
+    await writeCredential(credentialFile(), pin)
   }
 
   private async verifyPin(pin: string): Promise<boolean> {
-    let stored: StoredCredential
-    try {
-      stored = JSON.parse(await fs.readFile(credentialFile(), 'utf-8')) as StoredCredential
-    } catch {
-      return false
-    }
-    if (stored?.version !== 1 || typeof stored.salt !== 'string' || typeof stored.hash !== 'string') {
-      return false
-    }
-    let expected: Buffer
-    try {
-      expected = stored.sealed
-        ? Buffer.from(platform().unsealSecret!(Buffer.from(stored.hash, 'base64')).toString('utf8'), 'base64')
-        : Buffer.from(stored.hash, 'base64')
-    } catch {
-      // Unseal can fail across a machine migration / keychain reset — treat as "cannot verify",
-      // never as a crash. The user's documented recovery is deleting the shared record.
-      return false
-    }
-    const candidate = deriveHash(pin, Buffer.from(stored.salt, 'base64'))
-    if (expected.byteLength !== candidate.byteLength) return false
-    return timingSafeEqual(expected, candidate)
+    return checkPin(credentialFile(), pin)
   }
 
   /** Turn the mode ON. `pin` is required only when no credential exists yet on this machine. */
@@ -259,7 +184,7 @@ export class SchoolModeStore {
     const run = this.chain.then(async () => {
       if (!(await this.hasCredential())) {
         const trimmed = (pin ?? '').trim()
-        if (trimmed.length < MIN_PIN_LENGTH || trimmed.length > MAX_PIN_LENGTH) {
+        if (!isAcceptablePin(trimmed)) {
           throw new Error(`a PIN of at least ${MIN_PIN_LENGTH} characters is required the first time this mode is turned on`)
         }
         await this.setCredential(trimmed)
@@ -286,7 +211,7 @@ export class SchoolModeStore {
     const run = this.chain.then(async () => {
       if (!(await this.verifyPin(currentPin))) return false
       const trimmed = nextPin.trim()
-      if (trimmed.length < MIN_PIN_LENGTH || trimmed.length > MAX_PIN_LENGTH) return false
+      if (!isAcceptablePin(trimmed)) return false
       await this.setCredential(trimmed)
       return true
     })
