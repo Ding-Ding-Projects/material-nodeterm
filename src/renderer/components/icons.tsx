@@ -322,3 +322,26 @@ export const IconCanvasView = () => (
     <rect x="3.5" y="9.5" width="5.5" height="5" rx="1" />
   </svg>
 )
+
+export const IconConvert = () => (
+  <svg {...S}>
+    {/* Two files with an exchange arrow between them — the universal file converter. */}
+    <path d="M14 3v5h5" />
+    <path d="M14 3l5 5" />
+    <path d="M3 21v-5h5" />
+    <path d="M3 21l5-5" />
+    <path d="M7 14a7 7 0 0 1 7-7M17 10a7 7 0 0 1-7 7" />
+  </svg>
+)
+
+export const IconOllama = () => (
+  <svg {...S}>
+    {/* A simple llama-adjacent glyph — two rounded "ears" over a body, standing in for the local
+        Ollama suite manager without depending on any bundled brand asset. */}
+    <path d="M9 4c0 1.5-1 2.5-1 4M15 4c0 1.5 1 2.5 1 4" />
+    <rect x="6" y="8" width="12" height="10" rx="4" />
+    <circle cx="9.5" cy="13" r="0.8" fill="currentColor" stroke="none" />
+    <circle cx="14.5" cy="13" r="0.8" fill="currentColor" stroke="none" />
+    <path d="M9.5 16h5" />
+  </svg>
+)

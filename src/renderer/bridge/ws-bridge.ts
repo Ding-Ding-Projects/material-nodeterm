@@ -15,6 +15,8 @@ import {
 } from '../../shared/rpc'
 import { IPC } from '../../shared/ipc'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
+import type { ConverterApi } from '../../shared/converter'
+import type { OllamaApi } from '../../shared/ollama'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -627,6 +629,79 @@ export function buildSpeechApi(client: RpcClient): Pick<NodeTerminalApi, 'speech
   return { speech }
 }
 
+/** Universal file converter (docs/file-converter.md) — the SAME core engine as desktop, over the
+ *  SAME converter:* channels; only the transport differs. */
+export function buildConverterApi(client: RpcClient): Pick<NodeTerminalApi, 'converter'> {
+  const converter: ConverterApi = {
+    catalog: () => client.request(IPC.converterCatalog) as ReturnType<ConverterApi['catalog']>,
+    detect: (path) => client.request(IPC.converterDetect, path) as ReturnType<ConverterApi['detect']>,
+    preflight: (destDir) =>
+      client.request(IPC.converterPreflight, destDir) as ReturnType<ConverterApi['preflight']>,
+    state: (offset, limit) =>
+      client.request(IPC.converterState, offset, limit) as ReturnType<ConverterApi['state']>,
+    addFiles: (paths, destDir, adapterId, lossyAcknowledged) =>
+      client.request(
+        IPC.converterAddFiles,
+        paths,
+        destDir,
+        adapterId,
+        lossyAcknowledged
+      ) as ReturnType<ConverterApi['addFiles']>,
+    addFolder: (root, destDir, adapterId, opts) =>
+      client.request(IPC.converterAddFolder, root, destDir, adapterId, opts) as Promise<void>,
+    cancelScan: () => client.request(IPC.converterCancelScan) as Promise<void>,
+    resolvePending: (ids, opts) => client.request(IPC.converterResolvePending, ids, opts) as Promise<void>,
+    start: () => client.request(IPC.converterStart) as Promise<void>,
+    pause: () => client.request(IPC.converterPause) as Promise<void>,
+    cancelItem: (id) => client.request(IPC.converterCancelItem, id) as Promise<void>,
+    cancelAll: () => client.request(IPC.converterCancelAll) as Promise<void>,
+    retryItem: (id) => client.request(IPC.converterRetryItem, id) as Promise<void>,
+    removeItem: (id) => client.request(IPC.converterRemoveItem, id) as Promise<void>,
+    clearFinished: () => client.request(IPC.converterClearFinished) as Promise<void>,
+    setConcurrency: (n) => client.request(IPC.converterSetConcurrency, n) as Promise<number>,
+    onItem: (listener) => client.subscribe(IPC.converterItem, listener as Listener),
+    onSummary: (listener) => client.subscribe(IPC.converterSummary, listener as Listener)
+  }
+  return { converter }
+}
+
+/** Local Ollama suite manager (docs/ollama-manager.md) — the SAME core engine as desktop; the
+ *  server process is the one making the loopback calls to Ollama, exactly as main does. */
+export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama'> {
+  const ollama: OllamaApi = {
+    status: () => client.request(IPC.ollamaStatus) as ReturnType<OllamaApi['status']>,
+    models: () => client.request(IPC.ollamaModels) as ReturnType<OllamaApi['models']>,
+    running: () => client.request(IPC.ollamaRunning) as ReturnType<OllamaApi['running']>,
+    show: (model) => client.request(IPC.ollamaShow, model) as ReturnType<OllamaApi['show']>,
+    deleteModel: (model) => client.request(IPC.ollamaDelete, model) as Promise<void>,
+    copyModel: (source, destination) => client.request(IPC.ollamaCopy, source, destination) as Promise<void>,
+    hardware: () => client.request(IPC.ollamaHardware) as ReturnType<OllamaApi['hardware']>,
+    fit: (refs) => client.request(IPC.ollamaFit, refs) as ReturnType<OllamaApi['fit']>,
+    popularModels: () => client.request(IPC.ollamaPopularModels) as ReturnType<OllamaApi['popularModels']>,
+    pullState: () => client.request(IPC.ollamaPullState) as ReturnType<OllamaApi['pullState']>,
+    pullEnqueue: (refs) => client.request(IPC.ollamaPullEnqueue, refs) as ReturnType<OllamaApi['pullEnqueue']>,
+    pullStart: () => client.request(IPC.ollamaPullStart) as Promise<void>,
+    pullPause: () => client.request(IPC.ollamaPullPause) as Promise<void>,
+    pullCancelItem: (id) => client.request(IPC.ollamaPullCancelItem, id) as Promise<void>,
+    pullRetryItem: (id) => client.request(IPC.ollamaPullRetryItem, id) as Promise<void>,
+    pullRemoveItem: (id) => client.request(IPC.ollamaPullRemoveItem, id) as Promise<void>,
+    pullSetConcurrency: (n) => client.request(IPC.ollamaPullSetConcurrency, n) as Promise<number>,
+    onPullItem: (listener) => client.subscribe(IPC.ollamaPullItem, listener as Listener),
+    onPullSummary: (listener) => client.subscribe(IPC.ollamaPullSummary, listener as Listener),
+    chatSessions: () => client.request(IPC.ollamaChatSessions) as ReturnType<OllamaApi['chatSessions']>,
+    chatGet: (id) => client.request(IPC.ollamaChatGet, id) as ReturnType<OllamaApi['chatGet']>,
+    chatCreate: (model, systemPrompt) =>
+      client.request(IPC.ollamaChatCreate, model, systemPrompt) as ReturnType<OllamaApi['chatCreate']>,
+    chatRename: (id, title) => client.request(IPC.ollamaChatRename, id, title) as Promise<boolean>,
+    chatDelete: (id) => client.request(IPC.ollamaChatDelete, id) as Promise<void>,
+    chatExport: (id, format) => client.request(IPC.ollamaChatExport, id, format) as Promise<string | null>,
+    chatSend: (id, text) => client.request(IPC.ollamaChatSend, id, text) as Promise<void>,
+    chatStop: (id) => client.request(IPC.ollamaChatStop, id) as Promise<void>,
+    onChatStream: (listener) => client.subscribe(IPC.ollamaChatStream, listener as Listener)
+  }
+  return { ollama }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -871,6 +946,8 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildCanvasApi(client),
     ...buildPresenceApi(client),
     ...buildSpeechApi(client),
+    ...buildConverterApi(client),
+    ...buildOllamaApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildGitHubApi(client),
@@ -891,7 +968,10 @@ export async function installWsBridge(): Promise<boolean> {
       const startDir = '/' // navigable up/down from root; the picker remembers nothing across calls in v1
       return {
         selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: api.fs.list }),
-        selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list })
+        selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list }),
+        // No native multi-file dialog in the browser. FileConverterPanel checks isBrowserRuntime()
+        // and uses a plain <input type="file" multiple> + files.saveUpload instead of calling this.
+        selectFiles: () => Promise.resolve(null)
       }
     })()
   }

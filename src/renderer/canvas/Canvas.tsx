@@ -105,6 +105,8 @@ import {
   IconReload,
   IconPower,
   IconNote,
+  IconConvert,
+  IconOllama,
   IconPhone,
   IconProject,
   IconRemote,
@@ -130,7 +132,9 @@ import {
   BugReportDialog,
   PhonePairPopover,
   MobileLaunchCard,
-  KanbanView
+  KanbanView,
+  FileConverterPanel,
+  OllamaManagerPanel
 } from '../components/lazyPanels'
 import { WelcomeScreen } from '../components/WelcomeScreen'
 import { CloneRepoDialog } from '../components/CloneRepoDialog'
@@ -871,6 +875,10 @@ export function Canvas() {
       .catch(() => {})
   }, [])
   const [explorerOpen, setExplorerOpen] = useState(false)
+  // File converter + Ollama manager panels (docs/file-converter.md, docs/ollama-manager.md) — same
+  // toggle-a-flag pattern as every other drawer/panel on this canvas.
+  const [converterOpen, setConverterOpen] = useState(false)
+  const [ollamaOpen, setOllamaOpen] = useState(false)
   // Reveal-in-Explorer target (relative to the active project cwd). The nonce makes each reveal
   // distinct so revealing the same file twice still re-fires the Explorer effect.
   const [reveal, setReveal] = useState<{ path: string; nonce: number } | null>(null)
@@ -8442,6 +8450,8 @@ export function Canvas() {
         ? [{ id: 'new-file', label: 'New file…', icon: <IconEditor />, run: () => void newProjectFile() }]
         : []),
       { id: 'open-web', label: 'Open web view…', icon: <IconRemote />, run: () => addWebView() },
+      { id: 'open-converter', label: 'File converter', icon: <IconConvert />, run: () => setConverterOpen(true) },
+      { id: 'open-ollama', label: 'Ollama manager', icon: <IconOllama />, run: () => setOllamaOpen(true) },
       { id: 'open-browser', label: 'New browser', icon: <IconRemote />, run: () => addBrowser() },
       ...useSshServers.getState().servers.map(
         (srv): Command => ({
@@ -8911,6 +8921,12 @@ export function Canvas() {
         <button title={hintLabel('Source Control (⌘⇧G)')} onClick={() => setScOpen(true)}>
           <IconBranch />
         </button>
+        <button title="File converter" onClick={() => setConverterOpen(true)}>
+          <IconConvert />
+        </button>
+        <button title="Ollama manager" onClick={() => setOllamaOpen(true)}>
+          <IconOllama />
+        </button>
         <button
           className="notif-bell"
           title="Notifications"
@@ -9307,6 +9323,9 @@ export function Canvas() {
           reveal={reveal}
         />
       )}
+
+      {converterOpen && <FileConverterPanel onClose={() => setConverterOpen(false)} />}
+      {ollamaOpen && <OllamaManagerPanel onClose={() => setOllamaOpen(false)} />}
 
       <SessionsSidebar
         open={sessionsOpen}

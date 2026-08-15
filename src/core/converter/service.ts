@@ -1,0 +1,495 @@
+// The converter engine: bounded-concurrency queue runner over the bundled adapter registry, with
+// crash-recoverable persistence (store.ts), paged folder discovery (fs-scan.ts), atomic writes,
+// pre-write validation, and the lossy/overwrite confirmation gate. See docs/file-converter.md.
+
+import { open, mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import { access } from 'node:fs/promises'
+import { basename, dirname, extname, join } from 'node:path'
+import { freeDiskBytes } from '../disk-space'
+import {
+  CONVERTER_CATALOG,
+  CONVERTER_DEFAULT_CONCURRENCY,
+  CONVERTER_MAX_CONCURRENCY,
+  CONVERTER_SNIFF_BYTES,
+  type ConvertItemStatus,
+  type ConvertQueueItem,
+  type ConverterDetectionResult,
+  type ConverterPreflightResult,
+  type ConverterQueueState
+} from '../../shared/converter'
+import { sniffFormat } from './detect'
+import { DEFAULT_SKIP_DIRS, listTopLevelFiles, nextPage, walkFiles } from './fs-scan'
+import { getAdapter } from './registry'
+import { ConverterStore } from './store'
+
+let nextId = 1
+function freshId(): string {
+  return `cv_${Date.now().toString(36)}_${(nextId++).toString(36)}`
+}
+
+function uniqueDestPath(destDir: string, sourceName: string, targetExt: string): string {
+  const base = basename(sourceName, extname(sourceName))
+  return join(destDir, `${base}${targetExt}`)
+}
+
+export interface ConverterServiceDeps {
+  userDataDir: string
+  /** Fired after any single item's status/progress changes. */
+  onItemChange?: (item: ConvertQueueItem) => void
+  /** Fired after a queue-wide fact changes (running/scanning/concurrency/total). */
+  onSummaryChange?: (summary: Pick<ConverterQueueState, 'running' | 'scanning' | 'concurrency' | 'total'>) => void
+}
+
+export class ConverterService {
+  private readonly store: ConverterStore
+  private readonly deps: ConverterServiceDeps
+  private items: ConvertQueueItem[] = []
+  private byId = new Map<string, ConvertQueueItem>()
+  private concurrency = CONVERTER_DEFAULT_CONCURRENCY
+  private running = false
+  private scanning = false
+  private activeRunners = 0
+  private cancelRequested = new Set<string>()
+  private scanAbort: AbortController | null = null
+  private loaded: Promise<void>
+
+  constructor(deps: ConverterServiceDeps) {
+    this.deps = deps
+    this.store = new ConverterStore(deps.userDataDir)
+    this.loaded = this.store.load().then((items) => {
+      this.items = items.map((i) =>
+        // A crash mid-run leaves 'running' items stranded — resume as queued rather than lost.
+        i.status === 'running' ? { ...i, status: 'queued' as ConvertItemStatus, updatedAt: Date.now() } : i
+      )
+      for (const i of this.items) this.byId.set(i.id, i)
+    })
+  }
+
+  private async ready(): Promise<void> {
+    await this.loaded
+  }
+
+  private touch(item: ConvertQueueItem): void {
+    item.updatedAt = Date.now()
+    this.deps.onItemChange?.(item)
+    void this.store.save(this.items)
+  }
+
+  private emitSummary(): void {
+    this.deps.onSummaryChange?.({
+      running: this.running,
+      scanning: this.scanning,
+      concurrency: this.concurrency,
+      total: this.items.length
+    })
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Detection
+  // -------------------------------------------------------------------------------------------
+
+  async detect(path: string): Promise<ConverterDetectionResult> {
+    const st = await stat(path)
+    const fh = await open(path, 'r')
+    try {
+      const buf = Buffer.alloc(Math.min(CONVERTER_SNIFF_BYTES, st.size))
+      if (buf.length > 0) await fh.read(buf, 0, buf.length, 0)
+      const sniff = sniffFormat(buf, basename(path))
+      const compatible = CONVERTER_CATALOG.filter(
+        (a) => a.fromKind === 'any' || (sniff.kind !== null && a.fromKind === sniff.kind)
+      ).map((a) => a.id)
+      return {
+        path,
+        name: basename(path),
+        sizeBytes: st.size,
+        detectedKind: sniff.kind,
+        confidence: sniff.confidence,
+        note: sniff.note,
+        compatibleAdapterIds: compatible
+      }
+    } finally {
+      await fh.close()
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Preflight
+  // -------------------------------------------------------------------------------------------
+
+  async preflight(destDir: string): Promise<ConverterPreflightResult> {
+    let destDirExists = true
+    try {
+      await access(destDir, fsConstants.F_OK)
+    } catch {
+      destDirExists = false
+    }
+    let writable = false
+    try {
+      await access(destDirExists ? destDir : dirname(destDir), fsConstants.W_OK)
+      writable = true
+    } catch {
+      writable = false
+    }
+    const freeBytes = freeDiskBytes(destDirExists ? destDir : dirname(destDir))
+    await this.ready()
+    const estimatedNeededBytes = this.items
+      .filter((i) => i.status === 'queued' || i.status === 'needs-confirm' || i.status === 'paused')
+      .reduce((sum, i) => sum + i.sourceBytes, 0)
+    return {
+      destDir,
+      destDirExists,
+      writable,
+      freeBytes,
+      estimatedNeededBytes,
+      sufficient: freeBytes === null ? null : freeBytes > estimatedNeededBytes * 1.1
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Queue mutation
+  // -------------------------------------------------------------------------------------------
+
+  async state(offset = 0, limit = 200): Promise<ConverterQueueState> {
+    await this.ready()
+    return {
+      items: this.items.slice(offset, offset + limit),
+      total: this.items.length,
+      concurrency: this.concurrency,
+      running: this.running,
+      scanning: this.scanning
+    }
+  }
+
+  setConcurrency(n: number): number {
+    this.concurrency = Math.max(1, Math.min(CONVERTER_MAX_CONCURRENCY, Math.floor(n) || 1))
+    this.emitSummary()
+    this.pump()
+    return this.concurrency
+  }
+
+  private async buildItem(
+    path: string,
+    destDir: string,
+    adapterId: string,
+    lossyAcknowledged: boolean
+  ): Promise<ConvertQueueItem | { error: string; path: string }> {
+    const descriptor = CONVERTER_CATALOG.find((a) => a.id === adapterId)
+    if (!descriptor || !descriptor.available) {
+      return { error: `Adapter "${adapterId}" is not available in this build`, path }
+    }
+    let st
+    try {
+      st = await stat(path)
+    } catch {
+      return { error: 'File does not exist or is not readable', path }
+    }
+    if (!st.isFile()) return { error: 'Not a regular file', path }
+    if (st.size > descriptor.maxInputBytes) {
+      return {
+        error: `File is ${st.size.toLocaleString()} bytes, over this adapter's ${descriptor.maxInputBytes.toLocaleString()}-byte limit`,
+        path
+      }
+    }
+    const destPath = uniqueDestPath(destDir, basename(path), descriptor.targetExt)
+    let destExists = false
+    try {
+      await access(destPath, fsConstants.F_OK)
+      destExists = true
+    } catch {
+      destExists = false
+    }
+    const reasons: ('lossy' | 'overwrite')[] = []
+    if (descriptor.lossy && !lossyAcknowledged) reasons.push('lossy')
+    if (destExists) reasons.push('overwrite')
+    const now = Date.now()
+    return {
+      id: freshId(),
+      sourcePath: path,
+      sourceName: basename(path),
+      sourceBytes: st.size,
+      destPath,
+      adapterId,
+      status: reasons.length > 0 ? 'needs-confirm' : 'queued',
+      confirmReasons: reasons.length > 0 ? reasons : undefined,
+      progressBytes: 0,
+      totalBytes: st.size,
+      createdAt: now,
+      updatedAt: now
+    }
+  }
+
+  async addFiles(
+    paths: string[],
+    destDir: string,
+    adapterId: string,
+    opts: { lossyAcknowledged?: boolean } = {}
+  ): Promise<{ added: ConvertQueueItem[]; rejected: { path: string; error: string }[] }> {
+    await this.ready()
+    await mkdir(destDir, { recursive: true }).catch(() => {})
+    const added: ConvertQueueItem[] = []
+    const rejected: { path: string; error: string }[] = []
+    for (const p of paths) {
+      const result = await this.buildItem(p, destDir, adapterId, opts.lossyAcknowledged === true)
+      if ('error' in result) rejected.push(result)
+      else {
+        this.items.push(result)
+        this.byId.set(result.id, result)
+        added.push(result)
+        this.deps.onItemChange?.(result)
+      }
+    }
+    await this.store.save(this.items)
+    this.emitSummary()
+    this.pump()
+    return { added, rejected }
+  }
+
+  /** Paged, background folder scan. Uses the sourceExt hint (not full content sniffing — sniffing
+   *  every file in a large tree would be slow) unless the adapter's fromKind is 'any', which matches
+   *  everything. Returns immediately; progress is observable via state()/onSummaryChange (scanning).
+   *  `recursive: false` (default true) scans only the files directly inside `root`. */
+  async addFolder(
+    root: string,
+    destDir: string,
+    adapterId: string,
+    opts: { lossyAcknowledged?: boolean; recursive?: boolean } = {}
+  ): Promise<void> {
+    await this.ready()
+    const descriptor = CONVERTER_CATALOG.find((a) => a.id === adapterId)
+    if (!descriptor || !descriptor.available) throw new Error(`Adapter "${adapterId}" is not available`)
+    await mkdir(destDir, { recursive: true }).catch(() => {})
+    this.scanAbort?.abort()
+    this.scanAbort = new AbortController()
+    const signal = this.scanAbort.signal
+    this.scanning = true
+    this.emitSummary()
+    const matches = (p: string): boolean =>
+      descriptor.fromKind === 'any' || descriptor.sourceExt.some((ext) => p.toLowerCase().endsWith(ext))
+    try {
+      if (opts.recursive === false) {
+        const files = (await listTopLevelFiles(root)).filter(matches)
+        if (files.length > 0 && !signal.aborted) await this.addFiles(files, destDir, adapterId, opts)
+        return
+      }
+      const gen = walkFiles(root, { skipDirs: DEFAULT_SKIP_DIRS, signal })
+      for (;;) {
+        const { page, done } = await nextPage(gen, 200)
+        const matching = page.filter(matches)
+        if (matching.length > 0 && !signal.aborted) {
+          await this.addFiles(matching, destDir, adapterId, opts)
+        }
+        if (done || signal.aborted) break
+      }
+    } finally {
+      this.scanning = false
+      this.emitSummary()
+    }
+  }
+
+  cancelScan(): void {
+    this.scanAbort?.abort()
+  }
+
+  resolvePending(ids: string[], opts: { overwrite?: boolean; lossyAcknowledged?: boolean }): void {
+    for (const id of ids) {
+      const item = this.byId.get(id)
+      if (!item || item.status !== 'needs-confirm') continue
+      const remaining = (item.confirmReasons ?? []).filter((r) => {
+        if (r === 'overwrite' && opts.overwrite) return false
+        if (r === 'lossy' && opts.lossyAcknowledged) return false
+        return true
+      })
+      if (opts.overwrite) item.overwriteAllowed = true
+      item.confirmReasons = remaining.length > 0 ? remaining : undefined
+      item.status = remaining.length > 0 ? 'needs-confirm' : 'queued'
+      this.touch(item)
+    }
+    this.pump()
+  }
+
+  cancelItem(id: string): void {
+    const item = this.byId.get(id)
+    if (!item) return
+    if (item.status === 'running') {
+      this.cancelRequested.add(id)
+      return
+    }
+    if (item.status === 'done' || item.status === 'cancelled') return
+    item.status = 'cancelled'
+    this.touch(item)
+  }
+
+  cancelAll(): void {
+    for (const item of this.items) {
+      if (item.status === 'queued' || item.status === 'needs-confirm' || item.status === 'paused') {
+        item.status = 'cancelled'
+        this.touch(item)
+      } else if (item.status === 'running') {
+        this.cancelRequested.add(item.id)
+      }
+    }
+  }
+
+  retryItem(id: string): void {
+    const item = this.byId.get(id)
+    if (!item || (item.status !== 'failed' && item.status !== 'cancelled')) return
+    item.status = 'queued'
+    item.error = undefined
+    item.progressBytes = 0
+    this.touch(item)
+    this.pump()
+  }
+
+  removeItem(id: string): void {
+    const item = this.byId.get(id)
+    if (!item || item.status === 'running' || item.status === 'queued') return
+    this.items = this.items.filter((i) => i.id !== id)
+    this.byId.delete(id)
+    void this.store.save(this.items)
+    this.emitSummary()
+  }
+
+  clearFinished(): void {
+    const before = this.items.length
+    this.items = this.items.filter(
+      (i) => !(i.status === 'done' || i.status === 'failed' || i.status === 'cancelled' || i.status === 'skipped')
+    )
+    for (const i of [...this.byId.values()]) if (!this.items.includes(i)) this.byId.delete(i.id)
+    if (this.items.length !== before) {
+      void this.store.save(this.items)
+      this.emitSummary()
+    }
+  }
+
+  start(): void {
+    if (this.running) return
+    this.running = true
+    this.emitSummary()
+    this.pump()
+  }
+
+  pause(): void {
+    if (!this.running) return
+    this.running = false
+    this.emitSummary()
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Runner
+  // -------------------------------------------------------------------------------------------
+
+  private pump(): void {
+    if (!this.running) return
+    while (this.activeRunners < this.concurrency) {
+      const next = this.items.find((i) => i.status === 'queued')
+      if (!next) break
+      this.activeRunners++
+      void this.runItem(next).finally(() => {
+        this.activeRunners--
+        this.pump()
+      })
+    }
+  }
+
+  private async runItem(item: ConvertQueueItem): Promise<void> {
+    item.status = 'running'
+    item.progressBytes = 0
+    this.touch(item)
+
+    const bail = (status: ConvertItemStatus, error?: string): void => {
+      item.status = status
+      item.error = error
+      this.cancelRequested.delete(item.id)
+      this.touch(item)
+    }
+
+    if (this.cancelRequested.has(item.id)) return bail('cancelled')
+
+    const adapter = getAdapter(item.adapterId)
+    if (!adapter) return bail('failed', `No adapter registered for "${item.adapterId}"`)
+
+    let input: Buffer
+    try {
+      input = await this.boundedRead(item.sourcePath, item.totalBytes)
+    } catch (e) {
+      return bail('failed', `Could not read source: ${(e as Error).message}`)
+    }
+    if (this.cancelRequested.has(item.id)) return bail('cancelled')
+    item.progressBytes = Math.round(item.totalBytes * 0.3)
+    this.touch(item)
+
+    let output: Buffer
+    let warnings: string[] = []
+    try {
+      const result = adapter.convert(input)
+      output = result.output
+      warnings = result.warnings
+    } catch (e) {
+      return bail('failed', (e as Error).message)
+    }
+    if (this.cancelRequested.has(item.id)) return bail('cancelled')
+    item.progressBytes = Math.round(item.totalBytes * 0.7)
+    this.touch(item)
+
+    const validationError = adapter.validate(output)
+    if (validationError) return bail('failed', validationError)
+
+    // Re-check overwrite right before the write — the destination could have appeared since the
+    // item was queued (another item, another app writing there). Never silently clobber a file
+    // the user has not explicitly allowed overwriting for THIS run.
+    let existsNow = false
+    try {
+      await access(item.destPath, fsConstants.F_OK)
+      existsNow = true
+    } catch {
+      existsNow = false
+    }
+    if (existsNow && !item.overwriteAllowed) {
+      item.status = 'needs-confirm'
+      item.confirmReasons = ['overwrite']
+      this.touch(item)
+      return
+    }
+
+    try {
+      await mkdir(dirname(item.destPath), { recursive: true })
+      const tmp = `${item.destPath}.part-${process.pid}-${Date.now()}`
+      await writeFile(tmp, output)
+      await rename(tmp, item.destPath)
+    } catch (e) {
+      return bail('failed', `Could not write output: ${(e as Error).message}`)
+    }
+
+    item.progressBytes = item.totalBytes
+    item.warnings = warnings.length > 0 ? warnings : undefined
+    item.status = 'done'
+    this.cancelRequested.delete(item.id)
+    this.touch(item)
+  }
+
+  private async boundedRead(path: string, maxBytes: number): Promise<Buffer> {
+    const fh = await open(path, 'r')
+    try {
+      const st = await fh.stat()
+      if (st.size > maxBytes) throw new Error('Source grew past the adapter size limit since it was queued')
+      const buf = Buffer.alloc(st.size)
+      if (st.size > 0) await fh.read(buf, 0, st.size, 0)
+      return buf
+    } finally {
+      await fh.close()
+    }
+  }
+}
+
+/** Remove a stray `.part-*` temp file left by a crash mid-write — best-effort cleanup a shell can
+ *  call once at boot for the destination directories it knows about. Not wired to a specific
+ *  directory automatically (the converter writes across arbitrary user-chosen folders), so this is
+ *  exposed for callers that want it rather than run unconditionally. */
+export async function cleanupPartFile(path: string): Promise<void> {
+  try {
+    await unlink(path)
+  } catch {
+    // already gone — fine
+  }
+}

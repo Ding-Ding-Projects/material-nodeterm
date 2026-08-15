@@ -381,7 +381,61 @@ export function buildStubApi(): Omit<
       error: 'Raising the terminal limit must be done on the machine running the server.'
     }),
     onAgentControl: noopUnsub,
-    sendAgentControlResult: noop
+    sendAgentControlResult: noop,
+    // Both overridden with the REAL implementation by ws-bridge.ts's buildConverterApi/
+    // buildOllamaApi (the Server Edition runs the identical core engine as desktop — see
+    // docs/file-converter.md / docs/ollama-manager.md). This stub only matters where nothing
+    // overrides it: a relay tab that deliberately keeps these local-machine-only (relay-api.ts).
+    converter: {
+      catalog: U('converter.catalog'),
+      detect: U('converter.detect'),
+      preflight: U('converter.preflight'),
+      state: U('converter.state'),
+      addFiles: U('converter.addFiles'),
+      addFolder: U('converter.addFolder'),
+      cancelScan: U('converter.cancelScan'),
+      resolvePending: U('converter.resolvePending'),
+      start: U('converter.start'),
+      pause: U('converter.pause'),
+      cancelItem: U('converter.cancelItem'),
+      cancelAll: U('converter.cancelAll'),
+      retryItem: U('converter.retryItem'),
+      removeItem: U('converter.removeItem'),
+      clearFinished: U('converter.clearFinished'),
+      setConcurrency: U('converter.setConcurrency'),
+      onItem: noopUnsub,
+      onSummary: noopUnsub
+    },
+    ollama: {
+      status: U('ollama.status'),
+      models: U('ollama.models'),
+      running: U('ollama.running'),
+      show: U('ollama.show'),
+      deleteModel: U('ollama.deleteModel'),
+      copyModel: U('ollama.copyModel'),
+      hardware: U('ollama.hardware'),
+      fit: U('ollama.fit'),
+      popularModels: U('ollama.popularModels'),
+      pullState: U('ollama.pullState'),
+      pullEnqueue: U('ollama.pullEnqueue'),
+      pullStart: U('ollama.pullStart'),
+      pullPause: U('ollama.pullPause'),
+      pullCancelItem: U('ollama.pullCancelItem'),
+      pullRetryItem: U('ollama.pullRetryItem'),
+      pullRemoveItem: U('ollama.pullRemoveItem'),
+      pullSetConcurrency: U('ollama.pullSetConcurrency'),
+      onPullItem: noopUnsub,
+      onPullSummary: noopUnsub,
+      chatSessions: U('ollama.chatSessions'),
+      chatGet: U('ollama.chatGet'),
+      chatCreate: U('ollama.chatCreate'),
+      chatRename: U('ollama.chatRename'),
+      chatDelete: U('ollama.chatDelete'),
+      chatExport: U('ollama.chatExport'),
+      chatSend: U('ollama.chatSend'),
+      chatStop: U('ollama.chatStop'),
+      onChatStream: noopUnsub
+    }
   } satisfies Omit<
     NodeTerminalApi,
     | 'pty'

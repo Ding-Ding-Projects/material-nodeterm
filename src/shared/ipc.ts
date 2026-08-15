@@ -428,5 +428,62 @@ export const IPC = {
   // Electron-only: registered in src/main/index.ts (systemPreferences.askForMediaAccess) and
   // stubbed `async () => true` in src/server/index.ts (browser mic permission is the browser's
   // own prompt, not ours to gate).
-  speechMicConsent: 'speech:mic-consent'
+  speechMicConsent: 'speech:mic-consent',
+  // Universal file converter (docs/file-converter.md). converterItem/converterSummary are pushed
+  // by the core engine whenever an item or the queue-wide facts change — the renderer never polls.
+  converterCatalog: 'converter:catalog',
+  converterDetect: 'converter:detect',
+  converterPreflight: 'converter:preflight',
+  converterState: 'converter:state',
+  converterAddFiles: 'converter:add-files',
+  converterAddFolder: 'converter:add-folder',
+  converterCancelScan: 'converter:cancel-scan',
+  converterResolvePending: 'converter:resolve-pending',
+  converterStart: 'converter:start',
+  converterPause: 'converter:pause',
+  converterCancelItem: 'converter:cancel-item',
+  converterCancelAll: 'converter:cancel-all',
+  converterRetryItem: 'converter:retry-item',
+  converterRemoveItem: 'converter:remove-item',
+  converterClearFinished: 'converter:clear-finished',
+  converterSetConcurrency: 'converter:set-concurrency',
+  converterItem: 'converter:item',
+  converterSummary: 'converter:summary',
+  /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
+   *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
+   *  FileConverterPanel.tsx. */
+  dialogSelectFiles: 'dialog:select-files',
+  // Local Ollama suite manager (docs/ollama-manager.md). Talks ONLY to Ollama's own local HTTP API
+  // (default http://127.0.0.1:11434) from the privileged shell — never from the renderer directly.
+  ollamaStatus: 'ollama:status',
+  ollamaModels: 'ollama:models',
+  ollamaRunning: 'ollama:running',
+  ollamaShow: 'ollama:show',
+  ollamaDelete: 'ollama:delete',
+  ollamaCopy: 'ollama:copy',
+  ollamaHardware: 'ollama:hardware',
+  ollamaFit: 'ollama:fit',
+  ollamaPopularModels: 'ollama:popular-models',
+  ollamaPullState: 'ollama:pull-state',
+  ollamaPullEnqueue: 'ollama:pull-enqueue',
+  ollamaPullStart: 'ollama:pull-start',
+  ollamaPullPause: 'ollama:pull-pause',
+  ollamaPullCancelItem: 'ollama:pull-cancel-item',
+  ollamaPullRetryItem: 'ollama:pull-retry-item',
+  ollamaPullRemoveItem: 'ollama:pull-remove-item',
+  ollamaPullSetConcurrency: 'ollama:pull-set-concurrency',
+  /** main/server → renderer: a pull item's status/progress changed. */
+  ollamaPullItem: 'ollama:pull-item',
+  ollamaPullSummary: 'ollama:pull-summary',
+  ollamaChatSessions: 'ollama:chat-sessions',
+  ollamaChatGet: 'ollama:chat-get',
+  ollamaChatCreate: 'ollama:chat-create',
+  ollamaChatRename: 'ollama:chat-rename',
+  ollamaChatDelete: 'ollama:chat-delete',
+  ollamaChatExport: 'ollama:chat-export',
+  ollamaChatSend: 'ollama:chat-send',
+  ollamaChatStop: 'ollama:chat-stop',
+  /** main/server → renderer: a streamed chat token/finish/error for the session named in the
+   *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
+  ollamaChatStream: 'ollama:chat-stream'
 } as const
