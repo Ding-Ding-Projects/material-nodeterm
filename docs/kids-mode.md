@@ -110,9 +110,9 @@ feature is *missing* from the other shell.
 
 ## Still outstanding
 
-- **Real device verification.** Every claim here is covered by tests and guards, but nobody has
-  turned the mode on in a running build and watched an agent launch, so the end-to-end path is
-  proven by construction rather than by observation.
+- **An agent launched under the mode.** The permission gate is unit-tested at the resolver and the
+  mode is verified end to end in a running build (below), but nobody has yet watched a real agent
+  CLI start with the narrowed flag. That is the one step still proven by construction.
 - **Wider destructive coverage.** The gate is wired at the kanban session delete (see below). The
   other destructive paths — project delete, worktree remove, notification bulk delete — already
   open the super gate unconditionally, so kids mode adds nothing there. `GuardedAction` names six
@@ -149,6 +149,25 @@ while deleting the same session from the board opened a one-button confirm — i
 identical node, two different confirmations. Its comment even claimed they matched. Kids mode now
 makes them agree; making them agree for *everyone* is a product decision, not a wiring fix, so the
 off-path was left exactly as it was.
+
+## Verified against a running build
+
+Not only by tests. On 2026-08-15 the mode was driven through a real packaged build over CDP, and
+`docs/assets/shots/app-settings-kids-mode.png` is the capture — maintained by `npm run shots`
+rather than taken by hand, so it goes stale loudly instead of quietly.
+
+What was observed, through the real IPC and the real UI:
+
+| | |
+| --- | --- |
+| `window.nodeTerminal.kidsMode` present, `load()` answers | the bridge is real, not a stub |
+| starts OFF | the default is the safe one |
+| `enable('4321')` turns it on | first-run PIN establishes the credential |
+| a wrong PIN is refused and it STAYS ON | the failure that matters most |
+| the correct PIN turns it off | |
+| the settings UI flipped ON with no reload | the renderer store hydrated **and** is subscribed to the shared record |
+| the disclosure is on screen | not merely in the source — the whole basis for offering this |
+| the refused modes render with their reasons | generated from the policy table, not retyped |
 
 ## Verifying a claim here
 

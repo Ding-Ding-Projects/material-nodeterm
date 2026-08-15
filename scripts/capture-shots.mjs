@@ -103,6 +103,16 @@ const SURFACES = [
     open: { click: '.tab__board-toggle' },
     verify: '[class*="kanban"]'
   },
+  {
+    // Two clicks deep: open Settings, then its Kids mode section. Captured because the mode's
+    // whole defensibility rests on the disclosure being ON SCREEN rather than merely in the
+    // source — a screenshot is the only artefact that shows that stayed true.
+    id: 'app-settings-kids-mode',
+    required: true,
+    title: 'Settings — Kids mode',
+    open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Kids mode'] },
+    verify: '[class*="settings"]'
+  },
   // Optional: these need state the harness cannot manufacture.
   { id: 'app-agent-running', required: false, title: 'Agent mid-turn', why: 'needs a real agent CLI session' },
   { id: 'app-ssh-project', required: false, title: 'SSH project', why: 'needs a reachable host and credentials' }
@@ -265,7 +275,36 @@ for (const s of SURFACES) {
       alreadyOpen = pre.result.value === true
     }
 
-    if (!alreadyOpen && s.open?.click) {
+    if (!alreadyOpen && s.open?.clicks) {
+      // A SEQUENCE, for surfaces more than one click deep — a settings section, a sub-tab. Each
+      // step must land, or the run fails rather than photographing wherever it stopped.
+      for (const sel of s.open.clicks) {
+        // Each step is either a CSS selector or a visible label. Falling back to the label is
+        // what makes a settings section addressable at all: its sidebar entry has no id, no test
+        // hook and no stable class — only the words a user reads.
+        const target = JSON.stringify(sel)
+        const hit = await send('Runtime.evaluate', {
+          returnByValue: true,
+          expression:
+            '(function(){' +
+            `  var sel = ${target};` +
+            '  var el = null;' +
+            '  try { el = document.querySelector(sel) } catch (e) { el = null }' +
+            '  if (!el) {' +
+            "    var all = [].slice.call(document.querySelectorAll('button,a,[role=button],li'));" +
+            '    el = all.filter(function (e) { return (e.textContent || "").trim() === sel })[0];' +
+            '  }' +
+            '  if (!el) return false; el.click(); return true;' +
+            '})()'
+        })
+        if (hit.result.value !== true) {
+          failures.push({ id: s.id, why: `opener step "${sel}" was not found` })
+          break
+        }
+        await sleep(1200)
+      }
+      if (failures.some((f) => f.id === s.id)) continue
+    } else if (!alreadyOpen && s.open?.click) {
       const clicked = await send('Runtime.evaluate', {
         returnByValue: true,
         expression: `(function(){var el=document.querySelector(${JSON.stringify(s.open.click)});if(!el)return false;el.click();return true})()`
