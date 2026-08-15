@@ -14,6 +14,8 @@ import type { ServerConfig } from './config'
 import { initPlatform } from '../core/platform'
 import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
+import { ScheduledSettingsStore } from '../core/scheduled-settings-store'
+import { ScheduledSettingsService } from '../core/scheduled-settings-service'
 import { WorkspaceStore } from '../core/workspace-store'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
@@ -156,6 +158,8 @@ export async function startServer(
   // Core services — same construction + registration order as src/main/index.ts.
   const settingsStore = new SettingsStore()
   const schoolModeStore = new SchoolModeStore()
+  const scheduledSettingsStore = new ScheduledSettingsStore()
+  const scheduledSettingsService = new ScheduledSettingsService(scheduledSettingsStore)
   const ptyManager = new PtyManager()
   const workspaceStore = new WorkspaceStore()
 
@@ -163,6 +167,9 @@ export async function startServer(
   settingsStore.registerIpc()
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
+  scheduledSettingsStore.init()
+  scheduledSettingsStore.registerIpc()
+  scheduledSettingsService.start()
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
@@ -612,6 +619,7 @@ export async function startServer(
     port,
     async close() {
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
+      scheduledSettingsService.stop()
       sessionReaper.stop()
       pressure.stop()
       ptyPressure.stop()

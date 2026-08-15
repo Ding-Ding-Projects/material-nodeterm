@@ -249,6 +249,25 @@ export const IPC = {
   /** Shell → renderer (broadcast): the shared record changed — including a change made by
    *  ANOTHER process watching the same shared file (live, no restart). Payload: SchoolModeRecord. */
   schoolModeChanged: 'school-mode:changed',
+  // Scheduled settings (docs/scheduled-settings.md): rules that override the app's own appearance
+  // settings for a date+time window, gated by a local switch, an HTTPS API, or a Home Assistant
+  // boolean entity. All handled in src/core/scheduled-settings-*.ts (shell-agnostic).
+  scheduledSettingsLoad: 'scheduled-settings:load',
+  scheduledSettingsSave: 'scheduled-settings:save',
+  /** Set (token) / clear (null) the Home Assistant access token for one rule. Sealed at rest;
+   *  there is deliberately no matching "get" channel — see scheduled-settings-secrets.ts. */
+  scheduledSettingsSetHaToken: 'scheduled-settings:set-ha-token',
+  /** Which rule ids currently have a Home Assistant token stored, without exposing any token. */
+  scheduledSettingsTokenStatus: 'scheduled-settings:token-status',
+  /** Ask the service to refresh one rule's external source right now (the Settings UI's "Retry"
+   *  action after a failed fetch). */
+  scheduledSettingsRefreshRule: 'scheduled-settings:refresh-rule',
+  /** One-shot read of the currently-resolved schedule state, for a UI that mounts after the first
+   *  push (see scheduledSettingsActiveChange below). */
+  scheduledSettingsActiveState: 'scheduled-settings:active-state',
+  /** main/server → renderer broadcast: the resolved schedule changed (a new rule became active, an
+   *  external source's fetch completed, or none apply anymore). Payload: ScheduledSettingsActiveState. */
+  scheduledSettingsActiveChange: 'scheduled-settings:active-change',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',

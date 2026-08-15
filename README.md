@@ -351,6 +351,7 @@ summaries are distilled from.
 | [`docs/notifications.md`](./docs/notifications.md) | Non-blocking toasts and the reviewable notification centre — what is a toast vs a modal, and why. |
 | [`docs/command-palette.md`](./docs/command-palette.md) | The command palette (`⌘K` or `Ctrl+Shift+F`) — rich inline controls, teleport-to-element, persisted size. |
 | [`docs/destructive-confirmation.md`](./docs/destructive-confirmation.md) | The two-key + slider gate that stands in front of anything irreversible. |
+| [`docs/scheduled-settings.md`](./docs/scheduled-settings.md) | Settings → Schedule — appearance overrides by time of day, date range, an HTTPS API, or a Home Assistant entity. |
 
 ## 🪟 Windows
 

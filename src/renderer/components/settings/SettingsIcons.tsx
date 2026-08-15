@@ -135,6 +135,14 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M10 6a2.6 2.6 0 0 1 0 4M11.8 4.2a5.2 5.2 0 0 1 0 7.6" />
     </>
   ),
+  // A calendar page with a clock face on it — a rule is a DATE window plus a TIME window, and
+  // either half alone would misdescribe it.
+  schedule: (
+    <>
+      <path d="M2.6 4.4h10.8v8.2H2.6zM2.6 6.8h10.8M5.4 2.8v2M10.6 2.8v2" />
+      <path d="M8 8.4v2l1.4.9" />
+    </>
+  ),
   'school-mode': (
     <>
       <path d="M2.4 5.6 8 3l5.6 2.6L8 8.2 2.4 5.6Z" />

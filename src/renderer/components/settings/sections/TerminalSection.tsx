@@ -146,7 +146,10 @@ function Sub({ children }: { children: React.ReactNode }): React.JSX.Element {
 }
 
 export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.Element {
-  const settings = useSettings((s) => s.settings)
+  // Reads `base`, not the effective `settings` — this section is EDITING the user's saved
+  // preference, and a scheduled-settings override must never leak into what the editor shows or
+  // what a drag starts from (see state/settings.ts's doc on `base` vs `settings`).
+  const settings = useSettings((s) => s.base)
   const update = useSettings((s) => s.update)
   return (
     <SettingsSection id="terminal" title="Terminal" isActive={isActive} searchEntries={ENTRIES}>

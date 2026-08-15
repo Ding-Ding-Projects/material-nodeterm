@@ -6,6 +6,7 @@ export type SettingsSectionId =
   | 'notch'
   | 'phone'
   | 'speech'
+  | 'schedule'
   | 'agents'
   | 'usage'
   | 'accounts'
@@ -74,7 +75,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'notifications', title: 'Notifications' },
       { id: 'language', title: 'Language' },
       { id: 'narrator', title: 'Narrator' },
-      { id: 'speech', title: 'Speech' }
+      { id: 'speech', title: 'Speech' },
+      { id: 'schedule', title: 'Schedule' }
     ]
   },
   {
