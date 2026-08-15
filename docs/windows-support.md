@@ -92,6 +92,12 @@ stall in the retry loop, let a newer flush publish, then wake and replace it wit
 document. `agent-status-mirror` now publishes flush generations FIFO, with a barrier-controlled test
 that recreates the old ordering.
 
+A later SSH audit found the same race outside direct `fs` calls: remote shell writes
+shared `<target>.tmp`, scp downloads and media-cache fetches shared `<target>.part`, and upload
+directories used a timestamp plus a per-manager counter. Those now use per-call UUID staging,
+clean only their own failed stage, and reserve user-visible download names
+across app processes before transferring.
+
 ### Paths
 
 | Site | Was | Effect on Windows |

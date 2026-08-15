@@ -96,6 +96,22 @@ because they make ownership/liveness cleanup and diagnostics possible, but they 
 unique: containers can both be PID 1, worker isolates share a PID with independent module counters,
 and an OS can reuse a PID while crash litter remains.
 
+Remote-shell writes use the equivalent property with a locally minted random UUID; the remote host
+never has to interpolate a nonce.
+
+The same rule applies to SSH and scp staging even though those writes do not call `fs.writeFile`.
+`remoteAtomicWrite` mints one UUID before quoting the complete remote path, so spaces, apostrophes,
+literal POSIX backslashes and `~/` expansion keep their meanings. It preserves the `cat`/`mv`
+status while removing exactly that invocation's temp. Uploads likewise use UUID directories rather
+than a timestamp plus a per-manager counter, and failed uploads remove only their own directory.
+Downloads and media-cache fetches stage through hidden UUID `.part` paths beside the target; the
+bounded name avoids lengthening an already maximum-length filename. Ordinary downloads also
+reserve the final candidate with an exclusive lock, so two app processes cannot both observe
+`report.pdf` as absent and overwrite each other after transferring. Atomic remote stdin sites use
+the same helper for filesystem writes, tmux.conf, the credential-bearing hook endpoint and node
+tokens, agent status, and pending answers. Generated hook scripts/config merges still have direct
+writes and are not covered by this atomicity claim.
+
 Five sites had a shared name, and each had a reason it was thought safe — "only one instance
 exists", "the write queue serializes this". Every one of those was true within one process and
 silent about a second, and a second is not hypothetical: the Server Edition takes a `--data-dir`,
@@ -176,5 +192,5 @@ matches nothing otherwise reports clean, which is the same class of silent failu
 | Surface | Status |
 |---|---|
 | **Desktop** (Electron) | Covered. Windows is the platform this exists for. |
-| **Server Edition** | Covered — the helper is in `src/core`, so both shells get it. Its usual host is Linux, where the retry is inert, but a Windows-hosted server gets the same protection. |
-| **Mobile companion** | Not applicable. *nodeterm mobile* holds no local stores of its own; it attaches to sessions over the transport protocol. |
+| **Server Edition** | Covered for core stores — the helper is in `src/core`, so both shells get it. Its usual host is Linux, where the retry is inert, but a Windows-hosted server gets the same protection. The ControlMaster/scp manager is desktop-only. |
+| **Mobile companion** | No client change. It holds no local stores of its own, but the agent-status mirror it reads from an SSH host now arrives through the unique remote temp path. The transport shape is unchanged. |

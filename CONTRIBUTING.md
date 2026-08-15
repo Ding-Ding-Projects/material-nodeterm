@@ -99,6 +99,10 @@ need it too, and wire it in the same change.
   process's namespace; an unjudgeable probe preserves the file. A credential Clear must then use
   `clearAtomicTarget` and surface `clear-incomplete` while any recognized temp remains — preserving
   a plausible live writer is correct, but telling the UI its bearer bytes are gone is not.
+  Every temp/part staging name must also be unique per call across processes and cleaned by its
+  owner —
+  including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot
+  see.
 
 - **Unique temp files do not order whole-document writers.** If two flushes can snapshot the same
   store concurrently, publish them FIFO (or reject stale generations). Otherwise an older flush can
