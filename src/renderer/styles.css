@@ -294,6 +294,13 @@
      `var(--tint-rgb)`-only mix (like --md-outline) is exempted the same way --text already is. */
   --md-on-primary: #fff; /* same call as --knob: a white knob/label needs no theme flip */
   --md-primary-container: rgba(var(--accent-rgb), 0.16); /* --accent-rgb already themes */
+  /* Darker than --accent-text (#0060df), which this used to alias. That token is tuned to sit
+     on a PLAIN light surface; over a primary-container tint it measured 4.41:1 — under the 4.5
+     floor for the palette's secondary label, which is real clickable text. #004fb8 measures
+     5.87:1 there and 5.34:1 for the canvas lock glyph. Dark needs no restatement: its #6cb0ff
+     already clears both (5.39 / 5.41). M3's own light on-primary-container tones are darker
+     still; this is the closest step to the app's existing hue that clears both consumers. */
+  --md-on-primary-container: #004fb8;
   --md-tertiary-container: rgba(176, 74, 40, 0.18); /* --agent-working (light) at container alpha */
   --md-error-container: rgba(var(--danger-rgb), 0.16); /* --danger-rgb already themes */
   --md-success-container: rgba(31, 122, 56, 0.16); /* --success (light) at container alpha */
@@ -6210,7 +6217,13 @@ body,
 /* Canvas lock toggle (in the bottom-left Controls). The padlock fills with
    currentColor, so the locked state tints via `color`. */
 .react-flow__controls-button.canvas-lock-btn.locked {
-  color: var(--md-primary);
+  /* on-primary-container, NOT primary: this glyph sits ON the container fill below, which is
+     exactly the pairing the two roles exist for. As --md-primary it measured 2.87:1 against its
+     own wash in light — under 1.4.11's 3:1 for a non-text element that identifies a control.
+     Raising the container alpha cannot fix it: a tint of the accent over the same panel is a
+     subtle wash by construction, reaching only 1.52:1 even at 0.32. The glyph was the wrong
+     half to leave alone. */
+  color: var(--md-on-primary-container);
   background: var(--md-primary-container); /* was a hardcoded dark-accent rgba that never
     themed for light mode or a user-customized accent — the role tints the REAL --accent-rgb */
 }
@@ -11306,8 +11319,10 @@ body,
 }
 .notif-center__bulkbar button.danger {
   color: var(--md-error);
-  border-color: rgba(var(--danger-rgb), 0.35); /* was rgba(255,69,58,0.35) — a frozen literal that
-    never followed the light theme's darker danger hue; --danger-rgb themes it for real */
+  border-color: rgba(var(--danger-rgb), 0.8); /* was a frozen rgba(255,69,58,0.35) that never
+    followed the light theme's darker danger hue — and 0.35 was also simply invisible:
+    1.56:1 dark / 1.77:1 light against 1.4.11's 3:1 for the boundary marking this button as
+    the destructive one. 0.8 measures 3.20 / 4.00. */
 }
 .notif-center__list {
   flex: 1;

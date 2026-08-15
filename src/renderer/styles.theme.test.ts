@@ -395,3 +395,103 @@ describe('light palette contrast', () => {
     expect(luminance(hex(token('--canvas-bg')))).toBeLessThan(luminance(hex(token('--bg'))))
   })
 })
+
+/**
+ * Three contrast floors that were measured and fixed, and must not silently regress.
+ *
+ * The ratios here are computed with real backdrop COMPOSITING — a translucent fill blended over
+ * the surface beneath it — rather than by comparing two hex values, because every one of these
+ * pairs involves an `rgba()` tint. Comparing the unblended colours gives an answer that is not
+ * about anything a user can see.
+ *
+ * Each also records WHICH floor applies, because getting that wrong is how this set was
+ * misdiagnosed twice: an `aria-hidden` icon was reported as failing a 4.5:1 text floor it never
+ * had to meet, and the lock button's wash was measured against the panel behind it when the pair
+ * that identifies the control is the glyph against its own wash.
+ */
+describe('measured contrast floors', () => {
+  const srgb = (c: number): number => {
+    const x = c / 255
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+  }
+  const rel = ([r, g, b]: number[]): number => 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b)
+  const contrast = (a: number[], b: number[]): number => {
+    const [hi, lo] = [rel(a), rel(b)].sort((x, y) => y - x)
+    return (hi + 0.05) / (lo + 0.05)
+  }
+  const over = (fg: number[], alpha: number, bg: number[]): number[] =>
+    fg.map((c, i) => Math.round(c * alpha + bg[i] * (1 - alpha)))
+  const hex = (h: string): number[] => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+
+  /** Read a token's literal value out of one theme block. */
+  const token = (block: string, name: string): string => {
+    const m = new RegExp(`${name}:\s*([^;]+);`).exec(block)
+    if (!m) throw new Error(`${name} not found in that theme block`)
+    return m[1].trim()
+  }
+  /** Resolve one level of `var(--other)` aliasing — the dark block's on-primary-container is an
+   *  alias, the light block's is a literal, and a helper that only understood literals reported
+   *  the alias as a parse failure rather than as the value it plainly is. */
+  const resolved = (block: string, name: string): string => {
+    const v = token(block, name)
+    const alias = /^var\(\s*(--[a-z0-9-]+)\s*\)$/i.exec(v)
+    return alias ? token(block, alias[1]) : v
+  }
+  const rgbTriple = (block: string, name: string): number[] =>
+    token(block, name).split(',').map((n) => parseInt(n.trim(), 10))
+
+  /** The container alpha, read from the stylesheet rather than hardcoded here. */
+  const containerAlpha = (): number => {
+    const m = /--md-primary-container:\s*rgba\(var\(--accent-rgb\),\s*([\d.]+)\)/.exec(DARK)
+    if (!m) throw new Error('--md-primary-container is no longer an --accent-rgb tint')
+    return +m[1]
+  }
+
+  it('the palette secondary label clears 4.5:1 — it is real clickable text', () => {
+    // <span className="palette__secondary" onClick=...> in CommandPalette.tsx: interactive text,
+    // so the text floor applies, not 1.4.11's 3:1.
+    const a = containerAlpha()
+    const cases: Array<[string, string, number[], string]> = [
+      ['dark', resolved(DARK, '--md-on-primary-container'), rgbTriple(DARK, '--accent-rgb'), token(DARK, '--menu-rgb')],
+      ['light', resolved(LIGHT, '--md-on-primary-container'), rgbTriple(LIGHT, '--accent-rgb'), token(LIGHT, '--menu-rgb')]
+    ]
+    for (const [theme, onC, accent, menu] of cases) {
+      const bg = over(accent, a, String(menu).split(',').map((n) => parseInt(n.trim(), 10)))
+      const ratio = contrast(hex(onC), bg)
+      expect(ratio, `${theme}: on-primary-container on its container`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('the canvas lock glyph clears 3:1 against its own wash', () => {
+    // A non-text element identifying a control (1.4.11). It must be the ON-role, not --md-primary:
+    // as --md-primary it measured 2.87:1 in light, and no container alpha can rescue that — a tint
+    // of the accent over the same panel only reaches 1.52:1 against the panel even at 0.32.
+    expect(RULES).toMatch(
+      /\.canvas-lock-btn\.locked\s*\{[^}]*color:\s*var\(--md-on-primary-container\)/
+    )
+    const a = containerAlpha()
+    for (const [theme, block, panelHex] of [
+      ['dark', DARK, '#282828'],
+      ['light', LIGHT, '#f3efe7']
+    ] as const) {
+      const panel = hex(panelHex)
+      const wash = over(rgbTriple(block, '--accent-rgb'), a, panel)
+      const glyph = hex(resolved(block, '--md-on-primary-container'))
+      expect(contrast(glyph, wash), `${theme}: lock glyph on its wash`).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('the destructive bulk-action border clears 3:1 — it is what marks the button', () => {
+    const m = /\.notif-center__bulkbar button\.danger\s*\{[^}]*border-color:\s*rgba\(var\(--danger-rgb\),\s*([\d.]+)\)/.exec(RULES)
+    expect(m, 'the danger border must stay a themed --danger-rgb tint').toBeTruthy()
+    const alpha = +m![1]
+    for (const [theme, block] of [
+      ['dark', DARK],
+      ['light', LIGHT]
+    ] as const) {
+      const menu = String(token(block, '--menu-rgb')).split(',').map((n) => parseInt(n.trim(), 10))
+      const border = over(rgbTriple(block, '--danger-rgb'), alpha, menu)
+      expect(contrast(border, menu), `${theme}: danger border on the panel`).toBeGreaterThanOrEqual(3)
+    }
+  })
+})
