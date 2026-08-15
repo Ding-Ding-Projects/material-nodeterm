@@ -1094,6 +1094,11 @@ export function Canvas() {
    */
   const removePendingRef = useRef(false)
   const [deleteFromDisk, setDeleteFromDisk] = useState(false)
+  // Whether kids mode requires the hardened path for a worktree removal. Read at render
+  // rather than captured when the dialog opened: the mode is a shared record another
+  // process can flip, and a dialog left open across that change must honour the new state.
+  const kidsModeOn = useKidsMode((s) => s.enabled)
+  const kidsGateRequired = requiresDestructiveGate('remove-worktree', kidsModeOn).required
   // Group awaiting confirmation to merge its worktree into the base branch. `hasOrigin` decides
   // whether the dialog offers (and warns about) the push to origin — a repo with no `origin` must
   // never be threatened with a publish that cannot happen.
@@ -9641,11 +9646,21 @@ export function Canvas() {
           danger={deleteFromDisk}
           // An agent asked for this one: it appeared while the user was typing somewhere else, so
           // no keystroke may confirm it — only a click on a button they had to look at.
-          enterConfirms={!removeTarget.requestedBy}
+          // Also never while kids mode is on. A security review found this reachable with one
+          // Enter, on a dialog whose disk-deletion was implicit — see below.
+          enterConfirms={!removeTarget.requestedBy && !kidsGateRequired}
           option={
             // We created it → deletion is the point of the action, no opt-in to make. The user
             // created it → deleting from disk is a deliberate extra choice, never the default.
-            removeTarget.canDelete
+            //
+            // EXCEPT under kids mode, where the checkbox always appears and always starts
+            // unticked. For a worktree nodeterm created, this dialog previously deleted the
+            // directory from disk with no checkbox shown and Enter able to confirm it — the
+            // single most destructive thing reachable in one keystroke, and what a security
+            // review flagged. Showing the option turns an implicit deletion into an informed one,
+            // which is better here than routing to the two-key gate: that gate cannot express a
+            // choice, so it would have taken the choice away rather than surfaced it.
+            removeTarget.canDelete && !kidsGateRequired
               ? undefined
               : {
                   label: 'Delete the worktree directory from disk too',

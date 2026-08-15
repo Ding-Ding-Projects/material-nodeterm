@@ -126,13 +126,20 @@ feature is *missing* from the other shell.
   | --- | --- |
   | `delete-node` | consults the policy ✅ |
   | `delete-project` | already opens the super gate unconditionally ✅ |
-  | `remove-worktree` | **plain ConfirmDialog, Enter confirms, delete-from-disk pre-ticked** ❌ |
+  | `remove-worktree` | hardened: no Enter-confirm, disk deletion always an unticked opt-in ✅ |
   | `discard-changes` | bare `window.confirm()` ❌ |
   | `revoke-device` | plain `ConfirmDialog` ❌ |
   | `clear-history` | not wired ❌ |
 
-  So **three of six** are genuinely unprotected while kids mode is on, not one. Wiring them is
-  outstanding work, not a documented exemption.
+  So **two of six** remain unprotected. `discard-changes` and `revoke-device` live outside
+  `Canvas.tsx`, which owns `openDestructiveGate`, so wiring them needs the gate plumbed through —
+  real work, not a one-line change, and left undone rather than half-done.
+
+  `remove-worktree` was handled differently from `delete-node` on purpose. Routing it to the
+  two-key gate would have LOST the disk-deletion choice, because that gate cannot express an
+  option — so instead the choice is always shown and always starts unticked, and no keystroke can
+  confirm. Surfacing an implicit deletion beats replacing it with a harder confirmation of the
+  same implicit thing.
 - **A security review**, before this is offered to anyone as child-safety. The survey that scoped
   the M3 overhaul was explicit that a child-facing gate in front of a real PTY needs its own review
   independent of any UI timeline.
