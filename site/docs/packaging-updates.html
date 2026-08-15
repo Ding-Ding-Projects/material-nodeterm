@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Packaging &amp; auto-update — nodeterm docs</title>
+    <meta name="description" content="Desktop builds are packaged per-platform and check their own update feed on launch, downloading updates in the background and surfacing a non-blocking "restart to update" card rather than interrupting active work." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Releases</p>
+      <h1>Packaging &amp; auto-update</h1>
+      <p>Desktop builds are packaged per-platform and check their own update feed on launch, downloading updates in the background and surfacing a non-blocking "restart to update" card rather than interrupting active work.</p>
+
+      <h2>Behaviour</h2>
+      <p>Update checks and downloads happen silently in the background; the only visible sign is a dismissible card that appears once a download is ready, naming the new version and offering a restart. Nothing forces a restart on its own.</p>
+
+      <h2>Configuration</h2>
+      <p>Update checks and a separate opt-out telemetry ping are both gated on standard "do not track" signals and a build being an actual packaged release, not a development build.</p>
+
+      <h2>Failure modes</h2>
+      <p>If the update feed can't be reached, the app simply keeps running the current version — there is no blocking error state for a failed update check.</p>
+
+      <h2>Security considerations</h2>
+      <p>Under the project's current release policy, builds are not code-signed; this is disclosed plainly in release notes and on the update card itself rather than presented as a signed, verified update.</p>
+
+      <h2>Verification</h2>
+      <p>Exercised via the project's own local build/installer scripts, which verify the artifact they produce (path, size, checksum) rather than only trusting that packaging exited without an error.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./windows-support.html">Windows support</a></li>
+        <li><a href="./server-edition.html">Server Edition</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

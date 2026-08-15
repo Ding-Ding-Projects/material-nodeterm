@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dim sum surprise — nodeterm docs</title>
+    <meta name="description" content="A 10% chance, on every page load, of a small dish appearing in the corner — named in both languages, illustrated with a small original SVG drawn for this site. There is no setting anywhere that turns it off." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">This site</p>
+      <h1>Dim sum surprise</h1>
+      <p>A 10% chance, on every page load, of a small dish appearing in the corner — named in both languages, illustrated with a small original SVG drawn for this site. There is no setting anywhere that turns it off.</p>
+
+      <h2>Behaviour</h2>
+      <p>Non-blocking and auto-dismissing: it never gates the page loading, never steals keyboard focus, and never appears twice in one load. The draw happens exactly once, deferred slightly so it never competes with the very first paint.</p>
+
+      <h2>Configuration</h2>
+      <p>There is deliberately no configuration for the random draw itself — the Dim Sum panel only offers a manual "show me another dish" peek button, which is a convenience for browsing the catalog, not an opt-out of the automatic surprise.</p>
+
+      <h2>Failure modes</h2>
+      <p>Suppressed entirely while School mode is on, per that feature's "behave as if not installed" contract.</p>
+
+      <h2>Security considerations</h2>
+      <p>All six dish illustrations are original SVGs bundled with this site — nothing is fetched from a third party or a CDN.</p>
+
+      <h2>Verification</h2>
+      <p>The roll is a single <code>Math.random()</code> call per page load, in <code>site/app/features/dimsum.js</code>'s <code>maybeShowDimSumSurprise()</code>, which itself only ever runs once per load.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./school-mode.html">School mode</a></li>
+        <li><a href="./language-modes.html">Language modes, funny levels &amp; emoji</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

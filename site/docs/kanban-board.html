@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kanban board — nodeterm docs</title>
+    <meta name="description" content="Every project doubles as a Trello-style board. Cards aren't a separate data model — they're the same live session nodes on the canvas, just viewed as a board instead of a spatial map." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Canvas</p>
+      <h1>Kanban board</h1>
+      <p>Every project doubles as a Trello-style board. Cards aren't a separate data model — they're the same live session nodes on the canvas, just viewed as a board instead of a spatial map.</p>
+
+      <h2>Behaviour</h2>
+      <p>Dragging a card between columns changes only board metadata (which column it's assigned to) — it never moves the underlying canvas node or changes its group. A terminal card opens into a live second view of the same tmux session, so typing in the board's card modal and typing on the canvas both reach the exact same running process.</p>
+        <p>Cards support assignees, a due date, priority, and a per-card comment/activity feed backed by an append-only local log file, so the history of who did what to a card survives independently of the canvas state itself.</p>
+
+      <h2>Configuration</h2>
+      <p>Column names, order, and the assignment of sessions to columns are all part of the project's own file, so they travel with the project the same way node positions do.</p>
+
+      <h2>Failure modes</h2>
+      <p>A board referencing a node that no longer exists prunes that stale assignment automatically rather than showing a dead card; deleting the last column doesn't break anything because an "Ungrouped" column always exists as the catch-all destination.</p>
+
+      <h2>Security considerations</h2>
+      <p>Not applicable beyond what's already covered under source control and terminal sessions — the board is a view, not a new access boundary.</p>
+
+      <h2>Verification</h2>
+      <p>Board shape validation runs on every load path so a hand-edited or older-format board file degrades to a fresh default rather than crashing the render.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./projects-and-tabs.html">Projects &amp; tabs</a></li>
+        <li><a href="./agent-support.html">Agent support</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

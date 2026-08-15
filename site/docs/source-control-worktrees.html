@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Source control &amp; worktrees — nodeterm docs</title>
+    <meta name="description" content="A full source-control panel — stage, diff, branch, commit, push — plus one-step git worktrees bound directly to canvas group frames, so an agent per branch is just a group per branch." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Git</p>
+      <h1>Source control &amp; worktrees</h1>
+      <p>A full source-control panel — stage, diff, branch, commit, push — plus one-step git worktrees bound directly to canvas group frames, so an agent per branch is just a group per branch.</p>
+
+      <h2>Behaviour</h2>
+      <p>The source-control panel operates on a selected scope: the project's main checkout, or any worktree bound to a group on the canvas. Creating a worktree is one step from the pane menu or command palette; every node created inside its bound frame automatically inherits that worktree's path as its working directory.</p>
+
+      <h2>Configuration</h2>
+      <p>AI-generated commit messages use a bring-your-own local agent CLI, spawned read-only against the staged diff — there is no built-in model call.</p>
+
+      <h2>Failure modes</h2>
+      <p>A worktree deleted outside the app is detected and marked stale rather than silently vanishing from the canvas; its frame stays but every destructive action on it (merge, remove) is disabled until it's unbound. A failed git read is never treated as "git reported nothing" — those are kept as two distinct facts throughout, because conflating them is exactly how a transient failure could look like a deleted worktree.</p>
+
+      <h2>Security considerations</h2>
+      <p>Merging a worktree can optionally push to the remote — that push is disclosed in the merge dialog and is opt-in, off by default, because a push to a shared remote can't be politely undone the way a local operation can.</p>
+
+      <h2>Verification</h2>
+      <p>Destructive removal paths refuse to operate on a worktree path that resolves to the repository root, the user's home directory, or an ancestor of either, on every code path that can delete one.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./kanban-board.html">Kanban board</a></li>
+        <li><a href="./projects-and-tabs.html">Projects &amp; tabs</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

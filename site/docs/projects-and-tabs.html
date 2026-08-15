@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Projects &amp; tabs — nodeterm docs</title>
+    <meta name="description" content="A project is one canvas — one pan/zoom page of nodes, with its own working directory. Everything you build spatially belongs to exactly one project, and every project is its own tab." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Canvas</p>
+      <h1>Projects &amp; tabs</h1>
+      <p>A project is one canvas — one pan/zoom page of nodes, with its own working directory. Everything you build spatially belongs to exactly one project, and every project is its own tab.</p>
+
+      <h2>Behaviour</h2>
+      <p>Switching between project tabs unmounts the previous project's terminal nodes — their tmux clients detach, but the sessions themselves keep running — and mounts the new project's nodes, reattaching any of its own terminals. Project order is a single shared order between the tab bar and the sessions sidebar; both reorder the same underlying list via drag-and-drop.</p>
+        <p>Closing a project from its tab menu is non-destructive: it hides the tab and stops attaching its terminals, but keeps every node and setting on disk, with the tmux sessions still running underneath. It reappears in a "Recently closed" list on the welcome screen. Permanent deletion — which does tear down the underlying sessions — only happens from that recently-closed list's own remove action.</p>
+
+      <h2>Configuration</h2>
+      <p>A project's working directory is set once, via a folder picker, and every terminal or agent node created afterward opens there by default. Opening the same folder twice reuses the existing project rather than creating a duplicate.</p>
+
+      <h2>Failure modes</h2>
+      <p>If a project's on-disk file becomes unreadable, its tab renders greyed-out as "unavailable" rather than silently disappearing — nothing is dropped without being shown as broken first.</p>
+
+      <h2>Security considerations</h2>
+      <p>Project files are plain, git-shareable JSON next to the project's own code; there is nothing in them that should be treated as secret, but they do record file paths and node titles, which is worth knowing before committing one to a shared repository.</p>
+
+      <h2>Verification</h2>
+      <p>Covered by the persistence layer's own test suite, exercising save/load round-trips, the "close vs delete" distinction, and reordering.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./canvas-lifecycle.html">Canvas &amp; node lifecycle</a></li>
+        <li><a href="./kanban-board.html">Kanban board</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

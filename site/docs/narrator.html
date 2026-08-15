@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Narrator — nodeterm docs</title>
+    <meta name="description" content="A spoken narrator built on the browser's own speech synthesis, off by default. Language choice is English, Cantonese, or Both — where Both speaks English then Cantonese strictly serialized, never overlapping." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('nodeterm-theme')
+          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">This site</p>
+      <h1>Narrator</h1>
+      <p>A spoken narrator built on the browser's own speech synthesis, off by default. Language choice is English, Cantonese, or Both — where Both speaks English then Cantonese strictly serialized, never overlapping.</p>
+
+      <h2>Behaviour</h2>
+      <p>Two independent voice pickers — one per language — because choosing an English voice says nothing about which Cantonese voice should read the other half of a bilingual line. Each picker lists only the voices actually installed for that language on this machine, plus an explicit "choose automatically" option, which is the shipped default.</p>
+
+      <h2>Configuration</h2>
+      <p>Rate and pitch sliders adjust delivery within the platform's supported range. If a previously chosen voice is no longer installed, the choice is kept (never silently reset) and the narrator falls back to another voice for that language until the original one reappears.</p>
+
+      <h2>Failure modes</h2>
+      <p>The browser's voice list commonly arrives empty on the very first call and fills in a moment later behind a <code>voiceschanged</code> event — every picker on this site subscribes to that event and re-reads the list rather than reading it once and reporting "no voices installed" on a machine that has forty of them.</p>
+
+      <h2>Security considerations</h2>
+      <p>Speech synthesis runs entirely through the browser's own API; nothing spoken is sent anywhere.</p>
+
+      <h2>Verification</h2>
+      <p>Utterances are pushed through a single shared queue so "Both" can never speak English and Cantonese at the same time — see the queue in <code>site/app/features/narrator.js</code>.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./language-modes.html">Language modes, funny levels &amp; emoji</a></li>
+        <li><a href="./toy-locks.html">Toy locks</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>
