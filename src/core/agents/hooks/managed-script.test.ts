@@ -273,13 +273,17 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
       writeFileSync(join(liveTokens, 'node-1'), 'FALLBACK-NODE-TOKEN\n', 'utf8')
       writeFileSync(
         dead,
-        `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'hook-oldproject.sock')}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR=${deadTokens}\n`,
+        // NODETERM_NODE_TOKEN_DIR is single-quoted, matching hook-server.ts's writeEndpointFile:
+        // it is a filesystem path, and an unquoted `VAR=value` assignment has POSIX sh strip
+        // every backslash (win32) or word-split on a space (any platform, e.g. macOS's
+        // "Application Support") when the managed script later sources this file.
+        `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'hook-oldproject.sock')}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR='${deadTokens}'\n`,
         'utf8'
       )
       // The live project's endpoint, rewritten by the most recent connect.
       writeFileSync(
         join(home, '.nodeterm', 'hook-endpoint-liveproject.env'),
-        `NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_TOKEN=live-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR=${liveTokens}\n`,
+        `NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_TOKEN=live-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR='${liveTokens}'\n`,
         'utf8'
       )
       // Fake curl: log every invocation, fail the unix-socket transport (dead tunnel), succeed on TCP.
@@ -352,7 +356,7 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
     const dead = join(home, '.nodeterm', 'hook-endpoint-oldproject.env')
     writeFileSync(
       dead,
-      `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'dead.sock')}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR=${tokens}\n`,
+      `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'dead.sock')}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR='${tokens}'\n`,
       'utf8'
     )
     // A pre-v2 endpoint file: port + token + version, and no token dir.
@@ -493,7 +497,7 @@ describe('managed script presents the per-node token', () => {
     const endpoint = join(home, '.nodeterm', 'hook-endpoint-live.env')
     writeFileSync(
       endpoint,
-      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR=${tokens}\n`,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR='${tokens}'\n`,
       'utf8'
     )
     expect(
@@ -595,13 +599,13 @@ describe('managed script presents the per-node token', () => {
     const dead = join(home, '.nodeterm', 'hook-endpoint-dead.env')
     writeFileSync(
       dead,
-      `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'nothing-listens-here.sock')}\nNODETERM_HOOK_TOKEN=dead\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR=${primaryTokens}\n`,
+      `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'nothing-listens-here.sock')}\nNODETERM_HOOK_TOKEN=dead\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR='${primaryTokens}'\n`,
       'utf8'
     )
     const live = join(home, '.nodeterm', 'hook-endpoint-live.env')
     writeFileSync(
       live,
-      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR=${fallbackTokens}\n`,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR='${fallbackTokens}'\n`,
       'utf8'
     )
     // `ls -t` picks the freshest candidate — make the dead one unambiguously older.

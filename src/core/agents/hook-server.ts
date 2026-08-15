@@ -783,6 +783,15 @@ class HookServer {
     try {
       const p = this.endpointFilePath()
       mkdirSync(path.dirname(p), { recursive: true })
+      // POSIX single-quote escape (same convention as buildManagedHookCommand in
+      // install-helper.ts): the managed script sources this file verbatim with `. "$file"`, and
+      // on win32 `nodeTokenDir()` is a `\`-joined path. An UNQUOTED `VAR=value` assignment has
+      // sh strip every backslash when the file is sourced (POSIX removes a backslash and keeps
+      // whatever follows it, in or out of quotes) — silently mangling the dir into a path that
+      // does not exist, so every per-node token lookup (and the endpoint-failover retry) fails
+      // closed with an empty token. Single-quoting preserves the value byte-for-byte.
+      const dir = nodeTokenDir()
+      const q = `'${dir.replaceAll("'", "'\\''")}'`
       writeFileSync(
         p,
         `NODETERM_HOOK_PORT=${this.port}\n` +
@@ -792,7 +801,7 @@ class HookServer {
           // Advertised (not compiled in) so a failover that sources ANOTHER instance's endpoint
           // file also picks up THAT instance's token dir: it then finds a token that instance can
           // verify, or none — never a mismatched one.
-          `NODETERM_NODE_TOKEN_DIR=${nodeTokenDir()}\n`,
+          `NODETERM_NODE_TOKEN_DIR=${q}\n`,
         // 0o600: this file holds the bearer token — owner read/write only so another local user
         // can't read it and forge hook events.
         { encoding: 'utf8', mode: 0o600 }

@@ -71,8 +71,18 @@ export const NodetermStatus = async () => {
           if (m) conf[m[1].toLowerCase()] = m[2]
           // The v2 endpoint line: where this instance keeps per-node tokens. It has its own
           // prefix, so it needs its own match rather than a widened NODETERM_HOOK_ group.
+          // hook-server.ts POSIX single-quotes this value so the managed POSIX-shell script can
+          // source it without a space, or a win32 backslash, in the path corrupting it — strip
+          // that quoting here too (a plain leading/trailing quote pair; the dir never contains
+          // one itself) so this JS reader sees the same raw path. An older unquoted line (a
+          // pre-fix instance, or a hand-written endpoint file) still matches: there is simply no
+          // quote pair to strip.
           const d = line.match(/^NODETERM_NODE_TOKEN_DIR=(.*)$/)
-          if (d) conf.tokenDir = d[1]
+          if (d) {
+            let v = d[1]
+            if (v.length >= 2 && v[0] === "'" && v[v.length - 1] === "'") v = v.slice(1, -1)
+            conf.tokenDir = v
+          }
         }
       }
     } catch {}
