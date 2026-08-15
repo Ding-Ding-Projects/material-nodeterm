@@ -11,6 +11,7 @@ import { AppearanceSection } from './sections/AppearanceSection'
 import { NotchSection } from './sections/NotchSection'
 import { PhoneSection } from './sections/PhoneSection'
 import { SpeechSection } from './sections/SpeechSection'
+import { ScheduleSection } from './sections/ScheduleSection'
 import { AgentsSection } from './sections/AgentsSection'
 import { UsageSection } from './sections/UsageSection'
 import { AccountsSection } from './sections/AccountsSection'
@@ -77,6 +78,7 @@ export function SettingsPage({
             {isMac && <NotchSection isActive={active === 'notch'} />}
             <PhoneSection isActive={active === 'phone'} />
             <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />
+            <ScheduleSection isActive={active === 'schedule'} />
             <AgentsSection isActive={active === 'agents'} />
             <UsageSection isActive={active === 'usage'} />
             <AccountsSection isActive={active === 'accounts'} />

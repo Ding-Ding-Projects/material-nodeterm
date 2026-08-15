@@ -281,6 +281,7 @@ import { pushSessionRename } from '../lib/sessionRename'
 import { oneLine } from '@shared/one-line'
 import { parseLenses, verifyLensPrompt, verifySynthesisPrompt } from '../lib/verifyPanel'
 import { useSettings } from '../state/settings'
+import { useScheduledSettings } from '../state/scheduledSettings'
 import { activePermissionMode } from '../state/permissionMode'
 import { useContextWindow } from '../state/contextWindow'
 import { useSessionNaming } from '../state/sessionNaming'
@@ -7790,6 +7791,30 @@ export function Canvas() {
   // Load saved SSH servers once so the RemotePicker / palette have them available.
   useEffect(() => {
     void useSshServers.getState().hydrate()
+  }, [])
+
+  // Scheduled settings (docs/scheduled-settings.md): hydrate the rule list once for the Settings →
+  // Schedule panel, then subscribe to the ONE resolved-schedule push for the lifetime of the app
+  // and forward it to both consumers — `useScheduledSettings` (so the panel's status rows stay
+  // live even while it's unmounted) and `useSettings().applyScheduleOverride` (the actual effect:
+  // an in-memory-only merge on top of the user's saved settings, never written to disk — see
+  // state/settings.ts's doc on `base` vs `settings`). A single subscription here, rather than one
+  // per consumer, is deliberate: the preload's push channel already fans out to any number of
+  // listeners, but there is exactly one PLACE in the app that should decide "the schedule changed,
+  // now go apply it" — scattering that decision across every component that happens to care would
+  // make it easy for a future change to reach the appearance overlay through only one of two paths.
+  useEffect(() => {
+    void useScheduledSettings
+      .getState()
+      .hydrate()
+      .then(() => {
+        const active = useScheduledSettings.getState().active
+        useSettings.getState().applyScheduleOverride(active?.active?.values ?? null)
+      })
+    return window.nodeTerminal.scheduledSettings.onActiveChange((active) => {
+      useScheduledSettings.setState({ active })
+      useSettings.getState().applyScheduleOverride(active.active?.values ?? null)
+    })
   }, [])
 
   // SSH auto-reconnect: TerminalNode reports each remote terminal whose ssh client died with the

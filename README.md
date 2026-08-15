@@ -260,7 +260,9 @@ npm run server:dev # build + run the browser Server Edition (needs Node 22 + tmu
   **mobile companion** (a separate SwiftUI repo) all ride the same core + transport seams.
 
 See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, and the design docs
-under [`docs/`](./docs) for deeper notes.
+under [`docs/`](./docs) for deeper notes — including
+[`docs/scheduled-settings.md`](./docs/scheduled-settings.md) for the Settings → Schedule feature
+(automatic appearance overrides by time of day, date range, or a Home Assistant entity).
 
 ## 🤝 Contributing
 

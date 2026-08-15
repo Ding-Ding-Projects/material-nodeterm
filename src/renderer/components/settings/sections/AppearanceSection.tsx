@@ -78,10 +78,12 @@ function VisibilityToggles({
 }
 
 export function AppearanceSection({ isActive }: { isActive: boolean }): React.JSX.Element {
-  const appTheme = useSettings((s) => s.settings.appTheme)
-  const accent = useSettings((s) => s.settings.accent)
-  const hiddenNodeMenuItems = useSettings((s) => s.settings.hiddenNodeMenuItems)
-  const hiddenHeaderButtons = useSettings((s) => s.settings.hiddenHeaderButtons)
+  // `base`, not the effective `settings` — see TerminalSection's identical note; this section
+  // edits the saved preference, never the currently-applied scheduled override.
+  const appTheme = useSettings((s) => s.base.appTheme)
+  const accent = useSettings((s) => s.base.accent)
+  const hiddenNodeMenuItems = useSettings((s) => s.base.hiddenNodeMenuItems)
+  const hiddenHeaderButtons = useSettings((s) => s.base.hiddenHeaderButtons)
   const update = useSettings((s) => s.update)
   return (
     <SettingsSection

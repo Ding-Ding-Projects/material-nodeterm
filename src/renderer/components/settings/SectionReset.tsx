@@ -24,7 +24,10 @@ export function SectionReset<K extends keyof Settings>({
   /** Completes the confirm sentence: "Reset <what> to their defaults?" */
   what: string
 }): React.JSX.Element {
-  const settings = useSettings((s) => s.settings)
+  // `base`, not the effective `settings` — "is this section already at its default?" is a
+  // question about the user's SAVED preference, not about whatever a scheduled override happens
+  // to be showing right now (see state/settings.ts's doc on `base` vs `settings`).
+  const settings = useSettings((s) => s.base)
   const update = useSettings((s) => s.update)
   const [asking, setAsking] = useState(false)
   const pristine = isPristine(keys, settings)

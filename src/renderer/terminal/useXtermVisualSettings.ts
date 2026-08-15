@@ -15,12 +15,20 @@ import { XTERM_VISUAL_KEYS, type XtermVisualSettings } from './terminal-config'
  * is the last thing that should re-render because a notification toggle moved. Shallow-comparing
  * the picked keys keeps the old behaviour — re-render only when an appearance value actually
  * changes — while collapsing the effect dependency to a single stable value.
+ *
+ * `source` defaults to `'settings'` (the EFFECTIVE, possibly scheduled-settings-overridden
+ * value) — what every real terminal on the canvas must render. The one exception is
+ * `TerminalPreview` inside Settings → Terminal, which passes `'base'`: that preview is showing
+ * what the controls on the SAME page are editing, and those controls edit `base` (see
+ * state/settings.ts's doc on `base` vs `settings`) — a preview reading the effective value would
+ * silently disagree with its own sliders while a scheduled override happened to be active.
  */
-export function useXtermVisualSettings(): XtermVisualSettings {
+export function useXtermVisualSettings(source: 'settings' | 'base' = 'settings'): XtermVisualSettings {
   return useSettings(
     useShallow((s) => {
       const out = {} as Record<string, unknown>
-      for (const k of XTERM_VISUAL_KEYS) out[k] = s.settings[k]
+      const src = source === 'base' ? s.base : s.settings
+      for (const k of XTERM_VISUAL_KEYS) out[k] = src[k]
       return out as unknown as XtermVisualSettings
     })
   )

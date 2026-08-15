@@ -48,10 +48,12 @@ export function TerminalPreview(): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
 
-  const visual = useXtermVisualSettings()
+  // 'base' — this preview shows what the CONTROLS on this page are editing, not whatever a
+  // scheduled-settings override happens to be applying right now. See useXtermVisualSettings's doc.
+  const visual = useXtermVisualSettings('base')
 
   useEffect(() => {
-    const s = useSettings.getState().settings
+    const s = useSettings.getState().base
     const term = new Terminal({
       ...xtermOptionsFromSettings(s),
       cols: PREVIEW_COLS,
