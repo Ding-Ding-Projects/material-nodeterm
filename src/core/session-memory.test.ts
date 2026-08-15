@@ -208,9 +208,17 @@ describe('collectSessionMemory', () => {
     })
   })
 
-  it('routes the ps fallback through the injected exec seam', async () => {
-    // With no readTable injected the default /proc reader runs first; make it fail so the `ps`
-    // fallback is reached on every platform, including the Linux box this suite runs on.
+  it('routes the process-table fallback through the injected exec seam', async () => {
+    // With no readTable injected the default /proc reader runs first; make it fail so the
+    // fallback is reached on every platform.
+    //
+    // The fallback BINARY is platform-specific and the assertion says so explicitly rather than
+    // inheriting whichever OS happens to run the suite: `/proc` and `ps` do not exist on Windows,
+    // so win32 shells out to PowerShell instead (see WIN_PROCESS_TABLE_ARGS). Hard-coding `ps`
+    // made this test assert the platform it ran on — green on Linux, red on Windows, for code
+    // that is correct on both.
+    const isWin = process.platform === 'win32'
+    const fallbackBin = isWin ? 'powershell.exe' : 'ps'
     const spy = vi.spyOn(fs, 'readdirSync').mockImplementation(() => {
       throw new Error('/proc unreadable')
     })
@@ -222,13 +230,19 @@ describe('collectSessionMemory', () => {
         exec: async (bin) => {
           calls.push(bin)
           if (bin === 'ps') return '  PID  PPID    RSS\n  100     1   1024\n'
+          // Shaped exactly as `ConvertTo-Csv -NoTypeInformation` writes it: a header row, then
+          // QUOTED fields, with WorkingSetSize in BYTES (the WMI/CIM convention) rather than the
+          // kB `ps` reports. 1048576 B = 1024 kB = the same 1 MB the POSIX branch yields, so both
+          // platforms assert the identical row.
+          if (bin === 'powershell.exe')
+            return '"ProcessId","ParentProcessId","WorkingSetSize"\n"100","1","1048576"\n'
           return 'nt-a|100|zsh\n'
         },
         readMem: () => null
       })
-      // The `ps` call must come THROUGH the seam, not around it — otherwise this path can never
-      // be driven by a test and the file's "every exec is injectable" promise is false.
-      expect(calls).toContain('ps')
+      // The fallback call must come THROUGH the seam, not around it — otherwise this path can
+      // never be driven by a test and the file's "every exec is injectable" promise is false.
+      expect(calls).toContain(fallbackBin)
       expect(r.ok).toBe(true)
       expect(r.rows[0]).toMatchObject({ session: 'nt-a', selfMb: 1 })
     } finally {
