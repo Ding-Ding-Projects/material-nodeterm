@@ -26,8 +26,7 @@
     "count-lines": "node scripts/count-lines.mjs",
     "dist": "npm run make-icon && electron-vite build && electron-builder --mac --arm64 -c.mac.identity=null -c.mac.notarize=false",
     "dist:linux": "npm run make-icon && electron-vite build && electron-builder --linux",
-    "dist:win": "npm run make-icon && electron-vite build && electron-builder --win squirrel --publish never",
-    "count-lines": "node scripts/count-lines.mjs",
+    "dist:win": "npm run make-icon && electron-vite build && electron-builder --win squirrel --x64 --publish never",
     "release": "npm run make-icon && electron-vite build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper"
   },
@@ -52,23 +51,6 @@
         "to": "icon.png"
       }
     ],
-    "win": {
-      "target": [
-        {
-          "target": "squirrel",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "build/icon.png",
-      "forceCodeSigning": false,
-      "signAndEditExecutable": false,
-      "signExecutable": false
-    },
-    "squirrelWindows": {
-      "artifactName": "${productName}-Setup-${version}.${ext}"
-    },
     "linux": {
       "target": [
         {
@@ -127,16 +109,27 @@
       ]
     },
     "win": {
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "target": [
         {
-          "target": "squirrel"
+          "target": "squirrel",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
-      ]
+      ],
+      "forceCodeSigning": false,
+      "signExecutable": false,
+      "signAndEditExecutable": false
     },
     "squirrelWindows": {
-      "artifactName": "${productName}-Setup-${version}.${ext}",
-      "iconUrl": "https://raw.githubusercontent.com/Ding-Ding-Projects/material-nodeterm/main/build/icon.png"
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "publish": {
       "provider": "generic",
@@ -174,6 +167,7 @@
     "@xyflow/react": "^12.11.2",
     "electron": "^42.8.1",
     "electron-builder": "^26.15.3",
+    "electron-builder-squirrel-windows": "^26.15.3",
     "electron-vite": "^5.0.0",
     "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",

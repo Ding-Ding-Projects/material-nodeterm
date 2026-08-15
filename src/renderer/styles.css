@@ -197,7 +197,8 @@ body,
   align-items: center;
   gap: 14px;
   height: 44px;
-  /* Leave room for the macOS traffic lights on the left. */
+  /* Leave room for the macOS traffic lights on the left (the default; Windows overrides this
+     below — see the [data-platform='win'] rule). */
   padding: 0 12px 0 86px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
@@ -206,6 +207,17 @@ body,
   flex-shrink: 0;
   /* The bar itself is the window drag region. */
   -webkit-app-region: drag;
+}
+
+/* Windows has no traffic lights on the left — main/index.ts creates the window with
+   titleBarStyle:'hidden' + titleBarOverlay instead, which draws the native minimize/maximize/
+   close buttons as an overlay in the top-right corner. That overlay is NOT part of document
+   flow (it's painted on top of whatever we render there), so reserve room for it on the right
+   instead of the left, or our own tabs would render underneath, unclickable, native buttons.
+   146px covers three Windows 11 caption buttons (~46px each) plus a little breathing room; see
+   docs/windows.md for the caveat that this is a fixed estimate, not `env(titlebar-area-*)`. */
+:root[data-platform='win'] .tabbar {
+  padding: 0 146px 0 12px;
 }
 
 /* Interactive elements inside the bar must not drag the window. */

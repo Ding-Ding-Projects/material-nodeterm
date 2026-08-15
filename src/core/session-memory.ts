@@ -101,6 +101,45 @@ export function parseProcessTable(stdout: string): ProcEntry[] {
 }
 
 /**
+ * The command line run on Windows to get the whole process table in one shot: no `/proc`, no
+ * `ps` binary — `Get-CimInstance Win32_Process` is the WMI equivalent, giving PID, parent PID and
+ * `WorkingSetSize` (bytes) for every process in one query. `ConvertTo-Csv` is used over
+ * `Format-Table` deliberately: a fixed-width table's column widths shift with the largest value in
+ * the batch, which makes it unsafe to parse positionally, while CSV fields stay one-value-per-cell
+ * regardless of magnitude. `-NoTypeInformation` drops the `#TYPE …` line PowerShell would
+ * otherwise prepend.
+ */
+export const WIN_PROCESS_TABLE_ARGS = [
+  '-NoProfile',
+  '-NonInteractive',
+  '-Command',
+  'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize | ConvertTo-Csv -NoTypeInformation'
+]
+
+/**
+ * Parse the CSV `ConvertTo-Csv` writes for `ProcessId,ParentProcessId,WorkingSetSize` — quoted,
+ * comma-separated, one header row then one data row per process. `WorkingSetSize` is bytes (the
+ * WMI/CIM convention), converted to kB here so this returns the same `ProcEntry` shape as every
+ * other platform's reader. Tolerant: the header row and any line that doesn't parse as three
+ * quoted numeric fields are skipped rather than aborting the whole table.
+ */
+export function parseWindowsProcessTable(stdout: string): ProcEntry[] {
+  const out: ProcEntry[] = []
+  for (const raw of stdout.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line) continue
+    const m = /^"(\d+)"\s*,\s*"(\d*)"\s*,\s*"(\d*)"$/.exec(line)
+    if (!m) continue // header row ("ProcessId","ParentProcessId","WorkingSetSize") or malformed
+    const pid = Number(m[1])
+    const ppid = Number(m[2])
+    const wsBytes = Number(m[3])
+    if (!Number.isFinite(pid) || !Number.isFinite(ppid) || !Number.isFinite(wsBytes)) continue
+    out.push({ pid, ppid, rssKb: Math.round(wsBytes / 1024) })
+  }
+  return out
+}
+
+/**
  * Parse `top -l 1 -stats pid,mem` into pid → **phys_footprint** in kB.
  *
  * On darwin this REPLACES `ps`'s `rss` as the panel's memory number, because the two measure
@@ -244,6 +283,10 @@ export function readMemInfo(): MemInfo | null {
       os.totalmem()
     )
   }
+  // Windows (and every other platform without its own reader above): `os.freemem()`/`os.totalmem()`
+  // are accurate here — unlike macOS, Win32's `GlobalMemoryStatusEx` (what libuv calls under the
+  // hood) reports genuinely free pages without the "nothing is ever free" behavior that makes the
+  // same call useless on darwin, so no separate win32 branch is needed.
   try {
     return {
       availableMb: Math.round(os.freemem() / 1048576),
@@ -399,22 +442,31 @@ export async function collectSessionMemory(
 
   let table = readTable()
   if (table === null && !deps.readTable) {
-    // Non-Linux (or an unreadable /proc): `ps` for the whole table, through the same injectable
-    // seam as tmux — nothing in this file may reach a subprocess around it.
+    // Non-Linux (or an unreadable /proc): neither `/proc` nor the POSIX `ps` binary exists on
+    // Windows, so it gets its own reader — PowerShell's `Get-CimInstance Win32_Process`, through
+    // the SAME injectable `exec` seam as tmux and every other platform's reader here (nothing in
+    // this file may reach a subprocess around it). A failed spawn (no PowerShell on PATH, a
+    // locked-down execution policy that still refuses `-Command`, …) is caught below exactly like
+    // a missing `ps` — `table` stays null and the caller reports `ok:false`, never zero rows
+    // dressed up as a real answer.
     //
     // On darwin a SECOND call is merged in: `top` carries phys_footprint, which is what Activity
     // Monitor shows and what the pill's `vm_stat` reading already counts. `ps`'s own `rss` drops
     // an idle process's compressed pages and understated a six-hour-idle session by about half —
     // exactly the population this panel exists to describe. See parseTopFootprint.
     try {
-      const rows = parseProcessTable(await exec('ps', ['-eo', 'pid,ppid,rss']))
-      if (process.platform === 'darwin') {
-        const fp = parseTopFootprint(await exec('top', ['-l', '1', '-stats', 'pid,mem']))
-        // A pid `top` did not list keeps its `rss`. The two snapshots are a moment apart, so a miss
-        // is a process that came or went between them — not a reason to report nothing.
-        table = rows.map((e) => ({ ...e, rssKb: fp.get(e.pid) ?? e.rssKb }))
+      if (process.platform === 'win32') {
+        table = parseWindowsProcessTable(await exec('powershell.exe', WIN_PROCESS_TABLE_ARGS))
       } else {
-        table = rows
+        const rows = parseProcessTable(await exec('ps', ['-eo', 'pid,ppid,rss']))
+        if (process.platform === 'darwin') {
+          const fp = parseTopFootprint(await exec('top', ['-l', '1', '-stats', 'pid,mem']))
+          // A pid `top` did not list keeps its `rss`. The two snapshots are a moment apart, so a
+          // miss is a process that came or went between them — not a reason to report nothing.
+          table = rows.map((e) => ({ ...e, rssKb: fp.get(e.pid) ?? e.rssKb }))
+        } else {
+          table = rows
+        }
       }
     } catch {
       table = null

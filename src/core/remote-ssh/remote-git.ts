@@ -6,7 +6,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { childArgs } from './control-master'
-import { findExecutableSync, shellPathNow } from '../exec-path'
+import { findExecutableSync, opensshFallbacks, shellPathNow } from '../exec-path'
 import { posixQuote, quoteRemotePath, type SshConnection } from '../../shared/ssh'
 
 const run = promisify(execFile)
@@ -28,11 +28,7 @@ function findSsh(): string | null {
   // an `ssh -V` spawn per candidate, blocking the main thread): walk the cached login-shell
   // PATH from exec-path.ts, then the hardcoded locations. A MISS is only memoized once the
   // async PATH probe has settled, so a custom-location ssh isn't cached away forever.
-  const found = findExecutableSync('ssh', [
-    '/usr/bin/ssh',
-    '/usr/local/bin/ssh',
-    '/opt/homebrew/bin/ssh'
-  ])
+  const found = findExecutableSync('ssh', opensshFallbacks('ssh'))
   if (found || shellPathNow() !== undefined) sshPath = found
   return found
 }

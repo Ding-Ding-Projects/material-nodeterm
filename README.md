@@ -231,6 +231,9 @@ detects your platform. Everything is also listed at
   itself (electron-updater), so `brew upgrade` is rarely needed for it.
 - **Linux (x64)** — self-updating **AppImage**, or a `.deb` for Debian/Ubuntu
   (`sudo apt install ./nodeterm-*.deb`; updates are manual for `.deb`).
+- **Windows (x64)** — self-updating Squirrel.Windows installer (`Setup.exe`). Unsigned — see
+  [docs/windows.md](docs/windows.md) for the SmartScreen prompt you'll see on first run, what
+  degrades without tmux, and how to build it yourself.
 - **iOS** — **nodeterm mobile** on the
   [App Store](https://apps.apple.com/app/nodeterm/id6790581233).
 
@@ -240,8 +243,10 @@ detects your platform. Everything is also listed at
 
 ## 🛠 Build from source
 
-Requires Node.js 20+ on macOS or Linux (tmux recommended — it's what makes sessions
-survive restarts). A source checkout does **not** carry the bundled tmux: run
+Requires Node.js 20+ on macOS, Linux, or Windows (tmux recommended on macOS/Linux — it's what
+makes sessions survive restarts; **Windows has no tmux build**, see
+[docs/windows.md](docs/windows.md) for what that changes and how to get it anyway via
+MSYS2/Cygwin). A source checkout does **not** carry the bundled tmux: run
 `node scripts/build-tmux.mjs` once on macOS to build it into `resources/bin/tmux` (the
 release job does this automatically), or just install tmux yourself.
 
@@ -254,8 +259,9 @@ npm run typecheck  # fastest correctness gate
 npm test            # vitest unit + integration suite
 npm run dist        # local UNSIGNED .dmg into dist/ (smoke test)
 npm run dist:linux  # AppImage + .deb into dist/ (on a Linux host)
+npm run dist:win    # local UNSIGNED Squirrel.Windows Setup.exe into dist/ (on a Windows host)
 npm run server:dev  # build + run the browser Server Edition (needs Node 22 + tmux)
-npm run count-lines  # print the project's committed line-count table
+npm run count-lines # print the project's committed line-count table
 ```
 
 ### One-click build scripts
@@ -334,6 +340,15 @@ summaries are distilled from.
 | [`AGENTS.md`](./AGENTS.md) | A **sanitized mirror** of this project's working conventions, written for AI coding agents — see the note at the top of that file for what "mirror" means here. |
 | [`CHANGELOG.md`](./CHANGELOG.md) | What shipped, when, generated from the real commit history. |
 | [`docs/narrator.md`](./docs/narrator.md) | The spoken TTS narrator (Settings → Interface → Narrator) — voice pickers, queue and cooldown rules, failure modes. |
+
+## 🪟 Windows
+
+Windows is a first-class desktop target: a Squirrel.Windows installer (`npm run dist:win`),
+PowerShell/cmd as the default shell, and a Material title bar with the native window buttons on
+the right. The one meaningful behavioral difference from macOS/Linux is that terminals run as a
+plain shell instead of a tmux session, so they don't survive an app restart — see
+[docs/windows.md](docs/windows.md) for the full picture (what degrades, the unsigned-installer
+SmartScreen warning, and how to get tmux-backed continuity anyway).
 
 ## 🤝 Contributing
 
