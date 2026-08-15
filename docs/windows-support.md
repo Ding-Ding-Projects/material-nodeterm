@@ -7,11 +7,23 @@ platform-difference defects were found, what now guards against them, and what i
 Keep the split — a user reading "what degrades" should not have to wade through regex archaeology,
 and a contributor about to touch a path needs the archaeology.
 
-**The honest summary first: nobody has run a packaged Windows build of this app end to end.** The
-installer has never been produced on this machine — see [Building](#building) for the three
-separate reasons why, two of which are now diagnosed in one second instead of discovered over ten
-minutes. Everything below is either measured against real Windows behaviour or explicitly labelled
-as unverified.
+**The Windows installer is built and published on every push, by CI, on `windows-latest`** — a real
+Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), non-draft, downloadable, unsigned by
+policy. That is the shipping path and it works.
+
+What has NOT happened is anyone **installing and launching one**. So the runtime behaviour of a
+packaged build — the session-host fallback where there is no tmux, above all — remains unverified,
+and everything below is source-level or unit-tested unless it says otherwise.
+
+Building the installer **locally on a developer machine** is a separate matter and is currently
+blocked here; see [Building](#building) for the three reasons, two of which are now diagnosed in
+one second instead of discovered over ten minutes. None of them affects CI, which has the toolchain
+components a local machine may be missing.
+
+> An earlier version of this page said no packaged build had ever been produced. That was wrong:
+> it confused "I could not build one on this machine" with "the project does not build one". The
+> distinction matters, because the first is a local toolchain gap and the second would be a
+> release-pipeline failure.
 
 Windows is the active delivery target, but most of this codebase was written on macOS. That
 asymmetry is the theme of this page: **almost every defect here was code that is genuinely correct
@@ -142,9 +154,15 @@ compile.
 
 ## Known gaps
 
-- **No packaged build has been launched.** Everything above is source-level or unit-tested. The
-  runtime behaviour of a real installed Windows build — tmux absence and the session-host fallback
-  in particular (see [windows-session-host.md](windows-session-host.md)) — is unverified.
+- **No packaged build has been INSTALLED and launched.** CI builds and publishes the installer on
+  every push (verified: `v0.3.0-ci.165` carries a 206.8 MB `nodeterm-Setup-0.3.0.exe`, non-draft,
+  HTTP 206 on a range request), but nobody has run one. So the runtime behaviour of a real install
+  — tmux absence and the session-host fallback above all (see
+  [windows-session-host.md](windows-session-host.md)) — is unverified. Downloading one and clicking
+  through it is the single highest-value Windows check still outstanding.
+- **Building the installer locally is blocked on this machine**, on the Spectre-mitigated MSVC
+  libraries, whose installer needs elevation. Not a shipping blocker — CI has them — but it does
+  mean a developer here cannot reproduce the release artifact without that component.
 
 ## If you are adding code that touches a path
 
