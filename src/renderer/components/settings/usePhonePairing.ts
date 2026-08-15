@@ -16,6 +16,10 @@ const SSH_RECHECK_MS = 2000
 export function usePhonePairing(onPaired?: () => void): {
   phase: PairingPhase
   qr: string
+  /** Six-digit code for typing in by hand where a camera cannot be used. */
+  shortCode: string
+  /** The `host:port` that code is typed at. */
+  manualHost: string
   sshOpen: boolean
   sshHealed: boolean
   /** On phase 'paired': whether the pairing came with a relay leg ('off' = toggle disabled,
@@ -33,6 +37,8 @@ export function usePhonePairing(onPaired?: () => void): {
 } {
   const [phase, setPhase] = useState<PairingPhase>('idle')
   const [qr, setQr] = useState('')
+  const [shortCode, setShortCode] = useState('')
+  const [manualHost, setManualHost] = useState('')
   const [sshOpen, setSshOpen] = useState(true)
   // Went from unreachable → reachable while the warning was showing: show a green confirmation
   // instead of silently dropping the warning (the user just flipped a toggle; acknowledge it).
@@ -74,10 +80,18 @@ export function usePhonePairing(onPaired?: () => void): {
     setError('')
     setBusy(true)
     try {
-      const { payload, sshOpen: open, relayPlan: plan } = await window.nodeTerminal.pairing.start()
+      const {
+        payload,
+        sshOpen: open,
+        relayPlan: plan,
+        shortCode: code,
+        manualHost: mhost
+      } = await window.nodeTerminal.pairing.start()
       setRelayPlan(plan ?? null)
       const dataUrl = await toDataURL(payload, { margin: 1, width: 240 })
       setQr(dataUrl)
+      setShortCode(code ?? '')
+      setManualHost(mhost ?? '')
       setSshOpen(open)
       setSshHealed(false)
       setRelayResult(null)
@@ -97,6 +111,8 @@ export function usePhonePairing(onPaired?: () => void): {
     }
     setPhase('idle')
     setQr('')
+    setShortCode('')
+    setManualHost('')
   }
 
   // Subscribe to the completion event; drives paired/timeout state. `onPaired` rides a ref so
@@ -107,6 +123,8 @@ export function usePhonePairing(onPaired?: () => void): {
     return window.nodeTerminal.pairing.onDone((result) => {
       runningRef.current = false
       setQr('')
+    setShortCode('')
+    setManualHost('')
       setPhase(result.ok ? 'paired' : 'timeout')
       setRelayResult(result.ok ? (result.relay ?? null) : null)
       if (result.ok) onPairedRef.current?.()
@@ -123,5 +141,5 @@ export function usePhonePairing(onPaired?: () => void): {
     }
   }, [])
 
-  return { phase, qr, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset: () => setPhase('idle') }
+  return { phase, qr, shortCode, manualHost, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset: () => setPhase('idle') }
 }

@@ -8,9 +8,10 @@
 // `token` is a single-use secret on a listener that lives ten minutes and stops at the first
 // success. That token IS the authorization — scanning the QR is the capability.
 //
-// What this page then does, exactly as the iOS app does:
+// What this page then does:
 //   1. generate an Ed25519 keypair in the browser (WebCrypto), private key never leaves it
 //   2. POST { token, publicKey } to  http://<host>:<pairPort>/pair
+//      (`token` is either the QR's full secret or the six-digit code shown beside it)
 //   3. the desktop installs the public key and the device is paired
 //
 // TWO REAL CONSTRAINTS, surfaced to the user rather than discovered as a silent failure:
@@ -59,6 +60,28 @@ function opensshEd25519(rawKey) {
   return `ssh-ed25519 ${b64(out.buffer)} nodeterm-web`
 }
 
+/**
+ * Build a payload from a hand-typed `host:port` plus the six-digit code the desktop shows beside
+ * the QR.
+ *
+ * This exists because scanning is not always possible — Safari ships no QR reader, a laptop has
+ * no rear camera, and someone pairing a browser on the very machine showing the code cannot point
+ * one screen at itself. The desktop's listener accepts the short code in the same field as the
+ * QR's long token, so nothing here is a second endpoint or a second kind of authorization: it is
+ * the same single-use credential, typed instead of scanned.
+ *
+ * The desktop caps this at five wrong entries and then stops the whole listener, because six
+ * digits is only a million and a LAN is quick — so the cost of a mistyped digit is pressing Pair
+ * again, and the cost of guessing is that guessing does not work.
+ */
+function payloadFromCode(hostPort, code) {
+  var digits = String(code || '').replace(/\D/g, '')
+  if (digits.length !== 6) throw new Error('The code is six digits.')
+  var m = /^\s*(?:https?:\/\/)?([^\s/:]+):(\d{1,5})\s*$/.exec(String(hostPort || ''))
+  if (!m) throw new Error('Enter the address as shown on the desktop, e.g. 192.168.1.20:53411')
+  return { v: 1, nodeterm: true, host: m[1], pairPort: Number(m[2]), token: digits }
+}
+
 /** Parse and sanity-check a scanned payload before we act on it. */
 function parsePayload(text) {
   let p
@@ -76,7 +99,8 @@ function parsePayload(text) {
 }
 
 async function pair(payload, setStatus) {
-  const p = parsePayload(payload)
+  // Either a scanned/pasted payload string, or one already built from a typed code.
+  const p = typeof payload === 'object' && payload ? payload : parsePayload(payload)
 
   if (IS_SECURE_PAGE && !/^https:/.test(`http://${p.host}`)) {
     // Stated before the attempt, not after: on https this cannot work, and "Failed to fetch"
@@ -97,7 +121,7 @@ async function pair(payload, setStatus) {
   } catch {
     throw new Error(
       'This browser cannot generate an Ed25519 key (needs Safari 17+, Chrome 113+, or Firefox 129+). ' +
-        'Pair from the iOS app or a newer browser.'
+        'Pair from a newer browser.'
     )
   }
 
@@ -119,8 +143,12 @@ async function pair(payload, setStatus) {
     const detail = await res.text().catch(() => '')
     throw new Error(
       res.status === 403
-        ? 'The host rejected that code. It has probably expired — press Pair again on the desktop for a fresh QR.'
-        : `The host answered ${res.status}. ${detail}`.trim()
+        ? 'The host rejected that code. Check the six digits, or press Pair again on the desktop for a fresh one.'
+        : res.status === 429
+          // The short-code attempt cap. The listener has stopped, so retrying here is pointless —
+          // say so rather than letting someone type a sixth guess into a dead window.
+          ? 'Too many wrong codes, so the desktop closed the pairing window. Press Pair again there for a fresh code.'
+          : `The host answered ${res.status}. ${detail}`.trim()
     )
   }
   return p
@@ -137,7 +165,8 @@ export function registerPairDevice(store) {
         <h2>Pair this device</h2>
         <p>
           Open <strong>nodeterm on your computer</strong>, go to <em>Settings → Phone</em> and press
-          <em>Pair</em>. It shows a QR code. Scan it here, or paste the text shown beside it.
+          <em>Pair</em>. It shows a QR code, a six-digit code, and an address. Scan the QR here,
+          type the six digits, or paste the full text — any of the three works.
         </p>
         ${
           IS_SECURE_PAGE
@@ -152,7 +181,19 @@ export function registerPairDevice(store) {
             : `<p class="pair-note">This browser has no built-in QR reader (Safari does not provide one),
                so use the paste box below — the desktop shows the same code as text next to the QR.</p>`
         }
-        <label class="pair-label" for="pair-paste">Or paste the pairing code</label>
+        <fieldset class="pair-manual">
+          <legend>Type the code instead</legend>
+          <p class="pair-note">The desktop shows a six-digit code and an address under the QR.</p>
+          <label class="pair-label" for="pair-host">Address</label>
+          <input id="pair-host" class="pair-input" inputmode="url" autocomplete="off"
+            placeholder="192.168.1.20:53411">
+          <label class="pair-label" for="pair-code">Six-digit code</label>
+          <input id="pair-code" class="pair-input pair-input--code" inputmode="numeric"
+            maxlength="6" autocomplete="one-time-code" placeholder="000000">
+          <button type="button" class="pair-btn" data-action="pair-code">Pair with this code</button>
+        </fieldset>
+
+        <label class="pair-label" for="pair-paste">Or paste the full pairing code</label>
         <textarea id="pair-paste" class="pair-paste" rows="4"
           placeholder='{"v":1,"host":"192.168.…","token":"…","pairPort":…,"nodeterm":true}'></textarea>
         <button type="button" class="pair-btn" data-action="pair-submit">Pair with this code</button>
@@ -167,6 +208,19 @@ export function registerPairDevice(store) {
       const setStatus = (m) => { if (el) el.textContent = m }
       try {
         const p = await pair(box ? box.value : '', setStatus)
+        setStatus(`Paired with ${p.name || p.host}. This device can now reach it.`)
+      } catch (e) {
+        setStatus(e && e.message ? e.message : 'Pairing failed.')
+      }
+    },
+    'pair-code': async () => {
+      const el = document.querySelector('[data-pair-status]')
+      const setStatus = (m) => { if (el) el.textContent = m }
+      const host = document.getElementById('pair-host')
+      const code = document.getElementById('pair-code')
+      try {
+        const built = payloadFromCode(host ? host.value : '', code ? code.value : '')
+        const p = await pair(built, setStatus)
         setStatus(`Paired with ${p.name || p.host}. This device can now reach it.`)
       } catch (e) {
         setStatus(e && e.message ? e.message : 'Pairing failed.')

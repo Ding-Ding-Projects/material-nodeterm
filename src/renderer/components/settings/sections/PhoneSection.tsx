@@ -7,7 +7,6 @@ import { Button } from '@renderer/ui/Button'
 import { Switch } from '@renderer/ui/Switch'
 import { useSettings } from '@renderer/state/settings'
 import { usePhonePairing } from '../usePhonePairing'
-import { IOS_APP_STORE_URL } from '@renderer/lib/links'
 
 const ROWS = {
   remote: {
@@ -15,12 +14,12 @@ const ROWS = {
     keywords: ['phone', 'remote', 'anywhere', 'relay', 'encrypted', 'access', 'cellular']
   },
   pair: {
-    title: 'Pair phone',
-    keywords: ['phone', 'pair', 'qr', 'ios', 'mobile', 'ssh', 'scan', 'nodeterm']
+    title: 'Pair a device',
+    keywords: ['phone', 'pair', 'qr', 'code', 'mobile', 'browser', 'ssh', 'scan', 'nodeterm']
   },
   devices: {
     title: 'Paired devices',
-    keywords: ['phone', 'device', 'devices', 'paired', 'revoke', 'ios', 'iphone', 'remove']
+    keywords: ['phone', 'device', 'devices', 'paired', 'revoke', 'remove']
   }
 }
 const ENTRIES = Object.values(ROWS)
@@ -55,7 +54,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
 
   // The shared pairing machine (also behind the top-right quick-pair popover); a completed
   // pairing refreshes the device list below.
-  const { phase, qr, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset } = usePhonePairing(
+  const { phase, qr, shortCode, manualHost, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset } = usePhonePairing(
     () => void refreshDevices()
   )
 
@@ -88,7 +87,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
     <SettingsSection
       id="phone"
       title="Phone"
-      description="Pair the nodeterm iOS app so it can connect to this machine over your local network — no terminal commands needed."
+      description="Pair a phone or browser so it can reach this machine over your local network — no terminal commands needed."
       isActive={isActive}
       searchEntries={ENTRIES}
     >
@@ -98,7 +97,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
             <div className="min-w-0">
               <h4 className="text-[13px] font-medium text-text">Remote access from your phone</h4>
               <p className="mt-1 text-sm text-muted">
-                Reach this Mac from anywhere — not just your local network — end-to-end encrypted
+                Reach this machine from anywhere — not just your local network — end-to-end encrypted
                 over the relay. Your paired phone connects through the relay; the connection is
                 verified with a code the first time.
               </p>
@@ -114,19 +113,16 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
 
       <SearchableRow {...ROWS.pair}>
         <div className="space-y-4">
-          <h4 className="text-[13px] font-medium text-text">Pair phone</h4>
+          <h4 className="text-[13px] font-medium text-text">Pair a device</h4>
           <p className="text-sm text-muted">
-            Pair the nodeterm iOS app: scan this QR with your phone. Your phone generates its own
-            key on-device — nothing secret leaves this machine except a single-use pairing token.
+            Open nodeterm in your phone&apos;s browser and scan this QR from its{' '}
+            <strong>Pair a device</strong> page. The device generates its own key there — nothing
+            secret leaves this machine except a single-use pairing token.
           </p>
           <p className="text-sm text-muted">
-            Don&apos;t have the app yet?{' '}
-            <button
-              className="cursor-pointer underline hover:text-text"
-              onClick={() => window.nodeTerminal.shell.openExternal(IOS_APP_STORE_URL)}
-            >
-              Get nodeterm for iOS on the App Store
-            </button>
+            No nodeterm on your network yet? Run the Server Edition with{' '}
+            <code className="rounded bg-white/5 px-1 py-0.5">./host.sh</code> and open it from any
+            browser on the same network.
           </p>
 
           {phase === 'idle' || phase === 'timeout' ? (
@@ -173,6 +169,25 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
                     className="rounded-lg bg-white p-2"
                   />
                   <p className="text-sm text-muted">Waiting for your phone… (10 min)</p>
+                  {shortCode ? (
+                    // The typed alternative. A QR is useless to a browser with no reader (Safari
+                    // has none), to a camera that will not focus, and to anyone pairing from the
+                    // very screen showing the code — so the same listener also accepts six
+                    // digits. It is capped at five wrong tries and dies with the window, because
+                    // six digits is only a million and a LAN is fast.
+                    <div className="space-y-1 rounded-md border border-border px-3 py-2">
+                      <p className="text-sm text-muted">
+                        Can&apos;t scan? On the device, open{' '}
+                        <code className="rounded bg-white/5 px-1 py-0.5">{manualHost}</code> and
+                        type this code:
+                      </p>
+                      <p className="font-mono text-2xl tracking-[0.3em] text-text">{shortCode}</p>
+                      <p className="text-[12px] text-muted">
+                        Five wrong entries and pairing stops — press Cancel and start again for a
+                        fresh code.
+                      </p>
+                    </div>
+                  ) : null}
                   {relayPlan === 'dev' ? (
                     <p className="text-sm" style={{ color: '#ff9f0a' }}>
                       Dev build: the relay is off regardless of the toggle, so this code pairs
@@ -200,7 +215,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
           {phase === 'paired' ? (
             <div className="space-y-3">
               <p className="text-sm font-medium" style={{ color: '#30d158' }}>
-                ✓ Paired. Your phone can now connect with its own key.
+                ✓ Paired. That device can now connect with its own key.
               </p>
               {relayResult === 'ok' ? (
                 <p className="text-sm" style={{ color: '#30d158' }}>
@@ -223,7 +238,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
                   access, or use a packaged build.
                 </p>
               ) : null}
-              <Button onClick={reset}>Pair another phone</Button>
+              <Button onClick={reset}>Pair another device</Button>
             </div>
           ) : null}
 

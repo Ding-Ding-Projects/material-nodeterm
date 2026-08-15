@@ -37,9 +37,9 @@ instead — note the trailing `/material-nodeterm/`.
 Stacked terminal tabs hide context — you lose track of what's running where. nodeterm turns
 that into a **map**: every shell is a node you can place, group, label, and zoom into. Sessions
 are spatial and persistent, so your mental model stays intact across restarts. And because the
-app is built around a clean service seam, the same canvas runs three ways: as the **desktop
-app** (Windows, macOS and Linux), as a **self-hosted browser app** you reach from anywhere
-(Server Edition), and via an **iOS companion** that attaches to the same live sessions.
+app is built around a clean service seam, the same canvas runs two ways: as the **desktop
+app** (Windows, macOS and Linux), and as a **self-hosted browser app** you reach from anywhere
+(Server Edition) — including from a phone, with no app to install.
 
 ## ✨ Features
 
@@ -86,8 +86,9 @@ Point a project at a folder on a remote host and every terminal, file operation,
 and even the kanban board for that project run there while the canvas stays local — session
 continuity applies remotely too. Or run nodeterm's **Server Edition**: the exact same renderer,
 served headless over plain HTTP/WebSocket from a Linux (or macOS) box you own, reached from any
-browser, with single-user password auth. Phone pairing (remote access from the free iOS
-companion) is a Core feature, not a paywalled one.
+browser, with passkey or password auth. One command (`./host.sh`) builds and starts it in a
+container. Phone pairing — so a browser on your phone can reach the terminals on your desktop
+too — is a Core feature, not a paywalled one.
 
 ### Source control and git worktrees
 

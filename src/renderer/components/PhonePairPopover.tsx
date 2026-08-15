@@ -3,14 +3,13 @@ import { createPortal } from 'react-dom'
 import { Switch } from '@renderer/ui/Switch'
 import { useSettings } from '@renderer/state/settings'
 import { usePhonePairing } from './settings/usePhonePairing'
-import { IOS_APP_STORE_URL } from '@renderer/lib/links'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 /**
  * Quick phone pairing, anchored under the top-right phone button: opens straight into a live QR
  * (no "Start pairing" click — that's the whole point of the shortcut), with the standing
- * "Reach this Mac from anywhere" toggle below and a link into the full Phone settings.
+ * "Reach this machine from anywhere" toggle below and a link into the full Phone settings.
  * Closing the popover stops an unfinished pairing (the shared hook's unmount rule).
  */
 export function PhonePairPopover({
@@ -138,22 +137,16 @@ export function PhonePairPopover({
 
         <div className="phone-pair__row">
           <div className="phone-pair__row-text">
-            <div className="phone-pair__row-title">Reach this Mac from anywhere</div>
+            <div className="phone-pair__row-title">Reach this machine from anywhere</div>
             <div className="phone-pair__row-sub">E2E encrypted over the relay — not just your LAN.</div>
           </div>
           <Switch
             checked={phoneAccessEnabled}
             onChange={togglePhoneAccess}
-            ariaLabel="Reach this Mac from anywhere"
+            ariaLabel="Reach this machine from anywhere"
           />
         </div>
 
-        <button
-          className="phone-pair__link phone-pair__footer"
-          onClick={() => window.nodeTerminal.shell.openExternal(IOS_APP_STORE_URL)}
-        >
-          Get the nodeterm iOS app ↗
-        </button>
         <button className="phone-pair__link phone-pair__footer" onClick={onOpenSettings}>
           All phone settings…
         </button>

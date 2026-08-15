@@ -131,14 +131,12 @@ import {
   DictationOverlay,
   BugReportDialog,
   PhonePairPopover,
-  MobileLaunchCard,
   KanbanView,
   FileConverterPanel,
   OllamaManagerPanel
 } from '../components/lazyPanels'
 import { WelcomeScreen } from '../components/WelcomeScreen'
 import { CloneRepoDialog } from '../components/CloneRepoDialog'
-import { markMobileLaunchSeen, shouldShowMobileLaunch } from '../lib/mobileLaunch'
 import type { DictationTarget } from '../components/DictationOverlay'
 import { describeOs, REPO_URL } from '../lib/bugReport'
 import { shouldReleasePaneFocus } from '../lib/paneFocus'
@@ -860,8 +858,6 @@ export function Canvas() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   // First-run setup tour (agents / dictation / kanban / notifications) — see OnboardingFlow.
   const [onboardingOpen, setOnboardingOpen] = useState(false)
-  // One-shot mobile-launch announcement for established installs — see MobileLaunchCard.
-  const [mobileLaunchOpen, setMobileLaunchOpen] = useState(false)
   const [dictationOpen, setDictationOpen] = useState(false)
   // Target = the first selected terminal node AT OPEN TIME (not live-tracked while the
   // overlay is up — the design explicitly freezes it so a stray click elsewhere mid-dictation
@@ -1746,22 +1742,15 @@ export function Canvas() {
       .hydrate()
       .then(() => {
         const s = useSettings.getState().settings
-        if (s.seenOnboarding) {
-          // Established install: the one-shot mobile-launch card (fresh installs get the same
-          // pitch from the tour's phone step instead, marked below so it never shows twice).
-          if (shouldShowMobileLaunch()) setMobileLaunchOpen(true)
-          return
-        }
+        if (s.seenOnboarding) return
         if (s.seenShortcuts) {
           // Existing install (pre-tour): the setup tour is for fresh installs — migrate
           // silently so it never pops over an established workspace. Rerunnable via ⌘K.
           useSettings.getState().update({ seenOnboarding: true })
-          if (shouldShowMobileLaunch()) setMobileLaunchOpen(true)
         } else {
           // Fresh install: the tour replaces the auto-opened ShortcutsPanel (⌘/ still
           // opens it manually) and owns the notification-consent question.
           setOnboardingOpen(true)
-          markMobileLaunchSeen()
         }
       })
     api.workspace.load().then((ws) => {
@@ -9390,14 +9379,6 @@ export function Canvas() {
       )}
 
       {shortcutsOpen && <ShortcutsPanel onClose={() => setShortcutsOpen(false)} />}
-      {mobileLaunchOpen && (
-        <MobileLaunchCard
-          onClose={() => {
-            markMobileLaunchSeen()
-            setMobileLaunchOpen(false)
-          }}
-        />
-      )}
       {onboardingOpen && (
         <OnboardingFlow
           onClose={() => {

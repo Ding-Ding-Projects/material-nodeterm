@@ -4,7 +4,6 @@ import type { SpeechModelInfo } from '@shared/types'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type BuiltinAgentId } from '@shared/agents/config'
 import { isHoldChord, shortcutKeyParts } from '@shared/shortcut'
 import { keyLabel } from '@shared/platform-utils'
-import { IOS_APP_STORE_URL } from '../../lib/links'
 import { useSettings } from '../../state/settings'
 import { useEntitlement } from '../../state/entitlement'
 import { Switch } from '@renderer/ui/Switch'
@@ -383,22 +382,16 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
               <>
                 <h2>Your sessions, in your pocket</h2>
                 <p>
-                  <strong>nodeterm mobile</strong> attaches to these same live tmux sessions from
-                  your phone — watch an agent work, answer a "needs you", or type into any
-                  terminal from anywhere.
+                  <strong>nodeterm Server Edition</strong> serves this same canvas to any browser
+                  on your network — watch an agent work, answer a "needs you", or type into any
+                  terminal from your phone. Nothing to install on the phone.
                 </p>
                 <p>
-                  Grab it from the App Store, then pair in seconds: Settings → Phone (or the
-                  phone button top-right) shows a QR — scan it and you're in.
+                  Run <code>./host.sh</code> in the repo (it builds and starts a container, and
+                  prints a one-time setup link), then open that address on your phone. To let it
+                  reach <em>this</em> machine's terminals as well, pair in seconds: Settings →
+                  Phone — or the phone button top-right — shows a QR and a six-digit code.
                 </p>
-                <div className="onb-notify-actions">
-                  <button
-                    className="onb-btn onb-btn--primary"
-                    onClick={() => window.nodeTerminal.shell.openExternal(IOS_APP_STORE_URL)}
-                  >
-                    Get the iOS app
-                  </button>
-                </div>
               </>
             )}
 

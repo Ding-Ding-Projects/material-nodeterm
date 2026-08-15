@@ -117,7 +117,7 @@ function renderHall(store) {
         <div class="surface-grid">
           <div class="surface-card"><div class="surface-card__icon" aria-hidden="true">🖥</div><h4>On your desk</h4><p>The app for macOS and Linux, with native window chrome and auto-update.</p></div>
           <div class="surface-card"><div class="surface-card__icon" aria-hidden="true">🌍</div><h4>In any browser</h4><p>Server Edition serves the same canvas from your own machine, so you can reach it anywhere.</p></div>
-          <div class="surface-card"><div class="surface-card__icon" aria-hidden="true">📱</div><h4>In your pocket</h4><p>Scan one code and the same live session carries on in the iOS app.</p></div>
+          <div class="surface-card"><div class="surface-card__icon" aria-hidden="true">📱</div><h4>In your pocket</h4><p>Run the Docker host on any machine and open it from your phone’s browser — same canvas, nothing to install.</p></div>
         </div>
 
         <div class="promo-panel">

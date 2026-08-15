@@ -607,5 +607,22 @@ textarea.mono-area {
 }
 .pair-btn:hover { background: var(--orange); }
 .pair-btn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+/* Type-the-code path, for a browser with no QR reader (Safari) or a camera that will not focus. */
+.pair-manual {
+  display: flex; flex-direction: column; gap: 8px; margin: 0;
+  padding: 12px 14px 14px; border: 3px solid var(--line); border-radius: var(--round-sm);
+  background: var(--sunk);
+}
+.pair-manual legend { padding: 0 6px; font-family: var(--fun); font-weight: 700; font-size: 15px; }
+.pair-input {
+  width: 100%; padding: 10px; border: 3px solid var(--line); border-radius: var(--round-sm);
+  background: var(--paper2); color: var(--ink); font-family: var(--mono); font-size: 15px;
+}
+/* Six digits, spaced out so a transcription error is visible before it is submitted. */
+.pair-input--code {
+  max-width: 12ch; font-size: 24px; letter-spacing: .3em; text-align: center;
+}
+.pair-input:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
 /* aria-live, so the result is announced rather than only seen. */
 .pair-status { margin: 0; min-height: 1.2em; color: var(--ink2); font-size: 14px; }
