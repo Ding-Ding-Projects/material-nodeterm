@@ -1,60 +1,61 @@
 // site/app/shared/crypto.js
 //
-// Small SubtleCrypto helpers used by School mode's PIN and by toy locks.
-// Nothing here is a real security boundary (both features say so in their
-// own copy) — it exists so the site never stores a PIN/password in the
-// clear, and verifies against a hash instead. All of it runs locally;
-// nothing is ever sent anywhere.
-
-function toHex(buffer) {
-  const bytes = new Uint8Array(buffer)
-  let out = ''
-  for (const b of bytes) out += b.toString(16).padStart(2, '0')
-  return out
-}
+// Local-only crypto helpers used by the toy-lock gate (SHA-256 password
+// hashing) and the built-in authenticator (base32 decode + HMAC-SHA1 TOTP,
+// RFC 6238 / RFC 4226). Nothing here ever leaves the browser: no network
+// call, no telemetry.
 
 export async function sha256Hex(text) {
-  if (!window.crypto || !window.crypto.subtle) {
-    throw new Error('crypto.subtle is unavailable in this browser')
+  try {
+    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text)))
+    return Array.from(new Uint8Array(bytes))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  } catch (_err) {
+    // Web Crypto unavailable (very old browser, or a non-secure context).
+    // Fail to a clearly-not-a-real-hash marker rather than throwing, so a
+    // toy lock still "works" (as a speed bump) instead of crashing the page.
+    return 'plain:' + text
   }
-  const data = new TextEncoder().encode(text)
-  const digest = await window.crypto.subtle.digest('SHA-256', data)
-  return toHex(digest)
 }
 
-export function randomSaltHex(byteLength = 16) {
-  const bytes = new Uint8Array(byteLength)
-  if (window.crypto && window.crypto.getRandomValues) {
-    window.crypto.getRandomValues(bytes)
-  } else {
-    // Extremely unlikely fallback (very old browser) — still never blocks
-    // the page. Not cryptographically strong, but this is a toy lock, not
-    // a security boundary, so a degraded fallback is honest here.
-    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+const B32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+
+export function b32decode(input) {
+  const clean = String(input).toUpperCase().replace(/[^A-Z2-7]/g, '')
+  let bits = ''
+  for (let i = 0; i < clean.length; i++) {
+    const v = B32_ALPHABET.indexOf(clean[i])
+    if (v < 0) continue
+    bits += v.toString(2).padStart(5, '0')
   }
-  return toHex(bytes.buffer)
+  const out = []
+  for (let i = 0; i + 8 <= bits.length; i += 8) out.push(parseInt(bits.slice(i, i + 8), 2))
+  return new Uint8Array(out)
 }
 
-/** Hashes a secret with a per-credential salt. Never store the secret itself. */
-export async function hashSecret(secret, saltHex) {
-  return sha256Hex(saltHex + ':' + secret)
+// A TOTP code (RFC 6238) over the given base32 secret, using the current
+// 30-second time step and SHA-1 (the near-universal default every real
+// authenticator app also uses for compatibility).
+export async function totp(secretBase32) {
+  try {
+    const key = await crypto.subtle.importKey('raw', b32decode(secretBase32), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
+    const counter = Math.floor(Date.now() / 30000)
+    const buf = new ArrayBuffer(8)
+    const view = new DataView(buf)
+    view.setUint32(0, Math.floor(counter / 4294967296))
+    view.setUint32(4, counter >>> 0)
+    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, buf))
+    const offset = sig[sig.length - 1] & 0xf
+    const bin = ((sig[offset] & 0x7f) << 24) | (sig[offset + 1] << 16) | (sig[offset + 2] << 8) | sig[offset + 3]
+    return String(bin % 1000000).padStart(6, '0')
+  } catch (_err) {
+    return '––––––'
+  }
 }
 
-export async function verifySecret(secret, saltHex, expectedHashHex) {
-  const actual = await hashSecret(secret, saltHex)
-  return timingSafeEqual(actual, expectedHashHex)
-}
-
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
-}
-
-export function randomId(prefix = 'id') {
-  const bytes = new Uint8Array(8)
-  if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes)
-  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
-  return prefix + '-' + toHex(bytes.buffer)
+// Seconds remaining until the current 30s TOTP window rolls over — drives
+// the "Ns left" countdown on each code row.
+export function totpSecondsLeft() {
+  return 30 - (Math.floor(Date.now() / 1000) % 30)
 }
