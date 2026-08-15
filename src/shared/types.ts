@@ -10,6 +10,28 @@ import type { ProjectKanbanGitHub } from './github-issues'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
+import type {
+  ToyLockBeginTotpInput,
+  ToyLockBeginTotpResult,
+  ToyLockConfirmTotpInput,
+  ToyLockConfirmTotpResult,
+  ToyLockCreatePasswordInput,
+  ToyLockCreateResult,
+  ToyLockRecord,
+  ToyLockUpdateInput,
+  ToyLockVerifyInput,
+  ToyLockVerifyResult
+} from './toylock'
+import type {
+  AuthenticatorAddManualInput,
+  AuthenticatorAddResult,
+  AuthenticatorCode,
+  AuthenticatorEntry,
+  AuthenticatorExportInput,
+  AuthenticatorExportResult,
+  AuthenticatorRenameInput,
+  AuthenticatorRevealResult
+} from './authenticator'
 
 export interface PtyCreateOptions {
   shell?: string
@@ -2468,6 +2490,34 @@ export interface PresenceApi {
   onPeer(listener: (diff: PeerDiff) => void): () => void
 }
 
+/** Toy locks (docs/toy-locks.md) — see src/shared/toylock.ts for why "toy" is load-bearing: this
+ *  is a for-fun UX speed bump, never security. Every method is core-bound (same machine's data
+ *  dir the workspace/settings live in — Desktop's own userData, or the Server Edition's host). */
+export interface ToylockApi {
+  list(): Promise<ToyLockRecord[]>
+  createPassword(input: ToyLockCreatePasswordInput): Promise<ToyLockCreateResult>
+  beginTotp(input: ToyLockBeginTotpInput): Promise<ToyLockBeginTotpResult>
+  confirmTotp(input: ToyLockConfirmTotpInput): Promise<ToyLockConfirmTotpResult>
+  cancelTotp(lockId: string): Promise<void>
+  update(input: ToyLockUpdateInput): Promise<ToyLockRecord | null>
+  remove(id: string): Promise<void>
+  verify(input: ToyLockVerifyInput): Promise<ToyLockVerifyResult>
+}
+
+/** The built-in authenticator (docs/authenticator.md) — arbitrary TOTP secrets kept locally,
+ *  never synced, never phoning anywhere. Core-bound, same machine as ToylockApi. */
+export interface AuthenticatorApi {
+  list(): Promise<AuthenticatorEntry[]>
+  addManual(input: AuthenticatorAddManualInput): Promise<AuthenticatorAddResult>
+  addFromUri(uri: string): Promise<AuthenticatorAddResult>
+  rename(input: AuthenticatorRenameInput): Promise<AuthenticatorEntry | null>
+  remove(id: string): Promise<void>
+  code(id: string): Promise<AuthenticatorCode | null>
+  codes(ids: string[]): Promise<Record<string, AuthenticatorCode>>
+  reveal(id: string): Promise<AuthenticatorRevealResult>
+  exportSecrets(input: AuthenticatorExportInput): Promise<AuthenticatorExportResult>
+}
+
 export interface NodeTerminalApi {
   pty: PtyApi
   workspace: WorkspaceApi
@@ -2515,6 +2565,8 @@ export interface NodeTerminalApi {
   handoff: HandoffApi
   pairing: PairingApi
   presence: PresenceApi
+  toylock: ToylockApi
+  authenticator: AuthenticatorApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */
   onMarkdownToggle(listener: () => void): () => void
   /** Fires when the user presses Cmd/Ctrl+W (close selected node). Returns unsubscribe. */

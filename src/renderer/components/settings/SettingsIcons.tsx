@@ -135,6 +135,30 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M10 6a2.6 2.6 0 0 1 0 4M11.8 4.2a5.2 5.2 0 0 1 0 7.6" />
     </>
   ),
+  // A padlock with a smile in the shackle — it is a TOY lock, and the icon should not promise
+  // security the feature explicitly disclaims.
+  toylocks: (
+    <>
+      <rect x="3.4" y="7" width="9.2" height="6.2" rx="1.6" />
+      <path d="M5.8 7V5.4a2.2 2.2 0 0 1 4.4 0V7" />
+      <path d="M6.6 9.8a1.6 1.6 0 0 0 2.8 0" />
+    </>
+  ),
+  // A shield with a 6-digit rhythm of dashes — a rotating code, not a stored password.
+  authenticator: (
+    <>
+      <path d="M8 2.4 12.4 4.2V8c0 3-2 4.8-4.4 5.6C5.6 12.8 3.6 11 3.6 8V4.2Z" />
+      <path d="M5.9 7.6h.9M7.5 7.6h1M9.2 7.6h.9M6.6 9.6h2.8" />
+    </>
+  ),
+  // A life-ring — the help desk that exists to get you out, not to answer you.
+  support: (
+    <>
+      <circle cx="8" cy="8" r="5.4" />
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M4.2 4.2 6.4 6.4M11.8 4.2 9.6 6.4M4.2 11.8 6.4 9.6M11.8 11.8 9.6 9.6" />
+    </>
+  ),
   // A clock with a counter-clockwise arrow — "go back to how it was", not "what time is it".
   history: (
     <>

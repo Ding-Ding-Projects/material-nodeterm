@@ -35,6 +35,9 @@ import { LanguageSection } from './sections/LanguageSection'
 import { SchoolModeSection } from './sections/SchoolModeSection'
 import { PersonalVocabularySection } from './sections/PersonalVocabularySection'
 import { LocalHistorySection } from './sections/LocalHistorySection'
+import { ToyLocksSection } from './sections/ToyLocksSection'
+import { AuthenticatorSection } from './sections/AuthenticatorSection'
+import { SupportTicketsSection } from './sections/SupportTicketsSection'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -122,6 +125,9 @@ export function SettingsPage({
             <SchoolModeSection isActive={active === 'school-mode'} />
             <PersonalVocabularySection isActive={active === 'vocabulary'} />
             <LocalHistorySection isActive={active === 'history'} />
+            <ToyLocksSection isActive={active === 'toylocks'} />
+            <AuthenticatorSection isActive={active === 'authenticator'} />
+            <SupportTicketsSection isActive={active === 'support'} />
           </div>
         </main>
       </SettingsSearchContext.Provider>

@@ -30,6 +30,9 @@ export type SettingsSectionId =
   | 'school-mode'
   | 'vocabulary'
   | 'history'
+  | 'toylocks'
+  | 'authenticator'
+  | 'support'
 
 export interface SettingsSectionRef {
   id: SettingsSectionId
@@ -105,6 +108,15 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'school-mode', title: 'School mode' },
       { id: 'vocabulary', title: 'Personal vocabulary' },
       { id: 'history', title: 'History' }
+    ]
+  },
+  {
+    id: 'fun',
+    title: 'Just for fun',
+    sections: [
+      { id: 'toylocks', title: 'Toy locks' },
+      { id: 'authenticator', title: 'Authenticator' },
+      { id: 'support', title: 'Support Tickets' }
     ]
   }
 ]

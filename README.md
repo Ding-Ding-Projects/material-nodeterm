@@ -190,6 +190,11 @@ write-up of every node kind.
 - **Local settings history** — every settings save (accounts, custom agents, everything
   else) is snapshotted in an isolated local git repository, labelled by what changed, and
   restorable as a new, undoable revision. See [`docs/local-history.md`](./docs/local-history.md).
+- **Toy locks & the built-in authenticator** *(Settings → Just for fun)* — a purely-for-fun,
+  opt-in password/TOTP lock on a tab, a canvas node, or an appearance setting (this is a
+  speed bump, not security — recovery is deleting the app's own local data folder), plus a
+  local, offline TOTP authenticator with in-process QR pairing. See
+  [`docs/toy-locks.md`](./docs/toy-locks.md) and [`docs/authenticator.md`](./docs/authenticator.md).
 
 Every one of these has its own article under
 [`docs/features/`](./docs/features/README.md), covering behaviour, configuration, failure

@@ -499,5 +499,27 @@ export const IPC = {
   // Local, git-backed version history for user-managed records this app owns (settings today —
   // see src/core/local-history.ts, docs/local-history.md). Registered on BOTH shells.
   historyList: 'history:list',
-  historyRestore: 'history:restore'
+  historyRestore: 'history:restore',
+  // Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a tab/node/appearance value. Core-
+  // bound: registered by BOTH src/main and src/server (core/toylocks/toylock-service.ts), so a
+  // Server Edition browser tab reaches the SAME service over the WS bridge that Electron reaches
+  // over ipcMain — see src/renderer/bridge/ws-bridge.ts's buildToylockApi.
+  toylockList: 'toylock:list',
+  toylockCreatePassword: 'toylock:create-password',
+  toylockBeginTotp: 'toylock:begin-totp',
+  toylockConfirmTotp: 'toylock:confirm-totp',
+  toylockCancelTotp: 'toylock:cancel-totp',
+  toylockUpdate: 'toylock:update',
+  toylockRemove: 'toylock:remove',
+  toylockVerify: 'toylock:verify',
+  // The built-in authenticator (docs/authenticator.md). Same core-bound registration pattern.
+  authenticatorList: 'authenticator:list',
+  authenticatorAddManual: 'authenticator:add-manual',
+  authenticatorAddUri: 'authenticator:add-uri',
+  authenticatorRename: 'authenticator:rename',
+  authenticatorRemove: 'authenticator:remove',
+  authenticatorCode: 'authenticator:code',
+  authenticatorCodes: 'authenticator:codes',
+  authenticatorReveal: 'authenticator:reveal',
+  authenticatorExportSecrets: 'authenticator:export-secrets'
 } as const

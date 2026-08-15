@@ -111,6 +111,8 @@ export function buildStubApi(): Omit<
   | 'settings'
   | 'schoolMode'
   | 'scheduledSettings'
+  | 'toylock'
+  | 'authenticator'
   | 'fs'
   | 'git'
   | 'files'
@@ -130,6 +132,11 @@ export function buildStubApi(): Omit<
   | 'userDataDir'
   | 'presence'
   | 'speech'
+  // Real over the bridge too (buildToylockApi/buildAuthenticatorApi in ws-bridge.ts) — both are
+  // core-bound: secrets live on the SAME machine the workspace/settings do (this server's own
+  // userDataDir), so a stub here would make the whole feature silently do nothing in the browser.
+  | 'toylock'
+  | 'authenticator'
 > {
   const api = {
     ssh: {
@@ -485,6 +492,8 @@ export function buildStubApi(): Omit<
     | 'settings'
     | 'schoolMode'
     | 'scheduledSettings'
+    | 'toylock'
+    | 'authenticator'
     | 'fs'
     | 'git'
     | 'files'

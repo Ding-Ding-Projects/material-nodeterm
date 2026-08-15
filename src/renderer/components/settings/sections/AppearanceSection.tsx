@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { NODE_COLORS } from '../../../state/workspace'
 import { SettingsSection } from '../SettingsSection'
@@ -5,6 +6,9 @@ import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
+import { useToyLocks } from '../../../state/toylocks'
+import { LockWizard } from '../../toylocks/LockWizard'
+import { UnlockPrompt } from '../../toylocks/UnlockPrompt'
 import {
   HIDEABLE_HEADER_BUTTONS,
   HIDEABLE_MENU_ITEMS,
@@ -77,6 +81,10 @@ function VisibilityToggles({
   )
 }
 
+/** The one "appearance value" toy locks ship on today — see docs/toy-locks.md for how to extend
+ *  the same `useToyLock`-style pattern to another appearance control. */
+const ACCENT_TARGET = { kind: 'appearance' as const, id: 'accent', label: 'Accent colour' }
+
 export function AppearanceSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   // `base`, not the effective `settings` — see TerminalSection's identical note; this section
   // edits the saved preference, never the currently-applied scheduled override.
@@ -85,6 +93,26 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
   const hiddenNodeMenuItems = useSettings((s) => s.base.hiddenNodeMenuItems)
   const hiddenHeaderButtons = useSettings((s) => s.base.hiddenHeaderButtons)
   const update = useSettings((s) => s.update)
+
+  const lockRecords = useToyLocks((s) => s.records)
+  const unlockedUntil = useToyLocks((s) => s.unlockedUntil)
+  useEffect(() => {
+    void useToyLocks.getState().refresh()
+  }, [])
+  const accentLock = lockRecords.find((r) => r.target.kind === 'appearance' && r.target.id === 'accent')
+  const accentLocked = !!accentLock && !(unlockedUntil[accentLock.id] !== undefined && Date.now() < unlockedUntil[accentLock.id])
+  const [lockWizardAnchor, setLockWizardAnchor] = useState<{ x: number; y: number } | null>(null)
+  const [unlockAnchor, setUnlockAnchor] = useState<{ x: number; y: number } | null>(null)
+
+  // 'session' duration re-locks the moment this settings section is left (the closest thing an
+  // appearance CONTROL has to "leaving the surface" — see ToyLockDurationMode's doc comment).
+  useEffect(() => {
+    if (isActive || !accentLock || accentLock.duration !== 'session') return
+    useToyLocks.getState().relock(accentLock.id)
+    // Only fires on the active→inactive transition, not on every accentLock identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive])
+
   return (
     <SettingsSection
       id="appearance"
@@ -113,21 +141,38 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
       <SearchableRow {...ROWS.accent}>
         <div className="flex items-center justify-between gap-4 py-2.5">
           <span className="text-[13px] text-text">Accent</span>
-          <div className="flex flex-wrap gap-2">
-            {NODE_COLORS.map((c) => (
+          {accentLocked ? (
+            <button
+              type="button"
+              className="toylock-btn toylock-btn--sm"
+              onClick={(e) => setUnlockAnchor({ x: e.clientX, y: e.clientY })}
+            >
+              🔒 Locked — click to unlock
+            </button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              {NODE_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={`Accent ${c}`}
+                  onClick={() => update({ accent: c })}
+                  style={{ background: c }}
+                  className={cn(
+                    'size-6 rounded-full border-2',
+                    accent === c ? 'border-text' : 'border-transparent'
+                  )}
+                />
+              ))}
               <button
-                key={c}
                 type="button"
-                aria-label={`Accent ${c}`}
-                onClick={() => update({ accent: c })}
-                style={{ background: c }}
-                className={cn(
-                  'size-6 rounded-full border-2',
-                  accent === c ? 'border-text' : 'border-transparent'
-                )}
-              />
-            ))}
-          </div>
+                className="toylock-btn toylock-btn--sm"
+                onClick={(e) => (accentLock ? setUnlockAnchor({ x: e.clientX, y: e.clientY }) : setLockWizardAnchor({ x: e.clientX, y: e.clientY }))}
+              >
+                {accentLock ? 'Manage lock…' : 'Lock this…'}
+              </button>
+            </div>
+          )}
         </div>
       </SearchableRow>
       {/* One wrapper element per row: the section body puts a divider and its own padding around
@@ -171,6 +216,18 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
           what="the appearance settings"
         />
       </SearchableRow>
+
+      {lockWizardAnchor && (
+        <LockWizard target={ACCENT_TARGET} anchor={lockWizardAnchor} onClose={() => setLockWizardAnchor(null)} />
+      )}
+      {unlockAnchor && accentLock && (
+        <UnlockPrompt
+          record={accentLock}
+          anchor={unlockAnchor}
+          onClose={() => setUnlockAnchor(null)}
+          onUnlocked={() => setUnlockAnchor(null)}
+        />
+      )}
     </SettingsSection>
   )
 }

@@ -56,6 +56,8 @@ import { createGrantsAccessor } from '../core/push-grants'
 import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
+import { startToyLockService } from '../core/toylocks/toylock-service'
+import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
 import { claudeCliCaps, type ClaudeCliCaps } from '../core/claude-cli'
@@ -557,6 +559,13 @@ export async function startServer(
       isRemoteProject: sshScopePredicate({ sshProjectIds: () => workspaceStore.sshProjectIds() })
     }
   })
+
+  // Toy locks + the built-in authenticator (docs/toy-locks.md, docs/authenticator.md). No
+  // headless/relay-specific behaviour — the plain core-bound service, same as src/main/index.ts.
+  // Secrets land as raw 0600 bytes under this server's own userDataDir (CorePlatform.sealSecret is
+  // absent here — no OS keychain on a headless Linux box — see core/secure-store.ts).
+  startToyLockService()
+  startAuthenticatorService()
 
   // Headless notification host: every core service above (incl. the loopback hook server, which
   // is its own listener and MUST run) is booted, but we bind NO public HTTP/WS listener — no
