@@ -14,6 +14,17 @@ afterEach(async () => {
   await fs.rm(userDataDir, { recursive: true, force: true })
 })
 
+/**
+ * Windows has no POSIX permission bits: `fs.chmod(0o600)` only toggles the read-only ATTRIBUTE, and
+ * a mode that sets the owner-write bit (0o600 does) clears it — so Node reports a generic writable
+ * mode (0o666) back from `stat`, never the exact bits a POSIX filesystem would hold. Assert the
+ * real invariant on win32 (still private-writable, not read-only) instead of the exact POSIX value.
+ */
+function expectOwnerWritable(mode: number): void {
+  if (process.platform === 'win32') expect(mode & 0o200).toBeTruthy()
+  else expect(mode & 0o777).toBe(0o600)
+}
+
 describe('GitHubControlStore', () => {
   it('persists an approval with a revision and mode 0600', async () => {
     const store = new GitHubControlStore(userDataDir)
@@ -35,7 +46,7 @@ describe('GitHubControlStore', () => {
       }]
     })
     const stat = await fs.stat(path.join(userDataDir, 'github-issues-control.json'))
-    expect(stat.mode & 0o777).toBe(0o600)
+    expectOwnerWritable(stat.mode)
   })
 
   it('does not let a stale client restore a revoked approval', async () => {
