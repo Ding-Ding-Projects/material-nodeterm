@@ -11,6 +11,7 @@ export type SettingsSectionId =
   | 'accounts'
   | 'custom-agents'
   | 'notifications'
+  | 'narrator'
   | 'commit'
   | 'tmux'
   | 'github-issues'
@@ -67,6 +68,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'appearance', title: 'Appearance' },
       { id: 'notch', title: 'Notch', macOnly: true },
       { id: 'notifications', title: 'Notifications' },
+      { id: 'narrator', title: 'Narrator' },
       { id: 'speech', title: 'Speech' }
     ]
   },
