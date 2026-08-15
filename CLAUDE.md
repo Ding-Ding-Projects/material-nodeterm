@@ -1841,8 +1841,14 @@ Nothing in that says "close the app", and the usual reactions (admin terminal, r
 macOS/Linux, where unlinking an open file is ordinary — so it only bites on the platform this
 project ships.
 
-`scripts/check-native-unlocked.mjs` preflights both scripts and names the exact file and the PID
-holding it. It detects the lock by opening each addon for WRITING (`r+`) and closing it — measured
+`scripts/check-build-preflight.mjs` preflights both scripts and names the exact file and the PID
+holding it. It also checks for the **Spectre-mitigated MSVC libraries**: node-pty's own
+`binding.gyp` sets `SpectreMitigation`, that component is not part of a default C++ workload, and
+without it the build dies minutes in with four copies of `MSB8040`. Deliberately not worked around
+with `/p:SpectreMitigation=false` — node-pty asks for the mitigation on purpose, and disabling it
+would ship an unmitigated native module. It reports EVERY failed precondition in one run, because
+discovering them one at a time cost three separate multi-minute builds: the locked DLL hid the
+missing Spectre libs entirely, since the rebuild never reached the compile. It detects the lock by opening each addon for WRITING (`r+`) and closing it — measured
 against a genuinely locked `conpty.node`: **rename succeeded, open-for-read succeeded, only
 open-for-write returned `EBUSY`.** The tempting proxy (can I rename it?) does not work, because
 Windows blocks DELETE on a mapped image and a same-directory rename does not need it.
