@@ -1823,6 +1823,33 @@ builds (unless `NODETERM_API_BASE` targets a local server). Schema example:
 ping to `api.nodeterm.dev/v1/telemetry` (version/OS on launch + daily), gated on
 `settings.telemetryEnabled` + the same build/DNT guards; toggle in Settings → Privacy.
 
+## Building on Windows: close the app first
+
+`npm run dist:win` and `npm run rebuild` both run electron-rebuild, which deletes and recompiles
+node-pty. **Windows refuses to delete a DLL mapped into a live process**, so any running instance —
+a `npm start` dev window, a packaged build, a leftover from a test run — makes the build fail with:
+
+```
+⨯ [Error: EPERM: operation not permitted, unlink '...
+ode-ptyuild\Release\conpty.node']
+⨯ node-gyp failed to rebuild '...
+ode-pty'
+```
+
+Nothing in that says "close the app", and the usual reactions (admin terminal, reinstall
+`node_modules`, blame antivirus) all fail because none of them is the cause. It is invisible on
+macOS/Linux, where unlinking an open file is ordinary — so it only bites on the platform this
+project ships.
+
+`scripts/check-native-unlocked.mjs` preflights both scripts and names the exact file and the PID
+holding it. It detects the lock by opening each addon for WRITING (`r+`) and closing it — measured
+against a genuinely locked `conpty.node`: **rename succeeded, open-for-read succeeded, only
+open-for-write returned `EBUSY`.** The tempting proxy (can I rename it?) does not work, because
+Windows blocks DELETE on a mapped image and a same-directory rename does not need it.
+
+Wired into `dist:win` and `rebuild`, deliberately **not** into `postinstall` — that runs
+automatically in contexts a hard stop would be more disruptive than the underlying failure.
+
 ## Atomic writes (never a bare `fs.rename`)
 
 Every store persists temp-file-then-rename. That is correct on POSIX and **silently lossy on

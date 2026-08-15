@@ -377,7 +377,11 @@ export function initStandingHost(
     for (const p of [...pool]) removeFromPool(p)
     // Host gone from the relay → stop advertising, so phones don't mint tokens against a
     // host that will never answer.
-    void removeRelayAdvertisement()
+    void removeRelayAdvertisement().then((gone) => {
+      // Not fatal — the host is already down, so nothing can be minted against it right now. But
+      // a stale advertisement outlives this process, so say so rather than leaving it silent.
+      if (!gone) console.warn('[standing-host] could not remove the relay advertisement; a phone may still offer adoption for this host')
+    })
   }
 
   function reconcile(): void {

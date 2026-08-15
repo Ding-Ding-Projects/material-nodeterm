@@ -125,6 +125,37 @@ export function renameAtomicSync(
 /** A slot that is never written, so `Atomics.wait` always waits out its full timeout. */
 const SLEEP_SLOT = new Int32Array(new SharedArrayBuffer(4))
 
+/**
+ * Delete `target`, retrying the same transient Windows codes, and treating "already gone" as
+ * success. Returns false if it is still there afterwards.
+ *
+ * Deleting has the identical Windows hazard as renaming — a scanner or sync client holding the
+ * file open makes `unlink` fail with `EPERM` — but it usually matters less, because a failed
+ * delete leaves litter and says so, where a failed rename lost the write silently.
+ *
+ * The case it matters for is a delete whose PURPOSE is to stop something happening. Removing the
+ * relay advertisement is one: it exists so phones stop minting tokens against a host that will
+ * never answer, so a delete that quietly fails leaves the user's "phone access off" unenforced.
+ *
+ * The trap this closes is not the retry, it is the reporting. Such a delete is normally written
+ * as an unlink wrapped in a bare catch commented "already absent", which is correct for the
+ * failure the author had in mind and wrong for every other one: ENOENT really is fine, and EPERM
+ * means the file is still sitting there. Only ENOENT counts as gone here.
+ */
+export async function removeAtomic(target: string): Promise<boolean> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await fs.unlink(target)
+      return true
+    } catch (e) {
+      const code = codeOf(e)
+      if (code === 'ENOENT') return true // genuinely absent — the caller's goal is met
+      if (attempt >= RETRY_DELAYS_MS.length || !TRANSIENT.has(code)) return false
+      await sleep(RETRY_DELAYS_MS[attempt])
+    }
+  }
+}
+
 /** Paired with `process.pid` in the temp name below: the counter makes a name unique WITHIN this
  *  process, the pid makes it unique ACROSS processes (it restarts at 0 in every new one). */
 let writeSeq = 0

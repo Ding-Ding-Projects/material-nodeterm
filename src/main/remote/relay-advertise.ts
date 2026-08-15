@@ -13,7 +13,7 @@
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
-import { renameAtomic, tempNameFor } from '../../core/fs-atomic'
+import { removeAtomic, renameAtomic, tempNameFor } from '../../core/fs-atomic'
 
 const FILE = path.join(os.homedir(), '.nodeterm', 'relay.json')
 
@@ -43,11 +43,16 @@ export async function writeRelayAdvertisement(ad: RelayAdvertisement): Promise<v
   }
 }
 
-/** Remove the advertisement (host stopped / toggle off) so phones stop offering adoption. */
-export async function removeRelayAdvertisement(): Promise<void> {
-  try {
-    await fs.unlink(FILE)
-  } catch {
-    // Already absent — fine.
-  }
+/**
+ * Remove the advertisement (host stopped / toggle off) so phones stop offering adoption.
+ *
+ * Returns false if the file is still there. That distinction is the point: this used to be an
+ * unlink in a bare catch commented "already absent — fine", which is true of ENOENT and false of
+ * everything else. On Windows a scanner or sync client holding the file open makes unlink fail
+ * with EPERM, and the old shape read that as success — leaving a live advertisement on disk after
+ * the user turned phone access OFF, so phones keep minting tokens against a host that will never
+ * answer. That is precisely what removing it is for.
+ */
+export async function removeRelayAdvertisement(): Promise<boolean> {
+  return removeAtomic(FILE)
 }

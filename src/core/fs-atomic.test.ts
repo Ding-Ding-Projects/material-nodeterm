@@ -8,7 +8,7 @@ import { mkdtemp, readFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { renameAtomic, renameAtomicSync, writeFileAtomic } from './fs-atomic'
+import { removeAtomic, renameAtomic, renameAtomicSync, writeFileAtomic } from './fs-atomic'
 
 let dir: string
 beforeEach(async () => {
@@ -223,5 +223,51 @@ describe('writeFileAtomic', () => {
     await Promise.all([writeFileAtomic(target, a), writeFileAtomic(target, b)])
     const got = await readFile(target, 'utf-8')
     expect([a, b]).toContain(got)
+  })
+})
+
+describe('removeAtomic', () => {
+  it('reports success when the file is genuinely gone', async () => {
+    const f = join(dir, 'gone.json')
+    writeFileSync(f, 'x')
+    expect(await removeAtomic(f)).toBe(true)
+  })
+
+  it('treats ENOENT as success — the caller wanted it absent and it is', async () => {
+    expect(await removeAtomic(join(dir, 'never-existed.json'))).toBe(true)
+  })
+
+  it('reports FAILURE when the file is still there', async () => {
+    // The whole point. A delete whose purpose is to stop something happening — the relay
+    // advertisement, so phones stop minting tokens against a host that is off — must not report
+    // success while the file sits there. The old shape was an unlink in a bare catch commented
+    // "already absent", which is true of ENOENT and false of every other code.
+    vi.spyOn(fs, 'unlink').mockImplementation((async () => {
+      throw errWithCode('EPERM')
+    }) as typeof fs.unlink)
+    expect(await removeAtomic(join(dir, 'held-open.json'))).toBe(false)
+  })
+
+  it('retries a transient lock before giving up', async () => {
+    const f = join(dir, 'busy.json')
+    writeFileSync(f, 'x')
+    const real = fs.unlink
+    let calls = 0
+    vi.spyOn(fs, 'unlink').mockImplementation((async (p: never) => {
+      if (++calls <= 2) throw errWithCode('EBUSY')
+      return (real as (p: never) => Promise<void>)(p)
+    }) as typeof fs.unlink)
+    expect(await removeAtomic(f)).toBe(true)
+    expect(calls).toBe(3)
+  })
+
+  it('does not spend the retry budget on an error waiting cannot fix', async () => {
+    let calls = 0
+    vi.spyOn(fs, 'unlink').mockImplementation((async () => {
+      calls++
+      throw errWithCode('EISDIR')
+    }) as typeof fs.unlink)
+    expect(await removeAtomic(join(dir, 'a-directory'))).toBe(false)
+    expect(calls).toBe(1)
   })
 })

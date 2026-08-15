@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "test:unit": "vitest run test/remote",
-    "rebuild": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
+    "rebuild": "node scripts/check-native-unlocked.mjs && node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
     "server:build": "esbuild src/server/main.ts --bundle --platform=node --format=cjs --outfile=out/server/main.cjs --external:node-pty --external:ws --external:smart-whisper --tsconfig=tsconfig.node.json",
     "server:start": "node out/server/main.cjs",
     "server:dev": "npm run build && npm run server:build && node out/server/main.cjs",
@@ -30,7 +30,7 @@
     "check:app-contract": "node scripts/check-app-contract.mjs",
     "dist": "npm run make-icon && npm run build && electron-builder --mac --arm64 -c.mac.identity=null -c.mac.notarize=false",
     "dist:linux": "npm run make-icon && npm run build && electron-builder --linux",
-    "dist:win": "npm run make-icon && npm run build && electron-builder --win squirrel --x64 --publish never",
+    "dist:win": "node scripts/check-native-unlocked.mjs && npm run make-icon && npm run build && electron-builder --win squirrel --x64 --publish never",
     "release": "npm run make-icon && npm run build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper"
   },

@@ -66,6 +66,13 @@ need it too, and wire it in the same change.
 
 ## House rules
 
+- **Close the app before `npm run dist:win` or `npm run rebuild`.** Both delete and recompile
+  node-pty, and Windows will not let you delete a DLL that a live process has loaded — so a dev
+  window you forgot about makes the build die with an `EPERM` about a `.node` file that says
+  nothing about the real cause. A preflight now names the file and the PID holding it; if you see
+  it, close that instance rather than reaching for an admin terminal or reinstalling
+  `node_modules`, neither of which is the problem. This cannot happen on macOS or Linux.
+
 - **Never publish a file with a bare `fs.rename`.** Use `renameAtomic` or `writeFileAtomic` from
   `src/core/fs-atomic.ts`. On Windows a rename fails with `EPERM` whenever anything has the
   destination open — Defender scanning the file you just wrote, the search indexer, OneDrive — so
