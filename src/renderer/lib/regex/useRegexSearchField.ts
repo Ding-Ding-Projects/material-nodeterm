@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { escapeForRegex } from './engine'
+import { clampFilterCandidate, escapeForRegex } from './engine'
 import { compileForInlineFilter } from './safety'
 
 export type SearchMode = 'text' | 'regex'
@@ -98,7 +98,10 @@ export function useRegexSearchField(initial?: {
   }, [mode, pattern, flags])
 
   const test = useCallback(
-    (candidate: string) => {
+    (candidateRaw: string) => {
+      // Every inline filter surface (menus, Explorer, palette, settings rows) runs against a
+      // SHORT candidate — clamp it here, once, rather than trusting every caller to remember.
+      const candidate = clampFilterCandidate(candidateRaw)
       if (mode === 'text') {
         const q = query.trim().toLowerCase()
         return q === '' || candidate.toLowerCase().includes(q)

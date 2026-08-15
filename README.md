@@ -151,6 +151,11 @@ opencode / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂
   from your phone — plus push notifications and a mobile board view.
 - **Command palette** (⌘K), **file explorer** (⌘⇧E), **markdown view** (⌘M),
   **undo/redo**, and a native macOS dark UI.
+- **Regex builder, everywhere search is** — a real in-app builder (guided construction,
+  live matches, capture groups, safe against catastrophic backtracking) anchored right
+  beside the terminal find bar, the command palette, the Explorer filter, settings
+  search, and any filterable context menu — plain text stays the default, regex is one
+  click away. See [`docs/regex-builder.md`](./docs/regex-builder.md).
 - **Auto-update & in-app announcements** — the app checks a self-hosted feed and
   surfaces a "Restart to update" banner and product news.
 
