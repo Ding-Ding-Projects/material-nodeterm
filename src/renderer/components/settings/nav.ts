@@ -3,6 +3,8 @@ export type SettingsSectionId =
   | 'shell'
   | 'behavior'
   | 'appearance'
+  | 'appearance-editor'
+  | 'app-identity'
   | 'notch'
   | 'phone'
   | 'speech'
@@ -65,6 +67,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     title: 'Interface',
     sections: [
       { id: 'appearance', title: 'Appearance' },
+      { id: 'appearance-editor', title: 'Appearance editor' },
+      { id: 'app-identity', title: 'App name & logo' },
       { id: 'notch', title: 'Notch', macOnly: true },
       { id: 'notifications', title: 'Notifications' },
       { id: 'speech', title: 'Speech' }

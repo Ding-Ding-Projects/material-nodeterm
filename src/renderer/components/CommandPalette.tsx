@@ -107,7 +107,11 @@ export function CommandPalette({
 
   return createPortal(
     <div className="palette-overlay" onClick={onClose}>
-      <div className="palette" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="palette"
+        data-appearance-id="app:command-palette"
+        onClick={(e) => e.stopPropagation()}
+      >
         <input
           className="palette__input"
           autoFocus

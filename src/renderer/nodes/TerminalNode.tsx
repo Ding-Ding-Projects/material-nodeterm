@@ -150,6 +150,7 @@ import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
 import { AgentMascot } from './AgentMascot'
 import { connectHostAttachment } from '../lib/sshAttachments'
+import { appearanceId } from '../lib/appearance/registry'
 
 /** How long a remote terminal waits for its project's ControlMaster before giving up and showing
  *  the offline overlay. Sized for the SLOW-but-fine case (a cold app load whose connect is still
@@ -4042,6 +4043,7 @@ export function TerminalNode({
         ) : (
           <span
             className="term-node__title-text nodrag"
+            data-appearance-id={appearanceId('node', id)}
             title="Click to rename"
             onClick={() => {
               titleEditStartRef.current = data.title as string

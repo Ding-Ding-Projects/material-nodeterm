@@ -69,6 +69,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
       />
       <div
         ref={menuRef}
+        data-appearance-id="app:context-menu"
         className={`ctx-menu${scroll ? ' ctx-menu--scroll' : ''}`}
         style={menuStyle}
         onClick={(e) => e.stopPropagation()}

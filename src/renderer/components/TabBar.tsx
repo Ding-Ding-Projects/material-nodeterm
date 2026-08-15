@@ -12,6 +12,10 @@ import { sessionCount, sessionForProject, useProjectSession } from '../session/s
 import { tabClickAction } from '../session/relay-tab'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { IconCanvasView, IconKanban } from './icons'
+import { appearanceId } from '../lib/appearance/registry'
+import { openAppearanceEditor } from '../state/appearanceEditorHost'
+import { resolveAppDisplayName } from '@shared/appIdentity'
+import { resolveLogoPreset } from './appearance/BrandMark'
 import {
   ALL_PERMISSION_MODES,
   PERMISSION_MODE_LABELS,
@@ -105,6 +109,13 @@ export function TabBar({
   const [acctOpen, setAcctOpen] = useState(false)
   // Whether the caret menu's "Default permission mode" group is expanded (same idiom as acctOpen).
   const [modeOpen, setModeOpen] = useState(false)
+  // Per-tab DOM refs, so the caret menu's "Edit tab appearance…" row can anchor the (non-modal)
+  // appearance editor to the actual tab element rather than the caret button that opened the menu.
+  const tabElRef = useRef<Record<string, HTMLElement | null>>({})
+  // The user's chosen display name (docs/app-rename.md), or the shipped name if unset — the brand
+  // mark is the one piece of chrome that always introduces the app.
+  const displayName = useSettings((s) => resolveAppDisplayName(s.settings.appDisplayName))
+  const appLogo = useSettings((s) => s.settings.appLogo)
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   // The mode a project without an override falls back to, shown in the "Use global (…)" entry.
   const globalMode = useSettings((s) => s.settings.claudePermissionMode)
@@ -198,27 +209,22 @@ export function TabBar({
 
       <div className="tabbar">
         <div className="brand">
-          <svg className="brand__mark" viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">
-            <defs>
-              <linearGradient id="ntg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#a38dff" />
-                <stop offset="1" stopColor="#622994" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M13 12 L31 24 L13 36"
-              fill="none"
-              stroke="url(#ntg)"
-              strokeWidth="5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <circle cx="13" cy="12" r="3.6" fill="#a38dff" />
-            <circle cx="13" cy="36" r="3.6" fill="#a38dff" />
-            <circle cx="31" cy="24" r="3.6" fill="#fff" />
-            <rect x="33.5" y="32.5" width="10.5" height="5" rx="2.5" fill="#a38dff" />
-          </svg>
-          <span className="brand__name">nodeterm</span>
+          <span className="brand__mark" aria-hidden="true">
+            {appLogo.selection === 'custom' && appLogo.customImage ? (
+              <img
+                src={appLogo.customImage.dataUrl}
+                width={26}
+                height={26}
+                alt=""
+                style={{ borderRadius: 6, objectFit: 'contain' }}
+              />
+            ) : (
+              resolveLogoPreset(appLogo.selection).render(26)
+            )}
+          </span>
+          <span className="brand__name" data-appearance-id="app:tabbar-brand">
+            {displayName}
+          </span>
         </div>
 
         <div
@@ -249,9 +255,31 @@ export function TabBar({
             return (
               <div
                 key={p.id}
+                data-appearance-id={appearanceId('tab', p.id)}
+                ref={(el) => {
+                  tabElRef.current[p.id] = el
+                }}
                 className={`tab${active ? ' active' : ''}${p.unavailable ? ' unavailable' : ''}${dropId === p.id ? ' is-drop-before' : ''}`}
                 style={active ? { color: p.color } : undefined}
                 draggable={editingId !== p.id}
+                // Normal right-click keeps tab management (the same caret menu, now with "Edit tab
+                // appearance…" added to it); Shift+right-click opens the appearance editor
+                // directly, anchored to this tab.
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (editingId) return
+                  if (e.shiftKey) {
+                    openAppearanceEditor(
+                      appearanceId('tab', p.id),
+                      p.name,
+                      'tab',
+                      e.currentTarget as HTMLElement
+                    )
+                    return
+                  }
+                  openMenu(p.id, e.currentTarget as HTMLElement)
+                }}
                 onDragStart={(e) => {
                   e.dataTransfer.effectAllowed = 'move'
                   setDragId(p.id)
@@ -380,6 +408,22 @@ export function TabBar({
             onClick={(e) => e.stopPropagation()}
           >
             <button onClick={() => startRename(menuProject.id, menuProject.name)}>Rename</button>
+            <button
+              onClick={() => {
+                const anchor = tabElRef.current[menuProject.id]
+                closeMenu()
+                if (anchor) {
+                  openAppearanceEditor(
+                    appearanceId('tab', menuProject.id),
+                    menuProject.name,
+                    'tab',
+                    anchor
+                  )
+                }
+              }}
+            >
+              Edit tab appearance…
+            </button>
             <button
               onClick={() => {
                 onSetFolder(menuProject.id)

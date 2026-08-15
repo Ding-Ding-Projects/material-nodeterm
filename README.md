@@ -262,6 +262,19 @@ npm run server:dev # build + run the browser Server Edition (needs Node 22 + tmu
 See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, and the design docs
 under [`docs/`](./docs) for deeper notes.
 
+### 🎨 Appearance & identity
+
+- [**Appearance editor**](./docs/appearance.md) — right-click (or Shift+right-click on a tab)
+  any tab or node title for a non-modal, per-element typography/colour editor, with presets you
+  can export and import.
+- [**Colour picker**](./docs/colour-picker.md) — the infinite spectrum picker behind every colour
+  field in the app, with a HEX/RGB/HSL/HSV/HWB/Lab/LCH/OKLab/OKLCH/CMYK translator and a
+  contrast readout.
+- [**App rename**](./docs/app-rename.md) — give the app whatever display name you like; it never
+  touches the app's real identity (data directory, installer, update feed).
+- [**App logo**](./docs/app-logo.md) — pick a shipped colour variant of the mark or upload your
+  own image, processed entirely on your machine.
+
 ## 🤝 Contributing
 
 Issues and pull requests are welcome. **Start with [CONTRIBUTING.md](./CONTRIBUTING.md)** —
