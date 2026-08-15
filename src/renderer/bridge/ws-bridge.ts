@@ -36,6 +36,8 @@ import {
   type PtyApi,
   type PtyCreateOptions,
   type SettingsApi,
+  type SchoolModeApi,
+  type SchoolModeRecord,
   type ClaudeUsage,
   type ProviderUsage,
   type RemoteAccountUsage,
@@ -202,11 +204,12 @@ const AI_NAMING_UNAVAILABLE = {
   message: 'AI naming is not available in the server edition yet'
 }
 
-/** Build the real `pty` / `workspace` / `settings` namespaces (plus the top-level `userDataDir`)
- *  over an RpcClient, mirroring the preload's invoke(→request)/send(→cast) split exactly. */
+/** Build the real `pty` / `workspace` / `settings` / `schoolMode` namespaces (plus the top-level
+ *  `userDataDir`) over an RpcClient, mirroring the preload's invoke(→request)/send(→cast) split
+ *  exactly. */
 export function buildRealApi(
   client: RpcClient
-): Pick<NodeTerminalApi, 'pty' | 'workspace' | 'settings' | 'userDataDir'> {
+): Pick<NodeTerminalApi, 'pty' | 'workspace' | 'settings' | 'schoolMode' | 'userDataDir'> {
   const pty: PtyApi = {
     create: (options: PtyCreateOptions) =>
       client.request(IPC.ptyCreate, options) as ReturnType<PtyApi['create']>,
@@ -288,12 +291,27 @@ export function buildRealApi(
     save: (s: Settings) => client.request(IPC.settingsSave, s) as Promise<void>
   }
 
+  // School mode is APP-GLOBAL like `settings` (it describes THIS machine, shared across whatever
+  // local apps read `~/.nodeterm/shared/`), so the Server Edition serves the same real handlers
+  // core/school-mode.ts registers on every shell.
+  const schoolMode: SchoolModeApi = {
+    load: () => client.request(IPC.schoolModeLoad) as Promise<SchoolModeRecord>,
+    enable: (pin?: string) => client.request(IPC.schoolModeEnable, pin) as Promise<SchoolModeRecord>,
+    disable: (pin: string) =>
+      client.request(IPC.schoolModeDisable, pin) as ReturnType<SchoolModeApi['disable']>,
+    rename: (name: string) => client.request(IPC.schoolModeRename, name) as Promise<SchoolModeRecord>,
+    changePin: (currentPin: string, nextPin: string) =>
+      client.request(IPC.schoolModeChangePin, currentPin, nextPin) as Promise<boolean>,
+    hasCredential: () => client.request(IPC.schoolModeHasCredential) as Promise<boolean>,
+    onChanged: (cb) => client.subscribe(IPC.schoolModeChanged, cb as Listener)
+  }
+
   // The server's data dir, over the SAME channel the desktop preload uses. It is the writable base
   // the worktree dialog derives its default path from — a stub returning '' would suggest
   // `/worktrees/…` at the filesystem root (the server usually runs as root, and git would create it).
   const userDataDir = (): Promise<string> => client.request(IPC.appUserDataDir) as Promise<string>
 
-  return { pty, workspace, settings, userDataDir }
+  return { pty, workspace, settings, schoolMode, userDataDir }
 }
 
 export function buildGitHubApi(

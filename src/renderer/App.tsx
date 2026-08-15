@@ -2,9 +2,12 @@ import { useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { Canvas } from './canvas/Canvas'
 import { PromptDialogHost } from './components/promptDialog'
+import { DimSumSurprise } from './components/DimSumSurprise'
 import { SessionProvider } from './session/session'
 import { localSession } from './session/localSession'
 import { useSettings } from './state/settings'
+import { useSchoolMode } from './state/schoolMode'
+import { usePersonalVocabulary } from './state/personalVocabulary'
 import { useViewMode } from './state/viewMode'
 import { setWebglEnabled } from './terminal/webgl-budget'
 import { applyRendererMode } from './terminal/renderer-mode'
@@ -57,6 +60,14 @@ export default function App() {
     useViewMode.getState().setDefaultView(defaultView === 'kanban' ? 'kanban' : 'canvas')
   }, [defaultView])
 
+  // Hydrate the shared School-mode record once, at the root — every surface (Settings, the
+  // dim-sum surprise, the personal-vocabulary boundary) reads the store this seeds rather than
+  // calling the IPC directly, so a change made by ANOTHER app/window applies live everywhere.
+  useEffect(() => {
+    void useSchoolMode.getState().init()
+    usePersonalVocabulary.getState().hydrate()
+  }, [])
+
   return (
     <SessionProvider session={localSession}>
       <ReactFlowProvider>
@@ -64,6 +75,7 @@ export default function App() {
         {/* In-app window.prompt replacement (Electron has no prompt); driven by promptDialog(). */}
         <PromptDialogHost />
       </ReactFlowProvider>
+      <DimSumSurprise />
     </SessionProvider>
   )
 }

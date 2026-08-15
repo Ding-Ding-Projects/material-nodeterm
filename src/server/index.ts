@@ -13,6 +13,7 @@ import type { ServerConfig } from './config'
 
 import { initPlatform } from '../core/platform'
 import { SettingsStore } from '../core/settings-store'
+import { SchoolModeStore } from '../core/school-mode'
 import { WorkspaceStore } from '../core/workspace-store'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
@@ -154,11 +155,14 @@ export async function startServer(
 
   // Core services — same construction + registration order as src/main/index.ts.
   const settingsStore = new SettingsStore()
+  const schoolModeStore = new SchoolModeStore()
   const ptyManager = new PtyManager()
   const workspaceStore = new WorkspaceStore()
 
   settingsStore.init()
   settingsStore.registerIpc()
+  await schoolModeStore.init()
+  schoolModeStore.registerIpc()
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()
   workspaceStore.registerIpc()

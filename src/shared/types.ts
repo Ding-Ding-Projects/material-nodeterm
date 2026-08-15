@@ -1145,6 +1145,46 @@ export interface SettingsApi {
   save(settings: Settings): Promise<void>
 }
 
+/**
+ * The shared "School mode" record — a self-imposed, non-security, user-experience switch that
+ * lives OUTSIDE any single app's own settings.json (see core/school-mode.ts). It is deliberately
+ * separate from `Settings`: several apps on the same machine can read/honor one shared switch,
+ * and it survives a per-app data reset.
+ */
+export interface SchoolModeRecord {
+  version: 1
+  enabled: boolean
+  /** User-chosen display name, shown everywhere instead of the shipped "School mode" name once
+   *  renamed. Defaults to the shipped name until the user changes it. */
+  name: string
+}
+
+/** The `window.nodeTerminal.schoolMode` surface. Every method resolves/rejects — a caller never
+ *  needs to distinguish "not yet loaded" from "off": `load()` always answers a real record. */
+export interface SchoolModeApi {
+  /** Current record. */
+  load(): Promise<SchoolModeRecord>
+  /** Turn the mode ON. `pin` is REQUIRED only the first time ever (no stored credential exists
+   *  yet) and establishes the unlock PIN; every later call ignores it. There is deliberately no
+   *  PIN check to ENTER the mode — only to leave it, per the "self-imposed speed bump" contract. */
+  enable(pin?: string): Promise<SchoolModeRecord>
+  /** Turn the mode OFF. Requires the correct PIN, verified against a stored hash (never a stored
+   *  plaintext PIN). `ok:false` names the reason without leaking anything about the credential. */
+  disable(pin: string): Promise<{ ok: true; record: SchoolModeRecord } | { ok: false; error: string }>
+  /** Rename the mode's display name. No PIN required — renaming carries no security meaning. */
+  rename(name: string): Promise<SchoolModeRecord>
+  /** Change the unlock PIN. Requires the current one; resolves `false` on a wrong current PIN or
+   *  an invalid new one (never throws for that — only for genuine I/O failure). */
+  changePin(currentPin: string, nextPin: string): Promise<boolean>
+  /** Whether an unlock PIN has ever been set on this machine (so the UI knows whether the next
+   *  `enable()` call needs one, and can label the very-first-enable flow accordingly). */
+  hasCredential(): Promise<boolean>
+  /** Fires whenever the shared record changes, INCLUDING a change written by another process
+   *  watching the same shared file (another app, a second window) — this is what makes the mode
+   *  apply live with no restart. Returns unsubscribe. */
+  onChanged(cb: (record: SchoolModeRecord) => void): () => void
+}
+
 /** A downloadable whisper model plus its on-disk status, as returned by `speech.models()`. */
 export interface SpeechModelInfo extends WhisperModelInfo {
   downloaded: boolean
@@ -2182,6 +2222,7 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   dialog: DialogApi
   settings: SettingsApi
+  schoolMode: SchoolModeApi
   speech: SpeechApi
   ssh: SshApi
   sshProject: SshProjectApi

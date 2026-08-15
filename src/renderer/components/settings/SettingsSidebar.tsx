@@ -1,6 +1,7 @@
 import { cn } from '@renderer/ui/cn'
 import { Input } from '@renderer/ui/Input'
 import { visibleSettingsGroups, type SettingsSectionId } from './nav'
+import { useSchoolMode } from '../../state/schoolMode'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 const GROUPS = visibleSettingsGroups(isMac)
@@ -21,6 +22,9 @@ export function SettingsSidebar({
   onClose: () => void
 }): React.JSX.Element {
   const hasQuery = query.trim() !== ''
+  // Once School mode is renamed, the shipped "School mode" label must never surface anywhere —
+  // this is the one spot the sidebar nav's otherwise-static section titles need a live override.
+  const schoolModeName = useSchoolMode((s) => s.name)
   return (
     <aside className="flex w-[256px] shrink-0 flex-col border-r border-border bg-panel">
       <div
@@ -74,8 +78,9 @@ export function SettingsSidebar({
               {group.title}
             </p>
             {group.sections.map((s) => {
+              const label = s.id === 'school-mode' ? schoolModeName : s.title
               const isActive = activeSectionId === s.id
-              const dimmed = hasQuery && !matchesQuery(query, { title: s.title })
+              const dimmed = hasQuery && !matchesQuery(query, { title: label })
               return (
                 <button
                   key={s.id}
@@ -98,7 +103,7 @@ export function SettingsSidebar({
                   >
                     <SectionIcon id={s.id} />
                   </span>
-                  <span className="truncate">{s.title}</span>
+                  <span className="truncate">{label}</span>
                 </button>
               )
             })}

@@ -119,7 +119,19 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
     </>
   ),
   updates: <path d="M8 2.6v7M5 6.6 8 9.6l3-3M3.6 12.6h8.8" />,
-  privacy: <path d="M8 2.4 12.4 4.2V8c0 3-2 4.8-4.4 5.6C5.6 12.8 3.6 11 3.6 8V4.2Z" />
+  privacy: <path d="M8 2.4 12.4 4.2V8c0 3-2 4.8-4.4 5.6C5.6 12.8 3.6 11 3.6 8V4.2Z" />,
+  'school-mode': (
+    <>
+      <path d="M2.4 5.6 8 3l5.6 2.6L8 8.2 2.4 5.6Z" />
+      <path d="M4.4 6.8v3c0 1 1.6 2 3.6 2s3.6-1 3.6-2v-3M13.6 5.6v4.4" />
+    </>
+  ),
+  vocabulary: (
+    <>
+      <path d="M4 3h6.4L13 5.6V13H4z" />
+      <path d="M10.4 3v2.6H13M6 8h4M6 10.4h4" />
+    </>
+  )
 }
 
 export function SectionIcon({ id }: { id: SettingsSectionId }): React.JSX.Element {

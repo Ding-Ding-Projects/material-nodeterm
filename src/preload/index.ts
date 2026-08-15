@@ -142,6 +142,15 @@ const api: NodeTerminalApi = {
     load: () => ipcRenderer.invoke(IPC.settingsLoad),
     save: (settings) => ipcRenderer.invoke(IPC.settingsSave, settings)
   },
+  schoolMode: {
+    load: () => ipcRenderer.invoke(IPC.schoolModeLoad),
+    enable: (pin) => ipcRenderer.invoke(IPC.schoolModeEnable, pin),
+    disable: (pin) => ipcRenderer.invoke(IPC.schoolModeDisable, pin),
+    rename: (name) => ipcRenderer.invoke(IPC.schoolModeRename, name),
+    changePin: (currentPin, nextPin) => ipcRenderer.invoke(IPC.schoolModeChangePin, currentPin, nextPin),
+    hasCredential: () => ipcRenderer.invoke(IPC.schoolModeHasCredential),
+    onChanged: subscribe(IPC.schoolModeChanged)
+  },
   githubIssues: {
     subscribe: (projectId) => ipcRenderer.invoke(IPC.githubIssuesSubscribe, { projectId }),
     unsubscribe: async (projectId) => {

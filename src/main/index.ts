@@ -16,6 +16,7 @@ import { PtyManager } from '../core/pty-manager'
 import { WorkspaceStore } from '../core/workspace-store'
 import { WorkspaceWatcher } from '../core/workspace-watcher'
 import { SettingsStore } from '../core/settings-store'
+import { SchoolModeStore } from '../core/school-mode'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
 import { GitService } from '../core/git-service'
@@ -217,6 +218,7 @@ function isSafeExternalUrl(url: unknown): url is string {
 }
 
 const settingsStore = new SettingsStore()
+const schoolModeStore = new SchoolModeStore()
 const sshStore = new SshStore()
 const ptyManager = new PtyManager()
 // Dictation: local whisper.cpp models live under userData, one dir per install (same convention
@@ -529,6 +531,8 @@ app.whenReady().then(async () => {
 
   settingsStore.init()
   settingsStore.registerIpc()
+  await schoolModeStore.init()
+  schoolModeStore.registerIpc()
   sshStore.registerIpc()
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()

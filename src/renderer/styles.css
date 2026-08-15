@@ -10344,3 +10344,81 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- Dim-sum surprise (components/DimSumSurprise.tsx) ----
+   Non-blocking, auto-dismissing, bottom-right so it never competes with the bottom-left pills
+   cluster or the sessions sidebar. z-index sits above the canvas/kanban board (25/26) but below
+   every modal surface (ConfirmDialog/palette at 70) — it must never trap focus or cover a dialog. */
+.dimsum-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 300px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(var(--popover-rgb), 0.98);
+  border: 1px solid rgba(var(--tint-rgb), 0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, calc(0.5 * var(--shadow-k)));
+  color: var(--text-strong);
+  pointer-events: auto;
+  animation: dimsum-toast-in 220ms ease-out;
+}
+.dimsum-toast__image {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+.dimsum-toast__body {
+  min-width: 0;
+}
+.dimsum-toast__eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(var(--tint-rgb), 0.5);
+}
+.dimsum-toast__name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dimsum-toast__close {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border: none;
+  background: transparent;
+  color: rgba(var(--tint-rgb), 0.5);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dimsum-toast__close:hover {
+  background: rgba(var(--tint-rgb), 0.08);
+  color: var(--text-strong);
+}
+@keyframes dimsum-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dimsum-toast {
+    animation: none;
+  }
+}
