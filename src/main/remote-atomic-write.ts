@@ -39,13 +39,22 @@ export function remoteAtomicWrite(
   path: string,
   options: RemoteAtomicWriteOptions = {}
 ): RemoteAtomicWrite {
-  const temporaryPath = `${path}.${randomUUID()}.tmp`
+  const parentPath = remoteDirname(path)
+  const temporaryLeaf = `.nodeterm-${randomUUID()}.tmp`
+  // Keep the temp beside the target so mv remains one-filesystem atomic, but do not extend the
+  // target leaf: a valid NAME_MAX-length filename plus `.UUID.tmp` cannot be created at all.
+  const temporaryPath =
+    parentPath === '/'
+      ? `/${temporaryLeaf}`
+      : parentPath === '.'
+        ? temporaryLeaf
+        : `${parentPath}/${temporaryLeaf}`
   const target = quoteRemotePath(path)
   const temporary = quoteRemotePath(temporaryPath)
   const prefix = options.restrictPermissions ? 'umask 077; ' : ''
   const parent = options.makeParent === false
     ? ''
-    : `mkdir -p -- ${quoteRemotePath(remoteDirname(path))} && `
+    : `mkdir -p -- ${quoteRemotePath(parentPath)} && `
   const protect = options.chmod600 ? ` && chmod 600 -- ${temporary}` : ''
   const command =
     `${prefix}${parent}{ cat > ${temporary}${protect} && mv -f -- ${temporary} ${target}; ` +

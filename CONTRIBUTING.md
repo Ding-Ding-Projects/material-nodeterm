@@ -92,7 +92,8 @@ need it too, and wire it in the same change.
   for this and will fail your PR; `docs/atomic-writes.md` explains why the retry is safe. Every
   temp/part staging name must also be unique per call across processes and cleaned by its owner —
   including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot
-  see.
+  see. Keep a remote temp's own leaf bounded: extending an already-valid maximum-length target leaf
+  with a UUID suffix turns an atomic write into a guaranteed `ENAMETOOLONG` failure.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.
