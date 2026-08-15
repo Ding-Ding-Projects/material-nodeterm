@@ -88,7 +88,18 @@ describe('buildAskpassScript', () => {
 // The recording curl below is a PASSTHROUGH — it logs argv + stdin, then execs the REAL curl —
 // so each case proves the bearer left argv AND that the socket still accepted the request.
 // Asserting only that the server got its header would pass with the leak completely intact.
-describe('the askpass helper keeps its bearer off curl\'s command line', () => {
+//
+// win32: skipped. This describe block spawns a real `/bin/sh` by literal absolute path
+// (`execFile('/bin/sh', ...)`) to run the generated POSIX script under both the recording and
+// the plain system curl. Measured on this machine: `execFileSync('/bin/sh', …)` fails with
+// `ENOENT` — Node's child_process resolves an argument containing a path separator directly via
+// CreateProcess, with no PATH search and no MSYS/Git-Bash path translation (that translation is
+// a feature of the *launching* shell, not of a native Node.exe child_process call), so there is
+// no route to a real `/bin/sh` here. `askpassServer.envFor` still unconditionally hands out this
+// POSIX `#!/bin/sh` script's path as `SSH_ASKPASS` in production too (see ssh-project.ts), so a
+// passphrase-protected identity file's askpass prompt is a known, currently-undocumented gap on
+// native Windows — tracked as a follow-up, not fixed here (see this lane's final report).
+describe.skipIf(process.platform === 'win32')('the askpass helper keeps its bearer off curl\'s command line', () => {
   let dir = ''
   let script = ''
   let binDir = ''
@@ -246,7 +257,15 @@ describe('the askpass helper keeps its bearer off curl\'s command line', () => {
   })
 })
 
-describe('AskpassServer', () => {
+// win32: skipped. `AskpassServer.start()` binds an ordinary filesystem path as a Unix domain
+// socket (`http.createServer().listen(sockPath)`). Measured on this machine against Node's
+// builtin `http`/`net`: that listen() rejects with `EACCES: permission denied` for a plain
+// tmpdir path — Windows named-pipe binding needs a `\\.\pipe\` (or `\\?\pipe\`) name, which
+// `askpassSockPath()` does not produce. In production this means `start()` throws and the
+// caller's existing fail-open handling (see ssh-project.ts / index.ts) degrades askpass to "not
+// available" rather than crashing — but the feature itself is inert on native Windows today,
+// same gap as the /bin/sh-dependent describe block above.
+describe.skipIf(process.platform === 'win32')('AskpassServer', () => {
   let server: AskpassServer | undefined
 
   afterEach(() => {

@@ -262,8 +262,13 @@ describe('revokeDevice', () => {
     expect(keys).toBe(`${KEY_OTHER}\n${KEY_B}\n`)
     expect(deviceIds()).toEqual(['dev-b'])
     expect(agentJson().hostId).toBe('host-keep-me')
-    expect(statSync(AUTH_KEYS).mode & 0o777).toBe(0o600)
-    expect(statSync(AGENT_JSON).mode & 0o777).toBe(0o600)
+    // Windows has no owner/group/other split: fs.chmod there can only clear/set a single
+    // writable bit (mapped to the read-only DOS attribute), so 0o600's owner-write bit clears
+    // read-only and stat() reports 0o666, never the POSIX-exact 0o600. Both are "we asked for
+    // it to be writable and not group/world-restricted in the way this platform can express".
+    const expectedMode = process.platform === 'win32' ? 0o666 : 0o600
+    expect(statSync(AUTH_KEYS).mode & 0o777).toBe(expectedMode)
+    expect(statSync(AGENT_JSON).mode & 0o777).toBe(expectedMode)
   })
 })
 

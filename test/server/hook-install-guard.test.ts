@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
-import os from 'os'
 import path from 'path'
 
 // Guard for a bug that bit a developer for real: `startServer` merges the managed agent hooks
@@ -10,29 +9,39 @@ import path from 'path'
 // which Claude Code runs on every tool call, so every later session on that machine died.
 // `installHooks: false` is the opt-out; every server test must pass it. This test keeps the
 // flag honest (and the default — a real deployment does need the hooks installed).
+//
+// `os.homedir()` is mocked, not `process.env.HOME`: Node's `os.homedir()` on Windows reads
+// `USERPROFILE` (via the Win32 user-profile API), never `HOME`, so redirecting `HOME` was a
+// no-op there. The second test below ("installs the hooks by default") would have gone
+// straight past this test's own sandbox and written the skill file + AGENTS.md into the
+// DEVELOPER'S REAL `~\.claude` / `~\.codex` on every Windows run — the exact catastrophe this
+// file exists to guard against, on the one platform its guard didn't actually cover.
+let testHome = ''
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('os')>()
+  const homedir = (): string => testHome
+  const base = (actual as unknown as { default?: typeof actual }).default ?? actual
+  return { ...actual, homedir, default: { ...base, homedir } }
+})
 vi.mock('../../src/core/agents/hooks', () => ({ installManagedAgentHooks: vi.fn() }))
 
+import os from 'os'
 import { startServer } from '../../src/server/index'
 import { installManagedAgentHooks } from '../../src/core/agents/hooks'
 
 describe('startServer: managed hook install is opt-out-able', () => {
   let dataDir: string
-  let testHome: string
   let close: (() => Promise<void>) | undefined
-  const realHome = process.env.HOME
 
   beforeEach(() => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-e2e-hookguard-'))
     testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-e2e-hookguard-home-'))
-    process.env.HOME = testHome
     vi.mocked(installManagedAgentHooks).mockClear()
   })
 
   afterEach(async () => {
     await close?.()
     close = undefined
-    if (realHome === undefined) delete process.env.HOME
-    else process.env.HOME = realHome
     fs.rmSync(dataDir, { recursive: true, force: true })
     fs.rmSync(testHome, { recursive: true, force: true })
   })

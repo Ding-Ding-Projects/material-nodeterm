@@ -254,15 +254,28 @@ describe('RemoteHooks — the opencode XDG path expression', () => {
     }).trim()
   }
 
-  it('a hostile $HOME stays inert and the expression stays ONE word (real /bin/sh)', () => {
-    expect(isSafeRemoteHome(HOSTILE), 'refused at the boundary now — but not RELIED on here').toBe(false)
-    expect(probe(HOSTILE)).toBe(`ARGC=1|${HOSTILE}/.config/opencode/AGENTS.md`)
-  })
+  // win32: skipped. `probe()` runs the generated expression through a real `/bin/sh` by literal
+  // absolute path. Measured on this machine: `execFileSync('/bin/sh', …)` fails with `ENOENT` —
+  // Node's child_process resolves a path-containing argument directly via CreateProcess, with no
+  // PATH search and no MSYS/Git-Bash translation (that belongs to the launching shell, not to a
+  // native Node.exe child_process call), so there is no real POSIX `/bin/sh` to run this against.
+  // The expression itself is still exercised indirectly by the mocked-`run` tests further down in
+  // this file (they assert the exact string this same builder produces), which stay platform-safe.
+  it.skipIf(process.platform === 'win32')(
+    'a hostile $HOME stays inert and the expression stays ONE word (real /bin/sh)',
+    () => {
+      expect(isSafeRemoteHome(HOSTILE), 'refused at the boundary now — but not RELIED on here').toBe(false)
+      expect(probe(HOSTILE)).toBe(`ARGC=1|${HOSTILE}/.config/opencode/AGENTS.md`)
+    }
+  )
 
-  it("still honours the HOST's $XDG_CONFIG_HOME, including one containing a space", () => {
-    expect(probe('/home/u', { XDG_CONFIG_HOME: '/o p/cfg' })).toBe('ARGC=1|/o p/cfg/opencode/AGENTS.md')
-    expect(probe('/home/u')).toBe('ARGC=1|/home/u/.config/opencode/AGENTS.md')
-  })
+  it.skipIf(process.platform === 'win32')(
+    "still honours the HOST's $XDG_CONFIG_HOME, including one containing a space",
+    () => {
+      expect(probe('/home/u', { XDG_CONFIG_HOME: '/o p/cfg' })).toBe('ARGC=1|/o p/cfg/opencode/AGENTS.md')
+      expect(probe('/home/u')).toBe('ARGC=1|/home/u/.config/opencode/AGENTS.md')
+    }
+  )
 
   for (const [what, install] of [
     ['canvas control', (rh: RemoteHooks, c: typeof conn) => rh.installCanvasControl(c, '/s.sock', HOSTILE)],
@@ -296,6 +309,13 @@ describe('RemoteHooks.ensureFullscreenTui — the fourth $(dirname …) site', (
     const write = runs.map((r) => r.args[r.args.length - 1]).find((l) => l.includes('mkdir -p'))
     expect(write).toBeTruthy()
     expect(write).toContain(`mkdir -p "$(dirname '/Users/Enes Kirca/.claude/settings.json')"`)
+    // win32: the real-/bin/sh half only. Measured on this machine: `execFileSync('/bin/sh', …)`
+    // fails with `ENOENT` — Node's child_process resolves a path-containing argument directly via
+    // CreateProcess with no PATH search and no MSYS/Git-Bash translation, so there is no real
+    // POSIX `/bin/sh` here to prove the expression inert against. The mocked-`run` assertion
+    // above (the exact generated command line) still runs and still catches a regression in the
+    // string itself; only the extra "and a real shell agrees this is ONE word" proof is skipped.
+    if (process.platform === 'win32') return
     const argc = execFileSync(
       '/bin/sh',
       ['-c', `set -- "$(dirname '/Users/Enes Kirca/.claude/settings.json')"; echo "ARGC=$#|$1"`],

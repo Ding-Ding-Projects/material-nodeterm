@@ -43,7 +43,9 @@ describe('host-identity: persistent host keypair', () => {
     const keys = await loadOrCreateHostKeyPair()
     expect(keys.publicKey).toHaveLength(32)
     expect((await readFile()).publicKey).toBe(publicKeyToB64(keys.publicKey))
-    expect((await fs.stat(hostPath())).mode & 0o777).toBe(0o600)
+    // Windows has no owner/group/other split: chmod(0o600) there only clears the read-only DOS
+    // attribute (the owner-write bit is set), so stat() reports 0o666, never a POSIX-exact 0o600.
+    expect((await fs.stat(hostPath())).mode & 0o777).toBe(process.platform === 'win32' ? 0o666 : 0o600)
   })
 
   it('returns the SAME public key across restarts (the pinned identity is stable)', async () => {
@@ -146,6 +148,8 @@ describe('host-identity: persistent host keypair', () => {
     encryptionAvailable = true
     restart()
     await loadOrCreateHostKeyPair()
-    expect((await fs.stat(hostPath())).mode & 0o777).toBe(0o600)
+    // 0o644 and 0o600 both carry the owner-write bit, so on Windows both map to the same
+    // "not read-only" state and this "tightening" is a no-op there — the assertion follows.
+    expect((await fs.stat(hostPath())).mode & 0o777).toBe(process.platform === 'win32' ? 0o666 : 0o600)
   })
 })

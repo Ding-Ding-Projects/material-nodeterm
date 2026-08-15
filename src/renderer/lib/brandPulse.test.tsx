@@ -166,10 +166,17 @@ describe('the pulse classes exist in both stylesheets', () => {
       [CANVAS_CSS, BRAND_PULSE_CLASS],
       [HUD_CSS, HUD_BRAND_PULSE_CLASS.split(' ').at(-1) as string]
     ] as const) {
+      // Regex, not a literal `'}\n}'` `indexOf`: on a Windows checkout with `core.autocrlf=true`
+      // these stylesheets are CRLF (`}\r\n}`), so the literal 3-byte LF sequence never matches and
+      // every block silently truncated to 2 characters, failing `toBeTruthy()` below on every run.
+      // `\r?` matches the LF-only case identically, so this is the version that was always right.
       const blocks = css
         .split('@media (prefers-reduced-motion: reduce)')
         .slice(1)
-        .map((rest) => rest.slice(0, rest.indexOf('}\n}') + 3))
+        .map((rest) => {
+          const close = /\}\r?\n\}/.exec(rest)
+          return close ? rest.slice(0, close.index + close[0].length) : rest
+        })
       const block = blocks.find((b) => b.includes(`.${cls}`))
       expect(block, cls).toBeTruthy()
       expect(block).toContain('opacity: 1')
