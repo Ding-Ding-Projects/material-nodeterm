@@ -70,8 +70,17 @@ exists and written as raw 0600 bytes where it does not (the Server Edition has n
 That mechanism is `src/core/shared-mode-credential.ts`, shared with School mode. It was **extracted
 rather than copied**: a second hand-maintained copy would drift, and a drift here means one mode's
 lock behaving differently from the other's. Only the credential moved — the record storage and
-directory watcher stay per-mode, because a difference there is harmless and coupling two
-near-opposite features further would be wrong.
+record semantics stay per-mode, because coupling two near-opposite features further would be
+wrong. The generic watcher lifecycle is shared only so both records survive the same absent-at-boot
+filesystem shape.
+
+The record watcher itself uses the shared lifecycle in `src/core/shared-record-watch.ts`. A first
+run normally has no `~/.nodeterm/shared/` directory to watch, so it holds exactly one watcher on the
+nearest existing ancestor, promotes toward the shared directory as it appears, and retries the
+promotion immediately after this process writes the first record. Promotion also reloads once:
+another app may have created and written the record before the narrower watcher was armed. There is
+no polling timer to leak at shutdown; `dispose()` closes the one live handle, and a lifecycle
+generation makes an event queued before shutdown inert when it eventually runs.
 
 An unsealable credential (a keychain reset, a machine migration) reads as **"cannot verify"** and
 leaves the mode **locked**, rather than throwing or falling open. The documented recovery is
@@ -83,6 +92,9 @@ Deliberate, and asserted:
 
 - **A corrupt record reads as OFF.** A malformed byte must not leave a child in a mode nobody can
   confirm the state of, and must not lock an adult out of their own app.
+- **A failed read preserves the last-known state.** Only `ENOENT` proves there is no record. A
+  permission or I/O failure says nothing about whether Kids mode is on and must not silently turn
+  it off; on first boot there is no earlier fact to preserve, so the in-memory default remains off.
 - **A shell that cannot reach the IPC leaves the renderer store OFF.** Defaulting to on would apply
   restrictions nobody asked for and imply a protection that is not in force.
 - **A wrong PIN leaves the mode on.** Obviously — but it is tested, because "fails open" is the

@@ -162,6 +162,15 @@ Persistence has two layers:
 
 `settings.json` is a separate store (`main/settings-store.ts`, `state/settings.ts`).
 
+**The shared School/Kids mode records must become watchable even when their directory is absent at
+boot.** Both stores use `core/shared-record-watch.ts`: one `fs.watch` handle sits on the nearest
+existing ancestor, promotes toward `~/.nodeterm/shared/` as it appears, and retries promotion after
+a successful local record write. Promotion reloads once to cover a record written before the
+narrower handle was armed; there is no poll timer, and disposal closes the one handle. Only
+`ENOENT` proves absence. A per-store lifecycle generation also makes a reload queued before
+disposal inert. Invalid JSON follows each mode's documented OFF policy, while any other read/watch
+failure preserves the last-known state instead of silently weakening a live mode.
+
 ## Projects (tabs)
 
 Each project is one canvas/page; terminals and notes belong to a project. The `projects`

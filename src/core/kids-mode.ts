@@ -23,7 +23,6 @@
 // regardless. Neither mode weakens the other — a rule that only ever adds restrictions cannot
 // produce a surprising combination.
 
-import { promises as fs, type FSWatcher, watch } from 'fs'
 import os from 'os'
 import path from 'path'
 
@@ -39,6 +38,7 @@ import {
   verifyPin as checkPin,
   MIN_PIN_LENGTH
 } from './shared-mode-credential'
+import { readSharedJson, SharedRecordWatcher } from './shared-record-watch'
 
 const MAX_NAME_LENGTH = 80
 
@@ -72,51 +72,47 @@ function sanitizeName(name: string): string {
 export class KidsModeStore {
   private cache: KidsModeRecord = DEFAULT_RECORD
   private listeners = new Set<(r: KidsModeRecord) => void>()
-  private watcher: FSWatcher | null = null
+  private watcher = new SharedRecordWatcher(recordFile(), () => this.queueReload())
   /** Every write is FIFO'd: the watcher's own reload can race a write we just issued. */
   private chain: Promise<unknown> = Promise.resolve()
+  /** Invalidates watcher reloads that were queued before dispose/re-init. */
+  private lifecycle = 0
 
   async init(): Promise<void> {
-    await this.reload()
-    this.watchDir()
+    const lifecycle = ++this.lifecycle
+    await this.reload(lifecycle)
+    if (lifecycle === this.lifecycle) this.watcher.start()
   }
 
-  private async reload(): Promise<void> {
-    try {
-      const parsed: unknown = JSON.parse(await fs.readFile(recordFile(), 'utf-8'))
+  private async reload(lifecycle: number): Promise<boolean> {
+    const result = await readSharedJson(recordFile())
+    if (lifecycle !== this.lifecycle) return false
+    if (result.kind === 'value') {
+      const parsed = result.value
       this.cache = isValidRecord(parsed)
         ? { version: 1, enabled: parsed.enabled, name: sanitizeName(parsed.name) }
         : DEFAULT_RECORD
-    } catch {
-      // Absent (nobody has ever turned it on) or corrupt. Defaults, silently — a hand-editable
-      // shared file must never crash a boot over a malformed byte. Note which way this fails:
-      // OFF. A corrupt record must not leave a child in a mode nobody can verify the state of,
-      // and it must not lock an adult out of an app either.
+    } else if (result.kind === 'absent' || result.kind === 'invalid') {
+      // A proven absence (nobody has ever turned it on) or corrupt JSON defaults OFF. A failed
+      // read is different: it preserves the last-known state rather than silently weakening it.
       this.cache = DEFAULT_RECORD
     }
+    return result.kind !== 'error'
   }
 
-  /** Watch the DIRECTORY, not the file: it may not exist yet, and writers use temp+rename, which
-   *  a file-handle watch misses. Best effort — a change still applies on the next call. */
-  private watchDir(): void {
-    try {
-      this.watcher?.close()
-      this.watcher = watch(path.dirname(recordFile()), { persistent: false }, (_e, filename) => {
-        if (filename && filename !== path.basename(recordFile())) return
-        void this.chain.then(async () => {
-          const before = this.cache
-          await this.reload()
-          if (before.enabled !== this.cache.enabled || before.name !== this.cache.name) this.notify()
-        })
-      })
-    } catch {
-      // Directory not created yet; the first write makes it.
-    }
+  private queueReload(): void {
+    const lifecycle = this.lifecycle
+    const run = this.chain.then(async () => {
+      const before = this.cache
+      const applied = await this.reload(lifecycle)
+      if (applied && (before.enabled !== this.cache.enabled || before.name !== this.cache.name)) this.notify()
+    })
+    this.chain = run.catch(() => {})
   }
 
   dispose(): void {
-    this.watcher?.close()
-    this.watcher = null
+    this.lifecycle += 1
+    this.watcher.dispose()
   }
 
   get(): KidsModeRecord {
@@ -146,6 +142,7 @@ export class KidsModeStore {
   private async writeRecord(next: KidsModeRecord): Promise<KidsModeRecord> {
     this.cache = next
     await persistFile(recordFile(), JSON.stringify(next, null, 2))
+    this.watcher.recordWritten()
     this.notify()
     return this.cache
   }
