@@ -512,6 +512,39 @@ const FEATURES = [
     wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'OllamaManagerPanel' },
     docs: ['docs/ollama-manager.md'],
   },
+  {
+    // The unlock ladder. Asserted on the two things that would silently gut it: the ladder's own
+    // module, and the fact that the server actually SERVES it — a ladder nobody can reach from a
+    // lockout screen is a passing unit test and a countdown the user still has to stare at.
+    id: 'unlock-ladder',
+    label: 'Unlock ladder (dim sum, sums, whack-a-mole)',
+    files: ['src/core/unlock-ladder.ts', 'src/core/unlock-ladder.test.ts', 'src/server/unlock-ladder-routes.test.ts'],
+    // EVERY needle here carries a delimiter the symbol's own name cannot supply — a trailing
+    // `{`, `(`, or ` =`. A bare substring is toothless against exactly the edit it is meant to
+    // catch: `clearLockoutByLadder` matches happily inside `clearLockoutByLadderRENAMED`, and
+    // `LADDER_BUDGET` matches inside `LADDER_BUDGET_WINDOW_MS`, so both stayed green through a
+    // deliberate rename until this comment existed.
+    contentChecks: [
+      ['src/core/unlock-ladder.ts', 'export class UnlockLadder {'],
+      // The cap is the whole safety story: every rung is machine-solvable, so a ladder without a
+      // budget has quietly removed the lockout it decorates.
+      ['src/core/unlock-ladder.ts', 'export const LADDER_BUDGET ='],
+      // Clearing the ladder must reach exactly this method and no other — see its doc comment.
+      // Asserted at the DEFINITION and the CALL, because either half alone is dead.
+      ['src/server/auth.ts', 'clearLockoutByLadder(): void {'],
+      ['src/server/http.ts', 'auth.clearLockoutByLadder()'],
+      ['src/server/http.ts', "pathname === '/auth/unlock/challenge'"],
+      ['src/server/http.ts', "pathname === '/auth/unlock/verify'"],
+      // School mode removes every dim-sum surface, so the starting rung must be decided from it.
+      ['src/server/index.ts', 'auth.setSchoolModeSource('],
+      ['src/core/unlock-ladder.ts', 'firstRung(): LadderRung {'],
+      // Defined AND called: the lockout screen is what makes the ladder reachable, and a
+      // `lockedPage` that exists but is never served is a countdown with a dead function beside
+      // it. Asserting the call site rather than an import, since it lives in the same file.
+      ['src/server/http.ts', 'lockedPage(auth.lockoutRemainingMs()'],
+    ],
+    docs: ['docs/unlock-ladder.md'],
+  },
 ]
 
 for (const feature of FEATURES) {

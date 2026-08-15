@@ -1727,6 +1727,52 @@ again; the grace window was never the thing that was wrong.
   the relay server may rate-limit free hosts independently — a client-side gate must NOT be
   reintroduced to work around a backend refusal (fix the backend policy instead).
 
+## The unlock ladder (Server Edition lockout)
+
+Five wrong passwords locks the account, and instead of a bare countdown the lockout screen offers a
+way to play out of it: **dim sum** (one dish, four choices) → after 5 wrong dishes **ten easy sums**
+→ after one wrong sum **whack-a-mole**. Clear any rung and the wait ends; lose the lot and you are
+where you started, waiting, with the ladder not re-offered for that lockout. State machine is the
+Electron-free `src/core/unlock-ladder.ts`; served at `/auth/unlock/{challenge,verify}` and drawn by
+`lockedPage()` in `src/server/http.ts`. Full write-up: **`docs/unlock-ladder.md`**.
+
+**Five rules are the entire safety of it. Keep the games and drop any one and you have shipped a
+second, much weaker password:**
+
+1. **It clears the WAITING, never the CREDENTIAL.** No session, no cookie — the user lands back on
+   the password form. `clearLockoutByLadder()` moves `lockedUntil` and *nothing else*, deliberately;
+   widening that method is precisely how this stops being true. Pinned by a route test asserting no
+   `Set-Cookie`.
+2. **No attempt refund.** Waiting returns five attempts, so the ladder returns five. The moment
+   solving beats waiting, brute force gets cheaper — the one thing a lockout exists to prevent.
+3. **`LADDER_BUDGET` (3 clears/rolling hour) is the real defence, not the difficulty.** Every rung
+   is machine-solvable — four choices is one-in-four, ten sums are trivial, a mole schedule is
+   arithmetic. A ladder without the cap has quietly removed the lockout it decorates.
+4. **The escalation is untouched.** `nextLockoutMs` now doubles the lockout per consecutive lockout
+   (60 s → 2 m → 4 m …, hour cap — replacing a flat 60 s that charged the same for the first wrong
+   guess and the five hundredth), and clearing the ladder never resets that streak.
+5. **Server-generated, server-graded, single-use nonce, consumed BEFORE grading** — so a wrong
+   answer cannot be retried against the same question and a right one cannot be replayed.
+
+Two more that cost the whole rung when missed: a **timed game cannot be won faster than it lasts**
+(a whack submission arriving before `WHACK_DURATION_MS` is rejected, or a script posts a perfect
+score the instant it gets the schedule), and **each mole grades once** (else "hit the moles" becomes
+"send enough taps"; the on-screen score is encouragement and is regraded server-side).
+
+**School mode** removes every dim-sum surface, so under it the ladder **starts at the maths** —
+absent, not disabled-with-a-message, since naming the hidden thing is what School mode forbids.
+`firstRung()` is the only decider and `issue('dimsum')` still returns maths under the mode. Read
+through a closure (`auth.setSchoolModeSource`), never sampled at boot: it is a live shared switch a
+running app must pick up without a restart.
+
+**Surfaces:** Server Edition only, and that is a decision rather than a gap — the desktop app has no
+password gate, and the Pages site's toy locks (`site/app/shared/locks-state.js`) have no lockout at
+all (a wrong password returns `false`, unlimited retries), so there is no wait to skip. *If a
+lockout is ever added to either, it owes the ladder.* Guarded by an `unlock-ladder` row in
+`scripts/check-app-contract.mjs` whose needles all carry a delimiter — a bare `clearLockoutByLadder`
+matches inside `clearLockoutByLadderRENAMED` and `LADDER_BUDGET` matches inside
+`LADDER_BUDGET_WINDOW_MS`, and both stayed green through a deliberate rename before that was fixed.
+
 ## Speech / dictation (desktop + server)
 
 Voice-to-text input captured via microphone, turned into terminal text via on-device Whisper. Works on desktop (Electron) and Server Edition (browser); iOS support is separate (`nodeterm-ios`, private — see the three-surfaces entry under Conventions).
