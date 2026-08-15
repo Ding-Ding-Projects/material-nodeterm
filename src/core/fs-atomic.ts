@@ -15,10 +15,10 @@
 //   - a backup or sync client (OneDrive over a user profile, very common) holds a read handle;
 //   - two of our own concurrent writers race their renames onto one destination.
 //
-// The last one is reproducible on demand and is what exposed this: the approved-devices store has
-// three un-queued writers, and its own test — which deliberately overlaps two saves — fails on
-// Windows with `EPERM: operation not permitted, rename`. It passed on POSIX for as long as the
-// store has existed.
+// The last one was reproducible on demand and exposed this: the approved-devices store originally
+// had three un-queued writers, and its old overlapping-save test failed on Windows with
+// `EPERM: operation not permitted, rename`. The store now also serializes its read-modify-write
+// decisions, but retrying rename remains required for scanners/indexers and independent processes.
 //
 // The consequence is worse than a failed save. These are the stores holding the user's canvas
 // layout, their settings, their pinned remote devices and their sealed credentials. On Windows a

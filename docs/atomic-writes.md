@@ -46,8 +46,10 @@ destructured from `node:fs/promises`. The first version of the guard below knew 
 spelling and went green over the other eight, among them `atomic-json-store.ts` — a file named for
 the thing it was failing to do. Every one of them reads as a correct atomic write, because on the
 platform most of this app was written on it *is* one. The only signal anywhere in a 6,000-test
-suite was `src/main/remote/approved-devices.test.ts`, whose deliberate two-overlapping-saves case
-had been failing on Windows for as long as that store existed and passing everywhere else.
+suite was `src/main/remote/approved-devices.test.ts`, whose former two-overlapping-saves case had
+been failing on Windows for as long as that store existed and passing everywhere else. That store
+now also serializes its complete read-modify-write decisions; rename retry remains necessary for
+scanners, indexers and independent processes.
 
 It was nearly written off as contention flake — several genuine timeout-shaped failures in this
 repo are exactly that. What settled it was running the one file alone, at `HEAD`, unmodified, and
@@ -59,6 +61,13 @@ reading the actual error rather than the summary line.
 indivisible rename, so retrying cannot tear a write — it only tries the same operation again once
 whoever held the destination has let go. Scanner windows are milliseconds, so the first retry
 almost always wins; the tail exists for a sync client mid-upload.
+
+**Does not serialize application decisions.** Unique temps and rename retry guarantee complete
+bytes, not correct ordering between two snapshots loaded before either write. A shared store with
+multiple read-modify-write callers still needs one mutation funnel (or an equivalent revision/CAS
+protocol). The approved-device store is the reference: approval and revoke enqueue their
+`pinDevice` / `unpinDevice` functions, so the later decision reads the result of the earlier one
+instead of publishing a stale replacement.
 
 **Does not retry forever.** A genuinely locked file must fail. Several callers have contracts that
 depend on a failed save being reported as one — `revocation.ts` returns `persisted: false` and the

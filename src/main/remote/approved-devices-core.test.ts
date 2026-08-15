@@ -3,6 +3,7 @@ import {
   emptyApprovedDevices,
   isPinned,
   parseApprovedDevices,
+  parsePersistedApprovedDevices,
   pinDevice,
   unpinDevice
 } from './approved-devices-core'
@@ -21,6 +22,22 @@ describe('approved-devices-core', () => {
       expect(
         parseApprovedDevices({ pubkeys: ['a', '', 'b', 42, 'a', null, 'c'] })
       ).toEqual({ pubkeys: ['a', 'b', 'c'] })
+    })
+  })
+
+  describe('parsePersistedApprovedDevices', () => {
+    it('rejects malformed disk shapes instead of turning a failed trust read into absence', () => {
+      expect(() => parsePersistedApprovedDevices(undefined)).toThrow(/valid store/i)
+      expect(() => parsePersistedApprovedDevices({})).toThrow(/valid store/i)
+      expect(() => parsePersistedApprovedDevices({ pubkeys: 'nope' })).toThrow(/valid store/i)
+      expect(() => parsePersistedApprovedDevices({ pubkeys: ['good', 42] })).toThrow(/public key/i)
+      expect(() => parsePersistedApprovedDevices({ pubkeys: ['good', ''] })).toThrow(/public key/i)
+    })
+
+    it('accepts a valid store and de-duplicates repeated keys', () => {
+      expect(parsePersistedApprovedDevices({ pubkeys: ['a', 'b', 'a'] })).toEqual({
+        pubkeys: ['a', 'b']
+      })
     })
   })
 

@@ -10,7 +10,8 @@ import { app } from 'electron'
 import { writeFileAtomic } from '../../core/fs-atomic'
 import {
   emptyApprovedDevices,
-  parseApprovedDevices,
+  parsePersistedApprovedDevices,
+  type ApprovedDevicesMutation,
   type ApprovedDevices
 } from './approved-devices-core'
 
@@ -18,38 +19,69 @@ function file(): string {
   return path.join(app.getPath('userData'), 'remote-approved-devices.json')
 }
 
-/** Load the pinned-device list; returns an empty list when the file is absent or malformed. */
-export async function loadApprovedDevices(): Promise<ApprovedDevices> {
+/**
+ * Every read and write enters one queue. Atomic rename prevents torn bytes; this queue prevents a
+ * complete but stale read-modify-write snapshot from winning after a later revoke.
+ */
+let storeTail: Promise<void> = Promise.resolve()
+
+function serializeStore<T>(operation: () => Promise<T>): Promise<T> {
+  const result = storeTail.then(operation)
+  // A failed read/write is reported to its caller but must not poison every later operation.
+  storeTail = result.then(
+    () => undefined,
+    () => undefined
+  )
+  return result
+}
+
+async function readApprovedDevices(): Promise<ApprovedDevices> {
   try {
-    return parseApprovedDevices(JSON.parse(await fs.readFile(file(), 'utf-8')))
-  } catch {
-    return emptyApprovedDevices()
+    const json = JSON.parse(await fs.readFile(file(), 'utf-8')) as unknown
+    return parsePersistedApprovedDevices(json)
+  } catch (err) {
+    // Absence is the one checked state that means "there are no approved devices". Permission,
+    // I/O, JSON and shape failures say only that trust could not be established, so preserve them.
+    if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') return emptyApprovedDevices()
+    throw err
   }
 }
 
+/** Load the pinned-device list after all mutations already queued ahead of this read. */
+export function loadApprovedDevices(): Promise<ApprovedDevices> {
+  return serializeStore(readApprovedDevices)
+}
+
+async function writeApprovedDevices(store: ApprovedDevices): Promise<void> {
+  const valid = parsePersistedApprovedDevices(store)
+  await writeFileAtomic(file(), JSON.stringify(valid), { mode: 0o600 })
+}
+
 /**
- * Persist the pinned-device list atomically (unique temp + retrying rename, 0600).
+ * Atomically decide and publish one approved-device mutation against the latest committed state.
+ * Callers must pass their intent (`pinDevice` / `unpinDevice`), never a snapshot loaded earlier.
+ * The full-snapshot writer deliberately stays private so a future caller cannot bypass the queue's
+ * read-modify-write decision. `writeFileAtomic` still supplies unique temps, retrying rename and
+ * failed-write cleanup; revocation's `persisted:false` contract depends on the old file surviving.
  *
- * The temp name must be unique per call because three writers reach this from the main process
- * with nothing queueing them: the standing host's fire-and-forget pin on approval
- * (standing-host.ts, `void loadApprovedDevices().then(...)`), relay-trust's un-awaited pin when a
- * mutual approval settles, and the revoke IPC (src/main/index.ts → revocation.ts). With one
- * shared `<file>.tmp`, a writer's rename publishes the other's half-written list — or moves the
- * file out from under it, so the loser's rename fails.
- *
- * That uniqueness was here already and was not enough on Windows: those same three writers race
- * their renames onto ONE destination, and Windows fails a rename whose destination anyone has
- * open with `EPERM`. This store's own concurrency test failed exactly that way. `writeFileAtomic`
- * owns both halves now — see src/core/fs-atomic.ts for why the destination is so often held open
- * there (Defender, the indexer, OneDrive) and why the retry cannot tear a write.
- *
- * A failed write removes its own temp and rethrows, leaving the OLD file byte-for-byte intact —
- * revocation.ts's `persisted:false` contract depends on both halves.
- *
- * No orphan sweep here, unlike the PAT stores (src/main/github-control.ts, src/server/github-control.ts)
- * or agent.json (src/main/pairing-service.ts): those orphan temps hold live credentials, but these are
- * PUBLIC keys, so a stray temp is litter rather than a leak.
+ * No orphan sweep here, unlike the PAT stores or agent.json: these temps contain public keys, not
+ * credentials, so a crashed temp is litter rather than a secret leak.
  */
-export async function saveApprovedDevices(store: ApprovedDevices): Promise<void> {
-  await writeFileAtomic(file(), JSON.stringify(store), { mode: 0o600 })
+export function mutateApprovedDevices(
+  mutation: ApprovedDevicesMutation
+): Promise<ApprovedDevices> {
+  return serializeStore(async () => {
+    const loaded = await readApprovedDevices()
+    // A mutation is pure by contract. Freezing a private copy turns an accidental in-place push()
+    // into a rejected operation instead of a silent `next === current` lost write.
+    const current: ApprovedDevices = Object.freeze({
+      pubkeys: Object.freeze([...loaded.pubkeys])
+    })
+    const next = mutation(current)
+    // The pure pin/unpin helpers return the original object for an idempotent operation. Avoiding a
+    // rewrite matters for revoke: "not pinned" is a successful checked result, not a new empty file.
+    if (next === current) return current
+    await writeApprovedDevices(next)
+    return parsePersistedApprovedDevices(next)
+  })
 }

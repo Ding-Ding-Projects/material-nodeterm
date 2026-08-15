@@ -95,6 +95,13 @@ bug.
 different facts and must stay distinguishable at every layer. Collapsing them is how a panel ends up
 reporting "no sessions" on a host running thirty.
 
+**Serialize a shared store's decision, not only its final write.** Atomic rename prevents torn
+bytes, but it does not stop two callers from loading the same snapshot and publishing complete,
+conflicting replacements. Funnel read-modify-write operations through one mutation API; the
+approved-device store does this so an older approval cannot land after a revoke and restore the
+revoked key. Only a checked `ENOENT` is an empty store — unreadable or corrupt data must stay an
+error so the next mutation cannot overwrite it as if it were absent.
+
 **Degrade to nothing, never to something wrong.** A probe that fails means the bare, safe command —
 never a substituted nearest match. A hand-editable value that is unrecognised must yield the safe
 default, never something more destructive than the default.

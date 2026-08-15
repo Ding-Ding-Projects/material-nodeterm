@@ -21,8 +21,9 @@ import { TRUST_CONFIRM, createTrustGate, type TrustGate } from './relay-trust'
 let disk: ApprovedDevices = emptyApprovedDevices()
 vi.mock('./approved-devices', () => ({
   loadApprovedDevices: async () => disk,
-  saveApprovedDevices: async (s: ApprovedDevices) => {
-    disk = s
+  mutateApprovedDevices: async (mutation: (store: ApprovedDevices) => ApprovedDevices) => {
+    disk = mutation(disk)
+    return disk
   }
 }))
 import { loadApprovedDevices } from './approved-devices'
@@ -134,9 +135,9 @@ function bridgedPair(isolate = false): {
       onOpen: () => opened.push(tag),
       ...(isolate
         ? {
-            load: async () => stores[tag],
-            save: async (s: ApprovedDevices) => {
-              stores[tag] = s
+            mutate: async (mutation: (store: ApprovedDevices) => ApprovedDevices) => {
+              stores[tag] = mutation(stores[tag])
+              return stores[tag]
             }
           }
         : {})
@@ -323,9 +324,9 @@ describe('obligation (b): exactly one MutualApproval per pairing attempt', () =>
       sas: () => '111 222',
       sendConfirm: (j) => sent.push(j),
       onOpen: () => opened.push('open'),
-      load: async () => disk,
-      save: async (s) => {
-        disk = s
+      mutate: async (mutation) => {
+        disk = mutation(disk)
+        return disk
       }
     })
 
@@ -343,9 +344,9 @@ describe('obligation (b): exactly one MutualApproval per pairing attempt', () =>
       sas: () => null,
       sendConfirm: () => {},
       onOpen: () => {},
-      load: async () => disk,
-      save: async (s) => {
-        disk = s
+      mutate: async (mutation) => {
+        disk = mutation(disk)
+        return disk
       }
     })
     expect(gate.onTunnelText(JSON.stringify({ t: 'cast', method: 'pty.write', args: [] }))).toBe(false)

@@ -10,8 +10,21 @@
 /** The persisted shape of <userData>/remote-approved-devices.json. */
 export interface ApprovedDevices {
   /** Base64 NaCl box public keys of phones the host has approved at least once. */
-  pubkeys: string[]
+  readonly pubkeys: readonly string[]
 }
+
+/**
+ * One read-modify-write decision against the approved-device store.
+ *
+ * The disk adapter serializes these decisions. Passing the decision instead of a precomputed
+ * snapshot is what prevents an approval from publishing a stale list after a concurrent revoke.
+ */
+export type ApprovedDevicesMutation = (current: ApprovedDevices) => ApprovedDevices
+
+/** Store seam used by trust/revocation code without exposing filesystem details. */
+export type MutateApprovedDevices = (
+  mutation: ApprovedDevicesMutation
+) => Promise<ApprovedDevices>
 
 export function emptyApprovedDevices(): ApprovedDevices {
   return { pubkeys: [] }
@@ -32,6 +45,25 @@ export function parseApprovedDevices(raw: unknown): ApprovedDevices {
     }
   }
   return { pubkeys: out }
+}
+
+/**
+ * Parse the persisted file without treating corruption as an empty trust list.
+ *
+ * `parseApprovedDevices` remains the tolerant decoder for untrusted in-memory values. A file read
+ * is different: silently dropping a malformed entry (or a missing `pubkeys` field) would turn
+ * "could not establish trust" into "no devices are trusted" and the next mutation would overwrite
+ * the only evidence of the problem. The I/O adapter uses this strict form on every disk read/write.
+ */
+export function parsePersistedApprovedDevices(raw: unknown): ApprovedDevices {
+  if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { pubkeys?: unknown }).pubkeys)) {
+    throw new Error('Approved-device data is not a valid store.')
+  }
+  const pubkeys = (raw as { pubkeys: unknown[] }).pubkeys
+  if (pubkeys.some((key) => typeof key !== 'string' || key.length === 0)) {
+    throw new Error('Approved-device data contains an invalid public key.')
+  }
+  return parseApprovedDevices(raw)
 }
 
 /** True when `pubkeyB64` has been pinned before. Empty input is never pinned. */
