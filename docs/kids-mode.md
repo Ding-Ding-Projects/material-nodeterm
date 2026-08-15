@@ -99,8 +99,8 @@ restrictions cannot produce a surprising combination.
 
 | Surface | State |
 | --- | --- |
-| **Desktop** | store booted in `src/main/index.ts`, IPC via preload |
-| **Server Edition** | store booted in `src/server/index.ts`, real ws-bridge implementation — not a stub |
+| **Desktop** | store booted in `src/main/index.ts`, IPC via preload, Settings → Kids mode |
+| **Server Edition** | store booted in `src/server/index.ts`, real ws-bridge implementation — not a stub; the same settings section, since it is plain renderer code |
 | **Pages site** | not applicable — it runs no agents and has no shell |
 | **Mobile companion** | follow-up in `nodeterm-ios` |
 
@@ -110,8 +110,9 @@ feature is *missing* from the other shell.
 
 ## Still outstanding
 
-- **The settings surface.** The store, policy, IPC and both shells are wired; the section a user
-  actually toggles it from is not built yet.
+- **Real device verification.** Every claim here is covered by tests and guards, but nobody has
+  turned the mode on in a running build and watched an agent launch, so the end-to-end path is
+  proven by construction rather than by observation.
 - **Wider destructive coverage.** The gate is wired at the kanban session delete (see below). The
   other destructive paths — project delete, worktree remove, notification bulk delete — already
   open the super gate unconditionally, so kids mode adds nothing there. `GuardedAction` names six

@@ -549,8 +549,15 @@ const FEATURES = [
       ['src/server/index.ts', /^\s*await kidsModeStore\.init\(\)/m],
       // A real bridge implementation, not a stub.
       ['src/renderer/bridge/ws-bridge.ts', 'const kidsMode: KidsModeApi = {'],
-      ['src/renderer/App.tsx', /^\s*void useKidsMode\.getState\(\)\.init\(\)/m]
+      ['src/renderer/App.tsx', /^\s*void useKidsMode\.getState\(\)\.init\(\)/m],
+      // The disclosure is RENDERED from the shared constant, not retyped. A second copy of that
+      // wording is one edit away from promising more than the mode delivers.
+      ['src/renderer/components/settings/sections/KidsModeSection.tsx', 'KIDS_DISCLOSURE'],
+      ['src/renderer/components/settings/SettingsPage.tsx', '<KidsModeSection isActive=']
     ],
+    // Asserts the section is reachable from a VISIBLE settings group and has a sidebar icon — a
+    // section file on disk that no group lists is invisible to a user, which is the same as absent.
+    settingsSection: 'kids-mode',
     docs: ['docs/kids-mode.md'],
   },
   {

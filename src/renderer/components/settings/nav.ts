@@ -28,6 +28,7 @@ export type SettingsSectionId =
   | 'language'
   | 'narrator'
   | 'school-mode'
+  | 'kids-mode'
   | 'vocabulary'
   | 'history'
   | 'toylocks'
@@ -106,6 +107,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'updates', title: 'Updates' },
       { id: 'privacy', title: 'Privacy' },
       { id: 'school-mode', title: 'School mode' },
+      { id: 'kids-mode', title: 'Kids mode' },
       { id: 'vocabulary', title: 'Personal vocabulary' },
       { id: 'history', title: 'History' }
     ]

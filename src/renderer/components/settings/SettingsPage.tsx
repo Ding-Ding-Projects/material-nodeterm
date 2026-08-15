@@ -33,6 +33,7 @@ import { PrivacySection } from './sections/PrivacySection'
 import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
 import { LanguageSection } from './sections/LanguageSection'
 import { SchoolModeSection } from './sections/SchoolModeSection'
+import { KidsModeSection } from './sections/KidsModeSection'
 import { PersonalVocabularySection } from './sections/PersonalVocabularySection'
 import { LocalHistorySection } from './sections/LocalHistorySection'
 import { ToyLocksSection } from './sections/ToyLocksSection'
@@ -123,6 +124,7 @@ export function SettingsPage({
             <UpdatesSection isActive={active === 'updates'} />
             <PrivacySection isActive={active === 'privacy'} />
             <SchoolModeSection isActive={active === 'school-mode'} />
+            <KidsModeSection isActive={active === 'kids-mode'} />
             <PersonalVocabularySection isActive={active === 'vocabulary'} />
             <LocalHistorySection isActive={active === 'history'} />
             <ToyLocksSection isActive={active === 'toylocks'} />

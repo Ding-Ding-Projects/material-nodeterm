@@ -197,6 +197,15 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M4.4 6.8v3c0 1 1.6 2 3.6 2s3.6-1 3.6-2v-3M13.6 5.6v4.4" />
     </>
   ),
+  // A kite: a child's thing, and distinct at 16px from the mortarboard beside it — two icons that
+  // read alike in a sidebar are two icons nobody can tell apart at a glance.
+  'kids-mode': (
+    <>
+      <path d="M8 1.8 12.5 6 8 10.2 3.5 6 8 1.8Z" />
+      <path d="M8 1.8v8.4M3.5 6h9" />
+      <path d="M8 10.2c0 1.6-.8 2.4-1.6 3.2" />
+    </>
+  ),
   vocabulary: (
     <>
       <path d="M4 3h6.4L13 5.6V13H4z" />
