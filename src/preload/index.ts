@@ -175,6 +175,15 @@ const api: NodeTerminalApi = {
     hasCredential: () => ipcRenderer.invoke(IPC.schoolModeHasCredential),
     onChanged: subscribe(IPC.schoolModeChanged)
   },
+  kidsMode: {
+    load: () => ipcRenderer.invoke(IPC.kidsModeLoad),
+    enable: (pin) => ipcRenderer.invoke(IPC.kidsModeEnable, pin),
+    disable: (pin) => ipcRenderer.invoke(IPC.kidsModeDisable, pin),
+    rename: (name) => ipcRenderer.invoke(IPC.kidsModeRename, name),
+    changePin: (currentPin, nextPin) => ipcRenderer.invoke(IPC.kidsModeChangePin, currentPin, nextPin),
+    hasCredential: () => ipcRenderer.invoke(IPC.kidsModeHasCredential),
+    onChanged: subscribe(IPC.kidsModeChanged)
+  },
   scheduledSettings: {
     load: () => ipcRenderer.invoke(IPC.scheduledSettingsLoad),
     save: (file: ScheduledSettingsFile) => ipcRenderer.invoke(IPC.scheduledSettingsSave, file),

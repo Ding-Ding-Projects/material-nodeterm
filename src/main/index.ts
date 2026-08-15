@@ -36,6 +36,7 @@ import { WorkspaceStore } from '../core/workspace-store'
 import { WorkspaceWatcher } from '../core/workspace-watcher'
 import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
+import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsStore } from '../core/scheduled-settings-store'
 import { ScheduledSettingsService } from '../core/scheduled-settings-service'
 import { presenceHub } from '../core/presence/hub'
@@ -250,6 +251,7 @@ function isSafeExternalUrl(url: unknown): url is string {
 
 const settingsStore = new SettingsStore()
 const schoolModeStore = new SchoolModeStore()
+const kidsModeStore = new KidsModeStore()
 const scheduledSettingsStore = new ScheduledSettingsStore()
 const scheduledSettingsService = new ScheduledSettingsService(scheduledSettingsStore)
 const sshStore = new SshStore()
@@ -591,6 +593,8 @@ app.whenReady().then(async () => {
   settingsStore.registerIpc()
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
+  await kidsModeStore.init()
+  kidsModeStore.registerIpc()
   scheduledSettingsStore.init()
   scheduledSettingsStore.registerIpc()
   scheduledSettingsService.start()

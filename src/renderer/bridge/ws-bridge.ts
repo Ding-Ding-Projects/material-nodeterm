@@ -39,6 +39,8 @@ import {
   type PtyCreateOptions,
   type ScheduledSettingsApi,
   type SettingsApi,
+  type KidsModeApi,
+  type KidsModeRecord,
   type SchoolModeApi,
   type SchoolModeRecord,
   type ClaudeUsage,
@@ -241,7 +243,7 @@ export function buildRealApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'pty' | 'workspace' | 'settings' | 'schoolMode' | 'scheduledSettings' | 'userDataDir'
+  'pty' | 'workspace' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'userDataDir'
 > {
   const pty: PtyApi = {
     create: (options: PtyCreateOptions) =>
@@ -339,6 +341,18 @@ export function buildRealApi(
     onChanged: (cb) => client.subscribe(IPC.schoolModeChanged, cb as Listener)
   }
 
+  const kidsMode: KidsModeApi = {
+    load: () => client.request(IPC.kidsModeLoad) as Promise<KidsModeRecord>,
+    enable: (pin?: string) => client.request(IPC.kidsModeEnable, pin) as Promise<KidsModeRecord>,
+    disable: (pin: string) =>
+      client.request(IPC.kidsModeDisable, pin) as ReturnType<KidsModeApi['disable']>,
+    rename: (name: string) => client.request(IPC.kidsModeRename, name) as Promise<KidsModeRecord>,
+    changePin: (currentPin: string, nextPin: string) =>
+      client.request(IPC.kidsModeChangePin, currentPin, nextPin) as Promise<boolean>,
+    hasCredential: () => client.request(IPC.kidsModeHasCredential) as Promise<boolean>,
+    onChanged: (cb) => client.subscribe(IPC.kidsModeChanged, cb as Listener)
+  }
+
   const scheduledSettings: ScheduledSettingsApi = {
     load: () => client.request(IPC.scheduledSettingsLoad) as Promise<ScheduledSettingsFile>,
     save: (file: ScheduledSettingsFile) =>
@@ -357,7 +371,7 @@ export function buildRealApi(
   // `/worktrees/…` at the filesystem root (the server usually runs as root, and git would create it).
   const userDataDir = (): Promise<string> => client.request(IPC.appUserDataDir) as Promise<string>
 
-  return { pty, workspace, settings, schoolMode, scheduledSettings, userDataDir }
+  return { pty, workspace, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
 }
 
 export function buildGitHubApi(

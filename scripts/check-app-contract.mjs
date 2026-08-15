@@ -513,6 +513,47 @@ const FEATURES = [
     docs: ['docs/ollama-manager.md'],
   },
   {
+    // Kids mode. The needles carry delimiters for the usual reason, and the BOTH-SHELLS rows are
+    // the important ones: this repo has shipped a one-shell core change three times, and the
+    // boundary tests cannot tell you a feature is missing from the other shell — only that what
+    // is there compiles.
+    id: 'kids-mode',
+    label: 'Kids mode (separate from School mode)',
+    files: [
+      'src/core/kids-mode.ts',
+      'src/core/kids-mode-policy.ts',
+      'src/core/kids-mode.test.ts',
+      'src/core/kids-mode-policy.test.ts',
+      'src/renderer/state/kidsMode.ts',
+      'src/shared/kids-mode-name.ts'
+    ],
+    contentChecks: [
+      ['src/core/kids-mode.ts', 'export class KidsModeStore {'],
+      // The honesty line is the reason this feature is defensible at all.
+      ['src/core/kids-mode-policy.ts', 'export const KIDS_DISCLOSURE ='],
+      ['src/core/kids-mode-policy.ts', 'does NOT sandbox'],
+      // bypassPermissions must stay refused, and the refusal must carry a reason.
+      ['src/core/kids-mode-policy.ts', 'bypassPermissions:'],
+      // Separate files from School mode — a shared one would let either PIN open both.
+      ['src/core/kids-mode.ts', "'kids-mode.json'"],
+      ['src/core/kids-mode.ts', "'kids-mode.credential.json'"],
+      // Booted by BOTH shells, or the Server Edition silently lacks the feature.
+      //
+      // LINE-ANCHORED regexes, not substrings. Commenting a call out leaves the substring
+      // perfectly intact, so `// kidsModeStore.registerIpc()` sailed past the plain-string
+      // version of these two rows — verified by doing exactly that and watching the guard stay
+      // green. Commenting out is how a wiring line actually dies.
+      ['src/main/index.ts', /^\s*kidsModeStore\.registerIpc\(\)/m],
+      ['src/server/index.ts', /^\s*kidsModeStore\.registerIpc\(\)/m],
+      ['src/main/index.ts', /^\s*await kidsModeStore\.init\(\)/m],
+      ['src/server/index.ts', /^\s*await kidsModeStore\.init\(\)/m],
+      // A real bridge implementation, not a stub.
+      ['src/renderer/bridge/ws-bridge.ts', 'const kidsMode: KidsModeApi = {'],
+      ['src/renderer/App.tsx', /^\s*void useKidsMode\.getState\(\)\.init\(\)/m]
+    ],
+    docs: ['docs/kids-mode.md'],
+  },
+  {
     // The unlock ladder. Asserted on the two things that would silently gut it: the ladder's own
     // module, and the fact that the server actually SERVES it — a ladder nobody can reach from a
     // lockout screen is a passing unit test and a countdown the user still has to stare at.

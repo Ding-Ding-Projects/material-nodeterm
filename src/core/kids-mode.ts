@@ -29,6 +29,7 @@ import path from 'path'
 
 import { IPC } from '../shared/ipc'
 import type { KidsModeRecord } from '../shared/types'
+import { DEFAULT_KIDS_MODE_NAME } from '../shared/kids-mode-name'
 import { platform } from './platform'
 import {
   hasCredential as credentialExists,
@@ -41,7 +42,9 @@ import {
 
 const MAX_NAME_LENGTH = 80
 
-export const DEFAULT_KIDS_MODE_NAME = 'Kids mode'
+// Re-exported from src/shared so the renderer can use it as a pre-IPC default without importing
+// this node:fs-using module into the browser bundle. One definition, so the two cannot drift.
+export { DEFAULT_KIDS_MODE_NAME } from '../shared/kids-mode-name'
 
 const DEFAULT_RECORD: KidsModeRecord = { version: 1, enabled: false, name: DEFAULT_KIDS_MODE_NAME }
 

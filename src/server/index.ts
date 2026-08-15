@@ -14,6 +14,7 @@ import type { ServerConfig } from './config'
 import { initPlatform } from '../core/platform'
 import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
+import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsStore } from '../core/scheduled-settings-store'
 import { ScheduledSettingsService } from '../core/scheduled-settings-service'
 import { WorkspaceStore } from '../core/workspace-store'
@@ -160,6 +161,7 @@ export async function startServer(
   // Core services — same construction + registration order as src/main/index.ts.
   const settingsStore = new SettingsStore()
   const schoolModeStore = new SchoolModeStore()
+  const kidsModeStore = new KidsModeStore()
   const scheduledSettingsStore = new ScheduledSettingsStore()
   const scheduledSettingsService = new ScheduledSettingsService(scheduledSettingsStore)
   const ptyManager = new PtyManager()
@@ -169,6 +171,8 @@ export async function startServer(
   settingsStore.registerIpc()
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
+  await kidsModeStore.init()
+  kidsModeStore.registerIpc()
   // School mode removes every dim-sum surface, and the unlock ladder's first rung is a dim-sum
   // question. Read through a closure rather than at boot: the mode is a live, shared switch that
   // an app already running must pick up without a restart, and a value captured here would leave

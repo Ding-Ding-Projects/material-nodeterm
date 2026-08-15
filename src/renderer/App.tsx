@@ -8,6 +8,7 @@ import { SessionProvider } from './session/session'
 import { localSession } from './session/localSession'
 import { useSettings } from './state/settings'
 import { useSchoolMode } from './state/schoolMode'
+import { useKidsMode } from './state/kidsMode'
 import { usePersonalVocabulary } from './state/personalVocabulary'
 import { useViewMode } from './state/viewMode'
 import { setWebglEnabled } from './terminal/webgl-budget'
@@ -69,6 +70,7 @@ export default function App() {
   // calling the IPC directly, so a change made by ANOTHER app/window applies live everywhere.
   useEffect(() => {
     void useSchoolMode.getState().init()
+    void useKidsMode.getState().init()
     usePersonalVocabulary.getState().hydrate()
   }, [])
   // The user's chosen display name (docs/app-rename.md) — DISPLAY only. The document title is the

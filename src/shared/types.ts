@@ -2573,6 +2573,7 @@ export interface NodeTerminalApi {
   dialog: DialogApi
   settings: SettingsApi
   schoolMode: SchoolModeApi
+  kidsMode: KidsModeApi
   scheduledSettings: ScheduledSettingsApi
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
