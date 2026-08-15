@@ -4,7 +4,7 @@
 // Refuse to start a build that cannot succeed, and say why in one second rather than three
 // minutes. Two preconditions today, both Windows-only in practice:
 //
-//   1. no running process has this repo's native modules loaded;
+//   1. no running process holds a binary under node_modules that a rebuild must delete;
 //   2. the toolchain has the Spectre-mitigated MSVC libraries node-pty requires.
 //
 // It reports EVERY failed precondition in one run, deliberately. Discovering these one at a
@@ -52,10 +52,23 @@ import { dirname, join, relative } from 'node:path'
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MODULES = join(REPO_ROOT, 'node_modules')
 
-/** Every compiled addon under node_modules, which is what a rebuild replaces. */
-function nativeModules(dir, out = [], depth = 0) {
-  // Bounded: node_modules is deep and almost all of it is JavaScript. Addons live near the top of
-  // a package, under build/Release or prebuilds.
+/**
+ * Every binary under node_modules that a rebuild or reinstall has to DELETE, and that Windows
+ * will therefore refuse to delete while a process has it mapped.
+ *
+ * `.node` was the whole list at first, because electron-rebuild recompiles addons. That missed
+ * the most common failure of all: `npm ci` removes node_modules wholesale, so it dies on
+ * `node_modules\electron\dist\electron.exe` — the Electron binary the running app IS. `build.bat`
+ * hit exactly that and reported npm's opaque EPERM with "see the npm output above for the real
+ * cause", which is the same unhelpful message this preflight was written to replace.
+ *
+ * `.dll` is included for the same reason: a native package that ships a sidecar DLL locks it the
+ * moment the addon loading it is mapped.
+ */
+const LOCKABLE = /\.(node|exe|dll)$/i
+function lockableBinaries(dir, out = [], depth = 0) {
+  // Bounded: node_modules is deep and almost all of it is JavaScript. Binaries live near the top
+  // of a package, under build/Release, prebuilds, or dist.
   if (depth > 6) return out
   let entries
   try {
@@ -65,8 +78,8 @@ function nativeModules(dir, out = [], depth = 0) {
   }
   for (const e of entries) {
     const p = join(dir, e.name)
-    if (e.isDirectory()) nativeModules(p, out, depth + 1)
-    else if (e.name.endsWith('.node')) out.push(p)
+    if (e.isDirectory()) lockableBinaries(p, out, depth + 1)
+    else if (LOCKABLE.test(e.name)) out.push(p)
   }
   return out
 }
@@ -156,7 +169,7 @@ function spectreLibComplaints() {
 }
 
 const locked = []
-for (const file of nativeModules(MODULES)) {
+for (const file of lockableBinaries(MODULES)) {
   try {
     closeSync(openSync(file, 'r+'))
   } catch (e) {
@@ -190,10 +203,11 @@ if (spectreLibComplaints().length > 0) {
 
 if (locked.length > 0) {
   problems.push({
-    title: "a running process has this repo's native modules loaded",
+    title: "a running process holds a binary this build has to replace",
     lines: [
-      'On Windows a DLL mapped into a live process cannot be deleted, so the electron-rebuild',
-      'step would fail with an EPERM about a .node file that says nothing about the real cause.',
+      'On Windows a binary mapped into a live process cannot be deleted. electron-rebuild would',
+      'fail with an EPERM about a .node file, and `npm ci` — which removes node_modules wholesale',
+      '— with one about electron.exe. Neither message mentions the app that is holding it.',
       '',
       ...locked.flatMap((file) => [
         `  ${relative(REPO_ROOT, file)}`,

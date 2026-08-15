@@ -116,6 +116,22 @@ Nothing the script downloads is ever committed to the repository itself.
 
 Takes a checkout with nothing installed to a built, runnable program:
 
+0. **Preflight** (`scripts/check-build-preflight.mjs`), on Windows the phase that matters most.
+   `npm ci` in the next step removes `node_modules` wholesale, and Windows refuses to delete a
+   binary a live process has mapped — so a forgotten dev window kills the install on
+   `node_modules\electron\dist\electron.exe`, with npm's own `EPERM` and no mention of the app
+   holding it. Measured: `build.bat /s` failed exactly that way, and all its report could say was
+   *"see the npm output above for the real cause"*. It now names the file and the PID, and reports
+   the missing Spectre-mitigated MSVC libraries in the same run — both blockers in about three
+   seconds rather than one after several minutes of the other.
+
+   Skipped, not failed, when `node` is not on `PATH` yet: the dependency phase is what installs
+   node, so a genuinely fresh machine must not be blocked by a check that needs it.
+
+   The `.sh` scripts do not call it. Unlinking an open file is ordinary on macOS and Linux, and
+   the Spectre check is Windows-only by construction, so there it would be a phase that can never
+   fail.
+
 1. Calls `download-dependencies.{bat,sh}` (by absolute path on Windows — see above), rather than
    duplicating its logic, so the two scripts can never silently drift apart.
 2. Runs `npm run build` (`electron-vite build`) and confirms `out/main/index.js` actually exists

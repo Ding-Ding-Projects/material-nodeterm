@@ -31,6 +31,36 @@ echo Repository : %NODETERM_ROOT%
 echo.
 
 rem ---------------------------------------------------------------------------------------------
+rem Phase 0: preconditions that make the whole build impossible, checked in about a second.
+rem
+rem `npm ci` below removes node_modules wholesale, and Windows refuses to delete a binary that a
+rem live process has mapped -- so a forgotten dev window makes the install die on
+rem node_modules\electron\dist\electron.exe with npm's own EPERM, which never mentions the app
+rem holding it. Measured: this script failed exactly that way, and its report could only say "see
+rem the npm output above for the real cause". The preflight names the file and the PID instead.
+rem
+rem Non-fatal by design when node is missing: the dependency phase installs node, so a machine
+rem without it yet must not be blocked by a check that needs it.
+rem ---------------------------------------------------------------------------------------------
+call :phase_begin "Preflight"
+where node >nul 2>&1
+if errorlevel 1 (
+    echo   node not on PATH yet - skipping the preflight; the dependency phase installs it.
+) else (
+    call node "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
+    if errorlevel 1 (
+        echo.
+        echo [FAILED] Preflight
+        echo   Dependency : a build precondition listed above
+        echo   Constraint : every precondition must hold before npm ci removes node_modules
+        echo   Source     : "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
+        echo   Error      : see the numbered problems above - each names its own fix
+        exit /b 1
+    )
+)
+call :phase_end "Preflight"
+
+rem ---------------------------------------------------------------------------------------------
 rem Phase 1: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
 rem the two scripts can never silently drift apart.
 rem ---------------------------------------------------------------------------------------------

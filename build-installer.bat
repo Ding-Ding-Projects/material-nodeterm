@@ -60,6 +60,35 @@ echo Tree state : %BUILD_TREE_STATE%
 echo.
 
 rem ---------------------------------------------------------------------------------------------
+rem Phase 0: preconditions that make the whole build impossible, checked in about a second.
+rem
+rem This script has MORE to lose than build.bat by skipping it: the packaging step is the long
+rem one, and both known blockers surface only after minutes of work -- a locked binary as an EPERM
+rem from npm or electron-rebuild that never names the app holding it, and the missing
+rem Spectre-mitigated libraries as four copies of MSB8040 well into the compile.
+rem
+rem Non-fatal by design when node is missing: the dependency phase installs node, so a machine
+rem without it yet must not be blocked by a check that needs it.
+rem ---------------------------------------------------------------------------------------------
+call :phase_begin "Preflight"
+where node >nul 2>&1
+if errorlevel 1 (
+    echo   node not on PATH yet - skipping the preflight; the dependency phase installs it.
+) else (
+    call node "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
+    if errorlevel 1 (
+        echo.
+        echo [FAILED] Preflight
+        echo   Dependency : a build precondition listed above
+        echo   Constraint : every precondition must hold before packaging starts
+        echo   Source     : "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
+        echo   Error      : see the numbered problems above - each names its own fix
+        exit /b 1
+    )
+)
+call :phase_end "Preflight"
+
+rem ---------------------------------------------------------------------------------------------
 rem Phase 1: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
 rem the two scripts can never silently drift apart.
 rem ---------------------------------------------------------------------------------------------
