@@ -148,7 +148,7 @@ import { TmuxBanner } from '../components/TmuxBanner'
 import { PtyPressureBanner } from '../components/PtyPressureBanner'
 import { ConflictBar } from '../components/ConflictBar'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { DestructiveConfirmGate } from '../components/DestructiveConfirmGate'
+import { openDestructiveGate } from '../state/destructiveGate'
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
 import { useKidsMode } from '../state/kidsMode'
 import { NotificationCenter } from '../components/NotificationCenter'
@@ -424,17 +424,6 @@ interface ConfirmState {
   /** Set when an AGENT asked for this dialog: it is answered by an explicit click, never by an
    *  Enter the user aimed at their terminal (see components/confirm-key). */
   requestedBy?: string
-}
-/** One request for the destructive-action super-confirmation gate (two keys + full-range
- *  slider) — see `DestructiveConfirmGate` and docs/destructive-confirmation.md. */
-interface DestructiveGateRequest {
-  title: string
-  description: string
-  affected?: string[]
-  confirmLabel?: string
-  anchor?: { x: number; y: number }
-  restoreFocusEl?: HTMLElement | null
-  onConfirm: () => void
 }
 interface RemoveState {
   groupId: string
@@ -961,8 +950,11 @@ export function Canvas() {
   // The destructive-action super-confirmation gate (two keys + full-range slider) — see
   // requestDeleteNodes / requestDeleteProject and docs/destructive-confirmation.md. Only one at
   // a time, exactly like `confirm` above.
-  const [destructiveGate, setDestructiveGate] = useState<DestructiveGateRequest | null>(null)
-  const openDestructiveGate = useCallback((req: DestructiveGateRequest) => setDestructiveGate(req), [])
+  // The gate is a module-level store (state/destructiveGate.ts) rendered once at the app root by
+  // `DestructiveGateHost`, NOT local state here. It used to be Canvas's own `useState`, which is
+  // the only reason the two destructive actions outside this file — discarding a file's changes,
+  // revoking a paired device — could not reach it. Canvas keeps the same call sites; it simply no
+  // longer owns the dialog.
   // Node to center once its project finishes loading (cross-project notification click).
   const pendingFocusRef = useRef<string | null>(null)
   // One-shot: the next active-project load keeps the CURRENT camera instead of applying the
@@ -6058,7 +6050,7 @@ export function Canvas() {
         }
       })
     },
-    [deleteNodes, openDestructiveGate]
+    [deleteNodes]
   )
 
   // Persist a browser card's navigation (url/title) from the modal webview back to the node.
@@ -8457,7 +8449,7 @@ export function Canvas() {
         onConfirm: () => deleteProject(id)
       })
     },
-    [deleteProject, openDestructiveGate]
+    [deleteProject]
   )
 
   const now = useMemo(() => Date.now(), [transcriptHits])
@@ -9498,22 +9490,6 @@ export function Canvas() {
             confirm.onCancel?.()
             setConfirm(null)
           }}
-        />
-      )}
-
-      {destructiveGate && (
-        <DestructiveConfirmGate
-          title={destructiveGate.title}
-          description={destructiveGate.description}
-          affected={destructiveGate.affected}
-          confirmLabel={destructiveGate.confirmLabel}
-          anchor={destructiveGate.anchor}
-          restoreFocusEl={destructiveGate.restoreFocusEl}
-          onConfirm={() => {
-            destructiveGate.onConfirm()
-            setDestructiveGate(null)
-          }}
-          onCancel={() => setDestructiveGate(null)}
         />
       )}
 

@@ -112,13 +112,24 @@ export function gateKidsPermissionMode(
 }
 
 /** Actions kids mode always routes through the two-key destructive confirmation. */
+/**
+ * The destructive actions kids mode gates. Every member must be reachable at a real call site —
+ * `state/destructiveGate.test.ts` starts from THIS list and fails for any entry no surface asks
+ * about, because that is the failure mode a per-action test cannot catch: an action nobody wired
+ * has no test to go red.
+ *
+ * `clear-history` was here and is gone. Nothing in the app clears history — the local version
+ * history is append-only by design, and even a restore is recorded as a new revision rather than
+ * removing anything. Listing it made a safety list look like it covered something that does not
+ * exist, which is worse than a shorter list: a reader checking whether kids mode protects history
+ * would have found a yes. Add it back in the same change that adds a surface which clears it.
+ */
 export type GuardedAction =
   | 'delete-project'
   | 'delete-node'
   | 'discard-changes'
   | 'remove-worktree'
   | 'revoke-device'
-  | 'clear-history'
 
 /**
  * Whether the destructive-action super-confirmation is mandatory for this action right now.

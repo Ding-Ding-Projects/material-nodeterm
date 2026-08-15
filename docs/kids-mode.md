@@ -127,9 +127,8 @@ feature is *missing* from the other shell.
   | `delete-node` | consults the policy ✅ |
   | `delete-project` | already opens the super gate unconditionally ✅ |
   | `remove-worktree` | hardened: no Enter-confirm, disk deletion always an unticked opt-in ✅ |
-  | `discard-changes` | bare `window.confirm()` ❌ |
-  | `revoke-device` | plain `ConfirmDialog` ❌ |
-  | `clear-history` | not wired ❌ |
+  | `discard-changes` | two-key gate under kids mode; plain confirm when off ✅ |
+  | `revoke-device` | two-key gate under kids mode; plain confirm when off ✅ |
 
   So **two of six** remain unprotected. `discard-changes` and `revoke-device` live outside
   `Canvas.tsx`, which owns `openDestructiveGate`, so wiring them needs the gate plumbed through —

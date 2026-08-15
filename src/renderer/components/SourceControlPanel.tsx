@@ -8,6 +8,9 @@ import { promptDialog } from './promptDialog'
 import { useProjects } from '../state/projects'
 import { useSettings } from '../state/settings'
 import { useSshConn } from '../state/sshConn'
+import { requiresDestructiveGate } from '@shared/kids-mode-policy'
+import { openDestructiveGate } from '../state/destructiveGate'
+import { useKidsMode } from '../state/kidsMode'
 import { useScmDraft } from '../state/scmDraft'
 import { useScmCache } from '../state/scmCache'
 import { useSession } from '../session/session'
@@ -255,9 +258,29 @@ export function SourceControlPanel({
     await requestRefreshAll()
   }
 
+  // Discarding a file's changes destroys work that was never committed anywhere — the one
+  // destructive action in this panel with no recovery path at all (a deleted branch still has its
+  // commits; a reverted commit is a new commit). Under kids mode it therefore takes the two-key
+  // gate, reached through the shared store: this panel is not inside Canvas, and while the gate
+  // lived in Canvas's own state that is the entire reason this action went unguarded.
+  //
+  // With the mode OFF the plain confirm is kept byte-for-byte. Silently tightening a
+  // confirmation for every existing user is a product decision, not a wiring fix.
   const discard = (f: GitFileChange) => {
+    const run = () => void act(() => git.discard(cwd!, f.path, f.status === 'U'))
+    if (requiresDestructiveGate('discard-changes', useKidsMode.getState().enabled).required) {
+      openDestructiveGate({
+        title: `Discard changes to ${f.path}`,
+        description:
+          'The edits in this file are thrown away. They were never committed, so there is nothing to restore them from — not undo, not the history panel, not git.',
+        affected: [f.path],
+        confirmLabel: 'Discard',
+        onConfirm: run
+      })
+      return
+    }
     if (!window.confirm(`Discard changes to ${f.path}? This cannot be undone.`)) return
-    void act(() => git.discard(cwd!, f.path, f.status === 'U'))
+    run()
   }
 
   // Runs in the store so it completes even if the panel is closed mid-generation; the result

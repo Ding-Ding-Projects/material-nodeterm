@@ -112,7 +112,6 @@ describe('the destructive gate', () => {
     'discard-changes',
     'remove-worktree',
     'revoke-device',
-    'clear-history'
   ] as const
 
   it('is mandatory for every guarded action while kids mode is on', () => {

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { Canvas } from './canvas/Canvas'
 import { PromptDialogHost } from './components/promptDialog'
+import { DestructiveGateHost } from './components/DestructiveGateHost'
 import { DimSumSurprise } from './components/DimSumSurprise'
 import { NotificationToasts } from './components/NotificationToasts'
 import { SessionProvider } from './session/session'
@@ -87,6 +88,9 @@ export default function App() {
         <Canvas />
         {/* In-app window.prompt replacement (Electron has no prompt); driven by promptDialog(). */}
         <PromptDialogHost />
+      {/* Mounted at the root so every surface can reach the super gate, and so an open one
+          survives a project switch beneath it. See state/destructiveGate.ts. */}
+      <DestructiveGateHost />
         {/* Non-blocking corner-anchored toast stack — mounted once, app-wide. See
             docs/notifications.md. */}
         <NotificationToasts />

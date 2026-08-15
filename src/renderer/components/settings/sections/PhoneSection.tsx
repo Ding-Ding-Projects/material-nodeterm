@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import type { PairedDevice } from '@shared/types'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
+import { requiresDestructiveGate } from '@shared/kids-mode-policy'
+import { openDestructiveGate } from '../../../state/destructiveGate'
+import { useKidsMode } from '../../../state/kidsMode'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { Button } from '@renderer/ui/Button'
 import { Switch } from '@renderer/ui/Switch'
@@ -73,6 +76,29 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
   useEffect(() => {
     void refreshDevices()
   }, [refreshDevices])
+
+  // Read at RENDER: the mode is a shared record another process can flip, so a Settings page left
+  // open across that change must honour the new state rather than one captured at mount.
+  const kidsGateRequired = requiresDestructiveGate('revoke-device', useKidsMode((s) => s.enabled))
+    .required
+
+  const requestRevoke = (device: PairedDevice, anchorEl: HTMLElement | null): void => {
+    if (!kidsGateRequired) {
+      setPendingRevoke(device)
+      return
+    }
+    const rect = anchorEl?.getBoundingClientRect()
+    openDestructiveGate({
+      title: `Revoke “${device.name}”`,
+      description:
+        'This device’s key is deleted from this machine. It cannot reconnect, and getting it back means pairing it again from scratch.',
+      affected: [device.name],
+      confirmLabel: 'Revoke',
+      anchor: rect ? { x: rect.left, y: rect.bottom } : undefined,
+      restoreFocusEl: anchorEl,
+      onConfirm: () => void revokeDevice(device)
+    })
+  }
 
   const revokeDevice = async (device: PairedDevice): Promise<void> => {
     setPendingRevoke(null)
@@ -270,7 +296,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
                       </div>
                     ) : null}
                   </div>
-                  <Button onClick={() => setPendingRevoke(device)}>Revoke</Button>
+                  <Button onClick={(e) => requestRevoke(device, e.currentTarget)}>Revoke</Button>
                 </li>
               ))}
             </ul>
@@ -278,7 +304,11 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
         </div>
       </SearchableRow>
 
-      {pendingRevoke ? (
+      {/* Revoking is destructive in a way the wording has to carry: the device's key is gone, so
+          this is not "sign it out" — that phone has to be paired again from scratch, in person,
+          with the machine it pairs to. Under kids mode it takes the two-key gate; with the mode
+          off the existing single confirm is unchanged. */}
+      {pendingRevoke && !kidsGateRequired ? (
         <ConfirmDialog
           message={`Revoke “${pendingRevoke.name}”? Its key is removed from this machine and it will no longer be able to connect.`}
           confirmLabel="Revoke"

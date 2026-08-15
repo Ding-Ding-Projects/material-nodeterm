@@ -46,7 +46,7 @@ on the host:
 
 1. Cloudflare dashboard → **Zero Trust** → **Networks** → **Tunnels**
 2. Pick the tunnel, **Configure** → **Public Hostname** → **Add a public hostname**
-3. Subdomain / domain: the name you want, e.g. `dew` + `dewhui.uk`
+3. Subdomain / domain: the name you want, e.g. `nodeterm` + `example.com`
 4. Service: **HTTP** → `127.0.0.1:8443` (or the LAN address from step 1)
 5. Save. The DNS record is created for you.
 
@@ -54,7 +54,7 @@ If the tunnel instead runs from a `config.yml`, add the route there and restart 
 
 ```yaml
 ingress:
-  - hostname: dew.example.uk
+  - hostname: nodeterm.example.com
     service: http://127.0.0.1:8443
   - service: http_status:404          # keep this catch-all last
 ```

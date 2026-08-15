@@ -393,9 +393,23 @@ const FEATURES = [
   {
     id: 'destructive-confirmation',
     label: 'Destructive-action confirmation gate',
-    files: ['src/renderer/components/DestructiveConfirmGate.tsx'],
-    contentChecks: [['src/renderer/components/DestructiveConfirmGate.tsx', 'export function DestructiveConfirmGate']],
-    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'DestructiveConfirmGate' },
+    files: [
+      'src/renderer/components/DestructiveConfirmGate.tsx',
+      'src/renderer/components/DestructiveGateHost.tsx',
+      'src/renderer/state/destructiveGate.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/components/DestructiveConfirmGate.tsx', 'export function DestructiveConfirmGate'],
+      // The gate is reached through a store, so it is available to every surface — not only the
+      // canvas. This row used to assert the component was imported by Canvas.tsx, which pinned
+      // WHERE the gate lived rather than THAT it works, and stayed green for the whole period in
+      // which three of the five guarded actions could not reach it at all.
+      ['src/renderer/state/destructiveGate.ts', 'export function openDestructiveGate'],
+      ['src/renderer/components/DestructiveGateHost.tsx', '<DestructiveConfirmGate'],
+    ],
+    // Mounted at the app root, so an open gate is not inside a subtree a project switch
+    // re-renders out from under the person confirming.
+    wired: { file: 'src/renderer/App.tsx', symbol: 'DestructiveGateHost' },
     docs: ['docs/destructive-confirmation.md'],
   },
   {
