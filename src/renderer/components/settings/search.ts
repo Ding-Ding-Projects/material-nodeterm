@@ -1,3 +1,4 @@
+import { clampFilterCandidate } from '../../lib/regex/engine'
 import { compileForInlineFilter } from '../../lib/regex/safety'
 import type { SearchMode } from '../../lib/regex/useRegexSearchField'
 
@@ -43,5 +44,5 @@ export function matchesEntry(state: SettingsSearchState, entry: SettingsSearchEn
   if (!pattern) return true
   const re = compileForInlineFilter(pattern, state.flags)
   if (!re) return true
-  return new RegExp(re.source, re.flags).test(haystack(entry))
+  return new RegExp(re.source, re.flags).test(clampFilterCandidate(haystack(entry)))
 }
