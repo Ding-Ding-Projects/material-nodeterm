@@ -164,6 +164,119 @@ describe('the light theme overrides every themeable token', () => {
   })
 })
 
+describe('Material 3 token foundation', () => {
+  // Hand-written inventory of every --md- role token the foundation landed with
+  // (src/renderer/styles.css `:root`, the "Material Design 3 — colour roles" +
+  // "shape scale" sections). Hand-written on purpose, per this repo's own completeness-guard
+  // rule: a check that only inspects tokens it finds by scanning the file cannot notice one that
+  // disappeared entirely — it would just quietly stop checking it. This list is what makes a
+  // deleted role a failure instead of a silent shrink.
+  const M3_ROLES = [
+    // surface ramp
+    '--md-surface-container-lowest',
+    '--md-surface-dim',
+    '--md-surface-container-low',
+    '--md-surface',
+    '--md-surface-container-high',
+    '--md-surface-container-highest',
+    '--md-on-surface',
+    '--md-on-surface-variant',
+    '--md-outline-variant',
+    '--md-outline',
+    // primary
+    '--md-primary',
+    '--md-on-primary',
+    '--md-primary-container',
+    '--md-on-primary-container',
+    // secondary
+    '--md-secondary',
+    '--md-secondary-container',
+    '--md-on-secondary-container',
+    // tertiary
+    '--md-tertiary',
+    '--md-tertiary-container',
+    '--md-on-tertiary-container',
+    // error
+    '--md-error',
+    '--md-error-container',
+    '--md-on-error-container',
+    // custom: success / warning
+    '--md-success',
+    '--md-success-container',
+    '--md-on-success-container',
+    '--md-warning',
+    '--md-warning-container',
+    '--md-on-warning-container',
+    // scrim / shadow
+    '--md-scrim',
+    '--md-shadow',
+    // shape scale
+    '--md-shape-none',
+    '--md-shape-extra-small',
+    '--md-shape-small',
+    '--md-shape-medium',
+    '--md-shape-large',
+    '--md-shape-extra-large',
+    '--md-shape-full'
+  ]
+
+  /** Whether `block` (a DARK or LIGHT slice) declares `name` at all — value not inspected. */
+  function definedIn(block: string, name: string): boolean {
+    return new RegExp(`^\\s*${name}\\s*:`, 'm').test(block)
+  }
+
+  it('every M3 role is declared in the dark (root) block', () => {
+    // Catches a role dropped from :root entirely — the case a scan-and-check test can't see,
+    // because it would just stop finding the name and never flag its absence.
+    const missing = M3_ROLES.filter((name) => !definedIn(DARK, name))
+    expect(missing).toEqual([])
+  })
+
+  it('every M3 role is DEFINED for the light theme too — restated, alias, or a pure tint mix', () => {
+    // A role counts as defined for light when any of:
+    //  - it has its own literal declaration in the light block (restated, same as any other
+    //    literal-valued token in this sheet), or
+    //  - its dark declaration is a bare alias (`var(--other-token)`) — CSS custom-property
+    //    cascade already carries an undeclared property through from `:root`, so the alias
+    //    flips for free whenever the token it points at flips (or is theme-independent, like a
+    //    radius), or
+    //  - its dark declaration is a pure `rgba(var(--tint-rgb), α)` mix, which flips by
+    //    construction because `--tint-rgb` itself is overridden in light.
+    // A role satisfying none of these keeps its DARK literal value on a light page — the exact
+    // silent-failure shape this whole file exists to catch (see the file banner above).
+    const brokenForLight: string[] = []
+    for (const name of M3_ROLES) {
+      if (definedIn(LIGHT, name)) continue
+      const declMatch = new RegExp(`^\\s*${name}\\s*:\\s*([^;]+);`, 'm').exec(DARK)
+      if (!declMatch) {
+        brokenForLight.push(name) // no dark declaration either — the block-1 test also flags this
+        continue
+      }
+      const value = declMatch[1].trim()
+      const isAlias = /^var\(--[a-z0-9-]+\)$/i.test(value)
+      const isTintMix = /^rgba?\(\s*var\(--tint-rgb\)[^)]*\)$/.test(value)
+      if (!isAlias && !isTintMix) brokenForLight.push(name)
+    }
+    expect(brokenForLight).toEqual([])
+  })
+})
+
+describe('the theme selector uses this app\'s convention, not the design doc\'s literal one', () => {
+  // The design file this foundation was implemented from used `data-md-theme` as its selector.
+  // This app's theme switch (App.tsx / lib/appTheme.ts) has always been `data-theme`, and every
+  // existing rule in this sheet — including the M3 block itself — keys off it. A stray
+  // `data-md-theme` selector copied in from the design would define tokens nobody's `<html>`
+  // attribute ever matches: no build error, no runtime error, just a light theme that silently
+  // keeps rendering the dark M3 values forever.
+  it('never references data-md-theme', () => {
+    expect(CSS.includes('data-md-theme')).toBe(false)
+  })
+
+  it('keys the light override off data-theme', () => {
+    expect(CSS.includes("data-theme='light'")).toBe(true)
+  })
+})
+
 /**
  * Contrast floors for the LIGHT palette.
  *

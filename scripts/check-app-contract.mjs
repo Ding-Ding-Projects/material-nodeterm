@@ -32,7 +32,7 @@
 // was deleted from SETTINGS_GROUPS is invisible to a user and must fail here
 // exactly as if the file did not exist.
 
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -584,6 +584,225 @@ for (const feature of FEATURES) {
       requireFileExists(doc, `${feature.label}: documentation`)
     }
   }
+}
+
+// ---------------------------------------------------------------------
+// Material Design 3 token foundation (src/renderer/styles.css) — CLAUDE.md
+// requires the app to conform fully to M3, with zero legacy/original design
+// elements remaining. This checks three ways that exact foundation can
+// regress WITHOUT the build noticing:
+//
+//   1. No CDN font/icon link anywhere under src/renderer. The renderer's
+//      CSP is `font-src 'self' data:` (src/renderer/index.html) — a <link>
+//      or `@import` pulling a font/icon face from an external host does not
+//      error, it is SILENTLY blocked: system font fallback, tofu glyphs
+//      where icons should be. Nothing in the source would look wrong; only
+//      the running app would, and only to someone looking at it.
+//   2. The stylesheet actually DEFINES the hand-written inventory of M3
+//      colour/shape roles — not merely that a comment says it intends to.
+//   3. Those roles are defined for BOTH themes. The dark defaults live on
+//      bare `:root`; a role whose value does not auto-theme (a literal
+//      hex/rgba rather than an alias onto an already-theming token, or a
+//      pure `--tint-rgb` mix) has to be independently restated under
+//      `:root[data-theme='light']`, or a light-mode user silently keeps
+//      the dark value forever — no error, no difference in the dark
+//      theme, just a wrong colour nobody notices until someone switches
+//      themes and knows what to look for.
+//   4. `data-md-theme` (the imported design file's own selector) never
+//      appears in styles.css — this app's theme switch has always been
+//      `data-theme` (App.tsx / lib/appTheme.ts), and every existing rule
+//      in the sheet, M3 block included, keys off it. A stray
+//      `data-md-theme` rule copied in from the design defines tokens
+//      nobody's <html> attribute will ever match: no build error, no
+//      runtime error, just a light theme that silently keeps rendering
+//      the dark M3 values forever.
+//
+// This deliberately duplicates part of what
+// src/renderer/styles.theme.test.ts's "Material 3 token foundation" +
+// "the theme selector uses this app's convention" describe blocks already
+// check — that is a vitest suite (`npm test`), this is a zero-dependency
+// script anyone can run standalone (`node scripts/check-app-contract.mjs`)
+// without a test runner. Two independent checks of the same fact, in two
+// different tools, is the point — see this file's own header on why a
+// guard that only validates what it already expects to find is worthless.
+//
+// EVERY needle below carries a delimiter its own name cannot supply — a
+// trailing `:` immediately after the property name, which every CSS custom
+// property declaration has. Without it `--md-primary` would match happily
+// inside `--md-primary-container`, exactly the "renamed/removed symbol
+// still matches" trap this file's own header (the requireWiredSymbol
+// comment above) already warns about.
+// ---------------------------------------------------------------------
+
+const STYLES_FILE = 'src/renderer/styles.css'
+
+function listRendererFiles(dir) {
+  const out = []
+  for (const entry of readdirSync(join(REPO_ROOT, dir), { withFileTypes: true })) {
+    const rel = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      if (entry.name !== 'node_modules') out.push(...listRendererFiles(rel))
+    } else if (/\.(html|css|ts|tsx|js|jsx)$/i.test(entry.name)) {
+      out.push(rel)
+    }
+  }
+  return out
+}
+const RENDERER_FILES = listRendererFiles('src/renderer')
+
+// --- 1. No CDN font/icon link -------------------------------------------
+const FORBIDDEN_FONT_ICON_HOSTS = [
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
+  'fonts.google.com',
+  'use.typekit.net',
+  'use.fontawesome.com',
+  'fontawesome.com',
+  'cdn.jsdelivr.net',
+  'unpkg.com',
+  'cdnjs.cloudflare.com',
+]
+// A <link> whose href is external, or an @import pulling from one — the two
+// shapes that actually load a stylesheet/font-face over the network, as
+// opposed to a plain string mentioning a host in passing.
+const EXTERNAL_LINK_RE = /<link\b[^>]*\bhref\s*=\s*['"]https?:\/\//i
+const EXTERNAL_IMPORT_RE = /@import\s+(?:url\()?['"]?https?:\/\//i
+const cdnHits = []
+for (const file of RENDERER_FILES) {
+  const text = readText(file) || ''
+  for (const host of FORBIDDEN_FONT_ICON_HOSTS) {
+    if (text.includes(host)) cdnHits.push(`${file}: references ${host}`)
+  }
+  if (EXTERNAL_LINK_RE.test(text)) cdnHits.push(`${file}: <link> with an external href`)
+  if (EXTERNAL_IMPORT_RE.test(text)) cdnHits.push(`${file}: @import from an external URL`)
+}
+checkedCount += 1
+if (cdnHits.length > 0) {
+  fail(
+    `M3 foundation: found ${cdnHits.length} CDN font/icon reference(s) under src/renderer — the CSP (font-src 'self' data:) blocks these SILENTLY at runtime, with no build error:`,
+  )
+  for (const hit of cdnHits) console.error(`    - ${hit}`)
+} else {
+  pass(`M3 foundation: no CDN font/icon link found across ${RENDERER_FILES.length} scanned files under src/renderer`)
+}
+
+// --- 2 & 3. M3 roles defined, and defined for both themes ---------------
+// Same block-boundary extraction as styles.theme.test.ts, CRLF guard
+// included: this file is CRLF on a Windows checkout with core.autocrlf=true,
+// so a literal '\n}\n' search silently returns -1 and slices the wrong
+// text (or an empty tail) with no error. `\r?` matches the LF-only case
+// identically, so this is not a platform branch — it is the version of the
+// search that is correct on both platforms.
+const stylesText = readText(STYLES_FILE) || ''
+const lightStartMatch = /^:root\[data-theme=['"]light['"]\]\s*\{/m.exec(stylesText)
+const darkBlockStart = stylesText.indexOf(':root {')
+const darkBlock =
+  lightStartMatch && darkBlockStart !== -1 ? stylesText.slice(darkBlockStart, lightStartMatch.index) : ''
+let lightBlock = ''
+if (lightStartMatch) {
+  const closeMatch = /\r?\n\}\r?\n/.exec(stylesText.slice(lightStartMatch.index))
+  if (closeMatch) {
+    lightBlock = stylesText.slice(lightStartMatch.index, lightStartMatch.index + closeMatch.index + closeMatch[0].length)
+  }
+}
+
+// Hand-written on purpose — a role dropped from the sheet entirely is
+// exactly the case a scan-and-check approach can't see, because it would
+// just stop finding the name and never flag its absence. Mirrors the
+// inventory in styles.theme.test.ts's M3_ROLES; kept as an independent
+// hand-typed list rather than imported, so the two checks cannot both go
+// blind to the same accidental deletion at once.
+const M3_ROLES = [
+  '--md-surface-container-lowest',
+  '--md-surface-dim',
+  '--md-surface-container-low',
+  '--md-surface',
+  '--md-surface-container-high',
+  '--md-surface-container-highest',
+  '--md-on-surface',
+  '--md-on-surface-variant',
+  '--md-outline-variant',
+  '--md-outline',
+  '--md-primary',
+  '--md-on-primary',
+  '--md-primary-container',
+  '--md-on-primary-container',
+  '--md-secondary',
+  '--md-secondary-container',
+  '--md-on-secondary-container',
+  '--md-tertiary',
+  '--md-tertiary-container',
+  '--md-on-tertiary-container',
+  '--md-error',
+  '--md-error-container',
+  '--md-on-error-container',
+  '--md-success',
+  '--md-success-container',
+  '--md-on-success-container',
+  '--md-warning',
+  '--md-warning-container',
+  '--md-on-warning-container',
+  '--md-scrim',
+  '--md-shadow',
+  '--md-shape-none',
+  '--md-shape-extra-small',
+  '--md-shape-small',
+  '--md-shape-medium',
+  '--md-shape-large',
+  '--md-shape-extra-large',
+  '--md-shape-full',
+]
+
+// Declared at all (value not inspected). Anchored to the START of a
+// (possibly indented) line — so a role name mentioned mid-sentence in a
+// comment can't count — and to an immediately following `:`, which is the
+// delimiter that keeps `--md-primary` from matching inside
+// `--md-primary-container` (see this section's header comment).
+function declaredIn(block, name) {
+  return new RegExp(`^\\s*${name}\\s*:`, 'm').test(block)
+}
+
+checkedCount += 1
+const missingFromDark = M3_ROLES.filter((name) => !declaredIn(darkBlock, name))
+if (missingFromDark.length > 0) {
+  fail(`M3 foundation: role(s) missing from the dark :root block in ${STYLES_FILE}: ${missingFromDark.join(', ')}`)
+} else {
+  pass(`M3 foundation: all ${M3_ROLES.length} M3 roles declared in the dark :root block of ${STYLES_FILE}`)
+}
+
+checkedCount += 1
+const brokenForLight = []
+for (const name of M3_ROLES) {
+  if (declaredIn(lightBlock, name)) continue // restated for light directly
+  const declMatch = new RegExp(`^\\s*${name}\\s*:\\s*([^;]+);`, 'm').exec(darkBlock)
+  if (!declMatch) {
+    brokenForLight.push(name) // no dark declaration either — also caught above
+    continue
+  }
+  const value = declMatch[1].trim()
+  const isAlias = /^var\(--[a-z0-9-]+\)$/i.test(value)
+  const isTintMix = /^rgba?\(\s*var\(--tint-rgb\)[^)]*\)$/.test(value)
+  if (!isAlias && !isTintMix) brokenForLight.push(name)
+}
+if (brokenForLight.length > 0) {
+  fail(
+    `M3 foundation: role(s) not defined for the light theme in ${STYLES_FILE} — neither restated under :root[data-theme='light'], nor an alias/--tint-rgb mix that auto-flips with it: ${brokenForLight.join(', ')}`,
+  )
+} else {
+  pass(`M3 foundation: all ${M3_ROLES.length} M3 roles are defined for both themes (restated, alias, or a --tint-rgb mix) in ${STYLES_FILE}`)
+}
+
+// --- 4. The design file's selector must never appear --------------------
+// Scoped to styles.css alone, deliberately: styles.theme.test.ts's own test
+// for this fact necessarily contains the literal string 'data-md-theme' in
+// its source (to assert the CSS does NOT contain it) — scanning the whole
+// src/renderer tree would make that correct, passing test file a permanent
+// false failure of this exact check.
+checkedCount += 1
+if (stylesText.includes('data-md-theme')) {
+  fail(`M3 foundation: 'data-md-theme' (the design file's selector, not this app's) found in ${STYLES_FILE} — this app's theme switch is 'data-theme'`)
+} else {
+  pass(`M3 foundation: 'data-md-theme' does not appear in ${STYLES_FILE} (this app uses 'data-theme')`)
 }
 
 // ---------------------------------------------------------------------

@@ -95,6 +95,95 @@
   --radius: 8px;
   --radius-sm: 6px;
   --radius-lg: 12px;
+
+  /* ---- Material Design 3 — colour roles -----------------------------------------------------
+     EXTENDS the alpha-tint model above; nothing above is replaced or renamed. Every role below is
+     either an ALIAS onto an existing token (so it inherits that token's per-theme value, and any
+     future edit to the aliased token, for free) or — where the app genuinely has no equivalent
+     (containers, outline, scrim, shadow) — a value AUTHORED from the app's own hues/alphas, never
+     the design doc's site-derived numbers. Prefixed `--md-` so these can never collide with the
+     app's existing bare names. See docs/app-design-tokens.md for the mapping this follows.
+     A token that merely aliases another token (its value is another `var(...)` reference) needs no
+     light-block restatement (styles.theme.test.ts only requires literal/`--tint-rgb` values to be
+     restated — an alias already flips with whatever it points at); a token whose value is a
+     literal hex/rgba is restated in the light block below. */
+
+  /* Surface container ramp — the app's six-step elevation ramp, wearing M3's names. */
+  --md-surface-container-lowest: var(--surface-black);
+  --md-surface-dim: var(--surface-sunken);
+  --md-surface-container-low: var(--surface-deep);
+  --md-surface: var(--bg);
+  --md-surface-container-high: var(--surface-raised);
+  --md-surface-container-highest: var(--surface-overlay);
+  --md-on-surface: var(--text);
+  --md-on-surface-variant: var(--muted);
+  --md-outline-variant: var(--border);
+  /* No existing token sits between --muted-2 (0.25) and --muted (0.55); "outline" wants a
+     boundary a user actually notices (an input's edge, a divider that carries meaning) —
+     stronger than --border/outline-variant, quieter than body text. Authored as one more step in
+     the SAME --tint-rgb alpha family the rest of the sheet already uses, which is why (per the
+     comment above) it needs no separate light-theme value: the tint flip already carries it. */
+  --md-outline: rgba(var(--tint-rgb), 0.35);
+
+  /* Primary — the app's one existing accent, under M3's name. The container is a real tint of
+     that accent (not a neutral surface), built from --accent-rgb so it themes automatically. */
+  --md-primary: var(--accent);
+  --md-on-primary: #fff; /* white text on a saturated accent fill, in both themes — same call as --knob */
+  --md-primary-container: rgba(var(--accent-rgb), 0.16);
+  --md-on-primary-container: var(--accent-text);
+
+  /* Secondary + tertiary do not exist yet (docs/app-design-tokens.md) — the only two genuinely
+     new colour decisions here. Secondary is authored NEUTRAL: the app has exactly one identity
+     accent (blue) and inventing an arbitrary second hue with no real call site would just be a
+     stray colour in a terminal app. Tertiary instead reuses --agent-working, the app's actual
+     SECOND hue already live in the product (the working/busy clay accent) — a real existing
+     identity colour, not a new invention. */
+  --md-secondary: var(--muted);
+  --md-secondary-container: var(--surface-overlay);
+  --md-on-secondary-container: var(--text);
+  --md-tertiary: var(--agent-working);
+  --md-tertiary-container: rgba(217, 119, 87, 0.18); /* --agent-working (dark) at container alpha */
+  --md-on-tertiary-container: var(--agent-working);
+
+  --md-error: var(--danger);
+  --md-error-container: rgba(var(--danger-rgb), 0.16);
+  --md-on-error-container: var(--danger);
+
+  /* M3 defines no success/warning role; the app genuinely needs both (SSH status, permission-mode
+     copy), so they are extended as custom colour roles per docs/app-design-tokens.md — aliased
+     onto the app's existing hues, never invented. */
+  --md-success: var(--success);
+  --md-success-container: rgba(50, 215, 75, 0.16); /* --success (dark) at container alpha */
+  --md-on-success-container: var(--success);
+  --md-warning: var(--warn);
+  --md-warning-container: rgba(var(--warn-rgb), 0.16);
+  --md-on-warning-container: var(--warn);
+
+  /* Neither has an app equivalent — a translucent wash and a drop-shadow colour are new concepts
+     here. --md-shadow's weight matches the app's own --shadow-k multiplier (0.55 base × 1 in
+     dark, × 0.35 in light ≈ 0.19) rather than the design doc's numbers; --md-scrim has no existing
+     app analogue to derive from; using the design's own dark/light values here is landing what it
+     describes, since there is nothing of the app's to alias instead. */
+  --md-scrim: rgba(0, 0, 0, 0.62);
+  --md-shadow: rgba(0, 0, 0, 0.55);
+
+  /* ---- Material Design 3 — shape scale --------------------------------------------------------
+     The app's three existing radii (6/8/12) are kept byte-for-byte as this scale's small/medium
+     anchors; the steps around them are authored FOR THIS APP — not the design doc's site-derived
+     20px, which docs/app-design-tokens.md calls out by name as wrong here. */
+  --radius-none: 0px;
+  --radius-xs: 4px;
+  --radius-xl: 16px;
+  --radius-xxl: 28px;
+  --radius-full: 999px;
+  --md-shape-none: var(--radius-none);
+  --md-shape-extra-small: var(--radius-sm); /* 6px, existing */
+  --md-shape-small: var(--radius); /* 8px, existing */
+  --md-shape-medium: var(--radius-lg); /* 12px, existing */
+  --md-shape-large: var(--radius-xl); /* 16px */
+  --md-shape-extra-large: var(--radius-xxl); /* 28px */
+  --md-shape-full: var(--radius-full); /* pill / circular */
+
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue',
     sans-serif;
   font-size: 13px;
@@ -193,6 +282,20 @@
      and a neutral one would be the only cold thing on screen. */
   --canvas-dot: #d8cdba;
   --minimap-mask: rgba(251, 248, 243, 0.6);
+
+  /* ---- Material Design 3 — literal roles restated for light --------------------------------
+     Every alias above (`--md-primary: var(--accent)` and the rest) already flips with the token
+     it points at and needs nothing here. Only the LITERAL values from the dark block are restated
+     — styles.theme.test.ts requires every colour-valued token to appear in this block, and a
+     `var(--tint-rgb)`-only mix (like --md-outline) is exempted the same way --text already is. */
+  --md-on-primary: #fff; /* same call as --knob: a white knob/label needs no theme flip */
+  --md-primary-container: rgba(var(--accent-rgb), 0.16); /* --accent-rgb already themes */
+  --md-tertiary-container: rgba(176, 74, 40, 0.18); /* --agent-working (light) at container alpha */
+  --md-error-container: rgba(var(--danger-rgb), 0.16); /* --danger-rgb already themes */
+  --md-success-container: rgba(31, 122, 56, 0.16); /* --success (light) at container alpha */
+  --md-warning-container: rgba(var(--warn-rgb), 0.16); /* --warn-rgb already themes */
+  --md-scrim: rgba(0, 0, 0, 0.32); /* design doc's own light value — no app scrim to alias */
+  --md-shadow: rgba(0, 0, 0, 0.19); /* --shadow-k's light weight: 0.55 × 0.35 ≈ 0.19 */
 }
 
 * {
