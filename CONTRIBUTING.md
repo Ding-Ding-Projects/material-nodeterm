@@ -143,6 +143,11 @@ on the host too: we shipped the hook bearer that way and any other account on th
 it and open a terminal running an arbitrary command. Pass secrets by 0600 file or by **stdin**
 (`curl --config -`), and never add an argv fallback. See `docs/node-identity.md`.
 
+**Phone-pairing credentials never ride plaintext LAN HTTP.** A pairing start must load and
+advertise the host's NaCl public key; the client POSTs `{epk,box}`, and the success response is a
+single encrypted `box`. If the host key or encryption is unavailable, pairing refuses before it
+writes an SSH key or bearer. Never restore the old `{token,publicKey}` plaintext fallback.
+
 **Both raw listeners change together** — `src/main/index.ts` and `src/server/agent-status.ts`. A new
 field on a hook event that reaches only the desktop leaves the Server Edition quietly without the
 feature, and the boundary tests can only tell you an import is wrong, never that a field is missing.

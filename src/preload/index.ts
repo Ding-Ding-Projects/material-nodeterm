@@ -596,6 +596,7 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.handoffBuild, sessionId, agentId, sourceNodeId, cwd, accountId)
   },
   pairing: {
+    supported: true,
     start: () => ipcRenderer.invoke(IPC.pairingStart),
     stop: () => ipcRenderer.invoke(IPC.pairingStop),
     onDone: (cb) => {

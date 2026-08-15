@@ -9113,15 +9113,17 @@ export function Canvas() {
             </span>
           )}
         </button>
-        <button
-          title="Pair phone"
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            setPhonePairAnchor((cur) => (cur ? null : { right: r.right, bottom: r.bottom }))
-          }}
-        >
-          <IconPhone />
-        </button>
+        {window.nodeTerminal.pairing.supported ? (
+          <button
+            title="Pair phone"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              setPhonePairAnchor((cur) => (cur ? null : { right: r.right, bottom: r.bottom }))
+            }}
+          >
+            <IconPhone />
+          </button>
+        ) : null}
         <button
           title={hintLabel('Settings (⌘,)')}
           onClick={() => {
@@ -9336,7 +9338,7 @@ export function Canvas() {
         />
       </div>
 
-      {phonePairAnchor && (
+      {window.nodeTerminal.pairing.supported && phonePairAnchor && (
         <PhonePairPopover
           anchor={phonePairAnchor}
           onClose={() => setPhonePairAnchor(null)}

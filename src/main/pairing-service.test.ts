@@ -38,12 +38,43 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import os from 'os'
-import { createPairingService } from './pairing-service'
+import {
+  createPairingService,
+  type PairingRelayDeps,
+  type PairingServiceTestHooks
+} from './pairing-service'
 import { rewriteKeyComment, type DeviceEntry } from './pairing-core'
+import {
+  decrypt,
+  deriveSharedKey,
+  encrypt,
+  genKeyPair,
+  publicKeyToB64,
+  type KeyPair
+} from './remote/e2ee'
 
 const HOME = os.homedir()
 const AGENT_JSON = path.join(HOME, '.nodeterm', 'agent.json')
 const AUTH_KEYS = path.join(HOME, '.ssh', 'authorized_keys')
+const HOST_KEYS = genKeyPair()
+
+const secureDeps = (
+  overrides: Partial<PairingRelayDeps> = {}
+): PairingRelayDeps => ({
+  getSettings: () => ({ phoneAccessEnabled: false }) as ReturnType<PairingRelayDeps['getSettings']>,
+  getEntitlement: () => null,
+  loadHostKeyPair: async () => HOST_KEYS,
+  relayEndpoint: 'wss://relay.invalid',
+  apiBase: 'https://api.invalid',
+  // No relay network call in this suite; hostKey is still mandatory and advertised.
+  relayAllowed: () => false,
+  ...overrides
+})
+
+const newService = (
+  hooks: PairingServiceTestHooks = {},
+  deps: PairingRelayDeps = secureDeps()
+) => createPairingService(deps, hooks)
 
 /**
  * This file deletes directories under HOME. If the `os` mock above ever breaks or is dropped,
@@ -150,8 +181,13 @@ function freshEd25519Line(): string {
   return `ssh-ed25519 ${blob.toString('base64')} phone@ios`
 }
 
-/** POST /pair the way the phone does (plaintext branch — no host key, so no `epk` envelope). */
-function post(port: number, body: unknown): Promise<string> {
+interface HttpResponse {
+  status: number
+  text: string
+}
+
+/** POST raw JSON to the real one-shot listener. */
+function postWire(port: number, body: unknown): Promise<HttpResponse> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body)
     const req = httpRequest(
@@ -169,12 +205,78 @@ function post(port: number, body: unknown): Promise<string> {
         let text = ''
         res.setEncoding('utf8')
         res.on('data', (c) => (text += c))
-        res.on('end', () => resolve(text))
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, text }))
       }
     )
     req.on('error', reject)
     req.end(payload)
   })
+}
+
+function sealRequest(
+  hostKey: string,
+  body: unknown
+): { wire: { epk: string; box: string }; sharedKey: Uint8Array } {
+  const eph = genKeyPair()
+  const sharedKey = deriveSharedKey(hostKey, eph.secretKey)
+  // Keep the peer implementation independent of pairing-envelope.ts: this is the on-wire client
+  // side, not a round-trip through the helper under test.
+  const box = encrypt(Uint8Array.from(Buffer.from(JSON.stringify(body), 'utf8')), sharedKey)
+  return {
+    wire: { epk: publicKeyToB64(eph.publicKey), box: Buffer.from(box).toString('base64') },
+    sharedKey
+  }
+}
+
+async function postSecure(
+  port: number,
+  hostKey: string,
+  body: unknown
+): Promise<HttpResponse & { sharedKey: Uint8Array }> {
+  const { wire, sharedKey } = sealRequest(hostKey, body)
+  return { ...(await postWire(port, wire)), sharedKey }
+}
+
+/**
+ * Open a real HTTP request, send all but its final byte, and leave it parked in the server's
+ * readBody await. `onPairRequestAccepted` is the deterministic barrier proving the socket is on
+ * the server side before competing requests settle the window.
+ */
+function beginPartialPost(
+  port: number,
+  body: unknown
+): { response: Promise<HttpResponse>; finish(): void } {
+  const payload = JSON.stringify(body)
+  let resolveResponse!: (value: HttpResponse) => void
+  let rejectResponse!: (reason: unknown) => void
+  const response = new Promise<HttpResponse>((resolve, reject) => {
+    resolveResponse = resolve
+    rejectResponse = reject
+  })
+  const req = httpRequest(
+    {
+      host: '127.0.0.1',
+      port,
+      path: '/pair',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    },
+    (res) => {
+      let text = ''
+      res.setEncoding('utf8')
+      res.on('data', (c) => (text += c))
+      res.on('end', () => resolveResponse({ status: res.statusCode ?? 0, text }))
+    }
+  )
+  req.on('error', rejectResponse)
+  req.write(payload.slice(0, -1))
+  return {
+    response,
+    finish: () => req.end(payload.slice(-1))
+  }
 }
 
 beforeEach(() => {
@@ -198,7 +300,7 @@ describe('revokeDevice', () => {
   // and its agent.json entry comes back WITH the bearer token for the host-agent socket.
   it('two concurrent revokes both stick (no lost update in either file)', async () => {
     gateReads([AGENT_JSON, AUTH_KEYS])
-    const service = createPairingService()
+    const service = newService()
 
     const results = await Promise.allSettled([
       service.revokeDevice('dev-a'),
@@ -216,7 +318,7 @@ describe('revokeDevice', () => {
   })
 
   it('a failed revoke rejects to its caller and does not block the next one', async () => {
-    const service = createPairingService()
+    const service = newService()
     // First rename is agent.json's, inside the failing revoke.
     vi.spyOn(fs, 'rename').mockRejectedValueOnce(
       Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' })
@@ -238,7 +340,7 @@ describe('revokeDevice', () => {
     // failure on the second step leaves the bigger capability already revoked AND the device still
     // listed — so the owner sees it and can retry. The reverse order (drop the listing first) would
     // hide a device whose SSH key is still live, with no button left to finish the job.
-    const service = createPairingService()
+    const service = newService()
     const realRename = fs.rename.bind(fs)
     vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
       if (String(to).includes('agent.json')) {
@@ -254,7 +356,7 @@ describe('revokeDevice', () => {
   })
 
   it('a single revoke drops exactly its own device, leaving the file 0600', async () => {
-    const service = createPairingService()
+    const service = newService()
 
     await service.revokeDevice('dev-a')
 
@@ -272,27 +374,223 @@ describe('revokeDevice', () => {
   })
 })
 
+describe('secure pairing listener', () => {
+  it('refuses to start instead of advertising a plaintext fallback when the host key is unavailable', async () => {
+    const done = vi.fn()
+    const missingProvider = createPairingService()
+    await expect(missingProvider.start(done)).rejects.toThrow(/no host-key provider/)
+
+    const lockedKey = newService(
+      {},
+      secureDeps({ loadHostKeyPair: async (): Promise<KeyPair> => Promise.reject(new Error('locked')) })
+    )
+    await expect(lockedKey.start(done)).rejects.toThrow(/host key could not be loaded/)
+    expect(done).not.toHaveBeenCalled()
+  })
+
+  it('rejects plaintext and tampered envelopes without writing either credential store', async () => {
+    const service = newService()
+    const append = vi.spyOn(fs, 'appendFile')
+    const write = vi.spyOn(fs, 'writeFile')
+    try {
+      const started = await service.start(() => {})
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+      const requestBody = { token, publicKey: freshEd25519Line(), deviceName: 'New Phone' }
+
+      const plaintext = await postWire(pairPort, requestBody)
+      expect(plaintext).toEqual({ status: 400, text: 'encrypted pairing required' })
+
+      const { wire } = sealRequest(hostKey, requestBody)
+      const tampered = Uint8Array.from(Buffer.from(wire.box, 'base64'))
+      tampered[tampered.length - 1] ^= 0xff
+      const badMac = await postWire(pairPort, {
+        ...wire,
+        box: Buffer.from(tampered).toString('base64')
+      })
+      expect(badMac).toEqual({ status: 400, text: 'decrypt failed' })
+
+      expect(append).not.toHaveBeenCalled()
+      expect(write).not.toHaveBeenCalled()
+      expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
+      expect(authKeys()).toBe(`${KEY_OTHER}\n${KEY_A}\n${KEY_B}\n`)
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('returns every long-lived credential only inside authenticated ciphertext', async () => {
+    const done = vi.fn()
+    const service = newService()
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+      const response = await postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'New Phone'
+      })
+
+      expect(response.status).toBe(200)
+      const wire = JSON.parse(response.text) as Record<string, unknown>
+      expect(Object.keys(wire)).toEqual(['box'])
+      expect(response.text).not.toContain('agentToken')
+      expect(response.text).not.toContain('deviceId')
+      const plain = decrypt(
+        Uint8Array.from(Buffer.from(String(wire.box), 'base64')),
+        response.sharedKey
+      )
+      expect(plain).not.toBeNull()
+      const opened = JSON.parse(Buffer.from(plain!).toString('utf8')) as {
+        ok: boolean
+        deviceId: string
+        agentToken: string
+      }
+      expect(opened.ok).toBe(true)
+      expect(opened.agentToken).toMatch(/^[A-Za-z0-9_-]{32}$/)
+      expect(response.text).not.toContain(opened.deviceId)
+      expect(response.text).not.toContain(opened.agentToken)
+      expect(deviceIds()).toEqual(['dev-a', 'dev-b', opened.deviceId])
+      expect(done).toHaveBeenCalledOnce()
+      expect(done).toHaveBeenCalledWith({ ok: true, relay: 'dev' })
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('fails closed before either credential write when response encryption is unavailable', async () => {
+    const done = vi.fn()
+    const service = newService({
+      sealResponse: () => {
+        throw new Error('secure randomness unavailable')
+      }
+    })
+    const append = vi.spyOn(fs, 'appendFile')
+    const write = vi.spyOn(fs, 'writeFile')
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+
+      const response = await postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'No Ciphertext Phone'
+      })
+
+      expect(response).toMatchObject({ status: 500, text: 'pairing failed' })
+      expect(append).not.toHaveBeenCalled()
+      expect(write).not.toHaveBeenCalled()
+      expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
+      expect(authKeys()).toBe(`${KEY_OTHER}\n${KEY_A}\n${KEY_B}\n`)
+      expect(done).toHaveBeenCalledOnce()
+      expect(done).toHaveBeenCalledWith({ ok: false })
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('five wrong codes settle an already-accepted correct request before it can write', async () => {
+    let releaseAccepted!: () => void
+    const accepted = new Promise<void>((resolve) => {
+      releaseAccepted = resolve
+    })
+    let acceptedCount = 0
+    const done = vi.fn()
+    const service = newService({
+      onPairRequestAccepted: () => {
+        acceptedCount += 1
+        if (acceptedCount === 1) releaseAccepted()
+      }
+    })
+    const append = vi.spyOn(fs, 'appendFile')
+    const write = vi.spyOn(fs, 'writeFile')
+    try {
+      const started = await service.start(done)
+      const { token, shortCode, pairPort, hostKey } = {
+        ...JSON.parse(started.payload),
+        shortCode: started.shortCode
+      } as { token: string; shortCode: string; pairPort: number; hostKey: string }
+      const correct = sealRequest(hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Sixth Phone'
+      })
+      const parked = beginPartialPost(pairPort, correct.wire)
+      await accepted // the correct socket is inside handleRequest before readBody's await
+
+      const wrongCode = shortCode === '000000' ? '000001' : '000000'
+      for (let i = 0; i < 4; i += 1) {
+        const wrong = await postSecure(pairPort, hostKey, {
+          token: wrongCode,
+          publicKey: freshEd25519Line()
+        })
+        expect(wrong.status).toBe(403)
+      }
+      const fifth = await postSecure(pairPort, hostKey, {
+        token: wrongCode,
+        publicKey: freshEd25519Line()
+      })
+      expect(fifth.status).toBe(429)
+
+      parked.finish()
+      await expect(parked.response).resolves.toEqual({
+        status: 409,
+        text: 'pairing window is closed'
+      })
+      expect(done).toHaveBeenCalledOnce()
+      expect(done).toHaveBeenCalledWith({ ok: false })
+      expect(append).not.toHaveBeenCalled()
+      expect(write).not.toHaveBeenCalled()
+      expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
+      expect(authKeys()).toBe(`${KEY_OTHER}\n${KEY_A}\n${KEY_B}\n`)
+    } finally {
+      service.stop()
+    }
+  })
+})
+
 describe('pairing POST vs revoke', () => {
   // The pairing POST mutates the same two files: it APPENDS to authorized_keys and upserts into
   // agent.json. Overlapping a revoke, an unserialized pairing either appends onto the inode the
   // revoke is about to rename over, or loses its agent.json entry to the revoke's stale read —
   // and the revoke can equally be undone by the pairing's. Both mutations must share ONE queue.
   it('a pairing landing mid-revoke keeps both changes', async () => {
-    const service = createPairingService()
+    const service = newService()
     try {
       const started = await service.start(() => {})
-      const { token, pairPort } = JSON.parse(started.payload) as {
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
         token: string
         pairPort: number
+        hostKey: string
       }
       gateReads([AGENT_JSON, AUTH_KEYS])
 
-      const [respText] = await Promise.all([
-        post(pairPort, { token, publicKey: freshEd25519Line(), deviceName: 'New Phone' }),
+      const [response] = await Promise.all([
+        postSecure(pairPort, hostKey, {
+          token,
+          publicKey: freshEd25519Line(),
+          deviceName: 'New Phone'
+        }),
         service.revokeDevice('dev-a')
       ])
 
-      const { deviceId } = JSON.parse(respText) as { deviceId: string }
+      expect(response.status).toBe(200)
+      const wire = JSON.parse(response.text) as { box: string }
+      const plain = decrypt(Uint8Array.from(Buffer.from(wire.box, 'base64')), response.sharedKey)
+      expect(plain).not.toBeNull()
+      const { deviceId } = JSON.parse(Buffer.from(plain!).toString('utf8')) as { deviceId: string }
       const keys = authKeys()
       expect(keys).not.toContain('nodeterm-ios-dev-a') // the revoke stuck
       expect(keys).toContain(`nodeterm-ios-${deviceId}`) // …and so did the pairing
