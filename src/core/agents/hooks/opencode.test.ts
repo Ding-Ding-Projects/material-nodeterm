@@ -199,7 +199,10 @@ describe('generated plugin unix-socket transport', () => {
     return mod.NodetermStatus()
   }
 
-  it('posts over the unix socket via node:http when NODETERM_HOOK_SOCK is set (no port)', async () => {
+  // A real Unix domain socket bound at a filesystem path is POSIX-only: `net.Server.listen(path)`
+  // on win32 tries to interpret the path as a Windows named pipe name and rejects a plain
+  // filesystem path with EACCES. There is no portable way to open the same kind of listener here.
+  it.skipIf(process.platform === 'win32')('posts over the unix socket via node:http when NODETERM_HOOK_SOCK is set (no port)', async () => {
     const { createServer } = await import('node:http')
     const sock = path.join(sockDir, 'hook.sock')
     const received: Array<{ url: string; token: string; body: string }> = []
@@ -231,7 +234,8 @@ describe('generated plugin unix-socket transport', () => {
     }
   })
 
-  it('reads NODETERM_HOOK_SOCK from the live endpoint file (restart handoff) and prefers it over a TCP port', async () => {
+  // Same POSIX-only real-unix-socket constraint as the test above.
+  it.skipIf(process.platform === 'win32')('reads NODETERM_HOOK_SOCK from the live endpoint file (restart handoff) and prefers it over a TCP port', async () => {
     const { createServer } = await import('node:http')
     const sock = path.join(sockDir, 'hook2.sock')
     const received: string[] = []
@@ -380,7 +384,8 @@ describe('generated plugin presents the per-node token', () => {
     )
   })
 
-  it('sends it on the node:http socketPath path too (real unix server)', async () => {
+  // Same POSIX-only real-unix-socket constraint as the tests in the block above.
+  it.skipIf(process.platform === 'win32')('sends it on the node:http socketPath path too (real unix server)', async () => {
     const { createServer } = await import('node:http')
     const sock = path.join(sockDir, 'hook.sock')
     const received: Array<string> = []
@@ -408,7 +413,8 @@ describe('generated plugin presents the per-node token', () => {
     }
   })
 
-  it('posts over node:http with an EMPTY token when the file is missing', async () => {
+  // Same POSIX-only real-unix-socket constraint as the tests above.
+  it.skipIf(process.platform === 'win32')('posts over node:http with an EMPTY token when the file is missing', async () => {
     const { createServer } = await import('node:http')
     const sock = path.join(sockDir, 'hook-empty.sock')
     const received: Array<string> = []
