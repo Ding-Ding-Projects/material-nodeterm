@@ -84,7 +84,7 @@ export function pathsForPosixShellEnv(
 
 /**
  * Arguments for running a generated script under the real shell. Git Bash prepends its own
- * `/mingw64/bin:/usr/bin` after native process creation, so a fake `curl` cannot reliably win by
+ * `/mingw64/bin:/usr/bin` after native process creation, so a fake tool cannot reliably win by
  * editing the native PATH environment. Put the fixture directory first after the shell starts.
  */
 export function posixShellScriptArgs(
