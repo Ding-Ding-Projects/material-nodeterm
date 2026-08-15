@@ -32,7 +32,8 @@ import { HostSession } from './session'
 import { paneCommand as readPaneCommand } from './process-tree'
 import { publishSessionHostState } from './state-file'
 import {
-  currentSessionAfterRetirement,
+  RETRY_SESSION_GENERATION,
+  SessionGenerationCoordinator,
   retireSessionGeneration
 } from './generation-barrier'
 
@@ -213,6 +214,7 @@ async function main(): Promise<void> {
       }
     }
   }
+  const generationCoordinator = new SessionGenerationCoordinator(sessions, cancelGraceExit)
 
   function broadcast(session: HostSession, frame: SessionHostFrame): void {
     const line = encodeFrame(frame)
@@ -266,30 +268,27 @@ async function main(): Promise<void> {
   }
 
   async function handleAttach(req: Extract<SessionHostRequest, { cmd: 'attach' }>, socket: net.Socket): Promise<AttachResult> {
-    cancelGraceExit()
-    // An exited entry deliberately keeps the name reserved until all old-generation frames have
-    // reached its subscribers. The protocol carries only `name`, not a generation id, so creating
-    // the replacement sooner lets a delayed old exit kill that replacement on the same socket.
-    const existing = await currentSessionAfterRetirement(sessions, req.name)
-    if (existing && !existing.exited) {
-      // Add the new subscriber only AFTER the barrier+snapshot. Otherwise a pending chunk can be
-      // delivered live to this socket and then appear again in its warm-attach screen.
-      const screen = await existing.serialize()
-      // The process can exit while the async emulator drains. Do not serialize/dispose the stale
-      // object into a replacement session; retry the ordinary cold path instead.
-      if (existing.exited || sessions.get(req.name) !== existing) {
-        return handleAttach(req, socket)
+    return generationCoordinator.run<AttachResult>(req.name, async (existing) => {
+      if (existing && !existing.exited) {
+        // Add the new subscriber only AFTER the barrier+snapshot. Otherwise a pending chunk can be
+        // delivered live to this socket and then appear again in its warm-attach screen.
+        const screen = await existing.serialize()
+        // The process can exit while the async emulator drains. Retain this name claim and cross
+        // its retirement barrier again; recursive attach would deadlock or race another waiter.
+        if (existing.exited || sessions.get(req.name) !== existing) {
+          return RETRY_SESSION_GENERATION
+        }
+        existing.subscribers.add(socket)
+        log(`attach (warm) name=${req.name} subscribers=${existing.subscribers.size}`)
+        return { fresh: false, screen: screen || undefined }
       }
-      existing.subscribers.add(socket)
-      log(`attach (warm) name=${req.name} subscribers=${existing.subscribers.size}`)
-      return { fresh: false, screen: screen || undefined }
-    }
-    const session = new HostSession(req.name, req.spawn, req.scrollback)
-    sessions.set(req.name, session)
-    session.subscribers.add(socket)
-    wireSession(session)
-    log(`attach (cold) name=${req.name} pid=${session.proc.pid}`)
-    return { fresh: true }
+      const session = new HostSession(req.name, req.spawn, req.scrollback)
+      sessions.set(req.name, session)
+      session.subscribers.add(socket)
+      wireSession(session)
+      log(`attach (cold) name=${req.name} pid=${session.proc.pid}`)
+      return { fresh: true }
+    })
   }
 
   async function dispatch(req: SessionHostRequest, socket: net.Socket): Promise<{ ok: true; result?: unknown } | { ok: false; error: string }> {

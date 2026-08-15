@@ -202,7 +202,12 @@ The same name is also a generation boundary. Data and exit events contain a sess
 generation id, so an exiting `HostSession` remains registered until its queued output, final exit
 broadcast and disposal complete. A same-name attach waits on that retirement promise before it can
 spawn a replacement. The old socket may therefore see its old exit before the new attach response,
-but the replacement can never receive an indistinguishable delayed exit from its predecessor.
+but the replacement can never receive an indistinguishable delayed exit from its predecessor. The
+whole wait/inspect/create decision is serialized per session name; otherwise two concurrent attach
+requests can both wake from the same retirement promise, both observe the empty slot, and spawn two
+PTYs before either continuation publishes its choice. Grace-exit cancellation is part of that
+atomic claim and runs after the wait, so it also cancels any new empty-host timer retirement just
+scheduled before the replacement was created.
 
 ### Reconnect (a dropped client connection is not a dead session)
 
