@@ -24,22 +24,31 @@ import {
 } from './agents/node-token-files'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
-import { REAL_SHELL_TEST_TIMEOUT_MS } from './testing/posix-shell'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS,
+  pathForPosixShell,
+  pathsForPosixShellEnv,
+  posixShellScriptArgs,
+  quotePathForPosixShell
+} from './testing/posix-shell'
 
 const run = promisify(execFile)
 
-/** A real POSIX shell to exec the generated launcher with. There is no literal `/bin/sh` path on
- *  win32, but a POSIX-compatible `sh` (Git for Windows' MSYS sh) is expected on PATH — resolved by
- *  bare name rather than an assumed install location, matching how the launcher's own login-shell
- *  PATH probe already works. A no-op on POSIX, where the literal path is correct as written. */
-const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
+const SHELL_PATH_ENV_KEYS = [
+  'CODEX_HOME',
+  'HOME',
+  'NODETERM_HOOK_ENDPOINT',
+  'NODETERM_HOOK_SOCK',
+  'NODETERM_NODE_TOKEN_DIR'
+] as const
 
 /**
- * The launcher's own `cwd=$PWD` (codex-identity-proxy.ts) is read by a REAL MSYS shell on win32,
- * whose `$PWD` — MEASURED directly, not assumed — is the native drive path with slashes flipped
- * (`C:/Users/x`, original drive-letter case, no `/c/` mount-style rewrite; that fuller conversion
- * is what interactive `pwd` does, but reading the already-initialized `$PWD` variable is a plainer
- * transform). A no-op on POSIX, where `fs.realpathSync` is already forward-slash-shaped.
+ * The launcher reads `cwd=$PWD` from a real MSYS shell, where `$PWD` uses `/c/...`. When that value
+ * crosses into Git's native curl executable, MSYS argv conversion rewrites it to `C:/...`; that is
+ * the value the Node hook server receives and the assertion must compare. A no-op on POSIX, where
+ * `fs.realpathSync` is already forward-slash-shaped.
  */
 function shCwd(nativePath: string): string {
   if (process.platform !== 'win32') return nativePath
@@ -65,7 +74,7 @@ let bindAnswer: (() => void) | null = null
 function writeFakeCodex(): void {
   fs.writeFileSync(
     path.join(binDir, 'codex'),
-    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(argvLog)}\nexit 0\n`,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${quotePathForPosixShell(argvLog)}\nexit 0\n`,
     { mode: 0o755 }
   )
 }
@@ -130,7 +139,7 @@ beforeEach(() => {
  */
 function baseEnv(): Record<string, string> {
   return {
-    PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    PATH: process.env.PATH ?? '',
     HOME: dir,
     NODETERM_NODE_ID: 'node-1',
     NODETERM_HOOK_ENDPOINT: hookServer.endpointFilePath(),
@@ -149,7 +158,10 @@ function callLauncher(
 ): Promise<{ stdout: string; stderr: string }> {
   const merged = { ...baseEnv(), ...env }
   for (const [k, v] of Object.entries(merged)) if (v === '') delete (merged as any)[k]
-  return run(SH, [script, ...args], { env: merged, cwd: dir })
+  return run(REAL_POSIX_SHELL, posixShellScriptArgs(script, args, binDir), {
+    env: environmentForPosixShell(pathsForPosixShellEnv(merged, SHELL_PATH_ENV_KEYS)),
+    cwd: dir
+  })
 }
 
 /** What the fake `codex` was exec'd with, one line per invocation. */
@@ -159,7 +171,11 @@ function codexArgv(): string[] {
 
 describe('generated Codex launcher', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('is valid POSIX sh', async () => {
-    await expect(run(SH, ['-n', launcher])).resolves.toBeTruthy()
+    await expect(
+      run(REAL_POSIX_SHELL, ['-n', pathForPosixShell(launcher)], {
+        env: environmentForPosixShell()
+      })
+    ).resolves.toBeTruthy()
   })
 
   it('starts a thread for a fresh node and resumes it on the shared app-server', async () => {
