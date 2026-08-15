@@ -71,6 +71,20 @@ import {
 } from './codex-identity-proxy'
 import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents/node-token-service'
 import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
+// Third persistence backend, selected when no local tmux was found (primarily Windows, where
+// tmux does not exist at all) — see docs/windows-session-host.md. Deliberately a thin, separate
+// module rather than inline here: this is the one narrow seam this file needed to grow for a
+// whole standalone process + protocol living under src/session-host/.
+import {
+  createSessionHostPty,
+  sessionHostCapture,
+  sessionHostKillSession,
+  sessionHostListSessions,
+  sessionHostPaneCommand,
+  sessionHostSendKeys,
+  sessionHostSupported
+} from './session-host-backend'
+import type { SessionHostPty } from './session-host-pty'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
 // kills the tmux server) can still replay recent output on cold restart. A final snapshot also
@@ -458,6 +472,16 @@ interface Session {
   /** True when this node had an `accountId` but its config dir was gone at spawn, so we fell back
    *  to the system account. `create()` surfaces it to the renderer (warning chip). */
   accountFallback?: boolean
+  /**
+   * This session is backed by the session-host process (docs/windows-session-host.md), not a
+   * local tmux — selected only when no local tmux was found (primarily Windows). `session.proc`
+   * is then a `SessionHostPty`, not a real node-pty `IPty` (see `createSessionHostPty`). Every
+   * call site that reaches past `session.proc` to run a tmux CLI command directly (`sendText`,
+   * `paneCommand`, `captureSession`, `captureSnapshot`, `snapshotScrollback`,
+   * `captureForResync`, the final kill in `destroySession`) branches on this the same way it
+   * already branches on `sshRemote`.
+   */
+  sessionHost?: boolean
 }
 
 /** Sinks for a detached session whose output is served somewhere other than the renderer
@@ -1601,7 +1625,12 @@ export class PtyManager {
     // so it MUST be async (`runAsync`) — a synchronous probe here would freeze every window/IPC
     // for its duration. Falls through to the local tmux/plain logic otherwise (also async: a
     // bulk project load fires one create() per node, and even cheap probes add up serialized).
-    const fresh = options.sshRemote
+    //
+    // `true` here for a node that ends up SESSION-HOST-backed is only a PLACEHOLDER: unlike tmux
+    // (a cheap name-only `has-session` probe, decided before spawning anything) the session-host
+    // backend's attach-or-create IS the probe — see the `spawned?.sessionHost` branch below, which
+    // overwrites both `fresh` and `screen` from that same round trip once `spawnSession` returns.
+    let fresh = options.sshRemote
       ? !(await this.remoteSessionExists(
           options.sshRemote,
           sessionName(options.persistKey as string)
@@ -1620,6 +1649,25 @@ export class PtyManager {
     }
     const sessionId = this.spawnSession(options, clientId, undefined)
     const spawned = this.sessions.get(sessionId)
+    // The session-host backend is NOT a painter (see docs/windows-session-host.md, "The seeding
+    // trap"): a warm attach there gets no free redraw the way a real tmux client provides, so
+    // this create must carry the screen to seed itself — exactly the same field a same-process
+    // co-attach JOIN already populates via `join()` below. `SessionHostPty.ready` is the SAME
+    // attach-or-create round trip `spawnSession` just kicked off; awaiting it here costs nothing
+    // extra (the socket write already happened) and is the only way to learn its real `fresh`.
+    let screen: string | undefined
+    if (spawned?.sessionHost) {
+      try {
+        const info = await (spawned.proc as unknown as SessionHostPty).ready
+        fresh = info.fresh
+        screen = info.screen
+      } catch {
+        // The attach itself failed (session-host unreachable / bundle missing after all). Leave
+        // `fresh` at its placeholder `true`: the renderer treats this like any other cold start —
+        // a working, empty terminal — rather than blocking the create on a backend that just
+        // proved it cannot be reached.
+      }
+    }
     // Surface a missing-account-dir fallback so the renderer can flag the node's account chip.
     const accountFallback = spawned?.accountFallback
     // The session's `persistKey` is set iff the spawn actually landed on a tmux, local or remote
@@ -1627,8 +1675,8 @@ export class PtyManager {
     // which is what the renderer's cache-dispose levers must not assume. See PtyCreateResult.
     const persistent = !!spawned?.persistKey
     return accountFallback
-      ? { sessionId, fresh, accountFallback, persistent }
-      : { sessionId, fresh, persistent }
+      ? { sessionId, fresh, accountFallback, persistent, ...(screen ? { screen } : {}) }
+      : { sessionId, fresh, persistent, ...(screen ? { screen } : {}) }
   }
 
   /** Does the node's remote tmux session exist (over the project's ControlMaster)? Async so the
@@ -1968,6 +2016,10 @@ export class PtyManager {
     const settings = this.getSettings()
     let file: string
     let args: string[]
+    // Set true only by the session-host branch below. Decides which of the two `proc =` paths
+    // runs further down — see there for why this can't just be "no local tmux was found" (a
+    // remote/ssh node must never fall into it, and neither may a node with no persistKey at all).
+    let useSessionHost = false
 
     // Resolve the session program. A bare 'ssh' is resolved to an absolute path because GUI
     // apps don't inherit the shell PATH; its args come from options.shellArgs.
@@ -2103,6 +2155,19 @@ export class PtyManager {
         args.push(shell)
         args.push(...programArgs)
       }
+    } else if (
+      !options.sshRemote &&
+      options.persistKey &&
+      settings.tmuxEnabled &&
+      sessionHostSupported()
+    ) {
+      // Third persistence backend, selected only when tmux itself was not found (primarily
+      // Windows, where tmux does not exist at all) — see docs/windows-session-host.md. `file`/
+      // `args` are left unused: the real spawn happens INSIDE the session-host process, driven by
+      // the `SessionHostPty` constructed below, not by a `pty.spawn()` in this one.
+      useSessionHost = true
+      file = ''
+      args = []
     } else {
       file =
         program ||
@@ -2113,25 +2178,38 @@ export class PtyManager {
     }
 
     let proc: pty.IPty
-    try {
-      proc = pty.spawn(file, args, {
-        name: 'xterm-256color',
-        cols: options.cols,
-        rows: options.rows,
-        cwd,
-        env
-      })
-    } catch (err) {
-      // node-pty surfaces the underlying failure as a bare "posix_spawnp failed." with no errno.
-      // Two different field causes wear that same message, so BOTH are measured before anything is
-      // said: a cross-arch `electron-builder --x64` run clobbering node-pty's spawn-helper (arm64
-      // app can't exec an x86_64 helper), and the machine being out of pty DEVICES
-      // (`kern.tty.ptmx_max`, 2026-08-11 — 515 `/dev/ttys*` against a ceiling of 511).
-      const reason = err instanceof Error ? err.message : String(err)
-      // Re-read the devices rather than reusing the pre-flight's reading: this spawn just consumed
-      // (and, per the leak above, kept) devices of its own, so the number the user is shown should
-      // be the one that was true when the failure happened.
-      throw this.spawnFailureError(reason, file, cwd, spawnHelperArchMismatch(), readPtyDevices())
+    if (useSessionHost) {
+      // Cast to the small `IPty` subset this file actually touches — see `SessionHostPty`'s own
+      // doc comment for exactly what it implements and why that is enough. Its constructor kicks
+      // off the attach-or-create round trip asynchronously and never throws synchronously (a
+      // rejection surfaces on `.ready`, awaited by `spawnNew` — see there for how a failure
+      // degrades rather than blocking the create).
+      proc = createSessionHostPty(
+        sessionName(options.persistKey as string),
+        { cwd, shell: program || settings.defaultShell || 'bash', args: programArgs, env, cols: options.cols, rows: options.rows },
+        settings.tmuxScrollback
+      ) as unknown as pty.IPty
+    } else {
+      try {
+        proc = pty.spawn(file, args, {
+          name: 'xterm-256color',
+          cols: options.cols,
+          rows: options.rows,
+          cwd,
+          env
+        })
+      } catch (err) {
+        // node-pty surfaces the underlying failure as a bare "posix_spawnp failed." with no errno.
+        // Two different field causes wear that same message, so BOTH are measured before anything is
+        // said: a cross-arch `electron-builder --x64` run clobbering node-pty's spawn-helper (arm64
+        // app can't exec an x86_64 helper), and the machine being out of pty DEVICES
+        // (`kern.tty.ptmx_max`, 2026-08-11 — 515 `/dev/ttys*` against a ceiling of 511).
+        const reason = err instanceof Error ? err.message : String(err)
+        // Re-read the devices rather than reusing the pre-flight's reading: this spawn just consumed
+        // (and, per the leak above, kept) devices of its own, so the number the user is shown should
+        // be the one that was true when the failure happened.
+        throw this.spawnFailureError(reason, file, cwd, spawnHelperArchMismatch(), readPtyDevices())
+      }
     }
 
     // tmux-backed sessions snapshot their scrollback to disk periodically so a machine reboot
@@ -2143,7 +2221,11 @@ export class PtyManager {
     // and silently leak the local session.
     const remote = options.sshRemote && options.persistKey && remoteSsh ? options.sshRemote : undefined
     const tmuxBacked = !!(this.tmuxPath && settings.tmuxEnabled && options.persistKey)
-    const persisted = !!options.persistKey && (remote ? true : tmuxBacked)
+    // `useSessionHost` is exactly "did the branch selection above pick the session-host backend",
+    // so it needs no re-derivation here — session-host-backed sessions survive losing their
+    // client exactly like tmux-backed ones do, for the same reason: the underlying pty lives in a
+    // separate process (the session host), not in this one.
+    const persisted = !!options.persistKey && (remote ? true : tmuxBacked || useSessionHost)
     const spawnSize = normalizeSize(options.cols, options.rows)
     // The spawning view's composite key. Usually the canvas node (PRIMARY), but a modal that opens
     // a node whose canvas terminal is closed spawns it too — under its own viewerId, correctly.
@@ -2181,7 +2263,8 @@ export class PtyManager {
       tmuxBacked: persisted,
       unwatchedSince: null,
       pausedBy: new Set<string>(),
-      accountFallback
+      accountFallback,
+      sessionHost: useSessionHost
     }
     // Both shared timers are armed by the first session that needs them: the scrollback snapshots
     // and the idle reap are both about tmux-backed sessions and nothing else.
@@ -2666,7 +2749,12 @@ export class PtyManager {
         return ''
       }
     }
-    if (!this.tmuxPath) return ''
+    // No local tmux: same capture, via the session-host backend.
+    if (!this.tmuxPath) {
+      return this.getSettings().tmuxEnabled && sessionHostSupported()
+        ? sessionHostCapture(sessionName(persistKey), full)
+        : ''
+    }
     try {
       const { stdout } = await runAsync(
         this.tmuxPath,
@@ -2692,6 +2780,11 @@ export class PtyManager {
     if (!session) return ''
     const key = session.persistKey ?? session.indexKey
     if (!key) return ''
+    // `true` (full scrollback, same cap the emulator was built with): unlike tmux's plain-pane
+    // capture, this backend has no separate mechanism for the user to scroll a live session's
+    // history (there is no tmux underneath to own the wheel — see docs/windows-session-host.md),
+    // so a joiner is seeded generously rather than with just the visible rows.
+    if (session.sessionHost) return sessionHostCapture(sessionName(key), true)
     if (session.sshRemote) return this.captureSession(key)
     return this.captureSnapshot(key)
   }
@@ -2766,7 +2859,21 @@ export class PtyManager {
         return false
       }
     }
-    if (!this.tmuxPath) return false
+    // No local tmux: this is a session-host-backed session (only that backend reaches this
+    // periodic snapshot loop at all — see `snapshotTick`'s `session.persistKey` gate). Same
+    // "cold-restore across a machine reboot" purpose as the tmux capture below; see
+    // docs/windows-session-host.md §7 for the honest limitation this snapshot exists to soften
+    // (the session-host process itself does NOT survive a reboot, unlike a real tmux server).
+    if (!this.tmuxPath) {
+      if (!this.getSettings().tmuxEnabled || !sessionHostSupported()) return false
+      try {
+        const text = await sessionHostCapture(sessionName(persistKey), true)
+        if (text) await writeScrollback(persistKey, text)
+        return true
+      } catch {
+        return false
+      }
+    }
     try {
       const { stdout } = await runAsync(
         this.tmuxPath,
@@ -2813,7 +2920,14 @@ export class PtyManager {
         return false
       }
     }
-    if (!this.tmuxPath) return false
+    // No local tmux: this machine persists sessions via the session-host backend instead (see
+    // docs/windows-session-host.md). Its `sendKeys` needs no attached client, exactly like
+    // tmux's own `send-keys -t <name>` below — the host looks the session up by NAME.
+    if (!this.tmuxPath) {
+      return this.getSettings().tmuxEnabled && sessionHostSupported()
+        ? sessionHostSendKeys(target, text, enter)
+        : false
+    }
     try {
       if (await this.bracketPasteRequested(target)) {
         // Paste-aware target (agent TUIs, multiplexers like herdr): one atomic write — the
@@ -2871,7 +2985,13 @@ export class PtyManager {
         return null
       }
     }
-    if (!this.tmuxPath) return null
+    // No local tmux: ask the session-host backend's own `#{pane_current_command}` equivalent (a
+    // descendant-process walk — see process-tree.ts for the imprecision that carries).
+    if (!this.tmuxPath) {
+      return this.getSettings().tmuxEnabled && sessionHostSupported()
+        ? sessionHostPaneCommand(target)
+        : null
+    }
     try {
       const { stdout } = await runAsync(this.tmuxPath, [
         '-L',
@@ -2983,7 +3103,9 @@ export class PtyManager {
    * never throws.
    */
   async listNodetermSessions(): Promise<string[]> {
-    if (!this.tmuxPath) return []
+    if (!this.tmuxPath) {
+      return this.getSettings().tmuxEnabled && sessionHostSupported() ? sessionHostListSessions() : []
+    }
     try {
       const { stdout } = await runAsync(this.tmuxPath, [
         '-L',
@@ -3164,7 +3286,15 @@ export class PtyManager {
       // anything wearing its name goes with it. Costs one `kill-session` that usually says "no
       // such session", which is already the ignored case below.
     }
-    if (!this.tmuxPath) return
+    if (!this.tmuxPath) {
+      // No local tmux: same "attempt unconditionally, ignore a miss" shape as the tmux kill
+      // below — a node that was never session-host-backed on this machine (a plain shell) just
+      // gets a harmless "no such session" from the host and nothing happens.
+      if (this.getSettings().tmuxEnabled && sessionHostSupported()) {
+        await sessionHostKillSession(sessionName(persistKey))
+      }
+      return
+    }
     // Which socket(s) to aim at. Holding the session ourselves means we KNOW: it is the local one,
     // one kill, unchanged. Holding nothing means the name is all we have — and then the fan-out is
     // the CALLER's to ask for, because on this machine a `nt-<id>` we hold nothing for can also be
