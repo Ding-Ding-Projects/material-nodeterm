@@ -17,6 +17,13 @@ Transcription runs against a locally downloaded Whisper model. The smallest mode
 and always available; larger, more accurate tiers are a paid feature. Only one model is kept
 loaded in memory at a time, loaded lazily on first use.
 
+Model downloads publish atomically: each store instance writes an exclusively-reserved
+`<model>.part.<store-id>.<part-id>` and renames it only after the stream closes. The model directory
+can be shared by a desktop app, Server Edition, or containers, so cleanup removes an inactive part
+owned by the current store immediately but preserves another store's part until it has not been
+modified for 24 hours. A second process may duplicate the network transfer, but it cannot unlink a
+live first process's fragment; both completed downloads contain the same model bytes.
+
 This works identically on the desktop app and in the browser (Server Edition) — the audio
 capture path differs (a native microphone prompt on desktop, the browser's own
 `getUserMedia` permission prompt in a browser), but the transcription and terminal-delivery
@@ -50,6 +57,10 @@ behaviour is the same either way.
 - Downloaded models are cached under the app's own data directory (or, for Server Edition,
   the server's data directory, shared across sessions), never a location a project's own
   repository would pick up and commit.
+- Partial model names use independent cryptographic store/download identifiers and exclusive file
+  creation, so even a repeated candidate cannot truncate an existing fragment. Cross-owner cleanup
+  is age-gated; a failed metadata read preserves the fragment rather than guessing that its writer
+  is dead.
 
 ## Verification
 
