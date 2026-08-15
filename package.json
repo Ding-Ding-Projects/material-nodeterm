@@ -25,6 +25,8 @@
     "make-social": "node scripts/make-social.mjs",
     "dist": "npm run make-icon && electron-vite build && electron-builder --mac --arm64 -c.mac.identity=null -c.mac.notarize=false",
     "dist:linux": "npm run make-icon && electron-vite build && electron-builder --linux",
+    "dist:win": "npm run make-icon && electron-vite build && electron-builder --win --publish never",
+    "count-lines": "node scripts/count-lines.mjs",
     "release": "npm run make-icon && electron-vite build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper"
   },
@@ -106,10 +108,23 @@
         }
       ]
     },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "squirrel"
+        }
+      ]
+    },
+    "squirrelWindows": {
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "iconUrl": "https://raw.githubusercontent.com/Ding-Ding-Projects/material-nodeterm/main/build/icon.png"
+    },
     "publish": {
       "provider": "generic",
       "url": "https://nodeterm.dev/updates"
-    }
+    },
+    "forceCodeSigning": false
   },
   "dependencies": {
     "@xterm/addon-unicode11": "^0.9.0",
