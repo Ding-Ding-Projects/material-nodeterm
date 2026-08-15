@@ -1384,6 +1384,38 @@ export interface SchoolModeRecord {
 
 /** The `window.nodeTerminal.schoolMode` surface. Every method resolves/rejects — a caller never
  *  needs to distinguish "not yet loaded" from "off": `load()` always answers a real record. */
+/**
+ * Kids mode — a friendlier, safer surface for a child, and the NEAR-OPPOSITE of School mode.
+ *
+ * School mode strips playfulness out so a screen looks serious in a classroom. Kids mode KEEPS
+ * all of it (dim sum, funny levels, Cantonese) and adds safety restrictions instead: agent
+ * permission modes that act without asking are refused, and every destructive action goes through
+ * the two-key confirmation. They share a record-plus-PIN shape and nothing else, which is why
+ * they are separate records with separate credentials rather than two profiles of one thing.
+ *
+ * It is honest about its limit. See KIDS_DISCLOSURE in core/kids-mode-policy.ts: this cannot
+ * sandbox the terminal, because the terminal is the product.
+ */
+export interface KidsModeRecord {
+  version: 1
+  enabled: boolean
+  /** User-chosen display name, like School mode's. Defaults to the shipped name. */
+  name: string
+}
+
+export interface KidsModeApi {
+  load(): Promise<KidsModeRecord>
+  /** Turn it ON. `pin` is required only the first time, and establishes the grown-up PIN.
+   *  Entering needs no proof — only leaving does. */
+  enable(pin?: string): Promise<KidsModeRecord>
+  /** Turn it OFF. Requires the grown-up PIN. */
+  disable(pin: string): Promise<{ ok: true; record: KidsModeRecord } | { ok: false; error: string }>
+  rename(name: string): Promise<KidsModeRecord>
+  changePin(currentPin: string, nextPin: string): Promise<boolean>
+  hasCredential(): Promise<boolean>
+  onChanged(cb: (r: KidsModeRecord) => void): () => void
+}
+
 export interface SchoolModeApi {
   /** Current record. */
   load(): Promise<SchoolModeRecord>

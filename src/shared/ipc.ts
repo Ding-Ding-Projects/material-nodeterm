@@ -234,6 +234,13 @@ export const IPC = {
   /** Read the shared School-mode record (`core/school-mode.ts`). Distinct from `settings:load`
    *  on purpose: the record lives in a shared local application-data location outside any one
    *  app's own userData, so several apps on the same machine can read/honor the same switch. */
+  kidsModeLoad: 'kids-mode:load',
+  kidsModeEnable: 'kids-mode:enable',
+  kidsModeDisable: 'kids-mode:disable',
+  kidsModeRename: 'kids-mode:rename',
+  kidsModeChangePin: 'kids-mode:change-pin',
+  kidsModeHasCredential: 'kids-mode:has-credential',
+  kidsModeChanged: 'kids-mode:changed',
   schoolModeLoad: 'school-mode:load',
   /** Turn the mode on. A `pin` is required only the FIRST time (no stored credential yet); it is
    *  ignored on every later call. Never required to enter — this is a focus mode, not a lock. */
