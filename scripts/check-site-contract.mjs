@@ -503,6 +503,59 @@ if (cdnHits.length > 0) {
 }
 
 // ---------------------------------------------------------------------
+// Every relative import resolves to a file that exists.
+// ---------------------------------------------------------------------
+//
+// This site is plain ES modules loaded straight from disk by the browser — there is no bundler
+// to fail, so an import of a file that does not exist is a 404 at RUNTIME. And because the whole
+// feature graph hangs off one `main.js`, a single missing module takes the ENTIRE page down: the
+// server still answers 200 for index.html, every asset still resolves, the deploy still goes
+// green, and the visitor gets a blank page.
+//
+// That is not hypothetical. `app/features/pair-device.js` shipped importing a
+// `../core/registry.js` that was never written, and the site rendered nothing at all until it was
+// found by attaching a debugger to a real browser. Nothing else caught it:
+//   - `node --check` passes, because the file's SYNTAX is perfect. It never resolves an import.
+//   - the contract checks below pass, because they assert files and strings are present, not that
+//     the app boots.
+//   - curl passes, because index.html and every real asset are served fine.
+// The only cheap signal was the one missing here, so it is here now.
+{
+  const walk = (dir, out = []) => {
+    for (const entry of readdirSync(join(REPO_ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${entry.name}`
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules') walk(rel, out)
+      } else if (entry.name.endsWith('.js')) {
+        out.push(rel)
+      }
+    }
+    return out
+  }
+  // `import x from './y.js'`, `export * from '../z.js'`, and dynamic `import('./w.js')` alike.
+  const SPEC_RE = /(?:from|import)\s*\(?\s*['"](\.{1,2}\/[^'"]+)['"]/g
+  let importCount = 0
+  const missing = []
+  for (const file of walk('site')) {
+    const text = readText(file) ?? ''
+    const dir = file.slice(0, file.lastIndexOf('/'))
+    for (const m of text.matchAll(SPEC_RE)) {
+      importCount += 1
+      // Resolved the way the BROWSER resolves it — relative to the importing file, no extension
+      // guessing and no index.js fallback, because the browser does neither.
+      const target = join(REPO_ROOT, dir, m[1])
+      if (!existsSync(target)) missing.push(`${file} imports ${m[1]} — no such file`)
+    }
+  }
+  checkedCount += 1
+  if (missing.length) {
+    for (const m of missing) fail(`Broken module import (the page will be blank): ${m}`)
+  } else {
+    pass(`Module graph: all ${importCount} relative imports across site/ resolve to real files`)
+  }
+}
+
+// ---------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------
 console.log('')

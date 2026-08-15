@@ -177,6 +177,7 @@ export const SECTIONS = [
   { id: 'export', icon: '📦', label: 'Take it home', kicker: 'save a copy', title: 'Take it home', sub: 'Pick a pile, pick a shape. We warn you first if that shape cannot carry everything.', ph: 'Search the shapes…' },
   { id: 'dish', icon: '🥟', label: 'Dim sum', kicker: 'a little treat', title: 'The dim sum trolley', sub: 'One visit in ten, a dish rolls past by itself. You can also just look at the whole trolley here.', ph: 'Search the trolley…' },
   { id: 'coverage', icon: '✅', label: 'Checklist', kicker: 'nothing hidden', title: 'The big checklist', sub: 'Every promise this page makes, and exactly where it lives. Anything only half-done says so.', ph: 'Search the checklist…' },
+  { id: 'pair', icon: '📱', label: 'Pair a device', kicker: 'phone or laptop', title: 'Pair this device', sub: 'Point this browser at nodeterm on your computer, and it can reach those terminals too. Scan, or type six digits.', ph: 'Search pairing…' },
   { id: 'play', icon: '🎮', label: 'Playroom', kicker: 'three games', title: 'The playroom', sub: 'Memory pairs, dumpling maths and whack-a-block. Every button really works, and your best score is kept.', ph: 'Search the playroom…' },
   { id: 'settings', icon: '⚙️', label: 'Settings', kicker: 'make it yours', title: 'Make it yours', sub: 'Colours, words, sound, timers, and a toy padlock for any box. Everything is saved in this browser only.', ph: 'Search settings…' },
 ]

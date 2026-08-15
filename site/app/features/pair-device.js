@@ -27,7 +27,7 @@
 //   exists, and everywhere else the same payload can be pasted — the desktop shows it as text
 //   beside the QR for precisely this reason.
 
-import { registerTab } from '../core/registry.js'
+import { registerRoom } from '../core/engine.js'
 
 const IS_SECURE_PAGE = location.protocol === 'https:'
 const CAN_SCAN = typeof window.BarcodeDetector !== 'undefined'
@@ -154,15 +154,70 @@ async function pair(payload, setStatus) {
   return p
 }
 
-export function registerPairDevice(store) {
-  registerTab({
-    id: 'pair',
-    title: 'Pair a device',
-    icon: '📱',
-    group: 'Remote',
+export function registerPairDevice(store, deps, registerAction, registerBinding) {
+  const setStatus = (m) => {
+    const el = document.querySelector('[data-pair-status]')
+    if (el) el.textContent = m
+  }
+
+  registerAction('pair-submit', async () => {
+    const box = document.getElementById('pair-paste')
+    try {
+      const p = await pair(box ? box.value : '', setStatus)
+      setStatus('Paired with ' + (p.name || p.host) + '. This device can now reach it.')
+    } catch (e) {
+      setStatus(e && e.message ? e.message : 'Pairing failed.')
+    }
+  })
+
+  registerAction('pair-code', async () => {
+    const host = document.getElementById('pair-host')
+    const code = document.getElementById('pair-code')
+    try {
+      const built = payloadFromCode(host ? host.value : '', code ? code.value : '')
+      const p = await pair(built, setStatus)
+      setStatus('Paired with ' + (p.name || p.host) + '. This device can now reach it.')
+    } catch (e) {
+      setStatus(e && e.message ? e.message : 'Pairing failed.')
+    }
+  })
+
+  registerAction('pair-scan', async () => {
+    if (!CAN_SCAN) {
+      setStatus('This browser cannot scan; type the six-digit code instead.')
+      return
+    }
+    let stream
+    try {
+      setStatus('Starting the camera…')
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      const video = document.createElement('video')
+      video.srcObject = stream
+      video.setAttribute('playsinline', '')
+      await video.play()
+      const det = new window.BarcodeDetector({ formats: ['qr_code'] })
+      setStatus('Point the camera at the QR code…')
+      // Poll rather than requestVideoFrameCallback: the latter is not everywhere, and a QR held
+      // up to a camera does not need 60fps to be found.
+      for (let i = 0; i < 200; i++) {
+        const found = await det.detect(video).catch(() => [])
+        if (found && found.length) {
+          const p = await pair(found[0].rawValue, setStatus)
+          setStatus('Paired with ' + (p.name || p.host) + '. This device can now reach it.')
+          break
+        }
+        await new Promise((r) => setTimeout(r, 150))
+      }
+    } catch (e) {
+      setStatus(e && e.message ? e.message : 'Could not use the camera.')
+    } finally {
+      if (stream) for (const t of stream.getTracks()) t.stop()
+    }
+  })
+
+  registerRoom('pair', {
     render: () => `
       <section class="pair-room">
-        <h2>Pair this device</h2>
         <p>
           Open <strong>nodeterm on your computer</strong>, go to <em>Settings → Phone</em> and press
           <em>Pair</em>. It shows a QR code, a six-digit code, and an address. Scan the QR here,
@@ -179,10 +234,10 @@ export function registerPairDevice(store) {
           CAN_SCAN
             ? `<button type="button" class="pair-btn" data-action="pair-scan">Scan the QR with this camera</button>`
             : `<p class="pair-note">This browser has no built-in QR reader (Safari does not provide one),
-               so use the paste box below — the desktop shows the same code as text next to the QR.</p>`
+               so type the six digits below — the desktop shows them beside the QR.</p>`
         }
         <fieldset class="pair-manual">
-          <legend>Type the code instead</legend>
+          <legend>Type the code</legend>
           <p class="pair-note">The desktop shows a six-digit code and an address under the QR.</p>
           <label class="pair-label" for="pair-host">Address</label>
           <input id="pair-host" class="pair-input" inputmode="url" autocomplete="off"
@@ -195,67 +250,9 @@ export function registerPairDevice(store) {
 
         <label class="pair-label" for="pair-paste">Or paste the full pairing code</label>
         <textarea id="pair-paste" class="pair-paste" rows="4"
-          placeholder='{"v":1,"host":"192.168.…","token":"…","pairPort":…,"nodeterm":true}'></textarea>
-        <button type="button" class="pair-btn" data-action="pair-submit">Pair with this code</button>
+          placeholder='{"v":1,"host":"192.168.…","token":"…","pairPort":0,"nodeterm":true}'></textarea>
+        <button type="button" class="pair-btn" data-action="pair-submit">Pair with this pasted code</button>
         <p class="pair-status" data-pair-status aria-live="polite"></p>
       </section>`
   })
-
-  return {
-    'pair-submit': async () => {
-      const el = document.querySelector('[data-pair-status]')
-      const box = document.getElementById('pair-paste')
-      const setStatus = (m) => { if (el) el.textContent = m }
-      try {
-        const p = await pair(box ? box.value : '', setStatus)
-        setStatus(`Paired with ${p.name || p.host}. This device can now reach it.`)
-      } catch (e) {
-        setStatus(e && e.message ? e.message : 'Pairing failed.')
-      }
-    },
-    'pair-code': async () => {
-      const el = document.querySelector('[data-pair-status]')
-      const setStatus = (m) => { if (el) el.textContent = m }
-      const host = document.getElementById('pair-host')
-      const code = document.getElementById('pair-code')
-      try {
-        const built = payloadFromCode(host ? host.value : '', code ? code.value : '')
-        const p = await pair(built, setStatus)
-        setStatus(`Paired with ${p.name || p.host}. This device can now reach it.`)
-      } catch (e) {
-        setStatus(e && e.message ? e.message : 'Pairing failed.')
-      }
-    },
-    'pair-scan': async () => {
-      const el = document.querySelector('[data-pair-status]')
-      const setStatus = (m) => { if (el) el.textContent = m }
-      if (!CAN_SCAN) { setStatus('This browser cannot scan; paste the code instead.'); return }
-      let stream
-      try {
-        setStatus('Starting the camera…')
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        const video = document.createElement('video')
-        video.srcObject = stream
-        video.setAttribute('playsinline', '')
-        await video.play()
-        const det = new window.BarcodeDetector({ formats: ['qr_code'] })
-        setStatus('Point the camera at the QR code…')
-        // Poll rather than requestVideoFrameCallback: the latter is not everywhere, and a QR
-        // that is being held up to a camera does not need 60fps to be found.
-        for (let i = 0; i < 200; i++) {
-          const found = await det.detect(video).catch(() => [])
-          if (found && found.length) {
-            const p = await pair(found[0].rawValue, setStatus)
-            setStatus(`Paired with ${p.name || p.host}. This device can now reach it.`)
-            break
-          }
-          await new Promise((r) => setTimeout(r, 150))
-        }
-      } catch (e) {
-        setStatus(e && e.message ? e.message : 'Could not use the camera.')
-      } finally {
-        if (stream) for (const t of stream.getTracks()) t.stop()
-      }
-    }
-  }
 }
