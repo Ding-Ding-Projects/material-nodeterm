@@ -48,8 +48,32 @@ import {
   type TmuxStatus,
   type TranscriptLine,
   type Workspace,
-  type WorkspaceApi
+  type WorkspaceApi,
+  type ToylockApi,
+  type AuthenticatorApi
 } from '../../shared/types'
+import type {
+  ToyLockBeginTotpInput,
+  ToyLockBeginTotpResult,
+  ToyLockConfirmTotpInput,
+  ToyLockConfirmTotpResult,
+  ToyLockCreatePasswordInput,
+  ToyLockCreateResult,
+  ToyLockRecord,
+  ToyLockUpdateInput,
+  ToyLockVerifyInput,
+  ToyLockVerifyResult
+} from '../../shared/toylock'
+import type {
+  AuthenticatorAddManualInput,
+  AuthenticatorAddResult,
+  AuthenticatorCode,
+  AuthenticatorEntry,
+  AuthenticatorExportInput,
+  AuthenticatorExportResult,
+  AuthenticatorRenameInput,
+  AuthenticatorRevealResult
+} from '../../shared/authenticator'
 import type { PeerIdentity } from '../../shared/presence'
 import { buildStubApi } from './stubs'
 import { mountPickerRoot, openDirectoryPicker } from './dialog-picker'
@@ -649,6 +673,50 @@ export function buildSessionMemoryApi(client: RpcClient): Pick<NodeTerminalApi, 
   }
 }
 
+/** Build the `toylock` namespace over an RpcClient — core-bound: the server's own userDataDir is
+ *  where the lock records live (raw 0600 bytes there; no OS keychain on a headless box — see
+ *  core/secure-store.ts), so this reaches the SAME service Electron reaches over ipcMain. */
+export function buildToylockApi(client: RpcClient): Pick<NodeTerminalApi, 'toylock'> {
+  const toylock: ToylockApi = {
+    list: () => client.request(IPC.toylockList) as Promise<ToyLockRecord[]>,
+    createPassword: (input: ToyLockCreatePasswordInput) =>
+      client.request(IPC.toylockCreatePassword, input) as Promise<ToyLockCreateResult>,
+    beginTotp: (input: ToyLockBeginTotpInput) =>
+      client.request(IPC.toylockBeginTotp, input) as Promise<ToyLockBeginTotpResult>,
+    confirmTotp: (input: ToyLockConfirmTotpInput) =>
+      client.request(IPC.toylockConfirmTotp, input) as Promise<ToyLockConfirmTotpResult>,
+    cancelTotp: (lockId: string) => client.request(IPC.toylockCancelTotp, lockId) as Promise<void>,
+    update: (input: ToyLockUpdateInput) =>
+      client.request(IPC.toylockUpdate, input) as Promise<ToyLockRecord | null>,
+    remove: (id: string) => client.request(IPC.toylockRemove, id) as Promise<void>,
+    verify: (input: ToyLockVerifyInput) =>
+      client.request(IPC.toylockVerify, input) as Promise<ToyLockVerifyResult>
+  }
+  return { toylock }
+}
+
+/** Build the `authenticator` namespace over an RpcClient. Same core-bound reasoning as
+ *  `buildToylockApi` — see docs/authenticator.md. */
+export function buildAuthenticatorApi(client: RpcClient): Pick<NodeTerminalApi, 'authenticator'> {
+  const authenticator: AuthenticatorApi = {
+    list: () => client.request(IPC.authenticatorList) as Promise<AuthenticatorEntry[]>,
+    addManual: (input: AuthenticatorAddManualInput) =>
+      client.request(IPC.authenticatorAddManual, input) as Promise<AuthenticatorAddResult>,
+    addFromUri: (uri: string) =>
+      client.request(IPC.authenticatorAddUri, uri) as Promise<AuthenticatorAddResult>,
+    rename: (input: AuthenticatorRenameInput) =>
+      client.request(IPC.authenticatorRename, input) as Promise<AuthenticatorEntry | null>,
+    remove: (id: string) => client.request(IPC.authenticatorRemove, id) as Promise<void>,
+    code: (id: string) => client.request(IPC.authenticatorCode, id) as Promise<AuthenticatorCode | null>,
+    codes: (ids: string[]) =>
+      client.request(IPC.authenticatorCodes, ids) as Promise<Record<string, AuthenticatorCode>>,
+    reveal: (id: string) => client.request(IPC.authenticatorReveal, id) as Promise<AuthenticatorRevealResult>,
+    exportSecrets: (input: AuthenticatorExportInput) =>
+      client.request(IPC.authenticatorExportSecrets, input) as Promise<AuthenticatorExportResult>
+  }
+  return { authenticator }
+}
+
 /**
  * Build the `claude` namespace over an RpcClient. `cliCaps` is a REAL handler on the server
  * (`registerClaudeCliIpc` runs in the server shell too), so the browser resolves the very same
@@ -837,6 +905,8 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
+    ...buildToylockApi(client),
+    ...buildAuthenticatorApi(client),
     ...buildGitHubApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the

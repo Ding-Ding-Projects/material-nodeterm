@@ -18,6 +18,9 @@ import {
   type AgentPermissionMode
 } from '@shared/agents/config'
 import { bypassSandboxCaveat, permissionModeAgentsLabel } from '@shared/agents/approval-mode'
+import { useToyLocks } from '../state/toylocks'
+import { LockWizard } from './toylocks/LockWizard'
+import { UnlockPrompt } from './toylocks/UnlockPrompt'
 
 interface TabBarProps {
   onSwitch: (id: string) => void
@@ -141,6 +144,48 @@ export function TabBar({
         remoteClaudeVersionByProject[menuProject.id]
       )
     : null
+
+  // Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a project tab. `useToyLocks` is
+  // shared across every lockable surface; this component reads it just to know which tabs are
+  // locked-and-not-currently-unlocked and to drive its own wizard/unlock popovers.
+  const lockRecords = useToyLocks((s) => s.records)
+  const unlockedUntil = useToyLocks((s) => s.unlockedUntil)
+  useEffect(() => {
+    void useToyLocks.getState().refresh()
+  }, [])
+  const lockForProject = (id: string) => lockRecords.find((r) => r.target.kind === 'tab' && r.target.id === id)
+  const isTabLocked = (id: string): boolean => {
+    const lock = lockForProject(id)
+    if (!lock) return false
+    const until = unlockedUntil[lock.id]
+    return !(until !== undefined && Date.now() < until)
+  }
+  const [lockWizard, setLockWizard] = useState<{ projectId: string; x: number; y: number } | null>(null)
+  const [unlockPrompt, setUnlockPrompt] = useState<{ projectId: string; x: number; y: number } | null>(null)
+  const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null)
+  // The lock could disappear out from under an open prompt (removed from Settings, or in another
+  // window over a shared team session) — close it rather than let it keep asking for a credential
+  // that no longer guards anything.
+  useEffect(() => {
+    if (unlockPrompt && !lockForProject(unlockPrompt.projectId)) {
+      setUnlockPrompt(null)
+      setPendingSwitchId(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lockForProject reads lockRecords, listed here
+  }, [unlockPrompt, lockRecords])
+  // A 'session' duration lock re-locks the moment its tab is LEFT (switched away from) — see
+  // ToyLockDurationMode's doc comment in shared/toylock.ts. Minutes/until-close locks expire on
+  // their own (isUnlocked re-evaluates the timestamp every read), so only 'session' needs this.
+  const prevActiveIdRef = useRef<string | undefined>(activeId ?? undefined)
+  useEffect(() => {
+    const prev = prevActiveIdRef.current
+    if (prev && prev !== activeId) {
+      const lock = lockForProject(prev)
+      if (lock && lock.duration === 'session') useToyLocks.getState().relock(lock.id)
+    }
+    prevActiveIdRef.current = activeId ?? undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lockForProject reads lockRecords
+  }, [activeId, lockRecords])
 
   const closeMenu = () => {
     setMenuId(null)
@@ -278,13 +323,23 @@ export function TabBar({
                   setDragId(null)
                   setDropId(null)
                 }}
-                onClick={() => {
+                onClick={(e) => {
                   if (editingId) return
                   // An unavailable tab distinguishes by its bound session source: a dropped RELAY
                   // tab reconnects on click (Stage 4 Task 7), a missing local folder is inert.
                   const action = tabClickAction(!!p.unavailable, sessionForProject(p.id).source)
-                  if (action === 'switch') onSwitch(p.id)
-                  else if (action === 'reconnect') onReconnect(p.id)
+                  if (action === 'switch') {
+                    // Toy-lock gate: a locked-and-not-currently-unlocked tab prompts to unlock
+                    // instead of teleporting past the lock. Not on the ACTIVE tab, though — that
+                    // click just re-selects it, and prompting again for a tab you're already
+                    // looking at would be the "assumed unlocked forever" trap in reverse.
+                    if (!active && isTabLocked(p.id)) {
+                      setPendingSwitchId(p.id)
+                      setUnlockPrompt({ projectId: p.id, x: e.clientX, y: e.clientY })
+                      return
+                    }
+                    onSwitch(p.id)
+                  } else if (action === 'reconnect') onReconnect(p.id)
                 }}
                 title={
                   p.unavailable
@@ -306,6 +361,11 @@ export function TabBar({
                 {p.ssh && (
                   <span className="tab__ssh" title={`${p.ssh.server.user}@${p.ssh.server.host}`}>
                     SSH
+                  </span>
+                )}
+                {lockForProject(p.id) && (
+                  <span className="tab__lock" title="This tab is locked — just for fun, not security">
+                    🔒
                   </span>
                 )}
                 {editingId === p.id ? (
@@ -506,6 +566,21 @@ export function TabBar({
             )}
             <button
               onClick={() => {
+                const lock = lockForProject(menuProject.id)
+                const pos = menuPos
+                closeMenu()
+                if (!pos) return
+                if (lock) {
+                  setUnlockPrompt({ projectId: menuProject.id, x: pos.left, y: pos.top })
+                } else {
+                  setLockWizard({ projectId: menuProject.id, x: pos.left, y: pos.top })
+                }
+              }}
+            >
+              {lockForProject(menuProject.id) ? 'Manage lock…' : 'Lock this tab…'}
+            </button>
+            <button
+              onClick={() => {
                 onCloseProject(menuProject.id)
                 closeMenu()
               }}
@@ -515,6 +590,38 @@ export function TabBar({
           </div>,
           document.body
         )}
+
+      {lockWizard && (
+        <LockWizard
+          target={{
+            kind: 'tab',
+            id: lockWizard.projectId,
+            label: projects.find((p) => p.id === lockWizard.projectId)?.name ?? 'this tab'
+          }}
+          anchor={{ x: lockWizard.x, y: lockWizard.y }}
+          onClose={() => setLockWizard(null)}
+        />
+      )}
+      {unlockPrompt &&
+        lockForProject(unlockPrompt.projectId) &&
+        (() => {
+          const record = lockForProject(unlockPrompt.projectId)!
+          return (
+            <UnlockPrompt
+              record={record}
+              anchor={{ x: unlockPrompt.x, y: unlockPrompt.y }}
+              onClose={() => {
+                setUnlockPrompt(null)
+                setPendingSwitchId(null)
+              }}
+              onUnlocked={() => {
+                setUnlockPrompt(null)
+                if (pendingSwitchId) onSwitch(pendingSwitchId)
+                setPendingSwitchId(null)
+              }}
+            />
+          )
+        })()}
     </>
   )
 }

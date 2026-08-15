@@ -119,6 +119,17 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
             </section>
           ))}
         </div>
+        <div className="shortcuts__footer">
+          <button
+            className="toylock-btn--link"
+            onClick={() => {
+              onClose()
+              window.dispatchEvent(new CustomEvent('nodeterm:open-settings', { detail: { section: 'support' } }))
+            }}
+          >
+            Need help? Open Support Tickets…
+          </button>
+        </div>
       </div>
     </div>,
     document.body

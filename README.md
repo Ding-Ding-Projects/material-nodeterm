@@ -153,6 +153,11 @@ opencode / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂
   **undo/redo**, and a native macOS dark UI.
 - **Auto-update & in-app announcements** — the app checks a self-hosted feed and
   surfaces a "Restart to update" banner and product news.
+- **Toy locks & the built-in authenticator** *(Settings → Just for fun)* — a purely-for-fun,
+  opt-in password/TOTP lock on a tab, a canvas node, or an appearance setting (this is a
+  speed bump, not security — recovery is deleting the app's own local data folder), plus a
+  local, offline TOTP authenticator with in-process QR pairing. See
+  [`docs/toy-locks.md`](./docs/toy-locks.md) and [`docs/authenticator.md`](./docs/authenticator.md).
 
 ### 🌍 Server Edition — nodeterm in your browser
 

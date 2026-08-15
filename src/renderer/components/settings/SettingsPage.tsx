@@ -26,6 +26,9 @@ import { SshSection } from './sections/SshSection'
 import { UpdatesSection } from './sections/UpdatesSection'
 import { PrivacySection } from './sections/PrivacySection'
 import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
+import { ToyLocksSection } from './sections/ToyLocksSection'
+import { AuthenticatorSection } from './sections/AuthenticatorSection'
+import { SupportTicketsSection } from './sections/SupportTicketsSection'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -92,6 +95,9 @@ export function SettingsPage({
             <SshSection isActive={active === 'ssh'} />
             <UpdatesSection isActive={active === 'updates'} />
             <PrivacySection isActive={active === 'privacy'} />
+            <ToyLocksSection isActive={active === 'toylocks'} />
+            <AuthenticatorSection isActive={active === 'authenticator'} />
+            <SupportTicketsSection isActive={active === 'support'} />
           </div>
         </main>
       </SettingsSearchContext.Provider>

@@ -391,5 +391,27 @@ export const IPC = {
   // Electron-only: registered in src/main/index.ts (systemPreferences.askForMediaAccess) and
   // stubbed `async () => true` in src/server/index.ts (browser mic permission is the browser's
   // own prompt, not ours to gate).
-  speechMicConsent: 'speech:mic-consent'
+  speechMicConsent: 'speech:mic-consent',
+  // Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a tab/node/appearance value. Core-
+  // bound: registered by BOTH src/main and src/server (core/toylocks/toylock-service.ts), so a
+  // Server Edition browser tab reaches the SAME service over the WS bridge that Electron reaches
+  // over ipcMain — see src/renderer/bridge/ws-bridge.ts's buildToylockApi.
+  toylockList: 'toylock:list',
+  toylockCreatePassword: 'toylock:create-password',
+  toylockBeginTotp: 'toylock:begin-totp',
+  toylockConfirmTotp: 'toylock:confirm-totp',
+  toylockCancelTotp: 'toylock:cancel-totp',
+  toylockUpdate: 'toylock:update',
+  toylockRemove: 'toylock:remove',
+  toylockVerify: 'toylock:verify',
+  // The built-in authenticator (docs/authenticator.md). Same core-bound registration pattern.
+  authenticatorList: 'authenticator:list',
+  authenticatorAddManual: 'authenticator:add-manual',
+  authenticatorAddUri: 'authenticator:add-uri',
+  authenticatorRename: 'authenticator:rename',
+  authenticatorRemove: 'authenticator:remove',
+  authenticatorCode: 'authenticator:code',
+  authenticatorCodes: 'authenticator:codes',
+  authenticatorReveal: 'authenticator:reveal',
+  authenticatorExportSecrets: 'authenticator:export-secrets'
 } as const

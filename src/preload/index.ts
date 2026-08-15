@@ -399,6 +399,27 @@ const api: NodeTerminalApi = {
     read: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemory, q),
     host: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemoryHost, q)
   },
+  toylock: {
+    list: () => ipcRenderer.invoke(IPC.toylockList),
+    createPassword: (input) => ipcRenderer.invoke(IPC.toylockCreatePassword, input),
+    beginTotp: (input) => ipcRenderer.invoke(IPC.toylockBeginTotp, input),
+    confirmTotp: (input) => ipcRenderer.invoke(IPC.toylockConfirmTotp, input),
+    cancelTotp: (lockId) => ipcRenderer.invoke(IPC.toylockCancelTotp, lockId),
+    update: (input) => ipcRenderer.invoke(IPC.toylockUpdate, input),
+    remove: (id) => ipcRenderer.invoke(IPC.toylockRemove, id),
+    verify: (input) => ipcRenderer.invoke(IPC.toylockVerify, input)
+  },
+  authenticator: {
+    list: () => ipcRenderer.invoke(IPC.authenticatorList),
+    addManual: (input) => ipcRenderer.invoke(IPC.authenticatorAddManual, input),
+    addFromUri: (uri) => ipcRenderer.invoke(IPC.authenticatorAddUri, uri),
+    rename: (input) => ipcRenderer.invoke(IPC.authenticatorRename, input),
+    remove: (id) => ipcRenderer.invoke(IPC.authenticatorRemove, id),
+    code: (id) => ipcRenderer.invoke(IPC.authenticatorCode, id),
+    codes: (ids) => ipcRenderer.invoke(IPC.authenticatorCodes, ids),
+    reveal: (id) => ipcRenderer.invoke(IPC.authenticatorReveal, id),
+    exportSecrets: (input) => ipcRenderer.invoke(IPC.authenticatorExportSecrets, input)
+  },
   context: {
     onUpdate: (listener) => {
       const handler = (_e: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)

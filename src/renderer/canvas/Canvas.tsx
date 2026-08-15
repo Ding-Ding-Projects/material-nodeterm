@@ -209,6 +209,9 @@ import { opensInEditor } from '../lib/openTarget'
 import { newEntryPath, parentDir } from '../lib/explorerCreate'
 import { useProjects } from '../state/projects'
 import { useAgentStatus } from '../state/agentStatus'
+import { useToyLocks } from '../state/toylocks'
+import { LockWizard } from '../components/toylocks/LockWizard'
+import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import { useCodexIdentity, codexFallbackText } from '../state/codexIdentity'
 import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
@@ -783,6 +786,20 @@ export function Canvas() {
     }
   }, [])
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
+  // Screen coordinates of whatever context menu is currently open (or was, until the wizard/prompt
+  // it spawned takes over) — `selectionItems`' "Lock this node…" item is built while the ONLY thing
+  // known is the flow position, so it reads this ref (set by the two menu handlers below) instead.
+  const lastMenuScreenPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  // Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a canvas node. See TabBar.tsx and
+  // AppearanceSection.tsx for the same pattern applied to a tab and an appearance control.
+  const [lockWizardTarget, setLockWizardTarget] = useState<{ nodeId: string; x: number; y: number } | null>(
+    null
+  )
+  const [unlockPromptTarget, setUnlockPromptTarget] = useState<{
+    nodeId: string
+    x: number
+    y: number
+  } | null>(null)
   const [remotePicker, setRemotePicker] = useState<{ x: number; y: number } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [fileIndex, setFileIndex] = useState<QuickOpenIndexedFile[]>([])
@@ -3472,6 +3489,20 @@ export function Canvas() {
     // Resolves the ssh binding by host at fire time (reads stores directly), so no project dep.
   }, [setNodes, markDirty, viewCenter])
 
+  // Toy-lock surfaces (TabBar, the appearance Accent row, a locked node) live outside Canvas's own
+  // JSX tree and don't hold a reference to `setSettingsOpen`/`setSettingsSection` — so "Forgotten
+  // your password?" on the unlock prompt dispatches this instead of prop-drilling a Settings opener
+  // through every one of them, the same idiom `nodeterm:add-account-login` already uses above.
+  useEffect(() => {
+    const onOpenSettings = (ev: Event): void => {
+      const section = (ev as CustomEvent<{ section?: SettingsSectionId }>).detail?.section
+      if (section) setSettingsSection(section)
+      setSettingsOpen(true)
+    }
+    window.addEventListener('nodeterm:open-settings', onOpenSettings)
+    return () => window.removeEventListener('nodeterm:open-settings', onOpenSettings)
+  }, [])
+
   // Resolve the system account's email once, so context menus (built via getState) can label
   // the "System account" entry with it.
   useEffect(() => useSystemAccount.getState().ensure(), [])
@@ -5248,6 +5279,28 @@ export function Canvas() {
             ] as MenuItem[]
           })()
         : []),
+      // Toy lock (docs/toy-locks.md) — for-fun, opt-in, single-node selections only (a lock
+      // targets one node id). Anchored at the menu's own screen position via
+      // lastMenuScreenPosRef (this closure only knows FLOW coords); the wizard/prompt resolve the
+      // node's current title as its target label at render time, in Canvas's own JSX below.
+      ...(ids.length === 1
+        ? (() => {
+            const lock = useToyLocks
+              .getState()
+              .records.find((r) => r.target.kind === 'node' && r.target.id === ids[0])
+            const pos = lastMenuScreenPosRef.current
+            return [
+              {
+                label: lock ? 'Manage lock…' : 'Lock this node…',
+                icon: <IconLock />,
+                onClick: () =>
+                  lock
+                    ? setUnlockPromptTarget({ nodeId: ids[0], x: pos.x, y: pos.y })
+                    : setLockWizardTarget({ nodeId: ids[0], x: pos.x, y: pos.y })
+              }
+            ] as MenuItem[]
+          })()
+        : []),
       { type: 'separator' },
       { label: 'Delete', icon: <IconTrash />, danger: true, onClick: () => deleteNodes(ids) }
     ])
@@ -5555,6 +5608,7 @@ export function Canvas() {
   const onNodeContextMenu = useCallback(
     (e: React.MouseEvent, node: Node) => {
       e.preventDefault()
+      lastMenuScreenPosRef.current = { x: e.clientX, y: e.clientY }
       // For a group frame, remember WHERE inside it the user right-clicked so "New …" creation
       // entries can place the node at the cursor (parentInto converts to group-relative).
       const items =
@@ -5571,6 +5625,7 @@ export function Canvas() {
   const onSelectionContextMenu = useCallback(
     (e: React.MouseEvent, selected: Node[]) => {
       e.preventDefault()
+      lastMenuScreenPosRef.current = { x: e.clientX, y: e.clientY }
       setMenu({
         x: e.clientX,
         y: e.clientY,
@@ -8358,6 +8413,40 @@ export function Canvas() {
       section: 'View',
       run: () => setOnboardingOpen(true)
     })
+    // "Just for fun" settings — a for-fun UX speed bump, never security (docs/toy-locks.md,
+    // docs/authenticator.md). Findable from the palette like any other settings destination.
+    cmds.push(
+      {
+        id: 'open-toylocks',
+        label: 'Toy locks',
+        hint: 'lock a tab node or setting, password, TOTP',
+        section: 'Settings',
+        run: () => {
+          setSettingsSection('toylocks')
+          setSettingsOpen(true)
+        }
+      },
+      {
+        id: 'open-authenticator',
+        label: 'Authenticator',
+        hint: 'TOTP codes, QR pairing',
+        section: 'Settings',
+        run: () => {
+          setSettingsSection('authenticator')
+          setSettingsOpen(true)
+        }
+      },
+      {
+        id: 'open-support-tickets',
+        label: 'Support Tickets',
+        hint: 'locked out, forgot password, recovery',
+        section: 'Settings',
+        run: () => {
+          setSettingsSection('support')
+          setSettingsOpen(true)
+        }
+      }
+    )
     return cmds
   }, [
     addTerminal,
@@ -8878,6 +8967,37 @@ export function Canvas() {
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
       )}
+
+      {/* Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a canvas node. The target's
+          label is resolved HERE, at render time, from the live node title — never captured stale
+          at the moment the context menu opened, so a since-renamed node still shows its current
+          name in the wizard/prompt. */}
+      {lockWizardTarget && (
+        <LockWizard
+          target={{
+            kind: 'node',
+            id: lockWizardTarget.nodeId,
+            label: (nodesRef.current.find((n) => n.id === lockWizardTarget.nodeId)?.data.title as string) || 'this node'
+          }}
+          anchor={{ x: lockWizardTarget.x, y: lockWizardTarget.y }}
+          onClose={() => setLockWizardTarget(null)}
+        />
+      )}
+      {unlockPromptTarget &&
+        (() => {
+          const record = useToyLocks
+            .getState()
+            .records.find((r) => r.target.kind === 'node' && r.target.id === unlockPromptTarget.nodeId)
+          if (!record) return null
+          return (
+            <UnlockPrompt
+              record={record}
+              anchor={{ x: unlockPromptTarget.x, y: unlockPromptTarget.y }}
+              onClose={() => setUnlockPromptTarget(null)}
+              onUnlocked={() => setUnlockPromptTarget(null)}
+            />
+          )
+        })()}
 
       {paletteOpen && (
         <CommandPalette

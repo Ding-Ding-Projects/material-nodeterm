@@ -73,6 +73,8 @@ import { createRemoteGrantsCache } from '../core/remote-push-grants'
 import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
+import { startToyLockService } from '../core/toylocks/toylock-service'
+import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
 import { registerPtmxLimitHandler } from './ptmx-limit'
@@ -1704,6 +1706,14 @@ app.whenReady().then(async () => {
       }
     }
   })
+
+  // Toy locks + the built-in authenticator (docs/toy-locks.md, docs/authenticator.md). Pure
+  // core-bound services — no shell-specific wiring beyond what CorePlatform already offers
+  // (userDataDir + Electron's safeStorage seal/unseal). Registered on the Server Edition too, in
+  // src/server/index.ts, so a browser tab reaches the exact same service over the WS bridge.
+  startToyLockService()
+  startAuthenticatorService()
+
   const ackSweeper = createAckSweeper({
     handlers: { ackDone, onUnreadClear: (id) => sendToMain(IPC.agentUnreadClear, id) }
   })
