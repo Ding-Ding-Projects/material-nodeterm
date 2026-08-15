@@ -7,6 +7,7 @@ import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
+import type { FunnyLevel, LanguageMode } from './i18n/types'
 
 export interface PtyCreateOptions {
   shell?: string
@@ -1040,6 +1041,21 @@ export interface Settings {
   notchHoverExpand: boolean
   /** Dictation (desktop/server). Written as a whole object by the renderer. */
   speech: SpeechSettings
+  /** Language nodeterm speaks to the user in: English, playful Hong Kong-style Cantonese, or
+   *  bilingual (English prominent, Cantonese compact secondary). See src/shared/i18n and
+   *  docs/language-modes.md. Applies live — no restart. */
+  languageMode: LanguageMode
+  /** Funny-level slider for ENGLISH copy, 1 (fully professional) to 5 (maximum playfulness).
+   *  Independent of `funnyLevelYue` — a user may want plain English with playful Cantonese, or
+   *  the reverse. Applies to every message category, errors and warnings included; only the
+   *  VOICE changes, never the facts (see src/shared/i18n/catalog.ts). */
+  funnyLevelEn: FunnyLevel
+  /** Funny-level slider for CANTONESE copy. See `funnyLevelEn`. */
+  funnyLevelYue: FunnyLevel
+  /** Decorate dialogs and message boxes with a relevant, non-semantic emoji. Emojis never appear
+   *  in buttons, field labels, or other control/accessible-name text — decoration only. Off by
+   *  default: the user opts in. */
+  showEmojiInDialogs: boolean
   /** Per-node hook identity enforcement (src/core/agents/node-identity-policy.ts).
    *
    *  The ONLY optional key in this interface, and deliberately so: it is a TRI-state, and the two
@@ -1138,6 +1154,15 @@ export const DEFAULT_SETTINGS: Settings = {
   notchWidth: 168,
   notchHoverExpand: true,
   speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
+  languageMode: 'en',
+  // Level 2, not 5: the default install is a developer tool a stranger just downloaded, and a
+  // maximally-playful error message is the wrong first impression for someone who hasn't yet
+  // chosen to have fun with their terminal manager. Level 2 keeps copy mostly plain with a
+  // little character — the kind of tone that reads as "friendly", not "trying too hard". Users
+  // who want more crank both sliders themselves.
+  funnyLevelEn: 2,
+  funnyLevelYue: 2,
+  showEmojiInDialogs: false,
 }
 
 export interface SettingsApi {

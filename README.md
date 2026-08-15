@@ -163,6 +163,10 @@ write-up of every node kind.
   from your phone — plus push notifications and a mobile board view.
 - **Command palette** (⌘K), **file explorer** (⌘⇧E), **markdown view** (⌘M),
   **undo/redo**, and a native macOS dark UI.
+- **Language modes** — English, playful Hong Kong-style Cantonese, or bilingual, plus two
+  independent funny-level sliders (English/Cantonese) that change *tone*, never facts, on
+  every message including errors. Settings → Interface → Language. See
+  [`docs/language-modes.md`](./docs/language-modes.md).
 - **Auto-update & in-app announcements** — the app checks a self-hosted feed and
   surfaces a "Restart to update" banner and product news.
 

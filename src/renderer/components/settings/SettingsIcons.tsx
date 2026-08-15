@@ -119,7 +119,14 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
     </>
   ),
   updates: <path d="M8 2.6v7M5 6.6 8 9.6l3-3M3.6 12.6h8.8" />,
-  privacy: <path d="M8 2.4 12.4 4.2V8c0 3-2 4.8-4.4 5.6C5.6 12.8 3.6 11 3.6 8V4.2Z" />
+  privacy: <path d="M8 2.4 12.4 4.2V8c0 3-2 4.8-4.4 5.6C5.6 12.8 3.6 11 3.6 8V4.2Z" />,
+  // A speech bubble with a globe grid inside it — "the language this app speaks".
+  language: (
+    <>
+      <path d="M2.5 3.6h11v6.4H8.6L6 12.6v-2.6H2.5Z" />
+      <path d="M4.6 6.8h6.8M6.4 3.6a5.4 5.4 0 0 0 0 6.4M9.6 3.6a5.4 5.4 0 0 1 0 6.4" />
+    </>
+  )
 }
 
 export function SectionIcon({ id }: { id: SettingsSectionId }): React.JSX.Element {

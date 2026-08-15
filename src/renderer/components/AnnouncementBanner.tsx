@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Announcement } from '@shared/types'
+import { useI18n } from '@renderer/lib/i18n'
 
 // Polls the remote announcements feed (via the main process) and shows the newest
 // item the user hasn't dismissed. Dismissed ids are remembered in localStorage so a
@@ -26,6 +27,7 @@ function saveSeen(seen: Set<string>): void {
 
 export function AnnouncementBanner(): JSX.Element | null {
   const [current, setCurrent] = useState<Announcement | null>(null)
+  const { ts } = useI18n()
 
   useEffect(() => {
     let cancelled = false
@@ -68,10 +70,14 @@ export function AnnouncementBanner(): JSX.Element | null {
           className="announce-banner__btn"
           onClick={() => window.open(current.url, '_blank', 'noopener')}
         >
-          Learn more
+          {ts('announce.learnMore', 'Learn more')}
         </button>
       )}
-      <button className="announce-banner__close" title="Dismiss" onClick={dismiss}>
+      <button
+        className="announce-banner__close"
+        title={ts('announce.dismiss', 'Dismiss')}
+        onClick={dismiss}
+      >
         ✕
       </button>
     </div>

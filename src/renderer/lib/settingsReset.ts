@@ -38,6 +38,14 @@ export const APPEARANCE_RESET_KEYS = [
   'hiddenHeaderButtons'
 ] as const satisfies readonly (keyof Settings)[]
 
+/** The language/funny-level settings the Language section owns. */
+export const LANGUAGE_RESET_KEYS = [
+  'languageMode',
+  'funnyLevelEn',
+  'funnyLevelYue',
+  'showEmojiInDialogs'
+] as const satisfies readonly (keyof Settings)[]
+
 /** The defaults for `keys`, as a patch for `useSettings.update`. */
 export function resetPatch<K extends keyof Settings>(keys: readonly K[]): Pick<Settings, K> {
   const out = {} as Pick<Settings, K>
