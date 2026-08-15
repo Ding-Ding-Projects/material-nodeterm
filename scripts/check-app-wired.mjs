@@ -34,9 +34,16 @@
 //    reason, never inferred at runtime from something not being found.
 
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, rmSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  assertManagedConfigUnchanged,
+  captureManagedConfigSentinel,
+  createAppSandbox,
+  repoElectronPids,
+} from './check-app-wired-core.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
@@ -52,7 +59,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function cdp(port) {
   const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
-  const page = targets.find((t) => t.type === 'page' && !t.url.startsWith('devtools://'))
+  // The HUD is a second page target with its own narrow preload; it intentionally has no
+  // nodeTerminal bridge. Targeting "the first page" selected it on a real Windows run and made
+  // the harness report that the main app had no bridge at all.
+  const page = targets.find(
+    (t) =>
+      t.type === 'page' &&
+      !t.url.startsWith('devtools://') &&
+      !/(?:^|[\\/])hud\.html(?:[?#]|$)/i.test(t.url),
+  )
   if (!page) throw new Error('no renderer target on the debugging port')
   const ws = new WebSocket(page.webSocketDebuggerUrl, { maxPayload: 64 * 1024 * 1024 })
   let id = 0
@@ -79,64 +94,61 @@ async function cdp(port) {
   return { send, close: () => ws.close() }
 }
 
-/**
- * PIDs of Electron processes belonging to THIS repo, right now.
- *
- * Needed because killing the app is not enough. On Windows the app spawns a **session host** —
- * the tmux-equivalent — and that process outlives its parent BY DESIGN, which is the whole point
- * of it. So every harness run that launches the app leaves one behind, still holding
- * `node_modules\electron\dist\electron.exe`.
- *
- * That is not theoretical: a leftover from a capture run made the next `npm ci` fail on that
- * binary, and because `npm ci` deletes node_modules BEFORE installing, it left the tree gutted —
- * no vitest, no react, no ws. The harness broke the checkout it was written to inspect.
- *
- * Snapshot before, diff after, kill only what appeared. Killing "all Electron for this repo"
- * would take the developer's own running app with it.
- */
-function repoElectronPids() {
-  if (process.platform !== 'win32') return []
-  try {
-    // No backslash doubling. Inside a PowerShell SINGLE-quoted string a backslash is an ordinary
-    // character, so escaping them made the -like pattern `C:\\Users\\…`, which matches nothing —
-    // the cleanup silently found zero leftovers and reported success while leaking every time.
-    // Only the single quote needs escaping there, by doubling it.
-    const ps =
-      `Get-CimInstance Win32_Process -Filter "Name='electron.exe'" | ` +
-      `Where-Object { $_.CommandLine -like '*${ROOT.replace(/'/g, "''")}*' } | ` +
-      `ForEach-Object { $_.ProcessId }`
-    return execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
-      encoding: 'utf8',
-      timeout: 20000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .split(/\r?\n/)
-      .map((s) => Number(s.trim()))
-      .filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
 const port = typeof attachPort === 'string' ? Number(attachPort) : 9223
-const pidsBefore = new Set(attachPort ? [] : repoElectronPids())
+const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
+const unix = join(ROOT, 'node_modules', '.bin', 'electron')
+const bin = process.platform === 'win32' ? electron : unix
+if (!attachPort && !existsSync(bin)) {
+  console.error('✗ Electron binary not found — run `npm ci` (or `npm run rebuild`) first.')
+  process.exit(1)
+}
+// A failed process inventory is not an empty inventory. Abort before launch: treating it as []
+// makes every pre-existing matching process look new at cleanup and risks killing a Swiftie's app.
+const pidsBefore = new Set(attachPort ? [] : repoElectronPids({ root: ROOT }))
+const realHomeSentinelOptions = { home: homedir(), env: process.env }
+const realHomeBefore = attachPort
+  ? null
+  : captureManagedConfigSentinel(realHomeSentinelOptions)
+const sandbox = attachPort ? null : createAppSandbox()
 let child = null
+let close = null
+let selected = []
+let failed = 0
+let runError = null
+let cleanupError = null
+
+try {
 if (!attachPort) {
-  const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
-  const unix = join(ROOT, 'node_modules', '.bin', 'electron')
-  const bin = existsSync(electron) ? electron : unix
-  if (!existsSync(bin)) {
-    console.error('✗ Electron binary not found — run `npm ci` (or `npm run rebuild`) first.')
-    process.exit(1)
-  }
   child = spawn(bin, [join(ROOT, 'out', 'main', 'index.js'), `--remote-debugging-port=${port}`], {
     cwd: ROOT,
     stdio: 'ignore',
+    env: sandbox.env,
   })
-  await sleep(6000)
+  await new Promise((resolveLaunch, rejectLaunch) => {
+    const cleanupListeners = () => {
+      clearTimeout(timer)
+      child.off('error', onError)
+      child.off('exit', onExit)
+    }
+    const onError = (error) => {
+      cleanupListeners()
+      rejectLaunch(error)
+    }
+    const onExit = (code, signal) => {
+      cleanupListeners()
+      rejectLaunch(new Error(`Electron exited during launch (code ${code}, signal ${signal})`))
+    }
+    const timer = setTimeout(() => {
+      cleanupListeners()
+      resolveLaunch()
+    }, 6000)
+    child.once('error', onError)
+    child.once('exit', onExit)
+  })
 }
-
-const { send, close } = await cdp(port)
+const connection = await cdp(port)
+const { send } = connection
+close = connection.close
 await send('Runtime.enable')
 await send('Emulation.setDeviceMetricsOverride', {
   width: 1600,
@@ -181,6 +193,52 @@ async function chord({ key: k, code, vk, ctrl = false, shift = false }) {
     })
   }
   await sleep(400)
+}
+
+if (sandbox) {
+  // NT_USER_DATA is not trusted merely because it was passed. Ask the running main process what
+  // Electron actually chose before touching any control, using the same real preload round-trip
+  // as the product. A missing NT_MULTI or NT_USER_DATA override turns this red.
+  await evaluate(`(function(){
+    window.__wiredUserData = 'pending';
+    try {
+      window.nodeTerminal.userDataDir().then(
+        function(v){ window.__wiredUserData = v },
+        function(e){ window.__wiredUserData = 'rejected: ' + e }
+      );
+    } catch (e) { window.__wiredUserData = 'threw: ' + e }
+    return true;
+  })()`)
+  const actualUserData = await until(
+    `window.__wiredUserData !== 'pending' ? window.__wiredUserData : null`,
+    8000,
+  )
+  const actualPath = typeof actualUserData === 'string' ? resolve(actualUserData) : ''
+  const expectedPath = resolve(sandbox.userData)
+  const samePath = process.platform === 'win32'
+    ? actualPath.toLowerCase() === expectedPath.toLowerCase()
+    : actualPath === expectedPath
+  if (!samePath) {
+    throw new Error(`app reported userData ${JSON.stringify(actualUserData)}; expected ${expectedPath}`)
+  }
+
+  // These are consequences of the real boot installers. Checking all of them proves HOME,
+  // USERPROFILE, XDG_CONFIG_HOME, and GROK_HOME converged on the disposable root; a test that
+  // only inspected the env object could stay green while Electron ignored it.
+  const installed = captureManagedConfigSentinel({ home: sandbox.home, env: sandbox.env })
+  const missing = Object.entries(installed)
+    .filter(([, value]) => value === 'absent')
+    .map(([target]) => target)
+  for (const target of [
+    join(sandbox.userData, 'hook-endpoint.env'),
+    join(sandbox.userData, 'context-links', 'context.sh'),
+    join(sandbox.userData, 'canvas-control', 'nodeterm.sh'),
+  ]) {
+    if (!existsSync(target)) missing.push(target)
+  }
+  if (missing.length) {
+    throw new Error(`isolated boot did not create its managed artefacts:\n${missing.map((p) => `  - ${p}`).join('\n')}`)
+  }
 }
 
 const CHECKS = [
@@ -335,8 +393,7 @@ const CHECKS = [
   },
 ]
 
-const selected = only ? CHECKS.filter((c) => only.includes(c.id)) : CHECKS
-let failed = 0
+selected = only ? CHECKS.filter((c) => only.includes(c.id)) : CHECKS
 console.log('')
 for (const c of selected) {
   let r
@@ -351,34 +408,71 @@ for (const c of selected) {
     console.error(`✗ ${c.title}\n    ${r.why}`)
   }
 }
-
-close()
-if (child) child.kill()
-
-// Clean up everything this run started, not just the process we hold a handle to. See
-// `repoElectronPids` for why the session host survives `child.kill()` and what it costs.
-if (!attachPort) {
-  await sleep(1500)
-  const leaked = repoElectronPids().filter((p) => !pidsBefore.has(p))
-  if (leaked.length) {
+} catch (error) {
+  runError = error
+} finally {
+  try {
+    close?.()
+  } catch (error) {
+    cleanupError ??= error
+  }
+  if (child) {
     try {
-      execFileSync(
-        'powershell',
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          `Stop-Process -Id ${leaked.join(',')} -Force -ErrorAction SilentlyContinue`,
-        ],
-        { timeout: 20000, stdio: 'ignore' },
-      )
-      console.log(`  (cleaned up ${leaked.length} process(es) this run started: ${leaked.join(', ')})`)
-    } catch {
-      // Not fatal to the verdict — but say so, because a leftover here breaks the NEXT npm ci.
-      console.error(`  ! could not stop leftover PIDs ${leaked.join(', ')} — they hold electron.exe`)
+      child.kill()
+    } catch (error) {
+      cleanupError ??= error
+    }
+  }
+
+  // Killing the app is not enough: on Windows its session host outlives the parent by design.
+  // Snapshot/diff means an already-running developer instance is never ours to stop. Re-query
+  // immediately before Stop-Process too, so a PID that exited and was reused cannot cross the
+  // literal repo-command-line boundary between discovery and termination.
+  if (!attachPort) {
+    await sleep(1500)
+    try {
+      const candidates = repoElectronPids({ root: ROOT }).filter((pid) => !pidsBefore.has(pid))
+      const stillOwned = new Set(repoElectronPids({ root: ROOT }))
+      const leaked = candidates.filter((pid) => stillOwned.has(pid))
+      if (leaked.length) {
+        execFileSync(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `Stop-Process -Id ${leaked.join(',')} -Force -ErrorAction Stop`,
+          ],
+          { timeout: 20000, stdio: 'ignore' },
+        )
+        console.log(`  (cleaned up ${leaked.length} process(es) this run started: ${leaked.join(', ')})`)
+      }
+    } catch (error) {
+      cleanupError ??= new Error(`could not inventory or stop this run's Electron processes: ${error.message}`, {
+        cause: error,
+      })
+    }
+
+    try {
+      const realHomeAfter = captureManagedConfigSentinel(realHomeSentinelOptions)
+      assertManagedConfigUnchanged(realHomeBefore, realHomeAfter)
+    } catch (error) {
+      cleanupError ??= error
+    }
+    if (sandbox) {
+      try {
+        rmSync(sandbox.root, { recursive: true, force: true })
+      } catch (error) {
+        cleanupError ??= new Error(`could not remove wiring sandbox ${sandbox.root}: ${error.message}`, {
+          cause: error,
+        })
+      }
     }
   }
 }
+
+if (runError) throw runError
+if (cleanupError) throw cleanupError
 
 console.log('')
 const sha = (() => {
