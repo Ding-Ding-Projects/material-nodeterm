@@ -17,6 +17,29 @@ const spawned: FakePty[] = []
 /** When set, the NEXT pty.spawn throws (simulates posix_spawn failing). */
 let failNextSpawn = false
 
+// This suite is about co-attach semantics over ONE spawned pty, so it must pin which persistence
+// backend `spawnSession` selects — otherwise it silently tests whichever backend the host machine
+// happens to make available.
+//
+// `pty-manager` picks tmux -> session host -> plain shell. The session-host branch is taken when
+// tmux is absent (always true on Windows) AND `sessionHostSupported()` is true, and that probe
+// answers "is out/session-host/host.cjs on disk" — so merely having run `npm run build` flipped
+// this suite from the mocked `pty.spawn` below to a real session-host shim that never connects,
+// turning 78 passes into 73 failures with `Cannot read properties of undefined (reading 'killed')`.
+// Forcing it false keeps this file testing the plain-shell path it was written for; the session
+// host has its own coverage. Same reasoning as pty-bundled-tmux.test.ts pinning darwin.
+vi.mock('./session-host-backend', () => ({
+  sessionHostSupported: () => false,
+  createSessionHostPty: () => {
+    throw new Error('session-host backend must not be selected in pty-coattach.test.ts')
+  },
+  sessionHostCapture: async () => '',
+  sessionHostKillSession: async () => {},
+  sessionHostListSessions: async () => [],
+  sessionHostPaneCommand: async () => null,
+  sessionHostSendKeys: async () => false
+}))
+
 vi.mock('node-pty', () => ({
   spawn: (_file: string, _args: string[], _opts: unknown) => {
     if (failNextSpawn) {

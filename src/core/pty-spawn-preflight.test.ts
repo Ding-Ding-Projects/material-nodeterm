@@ -30,6 +30,13 @@ import type { PtyCreateResult } from '../shared/types'
  */
 const spawned: Array<{ file: string }> = []
 const nodePty = vi.hoisted(() => ({ throws: false }))
+// Pin the persistence backend: without this the suite silently tests whichever backend this
+// machine has built, not the plain-shell path it was written for. See the fixture for the full
+// explanation and the 78-pass -> 73-fail incident that prompted it.
+vi.mock('./session-host-backend', async () =>
+  (await import('./__fixtures__/no-session-host')).noSessionHost()
+)
+
 vi.mock('node-pty', () => ({
   spawn: (file: string) => {
     spawned.push({ file })
