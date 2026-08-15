@@ -17,6 +17,8 @@ export interface DestructiveGateRequest {
   /** The control to return keyboard focus to once this closes (confirm OR cancel). */
   restoreFocusEl?: HTMLElement | null
   onConfirm: () => void
+  /** Optional acknowledgement for callers that must answer a cancelled request (agent control). */
+  onCancel?: () => void
 }
 
 /**

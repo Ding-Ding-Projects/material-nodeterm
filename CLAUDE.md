@@ -1479,7 +1479,18 @@ again; the grace window was never the thing that was wrong.
 - **Selection/pan**: box-select on left-drag (`SelectionMode.Partial` — touch to select);
   pan = middle-drag or trackpad two-finger (`panOnScroll`, `zoomOnScroll:false`); pinch
   zoom. Right mouse is free for the context menu.
-- **Delete** (Delete/Backspace) opens `ConfirmDialog` before removing selected nodes.
+- **Every node/session close uses one runtime funnel** (`renderer/lib/nodeDeletion.ts` →
+  `Canvas.requestDeleteNodes`): Delete/Backspace, canvas menu, every node header × (caught at
+  React Flow's `onBeforeDelete` boundary), kanban, Cmd/Ctrl+W, sessions sidebar/session-memory,
+  and agent-control `close`. Kids mode upgrades EVERY surface to the two-key destructive gate;
+  ordinary mode preserves each surface's historical contract. Do not call `deleteElements` as a
+  complete deletion path or add a second confirmation branch: `deleteNodes` owns the canonical
+  teardown, and the planner/dispatcher is what authorizes reaching it. React Flow expands a parent
+  deletion to descendants before `onBeforeDelete`, so `managedDeletionRoots` must reduce the set
+  back to roots — deleting a frame frees its children rather than deleting them. App-created
+  worktree removal is a separate option-bearing confirm: Kids mode starts disk deletion unticked
+  and an OFF→ON change resets an already-open dialog before paint, while still allowing a later
+  deliberate checkbox opt-in.
 - **Zoom chords** (`renderer/lib/zoomShortcut.ts`): **⌘/Ctrl+0 → `zoomTo100`** (actual size — what
   the browser AND Electron's default View menu already mean by that key) and **Shift+1 → `fitAll`**
   (the Figma/tldraw/Excalidraw "zoom to fit"). Matched on `e.code`, like the project-jump chord,

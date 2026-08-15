@@ -47,7 +47,10 @@ describe('the confirm-gated set and the dispatch that reads it stay in agreement
       expect(body).toMatch(/isDestructiveVerb\(verb\) && confirmBusy\(\)/)
       // …and no leftover bare gate beside it, which would make the set decorative again.
       expect(body).not.toMatch(/\bif \(confirmBusy\(\)\)/)
-      expect(body).toContain('setConfirm({')
+      if (verb === 'write') expect(body).toContain('setConfirm({')
+      // `close` delegates the confirmation decision to the behaviour-tested node-deletion
+      // dispatcher; keeping a second setConfirm branch here would recreate the Kids-mode bypass.
+      else expect(body).toContain("surface: 'agent-control'")
     })
   }
 

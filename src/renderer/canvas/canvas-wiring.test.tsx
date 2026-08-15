@@ -11,6 +11,7 @@ import fs from 'fs'
 import path from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { chromeObstacles, FIT_VIEW_GAP } from './fit-view'
+import { planNodeDeletion } from '../lib/nodeDeletion'
 
 const CANVAS_SRC = fs.readFileSync(path.join(__dirname, 'Canvas.tsx'), 'utf8')
 
@@ -102,13 +103,22 @@ describe('the end-session confirm describes both things it does', () => {
   // session-memory panel reuses the same path, and there the user came to reclaim RAM. Saying only
   // "this stops its tmux session" makes the node's removal a surprise on the one surface whose
   // purpose invites it. (Keeping the node would need a SECOND destroy path; deliberately not built.)
-  it('says the node goes too, on every owned-session confirm', () => {
-    const owned = CANVAS_SRC.match(/End this session\?[^']*/g) ?? []
-    expect(owned.length).toBeGreaterThanOrEqual(3)
-    for (const m of owned) {
-      // The orphan row is the one exception, and it is honest: there is no node to remove.
-      if (m.includes('no node on any canvas')) continue
-      expect(m).toContain('removes the node from its canvas')
-    }
+  it('says the node goes too for an owned session', () => {
+    const plan = planNodeDeletion({
+      surface: 'sessions-sidebar',
+      kidsModeOn: false,
+      titles: ['Session']
+    })
+    expect(plan.message).toMatch(/canvas node will be removed/i)
+  })
+
+  it('does not claim an orphan has a canvas node', () => {
+    const plan = planNodeDeletion({
+      surface: 'sessions-sidebar',
+      kidsModeOn: true,
+      titles: ['orphan session abc'],
+      removesNode: false
+    })
+    expect(plan.description).not.toMatch(/canvas node/i)
   })
 })
