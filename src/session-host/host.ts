@@ -376,7 +376,9 @@ async function main(): Promise<void> {
     }
   }
 
+  const liveSockets = new Set<net.Socket>()
   const server = net.createServer((socket) => {
+    liveSockets.add(socket)
     let authed = false
     const framer = new LineFramer()
     socket.on('data', (chunk: Buffer) => {
@@ -402,6 +404,7 @@ async function main(): Promise<void> {
       }
     })
     socket.on('close', () => {
+      liveSockets.delete(socket)
       // A connection dropping is a DETACH, never a kill — sessions belong to the host, not to
       // any one connection. Mirrors tmux: closing a client's terminal only ends that client.
       // `detach` also returns this socket's pause ticket; without that second half, a crashed
@@ -412,6 +415,27 @@ async function main(): Promise<void> {
       /* the 'close' handler above still runs and does the real cleanup */
     })
   })
+
+  let abortingStartup = false
+  function abortListeningStartup(reason: string, error: unknown): void {
+    if (abortingStartup) return
+    abortingStartup = true
+    log(`fatal: ${reason}: ${String(error)}`)
+    // `listen` has already succeeded when token/state publication runs. Stop accepting first and
+    // destroy anything that reached the tiny pre-publication window, then remove every artifact
+    // owned behind our exclusive startup lock. The uncaughtException logger below deliberately
+    // keeps the process alive, so startup failures must terminate through this explicit path.
+    for (const socket of liveSockets) socket.destroy()
+    const finish = (): void => {
+      cleanupFiles()
+      process.exit(1)
+    }
+    try {
+      server.close(finish)
+    } catch {
+      finish()
+    }
+  }
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     log(`listen error: ${err.code ?? err.message}`)
@@ -435,8 +459,8 @@ async function main(): Promise<void> {
     try {
       fs.writeFileSync(paths.tokenPath, token, { mode: 0o600 })
     } catch (e) {
-      log(`fatal: could not write token file: ${String(e)}`)
-      process.exit(1)
+      abortListeningStartup('could not write token file', e)
+      return
     }
     const state: SessionHostState = {
       pid: process.pid,
@@ -448,7 +472,12 @@ async function main(): Promise<void> {
     // Replace the empty startup-lock file atomically from a temp owned by THIS process. A fixed
     // `.tmp` lets racing/stale-reclaim hosts publish or remove one another's bytes; a bare rename
     // also loses the boot on Windows when a scanner briefly holds the state file open.
-    publishSessionHostState(paths.statePath, JSON.stringify(state))
+    try {
+      publishSessionHostState(paths.statePath, JSON.stringify(state))
+    } catch (e) {
+      abortListeningStartup('could not publish state file', e)
+      return
+    }
     log(`listening pid=${process.pid} endpoint=${paths.endpoint}`)
     scheduleGraceExitIfEmpty() // a host with zero sessions ever attached still exits eventually
   })
