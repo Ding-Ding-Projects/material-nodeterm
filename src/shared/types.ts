@@ -708,8 +708,14 @@ export interface DialogApi {
   selectFiles(): Promise<string[] | null>
 }
 
+export interface ClipboardWriteOptions {
+  /** Let a host surface its own failure UI. Callers with a fallback can disable that UI. */
+  reportFailure?: boolean
+}
+
 export interface ClipboardApi {
-  writeText(text: string): void
+  /** Resolves true only after the host reports that the system clipboard write completed. */
+  writeText(text: string, options?: ClipboardWriteOptions): Promise<boolean>
   /** Copy local files so Finder and other file-aware macOS apps can paste them. */
   writeFiles(paths: string[]): Promise<boolean>
 }
@@ -762,6 +768,12 @@ export interface FilesApi {
    * (too large, unwritable); callers drop that file the way a failed drop does.
    */
   saveUpload(name: string, dataBase64: string): Promise<string | null>
+  /**
+   * Server Edition only: persist a browser-owned Blob without first materializing and base64
+   * encoding it in the renderer. This capability is intentionally absent from the desktop and
+   * relay APIs; callers must fall back to `saveUpload` when it is not present.
+   */
+  saveUploadBlob?(name: string, data: Blob): Promise<string | null>
   /**
    * Persist raw bytes (base64) as a CANVAS image and resolve its ABSOLUTE path. Unlike
    * `saveUpload` the file is durable: a canvas image node is persisted in `project.json`, so its

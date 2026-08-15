@@ -40,18 +40,21 @@ const LOCAL_ONDATA_UNSUB = (): void => {}
  *  preload need real references. Cast so the spread contributes the full NodeTerminalApi shape. */
 function fakeLocalApi() {
   const ptyOnData = vi.fn(() => LOCAL_ONDATA_UNSUB)
+  const localUpload = vi.fn(async () => 'C:\\viewer\\upload.bin')
+  const localBlobUpload = vi.fn(async () => 'C:\\viewer\\blob.bin')
   const local = {
     updates: { NAME: 'local-updates' },
     clipboard: { NAME: 'local-clipboard' },
     settings: { NAME: 'local-settings' },
     githubControl: { NAME: 'local-github-control' },
     dialog: { NAME: 'local-dialog' },
+    files: { saveUpload: localUpload, saveUploadBlob: localBlobUpload },
     license: { NAME: 'local-license' },
     pty: { onData: ptyOnData },
     claude: { cliCaps: () => Promise.resolve({}), readTranscript: () => Promise.reject() },
     relayClient: { disconnect: vi.fn() }
   }
-  return { local: local as unknown as NodeTerminalApi, ptyOnData }
+  return { local: local as unknown as NodeTerminalApi, ptyOnData, localUpload, localBlobUpload }
 }
 
 describe('buildRelayApi', () => {
@@ -60,6 +63,7 @@ describe('buildRelayApi', () => {
     saved = (globalThis as Record<string, unknown>).window
   })
   afterEach(() => {
+    vi.unstubAllGlobals()
     ;(globalThis as Record<string, unknown>).window = saved
   })
 
@@ -103,6 +107,29 @@ describe('buildRelayApi', () => {
 
     void api.githubIssues.query({ projectId: 'p1', columnId: null, pageSize: 50 })
     expect(JSON.parse(t.sent[0])).toMatchObject({ t: 'req', method: IPC.githubIssuesQuery })
+  })
+
+  it('assembles relay uploads on host RPC and never exposes the viewer-local raw HTTP carrier', async () => {
+    const { local, localUpload, localBlobUpload } = fakeLocalApi()
+    ;(globalThis as Record<string, unknown>).window = { nodeTerminal: local }
+    const fetchUpload = vi.fn(() => Promise.reject(new Error('viewer HTTP must stay untouched')))
+    vi.stubGlobal('fetch', fetchUpload)
+    const t = new FakeTransport()
+    const { api } = buildRelayApi('conn-upload', t)
+
+    expect(api.files.saveUploadBlob).toBeUndefined()
+    const saving = api.files.saveUpload('relay.bin', 'cmVsYXktYnl0ZXM=')
+    const frame = JSON.parse(t.sent[0])
+    expect(frame).toMatchObject({
+      t: 'req',
+      method: IPC.filesSaveUpload,
+      args: ['relay.bin', 'cmVsYXktYnl0ZXM=']
+    })
+    t.emit(JSON.stringify({ t: 'res', id: frame.id, ok: true, result: '/host/upload/relay.bin' }))
+    await expect(saving).resolves.toBe('/host/upload/relay.bin')
+    expect(localUpload).not.toHaveBeenCalled()
+    expect(localBlobUpload).not.toHaveBeenCalled()
+    expect(fetchUpload).not.toHaveBeenCalled()
   })
 
   it('routes the folder/file picker to the HOST fs, not the local native dialog', () => {

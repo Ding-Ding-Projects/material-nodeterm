@@ -3,6 +3,7 @@ import { IPC } from '../shared/ipc'
 import type {
   CanvasMutation,
   CanvasState,
+  ClipboardWriteOptions,
   NodeTerminalApi,
   PairingDoneResult,
   Project,
@@ -342,7 +343,16 @@ const api: NodeTerminalApi = {
   },
   clipboard: {
     // Route to the MAIN process: renderer-side `clipboard` access is deprecated in Electron.
-    writeText: (text: string) => ipcRenderer.send(IPC.clipboardWrite, text),
+    // `reportFailure` is a browser-host presentation hint; desktop reports the outcome instead.
+    writeText: async (text: string, _options?: ClipboardWriteOptions) => {
+      try {
+        return (await ipcRenderer.invoke(IPC.clipboardWrite, text)) === true
+      } catch {
+        // Legacy callers treated this operation as fire-and-forget. Never leak an unhandled IPC
+        // rejection from those call sites; false remains an honest acknowledgement for awaiters.
+        return false
+      }
+    },
     writeFiles: (paths: string[]) => ipcRenderer.invoke(IPC.clipboardWriteFiles, paths)
   },
   shell: {

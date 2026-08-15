@@ -6,13 +6,16 @@ import {
   type HardwareEvidence,
   type OllamaChatSession,
   type OllamaChatSessionSummary,
+  type OllamaApi,
   type OllamaModelInfo,
   type OllamaRunningModel,
   type OllamaStatus,
   type PullQueueItem,
   type PullQueueState
 } from '@shared/ollama'
+import { E_UNSUPPORTED } from '@shared/rpc'
 import { formatBytes } from '../../lib/bytesFormat'
+import { useActiveSessionApi } from '../../session/session'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { promptDialog } from '../promptDialog'
 import { troubleshootSteps } from './troubleshoot'
@@ -22,6 +25,57 @@ export interface OllamaManagerPanelProps {
 }
 
 type Tab = 'health' | 'models' | 'store' | 'chat'
+type ActiveSessionApi = ReturnType<typeof useActiveSessionApi>
+
+const PANEL_SCOPE_KEYS = new WeakMap<ActiveSessionApi, number>()
+let nextPanelScopeKey = 1
+
+function panelScopeKey(api: ActiveSessionApi): number {
+  const known = PANEL_SCOPE_KEYS.get(api)
+  if (known !== undefined) return known
+  const key = nextPanelScopeKey++
+  PANEL_SCOPE_KEYS.set(api, key)
+  return key
+}
+
+interface RouteError {
+  code: string | null
+  message: string
+}
+
+interface ModelDeleteTarget {
+  model: string
+  api: ActiveSessionApi
+}
+
+const CHAT_SCOPE_KEYS = new WeakMap<OllamaApi, number>()
+let nextChatScopeKey = 1
+
+/** React state belongs to one Ollama core. A new api identity must remount ChatTab so an old
+ * session id can never be offered to the newly active core by send/rename/delete. */
+function chatScopeKey(ollama: OllamaApi): number {
+  const known = CHAT_SCOPE_KEYS.get(ollama)
+  if (known !== undefined) return known
+  const key = nextChatScopeKey++
+  CHAT_SCOPE_KEYS.set(ollama, key)
+  return key
+}
+
+function routeError(error: unknown): RouteError {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : null
+  if (code === E_UNSUPPORTED) {
+    return {
+      code,
+      message:
+        'Ollama is not available for this remote project session. The manager will not fall back to this computer.'
+    }
+  }
+  const detail = error instanceof Error ? error.message : String(error)
+  return { code, message: `Could not load Ollama for this project session: ${detail}` }
+}
 
 const toast = (message: string, kind: 'error' | 'info' = 'info'): void => {
   window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind, message } }))
@@ -68,7 +122,23 @@ function FitDetail({ fit }: { fit: FitEvaluation | undefined }) {
  * but not actually implemented (the control stays visibly disabled with the real reason); and the
  * search boxes are plain substring search, not the full anchored regex builder.
  */
-export function OllamaManagerPanel({ onClose }: OllamaManagerPanelProps) {
+export function OllamaManagerPanel(props: OllamaManagerPanelProps) {
+  // Ollama runs on the machine that owns the active project. In particular, a relay tab must use
+  // its deliberately-unsupported session api rather than silently managing this computer's models.
+  const api = useActiveSessionApi()
+  // Remount during the switch render, before passive effects. Otherwise a stale model/cart row can
+  // be briefly committed with callbacks from the newly active machine.
+  return <OllamaManagerPanelForApi key={panelScopeKey(api)} {...props} api={api} />
+}
+
+function OllamaManagerPanelForApi({
+  onClose,
+  api
+}: OllamaManagerPanelProps & { api: ActiveSessionApi }) {
+  const ollama = api.ollama
+  const apiRef = useRef(api)
+  const mountedRef = useRef(true)
+  apiRef.current = api
   const [tab, setTab] = useState<Tab>('health')
   const [status, setStatus] = useState<OllamaStatus | null>(null)
   const [checking, setChecking] = useState(false)
@@ -84,39 +154,85 @@ export function OllamaManagerPanel({ onClose }: OllamaManagerPanelProps) {
     running: false,
     concurrency: 1
   })
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ModelDeleteTarget | null>(null)
+  const [accessError, setAccessError] = useState<RouteError | null>(null)
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false
+    },
+    []
+  )
+
+  const apiStillActive = useCallback(
+    (candidate: ActiveSessionApi): boolean => mountedRef.current && apiRef.current === candidate,
+    []
+  )
 
   const refreshStatus = useCallback(async () => {
+    if (!apiStillActive(api)) return
     setChecking(true)
+    setAccessError(null)
     try {
-      const s = await window.nodeTerminal.ollama.status()
+      const s = await ollama.status()
+      if (!apiStillActive(api)) return
       setStatus(s)
       if (s.health === 'ok') {
         const [m, r, hw] = await Promise.all([
-          window.nodeTerminal.ollama.models(),
-          window.nodeTerminal.ollama.running(),
-          window.nodeTerminal.ollama.hardware()
+          ollama.models(),
+          ollama.running(),
+          ollama.hardware()
         ])
+        if (!apiStillActive(api)) return
         setModels(m)
         setRunning(r)
         setHardware(hw)
       } else {
-        const hw = await window.nodeTerminal.ollama.hardware().catch(() => null)
+        const hw = await ollama.hardware().catch(() => null)
+        if (!apiStillActive(api)) return
         setHardware(hw)
       }
+    } catch (error) {
+      if (!apiStillActive(api)) return
+      setStatus(null)
+      setHardware(null)
+      setModels([])
+      setRunning([])
+      setAccessError(routeError(error))
     } finally {
-      setChecking(false)
+      if (apiStillActive(api)) setChecking(false)
     }
-  }, [])
+  }, [api, apiStillActive, ollama])
 
   useEffect(() => {
+    let live = true
+    setStatus(null)
+    setHardware(null)
+    setModels([])
+    setRunning([])
+    setPopular([])
+    setFitMap({})
+    setCart([])
+    setCartSummary({ running: false, concurrency: 1 })
+    // A confirmation is authority for exactly the api/model pair that opened it. On a project
+    // switch, retaining it would let its model name cross into the next machine's delete call.
+    setDeleteTarget(null)
+    setAccessError(null)
     void refreshStatus()
-    window.nodeTerminal.ollama.popularModels().then(setPopular).catch(() => {})
-    window.nodeTerminal.ollama.pullState().then((s) => {
-      setCart(s.items)
-      setCartSummary({ running: s.running, concurrency: s.concurrency })
-    })
-    const offItem = window.nodeTerminal.ollama.onPullItem((item) => {
+    void ollama
+      .popularModels()
+      .then((models) => live && setPopular(models))
+      .catch(() => {})
+    void ollama
+      .pullState()
+      .then((s) => {
+        if (!live) return
+        setCart(s.items)
+        setCartSummary({ running: s.running, concurrency: s.concurrency })
+      })
+      .catch(() => {})
+    const offItem = ollama.onPullItem((item) => {
+      if (!live) return
       setCart((prev) => {
         const idx = prev.findIndex((i) => i.id === item.id)
         if (idx === -1) return [...prev, item]
@@ -125,12 +241,15 @@ export function OllamaManagerPanel({ onClose }: OllamaManagerPanelProps) {
         return copy
       })
     })
-    const offSummary = window.nodeTerminal.ollama.onPullSummary(setCartSummary)
+    const offSummary = ollama.onPullSummary((summary) => {
+      if (live) setCartSummary(summary)
+    })
     return () => {
+      live = false
       offItem()
       offSummary()
     }
-  }, [refreshStatus])
+  }, [ollama, refreshStatus])
 
   // Recompute fit whenever the set of names we care about changes (installed + popular + cart refs).
   useEffect(() => {
@@ -140,8 +259,13 @@ export function OllamaManagerPanel({ onClose }: OllamaManagerPanelProps) {
     for (const p of popular) refs.add(p.name)
     for (const c of cart) refs.add(c.ref)
     if (refs.size === 0) return
-    window.nodeTerminal.ollama.fit([...refs]).then(setFitMap).catch(() => {})
-  }, [models, popular, cart, status?.health])
+    ollama
+      .fit([...refs])
+      .then((fit) => {
+        if (apiStillActive(api)) setFitMap(fit)
+      })
+      .catch(() => {})
+  }, [models, popular, cart, status?.health, api, apiStillActive, ollama])
 
   const filteredPopular = useMemo(() => {
     const q = storeQuery.trim().toLowerCase()
@@ -150,17 +274,26 @@ export function OllamaManagerPanel({ onClose }: OllamaManagerPanelProps) {
   }, [popular, storeQuery])
 
   const handleDelete = useCallback(async () => {
-    if (!deleteTarget) return
+    if (!deleteTarget || deleteTarget.api !== api || !apiStillActive(api)) {
+      setDeleteTarget((current) => (current === deleteTarget ? null : current))
+      return
+    }
+    const target = deleteTarget
+    const model = target.model
     try {
-      await window.nodeTerminal.ollama.deleteModel(deleteTarget)
-      toast(`Deleted ${deleteTarget}.`)
+      await target.api.ollama.deleteModel(model)
+      if (!apiStillActive(target.api)) return
+      toast(`Deleted ${model}.`)
       void refreshStatus()
     } catch (e) {
-      toast(`Could not delete ${deleteTarget}: ${(e as Error).message}`, 'error')
+      if (!apiStillActive(target.api)) return
+      toast(`Could not delete ${model}: ${(e as Error).message}`, 'error')
     } finally {
-      setDeleteTarget(null)
+      // A newly-active project may already have opened its own confirmation while this request was
+      // in flight. Completion owns only the exact target object that launched it.
+      setDeleteTarget((current) => (current === target ? null : current))
     }
-  }, [deleteTarget, refreshStatus])
+  }, [api, apiStillActive, deleteTarget, refreshStatus])
 
   const handleAddCustomRef = useCallback(async () => {
     const ref = customRef.trim()
@@ -168,19 +301,19 @@ export function OllamaManagerPanel({ onClose }: OllamaManagerPanelProps) {
       toast('Not a valid model reference — use "name" or "name:tag".', 'error')
       return
     }
-    const result = await window.nodeTerminal.ollama.pullEnqueue([ref])
+    const result = await ollama.pullEnqueue([ref])
     if (result.rejected.length > 0) toast(result.rejected[0].error, 'error')
     else {
       toast(`Added ${ref} to the pull queue.`)
       setCustomRef('')
     }
-  }, [customRef])
+  }, [customRef, ollama])
 
   const handleAddToCart = useCallback(async (ref: string) => {
-    const result = await window.nodeTerminal.ollama.pullEnqueue([ref])
+    const result = await ollama.pullEnqueue([ref])
     if (result.rejected.length > 0) toast(result.rejected[0].error, 'error')
     else toast(`Added ${ref} to the pull queue.`)
-  }, [])
+  }, [ollama])
 
   const cartEstimate = useMemo(() => {
     let known = 0
@@ -203,63 +336,84 @@ export function OllamaManagerPanel({ onClose }: OllamaManagerPanelProps) {
           </button>
         </div>
         <div className="drawer__body om-body">
-          <div className="om-tabs" role="tablist">
-            {(['health', 'models', 'store', 'chat'] as Tab[]).map((t) => (
-              <button
-                key={t}
-                role="tab"
-                aria-selected={tab === t}
-                className={`om-tab${tab === t ? ' om-tab--active' : ''}`}
-                onClick={() => setTab(t)}
-              >
-                {t === 'health' ? 'Health' : t === 'models' ? 'Installed' : t === 'store' ? 'Model store' : 'Chat'}
-              </button>
-            ))}
-          </div>
+          {accessError ? (
+            <section className="om-empty-note" role="alert">
+              <p>{accessError.message}</p>
+              {accessError.code && (
+                <p>
+                  Refusal code: <code>{accessError.code}</code>
+                </p>
+              )}
+              {accessError.code !== E_UNSUPPORTED && (
+                <button className="sc-btn" onClick={() => void refreshStatus()} disabled={checking}>
+                  Retry
+                </button>
+              )}
+            </section>
+          ) : (
+            <>
+              <div className="om-tabs" role="tablist">
+                {(['health', 'models', 'store', 'chat'] as Tab[]).map((t) => (
+                  <button
+                    key={t}
+                    role="tab"
+                    aria-selected={tab === t}
+                    className={`om-tab${tab === t ? ' om-tab--active' : ''}`}
+                    onClick={() => setTab(t)}
+                  >
+                    {t === 'health' ? 'Health' : t === 'models' ? 'Installed' : t === 'store' ? 'Model store' : 'Chat'}
+                  </button>
+                ))}
+              </div>
 
-          {tab === 'health' && (
-            <HealthTab
-              status={status}
-              checking={checking}
-              hardware={hardware}
-              running={running}
-              onRefresh={refreshStatus}
-            />
+              {tab === 'health' && (
+                <HealthTab
+                  status={status}
+                  checking={checking}
+                  hardware={hardware}
+                  running={running}
+                  onRefresh={refreshStatus}
+                />
+              )}
+
+              {tab === 'models' && (
+                <ModelsTab
+                  status={status}
+                  models={models}
+                  fitMap={fitMap}
+                  onDelete={(model) => setDeleteTarget({ model, api })}
+                  onRefresh={refreshStatus}
+                />
+              )}
+
+              {tab === 'store' && (
+                <StoreTab
+                  ollama={ollama}
+                  status={status}
+                  storeQuery={storeQuery}
+                  setStoreQuery={setStoreQuery}
+                  filteredPopular={filteredPopular}
+                  fitMap={fitMap}
+                  customRef={customRef}
+                  setCustomRef={setCustomRef}
+                  onAddCustomRef={handleAddCustomRef}
+                  onAddToCart={handleAddToCart}
+                  cart={cart}
+                  cartSummary={cartSummary}
+                  cartEstimate={cartEstimate}
+                />
+              )}
+
+              {tab === 'chat' && (
+                <ChatTab key={chatScopeKey(ollama)} ollama={ollama} status={status} models={models} />
+              )}
+            </>
           )}
-
-          {tab === 'models' && (
-            <ModelsTab
-              status={status}
-              models={models}
-              fitMap={fitMap}
-              onDelete={(name) => setDeleteTarget(name)}
-              onRefresh={refreshStatus}
-            />
-          )}
-
-          {tab === 'store' && (
-            <StoreTab
-              status={status}
-              storeQuery={storeQuery}
-              setStoreQuery={setStoreQuery}
-              filteredPopular={filteredPopular}
-              fitMap={fitMap}
-              customRef={customRef}
-              setCustomRef={setCustomRef}
-              onAddCustomRef={handleAddCustomRef}
-              onAddToCart={handleAddToCart}
-              cart={cart}
-              cartSummary={cartSummary}
-              cartEstimate={cartEstimate}
-            />
-          )}
-
-          {tab === 'chat' && <ChatTab status={status} models={models} />}
         </div>
       </aside>
-      {deleteTarget && (
+      {deleteTarget?.api === api && (
         <ConfirmDialog
-          message={`Delete the installed model "${deleteTarget}"? This removes its blobs from disk.`}
+          message={`Delete the installed model "${deleteTarget.model}"? This removes its blobs from disk.`}
           onConfirm={() => void handleDelete()}
           onCancel={() => setDeleteTarget(null)}
         />
@@ -417,6 +571,7 @@ function ModelsTab({
 }
 
 function StoreTab({
+  ollama,
   status,
   storeQuery,
   setStoreQuery,
@@ -430,6 +585,7 @@ function StoreTab({
   cartSummary,
   cartEstimate
 }: {
+  ollama: OllamaApi
   status: OllamaStatus | null
   storeQuery: string
   setStoreQuery: (v: string) => void
@@ -501,7 +657,7 @@ function StoreTab({
             className="sc-btn"
             disabled={cart.length === 0}
             onClick={() =>
-              void (cartSummary.running ? window.nodeTerminal.ollama.pullPause() : window.nodeTerminal.ollama.pullStart())
+              void (cartSummary.running ? ollama.pullPause() : ollama.pullStart())
             }
           >
             {cartSummary.running ? 'Pause' : 'Start'}
@@ -513,7 +669,7 @@ function StoreTab({
               min={1}
               max={3}
               value={cartSummary.concurrency}
-              onChange={(e) => void window.nodeTerminal.ollama.pullSetConcurrency(Number(e.target.value))}
+              onChange={(e) => void ollama.pullSetConcurrency(Number(e.target.value))}
             />
           </label>
         </div>
@@ -547,17 +703,17 @@ function StoreTab({
                   {item.error && <p className="cv-item__error">{item.error}</p>}
                   <div className="cv-item__actions">
                     {(item.status === 'queued' || item.status === 'running') && (
-                      <button className="cv-item__link" onClick={() => void window.nodeTerminal.ollama.pullCancelItem(item.id)}>
+                      <button className="cv-item__link" onClick={() => void ollama.pullCancelItem(item.id)}>
                         Cancel
                       </button>
                     )}
                     {(item.status === 'failed' || item.status === 'cancelled') && (
-                      <button className="cv-item__link" onClick={() => void window.nodeTerminal.ollama.pullRetryItem(item.id)}>
+                      <button className="cv-item__link" onClick={() => void ollama.pullRetryItem(item.id)}>
                         Retry
                       </button>
                     )}
                     {item.status !== 'running' && item.status !== 'queued' && (
-                      <button className="cv-item__link" onClick={() => void window.nodeTerminal.ollama.pullRemoveItem(item.id)}>
+                      <button className="cv-item__link" onClick={() => void ollama.pullRemoveItem(item.id)}>
                         Remove
                       </button>
                     )}
@@ -572,7 +728,15 @@ function StoreTab({
   )
 }
 
-function ChatTab({ status, models }: { status: OllamaStatus | null; models: OllamaModelInfo[] }) {
+function ChatTab({
+  ollama,
+  status,
+  models
+}: {
+  ollama: OllamaApi
+  status: OllamaStatus | null
+  models: OllamaModelInfo[]
+}) {
   const [sessions, setSessions] = useState<OllamaChatSessionSummary[]>([])
   const [active, setActive] = useState<OllamaChatSession | null>(null)
   const [streamingText, setStreamingText] = useState('')
@@ -583,25 +747,25 @@ function ChatTab({ status, models }: { status: OllamaStatus | null; models: Olla
   const transcriptRef = useRef<HTMLDivElement>(null)
 
   const refreshSessions = useCallback(() => {
-    window.nodeTerminal.ollama.chatSessions().then(setSessions).catch(() => {})
-  }, [])
+    ollama.chatSessions().then(setSessions).catch(() => {})
+  }, [ollama])
 
   useEffect(() => {
     refreshSessions()
-    const off = window.nodeTerminal.ollama.onChatStream((evt) => {
+    const off = ollama.onChatStream((evt) => {
       if (!active || evt.sessionId !== active.id) return
       if (evt.kind === 'token') setStreamingText((t) => t + (evt.delta ?? ''))
       else {
         setStreaming(false)
         setStreamingText('')
         if (evt.kind === 'error') toast(`Chat error: ${evt.error}`, 'error')
-        window.nodeTerminal.ollama.chatGet(active.id).then((s) => s && setActive(s))
+        ollama.chatGet(active.id).then((s) => s && setActive(s))
         refreshSessions()
       }
     })
     return off
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id, refreshSessions])
+  }, [active?.id, ollama, refreshSessions])
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight })
@@ -612,39 +776,39 @@ function ChatTab({ status, models }: { status: OllamaStatus | null; models: Olla
       toast('Install a model first (Model store tab).', 'error')
       return
     }
-    const s = await window.nodeTerminal.ollama.chatCreate(models[0].name, '')
+    const s = await ollama.chatCreate(models[0].name, '')
     setActive(s)
     setCapabilities(null)
     refreshSessions()
-  }, [models, refreshSessions])
+  }, [models, ollama, refreshSessions])
 
   const handleSelect = useCallback(async (id: string) => {
-    const s = await window.nodeTerminal.ollama.chatGet(id)
+    const s = await ollama.chatGet(id)
     setActive(s)
     setCapabilities(null)
-  }, [])
+  }, [ollama])
 
   const handleRename = useCallback(async () => {
     if (!active) return
     const title = await promptDialog({ message: 'Rename chat', initialValue: active.title })
     if (title === null) return
-    await window.nodeTerminal.ollama.chatRename(active.id, title)
+    await ollama.chatRename(active.id, title)
     setActive((a) => (a ? { ...a, title } : a))
     refreshSessions()
-  }, [active, refreshSessions])
+  }, [active, ollama, refreshSessions])
 
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const handleDelete = useCallback(async () => {
     if (!active) return
-    await window.nodeTerminal.ollama.chatDelete(active.id)
+    await ollama.chatDelete(active.id)
     setActive(null)
     setDeleteConfirm(false)
     refreshSessions()
-  }, [active, refreshSessions])
+  }, [active, ollama, refreshSessions])
 
   const handleExport = useCallback(async () => {
     if (!active) return
-    const text = await window.nodeTerminal.ollama.chatExport(active.id, 'markdown')
+    const text = await ollama.chatExport(active.id, 'markdown')
     if (!text) return
     const blob = new Blob([text], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
@@ -653,7 +817,7 @@ function ChatTab({ status, models }: { status: OllamaStatus | null; models: Olla
     a.download = `${active.title.replace(/[^\w.-]+/g, '_')}.md`
     a.click()
     URL.revokeObjectURL(url)
-  }, [active])
+  }, [active, ollama])
 
   const handleSend = useCallback(async () => {
     if (!active || !composer.trim()) return
@@ -663,23 +827,23 @@ function ChatTab({ status, models }: { status: OllamaStatus | null; models: Olla
     setStreamingText('')
     setActive((a) => (a ? { ...a, messages: [...a.messages, { role: 'user', content: text, createdAt: Date.now() }] } : a))
     try {
-      await window.nodeTerminal.ollama.chatSend(active.id, text)
+      await ollama.chatSend(active.id, text)
     } catch (e) {
       toast(`Could not send: ${(e as Error).message}`, 'error')
       setStreaming(false)
     }
-  }, [active, composer])
+  }, [active, composer, ollama])
 
   const handleVerifyCapabilities = useCallback(async () => {
     if (!active) return
     setVerifyingCaps(true)
     try {
-      const info = await window.nodeTerminal.ollama.show(active.model)
+      const info = await ollama.show(active.model)
       setCapabilities(info.capabilities ?? [])
     } finally {
       setVerifyingCaps(false)
     }
-  }, [active])
+  }, [active, ollama])
 
   if (status?.health !== 'ok') return <p className="om-empty-note">Ollama is not reachable — see the Health tab.</p>
 
@@ -836,7 +1000,7 @@ function ChatTab({ status, models }: { status: OllamaStatus | null; models: Olla
               }}
             />
             {streaming ? (
-              <button className="sc-btn" onClick={() => void window.nodeTerminal.ollama.chatStop(active.id)}>
+              <button className="sc-btn" onClick={() => void ollama.chatStop(active.id)}>
                 Stop
               </button>
             ) : (

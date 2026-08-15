@@ -1,8 +1,43 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { buildFilesApi, buildRealApi, buildSessionMemoryApi } from './ws-bridge'
+import {
+  buildFilesApi,
+  buildRealApi,
+  buildServerFilesApi,
+  buildSessionMemoryApi,
+  saveUploadBlobOverHttp,
+  saveUploadOverHttp
+} from './ws-bridge'
 import { IPC } from '../../shared/ipc'
+import {
+  UPLOAD_MAX_BASE64_CHARS,
+  UPLOAD_MAX_BYTES,
+  UPLOAD_TOO_LARGE_MESSAGE
+} from '../../shared/uploads'
+
+function patternedBytes(length: number): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(length)
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = (i * 31 + (i >>> 8) * 17 + (i >>> 16) * 7 + 0x53) & 0xff
+  }
+  return bytes
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+async function sha256Blob(blob: Blob): Promise<string> {
+  const hash = createHash('sha256')
+  const reader = blob.stream().getReader()
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) return hash.digest('hex')
+    hash.update(value)
+  }
+}
 
 function fakeClient() {
   const calls: Array<{ kind: string; method: string; args: unknown[] }> = []
@@ -21,6 +56,8 @@ function fakeClient() {
 }
 
 describe('buildFilesApi', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
   it('fs/git/files members are request-shaped with the right channels', async () => {
     const c = fakeClient()
     const api = buildFilesApi(c as never)
@@ -46,6 +83,158 @@ describe('buildFilesApi', () => {
     expect(c.calls[2]).toEqual({ kind: 'subscribe', method: IPC.gitCloneProgress, args: [] })
     expect(typeof un).toBe('function')
     expect(typeof un2).toBe('function')
+  })
+
+  it('passes an exact 7 MiB Blob to authenticated HTTP without reading or making an RPC call', async () => {
+    const c = fakeClient()
+    const bytes = patternedBytes(7 * 1024 * 1024)
+    const expectedHash = sha256(bytes)
+    const raw = new Blob([bytes])
+    const arrayBuffer = vi.spyOn(raw, 'arrayBuffer')
+    const fetchUpload = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.method).toBe('POST')
+      expect(init?.credentials).toBe('same-origin')
+      expect(init?.headers).toEqual({
+        'Content-Type': 'application/octet-stream'
+      })
+      const body = init?.body as Blob
+      expect(body).toBe(raw)
+      expect(body.size).toBe(7 * 1024 * 1024)
+      expect(await sha256Blob(body)).toBe(expectedHash)
+      return new Response(JSON.stringify({ path: '/srv/uploads/token/file.bin' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' }
+      })
+    })
+    vi.stubGlobal('fetch', fetchUpload)
+    const api = buildServerFilesApi(c as never)
+
+    expect(api.files.saveUploadBlob).toBeTypeOf('function')
+    await expect(api.files.saveUploadBlob!('file.bin', raw)).resolves.toBe('/srv/uploads/token/file.bin')
+    expect(fetchUpload).toHaveBeenCalledWith('/upload?name=file.bin', expect.any(Object))
+    expect(arrayBuffer).not.toHaveBeenCalled()
+    expect(c.calls).toEqual([])
+  })
+
+  it('preserves non-repeating legacy bytes when Server Edition base64 uses HTTP', async () => {
+    const c = fakeClient()
+    const bytes = patternedBytes(256 * 1024 + 13)
+    const expectedHash = sha256(bytes)
+    const fetchUpload = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = init?.body as Uint8Array
+      expect(body).toBeInstanceOf(Uint8Array)
+      expect(body.byteLength).toBe(bytes.byteLength)
+      expect(sha256(body)).toBe(expectedHash)
+      return new Response(JSON.stringify({ path: '/srv/uploads/token/legacy.bin' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' }
+      })
+    })
+    vi.stubGlobal('fetch', fetchUpload)
+    const api = buildServerFilesApi(c as never)
+
+    await expect(api.files.saveUpload('legacy.bin', Buffer.from(bytes).toString('base64'))).resolves.toBe(
+      '/srv/uploads/token/legacy.bin'
+    )
+    expect(fetchUpload).toHaveBeenCalledTimes(1)
+    expect(c.calls).toEqual([])
+  })
+
+  it('refuses empty and oversized Blobs before fetch or a byte read', async () => {
+    const fetchUpload = vi.fn()
+    const emptyRead = vi.fn()
+    const oversizedRead = vi.fn()
+    const empty = { size: 0, arrayBuffer: emptyRead } as unknown as Blob
+    const oversized = {
+      size: UPLOAD_MAX_BYTES + 1,
+      arrayBuffer: oversizedRead
+    } as unknown as Blob
+
+    await expect(saveUploadBlobOverHttp('empty.bin', empty, fetchUpload)).resolves.toBeNull()
+    await expect(saveUploadBlobOverHttp('oversized.bin', oversized, fetchUpload)).rejects.toThrow(
+      UPLOAD_TOO_LARGE_MESSAGE
+    )
+    expect(emptyRead).not.toHaveBeenCalled()
+    expect(oversizedRead).not.toHaveBeenCalled()
+    expect(fetchUpload).not.toHaveBeenCalled()
+  })
+
+  it('accepts a Blob at exactly 64 MiB without reading it in application JavaScript', async () => {
+    const boundary = {
+      size: UPLOAD_MAX_BYTES,
+      arrayBuffer: vi.fn(() => Promise.reject(new Error('boundary Blob must stay unread')))
+    } as unknown as Blob
+    const fetchUpload = vi.fn(async () =>
+      new Response(JSON.stringify({ path: '/srv/uploads/token/boundary.bin' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' }
+      })
+    )
+
+    await expect(saveUploadBlobOverHttp('boundary.bin', boundary, fetchUpload)).resolves.toBe(
+      '/srv/uploads/token/boundary.bin'
+    )
+    expect(fetchUpload).toHaveBeenCalledWith(
+      '/upload?name=boundary.bin',
+      expect.objectContaining({ body: boundary })
+    )
+    expect(boundary.arrayBuffer).not.toHaveBeenCalled()
+  })
+
+  it('refuses oversized legacy base64 before atob or fetch', async () => {
+    const decode = vi.fn(() => {
+      throw new Error('atob must not receive an over-limit value')
+    })
+    const fetchUpload = vi.fn()
+    vi.stubGlobal('atob', decode)
+    // The encoded input already exists at this boundary. The guard must inspect its cheap string
+    // length and stop before allocating the additional decoded binary string and Uint8Array.
+    const oversized = 'A'.repeat(UPLOAD_MAX_BASE64_CHARS + 1)
+
+    await expect(saveUploadOverHttp('oversized.bin', oversized, fetchUpload)).rejects.toThrow(
+      UPLOAD_TOO_LARGE_MESSAGE
+    )
+    expect(decode).not.toHaveBeenCalled()
+    expect(fetchUpload).not.toHaveBeenCalled()
+  })
+
+  it('refuses malformed legacy base64 before fetch', async () => {
+    const fetchUpload = vi.fn()
+    await expect(saveUploadOverHttp('broken.bin', '%%%not-base64%%%', fetchUpload)).rejects.toThrow(
+      'could not be decoded'
+    )
+    expect(fetchUpload).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the server 64 MiB refusal as a specific thrown message', async () => {
+    const refused = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: 'too_large',
+            message: 'File exceeds the 64 MiB upload limit.',
+            maxBytes: 64 * 1024 * 1024
+          }),
+          { status: 413, headers: { 'content-type': 'application/json' } }
+        )
+    )
+    await expect(
+      saveUploadOverHttp('large.bin', Buffer.from('small transport fixture').toString('base64'), refused)
+    ).rejects.toThrow('File exceeds the 64 MiB upload limit.')
+  })
+
+  it('keeps relay uploads on the remote RPC carrier instead of viewer-local HTTP', async () => {
+    const c = fakeClient()
+    const api = buildFilesApi(c as never)
+    expect('saveUploadBlob' in api.files).toBe(false)
+    await api.files.saveUpload('relay.bin', 'cmVsYXk=')
+    expect(c.calls).toEqual([
+      {
+        kind: 'request',
+        method: IPC.filesSaveUpload,
+        args: ['relay.bin', 'cmVsYXk=']
+      }
+    ])
   })
 })
 

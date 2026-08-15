@@ -89,8 +89,83 @@ import { buildStubApi } from './stubs'
 import { mountPickerRoot, openDirectoryPicker } from './dialog-picker'
 import { encodePcmForWire } from './speech-encode'
 import { type FrameTransport, WebSocketFrameTransport } from './frame-transport'
+import {
+  UPLOAD_HTTP_PATH,
+  UPLOAD_MAX_BASE64_CHARS,
+  UPLOAD_MAX_BYTES,
+  UPLOAD_TOO_LARGE_MESSAGE,
+  type UploadHttpError,
+  type UploadHttpSuccess
+} from '../../shared/uploads'
 
 type Listener = (...args: unknown[]) => void
+
+async function postUploadOverHttp(
+  name: string,
+  body: Blob | Uint8Array<ArrayBuffer>,
+  fetchImpl: typeof fetch
+): Promise<string | null> {
+  const response = await fetchImpl(`${UPLOAD_HTTP_PATH}?name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body,
+    credentials: 'same-origin'
+  })
+  const result = (await response.json().catch(() => null)) as UploadHttpSuccess | UploadHttpError | null
+  if (!response.ok) {
+    const message = result && 'message' in result ? result.message : 'The server refused the upload.'
+    throw new Error(message)
+  }
+  return result && 'path' in result && typeof result.path === 'string' ? result.path : null
+}
+
+/**
+ * Compatibility carrier for browser-held bytes that already exist as base64 (for example a
+ * clipboard image). Refuse by encoded length before `atob`: otherwise an over-limit value needs a
+ * second, equally large binary-string allocation merely to discover that it cannot be accepted.
+ */
+export async function saveUploadOverHttp(
+  name: string,
+  dataBase64: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<string | null> {
+  if (typeof dataBase64 !== 'string' || dataBase64.length === 0) return null
+  if (dataBase64.length > UPLOAD_MAX_BASE64_CHARS) {
+    throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+  }
+
+  let binary: string
+  try {
+    binary = atob(dataBase64)
+  } catch {
+    throw new Error('The selected file could not be decoded for upload.')
+  }
+  if (binary.length === 0) return null
+  if (binary.length > UPLOAD_MAX_BYTES) {
+    throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+  }
+
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return postUploadOverHttp(name, bytes, fetchImpl)
+}
+
+/**
+ * Server Edition fast path for a File/Blob the browser already owns. Passing the Blob itself as
+ * the fetch body lets the browser stream its backing store; converting through ArrayBuffer,
+ * base64, `atob`, and another Uint8Array temporarily multiplies a 64 MiB selection several times.
+ */
+export async function saveUploadBlobOverHttp(
+  name: string,
+  data: Blob,
+  fetchImpl: typeof fetch = fetch
+): Promise<string | null> {
+  // Blob.size is cheap browser metadata. The authenticated receiver still counts untrusted bytes
+  // again, because this renderer-side guard is an allocation optimization, not a trust boundary.
+  if (data.size === 0) return null
+  if (data.size > UPLOAD_MAX_BYTES) throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+  return postUploadOverHttp(name, data, fetchImpl)
+}
 
 /**
  * A `FrameTransport`, a pending-request map keyed by an incrementing id, and a channel-listener
@@ -534,8 +609,8 @@ export function buildFilesApi(
     // server, and it deliberately does not stream through this socket — it mints a ticket the
     // browser redeems with a plain GET (src/server/download.ts).
     downloadTicket: (p) => client.request(IPC.filesDownloadTicket, p) as Promise<DownloadTicket | null>,
-    // Also real, and the direction that matters here: the browser holds the bytes, the terminal
-    // runs on the server, so a pasted image only becomes nameable once the server has written it.
+    // This default MUST remain RPC: buildRelayApi shares this builder, and same-origin HTTP there
+    // would write to the viewer's machine instead of the relay host.
     saveUpload: (name, dataBase64) =>
       client.request(IPC.filesSaveUpload, name, dataBase64) as Promise<string | null>,
     // Real too, and for the same reason: the browser holds the bytes and the project folder is on
@@ -571,6 +646,23 @@ export function buildFilesApi(
   }
 
   return { fs, git, files, context, boardLog }
+}
+
+/** Server Edition specialization: raw HTTP for upload bytes, RPC for the other file operations. */
+export function buildServerFilesApi(
+  client: RpcClient
+): Pick<NodeTerminalApi, 'fs' | 'git' | 'files' | 'context' | 'boardLog'> {
+  const api = buildFilesApi(client)
+  return {
+    ...api,
+    files: {
+      ...api.files,
+      // Only a browser served by this machine may use same-origin HTTP. Relays keep the RPC
+      // implementation above so an upload can never escape to the viewing machine.
+      saveUpload: saveUploadOverHttp,
+      saveUploadBlob: saveUploadBlobOverHttp
+    }
+  }
 }
 
 /**
@@ -1050,7 +1142,7 @@ export async function installWsBridge(): Promise<boolean> {
   const api: NodeTerminalApi = {
     ...stubApi,
     ...buildRealApi(client),
-    ...buildFilesApi(client),
+    ...buildServerFilesApi(client),
     ...buildAgentApi(client),
     ...buildCanvasApi(client),
     ...buildPresenceApi(client),
@@ -1083,7 +1175,8 @@ export async function installWsBridge(): Promise<boolean> {
         selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: api.fs.list }),
         selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list }),
         // No native multi-file dialog in the browser. FileConverterPanel checks isBrowserRuntime()
-        // and uses a plain <input type="file" multiple> + files.saveUpload instead of calling this.
+        // and uses a plain <input type="file" multiple> + files.saveUploadBlob instead of calling
+        // this (falling back to saveUpload for API compatibility).
         selectFiles: () => Promise.resolve(null)
       }
     })()
