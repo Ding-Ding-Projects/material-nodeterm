@@ -149,6 +149,13 @@ opencode / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂
 - **Your sessions, in your pocket** — **nodeterm mobile** (iOS) attaches to the same live
   tmux sessions: watch an agent work, answer a "needs you", or type into any terminal
   from your phone — plus push notifications and a mobile board view.
+- **File converter** — a local, offline, categorized file-conversion queue (JSON/YAML/TOML/
+  XML/CSV/TSV, text encodings, Markdown→HTML, base64/hex, gzip/brotli — every unsupported
+  format is still listed, disabled, naming what it would take). See
+  [`docs/file-converter.md`](./docs/file-converter.md).
+- **Ollama manager** — browse and pull local [Ollama](https://ollama.com) models with
+  evidence-based hardware-fit verdicts, a download-only "cart" (never a purchase), and a
+  streaming local chat surface. See [`docs/ollama-manager.md`](./docs/ollama-manager.md).
 - **Command palette** (⌘K), **file explorer** (⌘⇧E), **markdown view** (⌘M),
   **undo/redo**, and a native macOS dark UI.
 - **Auto-update & in-app announcements** — the app checks a self-hosted feed and
