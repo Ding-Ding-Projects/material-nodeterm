@@ -1,0 +1,180 @@
+// The guard main did not have: `browserGuests` stored whatever integer arrived over IPC. Every
+// case below is a renderer-supplied value, because the renderer is the attackable half of this
+// boundary — a compromised or merely buggy one must not be able to nominate the app's own window.
+import { describe, it, expect } from 'vitest'
+import {
+  browserDiscardedMessage,
+  registerBrowserGuest,
+  registerBrowserGuestRequest,
+  type BrowserGuest
+} from './browser-guest-registry'
+
+const lookup =
+  (types: Record<number, string>) =>
+  (id: number): { getType: () => string } | null =>
+    types[id] ? { getType: () => types[id] } : null
+
+describe('registerBrowserGuest', () => {
+  it('stores a real webview guest', () => {
+    const m = new Map<number, BrowserGuest>()
+    expect(registerBrowserGuest(m, 7, 'browser-1', 'canvas', lookup({ 7: 'webview' }))).toBe(true)
+    expect(m.get(7)).toEqual({ nodeId: 'browser-1', surface: 'canvas' })
+  })
+
+  it('REFUSES an id naming the app window — this is the escalation the guard exists for', () => {
+    const m = new Map<number, BrowserGuest>()
+    expect(registerBrowserGuest(m, 1, 'browser-1', 'canvas', lookup({ 1: 'window' }))).toBe(false)
+    expect(m.size).toBe(0)
+  })
+
+  it('refuses every non-webview type Electron can hand back, not just `window`', () => {
+    const m = new Map<number, BrowserGuest>()
+    for (const type of ['window', 'browserView', 'remote', 'backgroundPage', 'offscreen']) {
+      expect(registerBrowserGuest(m, 5, 'browser-1', 'canvas', lookup({ 5: type })), type).toBe(
+        false
+      )
+    }
+    expect(m.size).toBe(0)
+  })
+
+  it('refuses an id that names nothing at all', () => {
+    const m = new Map<number, BrowserGuest>()
+    expect(registerBrowserGuest(m, 99, 'browser-1', 'canvas', lookup({}))).toBe(false)
+    expect(m.size).toBe(0)
+  })
+
+  it('refuses a lookup that throws — a destroyed id is not a guest', () => {
+    const m = new Map<number, BrowserGuest>()
+    const throwing = (): never => {
+      throw new Error('Object has been destroyed')
+    }
+    expect(registerBrowserGuest(m, 7, 'browser-1', 'canvas', throwing)).toBe(false)
+    expect(m.size).toBe(0)
+  })
+
+  it('refuses when destruction races the type inspection after lookup', () => {
+    const m = new Map<number, BrowserGuest>()
+    const destroyed = {
+      getType(): never {
+        throw new Error('Object has been destroyed')
+      }
+    }
+    expect(registerBrowserGuest(m, 7, 'browser-1', 'canvas', () => destroyed)).toBe(false)
+    expect(m.size).toBe(0)
+  })
+
+  it('refuses an id that is not a positive integer, before it ever reaches the lookup', () => {
+    const m = new Map<number, BrowserGuest>()
+    // A lookup that would happily call ANYTHING a webview: the id guard is the only thing under
+    // test here, so nothing else may be doing the refusing.
+    let lookups = 0
+    const anything = (): { getType: () => string } => {
+      lookups += 1
+      return { getType: () => 'webview' }
+    }
+    for (const id of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '7', null]) {
+      expect(registerBrowserGuest(m, id, 'browser-1', 'canvas', anything), `${id}`).toBe(false)
+    }
+    expect(m.size).toBe(0)
+    expect(lookups).toBe(0)
+  })
+
+  it('refuses a node id `isSafeNodeId` refuses — it is a map key and, later, a storage key', () => {
+    const m = new Map<number, BrowserGuest>()
+    for (const bad of ['../etc', '', '.', '..', 'a/b', 'a b', 'x'.repeat(200), 7, null]) {
+      expect(registerBrowserGuest(m, 7, bad, 'canvas', lookup({ 7: 'webview' })), String(bad)).toBe(
+        false
+      )
+    }
+    expect(m.size).toBe(0)
+  })
+
+  it('refuses an unknown surface value', () => {
+    const m = new Map<number, BrowserGuest>()
+    // The renderer is the more attackable half; `surface` is what selects a debugger target later.
+    for (const bad of ['modal ', 'CANVAS', '', undefined, null, 1]) {
+      expect(
+        registerBrowserGuest(m, 7, 'browser-1', bad, lookup({ 7: 'webview' })),
+        String(bad)
+      ).toBe(false)
+    }
+    expect(m.size).toBe(0)
+  })
+
+  it('accepts the modal surface, and keeps both of a node`s guests apart', () => {
+    const m = new Map<number, BrowserGuest>()
+    expect(registerBrowserGuest(m, 11, 'browser-3', 'modal', lookup({ 11: 'webview' }))).toBe(true)
+    expect(registerBrowserGuest(m, 12, 'browser-3', 'canvas', lookup({ 12: 'webview' }))).toBe(true)
+    expect(m.get(11)).toEqual({ nodeId: 'browser-3', surface: 'modal' })
+    expect(m.get(12)).toEqual({ nodeId: 'browser-3', surface: 'canvas' })
+  })
+})
+
+describe('browserDiscardedMessage', () => {
+  it('names the memory saver rather than reading as a permissions failure', () => {
+    const msg = browserDiscardedMessage('browser-3')
+    expect(msg).toContain('browser-3')
+    expect(msg).toContain('memory')
+    // The rule it exists for: never blame permissions for a lifecycle event. "not drivable" would
+    // send the next debugger to the identity code for a bug in browser-discard-policy.ts.
+    expect(msg).not.toContain('drivable')
+    expect(msg).not.toMatch(/refus|permission|identity|token/i)
+    // It also has to say what to DO — a message with no way out is a dead end for the agent.
+    expect(msg).toContain('bring it on screen')
+    // Single line: every control reply is rendered as one.
+    expect(msg).not.toContain('\n')
+  })
+})
+
+describe('registerBrowserGuestRequest', () => {
+  it('keeps the legacy omitted surface as a validated canvas registration', () => {
+    const guests = new Map<number, BrowserGuest>()
+    const refused: unknown[] = []
+    expect(
+      registerBrowserGuestRequest(
+        guests,
+        21,
+        'browser-legacy',
+        undefined,
+        lookup({ 21: 'webview' }),
+        (details) => refused.push(details)
+      )
+    ).toBe(true)
+    expect(guests.get(21)).toEqual({ nodeId: 'browser-legacy', surface: 'canvas' })
+    expect(refused).toEqual([])
+  })
+
+  it('refuses and reports a renderer request that nominates the app window', () => {
+    const guests = new Map<number, BrowserGuest>()
+    const refused: unknown[] = []
+    expect(
+      registerBrowserGuestRequest(
+        guests,
+        1,
+        'browser-1',
+        'modal',
+        lookup({ 1: 'window' }),
+        (details) => refused.push(details)
+      )
+    ).toBe(false)
+    expect(guests.size).toBe(0)
+    expect(refused).toEqual([{ webContentsId: 1, nodeId: 'browser-1', surface: 'modal' }])
+  })
+
+  it('does not default a present invalid surface', () => {
+    const guests = new Map<number, BrowserGuest>()
+    const refused: unknown[] = []
+    expect(
+      registerBrowserGuestRequest(
+        guests,
+        22,
+        'browser-2',
+        'CANVAS',
+        lookup({ 22: 'webview' }),
+        (details) => refused.push(details)
+      )
+    ).toBe(false)
+    expect(guests.size).toBe(0)
+    expect(refused).toEqual([{ webContentsId: 22, nodeId: 'browser-2', surface: 'CANVAS' }])
+  })
+})
