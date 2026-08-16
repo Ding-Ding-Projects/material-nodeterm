@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Real container smoke for the Server Edition image. This intentionally lives outside npm test:
 // it needs a running Docker daemon and performs a full image build.
 import crypto from 'node:crypto'
