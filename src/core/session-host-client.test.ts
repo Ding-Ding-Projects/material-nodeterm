@@ -1,4 +1,4 @@
-// The three poke guys that made every persistent terminal on Windows silently non-persistent.
+// The three defects that made every persistent terminal on Windows silently non-persistent.
 //
 // They stacked, and each hid the next:
 //
