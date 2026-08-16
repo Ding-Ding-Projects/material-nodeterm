@@ -6,6 +6,17 @@ import { useSystemAccount } from '../../../state/systemAccount'
 import { isAccountLoginNode } from '../../../state/workspace'
 import { useProjects } from '../../../state/projects'
 import { useSshConn } from '../../../state/sshConn'
+import { useKidsMode } from '../../../state/kidsMode'
+import { openDestructiveGate } from '../../../state/destructiveGate'
+import {
+  ACCOUNT_REMOVAL_COMMITTED_EVENT,
+  ACCOUNT_REMOVAL_TEARDOWN_EVENT,
+  dispatchAccountRemoval,
+  planAccountRemoval,
+  requestAccountRemovalTeardown,
+  type AccountRemovalTeardownDetail,
+  type AccountRemovalDispatchDeps
+} from '../../../lib/accountRemoval'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
@@ -22,6 +33,12 @@ const ENTRIES = Object.values(ROWS)
 
 /** `addingOn` sentinel for the local button — a host key can never be this. */
 const LOCAL_TARGET = ''
+
+type PlainAccountRemovalRequest = Parameters<AccountRemovalDispatchDeps['openConfirm']>[0]
+interface PendingAccountRemoval {
+  account: ClaudeAccount
+  request: PlainAccountRemovalRequest
+}
 
 /** Spinner + label for an Add button that is mid-setup. */
 function AddingLabel({ where }: { where: string }): React.JSX.Element {
@@ -66,7 +83,9 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   // host connects/disconnects while this panel is open.
   const sshByProject = useSshConn((s) => s.byProject)
   const [versionWarning, setVersionWarning] = useState(false)
-  const [pendingRemove, setPendingRemove] = useState<ClaudeAccount | null>(null)
+  const [pendingRemove, setPendingRemove] = useState<PendingAccountRemoval | null>(null)
+  const [removingAccountId, setRemovingAccountId] = useState<string | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
   /**
    * Which "Add account" button is mid-setup: the host key, or LOCAL_TARGET for this machine.
    * Minting a REMOTE account is 10–15 s of real work on the host — mkdir, merging the status hook
@@ -168,38 +187,92 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     await runLogin(account)
   }
 
-  const confirmRemove = async (account: ClaudeAccount): Promise<void> => {
+  const performRemove = async (account: ClaudeAccount): Promise<void> => {
     setPendingRemove(null)
-    // Removing a pending account: stop the 5-minute waitLogin poll loop first.
-    if (account.pending) await window.nodeTerminal.claudeAccounts.cancelWaitLogin(account.id)
-    const projectId = projectIdForHost(account.host)
-    await window.nodeTerminal.claudeAccounts.remove(
-      account.id,
-      projectId ? { projectId } : undefined
-    )
-    applyAccounts((accs) => accs.filter((a) => a.id !== account.id))
-    // Clear the account off serialized nodes (all projects) + any project default...
-    useProjects.setState((s) => ({
-      projects: s.projects.map((p) => ({
-        ...p,
-        ...(p.defaultAccountId === account.id ? { defaultAccountId: undefined } : {}),
-        // The account's serialized login node is DROPPED, not kept account-less: respawned
-        // without its env, its `claude /login` would run against the system ~/.claude and
-        // overwrite the user's identity on completion. Other nodes just lose the accountId.
-        nodes: p.nodes
-          .filter((n) => !(n.accountId === account.id && isAccountLoginNode(n)))
-          .map((n) => (n.accountId === account.id ? { ...n, accountId: undefined } : n))
+    setRemovingAccountId(account.id)
+    setRemoveError(null)
+    try {
+      // The active login terminal was synchronously closed before this function began. Now stop a
+      // pending poll before removing the directory it is reading.
+      if (account.pending) await window.nodeTerminal.claudeAccounts.cancelWaitLogin(account.id)
+      const projectId = projectIdForHost(account.host)
+      await window.nodeTerminal.claudeAccounts.remove(
+        account.id,
+        projectId ? { projectId } : undefined
+      )
+      applyAccounts((accs) => accs.filter((a) => a.id !== account.id))
+      // Clear the account off serialized nodes (all projects) + any project default. Login nodes
+      // are dropped rather than kept account-less; ordinary nodes fall back on their next start.
+      useProjects.setState((s) => ({
+        projects: s.projects.map((p) => ({
+          ...p,
+          ...(p.defaultAccountId === account.id ? { defaultAccountId: undefined } : {}),
+          nodes: p.nodes
+            .filter((n) => !(n.accountId === account.id && isAccountLoginNode(n)))
+            .map((n) => (n.accountId === account.id ? { ...n, accountId: undefined } : n))
+        }))
       }))
-    }))
-    // ...and off the active project's LIVE nodes (Canvas listener patches React Flow).
-    window.dispatchEvent(
-      new CustomEvent('nodeterm:account-removed', { detail: { accountId: account.id } })
-    )
+      // The async delete may have outlived a project switch. Canvas patches whichever project is
+      // live now; inactive serialized projects were handled by the transform above.
+      window.dispatchEvent(
+        new CustomEvent(ACCOUNT_REMOVAL_COMMITTED_EVENT, {
+          detail: { accountId: account.id }
+        })
+      )
+    } catch {
+      // Safer partial order: an approved login terminal may already be closed, but credentials,
+      // the account record, defaults, and ordinary bindings all remain retryable.
+      setRemoveError(
+        `Could not remove “${account.label}”. Its active login terminal was closed, but the account and stored credentials were kept. Try again.`
+      )
+    } finally {
+      setRemovingAccountId((current) => (current === account.id ? null : current))
+    }
   }
 
-  const removeMessage = (a: ClaudeAccount): string => {
-    const n = countNodesUsing(a.id)
-    return `Remove account "${a.label}"? Its logged-in credentials and all its Claude transcripts will be deleted. ${n} node(s) currently use it and will fall back to the system account.`
+  const beginApprovedRemove = (account: ClaudeAccount): void => {
+    // This dispatch is synchronous. Canvas must accept the already-authorized live-node teardown
+    // and close/reconcile the account's active login terminals BEFORE it calls continueRemoval.
+    // If Canvas is not mounted (or refuses), credentials and account state remain untouched.
+    const handled = requestAccountRemovalTeardown(
+      account.id,
+      () => void performRemove(account),
+      (detail: AccountRemovalTeardownDetail) =>
+        window.dispatchEvent(new CustomEvent(ACCOUNT_REMOVAL_TEARDOWN_EVENT, { detail }))
+    )
+    if (!handled) {
+      window.dispatchEvent(
+        new CustomEvent('nodeterm:toast', {
+          detail: {
+            kind: 'error',
+            message: `Could not close the active login session for “${account.label}”. The account was not removed.`
+          }
+        })
+      )
+    }
+  }
+
+  const requestRemove = (account: ClaudeAccount, anchorEl: HTMLElement | null): boolean => {
+    if (removingAccountId === account.id) return false
+    const plan = planAccountRemoval({
+      label: account.label,
+      affectedNodeCount: countNodesUsing(account.id),
+      kidsModeOn: useKidsMode.getState().enabled
+    })
+    const rect = anchorEl?.getBoundingClientRect()
+    return dispatchAccountRemoval(plan, {
+      perform: () => beginApprovedRemove(account),
+      openGate: (request) =>
+        openDestructiveGate({
+          ...request,
+          anchor: rect ? { x: rect.left, y: rect.bottom } : undefined,
+          restoreFocusEl: anchorEl
+        }),
+      openConfirm: (request) => {
+        setPendingRemove({ account, request })
+        return true
+      }
+    })
   }
 
   return (
@@ -292,7 +365,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                         const blocked = !!account.host && !connectedProjectIdForHost(account.host)
                         return (
                           <Button
-                            disabled={blocked}
+                            disabled={blocked || removingAccountId === account.id}
                             title={
                               blocked
                                 ? `Connect to ${account.host} to finish logging in`
@@ -308,7 +381,8 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                   <Button
                     variant="ghost"
                     aria-label="Remove account"
-                    onClick={() => setPendingRemove(account)}
+                    disabled={removingAccountId === account.id}
+                    onClick={(event) => requestRemove(account, event.currentTarget)}
                   >
                     ×
                   </Button>
@@ -375,6 +449,10 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
             </div>
           )}
 
+          {removeError ? (
+            <p className="text-[12px] leading-relaxed text-[color:var(--danger)]">{removeError}</p>
+          ) : null}
+
           <p className="text-[12px] leading-relaxed text-muted">
             Accounts are isolated Claude logins. New Claude nodes pick an account from the add
             menus; each node keeps its account for life. Remote accounts live on an SSH host and are
@@ -385,10 +463,21 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
 
       {pendingRemove ? (
         <ConfirmDialog
-          message={removeMessage(pendingRemove)}
+          message={pendingRemove.request.message}
           confirmLabel="Remove"
-          onConfirm={() => void confirmRemove(pendingRemove)}
-          onCancel={() => setPendingRemove(null)}
+          onConfirm={() => {
+            const pending = pendingRemove
+            setPendingRemove(null)
+            // Kids mode can turn on while this ordinary dialog is open. Re-plan at the click
+            // boundary so a stale one-key confirmation can never authorize the transaction.
+            if (useKidsMode.getState().enabled) requestRemove(pending.account, null)
+            else pending.request.onConfirm()
+          }}
+          onCancel={() => {
+            const cancel = pendingRemove.request.onCancel
+            setPendingRemove(null)
+            cancel?.()
+          }}
         />
       ) : null}
     </SettingsSection>

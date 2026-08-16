@@ -98,6 +98,8 @@ export interface NodeData {
    * Persisted so cold-restore resume reads the transcript from the right account dir.
    */
   accountId?: string
+  /** Durable purpose marker; titles can be renamed and initialCommand is consumed on first use. */
+  accountLogin?: boolean
   /**
    * Agents in `SESSION_ID_CAPABLE` (claude): the session id nodeterm MINTED for this node and
    * launched the CLI with. Persisted so a resume is possible even when no hook ever delivered an
@@ -234,6 +236,7 @@ export function createTerminalNode(
       tags: [],
       cwd: ssh ? ssh.remoteCwd : cwd,
       initialCommand,
+      accountLogin: false,
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
   }
@@ -504,6 +507,7 @@ export function createAccountLoginNode(
     ...node.data,
     title: 'Claude login',
     accountId,
+    accountLogin: true,
     initialCommand: 'claude /login'
   }
   return node
@@ -511,12 +515,17 @@ export function createAccountLoginNode(
 
 /**
  * True when node data is (or started as) an account-login terminal (`claude /login`).
- * `initialCommand` is one-shot and never persisted, so the factory title is the only durable
- * signature — serialized copies match on title alone. Used to DESTROY the login node together
- * with its removed account: left alive, a cold restart would respawn its `claude /login` under
- * the system env, where completing the OAuth overwrites the user's ~/.claude identity.
+ * New nodes carry a durable marker. The title/command check is retained only to migrate legacy
+ * workspaces that predate it. Used to DESTROY the login node together with its removed account:
+ * left alive, a cold restart would respawn it under the system env, where completing OAuth can
+ * overwrite the user's ~/.claude identity.
  */
-export function isAccountLoginNode(data: { title?: string; initialCommand?: string }): boolean {
+export function isAccountLoginNode(data: {
+  accountLogin?: boolean
+  title?: string
+  initialCommand?: string
+}): boolean {
+  if (data.accountLogin !== undefined) return data.accountLogin
   return data.title === 'Claude login' || (data.initialCommand ?? '').startsWith('claude /login')
 }
 
@@ -1289,6 +1298,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         highScore: n.highScore,
         agentId,
         accountId: n.accountId,
+        // Migrate the old title-only identity into an explicit true/false on the next save.
+        accountLogin: n.accountLogin ?? isAccountLoginNode(n),
         agentSessionId: n.agentSessionId,
         pendingLaunch: n.pendingLaunch,
         ssh: n.ssh,
@@ -1354,6 +1365,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         highScore: n.data.highScore,
         agentId: n.data.agentId,
         accountId: n.data.accountId,
+        accountLogin: n.data.accountLogin,
         agentSessionId: n.data.agentSessionId,
         pendingLaunch: n.data.pendingLaunch,
         ssh: n.data.ssh,

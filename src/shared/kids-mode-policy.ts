@@ -129,6 +129,7 @@ export type GuardedAction =
   | 'delete-node'
   | 'discard-changes'
   | 'remove-worktree'
+  | 'remove-account'
   | 'revoke-device'
 
 /**

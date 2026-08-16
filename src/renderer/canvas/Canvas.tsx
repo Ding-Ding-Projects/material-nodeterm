@@ -160,6 +160,14 @@ import {
   worktreeDeleteFromDiskAfterModeChange,
   type NodeDeleteSurface
 } from '../lib/nodeDeletion'
+import {
+  ACCOUNT_REMOVAL_COMMITTED_EVENT,
+  ACCOUNT_REMOVAL_TEARDOWN_EVENT,
+  handleAccountRemovalCommitted,
+  handleAccountRemovalTeardown,
+  type AccountRemovalCommittedDetail,
+  type AccountRemovalTeardownDetail
+} from '../lib/accountRemoval'
 import { NotificationCenter } from '../components/NotificationCenter'
 import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
 import { ConsentNotice } from '../remote/ConsentNotice'
@@ -443,6 +451,8 @@ interface RequestDeleteNodesOptions {
   requestedBy?: string
   /** False only for a session-memory orphan, which has no canvas node behind it. */
   removesNode?: boolean
+  /** The account-removal gate already authorized its disclosed login-node closure. */
+  authorizedBy?: 'remove-account'
   /** Override the active-canvas teardown (used by inactive sidebar sessions). */
   perform?: () => void
   onCancel?: () => void
@@ -3993,7 +4003,8 @@ export function Canvas() {
         kidsModeOn: useKidsMode.getState().enabled,
         titles,
         requestedBy: options.requestedBy,
-        removesNode: options.removesNode
+        removesNode: options.removesNode,
+        authorizedBy: options.authorizedBy
       })
 
       // Refuse before opening a second modal of either kind. The synchronous mirrors in
@@ -4047,39 +4058,50 @@ export function Canvas() {
     return false // the confirmed path calls canonical `deleteNodes`; React Flow must not race it
   }, [requestDeleteNodes])
 
-  // When an account is removed in Settings, patch the ACTIVE project's live nodes (the projects
-  // store only holds the other projects' serialized copies). The account's login node is
-  // permanently DELETED — left alive with its accountId cleared, a cold restart would respawn
-  // its `claude /login` under the SYSTEM env, where completing the OAuth silently overwrites the
-  // user's ~/.claude identity (observed in the wild). Ordinary nodes just drop the accountId and
-  // fall back to the system account (the missing-dir spawn fallback is safe either way).
-  // Declared after deleteNodes: the dep array would hit the const's TDZ above it.
+  // Settings emits this synchronously AFTER the account-level confirmation but BEFORE it touches
+  // credentials or persisted state. The helper accepts the handshake only after routing login
+  // nodes through requestDeleteNodes; its perform callback closes/reconciles the live canvas and
+  // only then lets Settings continue the account transaction. That ordering prevents a slow rm or
+  // a project switch from leaving `claude /login` alive against a directory being deleted.
   useEffect(() => {
-    const onAccountRemoved = (ev: Event): void => {
-      const accountId = (ev as CustomEvent<{ accountId: string }>).detail?.accountId
-      if (!accountId) return
-      const loginIds = nodesRef.current
-        .filter((n) => n.data.accountId === accountId && isAccountLoginNode(n.data))
-        .map((n) => n.id)
-      if (loginIds.length) deleteNodes(loginIds)
-      setNodes((ns) =>
-        ns.some((n) => n.data.accountId === accountId)
-          ? ns.map((n) =>
-              n.data.accountId === accountId
-                ? { ...n, data: { ...n.data, accountId: undefined } }
-                : n
-            )
-          : ns
-      )
-      // Schedule a workspace write: persist() re-serializes the cleared live nodes and writes
-      // the whole projects store to disk, also covering AccountsSection's setState on the other
-      // projects' serialized nodes + defaultAccountId. Without this, quitting right after a
-      // removal would leave the dead accountId in workspace.json.
-      markDirty()
+    const onAccountRemovalApproved = (ev: Event): void => {
+      const detail = (ev as CustomEvent<AccountRemovalTeardownDetail>).detail
+      if (!detail) return
+      handleAccountRemovalTeardown(detail, nodesRef.current, {
+        isLoginNode: (node) => isAccountLoginNode(node.data),
+        requestDeleteNodes,
+        deleteNodes
+      })
     }
-    window.addEventListener('nodeterm:account-removed', onAccountRemoved)
-    return () => window.removeEventListener('nodeterm:account-removed', onAccountRemoved)
-  }, [setNodes, markDirty, deleteNodes])
+    window.addEventListener(ACCOUNT_REMOVAL_TEARDOWN_EVENT, onAccountRemovalApproved)
+    return () => window.removeEventListener(ACCOUNT_REMOVAL_TEARDOWN_EVENT, onAccountRemovalApproved)
+  }, [deleteNodes, requestDeleteNodes])
+
+  // The account transaction can await a remote/filesystem operation after login teardown. Apply
+  // its successful binding clear to whichever project is live when it commits; inactive projects
+  // were transformed in the projects store by Settings.
+  useEffect(() => {
+    const onAccountRemovalCommitted = (ev: Event): void => {
+      const detail = (ev as CustomEvent<AccountRemovalCommittedDetail>).detail
+      if (!detail) return
+      handleAccountRemovalCommitted(detail, {
+        clearLiveBindings: (accountId) => {
+          setNodes((ns) =>
+            ns.some((n) => n.data.accountId === accountId)
+              ? ns.map((n) =>
+                  n.data.accountId === accountId
+                    ? { ...n, data: { ...n.data, accountId: undefined } }
+                    : n
+                )
+              : ns
+          )
+        },
+        markDirty
+      })
+    }
+    window.addEventListener(ACCOUNT_REMOVAL_COMMITTED_EVENT, onAccountRemovalCommitted)
+    return () => window.removeEventListener(ACCOUNT_REMOVAL_COMMITTED_EVENT, onAccountRemovalCommitted)
+  }, [setNodes, markDirty])
 
   // Delete / Backspace asks for confirmation, then deletes the selected nodes.
   useEffect(() => {
