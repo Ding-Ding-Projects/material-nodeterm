@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
@@ -11,6 +11,7 @@ import { ColorField } from '@renderer/components/color/ColorField'
 import { SHIPPED_APP_NAME, resolveAppDisplayName } from '@shared/appIdentity'
 import { APP_LOGO_PRESETS } from '@renderer/components/appearance/BrandMark'
 import { DEFAULT_CROP, processLogoFile, type LogoValidationError } from '@renderer/lib/appearance/logoProcess'
+import { LogoProcessGeneration, selectLogoPreset } from '@renderer/lib/appearance/logoSelection'
 import type { AppLogoCrop } from '@shared/types'
 
 const ROWS = {
@@ -31,6 +32,12 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
   const [processError, setProcessError] = useState<LogoValidationError | null>(null)
   const [processing, setProcessing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const processGenerationRef = useRef<LogoProcessGeneration>()
+  if (!processGenerationRef.current) processGenerationRef.current = new LogoProcessGeneration()
+
+  // A decode finishing after this settings surface unmounts owns nothing. Besides avoiding a
+  // React state update after unmount, this keeps it from changing the app-wide settings store.
+  useEffect(() => () => processGenerationRef.current?.cancel(), [])
 
   const effectiveName = resolveAppDisplayName(appDisplayName)
 
@@ -39,15 +46,38 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
   }
 
   async function reprocess(file: File, nextFit: typeof fit, nextBg: string, nextCrop: AppLogoCrop): Promise<void> {
+    const generation = processGenerationRef.current!.begin()
     setProcessing(true)
     setProcessError(null)
-    const result = await processLogoFile(file, nextFit, nextBg, nextCrop)
+    let result
+    try {
+      result = await processLogoFile(file, nextFit, nextBg, nextCrop)
+    } catch {
+      result = {
+        ok: false as const,
+        error: {
+          code: 'decode-failed' as const,
+          message: 'Could not read and process that image.'
+        }
+      }
+    }
+    if (!processGenerationRef.current!.owns(generation)) return
     setProcessing(false)
     if (!result.ok) {
       setProcessError(result.error)
       return
     }
     update({ appLogo: { selection: 'custom', customImage: result.image } })
+  }
+
+  function choosePreset(selection: string): void {
+    processGenerationRef.current!.cancel()
+    setProcessing(false)
+    setProcessError(null)
+    // Read at click time rather than from a render closure: a successful upload and a click can
+    // share one event turn, and whichever custom image is currently stored is the one to retain.
+    const current = useSettings.getState().settings.appLogo
+    update({ appLogo: selectLogoPreset(current, selection) })
   }
 
   function onSelectFile(e: React.ChangeEvent<HTMLInputElement>): void {
@@ -134,7 +164,7 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
                 aria-checked={appLogo.selection === p.id}
                 title={p.label}
                 aria-label={`Use the ${p.label} logo`}
-                onClick={() => update({ appLogo: { selection: p.id } })}
+                onClick={() => choosePreset(p.id)}
                 className={`app-logo__preset${appLogo.selection === p.id ? ' is-active' : ''}`}
               >
                 {p.render(28)}
@@ -147,7 +177,7 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
               title={appLogo.customImage ? 'Custom image' : 'No custom image uploaded yet'}
               aria-label="Use the custom uploaded logo"
               disabled={!appLogo.customImage}
-              onClick={() => update({ appLogo: { selection: 'custom', customImage: appLogo.customImage } })}
+              onClick={() => choosePreset('custom')}
               className={`app-logo__preset${appLogo.selection === 'custom' ? ' is-active' : ''}`}
             >
               {appLogo.customImage ? (
@@ -175,6 +205,9 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
               <Button
                 className="ml-2"
                 onClick={() => {
+                  processGenerationRef.current!.cancel()
+                  setProcessing(false)
+                  setProcessError(null)
                   update({ appLogo: { selection: 'shipped' } })
                   setPendingFile(null)
                 }}

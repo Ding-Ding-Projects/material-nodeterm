@@ -235,6 +235,14 @@ canonical delete frees the children, and the latter performs irreversible teardo
 reasoning. A comment that restates the code is noise; one that says "do not simplify this back,
 here is what broke" is the point.
 
+**Treat appearance choices as families and async previews as generations.** A nested settings
+patch replaces the whole object, so selecting a shipped logo must retain an existing custom image
+unless the user explicitly removes it. Image decode/crop/fit completions may arrive out of order;
+only the newest generation may publish. Likewise, an accent is not only `--accent`: update its RGB,
+hover, readable-text and Material primary/container roles together for the current light/dark
+surface. HSV/CMYK are editor formats, not browser CSS—persist their RGBA conversion, including
+alpha. Blob downloads keep their object URL alive past the click turn before revoking it.
+
 ## Testing
 
 `npm test` must pass, and `npm run typecheck` is the fastest gate.

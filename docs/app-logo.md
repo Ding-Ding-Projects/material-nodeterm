@@ -10,7 +10,9 @@ Four shipped variants (`renderer/components/appearance/BrandMark.tsx` → `APP_L
 recolours of the same shape rather than unrelated artwork, so every preset still reads as
 "nodeterm" at a glance: **Default (purple)** — the shipped mark — plus **Ocean**, **Ember**, and
 **Monochrome**. Selecting one sets `settings.appLogo.selection` to its id; the shipped default is
-`'shipped'`.
+`'shipped'`. A preset selection changes only `selection`: once a custom upload has succeeded, its
+processed `customImage` remains stored so **Custom image** can be selected again without asking for
+the source file. The separate **Remove custom image** action is the only control that discards it.
 
 ## Custom upload
 
@@ -60,7 +62,10 @@ After a successful upload, an adjustment panel appears:
 
 Every adjustment re-runs the full validate → decode → composite pipeline against the originally
 selected file (kept only in the settings page's local component state — never persisted itself)
-and updates the live preview immediately.
+and updates the live preview immediately. Those jobs carry a monotonically increasing generation:
+only the newest completion may change the preview or settings. Selecting another preset, removing
+the custom image, or leaving the settings surface cancels ownership too. A slow older crop/decode
+therefore cannot spring back after a newer fit or visible preset choice.
 
 ## What changes, and what doesn't
 
@@ -97,6 +102,7 @@ custom-logo radio button is disabled until an upload succeeds).
 | Declared or decoded dimensions too large | Rejected before/after decode respectively |
 | Decoder throws on genuinely malformed bytes | Rejected, generic decode-failure message |
 | No 2D canvas context available | Rejected, generic composite-failure message |
+| Older decode finishes after a newer adjustment/preset | Ignored; the newest visible choice remains active |
 
 ## Security & privacy
 
@@ -108,7 +114,10 @@ to telemetry, logs, exports, or a screenshot.
 
 ## Verification
 
-- `npx tsc --noEmit` passes for both TypeScript projects.
+- `npm run typecheck` passes for both TypeScript projects.
+- `AppIdentitySection.test.tsx` controls real React file/preset/fit inputs with deferred processing
+  promises, resolves them in reverse order, and proves the latest generation owns settings.
+- `logoSelection.test.ts` pins custom-image retention and mutation-proves the generation guard.
 - Manual checks performed: uploaded a valid PNG (accepted, previewed, applied to the brand mark);
   renamed a `.txt` file to `.png` and attempted to upload it (rejected on the byte sniff, exact
   message shown); uploaded an animated GIF (rejected, exact message shown); adjusted fit,

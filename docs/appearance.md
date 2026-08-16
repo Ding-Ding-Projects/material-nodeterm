@@ -137,11 +137,13 @@ rejecting or silently corrupting the whole file, and a name collision on import 
 than overwritten. Export writes a plain JSON file via a client-side `Blob`/`<a download>` — no
 network request is made.
 
+Both preset-export entry points use the shared browser download primitive. Its generated Blob URL
+stays alive for 30 seconds after the synthetic anchor click before revocation; revoking in the same
+turn can race Chromium before it has consumed the URL and silently cancel the save.
+
 ## Verification
 
-Manual verification performed for this pass (automated tests were explicitly out of scope for
-this delivery — see the repository's contribution guide for the project's normal testing
-expectations):
+Verification for this surface includes:
 
 - `npx tsc --noEmit -p tsconfig.web.json` / `-p tsconfig.node.json` compile clean (see the PR /
   commit history for the exact run).
@@ -154,3 +156,5 @@ expectations):
   browser profile's `settings.json` shape (via the parse function directly), and confirmed
   duplicate names and malformed entries are reported and skipped rather than corrupting the
   library.
+- `exportSave.test.ts` drives the real Blob/anchor path with a fake clock and proves URL revocation
+  happens after, never during, the click turn; the synchronous-revocation mutant is red.

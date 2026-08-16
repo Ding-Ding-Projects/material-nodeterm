@@ -27,6 +27,10 @@ used" row) and an eyedropper sit on top of that as convenience, never as the onl
   change the colour — it changes which numeric representation you're looking at and editing.
   Each tab's fields commit on blur or Enter; an invalid HEX entry is rejected with the last valid
   colour left showing (never silently coerced to something else, never blanked).
+- **Persistence is browser CSS**: HSV and CMYK are editing/copy representations, not CSS colour
+  syntaxes. When either tab changes a value, the picker emits the equivalent `rgb()`/`rgba()` for
+  storage and live styling, preserving alpha. The controls stay in HSV/CMYK and **Copy** still
+  copies that selected representation; only the value crossing into CSS is normalized.
 - **Copy**: copies the *currently active tab's* formatted string through nodeterm's acknowledged
   clipboard bridge, with the browser clipboard as a fallback when that bridge is absent, reports
   failure, or rejects.
@@ -111,3 +115,6 @@ life of the renderer process (a module-level array); they are not persisted to d
 - Confirmed the 2-D field is fully operable by keyboard alone (Tab to focus, arrows to move,
   Enter/Space not required since it's a continuous drag surface) and that the contrast readout
   updates live as the colour changes.
+- `ColorPicker.test.tsx` drives the real HSV and CMYK tab/channel DOM controls and hands each
+  emitted alpha colour to a browser `CSSStyleDeclaration`; removing the RGBA boundary conversion
+  makes both cases fail.

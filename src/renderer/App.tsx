@@ -24,6 +24,7 @@ import { useAppTheme } from './state/useAppTheme'
 import { AppearanceStyleInjector } from './components/appearance/AppearanceStyleInjector'
 import { AppearanceEditorHost } from './components/appearance/AppearanceEditor'
 import { resolveAppDisplayName } from '../shared/appIdentity'
+import { applyAccentTokens } from './lib/accentTokens'
 
 export default function App() {
   // Apply the terminal-rendering setting to the two GPU coordinators, live. 'auto' is
@@ -58,6 +59,15 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme
   }, [appTheme])
+
+  // A custom accent is a colour FAMILY, not one isolated fill. CSS can alias --md-primary to
+  // --accent, but it cannot split a hex variable into RGB for containers or derive readable text
+  // tones. Publish the dependent roles together, and re-derive them when the light/dark surface
+  // beneath them changes.
+  const accent = useSettings((s) => s.settings.accent)
+  useEffect(() => {
+    applyAccentTokens(document.documentElement, accent, appTheme)
+  }, [accent, appTheme])
 
   // Keep the view-mode store's default in sync with the Settings choice, so projects the user
   // hasn't explicitly toggled follow it (and flip live when the setting changes).

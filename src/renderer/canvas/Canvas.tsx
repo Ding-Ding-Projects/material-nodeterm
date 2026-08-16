@@ -5260,12 +5260,6 @@ export function Canvas() {
     })
   }, [zoomTo100])
 
-  // Apply the accent color as a CSS variable.
-  useEffect(() => {
-    document.documentElement.style.setProperty('--accent', settings.accent)
-  }, [settings.accent])
-
-
   /** ids to act on for a node menu: the whole selection if the node is part of it, else just it. */
   const targetIds = useCallback((node: Node): string[] => {
     const selected = nodesRef.current.filter((n) => n.selected).map((n) => n.id)

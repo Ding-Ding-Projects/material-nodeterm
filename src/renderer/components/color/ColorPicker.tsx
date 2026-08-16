@@ -36,7 +36,8 @@ import {
 import { cn } from '@renderer/ui/cn'
 import { copyColorText } from './color-clipboard'
 
-type Format = 'hex' | 'rgb' | 'hsl' | 'hsv' | 'hwb' | 'lab' | 'lch' | 'oklab' | 'oklch' | 'cmyk'
+export type ColorFormat = 'hex' | 'rgb' | 'hsl' | 'hsv' | 'hwb' | 'lab' | 'lch' | 'oklab' | 'oklch' | 'cmyk'
+type Format = ColorFormat
 
 const FORMATS: { id: Format; label: string }[] = [
   { id: 'hex', label: 'HEX' },
@@ -150,7 +151,7 @@ export function ColorPicker({
   function commit(next: RGBA, fmt: Format = format, clipped = false): void {
     setRgba(next)
     setClipWarning(clipped)
-    const text = formatFor(fmt, next)
+    const text = browserCssForFormat(fmt, next)
     lastEmitted.current = text
     onChange(text)
   }
@@ -444,6 +445,16 @@ function formatFor(format: Format, rgba: RGBA): string {
     case 'cmyk':
       return toCmykString(rgba)
   }
+}
+
+/**
+ * Values leaving the picker are persisted and later assigned to real CSS properties. HSV and
+ * CMYK are useful editing/copy representations, but neither `hsv()` nor `cmyk()` is a browser CSS
+ * colour syntax. Convert just those two to RGBA at the boundary (including alpha); the selected
+ * tab and its channel controls remain HSV/CMYK in the UI.
+ */
+export function browserCssForFormat(format: ColorFormat, rgba: RGBA): string {
+  return format === 'hsv' || format === 'cmyk' ? toRgbString(rgba) : formatFor(format, rgba)
 }
 
 /** Numeric per-channel entry for every non-hex format, converting back to RGBA (with gamut
