@@ -172,7 +172,14 @@ SIGTERM directly. The wrappers' generated `.env` and temporary credential files 
 both Git and the Docker build context. Wrapper launches must pin the Compose file/project/profiles,
 export the exact bind/port/password values they validated, and reject inherited Compose controls;
 otherwise Compose's richer dotenv syntax can bypass a hand-written safety parser. Run
-`node scripts/test-docker-host.mjs` after changing the image or host wrappers.
+`node scripts/test-docker-host.mjs` after changing the image or host wrappers. To use an SSH daemon,
+pass an explicit `--docker-host ssh://...` endpoint. The harness pins that endpoint, creates only
+cryptographically unique and labelled resources, publishes no host port, applies runtime resource
+and capability limits, sends probe credentials over stdin, and treats verified cleanup as part of
+success. It never weakens SSH host-key checking; provision non-interactive persistent trust before
+the run. If an interrupted run retains its recovery journal, `--cleanup-run <uuid>` removes only
+resources whose recorded daemon identity, immutable resource identity, and ownership labels still
+match.
 
 **Registering a CorePlatform handler does not authorize relay access.** The Server Edition and the
 desktop relay share the same handler-registration seam, but a relay peer may call or receive only
