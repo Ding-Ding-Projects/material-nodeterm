@@ -257,8 +257,13 @@ export function assertRuntimePolicy(role, hostConfig, runId) {
   const fullCaps = ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID']
   const rootCaps = ['CHOWN', 'DAC_OVERRIDE', 'FOWNER']
   const expectedCaps = role === 'seed-legacy' || role === 'seed-mixed' ? rootCaps : fullCaps
+  const inspectedCaps = (hostConfig.CapAdd || []).map((capability) => {
+    assert(typeof capability === 'string', kind + ' container reported an invalid capability')
+    // The Engine canonicalizes CLI inputs such as CHOWN to CAP_CHOWN in inspect output.
+    return capability.toUpperCase().replace(/^CAP_/, '')
+  })
   assert(
-    JSON.stringify([...(hostConfig.CapAdd || [])].sort()) === JSON.stringify([...expectedCaps].sort()),
+    JSON.stringify(inspectedCaps.sort()) === JSON.stringify([...expectedCaps].sort()),
     kind + ' container capability allowlist does not match its role'
   )
   const prefix = 'nodeterm-smoke-' + runId
