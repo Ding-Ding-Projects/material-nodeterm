@@ -45,12 +45,17 @@ describe('mirror publication generations', () => {
     const newer = await reserveMirrorGeneration(file)
     expect([older, newer]).toEqual([1, 2])
     await expect(publishMirrorGeneration(file, newer, body(newer, 'done'))).resolves.toBe('published')
+    const canonicalBytes = fs.readFileSync(file)
     await expect(publishMirrorGeneration(file, older, body(older, 'working'))).resolves.toBe('superseded')
     const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as {
       generation: number
       nodes: { n1: { state: string } }
     }
     expect(doc).toMatchObject({ generation: 2, nodes: { n1: { state: 'done' } } })
+    expect(fs.readFileSync(file)).toEqual(canonicalBytes)
+    expect(
+      fs.readdirSync(dir).filter((name) => name.startsWith('agent-status.json.') && name.endsWith('.tmp'))
+    ).toEqual([])
   })
 
   it('does not reset a malformed durable counter to zero', async () => {
@@ -58,6 +63,17 @@ describe('mirror publication generations', () => {
     await expect(reserveMirrorGeneration(file)).rejects.toBeInstanceOf(SyntaxError)
     expect(fs.readFileSync(`${file}.generation`, 'utf8')).toBe('{not json')
     expect(fs.existsSync(file)).toBe(false)
+  })
+
+  it.each([
+    '[]',
+    JSON.stringify({ v: 2, updatedAt: 1, nodes: {} }),
+    JSON.stringify({ v: 1, updatedAt: 1 })
+  ])('does not reinterpret a malformed canonical mirror as legacy generation zero', async (bytes) => {
+    fs.writeFileSync(file, bytes)
+    await expect(reserveMirrorGeneration(file)).rejects.toThrow('Invalid mirror document')
+    expect(fs.readFileSync(file, 'utf8')).toBe(bytes)
+    expect(fs.existsSync(`${file}.generation`)).toBe(false)
   })
 
   it('refuses a body whose header does not match its reserved generation', async () => {

@@ -94,7 +94,18 @@ async function readCounterGeneration(file: string): Promise<number> {
 export async function readMirrorGeneration(file: string): Promise<number> {
   const raw = await readJsonFile(file)
   if (raw === undefined) return 0
-  if (!raw || typeof raw !== 'object') throw new Error(`Invalid mirror document in ${file}`)
+  if (
+    !raw ||
+    typeof raw !== 'object' ||
+    Array.isArray(raw) ||
+    (raw as { v?: unknown }).v !== 1 ||
+    !Number.isFinite((raw as { updatedAt?: unknown }).updatedAt) ||
+    !(raw as { nodes?: unknown }).nodes ||
+    typeof (raw as { nodes?: unknown }).nodes !== 'object' ||
+    Array.isArray((raw as { nodes?: unknown }).nodes)
+  ) {
+    throw new Error(`Invalid mirror document in ${file}`)
+  }
   const generation = (raw as { generation?: unknown }).generation
   return generation === undefined ? 0 : checkedGeneration(generation, file)
 }

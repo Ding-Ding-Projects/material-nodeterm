@@ -107,9 +107,17 @@ beforeAll(async () => {
   })
 })
 
-afterAll(() => {
-  for (const child of children) child.kill('SIGKILL')
-  if (fixtureDir) fs.rmSync(fixtureDir, { recursive: true, force: true })
+afterAll(async () => {
+  const liveChildren = [...children]
+  const exits = liveChildren.map((child) => {
+    if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
+    return new Promise<void>((resolve) => child.once('exit', () => resolve()))
+  })
+  for (const child of liveChildren) child.kill('SIGKILL')
+  await Promise.all(exits)
+  if (fixtureDir) {
+    fs.rmSync(fixtureDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  }
 })
 
 describe('agent-status mirror cross-process publication', () => {

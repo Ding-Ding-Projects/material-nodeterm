@@ -163,6 +163,12 @@ processes pointed at the same data directory, so two writers also have two indep
 
 The mirror uses a durable two-phase generation protocol in `src/core/mirror-publication.ts`:
 
+This protocol requires the unflagged `node:sqlite` capability. The supported runtime is
+`^22.22.2 || ^24.15.0 || >=26.0.0`; Desktop and Server Edition check the version and real `DatabaseSync`
+capability before starting services, while the installer and pinned container image enforce the
+same boundary. The production module loads SQLite lazily so an incompatible runtime reaches that
+diagnostic instead of failing during static dependency evaluation.
+
 1. Briefly acquire an OS-backed SQLite `BEGIN IMMEDIATE` transaction on
    `agent-status.json.publication.sqlite3` and atomically advance
    `agent-status.json.generation`. The number is reserved **before** the process snapshots its

@@ -1,5 +1,4 @@
 import fs from 'fs'
-import { DatabaseSync } from 'node:sqlite'
 import {
   _cancelScheduledWriteForTest,
   flush,
@@ -7,6 +6,7 @@ import {
   recordAgentEvent,
   type MirrorFile
 } from '../agent-status-mirror'
+import { loadNodeSqlite } from '../node-runtime'
 import type { NormalizedAgentEvent } from '@shared/agents/normalize'
 
 type FixtureMessage =
@@ -37,6 +37,7 @@ async function holdPublicationLock(file: string): Promise<void> {
   // This mode exists only for the crash-recovery test. BEGIN IMMEDIATE takes the same SQLite
   // writer transaction used by production without changing the otherwise-empty lock database.
   // process.abort then proves the OS releases it without any application cleanup or stale timer.
+  const { DatabaseSync } = loadNodeSqlite()
   const database = new DatabaseSync(`${file}.publication.sqlite3`)
   database.exec('BEGIN IMMEDIATE')
   send({ type: 'lock-held' })
@@ -45,6 +46,9 @@ async function holdPublicationLock(file: string): Promise<void> {
       if (message && typeof message === 'object' && (message as { type?: unknown }).type === 'abort') {
         // process.abort bypasses JS cleanup. SQLite must lose its kernel lock solely because the OS
         // closes this process's database handle, exactly as it does after a host/process crash.
+        // Keep the handle observably reachable until that instant: Node 22 can otherwise finalize
+        // an unreferenced DatabaseSync while this process remains alive and release the test lock.
+        database.exec('SELECT 1')
         process.abort()
       }
     })
