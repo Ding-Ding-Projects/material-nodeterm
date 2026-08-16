@@ -134,9 +134,14 @@ export function allSectionIds(): SettingsSectionId[] {
  * entirely off macOS (an empty group would be dropped too, though none exists today). Pure — the
  * caller passes the platform so this stays testable.
  */
-export function visibleSettingsGroups(isMac: boolean): SettingsGroup[] {
-  if (isMac) return SETTINGS_GROUPS
-  return SETTINGS_GROUPS.map((g) => ({ ...g, sections: g.sections.filter((s) => !s.macOnly) })).filter(
-    (g) => g.sections.length > 0
-  )
+export function visibleSettingsGroups(
+  isMac: boolean,
+  schoolModeAllowsLanguage = true
+): SettingsGroup[] {
+  return SETTINGS_GROUPS.map((g) => ({
+    ...g,
+    sections: g.sections.filter(
+      (s) => (isMac || !s.macOnly) && (schoolModeAllowsLanguage || s.id !== 'language')
+    )
+  })).filter((g) => g.sections.length > 0)
 }

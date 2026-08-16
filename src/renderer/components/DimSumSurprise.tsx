@@ -5,6 +5,7 @@ import { useSettings } from '../state/settings'
 import { useSchoolMode } from '../state/schoolMode'
 import { dimSumLabel, type DimSumDish } from '../lib/dimsum/catalog'
 import { rollDimSumForLaunch } from '../lib/dimsum/roll'
+import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
 
 /** How long after the app looks settled we decide (and, separately, re-check right before
  *  revealing) whether to show the surprise. Long enough that the first-run tour, the mobile-
@@ -34,22 +35,33 @@ export function DimSumSurprise() {
   const hydrated = useSettings((s) => s.hydrated)
   const hasProjects = useProjects((s) => s.projects.some((p) => !p.closed))
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const schoolModeAllowsDimSum = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
   const [dish, setDish] = useState<DimSumDish | null>(null)
   const [visible, setVisible] = useState(false)
   const decidedRef = useRef(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Latest gate values, read from a ref at reveal time so the settle-delay timeout doesn't close
   // over stale booleans captured when the effect first ran.
-  const gatesRef = useRef({ hasProjects, schoolModeEnabled })
-  gatesRef.current = { hasProjects, schoolModeEnabled }
+  const gatesRef = useRef({ hasProjects, schoolModeAllowsDimSum })
+  gatesRef.current = { hasProjects, schoolModeAllowsDimSum }
 
   useEffect(() => {
-    if (decidedRef.current || !hydrated) return
+    if (decidedRef.current || !hydrated || !schoolModeHydrated) return
+    // A confirmed ON record consumes this launch's opportunity without ever rolling. Turning the
+    // mode off later must not replay a surprise that was suppressed while focus mode was active.
+    if (schoolModeEnabled) {
+      decidedRef.current = true
+      return
+    }
     const t = setTimeout(() => {
       if (decidedRef.current) return
       decidedRef.current = true
-      const { hasProjects: hp, schoolModeEnabled: sm } = gatesRef.current
-      if (!hp || sm || openDialogCount() > 0) return
+      const { hasProjects: hp, schoolModeAllowsDimSum: allowed } = gatesRef.current
+      if (!hp || !allowed || openDialogCount() > 0) return
       const picked = rollDimSumForLaunch()
       if (!picked) return
       setDish(picked)
@@ -58,7 +70,19 @@ export function DimSumSurprise() {
       hideTimerRef.current = setTimeout(() => setVisible(false), dismissMs)
     }, DECIDE_DELAY_MS)
     return () => clearTimeout(t)
-  }, [hydrated])
+  }, [hydrated, schoolModeEnabled, schoolModeHydrated])
+
+  useEffect(() => {
+    if (schoolModeAllowsDimSum) return
+    // Render also gates on this value below, so the toast disappears in the same React commit.
+    // Clearing state/timers prevents its dismiss callback from lingering after the capability has
+    // become unavailable.
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = null
+    }
+    setVisible(false)
+  }, [schoolModeAllowsDimSum])
 
   useEffect(
     () => () => {
@@ -67,7 +91,7 @@ export function DimSumSurprise() {
     []
   )
 
-  if (!dish || !visible) return null
+  if (!schoolModeAllowsDimSum || !dish || !visible) return null
 
   return (
     <div className="dimsum-toast" role="status" aria-live="polite">

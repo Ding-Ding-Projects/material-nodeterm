@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { usePersonalVocabulary } from '../../state/personalVocabulary'
 import { useSchoolMode } from '../../state/schoolMode'
 import { applyVocabulary } from './apply'
+import { schoolModeAllowsOptionalFeatures } from '../schoolModePolicy'
 
 /**
  * The user-facing text boundary: pass any string the app is ABOUT TO SHOW a user (a label, a
@@ -17,9 +18,14 @@ import { applyVocabulary } from './apply'
 export function useVocabularyText<T extends string | undefined>(text: T): T {
   const entries = usePersonalVocabulary((s) => s.entries)
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const vocabularyAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
   return useMemo(() => {
     if (text === undefined) return text
-    if (schoolModeEnabled) return text
+    if (!vocabularyAllowed) return text
     return applyVocabulary(text, entries) as T
-  }, [text, entries, schoolModeEnabled])
+  }, [text, entries, vocabularyAllowed])
 }

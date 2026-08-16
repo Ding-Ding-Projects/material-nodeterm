@@ -39,6 +39,8 @@ import { LocalHistorySection } from './sections/LocalHistorySection'
 import { ToyLocksSection } from './sections/ToyLocksSection'
 import { AuthenticatorSection } from './sections/AuthenticatorSection'
 import { SupportTicketsSection } from './sections/SupportTicketsSection'
+import { useSchoolMode } from '../../state/schoolMode'
+import { schoolModeAllowsOptionalFeatures } from '../../lib/schoolModePolicy'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -59,7 +61,15 @@ export function SettingsPage({
   initialQuery?: string
 }): React.JSX.Element {
   const hydrate = useEntitlement((s) => s.hydrate)
-  const [active, setActive] = useState<SettingsSectionId>(initialSection ?? FIRST_SECTION_ID)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const languageFeaturesAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
+  const safeSection = (section: SettingsSectionId | undefined): SettingsSectionId =>
+    section === 'language' && !languageFeaturesAllowed ? 'school-mode' : section ?? FIRST_SECTION_ID
+  const [active, setActive] = useState<SettingsSectionId>(() => safeSection(initialSection))
   // Seeded, not a separate state: the palette's "Open in Settings" teleport pre-fills the same
   // field the user then types in, so the regex field owns the value and there is no second
   // source of truth to drift. `initial` is read once on mount, which is right — this component
@@ -76,8 +86,14 @@ export function SettingsPage({
 
   // Re-target when a caller opens settings to a specific section.
   useEffect(() => {
-    if (initialSection) setActive(initialSection)
-  }, [initialSection])
+    if (initialSection) setActive(safeSection(initialSection))
+  }, [initialSection, languageFeaturesAllowed])
+
+  // A shared record can turn on in another app while this window is looking at Language. Remove
+  // the controls immediately and land on the mode that explains why they disappeared.
+  useEffect(() => {
+    if (!languageFeaturesAllowed && active === 'language') setActive('school-mode')
+  }, [active, languageFeaturesAllowed])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -92,7 +108,12 @@ export function SettingsPage({
       className="nt-settings fixed inset-0 z-[55] flex bg-bg text-text"
       data-appearance-id="app:settings-dialog"
     >
-      <SettingsSidebar activeSectionId={active} search={search} onSelect={setActive} onClose={onClose} />
+      <SettingsSidebar
+        activeSectionId={active}
+        search={search}
+        onSelect={(section) => setActive(safeSection(section))}
+        onClose={onClose}
+      />
       <SettingsSearchContext.Provider value={searchState}>
         <main className="min-w-0 flex-1 overflow-y-auto px-12 py-10">
           <div className="mx-auto max-w-[860px] space-y-10">
@@ -105,7 +126,7 @@ export function SettingsPage({
             {isMac && <NotchSection isActive={active === 'notch'} />}
             <PhoneSection isActive={active === 'phone'} />
             <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />
-            <LanguageSection isActive={active === 'language'} />
+            {languageFeaturesAllowed && <LanguageSection isActive={active === 'language'} />}
             <ScheduleSection isActive={active === 'schedule'} />
             <AgentsSection isActive={active === 'agents'} />
             <UsageSection isActive={active === 'usage'} />
