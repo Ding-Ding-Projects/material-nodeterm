@@ -55,6 +55,9 @@ Node 23 and 25. `core/node-runtime.ts` checks both the exact version range and t
 installer uses the same contract through `scripts/check-node-runtime.mjs`, and the container pins
 24.15.0 rather than floating on a Node major. A supported version launched with
 `--no-experimental-sqlite`, or a custom build without SQLite, is still unsupported and fails closed.
+The installer also requires a newly extracted runtime to report the exact requested pin before it
+runs npm or writes/restarts systemd units; the capability probe alone is not evidence that archive
+contents match the requested version.
 
 `npm run build && npm run check:wired` is the built-app interaction gate. It launches with
 `NT_MULTI=1` and a disposable `NT_USER_DATA`, drives real controls over CDP, and removes both that

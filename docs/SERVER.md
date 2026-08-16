@@ -94,7 +94,8 @@ The installer (`scripts/install-server.sh`) is idempotent — re-run it any time
   `DatabaseSync`) is present it's used as-is, otherwise the installer downloads pinned Node
   v24.15.0 from nodejs.org into `~/.nodeterm-server-app/runtime/node` and uses it for the
   build and the systemd service (nothing is installed system-wide; Alpine/musl hosts still need a
-  distro `nodejs`). It also warns (with the apt/dnf one-liner) if the C toolchain
+  distro `nodejs`). A downloaded runtime must report that exact pin and pass the SQLite capability
+  probe before npm or systemd runs. It also warns (with the apt/dnf one-liner) if the C toolchain
   (`make`/`gcc`/`python3`) node-pty's native build needs is missing;
 - clones (or `git pull`s) the repo into `~/.nodeterm-server-app`;
 - installs deps (`npm ci --ignore-scripts`, then `npm rebuild node-pty` against Node's ABI —
