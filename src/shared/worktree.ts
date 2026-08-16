@@ -1,4 +1,6 @@
 export interface GroupWorktree {
+  /** Stable identity of this canvas binding. A same-path/branch rebind is still a new target. */
+  bindingId?: string
   /** Main repo root chosen at bind time. */
   repoPath: string
   /** The worktree's branch (new or existing). */

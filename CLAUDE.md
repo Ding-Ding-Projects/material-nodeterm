@@ -1592,10 +1592,20 @@ multiply-linked inode whose other name may be outside the staging tree.
   complete deletion path or add a second confirmation branch: `deleteNodes` owns the canonical
   teardown, and the planner/dispatcher is what authorizes reaching it. React Flow expands a parent
   deletion to descendants before `onBeforeDelete`, so `managedDeletionRoots` must reduce the set
-  back to roots — deleting a frame frees its children rather than deleting them. App-created
-  worktree removal is a separate option-bearing confirm: Kids mode starts disk deletion unticked
-  and an OFF→ON change resets an already-open dialog before paint, while still allowing a later
-  deliberate checkbox opt-in.
+  back to roots — deleting a frame frees its children rather than deleting them. Every async
+  authorization is bound to the exact target facts it disclosed: `createNodeDeletionCommitBarrier`
+  re-reads project/id/type/title/account plus a live object/session incarnation and the current Kids
+  verdict immediately before teardown.
+  A changed or unreadable target performs nothing; an ordinary confirmation that outlives Kids
+  OFF→ON or ready→unavailable performs nothing and reopens through the two-key gate. The generic
+  one-shot barrier carries the same invariant for account, authenticator-seed, and worktree removal.
+  Authenticator removal binds an opaque core revision that covers both entry metadata and sealed seed
+  bytes, then core serializes the final compare-and-remove so a cross-window replacement cannot spend
+  an older authorization.
+  App-created worktree removal keeps its option-bearing confirm: Kids mode or an unknown record
+  starts disk deletion unticked and an OFF→ON change resets an already-open dialog before paint.
+  A later explicit disk opt-in then enters the same `remove-worktree` two-key gate; only unbind can
+  commit from the plain dialog.
 - **Zoom chords** (`renderer/lib/zoomShortcut.ts`): **⌘/Ctrl+0 → `zoomTo100`** (actual size — what
   the browser AND Electron's default View menu already mean by that key) and **Shift+1 → `fitAll`**
   (the Figma/tldraw/Excalidraw "zoom to fit"). Matched on `e.code`, like the project-jump chord,
@@ -1694,6 +1704,14 @@ multiply-linked inode whose other name may be outside the staging tree.
   - **Destructive safety** — `createdByApp` gates removal: nodeterm deletes only worktrees it
     created; one the user merely **adopted** unbinds by default, and deleting its directory is an
     explicit opt-in that **defaults to off** (its branch is kept either way).
+    Under Kids mode, or while the renderer cannot establish a loaded + subscribed Kids record,
+    every disk-removal choice defaults off and then requires the two-key gate. Both the status-probe
+    await and final confirmation re-read the owning project, binding generation, group incarnation,
+    repo/path/branch/base/creator fields, and affected-node identities. Core also re-measures the
+    checkout registration, HEAD, index, tracked differences, and untracked-content fingerprint and
+    compares that proof immediately before forced removal; a rebound or content-changed worktree
+    cannot spend the earlier dialog on its replacement, and an in-flight Git result cannot clear a
+    newer binding.
     `isDangerousWorktreeRemovalPath` refuses a path that is the repo, `$HOME`, `/`, or an ancestor
     of any of them, on **every** removal path. **Merge** always confirms — it merges into the base's
     *working tree* (`decideMergeStrategy`: merge in the base's checkout when it is clean, else a

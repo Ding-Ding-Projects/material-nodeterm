@@ -30,6 +30,7 @@ import type {
   AuthenticatorExportInput,
   AuthenticatorExportResult,
   AuthenticatorRenameInput,
+  AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from './authenticator'
 
@@ -1424,8 +1425,13 @@ export interface KidsModeRecord {
   name: string
 }
 
+/** Runtime record plus whether core has both an authoritative read and a live file watcher. */
+export interface KidsModeSnapshot extends KidsModeRecord {
+  authoritative: boolean
+}
+
 export interface KidsModeApi {
-  load(): Promise<KidsModeRecord>
+  load(): Promise<KidsModeSnapshot>
   /** Turn it ON. `pin` is required only the first time, and establishes the grown-up PIN.
    *  Entering needs no proof — only leaving does. */
   enable(pin?: string): Promise<KidsModeRecord>
@@ -1434,7 +1440,7 @@ export interface KidsModeApi {
   rename(name: string): Promise<KidsModeRecord>
   changePin(currentPin: string, nextPin: string): Promise<boolean>
   hasCredential(): Promise<boolean>
-  onChanged(cb: (r: KidsModeRecord) => void): () => void
+  onChanged(cb: (r: KidsModeSnapshot) => void): () => void
 }
 
 export interface SchoolModeApi {
@@ -1649,8 +1655,22 @@ export interface GitFileChange {
   deleted: number
 }
 
+/** Core-measured exact checkout generation/content proof used only for forced worktree removal. */
+export interface GitWorktreeRemovalProof {
+  /** HEAD object id at measurement time. */
+  headOid: string
+  /** Filesystem generation of the checkout root and its per-worktree git administrative dir. */
+  generation: string
+  /** Hash of HEAD, index, tracked diffs, untracked bytes, and exact porcelain state. */
+  fingerprint: string
+}
+
 export interface GitStatus {
   hasRepo: boolean
+  /** True only when every command/read needed for a destructive content proof succeeded. */
+  authoritative?: boolean
+  /** Present only with `authoritative:true`; compare inside core immediately before forced removal. */
+  removalProof?: GitWorktreeRemovalProof
   /** "owner/repo" from the origin remote, else the folder name. */
   repoName: string
   branch: string
@@ -1759,7 +1779,13 @@ export interface GitApi {
   worktreeMerge(repoPath: string, branch: string, baseRef: string, push?: boolean): Promise<GitResult>
   /** `pruneOnly`: clean up git's registration only — never delete a directory. Used to prune a
    *  stale binding whose worktree was already deleted outside the app. */
-  worktreeRemove(repoPath: string, wtPath: string, deleteBranch: boolean, pruneOnly?: boolean): Promise<GitResult>
+  worktreeRemove(
+    repoPath: string,
+    wtPath: string,
+    deleteBranch: boolean,
+    pruneOnly?: boolean,
+    expected?: GitWorktreeRemovalProof
+  ): Promise<GitResult>
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>
@@ -2593,7 +2619,9 @@ export interface AuthenticatorApi {
   addManual(input: AuthenticatorAddManualInput): Promise<AuthenticatorAddResult>
   addFromUri(uri: string): Promise<AuthenticatorAddResult>
   rename(input: AuthenticatorRenameInput): Promise<AuthenticatorEntry | null>
-  remove(id: string): Promise<void>
+  /** Serialized core compare-and-remove. The expected entry includes its opaque sealed-record
+   *  revision, so success refers to the exact seed generation the confirmation disclosed. */
+  remove(expected: AuthenticatorEntry): Promise<AuthenticatorRemoveResult>
   code(id: string): Promise<AuthenticatorCode | null>
   codes(ids: string[]): Promise<Record<string, AuthenticatorCode>>
   reveal(id: string): Promise<AuthenticatorRevealResult>

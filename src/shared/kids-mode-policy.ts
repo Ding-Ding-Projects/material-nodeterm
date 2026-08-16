@@ -124,13 +124,17 @@ export function gateKidsPermissionMode(
  * exist, which is worse than a shorter list: a reader checking whether kids mode protects history
  * would have found a yes. Add it back in the same change that adds a surface which clears it.
  */
-export type GuardedAction =
-  | 'delete-project'
-  | 'delete-node'
-  | 'discard-changes'
-  | 'remove-worktree'
-  | 'remove-account'
-  | 'revoke-device'
+export const GUARDED_ACTIONS = [
+  'delete-project',
+  'delete-node',
+  'discard-changes',
+  'remove-worktree',
+  'remove-account',
+  'remove-authenticator',
+  'revoke-device'
+] as const
+
+export type GuardedAction = (typeof GUARDED_ACTIONS)[number]
 
 /**
  * Whether the destructive-action super-confirmation is mandatory for this action right now.

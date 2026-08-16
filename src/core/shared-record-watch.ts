@@ -60,6 +60,7 @@ export class SharedRecordWatcher {
   private watchedDirectory: string | null = null
   private generation = 0
   private disposed = false
+  private healthy = false
 
   private readonly targetDirectory: string
   private readonly targetBasename: string
@@ -67,7 +68,8 @@ export class SharedRecordWatcher {
   constructor(
     recordFile: string,
     private readonly onRecordChange: () => void,
-    private readonly createWatcher: WatchDirectory = watchDirectory
+    private readonly createWatcher: WatchDirectory = watchDirectory,
+    private readonly onHealthChange: (healthy: boolean) => void = () => {}
   ) {
     this.targetDirectory = path.dirname(recordFile)
     this.targetBasename = path.basename(recordFile)
@@ -89,6 +91,13 @@ export class SharedRecordWatcher {
     this.watcher?.close()
     this.watcher = null
     this.watchedDirectory = null
+    this.setHealthy(false)
+  }
+
+  private setHealthy(healthy: boolean): void {
+    if (healthy === this.healthy) return
+    this.healthy = healthy
+    this.onHealthChange(healthy)
   }
 
   private armClosestDirectory(forceReplace: boolean): void {
@@ -109,14 +118,25 @@ export class SharedRecordWatcher {
         this.generation = nextGeneration
         this.watcher = nextWatcher
         this.watchedDirectory = candidate
+        this.setHealthy(true)
         previous?.close()
         return
       } catch (error) {
         // Only a proven absence justifies climbing to an ancestor. Permission/resource errors
-        // leave the current watcher intact; a later successful local write will retry.
-        if (!isEnoent(error)) return
+        // leave the current watcher intact only as a recovery hook. It is not authoritative for
+        // the now-inaccessible target: a newly created ON record may already be hidden behind the
+        // failure. Fail closed immediately and re-read so consumers also learn that the snapshot
+        // is unavailable. A later ancestor event or successful local write retries promotion.
+        if (!isEnoent(error)) {
+          this.setHealthy(false)
+          this.onRecordChange()
+          return
+        }
         const parent = path.dirname(candidate)
-        if (parent === candidate) return
+        if (parent === candidate) {
+          this.setHealthy(false)
+          return
+        }
         candidate = parent
       }
     }
@@ -153,6 +173,7 @@ export class SharedRecordWatcher {
     this.generation += 1
     this.watcher = null
     this.watchedDirectory = null
+    this.setHealthy(false)
     failed?.close()
 
     // ENOENT means the watched directory disappeared, so fall back to its nearest ancestor.

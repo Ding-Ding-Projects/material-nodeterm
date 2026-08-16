@@ -25,6 +25,7 @@ vi.mock('./platform', () => ({
 
 const { KidsModeStore, DEFAULT_KIDS_MODE_NAME, sharedDir } = await import('./kids-mode')
 const { SchoolModeStore } = await import('./school-mode')
+const { persistFile } = await import('./shared-mode-credential')
 
 let home: string
 let homeSpy: ReturnType<typeof vi.spyOn>
@@ -93,13 +94,33 @@ describe('the lock', () => {
     }
   })
 
-  it('fails OFF on a corrupt record, never into an unverifiable locked state', async () => {
-    // Which way this fails matters. A corrupt shared file must not leave a child in a mode
-    // nobody can confirm the state of, and must not lock an adult out of their own app.
+  it('displays OFF but reports unavailable on a corrupt record', async () => {
+    // Display and authorization are deliberately different facts. The UI may render the safe
+    // default, but destructive callers must not spend corrupt bytes as proof that Kids mode is OFF.
     await fs.mkdir(sharedDir(), { recursive: true })
     await fs.writeFile(path.join(sharedDir(), 'kids-mode.json'), 'not json')
     const s = await fresh()
     expect(s.isOn()).toBe(false)
+    expect(s.snapshot().authoritative).toBe(false)
+    s.dispose()
+  })
+
+  it('does not flip the authoritative cache when a durable disable write fails', async () => {
+    const s = new KidsModeStore(async (file, data) => {
+      if ((JSON.parse(data) as { enabled: boolean }).enabled === false) {
+        throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+      }
+      await persistFile(file, data)
+    })
+    await s.init()
+    await s.enable('1234')
+    expect(s.snapshot()).toMatchObject({ enabled: true, authoritative: true })
+
+    await expect(s.disable('1234')).rejects.toThrow(/disk full/i)
+    expect(s.snapshot()).toMatchObject({ enabled: true, authoritative: true })
+    expect(JSON.parse(await fs.readFile(path.join(sharedDir(), 'kids-mode.json'), 'utf8'))).toMatchObject({
+      enabled: true
+    })
     s.dispose()
   })
 })
@@ -199,6 +220,63 @@ describe('the name', () => {
 })
 
 describe('live shared-record watching', () => {
+  it('marks policy unavailable while a watcher-triggered reload is still pending', async () => {
+    const s = await fresh()
+    expect(s.snapshot()).toMatchObject({ enabled: false, authoritative: true })
+    const realReadFile = fs.readFile.bind(fs)
+    let releaseRead!: (value: string) => void
+    let intercepted = false
+    const readSpy = vi.spyOn(fs, 'readFile').mockImplementation(async (...args: Parameters<typeof fs.readFile>) => {
+      const file = String(args[0])
+      if (!intercepted && file.endsWith('kids-mode.json')) {
+        intercepted = true
+        return new Promise<string>((resolve) => {
+          releaseRead = resolve
+        })
+      }
+      return realReadFile(...args)
+    })
+
+    const next = JSON.stringify({ version: 1, enabled: true, name: 'External ON' })
+    await fs.mkdir(sharedDir(), { recursive: true })
+    await fs.writeFile(path.join(sharedDir(), 'kids-mode.json'), next)
+    await waitUntil(() => intercepted && s.snapshot().authoritative === false)
+    expect(s.snapshot()).toMatchObject({ enabled: false, authoritative: false })
+
+    releaseRead(next)
+    await waitUntil(() => s.snapshot().enabled && s.snapshot().authoritative)
+    readSpy.mockRestore()
+    s.dispose()
+  })
+
+  it('does not miss an ON record created while the initial absent read is in flight', async () => {
+    const realReadFile = fs.readFile.bind(fs)
+    let intercepted = false
+    const readSpy = vi.spyOn(fs, 'readFile').mockImplementation(async (...args: Parameters<typeof fs.readFile>) => {
+      const file = String(args[0])
+      if (!intercepted && file.endsWith('kids-mode.json')) {
+        intercepted = true
+        await fs.mkdir(sharedDir(), { recursive: true })
+        await fs.writeFile(
+          path.join(sharedDir(), 'kids-mode.json'),
+          JSON.stringify({ version: 1, enabled: true, name: 'Created during read' })
+        )
+        throw Object.assign(new Error('the read began before creation'), { code: 'ENOENT' })
+      }
+      return realReadFile(...args)
+    })
+    const s = await fresh()
+
+    await waitUntil(() => s.isOn())
+    expect(s.snapshot()).toMatchObject({
+      enabled: true,
+      name: 'Created during read',
+      authoritative: true
+    })
+    readSpy.mockRestore()
+    s.dispose()
+  })
+
   it('observes an external edit after its first write creates a directory absent at boot', async () => {
     const s = await fresh()
 

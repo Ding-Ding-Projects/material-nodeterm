@@ -10,7 +10,7 @@ import { useSettings } from '../state/settings'
 import { useSshConn } from '../state/sshConn'
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
 import { openDestructiveGate } from '../state/destructiveGate'
-import { useKidsMode } from '../state/kidsMode'
+import { kidsDestructiveGateRequired } from '../state/kidsMode'
 import { useScmDraft } from '../state/scmDraft'
 import { useScmCache } from '../state/scmCache'
 import { useSession } from '../session/session'
@@ -268,7 +268,7 @@ export function SourceControlPanel({
   // confirmation for every existing user is a product decision, not a wiring fix.
   const discard = (f: GitFileChange) => {
     const run = () => void act(() => git.discard(cwd!, f.path, f.status === 'U'))
-    if (requiresDestructiveGate('discard-changes', useKidsMode.getState().enabled).required) {
+    if (requiresDestructiveGate('discard-changes', kidsDestructiveGateRequired()).required) {
       openDestructiveGate({
         title: `Discard changes to ${f.path}`,
         description:

@@ -41,6 +41,7 @@ import {
   type SettingsApi,
   type KidsModeApi,
   type KidsModeRecord,
+  type KidsModeSnapshot,
   type SchoolModeApi,
   type SchoolModeRecord,
   type ClaudeUsage,
@@ -417,7 +418,7 @@ export function buildRealApi(
   }
 
   const kidsMode: KidsModeApi = {
-    load: () => client.request(IPC.kidsModeLoad) as Promise<KidsModeRecord>,
+    load: () => client.request(IPC.kidsModeLoad) as Promise<KidsModeSnapshot>,
     enable: (pin?: string) => client.request(IPC.kidsModeEnable, pin) as Promise<KidsModeRecord>,
     disable: (pin: string) =>
       client.request(IPC.kidsModeDisable, pin) as ReturnType<KidsModeApi['disable']>,
@@ -591,13 +592,14 @@ export function buildFilesApi(
         baseRef,
         push
       ) as ReturnType<GitApi['worktreeMerge']>,
-    worktreeRemove: (repoPath, wtPath, deleteBranch, pruneOnly) =>
+    worktreeRemove: (repoPath, wtPath, deleteBranch, pruneOnly, expected) =>
       client.request(
         IPC.gitWorktreeRemove,
         repoPath,
         wtPath,
         deleteBranch,
-        pruneOnly
+        pruneOnly,
+        expected
       ) as ReturnType<GitApi['worktreeRemove']>,
     setActiveRemote: (projectId) =>
       client.request(IPC.gitSetActiveRemote, projectId) as Promise<void>
@@ -950,7 +952,8 @@ export function buildAuthenticatorApi(client: RpcClient): Pick<NodeTerminalApi, 
       client.request(IPC.authenticatorAddUri, uri) as Promise<AuthenticatorAddResult>,
     rename: (input: AuthenticatorRenameInput) =>
       client.request(IPC.authenticatorRename, input) as Promise<AuthenticatorEntry | null>,
-    remove: (id: string) => client.request(IPC.authenticatorRemove, id) as Promise<void>,
+    remove: (expected: AuthenticatorEntry) =>
+      client.request(IPC.authenticatorRemove, expected) as ReturnType<AuthenticatorApi['remove']>,
     code: (id: string) => client.request(IPC.authenticatorCode, id) as Promise<AuthenticatorCode | null>,
     codes: (ids: string[]) =>
       client.request(IPC.authenticatorCodes, ids) as Promise<Record<string, AuthenticatorCode>>,

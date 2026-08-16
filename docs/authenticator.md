@@ -109,6 +109,21 @@ Each entry has a **"Reveal secret"** action that fetches and shows the raw base3
 matching `otpauth://` URI) — for the rare case you need to re-pair the same secret into a *different*
 app. It is never shown by default, always behind that explicit click.
 
+## Removing a stored seed
+
+**Remove** deletes this app's sealed TOTP seed and therefore its current and future live codes. It
+does not change the account at the service that issued the seed, and removing an authenticator copy
+linked to a toy lock does not remove that toy lock's separately stored credential.
+
+Under Kids mode — and while the renderer cannot establish an authoritative live Kids-mode record —
+seed removal uses the app-wide two-key destructive gate. The authorization is bound to the entry's
+full non-secret identity plus an opaque core revision that changes when either its metadata or sealed
+seed changes. The core list is fetched again immediately before deletion, then core serializes a
+compare-and-remove against that exact revision. A rename, seed replacement, failed/corrupt store
+read, concurrent edit, or disappearance while either dialog is open performs zero deletion. If an
+ordinary dialog was already open when Kids mode turns on or becomes unavailable, it closes without
+deleting and a fresh two-key gate takes its place.
+
 ## Secrets stay local, and out of ordinary exports
 
 Nothing about the authenticator syncs, phones home, or makes a network request of any kind — see

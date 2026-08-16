@@ -5,6 +5,7 @@ import {
   KIDS_ALLOWED_PERMISSION_MODES,
   KIDS_DISCLOSURE,
   KIDS_REFUSED_PERMISSION_MODES,
+  GUARDED_ACTIONS,
   gateKidsPermissionMode,
   requiresDestructiveGate,
   unclassifiedPermissionModes
@@ -106,17 +107,8 @@ describe('permission modes', () => {
 })
 
 describe('the destructive gate', () => {
-  const ACTIONS = [
-    'delete-project',
-    'delete-node',
-    'discard-changes',
-    'remove-worktree',
-    'remove-account',
-    'revoke-device',
-  ] as const
-
   it('is mandatory for every guarded action while kids mode is on', () => {
-    for (const a of ACTIONS) {
+    for (const a of GUARDED_ACTIONS) {
       const r = requiresDestructiveGate(a, true)
       expect(r.required, `${a} must be gated`).toBe(true)
       expect(r.reason).toBeTruthy()
@@ -128,7 +120,7 @@ describe('the destructive gate', () => {
   })
 
   it('leaves the existing behaviour alone when the mode is off', () => {
-    for (const a of ACTIONS) {
+    for (const a of GUARDED_ACTIONS) {
       expect(requiresDestructiveGate(a, false).required).toBe(false)
     }
   })

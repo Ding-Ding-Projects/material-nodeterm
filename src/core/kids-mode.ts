@@ -27,7 +27,7 @@ import os from 'os'
 import path from 'path'
 
 import { IPC } from '../shared/ipc'
-import type { KidsModeRecord } from '../shared/types'
+import type { KidsModeRecord, KidsModeSnapshot } from '../shared/types'
 import { DEFAULT_KIDS_MODE_NAME } from '../shared/kids-mode-name'
 import { platform } from './platform'
 import {
@@ -70,42 +70,94 @@ function sanitizeName(name: string): string {
 }
 
 export class KidsModeStore {
+  constructor(private readonly persistRecord: typeof persistFile = persistFile) {}
+
   private cache: KidsModeRecord = DEFAULT_RECORD
-  private listeners = new Set<(r: KidsModeRecord) => void>()
-  private watcher = new SharedRecordWatcher(recordFile(), () => this.queueReload())
+  private readAuthoritative = false
+  private watcherHealthy = false
+  private listeners = new Set<(r: KidsModeSnapshot) => void>()
+  private watcher = new SharedRecordWatcher(
+    recordFile(),
+    () => this.queueReload(),
+    undefined,
+    (healthy) => {
+      if (healthy === this.watcherHealthy) return
+      this.watcherHealthy = healthy
+      this.notify()
+    }
+  )
   /** Every write is FIFO'd: the watcher's own reload can race a write we just issued. */
   private chain: Promise<unknown> = Promise.resolve()
   /** Invalidates watcher reloads that were queued before dispose/re-init. */
   private lifecycle = 0
+  /** Invalidates a read that began before a newer watcher event announced possible replacement. */
+  private recordChangeGeneration = 0
 
   async init(): Promise<void> {
     const lifecycle = ++this.lifecycle
-    await this.reload(lifecycle)
-    if (lifecycle === this.lifecycle) this.watcher.start()
+    // Arm first, then read. Reading before installing the watcher leaves a lost-update window in
+    // which another app can create an ON record after our ENOENT result and before the watch is
+    // live, making a stale OFF snapshot look authoritative forever. Watcher events queue behind
+    // this initial read on `chain`, so a write during the read is deterministically re-read after it.
+    this.readAuthoritative = false
+    this.watcher.start()
+    const run = this.chain.then(() => this.reload(lifecycle))
+    this.chain = run.catch(() => {})
+    await run
   }
 
-  private async reload(lifecycle: number): Promise<boolean> {
+  private async reload(
+    lifecycle: number,
+    recordGeneration = this.recordChangeGeneration
+  ): Promise<boolean> {
     const result = await readSharedJson(recordFile())
-    if (lifecycle !== this.lifecycle) return false
+    if (
+      lifecycle !== this.lifecycle ||
+      recordGeneration !== this.recordChangeGeneration
+    ) {
+      this.readAuthoritative = false
+      return false
+    }
     if (result.kind === 'value') {
       const parsed = result.value
-      this.cache = isValidRecord(parsed)
-        ? { version: 1, enabled: parsed.enabled, name: sanitizeName(parsed.name) }
-        : DEFAULT_RECORD
-    } else if (result.kind === 'absent' || result.kind === 'invalid') {
-      // A proven absence (nobody has ever turned it on) or corrupt JSON defaults OFF. A failed
-      // read is different: it preserves the last-known state rather than silently weakening it.
+      if (isValidRecord(parsed)) {
+        this.cache = { version: 1, enabled: parsed.enabled, name: sanitizeName(parsed.name) }
+        this.readAuthoritative = true
+      } else {
+        this.cache = DEFAULT_RECORD
+        this.readAuthoritative = false
+      }
+    } else if (result.kind === 'absent') {
+      // Only a proven absence means the default OFF is authoritative. Corrupt or unreadable data
+      // remains display-OFF on first boot but destructive policy must report unavailable.
       this.cache = DEFAULT_RECORD
+      this.readAuthoritative = true
+    } else if (result.kind === 'invalid') {
+      this.cache = DEFAULT_RECORD
+      this.readAuthoritative = false
+    } else {
+      this.readAuthoritative = false
     }
-    return result.kind !== 'error'
+    return this.readAuthoritative
   }
 
   private queueReload(): void {
     const lifecycle = this.lifecycle
+    const recordGeneration = ++this.recordChangeGeneration
+    const wasAuthoritative = this.snapshot().authoritative
+    // fs.watch says the bytes MAY have changed. That fact alone invalidates the old OFF/ON verdict
+    // synchronously; a slow queued read must not leave destructive callers spending stale OFF.
+    this.readAuthoritative = false
+    if (wasAuthoritative) this.notify()
     const run = this.chain.then(async () => {
-      const before = this.cache
-      const applied = await this.reload(lifecycle)
-      if (applied && (before.enabled !== this.cache.enabled || before.name !== this.cache.name)) this.notify()
+      const before = this.snapshot()
+      await this.reload(lifecycle, recordGeneration)
+      const after = this.snapshot()
+      if (
+        before.enabled !== after.enabled ||
+        before.name !== after.name ||
+        before.authoritative !== after.authoritative
+      ) this.notify()
     })
     this.chain = run.catch(() => {})
   }
@@ -119,12 +171,19 @@ export class KidsModeStore {
     return this.cache
   }
 
+  snapshot(): KidsModeSnapshot {
+    return {
+      ...this.cache,
+      authoritative: this.readAuthoritative && this.watcherHealthy
+    }
+  }
+
   /** Convenience for the many callers that only need the boolean. */
   isOn(): boolean {
     return this.cache.enabled
   }
 
-  onChange(cb: (r: KidsModeRecord) => void): () => void {
+  onChange(cb: (r: KidsModeSnapshot) => void): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)
   }
@@ -132,7 +191,7 @@ export class KidsModeStore {
   private notify(): void {
     for (const cb of this.listeners) {
       try {
-        cb(this.cache)
+        cb(this.snapshot())
       } catch {
         // A listener must never break the store or its siblings.
       }
@@ -140,8 +199,11 @@ export class KidsModeStore {
   }
 
   private async writeRecord(next: KidsModeRecord): Promise<KidsModeRecord> {
+    await this.persistRecord(recordFile(), JSON.stringify(next, null, 2))
+    // Durable bytes first. A disk-full/EACCES failure must leave the authoritative in-memory policy
+    // unchanged rather than reporting OFF while the shared record still says ON.
     this.cache = next
-    await persistFile(recordFile(), JSON.stringify(next, null, 2))
+    this.readAuthoritative = true
     this.watcher.recordWritten()
     this.notify()
     return this.cache
@@ -199,7 +261,7 @@ export class KidsModeStore {
 
   registerIpc(): void {
     const p = platform()
-    p.handle(IPC.kidsModeLoad, () => this.get())
+    p.handle(IPC.kidsModeLoad, () => this.snapshot())
     p.handle(IPC.kidsModeEnable, (pin?: string) => this.enable(pin))
     p.handle(IPC.kidsModeDisable, (pin: string) => this.disable(pin))
     p.handle(IPC.kidsModeRename, (name: string) => this.rename(name))

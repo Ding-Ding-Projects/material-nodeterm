@@ -64,6 +64,11 @@ Two credential kinds:
   secret into the built-in authenticator — the wizard says plainly that doing so makes the lock
   **ornamental**, because the key then sits right next to the door it opens.
 
+When an authenticator entry records a link to a toy lock, the authenticator copy and the toy-lock
+credential are still separate sealed records. Removing the authenticator entry removes its
+live-code convenience but does not remove or weaken the toy lock; under Kids mode that
+authenticator-seed deletion goes through the two-key destructive gate.
+
 ## Choosing how long an unlock lasts
 
 Every lock also picks an **unlock duration**:

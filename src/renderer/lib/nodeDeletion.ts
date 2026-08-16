@@ -1,4 +1,11 @@
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
+import {
+  createDestructiveCommitBarrier,
+  destructiveTargetIdentity,
+  type DestructiveAuthorization,
+  type DestructiveCommitRefusal,
+  type DestructiveCommitResult
+} from './destructiveAuthorization'
 
 /**
  * Every user-reachable way to end a node/session.
@@ -21,6 +28,8 @@ export type NodeDeletionConfirmation = 'destructive-gate' | 'plain-confirm' | 'i
 
 export interface NodeDeletionPlan {
   confirmation: NodeDeletionConfirmation
+  /** Authorization inherited from the already-approved account transaction, if any. */
+  inheritedAuthorization?: DestructiveAuthorization
   title: string
   description: string
   message: string
@@ -34,8 +43,11 @@ export interface PlanNodeDeletionInput {
   requestedBy?: string
   /** False only for a session-memory orphan: there is no canvas node to remove. */
   removesNode?: boolean
-  /** The account-removal gate already disclosed and authorized closing its login nodes. */
-  authorizedBy?: 'remove-account'
+  /** The account-removal confirmation already disclosed and authorized closing its login nodes. */
+  authorizedBy?: {
+    action: 'remove-account'
+    authorization: DestructiveAuthorization
+  }
 }
 
 /** Ordinary-mode behaviour that predates Kids mode. Kids mode overrides every row to the gate. */
@@ -67,7 +79,7 @@ export function planNodeDeletion({
   const count = named.length
   const one = named[0]
   const confirmation =
-    surface === 'account-removal' && authorizedBy === 'remove-account'
+    surface === 'account-removal' && authorizedBy?.action === 'remove-account'
       ? 'immediate'
       : requiresDestructiveGate('delete-node', kidsModeOn).required
         ? 'destructive-gate'
@@ -86,6 +98,7 @@ export function planNodeDeletion({
 
   return {
     confirmation,
+    inheritedAuthorization: authorizedBy?.authorization,
     title: removesNode
       ? count > 1
         ? `Delete ${count} nodes`
@@ -98,7 +111,7 @@ export function planNodeDeletion({
 }
 
 export interface NodeDeletionDispatchDeps {
-  perform(): void
+  perform(authorization: DestructiveAuthorization): void
   cancel?(): void
   openGate(request: {
     title: string
@@ -126,7 +139,7 @@ export function dispatchNodeDeletion(
   deps: NodeDeletionDispatchDeps
 ): boolean {
   if (plan.confirmation === 'immediate') {
-    deps.perform()
+    deps.perform(plan.inheritedAuthorization ?? 'ordinary')
     return true
   }
 
@@ -135,16 +148,122 @@ export function dispatchNodeDeletion(
       title: plan.title,
       description: plan.description,
       affected: plan.affected,
-      onConfirm: deps.perform,
+      onConfirm: () => deps.perform('two-key'),
       onCancel: deps.cancel
     })
   }
 
   return deps.openConfirm({
     message: plan.message,
-    onConfirm: deps.perform,
+    onConfirm: () => deps.perform('ordinary'),
     onCancel: deps.cancel
   })
+}
+
+/** Fields which make one disclosed node target distinguishable from a replacement using its id. */
+export interface NodeDeletionTarget {
+  id: string
+  projectId?: string
+  type?: string
+  title?: string
+  accountId?: string
+  /** Object-generation token: catches a same-id node/session replacement with identical labels. */
+  incarnation?: number
+  /** External-session generation facts for a target which has no canvas object. */
+  runtimeIdentity?: string
+}
+
+const nodeTargetIncarnations = new WeakMap<object, number>()
+let nextNodeTargetIncarnation = 1
+
+/** Stable for one live object, different for a replacement object even when every label is reused. */
+export function nodeDeletionTargetIncarnation(target: object): number {
+  const existing = nodeTargetIncarnations.get(target)
+  if (existing !== undefined) return existing
+  const created = nextNodeTargetIncarnation++
+  nodeTargetIncarnations.set(target, created)
+  return created
+}
+
+export function nodeDeletionTargetIdentity(targets: readonly NodeDeletionTarget[]): string {
+  return destructiveTargetIdentity(
+    targets.flatMap((target) => [
+      target.id,
+      target.projectId,
+      target.type,
+      target.title,
+      target.accountId,
+      target.incarnation,
+      target.runtimeIdentity
+    ])
+  )
+}
+
+export function orphanSessionRuntimeIdentity(row: {
+  session: string
+  nodeId: string
+  panePid: number
+  command: string
+}): string {
+  return destructiveTargetIdentity([row.session, row.nodeId, row.panePid, row.command])
+}
+
+export interface NodeDeletionCommitBarrierOptions {
+  disclosedTargets: readonly NodeDeletionTarget[]
+  authorization: DestructiveAuthorization
+  readCurrent(): NodeDeletionTarget[] | null
+  kidsGateRequired(): boolean
+  perform(targets: NodeDeletionTarget[]): void
+  upgradeToTwoKey(targets: NodeDeletionTarget[]): void
+  refuse?(reason: DestructiveCommitRefusal): void
+}
+
+/** Behavior-tested live target/policy seam used by every node/session confirmation surface. */
+export function createNodeDeletionCommitBarrier(
+  options: NodeDeletionCommitBarrierOptions
+): () => DestructiveCommitResult {
+  return createDestructiveCommitBarrier({
+    disclosedIdentity: nodeDeletionTargetIdentity(options.disclosedTargets),
+    authorization: options.authorization,
+    readCurrent: () => {
+      const current = options.readCurrent()
+      return current
+        ? {
+            identity: nodeDeletionTargetIdentity(current),
+            target: current,
+            kidsGateRequired: options.kidsGateRequired()
+          }
+        : null
+    },
+    perform: options.perform,
+    upgradeToTwoKey: options.upgradeToTwoKey,
+    refuse: options.refuse
+  })
+}
+
+export interface ProjectOwnedNodeDeletionDeps {
+  /** Read at commit time; a confirmation may outlive a project switch. */
+  readActiveProjectId(): string | null
+  deleteFromActiveProject(): void
+  deleteFromStoredProject(): void
+}
+
+/**
+ * Commit a sidebar deletion against the project that still owns the disclosed node.
+ *
+ * The active project is deliberately re-read here. Capturing it when the dialog opens lets a
+ * later project switch route the approved deletion into the replacement canvas instead.
+ */
+export function performProjectOwnedNodeDeletion(
+  projectId: string,
+  deps: ProjectOwnedNodeDeletionDeps
+): 'active-project' | 'stored-project' {
+  if (deps.readActiveProjectId() === projectId) {
+    deps.deleteFromActiveProject()
+    return 'active-project'
+  }
+  deps.deleteFromStoredProject()
+  return 'stored-project'
 }
 
 /**
@@ -173,9 +292,9 @@ export function managedDeletionRoots(
  */
 export function initialWorktreeDeleteFromDisk(
   createdByApp: boolean,
-  kidsModeOn: boolean
+  kidsGateRequired: boolean
 ): boolean {
-  return createdByApp && !kidsModeOn
+  return createdByApp && !kidsGateRequired
 }
 
 /**
@@ -186,8 +305,8 @@ export function initialWorktreeDeleteFromDisk(
  */
 export function worktreeDeleteFromDiskAfterModeChange(
   current: boolean,
-  wasKidsModeOn: boolean,
-  kidsModeOn: boolean
+  wasKidsGateRequired: boolean,
+  kidsGateRequired: boolean
 ): boolean {
-  return !wasKidsModeOn && kidsModeOn ? false : current
+  return !wasKidsGateRequired && kidsGateRequired ? false : current
 }

@@ -39,8 +39,12 @@ politely undone the way a local merge can.
 
 - **Settings → Agents** — which local agent CLI (if any) generates commit messages and how, and
   the extra prompt appended to that generation.
-- Worktree removal offers an opt-in (default off) to also delete the worktree's directory on
-  disk; the underlying branch is kept either way.
+- An adopted worktree always starts at **Unbind** with disk deletion off. For an app-created
+  worktree, a known-OFF Kids record retains the historical delete default; Kids mode and an
+  unavailable/untrusted Kids record reset disk deletion off, including across a live OFF→ON
+  transition while the dialog is open. Opting back into disk deletion then requires the app-wide
+  two-key gate. The app deletes its own branch only when Git confirms it is merged; an adopted
+  branch is always kept.
 
 ## Failure modes
 
@@ -55,6 +59,15 @@ politely undone the way a local merge can.
   report "everything is gone" for a perfectly healthy remote repository. This is a stated v1
   limitation, not a silent gap — the affordance shows up disabled with the reason, rather than
   disappearing.
+- **The group is rebound while a remove dialog is open**: the disclosed project, binding generation,
+  repo, path, branch, base, creator flag, group incarnation, and affected-node identities are re-read
+  immediately before unbind/delete. Any mismatch cancels with zero disk operation instead of
+  applying yesterday's approval to today's target.
+- **Files change or status cannot be read after approval**: disk removal is refused. Core measures an
+  authoritative proof of the checkout registration, HEAD, index, tracked differences, and untracked
+  file contents. The renderer carries that proof through the dialog/gate, and core measures and
+  compares it again immediately before the forced Git removal. If Git finishes after the group has
+  been rebound, the old path is repaired without clearing the newer binding.
 
 ## Security considerations
 

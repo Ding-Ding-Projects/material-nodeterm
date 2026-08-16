@@ -81,13 +81,25 @@ export class SecureStore<TMeta extends { id: string }> {
    *  the file itself is left untouched so a human can still recover it by hand if it's salvageable. */
   async load(): Promise<SealedEntry<TMeta>[]> {
     try {
+      return await this.loadStrict()
+    } catch {
+      return []
+    }
+  }
+
+  /** Destructive/mutating callers need to distinguish a fresh empty store from bytes they could
+   *  not read. ENOENT is the only empty case; corrupt/EACCES/EIO reject and must fail closed. */
+  async loadStrict(): Promise<SealedEntry<TMeta>[]> {
+    try {
       const raw = await fs.readFile(this.file(), 'utf8')
       const parsed = JSON.parse(raw) as StoreFile<TMeta>
-      if (parsed?.version !== 1 || !Array.isArray(parsed.entries)) return []
+      if (parsed?.version !== 1 || !Array.isArray(parsed.entries)) {
+        throw new Error(`invalid secure store: ${this.filename}`)
+      }
       return parsed.entries
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
-      return []
+      throw e
     }
   }
 

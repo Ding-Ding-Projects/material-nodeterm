@@ -4,13 +4,14 @@ import os from 'os'
 import path from 'path'
 import { promisify } from 'util'
 import { IPC } from '../shared/ipc'
-import type { GitFileChange, GitResult, GitStatus } from '../shared/types'
+import type { GitFileChange, GitResult, GitStatus, GitWorktreeRemovalProof } from '../shared/types'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import * as worktreeOps from '../shared/worktree-ops'
 import type { WorktreeListResult } from '../shared/worktree'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import { resolveGitRemote, runRemoteGit } from './remote-ssh/remote-git'
 import { platform } from './platform'
+import { gitRemovalFingerprint } from './git-removal-proof'
 import {
   isValidCloneUrl,
   expandCloneUrl,
@@ -20,6 +21,54 @@ import {
 } from '../shared/clone-url'
 
 const run = promisify(execFile)
+
+async function filesystemGeneration(target: string): Promise<string | null> {
+  try {
+    const real = await fs.promises.realpath(target)
+    const stat = await fs.promises.lstat(real)
+    return [real, stat.dev, stat.ino, stat.birthtimeMs, stat.mode].join('|')
+  } catch {
+    return null
+  }
+}
+
+async function hashUntrackedFiles(cwd: string, nulPaths: string): Promise<string | null> {
+  const root = path.resolve(cwd)
+  const hash = (await import('crypto')).createHash('sha256')
+  try {
+    for (const relative of nulPaths.split('\0').filter(Boolean).sort()) {
+      const absolute = path.resolve(root, relative)
+      const rel = path.relative(root, absolute)
+      if (!rel || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return null
+      const before = await fs.promises.lstat(absolute)
+      hash.update(relative)
+      hash.update('\0')
+      hash.update([before.mode, before.size, before.birthtimeMs].join('|'))
+      if (before.isSymbolicLink()) {
+        hash.update(await fs.promises.readlink(absolute))
+      } else if (before.isFile()) {
+        await new Promise<void>((resolve, reject) => {
+          const stream = fs.createReadStream(absolute)
+          stream.on('data', (chunk) => hash.update(chunk))
+          stream.on('error', reject)
+          stream.on('end', resolve)
+        })
+      } else {
+        return null
+      }
+      const after = await fs.promises.lstat(absolute)
+      if (
+        before.dev !== after.dev ||
+        before.ino !== after.ino ||
+        before.size !== after.size ||
+        before.mtimeMs !== after.mtimeMs
+      ) return null
+    }
+    return hash.digest('hex')
+  } catch {
+    return null
+  }
+}
 
 function findBin(names: string[]): string | null {
   for (const c of names) {
@@ -276,8 +325,14 @@ export class GitService {
     platform().handle(IPC.gitWorktreeMerge, (repoPath: string, branch: string, baseRef: string, push?: boolean) =>
       this.worktreeMerge(repoPath, branch, baseRef, push)
     )
-    platform().handle(IPC.gitWorktreeRemove, (repoPath: string, wtPath: string, deleteBranch: boolean, pruneOnly?: boolean) =>
-      this.worktreeRemove(repoPath, wtPath, deleteBranch, pruneOnly)
+    platform().handle(IPC.gitWorktreeRemove, (
+      repoPath: string,
+      wtPath: string,
+      deleteBranch: boolean,
+      pruneOnly?: boolean,
+      expected?: GitWorktreeRemovalProof
+    ) =>
+      this.worktreeRemove(repoPath, wtPath, deleteBranch, pruneOnly, expected)
     )
   }
 
@@ -327,21 +382,46 @@ export class GitService {
     repoPath: string,
     wtPath: string,
     deleteBranch: boolean,
-    pruneOnly = false
+    pruneOnly = false,
+    expected?: GitWorktreeRemovalProof
   ): Promise<worktreeOps.WorktreeOpResult> {
     // Refuse — and note what the refusal does NOT say: `worktreeGone`. A local stat of a remote
     // worktree would claim exactly that, and the renderer treats it as proof the directory is gone.
     if (isRemoteRepo(repoPath)) return Promise.resolve(REMOTE_WORKTREE_REFUSAL())
     // `pathExists` is git's `prunable` flag's fallback for git < 2.36 (see worktree-ops). LOCAL-only
     // (see `isRemoteRepo`).
-    return worktreeOps.worktreeRemove(git, repoPath, wtPath, os.homedir(), deleteBranch, pruneOnly, async (p) =>
-      fs.existsSync(p)
-    )
+    return (async () => {
+      if (!pruneOnly && expected) {
+        const current = await this.status(wtPath)
+        if (
+          current.authoritative !== true ||
+          !current.removalProof ||
+          current.removalProof.headOid !== expected.headOid ||
+          current.removalProof.generation !== expected.generation ||
+          current.removalProof.fingerprint !== expected.fingerprint
+        ) {
+          return {
+            ok: false,
+            message: 'The worktree changed or could not be measured immediately before removal. Nothing was removed.'
+          }
+        }
+      }
+      return worktreeOps.worktreeRemove(
+        git,
+        repoPath,
+        wtPath,
+        os.homedir(),
+        deleteBranch,
+        pruneOnly,
+        async (p) => fs.existsSync(p)
+      )
+    })()
   }
 
   async status(cwd: string): Promise<GitStatus> {
     const empty: GitStatus = {
       hasRepo: false,
+      authoritative: false,
       repoName: '',
       branch: '',
       branches: [],
@@ -367,7 +447,25 @@ export class GitService {
     // simply fails to empty when there's no origin, so it needn't wait on `remote`.)
     // gh auth is deliberately NOT awaited here (ghAuthedSwr): it hits the GitHub API and
     // used to hold the whole status — i.e. the panel's first paint — hostage for ~700ms.
-    const [branchR, branchesR, remoteBranchesR, remotesR, originR, countsR, upstreamR, cachedR, workR, porcelainR] =
+    const [
+      branchR,
+      branchesR,
+      remoteBranchesR,
+      remotesR,
+      originR,
+      countsR,
+      upstreamR,
+      cachedR,
+      workR,
+      porcelainR,
+      headR,
+      indexR,
+      cachedBinaryR,
+      workBinaryR,
+      exactPorcelainR,
+      untrackedR,
+      gitDirR
+    ] =
       await Promise.all([
         git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']),
         git(cwd, ['branch', '--format=%(refname:short)']),
@@ -380,7 +478,14 @@ export class GitService {
         git(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']),
         git(cwd, ['diff', '--cached', '--numstat']),
         git(cwd, ['diff', '--numstat']),
-        git(cwd, ['status', '--porcelain'])
+        git(cwd, ['status', '--porcelain']),
+        git(cwd, ['rev-parse', 'HEAD']),
+        git(cwd, ['ls-files', '--stage', '-z']),
+        git(cwd, ['diff', '--cached', '--binary', '--no-ext-diff']),
+        git(cwd, ['diff', '--binary', '--no-ext-diff']),
+        git(cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all']),
+        git(cwd, ['ls-files', '--others', '--exclude-standard', '-z']),
+        git(cwd, ['rev-parse', '--absolute-git-dir'])
       ])
     const gh = ghAuthedSwr()
 
@@ -434,8 +539,50 @@ export class GitService {
       }
     }
 
+    const [rootGeneration, gitDirGeneration, untrackedFingerprint] = await Promise.all([
+      filesystemGeneration(cwd),
+      gitDirR.ok && gitDirR.out.trim() ? filesystemGeneration(gitDirR.out.trim()) : Promise.resolve(null),
+      untrackedR.ok ? hashUntrackedFiles(cwd, untrackedR.out) : Promise.resolve(null)
+    ])
+    const criticalReads = [
+      branchR,
+      cachedR,
+      workR,
+      porcelainR,
+      headR,
+      indexR,
+      cachedBinaryR,
+      workBinaryR,
+      exactPorcelainR,
+      untrackedR,
+      gitDirR
+    ]
+    const authoritative =
+      criticalReads.every((result) => result.ok) &&
+      !!rootGeneration &&
+      !!gitDirGeneration &&
+      untrackedFingerprint !== null
+    const generation = authoritative ? `${rootGeneration}\0${gitDirGeneration}` : ''
+    const removalProof: GitWorktreeRemovalProof | undefined = authoritative
+      ? {
+          headOid: headR.out.trim(),
+          generation,
+          fingerprint: gitRemovalFingerprint({
+            headOid: headR.out.trim(),
+            index: indexR.out,
+            cachedDiff: cachedBinaryR.out,
+            worktreeDiff: workBinaryR.out,
+            porcelain: exactPorcelainR.out,
+            untracked: untrackedFingerprint!,
+            generation
+          })
+        }
+      : undefined
+
     return {
       hasRepo: true,
+      authoritative,
+      removalProof,
       repoName,
       branch,
       branches,

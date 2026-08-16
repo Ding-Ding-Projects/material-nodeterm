@@ -5,7 +5,7 @@
 // live `code`/`codes` computation (which hands back a computed 6–8 digit CODE, never the secret
 // that produced it).
 
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { platform } from '../platform'
 import { IPC } from '../../shared/ipc'
 import { SecureStore } from '../secure-store'
@@ -19,6 +19,7 @@ import type {
   AuthenticatorExportInput,
   AuthenticatorExportResult,
   AuthenticatorRenameInput,
+  AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from '../../shared/authenticator'
 
@@ -36,12 +37,39 @@ const GROSS_CLOCK_SKEW_HINT_S = 120
 
 type AuthenticatorStore = Pick<
   SecureStore<AuthenticatorEntry>,
-  'load' | 'save' | 'seal' | 'unseal'
+  'loadStrict' | 'save' | 'seal' | 'unseal'
 >
 
 export function startAuthenticatorService(
   store: AuthenticatorStore = new SecureStore<AuthenticatorEntry>('authenticator.json')
 ): { dispose(): void } {
+  let mutations: Promise<void> = Promise.resolve()
+  const mutate = <T>(run: () => Promise<T>): Promise<T> => {
+    const result = mutations.then(run, run)
+    mutations = result.then(() => undefined, () => undefined)
+    return result
+  }
+
+  const publicEntry = (entry: { meta: AuthenticatorEntry; secretEnc: string }): AuthenticatorEntry => ({
+    ...entry.meta,
+    revision: createHash('sha256')
+      .update(JSON.stringify(entry.meta))
+      .update('\0')
+      .update(entry.secretEnc)
+      .digest('hex')
+  })
+  const sameEntry = (actual: AuthenticatorEntry, expected: AuthenticatorEntry): boolean =>
+    actual.id === expected.id &&
+    actual.issuer === expected.issuer &&
+    actual.account === expected.account &&
+    actual.algorithm === expected.algorithm &&
+    actual.digits === expected.digits &&
+    actual.period === expected.period &&
+    actual.createdAt === expected.createdAt &&
+    actual.updatedAt === expected.updatedAt &&
+    actual.linkedToyLockId === expected.linkedToyLockId &&
+    actual.revision === expected.revision
+
   const codeFor = (secretBase32: string, entry: AuthenticatorEntry): AuthenticatorCode => {
     const secretBytes = base32Decode(secretBase32)
     const nowS = Math.floor(Date.now() / 1000)
@@ -78,8 +106,8 @@ export function startAuthenticatorService(
   }
 
   platform().handle(IPC.authenticatorList, async (): Promise<AuthenticatorEntry[]> => {
-    const entries = await store.load()
-    return entries.map((e) => e.meta).sort((a, b) => a.issuer.localeCompare(b.issuer) || a.account.localeCompare(b.account))
+    const entries = await store.loadStrict()
+    return entries.map(publicEntry).sort((a, b) => a.issuer.localeCompare(b.issuer) || a.account.localeCompare(b.account))
   })
 
   platform().handle(
@@ -101,11 +129,14 @@ export function startAuthenticatorService(
         createdAt: now,
         updatedAt: now
       }
-      const entries = await store.load()
-      const secretEnc = store.seal({ v: 1, secretBase32 } satisfies StoredSecret)
-      entries.push({ meta, secretEnc })
-      await store.save(entries)
-      return { ok: true, entry: meta }
+      return mutate(async () => {
+        const entries = await store.loadStrict()
+        const secretEnc = store.seal({ v: 1, secretBase32 } satisfies StoredSecret)
+        const stored = { meta, secretEnc }
+        entries.push(stored)
+        await store.save(entries)
+        return { ok: true, entry: publicEntry(stored) }
+      })
     }
   )
 
@@ -130,38 +161,52 @@ export function startAuthenticatorService(
         createdAt: now,
         updatedAt: now
       }
-      const entries = await store.load()
-      const secretEnc = store.seal({ v: 1, secretBase32: parsed.secretBase32 } satisfies StoredSecret)
-      entries.push({ meta, secretEnc })
-      await store.save(entries)
-      return { ok: true, entry: meta }
+      return mutate(async () => {
+        const entries = await store.loadStrict()
+        const secretEnc = store.seal({ v: 1, secretBase32: parsed.secretBase32 } satisfies StoredSecret)
+        const stored = { meta, secretEnc }
+        entries.push(stored)
+        await store.save(entries)
+        return { ok: true, entry: publicEntry(stored) }
+      })
     }
   )
 
   platform().handle(
     IPC.authenticatorRename,
     async (input: AuthenticatorRenameInput): Promise<AuthenticatorEntry | null> => {
-      const entries = await store.load()
-      const entry = entries.find((e) => e.meta.id === input.id)
-      if (!entry) return null
-      if (input.issuer !== undefined) entry.meta.issuer = input.issuer.trim() || entry.meta.issuer
-      if (input.account !== undefined) entry.meta.account = input.account.trim() || entry.meta.account
-      entry.meta.updatedAt = Date.now()
-      await store.save(entries)
-      return entry.meta
+      return mutate(async () => {
+        const entries = await store.loadStrict()
+        const entry = entries.find((e) => e.meta.id === input.id)
+        if (!entry) return null
+        if (input.issuer !== undefined) entry.meta.issuer = input.issuer.trim() || entry.meta.issuer
+        if (input.account !== undefined) entry.meta.account = input.account.trim() || entry.meta.account
+        entry.meta.updatedAt = Date.now()
+        await store.save(entries)
+        return publicEntry(entry)
+      })
     }
   )
 
-  platform().handle(IPC.authenticatorRemove, async (id: string): Promise<void> => {
-    const entries = await store.load()
-    const next = entries.filter((e) => e.meta.id !== id)
-    if (next.length !== entries.length) await store.save(next)
-  })
+  platform().handle(
+    IPC.authenticatorRemove,
+    async (expected: AuthenticatorEntry): Promise<AuthenticatorRemoveResult> =>
+      mutate(async () => {
+        const entries = await store.loadStrict()
+        const index = entries.findIndex((entry) => entry.meta.id === expected?.id)
+        if (index < 0) return { ok: false, error: 'not-found' }
+        const current = publicEntry(entries[index])
+        if (!sameEntry(current, expected)) return { ok: false, error: 'changed' }
+        entries.splice(index, 1)
+        await store.save(entries)
+        return { ok: true, removed: current }
+      })
+  )
 
   platform().handle(
     IPC.authenticatorCode,
     async (id: string): Promise<AuthenticatorCode | null> => {
-      const entries = await store.load()
+      const entries = await store.loadStrict()
       const entry = entries.find((e) => e.meta.id === id)
       if (!entry) return null
       const secret = store.unseal<StoredSecret>(entry.secretEnc)
@@ -172,7 +217,7 @@ export function startAuthenticatorService(
   platform().handle(
     IPC.authenticatorCodes,
     async (ids: string[]): Promise<Record<string, AuthenticatorCode>> => {
-      const entries = await store.load()
+      const entries = await store.loadStrict()
       const wanted = new Set(ids)
       const out: Record<string, AuthenticatorCode> = {}
       for (const entry of entries) {
@@ -187,7 +232,7 @@ export function startAuthenticatorService(
   platform().handle(
     IPC.authenticatorReveal,
     async (id: string): Promise<AuthenticatorRevealResult> => {
-      const entries = await store.load()
+      const entries = await store.loadStrict()
       const entry = entries.find((e) => e.meta.id === id)
       if (!entry) return { ok: false, error: 'This entry no longer exists.' }
       const secret = store.unseal<StoredSecret>(entry.secretEnc)
@@ -211,7 +256,7 @@ export function startAuthenticatorService(
     IPC.authenticatorExportSecrets,
     async (input: AuthenticatorExportInput): Promise<AuthenticatorExportResult> => {
       if (!input?.confirmed) return { ok: false, error: 'Export was not confirmed.' }
-      const entries = await store.load()
+      const entries = await store.loadStrict()
       const wanted = new Set(input.ids)
       const out: AuthenticatorExportEntry[] = []
       for (const entry of entries) {

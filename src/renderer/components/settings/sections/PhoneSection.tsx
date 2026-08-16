@@ -4,7 +4,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
 import { openDestructiveGate } from '../../../state/destructiveGate'
-import { useKidsMode } from '../../../state/kidsMode'
+import { kidsDestructiveGateRequired, useKidsMode } from '../../../state/kidsMode'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { Button } from '@renderer/ui/Button'
 import { Switch } from '@renderer/ui/Switch'
@@ -102,8 +102,10 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
   // Read at RENDER: the mode is a shared record another process can flip, so a Settings page left
   // open across that change must honour the new state rather than one captured at mount.
-  const kidsGateRequired = requiresDestructiveGate('revoke-device', useKidsMode((s) => s.enabled))
-    .required
+  const kidsGateRequired = requiresDestructiveGate(
+    'revoke-device',
+    useKidsMode(kidsDestructiveGateRequired)
+  ).required
 
   const requestRevoke = (device: PairedDevice, anchorEl: HTMLElement | null): void => {
     if (!kidsGateRequired) {

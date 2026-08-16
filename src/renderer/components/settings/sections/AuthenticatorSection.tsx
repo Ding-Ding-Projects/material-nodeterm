@@ -7,6 +7,18 @@ import type { AuthenticatorCode, AuthenticatorEntry, OtpAlgorithm } from '@share
 import { OTP_ALGORITHMS } from '@shared/otp'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { TwoKeyExportGate } from '../../authenticator/TwoKeyExportGate'
+import { openDestructiveGate } from '../../../state/destructiveGate'
+import { kidsDestructiveGateRequired } from '../../../state/kidsMode'
+import {
+  authenticatorRemovalTargetIdentity,
+  dispatchAuthenticatorRemoval,
+  planAuthenticatorRemoval,
+  type AuthenticatorRemovalDispatchDeps
+} from '../../../lib/authenticatorRemoval'
+import {
+  createDestructiveCommitBarrier,
+  type DestructiveAuthorization
+} from '../../../lib/destructiveAuthorization'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 
@@ -113,15 +125,19 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
 function EntryRow({
   entry,
   code,
+  readCurrentEntry,
   onRemoved,
   onRenamed
 }: {
   entry: AuthenticatorEntry
   code: AuthenticatorCode | undefined
+  readCurrentEntry: (id: string) => AuthenticatorEntry | null
   onRemoved: () => void
   onRenamed: (next: AuthenticatorEntry) => void
 }): React.JSX.Element {
-  const [confirmRemove, setConfirmRemove] = useState(false)
+  type PlainRemovalRequest = Parameters<AuthenticatorRemovalDispatchDeps['openConfirm']>[0]
+  const [confirmRemove, setConfirmRemove] = useState<PlainRemovalRequest | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
   const [renaming, setRenaming] = useState(false)
   const [issuer, setIssuer] = useState(entry.issuer)
   const [account, setAccount] = useState(entry.account)
@@ -146,6 +162,83 @@ function EntryRow({
   const reveal = async (): Promise<void> => {
     const res = await window.nodeTerminal.authenticator.reveal(entry.id)
     if (res.ok) setRevealed({ secretBase32: res.secretBase32 })
+  }
+
+  const requestRemove = (
+    disclosedEntry: AuthenticatorEntry,
+    forceTwoKey = false
+  ): boolean => {
+    setRemoveError(null)
+    const current = readCurrentEntry(disclosedEntry.id)
+    if (
+      !current ||
+      authenticatorRemovalTargetIdentity(current) !==
+        authenticatorRemovalTargetIdentity(disclosedEntry)
+    ) {
+      return false
+    }
+    const disclosedIdentity = authenticatorRemovalTargetIdentity(current)
+    const plan = planAuthenticatorRemoval(
+      current,
+      forceTwoKey || kidsDestructiveGateRequired()
+    )
+    const commitsStarted: Partial<Record<DestructiveAuthorization, boolean>> = {}
+    const commit = (authorization: DestructiveAuthorization): void => {
+      if (commitsStarted[authorization]) return
+      commitsStarted[authorization] = true
+      void window.nodeTerminal.authenticator
+        .list()
+        .then((liveEntries) => {
+          const liveEntry = liveEntries.find((candidate) => candidate.id === current.id) ?? null
+          const barrier = createDestructiveCommitBarrier({
+            disclosedIdentity,
+            authorization,
+            readCurrent: () =>
+              liveEntry
+                ? {
+                    identity: authenticatorRemovalTargetIdentity(liveEntry),
+                    target: liveEntry,
+                    kidsGateRequired: kidsDestructiveGateRequired()
+                  }
+                : null,
+            perform: (confirmedEntry) => {
+              void window.nodeTerminal.authenticator
+                .remove(confirmedEntry)
+                .then((result) => {
+                  if (result.ok) onRemoved()
+                  else setRemoveError(
+                    'That authenticator entry changed or disappeared. Nothing was removed; review it and try again.'
+                  )
+                })
+                .catch(() =>
+                  setRemoveError('Could not remove that authenticator seed. Nothing was deleted.')
+                )
+            },
+            upgradeToTwoKey: (confirmedEntry) => {
+              requestRemove(confirmedEntry, true)
+            },
+            refuse: () =>
+              setRemoveError(
+                'That authenticator entry changed or disappeared. Nothing was removed; review it and try again.'
+              )
+          })
+          barrier()
+        })
+        .catch(() =>
+          setRemoveError(
+            'The authenticator entry could not be re-read. Nothing was removed; try again.'
+          )
+        )
+    }
+
+    return dispatchAuthenticatorRemoval(plan, {
+      perform: commit,
+      openGate: (request) => openDestructiveGate(request),
+      openConfirm: (request) => {
+        setConfirmRemove(request)
+        return true
+      }
+    })
   }
 
   return (
@@ -205,12 +298,13 @@ function EntryRow({
             <button className="toylock-btn toylock-btn--sm" onClick={() => void reveal()}>
               Reveal secret
             </button>
-            <button className="toylock-btn toylock-btn--sm" onClick={() => setConfirmRemove(true)}>
+            <button className="toylock-btn toylock-btn--sm" onClick={() => requestRemove(entry)}>
               Remove
             </button>
           </>
         )}
       </div>
+      {removeError && <div className="toylock-error">{removeError}</div>}
       {revealed && (
         <div className="toylock-manual-secret">
           <span className="toylock-field__label">Secret for {entry.issuer} — {entry.account}</span>
@@ -222,13 +316,18 @@ function EntryRow({
       )}
       {confirmRemove && (
         <ConfirmDialog
-          message={`Remove the authenticator entry for "${entry.issuer} — ${entry.account}"? This does not affect the other side's account, only this app's copy.`}
+          message={confirmRemove.message}
           confirmLabel="Remove"
           onConfirm={() => {
-            void window.nodeTerminal.authenticator.remove(entry.id).then(onRemoved)
-            setConfirmRemove(false)
+            const request = confirmRemove
+            setConfirmRemove(null)
+            request.onConfirm()
           }}
-          onCancel={() => setConfirmRemove(false)}
+          onCancel={() => {
+            const request = confirmRemove
+            setConfirmRemove(null)
+            request.onCancel?.()
+          }}
         />
       )}
     </li>
@@ -324,6 +423,7 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
                   key={e.id}
                   entry={e}
                   code={codes[e.id]}
+                  readCurrentEntry={(id) => entriesRef.current.find((entry) => entry.id === id) ?? null}
                   onRemoved={() => setEntries((cur) => cur.filter((x) => x.id !== e.id))}
                   onRenamed={(next) => setEntries((cur) => cur.map((x) => (x.id === next.id ? next : x)))}
                 />

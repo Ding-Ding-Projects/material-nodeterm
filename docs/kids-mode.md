@@ -95,8 +95,13 @@ Deliberate, and asserted:
 - **A failed read preserves the last-known state.** Only `ENOENT` proves there is no record. A
   permission or I/O failure says nothing about whether Kids mode is on and must not silently turn
   it off; on first boot there is no earlier fact to preserve, so the in-memory default remains off.
-- **A shell that cannot reach the IPC leaves the renderer store OFF.** Defaulting to on would apply
-  restrictions nobody asked for and imply a protection that is not in force.
+- **A shell that cannot reach the IPC leaves the renderer's displayed mode OFF, but destructive
+  authorization unknown.** Defaulting the whole mode to on would imply agent/terminal protection
+  that is not in force. Spending an unverified OFF as permission to delete would be worse: until a
+  live subscription plus either a successful load snapshot or a subscription event establishes an
+  authoritative record, every destructive action uses the two-key gate. A failed load or
+  subscription stays in that fail-closed state; a later live record can make the verdict
+  authoritative without an app restart.
 - **A wrong PIN leaves the mode on.** Obviously — but it is tested, because "fails open" is the
   failure that matters.
 
@@ -137,22 +142,24 @@ feature is *missing* from the other shell.
 
 ## Destructive-action coverage
 
-There are **six** `GuardedAction` values, and all six have a real runtime path:
+There are **seven** runtime `GUARDED_ACTIONS`, and all seven have an executable policy path:
 
 | `GuardedAction` | Current behaviour |
 | --- | --- |
 | `delete-node` | one planner covers canvas key/menu/header, kanban, Cmd/Ctrl+W, sessions sidebar, session-memory panel, and agent-control close; every surface uses the two-key gate in Kids mode ✅ |
 | `delete-project` | always uses the two-key gate ✅ |
-| `remove-worktree` | no Enter-confirm in Kids mode; disk deletion starts unticked, including an already-open dialog when Kids mode turns on ✅ |
+| `remove-worktree` | no Enter-confirm in Kids mode; disk deletion starts unticked (including a live OFF→ON), and an explicit disk-delete choice then requires the two-key gate ✅ |
 | `discard-changes` | two-key gate in Kids mode; plain confirm when off ✅ |
 | `remove-account` | confirmation happens before credentials, transcripts, serialized bindings, or login sessions are removed; cancelling preserves all of them, and approval closes login nodes through the already-authorized node funnel without a second prompt ✅ |
+| `remove-authenticator` | deleting the app's sealed TOTP seed uses the two-key gate in Kids mode; the dialog names the exact issuer/account and a changed/replaced entry invalidates the approval ✅ |
 | `revoke-device` | two-key gate in Kids mode; plain confirm when off ✅ |
 
-`remove-worktree` is handled differently from `delete-node` on purpose. The two-key gate cannot
-express an option, so replacing the dialog with it would hide whether the directory is deleted.
-Instead, Kids mode keeps that choice visible, resets it to **off** on entry (even while the dialog
-is open), and disables Enter confirmation. The user can still opt in deliberately with the
-checkbox and button.
+`remove-worktree` keeps its option-bearing dialog first, because the two-key gate cannot express
+whether the directory is deleted. Kids mode (and an unknown Kids record) keeps that choice visible,
+resets it to **off** on entry even while the dialog is open, and disables Enter confirmation. An
+explicit **Delete from disk** choice then opens the same two-key gate as the other destructive
+actions; only an unbind can finish from the plain dialog. The group binding and every worktree field
+are re-read at both boundaries, so rebinding the group under either dialog performs nothing.
 
 ## Where the permission gate is actually applied
 
@@ -186,6 +193,14 @@ With Kids mode on, every surface receives the two-key gate. With it off, the his
 remain: canvas deletion is gated, kanban/sidebar/agent-control use a plain confirmation, and
 Cmd/Ctrl+W closes immediately. This makes Kids mode consistent without silently changing the
 ordinary-mode product contract.
+
+An authorization is bound to the exact target facts the dialog disclosed. Immediately before
+commit, `createNodeDeletionCommitBarrier` re-reads the active project plus each node's id, type,
+title, account binding, and live object/session generation. Orphan sessions receive a fresh scoped
+session sweep before teardown. A missing/replaced target cancels with zero teardown. If a plain dialog
+was opened under a known-OFF record and Kids mode turns on — or the record becomes unavailable — the
+plain approval performs nothing and starts a fresh two-key request. Account, authenticator, and
+worktree removal use the same one-shot live barrier with their own exact target identities.
 
 ## Verified against a running build
 
@@ -226,6 +241,10 @@ and by unwiring the gate (red).
 ```bash
 npx vitest run src/core/kids-mode.test.ts src/shared/kids-mode-policy.test.ts \
   src/renderer/state/permissionMode.kids.test.ts src/renderer/lib/nodeDeletion.test.ts \
-  src/renderer/lib/accountRemoval.test.ts
+  src/renderer/lib/accountRemoval.test.ts src/renderer/lib/destructiveAuthorization.test.ts \
+  src/renderer/lib/authenticatorRemoval.test.ts src/renderer/lib/worktreeRemoval.test.ts \
+  src/renderer/state/kidsMode.test.ts \
+  src/renderer/components/settings/sections/AccountsSection.test.tsx \
+  src/renderer/components/settings/sections/AuthenticatorSection.test.tsx
 node scripts/check-app-contract.mjs
 ```

@@ -18,11 +18,10 @@
 //   `confirmBusy()` refusal that precedes it. A newly added verb still needs its own confirm
 //   block, written by hand, in its own case.
 //
-//   What both sides reading one set buys is a DRIFT ALARM, not a gate:
-//   `src/renderer/canvas/control-destructive.test.ts` fails if the set and the hand-written
-//   confirm cases stop agreeing in either direction. That is worth having — the set and the
-//   dispatch had already drifted once, which is how it came to gate nothing — but it is an alarm,
-//   and calling it a gate would repeat the exact mistake this file was created to fix.
+//   What both sides reading one set buys is a shared runtime collision decision, not a dialog:
+//   `renderer/lib/controlDestructive.ts` refuses a destructive case while another confirmation
+//   owns the screen, and its behavioral test runs that same function for every member. Each case
+//   still owns the content and callback of its confirmation.
 //
 // NOR IS IT THE COMPLETE LIST OF CONFIRM-GATED ACTIONS. `close-worktree --mode remove`
 // (`Canvas.tsx`'s `case 'close-worktree'`) opens a human confirm through `requestRemoveWorktree`,
