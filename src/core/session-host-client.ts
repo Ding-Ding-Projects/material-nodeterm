@@ -39,6 +39,13 @@ function sleep(ms: number): Promise<void> {
  * Everything a live client needs to know about ONE connection attempt. Recreated on every
  * (re)connect; `SessionHostClient` itself outlives any single socket.
  */
+/** How long a single request may go unanswered before it is treated as a dead host.
+ *
+ *  Generous on purpose: the slowest legitimate request is an attach that has to SPAWN a shell on
+ *  a cold, contended Windows machine, and killing that early would turn a slow terminal into a
+ *  broken one. Ten seconds is far past that and far short of "the user thinks it is frozen". */
+const REQUEST_TIMEOUT_MS = 10_000
+
 export class SessionHostClient {
   private socket: net.Socket | null = null
   private framer = new LineFramer()
@@ -217,13 +224,44 @@ export class SessionHostClient {
     const id = this.nextId++
     const full = { id, ...req } as SessionHostRequest
     return new Promise<T>((resolve, reject) => {
+      // A DEADLINE, because "never answers" was a real state and it was the worst possible one.
+      //
+      // This promise used to settle only on a reply or a failed write. Every other path left it
+      // pending forever: a host that accepted the frame and went quiet, a reply lost to a framing
+      // bug, a session-host wedged mid-spawn. `PtyManager.create` awaits this to learn a session's
+      // real `fresh`, inside a try/catch — and a catch cannot help a promise that never settles.
+      // So opening a terminal hung indefinitely, with no error anywhere, and the caller had no way
+      // to tell that from a slow machine. Measured on Windows: 45 s and still pending, silent.
+      //
+      // Rejecting instead hands control back to the existing fallback, which is already written
+      // and already correct: the create proceeds as a cold start, and the user gets a working
+      // terminal rather than a spinner. A wrong-but-bounded answer beats a right one that never
+      // arrives.
+      const timer = setTimeout(() => {
+        if (!this.pending.has(id)) return
+        this.pending.delete(id)
+        reject(
+          new Error(
+            `session-host: no reply to '${req.cmd}' within ${REQUEST_TIMEOUT_MS}ms — the host is ` +
+              'running but not answering'
+          )
+        )
+      }, REQUEST_TIMEOUT_MS)
+      timer.unref?.() // never hold the app process open on a pending request's account
       this.pending.set(id, {
-        resolve: (v) => resolve((v.result ?? undefined) as T),
-        reject
+        resolve: (v) => {
+          clearTimeout(timer)
+          resolve((v.result ?? undefined) as T)
+        },
+        reject: (e) => {
+          clearTimeout(timer)
+          reject(e)
+        }
       })
       try {
         socket.write(encodeFrame(full))
       } catch (e) {
+        clearTimeout(timer)
         this.pending.delete(id)
         reject(e instanceof Error ? e : new Error(String(e)))
       }
