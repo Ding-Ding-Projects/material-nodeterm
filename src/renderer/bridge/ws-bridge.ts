@@ -82,7 +82,11 @@ import type {
   AuthenticatorRevealResult
 } from '../../shared/authenticator'
 import type { PeerIdentity } from '../../shared/presence'
-import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../../shared/scheduled-settings'
+import type {
+  ScheduledSettingsActiveState,
+  ScheduledSettingsFile,
+  ScheduledSettingsLoadState
+} from '../../shared/scheduled-settings'
 import type { VsCodeInstall, VsCodeOpenResult } from '../../shared/vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from '../../shared/local-history'
 import { buildStubApi } from './stubs'
@@ -429,7 +433,7 @@ export function buildRealApi(
   }
 
   const scheduledSettings: ScheduledSettingsApi = {
-    load: () => client.request(IPC.scheduledSettingsLoad) as Promise<ScheduledSettingsFile>,
+    load: () => client.request(IPC.scheduledSettingsLoad) as Promise<ScheduledSettingsLoadState>,
     save: (file: ScheduledSettingsFile) =>
       client.request(IPC.scheduledSettingsSave, file) as Promise<{ ok: boolean; error?: string }>,
     setHomeAssistantToken: (ruleId: string, token: string | null) =>

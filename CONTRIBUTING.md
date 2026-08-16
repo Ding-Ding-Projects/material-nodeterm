@@ -127,6 +127,13 @@ bug.
 different facts and must stay distinguishable at every layer. Collapsing them is how a panel ends up
 reporting "no sessions" on a host running thirty.
 
+For `scheduled-settings.json`, this rule includes startup: only `ENOENT` is an empty schedule.
+Corrupt/unreadable evidence must remain untouched while both shells boot with overrides disabled,
+surface the structured recovery state, and refuse a save that could overwrite it. Start/stop the
+feature through `ScheduledSettingsRuntime`, not a shell-local store/service sequence. In the
+renderer, release the scheduled-save in-flight owner on failure as well as success so one rejected
+bridge request cannot wedge later edits.
+
 **Serialize a shared store's decision, not only its final write.** Atomic rename prevents torn
 bytes, but it does not stop two callers from loading the same snapshot and publishing complete,
 conflicting replacements. Funnel read-modify-write operations through one mutation API; the

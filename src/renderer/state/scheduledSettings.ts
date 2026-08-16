@@ -2,12 +2,18 @@ import { create } from 'zustand'
 import {
   defaultScheduledSettingsFile,
   type ScheduledSettingsActiveState,
-  type ScheduledSettingsFile
+  type ScheduledSettingsFile,
+  type ScheduledSettingsLoadError
 } from '@shared/scheduled-settings'
+import { ScheduledSettingsSaveQueue } from './scheduled-settings-save'
 
 interface ScheduledSettingsState {
   file: ScheduledSettingsFile
   hydrated: boolean
+  /** Present when the shell could not read scheduled-settings.json. `file` is then the safe empty
+   * fallback, not proof that no rules existed; the Settings panel shows the preserved recovery
+   * path and exposes no editing controls until restart after repair. */
+  loadError: ScheduledSettingsLoadError | null
   /** The last save attempt's rejection reason (the bounded-schema validator in main), or `null`
    *  while nothing has failed. Shown inline in the Schedule section rather than thrown — a save
    *  failure here is a user-correctable mistake (too many rules, a malformed window), not a bug. */
@@ -27,52 +33,45 @@ interface ScheduledSettingsState {
 }
 
 const SAVE_COALESCE_MS = 500
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-let pendingSave: ScheduledSettingsFile | null = null
-
-function scheduleSave(next: ScheduledSettingsFile, onSaved: (error: string | null) => void): void {
-  pendingSave = next
-  if (saveTimer) return
-  saveTimer = setTimeout(() => {
-    saveTimer = null
-    const toSave = pendingSave
-    pendingSave = null
-    if (!toSave) return
-    void window.nodeTerminal.scheduledSettings
-      .save(toSave)
-      .then((res) => onSaved(res.ok ? null : (res.error ?? 'Could not save the schedule.')))
-      .catch(() => onSaved('Could not reach the app to save the schedule.'))
-  }, SAVE_COALESCE_MS)
-}
+const saveQueue = new ScheduledSettingsSaveQueue(
+  (file) => window.nodeTerminal.scheduledSettings.save(file),
+  SAVE_COALESCE_MS
+)
 
 // Reload/quit inside the coalesce window must not lose the last edit — same discipline as
 // state/settings.ts. Guarded: this module is transitively importable from a node-environment test.
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    if (pendingSave) void window.nodeTerminal.scheduledSettings.save(pendingSave)
-    pendingSave = null
+    saveQueue.flushPendingForUnload()
   })
 }
 
 export const useScheduledSettings = create<ScheduledSettingsState>((set) => ({
   file: defaultScheduledSettingsFile(),
   hydrated: false,
+  loadError: null,
   saveError: null,
   active: null,
   tokenStatus: {},
 
   async hydrate() {
-    const [file, active, tokenStatus] = await Promise.all([
+    const [loaded, active, tokenStatus] = await Promise.all([
       window.nodeTerminal.scheduledSettings.load(),
       window.nodeTerminal.scheduledSettings.activeState(),
       window.nodeTerminal.scheduledSettings.tokenStatus()
     ])
-    set({ file, active, tokenStatus, hydrated: true })
+    set({
+      file: loaded.file,
+      loadError: loaded.error,
+      active,
+      tokenStatus,
+      hydrated: true
+    })
   },
 
   update(next) {
     set({ file: next, saveError: null })
-    scheduleSave(next, (error) => set({ saveError: error }))
+    saveQueue.enqueue(next, (error) => set({ saveError: error }))
   },
 
   async setHomeAssistantToken(ruleId, token) {

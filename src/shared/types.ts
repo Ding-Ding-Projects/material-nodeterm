@@ -1466,7 +1466,9 @@ export interface SchoolModeApi {
  *  All network access and the periodic evaluator live in the main process (or the Server
  *  Edition's equivalent boundary) — the renderer only ever reads the resolved result. */
 export interface ScheduledSettingsApi {
-  load(): Promise<import('./scheduled-settings').ScheduledSettingsFile>
+  /** A successful file or a safe disabled fallback plus the exact recovery fact. A failed read is
+   * never represented as an ordinary empty schedule. */
+  load(): Promise<import('./scheduled-settings').ScheduledSettingsLoadState>
   /** `{ok:false, error}` on a bounds/shape violation — never thrown. */
   save(
     file: import('./scheduled-settings').ScheduledSettingsFile

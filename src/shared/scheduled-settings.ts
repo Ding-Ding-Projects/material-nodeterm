@@ -365,6 +365,23 @@ export interface ScheduledSettingsFile {
   rules: ScheduleRule[]
 }
 
+/** A failed startup read is not an empty schedule. The runtime serves `file` as a deliberately
+ * disabled in-memory fallback so no automation can run, while `error` preserves the distinct
+ * recovery fact for every renderer attached to either shell. The file named by `path` is never
+ * renamed or overwritten while this state is active. */
+export interface ScheduledSettingsLoadError {
+  kind: 'corrupt' | 'unreadable'
+  /** A bounded filesystem code such as EACCES/EIO/EISDIR when one exists. Raw exception text is
+   * intentionally not sent over IPC because it can contain attacker-controlled path content. */
+  code?: string
+  path: string
+  message: string
+}
+
+export type ScheduledSettingsLoadState =
+  | { ok: true; file: ScheduledSettingsFile; error: null }
+  | { ok: false; file: ScheduledSettingsFile; error: ScheduledSettingsLoadError }
+
 export const SCHEDULE_LIMITS = {
   maxRules: 50,
   maxLabelLength: 120,
