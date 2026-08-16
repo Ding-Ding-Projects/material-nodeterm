@@ -411,6 +411,43 @@ const CHECKS = [
     },
   },
   {
+    id: 'terminal-spawns',
+    title: 'A terminal actually spawns — the thing this app is for',
+    async run() {
+      // The most important check here, and the one most easily faked by the others passing. Every
+      // case above would still pass on an app that renders a beautiful canvas and cannot open a
+      // single shell, because node-pty is a NATIVE module: it must be compiled against Electron's
+      // ABI, and `electron-vite build` does not do that — electron-rebuild does, at install time.
+      // So a checkout whose postinstall failed boots, paints, and answers IPC while being unable
+      // to do the one thing it exists for.
+      await evaluate(`(function(){
+        window.__ptyProbe = 'pending';
+        try {
+          var key = 'wired-probe-' + Date.now();
+          // persistKey is the node id, and destroying by it is what ends the session for good —
+          // leaving one behind would leak a real tmux/session-host process onto this machine.
+          window.nodeTerminal.pty.create({ cols: 80, rows: 24, persistKey: key }).then(
+            function (r) {
+              window.__ptyProbe =
+                r && r.sessionId ? 'created' :
+                r && r.unavailable ? 'unavailable: ' + r.unavailable :
+                'no session id: ' + JSON.stringify(r).slice(0, 120);
+              try { window.nodeTerminal.pty.destroy(key) } catch (e) {}
+            },
+            function (e) { window.__ptyProbe = 'threw: ' + e }
+          );
+        } catch (e) { window.__ptyProbe = 'threw: ' + e }
+        return true;
+      })()`)
+      const r = await until(`window.__ptyProbe !== 'pending' ? window.__ptyProbe : null`, 15000)
+      if (r === null) return { ok: false, why: 'pty.create never settled — main did not answer' }
+      if (r !== 'created') {
+        return { ok: false, why: `pty.create → ${r} (node-pty is probably not built for Electron's ABI)` }
+      }
+      return { ok: true, detail: 'pty.create round-tripped and a real session came back' }
+    },
+  },
+  {
     id: 'ipc-bridge',
     title: 'The preload bridge is present and answers a real main-process call',
     async run() {

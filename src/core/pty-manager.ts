@@ -315,15 +315,6 @@ const WIN_POWERSHELL_FALLBACK = (): string =>
  *  installer's PATH update hasn't reached this (GUI-launched) process's inherited environment. */
 const WIN_PWSH_FALLBACK = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 
-/**
- * The Windows session program when nothing else picked one (no explicit program, no
- * `settings.defaultShell`): prefer PowerShell 7+ (`pwsh.exe` — the shell most developers actually
- * want once they've installed it), then the Windows PowerShell every machine ships
- * (`powershell.exe`), then whatever the environment itself calls its command processor
- * (`COMSPEC` — normally `cmd.exe`, but respecting it rather than hardcoding keeps this correct on
- * an environment that deliberately points it elsewhere), and only then a bare `cmd.exe` — the one
- * binary guaranteed to exist on every Windows install, so this function can never return nothing.
- */
 function resolveWindowsShell(): string {
   const pathStr = shellPathNow() ?? process.env.PATH
   const pwsh = findInPathString('pwsh', pathStr) ?? (fs.existsSync(WIN_PWSH_FALLBACK) ? WIN_PWSH_FALLBACK : null)
@@ -1726,16 +1717,32 @@ export class PtyManager {
     // attach-or-create round trip `spawnSession` just kicked off; awaiting it here costs nothing
     // extra (the socket write already happened) and is the only way to learn its real `fresh`.
     let screen: string | undefined
+    // Tracks whether the session-host attach actually worked, so `persistent` can tell the truth.
+    // It used to be derived from the path CHOSEN rather than the outcome, so a failed attach still
+    // reported `persistent: true` — the renderer then believed a throwaway shell would survive a
+    // restart, and every memory lever that spares a "tmux-backed" session was reasoning about a
+    // session that did not exist.
+    let sessionHostAttachFailed = false
     if (spawned?.sessionHost) {
       try {
         const info = await (spawned.proc as unknown as SessionHostPty).ready
         fresh = info.fresh
         screen = info.screen
-      } catch {
+      } catch (e) {
         // The attach itself failed (session-host unreachable / bundle missing after all). Leave
         // `fresh` at its placeholder `true`: the renderer treats this like any other cold start —
         // a working, empty terminal — rather than blocking the create on a backend that just
         // proved it cannot be reached.
+        //
+        // SAY SO. This was a bare `catch {}`, and that silence is the only reason a completely
+        // broken session-host attach survived: every terminal fell back to a non-persistent shell
+        // and nothing anywhere said a word. The user saw a working terminal that quietly did not
+        // survive a restart, which is the failure mode this whole backend exists to prevent.
+        console.warn(
+          `[session-host] attach failed for ${sessionName(options.persistKey!)} — this terminal ` +
+            `will NOT survive a restart: ${e instanceof Error ? e.message : String(e)}`
+        )
+        sessionHostAttachFailed = true
       }
     }
     // Surface a missing-account-dir fallback so the renderer can flag the node's account chip.
@@ -1743,7 +1750,7 @@ export class PtyManager {
     // The session's `persistKey` is set iff the spawn actually landed on a tmux, local or remote
     // (`persisted` in spawnSession) — i.e. exactly "this session survives losing its client",
     // which is what the renderer's cache-dispose levers must not assume. See PtyCreateResult.
-    const persistent = !!spawned?.persistKey
+    const persistent = !!spawned?.persistKey && !sessionHostAttachFailed
     return accountFallback
       ? { sessionId, fresh, accountFallback, persistent, ...(screen ? { screen } : {}) }
       : { sessionId, fresh, persistent, ...(screen ? { screen } : {}) }
@@ -2276,6 +2283,18 @@ export class PtyManager {
       // off the attach-or-create round trip asynchronously and never throws synchronously (a
       // rejection surfaces on `.ready`, awaited by `spawnNew` — see there for how a failure
       // degrades rather than blocking the create).
+      // `resolveLocalSessionShell`, NOT a bare `|| 'bash'`.
+      //
+      // This branch exists BECAUSE the platform has no tmux — which in practice means Windows —
+      // and it was defaulting to a POSIX shell that does not exist there. The host dutifully tried
+      // to spawn `bash`, node-pty answered `File not found:`, and the attach rejected. Everything
+      // downstream then hid it: the rejection was swallowed by a bare catch, `persistent` was
+      // derived from the path chosen rather than the outcome, and the renderer fell back to a
+      // plain shell. So every terminal on Windows looked fine and silently did not survive a
+      // restart — the one thing this whole backend is for.
+      //
+      // The non-session-host branch above already resolves this correctly. Sharing that logic is
+      // the fix; two places deciding "which shell" is what let them disagree.
       proc = createSessionHostPty(
         sessionName(options.persistKey as string),
         {

@@ -13,19 +13,22 @@ corrected workflow, on `windows-latest`** — a real Squirrel.Windows set (`Setu
 stages it as a draft, verifies the complete remote inventory, and only then makes it non-draft and
 downloadable; an upload failure exposes no empty release. That is the shipping path.
 
-What has NOT happened is anyone **installing and launching one**. So the runtime behaviour of a
-packaged build — the session-host fallback where there is no tmux, above all — remains unverified,
-and everything below is source-level or unit-tested unless it says otherwise.
+**It also builds locally now**, which it did not for most of this work. `build.bat /s` completes in
+about 107 s and `build-installer.bat /s` in about 199 s, producing the same three-artifact Squirrel
+set (a 205.8 MB `nodeterm-Setup-0.3.0.exe`, the full `.nupkg`, `RELEASES`), unsigned per policy.
+That needed one elevated install of the Spectre-mitigated MSVC libraries — see
+[Building](#building).
 
-Building the installer **locally on a developer machine** is a separate matter and is currently
-blocked here; see [Building](#building) for the three reasons, two of which are now diagnosed in
-one second instead of discovered over ten minutes. None of them affects CI, which has the toolchain
-components a local machine may be missing.
+What has NOT happened is anyone **installing and launching one**. So the runtime behaviour of an
+INSTALLED build is still unverified — though the session-host path underneath it is no longer
+guesswork: it is now exercised directly against a real host, and the three defects that made it
+silently useless are fixed and covered below.
 
 > An earlier version of this page said no packaged build had ever been produced. That was wrong:
 > it confused "I could not build one on this machine" with "the project does not build one". The
 > distinction matters, because the first is a local toolchain gap and the second would be a
-> release-pipeline failure.
+> release-pipeline failure. Both are now false anyway — CI builds one on every push, and so does
+> this machine.
 
 Windows is the active delivery target, but most of this codebase was written on macOS. That
 asymmetry is the theme of this page: **almost every defect here was code that is genuinely correct
@@ -172,6 +175,36 @@ a literal backslash (`/tmp/a\b.png`) into a different path (`/tmp/a/b.png`). The
 correctly rejects the app's own file. The separator is injectable in the pure URL builder only so
 both host dialects are exercised on every test machine.
 
+### The session host: every persistent terminal was quietly disposable
+
+Three defects stacked so each hid the next, and two more that made the whole stack invisible. The
+app opened terminals that worked and did **not** survive a restart — the one thing this backend
+exists to provide, on the one platform that has no tmux.
+
+1. **The connection went deaf the instant it succeeded.** `tryConnectOnce`'s `finish()` ran
+   `removeAllListeners('data')` unconditionally, one statement after `attachSocket()` installed the
+   reader. Every frame the host sent afterwards went unread.
+2. **`request()` had no deadline**, so a deaf socket meant the promise never settled. The caller
+   awaits it inside a `try`/`catch`, and **a catch cannot help a promise that never settles**.
+   Measured at 45 s, still pending, silent.
+3. **The spawn asked for `bash`.** This backend is selected precisely when tmux is absent — i.e.
+   on Windows — so it defaulted to a shell that does not exist there. Proved against a live host:
+   `shell='bash'` → `{"ok":false,"error":"File not found: "}`, `shell='powershell.exe'` → `ok`.
+   The ordinary pty branch had always resolved this properly via `resolveWindowsShell()`; two
+   places deciding one question is what let them disagree, and there is now one
+   `resolveSessionShell`.
+
+**What hid it** is the part worth remembering: a bare `catch {}`, and `persistent` derived from the
+path CHOSEN rather than the outcome. A failed attach still reported `persistent: true`, so the
+renderer believed a throwaway shell would survive a restart, and every memory lever that spares a
+persistent session was reasoning about a session that did not exist.
+
+**How it was actually confirmed**, after two false summits. `10,017 ms → 6 ms` looked like a fix
+and was not — 10,017 was exactly the new timeout, and 6 ms was an immediate silent failure.
+`persistent: true` looked like a fix and was not. The only check that settled it was asking the
+host itself: `listSessions` now returns the session **by name**. Anything short of that cannot tell
+"reports persistent" from "is persistent".
+
 ### Delete-to-stop-something
 
 `removeRelayAdvertisement` was an unlink in a bare catch commented *"already absent — fine"*. True
@@ -228,9 +261,10 @@ credential and shell-syntax cases continue to run under real Git Bash.
   — tmux absence and the session-host fallback above all (see
   [windows-session-host.md](windows-session-host.md)) — is unverified. Downloading one and clicking
   through it is the single highest-value Windows check still outstanding.
-- **Building the installer locally is blocked on this machine**, on the Spectre-mitigated MSVC
-  libraries, whose installer needs elevation. The corrected release workflow has not yet run on
-  a hosted runner, so its native rebuild and resulting Squirrel assets remain unverified too.
+- **The hosted workflow has now produced and validated unsigned Squirrel assets**, and this
+  machine now has the Spectre-mitigated MSVC component. A production-BAT build from the final
+  reconciled commit, followed by a real install/launch/update/uninstall check, is still required;
+  an older local package does not prove the final tree or the installed runtime.
 
 ## If you are adding code that touches a path
 

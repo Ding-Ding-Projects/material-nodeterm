@@ -1,0 +1,8 @@
+#!/bin/sh
+# Refuse a push from a checkout without the current shared working dictionary.
+#
+# Only a SHA-256 lives in the repository — see scripts/check-vocabulary.mjs for why storing the
+# terms themselves in a public repo would defeat the thing they exist for.
+#
+# Enable with:  git config core.hooksPath .githooks
+exec node "$(dirname "$0")/../scripts/check-vocabulary.mjs"
