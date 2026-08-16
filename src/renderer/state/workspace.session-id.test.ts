@@ -18,6 +18,12 @@ describe('createAgentNode mints a session id when the CLI accepts one', () => {
     const n = createAgentNode('claude', 0)
     expect(n.data.agentSessionId).toMatch(UUID_RE)
     expect(n.data.initialCommand).toContain(`--session-id ${n.data.agentSessionId}`)
+    expect(n.data.agentLaunchIntent).toMatchObject({
+      kind: 'agent',
+      action: 'start',
+      newSessionId: n.data.agentSessionId
+    })
+    expect(n.data.agentLaunchIntent).not.toHaveProperty('sessionId')
   })
 
   it('gives every node its own id (two nodes never share a conversation)', () => {

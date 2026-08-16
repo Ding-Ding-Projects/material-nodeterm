@@ -335,3 +335,36 @@ describe('ephemeral nodes are never published', () => {
     expect(c.sent).toHaveLength(1)
   })
 })
+
+describe('machine-local execution state is never published', () => {
+  it('strips terminal profile and delayed launch alongside shell/SSH exec before sending', () => {
+    const local = {
+      ...node('n1'),
+      shell: '/bin/zsh',
+      terminalProfileId: 'wsl:Ubuntu 24.04',
+      pendingLaunch: {
+        after: ['term-dep-1'],
+        launchId: '123e4567-e89b-42d3-a456-426614174000',
+        launch: { kind: 'shell-command', command: 'local secret command' }
+      },
+      ssh: {
+        host: 'example.test',
+        user: 'me',
+        extraArgs: '-o ProxyCommand=corp-proxy %h',
+        execTrusted: true
+      }
+    } satisfies CanvasNodeState
+    const [publishable] = publishableStates([local], new Set())
+    expect(publishable.shell).toBeUndefined()
+    expect(publishable.terminalProfileId).toBeUndefined()
+    expect(publishable.pendingLaunch).toBeUndefined()
+    expect(publishable.ssh).toEqual({ host: 'example.test', user: 'me' })
+
+    const c = collect()
+    const p = createCanvasPublisher(c.send)
+    p.publish([publishable])
+    expect(c.sent).toEqual([{ op: 'upsert', node: publishable }])
+    expect(JSON.stringify(c.sent)).not.toContain('Ubuntu 24.04')
+    expect(JSON.stringify(c.sent)).not.toContain('local secret command')
+  })
+})

@@ -80,6 +80,17 @@ describe('buildRealApi: workspace', () => {
   })
 })
 
+describe('buildRealApi: private Windows launch intent boundary', () => {
+  it('does not expose delayed launch execution on the Server Edition WebSocket API', () => {
+    const c = fakeClient()
+    const api = buildRealApi(c as never)
+
+    expect(api.pty.executeLaunchIntent).toBeUndefined()
+    expect('executeLaunchIntent' in api.pty).toBe(false)
+    expect(c.calls).toEqual([])
+  })
+})
+
 describe('buildRealApi: sessionMemory', () => {
   // A real WS namespace, not a stub: the same core service (`startSessionMemoryService`) registers
   // both channels in the server shell, so the browser gets a genuine per-session breakdown of the

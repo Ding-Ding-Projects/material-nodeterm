@@ -29,6 +29,28 @@ const SAFE_NODE_ID = /^term-[a-z0-9]+-[a-z0-9]{1,16}$/
 
 const TITLE_MAX = 120
 
+/**
+ * This writer deliberately preserves fields it does not understand, but execution authority is
+ * the exception: project.json is shared and may have been hand-edited since the desktop last
+ * wrote it. Scrub every known machine-local execution field whenever this raw rewrite lands.
+ */
+function stripRawNodeExec(node: Record<string, unknown>): Record<string, unknown> {
+  const {
+    shell: _shell,
+    terminalProfileId: _terminalProfileId,
+    pendingLaunch: _pendingLaunch,
+    ...portable
+  } = node
+  const ssh = portable.ssh
+  if (!ssh || typeof ssh !== 'object' || Array.isArray(ssh)) return portable
+  const {
+    extraArgs: _extraArgs,
+    execTrusted: _execTrusted,
+    ...connection
+  } = ssh as Record<string, unknown>
+  return { ...portable, ssh: connection }
+}
+
 export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date): string | null {
   if (!SAFE_NODE_ID.test(input.id)) return null
   let root: Record<string, unknown>
@@ -40,7 +62,7 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
     return null
   }
   if (root.version !== 1 || typeof root.rev !== 'number' || !Array.isArray(root.nodes)) return null
-  const nodes = root.nodes as Array<Record<string, unknown>>
+  const nodes = (root.nodes as Array<Record<string, unknown>>).map(stripRawNodeExec)
   if (nodes.some((n) => n?.id === input.id)) return null
 
   const isTerminal = (n: Record<string, unknown>): boolean =>
@@ -87,7 +109,8 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
   }
   if (typeof input.agentId === 'string') node.agentId = input.agentId
   // Desktop remote nodes carry the connection spec PER NODE — a sibling terminal in the same
-  // project has the right values; copy verbatim. No sibling with ssh → a plain local node.
+  // project has the right portable connection values. Machine-local execution fields were
+  // stripped above and therefore cannot be copied onto the new node.
   const sshDonor = nodes.find((n) => isTerminal(n) && n.ssh !== undefined)
   if (sshDonor) {
     node.ssh = sshDonor.ssh

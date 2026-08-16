@@ -3,9 +3,39 @@ import type { CorePlatform } from '../core/platform'
 import { mainWindowClientIds, sendToMain } from './main-window'
 import { peerRegistry } from './peer-registry'
 import { E_NO_HANDLER, type RpcErr, type RpcOk, type RpcRequest } from '../shared/rpc'
+import { IPC } from '../shared/ipc'
+import { stripSharedNodeExec } from '../shared/node-exec'
+import type {
+  RelayPtyCreateDecision,
+  RelayPtyCreateSource
+} from './relay-pty-create'
 
 type Handler = { fn: (...args: any[]) => unknown; withSender: boolean }
 type Listener = { fn: (...args: any[]) => void; withSender: boolean }
+
+/**
+ * Machine-local desktop state that a relay peer must never read or mutate. Keep this check at the
+ * dispatch boundary as well as registering the desktop-only profile handlers with raw ipcMain:
+ * the second guard means a later refactor cannot expose either surface merely by moving its
+ * registration onto CorePlatform. Local renderer calls still travel through ipcMain unchanged.
+ */
+const RELAY_LOCAL_ONLY_METHODS = new Set<string>([
+  IPC.settingsLoad,
+  IPC.settingsSave,
+  IPC.terminalProfilesList,
+  IPC.terminalProfilesRefresh,
+  IPC.ptyRecycleConfirmed,
+  IPC.ptyExecuteLaunchIntent,
+  IPC.workspaceSave
+])
+
+/** Sanitize only the copy crossing into a relay sink; the local window keeps its live overlay. */
+function relayEventArgs(channel: string, args: any[]): any[] {
+  if (channel !== IPC.workspaceExternalChange) return args
+  const project = args[0]
+  if (!project || typeof project !== 'object' || !Array.isArray(project.nodes)) return args
+  return [{ ...project, nodes: stripSharedNodeExec(project.nodes) }, ...args.slice(1)]
+}
 
 /**
  * The Electron platform, with the two extra members a relay PEER needs (they are deliberately NOT
@@ -16,9 +46,21 @@ export interface ElectronPlatform extends CorePlatform {
   /** Answer one peer RPC request from the recorded handler table. The peer's clientId is the
    *  sender, so handleWithSender attributes it correctly. Never rejects: a missing handler is
    *  E_NO_HANDLER and a throwing handler is E_HANDLER, so the peer's `await` always settles. */
-  dispatch(clientId: number, req: RpcRequest): Promise<RpcOk | RpcErr>
+  dispatch(
+    clientId: number,
+    req: RpcRequest,
+    source?: RelayPtyCreateSource
+  ): Promise<RpcOk | RpcErr>
   /** Fire one peer cast at every listener on that channel, in registration order. */
   cast(clientId: number, method: string, args: unknown[]): void
+}
+
+export interface ElectronPlatformOptions {
+  /** Relay-only authority rewriter. Native ipcMain calls deliberately bypass this seam. */
+  authorizeRelayPtyCreate?: (
+    raw: unknown,
+    source: RelayPtyCreateSource
+  ) => RelayPtyCreateDecision | Promise<RelayPtyCreateDecision>
 }
 
 /**
@@ -34,7 +76,7 @@ export interface ElectronPlatform extends CorePlatform {
  * SOLO COST: zero. With no peer registered the registry holds an empty Map — `has` is a miss, `ids`
  * is empty — and the webContents path below is the code it replaced, byte for byte.
  */
-export function electronPlatform(): ElectronPlatform {
+export function electronPlatform(options: ElectronPlatformOptions = {}): ElectronPlatform {
   // THE INVARIANT (4c): a channel is REACHABLE BY A REMOTE PEER if, and only if, it is registered
   // through platform().handle/on. A raw `ipcMain.handle` is invisible to a peer — a peer has no
   // webContents, so its request never travels through ipcMain at all; it is answered from THIS
@@ -91,7 +133,16 @@ export function electronPlatform(): ElectronPlatform {
       addListener(ch, { fn, withSender: true })
       ipcMain.on(ch, (e, ...args) => fn(e.sender.id, ...args))
     },
-    async dispatch(clientId, req) {
+    async dispatch(clientId, req, source = {}) {
+      if (RELAY_LOCAL_ONLY_METHODS.has(req.method)) {
+        return {
+          t: 'res', id: req.id, ok: false,
+          error: {
+            code: 'E_FORBIDDEN',
+            message: 'machine-local desktop operation is not available to relay peers'
+          }
+        }
+      }
       if (req.method.startsWith('githubControl:')) {
         return {
           t: 'res', id: req.id, ok: false,
@@ -109,7 +160,41 @@ export function electronPlatform(): ElectronPlatform {
         }
       }
       try {
-        const result = h.withSender ? await h.fn(clientId, ...req.args) : await h.fn(...req.args)
+        let args = req.args
+        if (req.method === IPC.ptyCreate) {
+          const authorize = options.authorizeRelayPtyCreate
+          if (!authorize) {
+            return {
+              t: 'res', id: req.id, ok: false,
+              error: {
+                code: 'E_FORBIDDEN',
+                message: 'relay terminal launch authority is unavailable'
+              }
+            }
+          }
+          let decision: RelayPtyCreateDecision
+          try {
+            decision = await authorize(args[0], source)
+          } catch {
+            return {
+              t: 'res', id: req.id, ok: false,
+              error: {
+                code: 'E_FORBIDDEN',
+                message: 'host terminal authority could not validate this launch'
+              }
+            }
+          }
+          if (!decision.ok) {
+            return {
+              t: 'res', id: req.id, ok: false,
+              error: { code: 'E_FORBIDDEN', message: decision.message }
+            }
+          }
+          // `pty:create` has one argument. Reconstruct the array as well as the object so a hostile
+          // peer cannot smuggle a future positional execution option past the authority rewriter.
+          args = [decision.options]
+        }
+        const result = h.withSender ? await h.fn(clientId, ...args) : await h.fn(...args)
         return { t: 'res', id: req.id, ok: true, result: result ?? null }
       } catch (err) {
         return {
@@ -119,6 +204,10 @@ export function electronPlatform(): ElectronPlatform {
       }
     },
     cast(clientId, method, args) {
+      // A peer chooses the tunnel frame shape. Do not rely on an invoke-only preload contract:
+      // sending a forged CAST for a machine-local channel must remain inert even if a future
+      // refactor accidentally registers a listener with the same name.
+      if (RELAY_LOCAL_ONLY_METHODS.has(method) || method.startsWith('githubControl:')) return
       const set = listeners.get(method)
       if (!set) return
       for (const l of set) {
@@ -141,7 +230,7 @@ export function electronPlatform(): ElectronPlatform {
       // registry's WS backpressure). Everything else is a webContents, dispatched natively.
       const peers = peerRegistry()
       if (peers.has(id)) {
-        peers.sendTo(id, ch, ...args)
+        peers.sendTo(id, ch, ...relayEventArgs(ch, args))
         return
       }
       const wc = webContents.fromId(id)
@@ -160,7 +249,7 @@ export function electronPlatform(): ElectronPlatform {
         // would skip every peer after this one AND unwind into the emitter (presenceHub.emit, the
         // canvas reflector), freezing the HOST's own presence/canvas over someone else's socket.
         try {
-          peers.sendTo(id, ch, ...args)
+          peers.sendTo(id, ch, ...relayEventArgs(ch, args))
         } catch (err) {
           console.warn(
             `[peer] broadcast of ${ch} to peer ${id} failed`,

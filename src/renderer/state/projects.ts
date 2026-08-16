@@ -87,7 +87,11 @@ interface ProjectsState {
    * whole-file `workspace.save` writes, so dropping a peer's `remove` would resurrect the node
    * they deleted on the very next save — the data-loss shape canvas sync exists to fix.
    */
-  applyNodeMutation(projectId: string, mutation: CanvasMutation): boolean
+  applyNodeMutation(
+    projectId: string,
+    mutation: CanvasMutation,
+    defaultTerminalProfileId?: string
+  ): boolean
   /** Renames a node within a project (source of truth for inactive projects). */
   renameNode(projectId: string, nodeId: string, title: string): void
   /** Recolors a node within a project. */
@@ -358,11 +362,11 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
-  applyNodeMutation(projectId, mutation) {
+  applyNodeMutation(projectId, mutation, defaultTerminalProfileId) {
     if (!get().projects.some((p) => p.id === projectId)) return false
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
-        applyCanvasMutation(nodes, mutation)
+        applyCanvasMutation(nodes, mutation, { defaultTerminalProfileId })
       )
     }))
     return true
@@ -398,11 +402,19 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const src = nodes.find((n) => n.id === nodeId)
         if (!src) return nodes
-        const copy: CanvasNodeState = {
+        const copy = {
           ...src,
           id: `${src.kind}-${Math.random().toString(36).slice(2, 10)}`,
           title: `${src.title} copy`,
-          position: { x: src.position.x + 24, y: src.position.y + 24 }
+          position: { x: src.position.x + 24, y: src.position.y + 24 },
+          // A duplicate is a new execution identity. It must not resume the source conversation or
+          // inherit a machine-local launch the source still owes.
+          initialCommand: undefined,
+          agentLaunchIntent: undefined,
+          agentSessionId: undefined,
+          pendingLaunch: undefined,
+          pendingLaunchError: undefined,
+          pendingLaunchErrorKind: undefined
         }
         return [...nodes, copy]
       })

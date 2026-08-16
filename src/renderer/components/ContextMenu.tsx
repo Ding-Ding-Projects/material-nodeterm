@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { NODE_COLORS } from '../state/workspace'
 import { useMenuFlip } from '../ui/useMenuFlip'
@@ -16,8 +16,8 @@ export type MenuItem =
       /** Renders the row muted and inert (`onClick` never fires). Pair it with `hint`: a row that
        *  is off for a reason the user cannot see teaches nothing — worse than not showing it. */
       disabled?: boolean
-      /** Why the row is disabled (or what it does). Surfaced as the row's native `title` tooltip —
-       *  deliberately not a tooltip system of our own. */
+      /** Why the row is disabled (or what it does). Disabled rows render this explanation inline
+       *  and expose it through `aria-describedby`; enabled rows retain the native title hint. */
       hint?: string
       /**
        * The REAL global keyboard shortcut that performs this exact action in this exact
@@ -100,6 +100,20 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
       : { top: flip.top, left: flip.left }
   // Index of the row whose submenu flyout is currently open (hover-driven).
   const [openSub, setOpenSub] = useState<number | null>(null)
+  const menuId = useId()
+  const keyboardOpenedSub = useRef<number | null>(null)
+
+  // A keyboard-opened flyout must move focus into the flyout after React has mounted it.
+  // Disabled menu items remain focusable by design, so the first row is a valid target even
+  // when it only explains why an unavailable profile cannot be launched.
+  useEffect(() => {
+    if (openSub == null || keyboardOpenedSub.current !== openSub) return
+    keyboardOpenedSub.current = null
+    document
+      .getElementById(`${menuId}-submenu-${openSub}`)
+      ?.querySelector<HTMLElement>('[role="menuitem"]')
+      ?.focus()
+  }, [menuId, openSub])
 
   const filterable = isFilterable(items)
   // Hooks run every render regardless of `filterable` — only the array CONTENT differs — so the
@@ -108,7 +122,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
     ? items.map((it, i) => ({
         id: String(i),
         label: it.type === 'item' || !it.type ? it.label : '',
-        disabled: it.type === 'item' ? it.disabled : false
+        disabled: it.type === 'item' || !it.type ? it.disabled : false
       }))
     : []
   const menuFilter = useMenuFilter(filterItems, {
@@ -135,6 +149,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
       />
       <div
         ref={menuRef}
+        role="menu"
         data-appearance-id="app:context-menu"
         className={`ctx-menu${scroll ? ' ctx-menu--scroll' : ''}`}
         style={menuStyle}
@@ -153,7 +168,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
         )}
         {items.map((item, i) => {
           if (visibleIndices && !visibleIndices.has(i)) return null
-          if (item.type === 'separator') return <div key={i} className="ctx-sep" />
+          if (item.type === 'separator') return <div key={i} className="ctx-sep" role="separator" />
           if (item.type === 'label') return <div key={i} className="ctx-label">{item.label}</div>
           if (item.type === 'colors') {
             return (
@@ -172,38 +187,100 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
             )
           }
           if (item.type === 'submenu') {
+            const submenuId = `${menuId}-submenu-${i}`
+            const triggerId = `${menuId}-submenu-trigger-${i}`
             return (
               <div
                 key={i}
-                className="ctx-item ctx-item--submenu"
+                className="ctx-submenu-host"
+                role="none"
                 onMouseEnter={() => setOpenSub(i)}
                 onMouseLeave={() => setOpenSub((cur) => (cur === i ? null : cur))}
               >
-                <span className="ctx-icon">{item.icon}</span>
-                {item.label}
+                <button
+                  id={triggerId}
+                  type="button"
+                  role="menuitem"
+                  className="ctx-item ctx-item--submenu"
+                  aria-haspopup="menu"
+                  aria-expanded={openSub === i}
+                  aria-controls={submenuId}
+                  onClick={() => setOpenSub((cur) => (cur === i ? null : i))}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === 'ArrowRight' ||
+                      event.key === 'ArrowDown' ||
+                      event.key === 'Enter' ||
+                      event.key === ' '
+                    ) {
+                      event.preventDefault()
+                      keyboardOpenedSub.current = i
+                      setOpenSub(i)
+                    } else if (event.key === 'ArrowLeft' || event.key === 'Escape') {
+                      event.preventDefault()
+                      setOpenSub(null)
+                    }
+                  }}
+                >
+                  <span className="ctx-icon">{item.icon}</span>
+                  <span className="ctx-item__label">{item.label}</span>
+                </button>
                 {openSub === i && (
-                  <div className="ctx-menu ctx-submenu" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    id={submenuId}
+                    role="menu"
+                    aria-labelledby={triggerId}
+                    className="ctx-menu ctx-submenu"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'ArrowLeft' && event.key !== 'Escape') return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setOpenSub(null)
+                      document.getElementById(triggerId)?.focus()
+                    }}
+                  >
                     {item.children.map((child, j) => {
-                      if (child.type === 'separator') return <div key={j} className="ctx-sep" />
+                      if (child.type === 'separator')
+                        return <div key={j} className="ctx-sep" role="separator" />
                       if (child.type === 'label')
                         return <div key={j} className="ctx-label">{child.label}</div>
                       if (child.type === 'colors' || child.type === 'submenu') return null
+                      const reasonId = child.disabled && child.hint
+                        ? `${submenuId}-reason-${j}`
+                        : undefined
                       return (
                         <button
                           key={j}
+                          type="button"
+                          role="menuitem"
                           className={`ctx-item${child.danger ? ' danger' : ''}`}
-                          disabled={child.disabled}
+                          aria-disabled={child.disabled || undefined}
+                          aria-label={reasonId ? child.label : undefined}
+                          aria-describedby={reasonId}
                           title={child.hint}
                           aria-keyshortcuts={
                             child.shortcut ? ariaKeyShortcuts(child.shortcut, isMacPlatform) : undefined
                           }
-                          onClick={() => {
+                          onClick={(event) => {
+                            if (child.disabled) {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              return
+                            }
                             child.onClick()
                             onClose()
                           }}
                         >
                           <span className="ctx-icon">{child.icon}</span>
-                          <span className="ctx-item__label">{child.label}</span>
+                          <span className="ctx-item__copy">
+                            <span className="ctx-item__label">{child.label}</span>
+                            {reasonId && (
+                              <span id={reasonId} className="ctx-item__hint">
+                                {child.hint}
+                              </span>
+                            )}
+                          </span>
                           {child.shortcut && child.shortcut.length > 0 && (
                             <span className="ctx-item__shortcut" aria-hidden>
                               {child.shortcut.map((k, ki) => (
@@ -221,11 +298,16 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
               </div>
             )
           }
+          const reasonId = item.disabled && item.hint ? `${menuId}-reason-${i}` : undefined
           return (
             <button
               key={i}
+              type="button"
+              role="menuitem"
               className={`ctx-item${item.danger ? ' danger' : ''}${filterable && menuFilter.filtered[menuFilter.activeIndex]?.id === String(i) ? ' kbd-active' : ''}`}
-              disabled={item.disabled}
+              aria-disabled={item.disabled || undefined}
+              aria-label={reasonId ? item.label : undefined}
+              aria-describedby={reasonId}
               title={item.hint}
               onMouseEnter={() => {
                 if (filterable) menuFilter.setActiveIndex(menuFilter.filtered.findIndex((fi) => fi.id === String(i)))
@@ -233,13 +315,25 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
               aria-keyshortcuts={
                 item.shortcut ? ariaKeyShortcuts(item.shortcut, isMacPlatform) : undefined
               }
-              onClick={() => {
+              onClick={(event) => {
+                if (item.disabled) {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  return
+                }
                 item.onClick()
                 onClose()
               }}
             >
               <span className="ctx-icon">{item.icon}</span>
-              <span className="ctx-item__label">{item.label}</span>
+              <span className="ctx-item__copy">
+                <span className="ctx-item__label">{item.label}</span>
+                {reasonId && (
+                  <span id={reasonId} className="ctx-item__hint">
+                    {item.hint}
+                  </span>
+                )}
+              </span>
               {item.shortcut && item.shortcut.length > 0 && (
                 <span className="ctx-item__shortcut" aria-hidden>
                   {item.shortcut.map((k, ki) => (

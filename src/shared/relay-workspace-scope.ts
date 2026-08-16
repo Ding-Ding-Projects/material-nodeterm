@@ -1,4 +1,24 @@
 import type { Workspace } from './types'
+import { stripSharedNodeExec } from './node-exec'
+
+/**
+ * Remove machine-local execution choices from a workspace before it crosses a relay boundary.
+ *
+ * A workspace loaded by the trusted host contains values restored from its machine-local index
+ * (`shell`, `terminalProfileId`, and trusted SSH arguments). They are legitimate in the host's
+ * renderer, but are neither shared project data nor meaningful on the peer's machine. Sending
+ * them would also let a later peer upsert echo a locally trusted execution value back over the
+ * wire. Keep the host object untouched and sanitize only the copy being returned to the peer.
+ */
+export function sanitizeWorkspaceForRelay(ws: Workspace): Workspace {
+  return {
+    ...ws,
+    projects: ws.projects.map((project) => ({
+      ...project,
+      nodes: stripSharedNodeExec(project.nodes)
+    }))
+  }
+}
 
 /**
  * Narrow a Workspace to the single project a relay hosting session shares with its peer.
@@ -10,6 +30,7 @@ import type { Workspace } from './types'
  * a project the source workspace did not already contain. Pure (does not mutate the input).
  */
 export function scopeWorkspaceToProject(ws: Workspace, projectId: string): Workspace {
-  const projects = ws.projects.filter((p) => p.id === projectId)
-  return { ...ws, projects, activeProjectId: projects.length > 0 ? projectId : '' }
+  const safe = sanitizeWorkspaceForRelay(ws)
+  const projects = safe.projects.filter((p) => p.id === projectId)
+  return { ...safe, projects, activeProjectId: projects.length > 0 ? projectId : '' }
 }

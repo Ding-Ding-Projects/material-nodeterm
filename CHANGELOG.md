@@ -16,6 +16,12 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Added
 
+- **First-class Windows terminal profiles.** The desktop app detects PowerShell 7, Windows
+  PowerShell, Command Prompt, Git Bash, every installed WSL distribution, and an advanced custom
+  executable. One-click creation uses the saved default; profile-aware menus can snapshot an
+  explicit choice per terminal or agent node, and headers identify the selected profile.
+- **Restart with profile…** for Windows terminal and agent nodes, behind a destructive warning
+  that the live process and persistent session will end before the node is recreated.
 - **Material 3 design tokens.** A full `--md-*` role set and a six-step shape scale in both light
   and dark themes, mapped onto the app's own palette rather than replacing it. Nothing was renamed
   or removed, so no existing surface changes appearance from this alone.
@@ -27,12 +33,22 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Changed
 
+- Windows profile ids are resolved in the trusted desktop core immediately before spawning.
+  Executable paths and argv remain private; `terminalProfileId`, custom shell selection, and
+  advanced SSH execution fields stay in the machine-local overlay and are stripped from shared
+  project files, portable exports, and peer mutations.
+- WSL profiles translate the project cwd through the exact selected distribution's `wslpath` and
+  launch it with `wsl.exe -d <distribution> --cd <linux-path>`. Missing distributions and failed
+  enumeration, translation, or launch now fail closed instead of opening a different shell or cwd.
 - Retheme onto the M3 roles: the canvas zoom/lock rail, the minimap frame, the bottom dock, the
   settings switch, the welcome screen, the notification centre and the command palette. Visual
   only — no layout, markup or behaviour changed, and every surface kept its full feature set.
 
 ### Fixed
 
+- Windows terminals now retain session-host continuity across an app close, crash, and relaunch.
+  A provisional or rejected attach is torn down, stays non-persistent, and reports its real reason
+  instead of being indexed as a working persistent terminal or replaced by a throwaway shell.
 - **Seven chrome highlights were frozen to the dark theme** and never followed the light theme or
   a user-chosen accent colour: the canvas lock button, the dock's active button, the welcome
   screen's remove-recent hover, the palette's secondary hover, the success and error toast icons,
@@ -44,6 +60,12 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 - Deleting a session from the board and from the canvas now ask the same way while kids mode is
   on. They had always differed — the canvas used the two-key confirmation, the board a single
   button — despite a comment claiming they matched.
+
+### Tests
+
+- Replaced the source-scanning shell regression with behavioural profile resolver, spawn,
+  session-host attach/socket, settings migration, creation snapshot, and machine-local stripping
+  coverage, including mutation checks for hostile ids, WSL fallback, and shared-state leakage.
 
 ## [0.3.0] — 2026-08-12
 

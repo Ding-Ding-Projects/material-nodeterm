@@ -10,7 +10,7 @@ way, while each contributes its own body content and header actions.
 
 | Kind | What it is |
 | --- | --- |
-| **Terminal** | A real shell backed by tmux. See [Session continuity](../terminals/session-continuity.md). Supports content search, AI-generated naming, markdown rendering of captured output, and clickable file/URL links in its output. |
+| **Terminal** | A real shell backed by tmux or the standalone Windows session host. See [Session continuity](../terminals/session-continuity.md). Supports content search, AI-generated naming, markdown rendering of captured output, and clickable file/URL links in its output. |
 | **Agent** | A terminal preset that launches an agent CLI (Claude Code, Codex, Gemini, opencode, Grok, or a custom command) as its first command. Adds status badges, a context-window meter, subagent cards, and (for capable agents) session renaming and conversation branching. See [Agent support](../agents/agent-support.md). |
 | **Sticky note** | A free-text, colorable note. Can be linked to a terminal or agent node to feed its text into that session as context on demand. |
 | **Group** | A real container node — other nodes can live *inside* it, and groups can nest inside groups. A group can optionally be bound to a git worktree, so every node created inside it inherits that worktree's directory. See [Source control & worktrees](../source-control/source-control-and-worktrees.md). |
@@ -27,8 +27,11 @@ rather than an in-session loop).
 
 - **Settings → Appearance** — default new-node size, which non-destructive context-menu items
   and header buttons are shown or hidden.
-- Per-node: color, title, tags, collapsed/expanded state, and (for terminal/agent nodes) which
-  shell or agent command launches in it. All of this is part of the persisted project file.
+- Per-node: color, title, tags, collapsed/expanded state, and the agent preset for agent nodes.
+  These portable values are part of the persisted project file. On Windows, a terminal or agent
+  node's selected shell profile is snapshotted separately in this machine's `LocalNodeExec`
+  overlay; it is not written to the shared project file. See
+  [Windows shell profiles](../terminals/windows-shell-profiles.md).
 
 ## Failure modes
 
@@ -63,8 +66,8 @@ rather than an in-session loop).
 
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how these nodes mount, park, and
   release memory as you navigate a large canvas.
-- [Session continuity](../terminals/session-continuity.md) — the tmux layer under terminal and
-  agent nodes.
+- [Session continuity](../terminals/session-continuity.md) — the persistent backend under terminal
+  and agent nodes.
 - [Agent support](../agents/agent-support.md) — everything specific to the agent node kind.
 - [Source control & worktrees](../source-control/source-control-and-worktrees.md) — binding a
   group node to a git worktree.

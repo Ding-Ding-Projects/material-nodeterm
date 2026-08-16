@@ -1,9 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import { dependencyEdges, launchesToFire, unmetDeps, type ArmedNode, type StatusById } from './pendingLaunch'
+import {
+  dependencyEdges,
+  launchesToFire,
+  pendingLaunchExecutionKey,
+  runPendingLaunchOnce,
+  unmetDeps,
+  type ArmedNode,
+  type StatusById
+} from './pendingLaunch'
 
+const LAUNCH_ID = '123e4567-e89b-42d3-a456-426614174000'
 const armed = (id: string, after: string[], command = `echo ${id}`): ArmedNode => ({
   id,
-  data: { pendingLaunch: { after, command } }
+  data: {
+    pendingLaunch: {
+      after,
+      launchId: LAUNCH_ID,
+      launch: { kind: 'shell-command', command }
+    }
+  }
 })
 const plain = (id: string): ArmedNode => ({ id, data: {} })
 
@@ -13,7 +28,11 @@ describe('launchesToFire', () => {
   it('fires when every dep has reported done', () => {
     const status: StatusById = { a: { state: 'done' }, b: { state: 'done' } }
     expect(launchesToFire([armed('c', ['a', 'b'])], status, live)).toEqual([
-      { id: 'c', command: 'echo c' }
+      {
+        id: 'c',
+        launchId: LAUNCH_ID,
+        launch: { kind: 'shell-command', command: 'echo c' }
+      }
     ])
   })
 
@@ -36,7 +55,11 @@ describe('launchesToFire', () => {
     // A deleted node can never report; waiting on it would strand the dependent forever.
     const status: StatusById = { a: { state: 'done' } }
     expect(launchesToFire([armed('c', ['a', 'ghost'])], status, new Set(['a', 'c']))).toEqual([
-      { id: 'c', command: 'echo c' }
+      {
+        id: 'c',
+        launchId: LAUNCH_ID,
+        launch: { kind: 'shell-command', command: 'echo c' }
+      }
     ])
   })
 
@@ -46,7 +69,56 @@ describe('launchesToFire', () => {
   })
 
   it('fires immediately when there are no deps left to wait on', () => {
-    expect(launchesToFire([armed('c', [])], {}, live)).toEqual([{ id: 'c', command: 'echo c' }])
+    expect(launchesToFire([armed('c', [])], {}, live)).toEqual([
+      {
+        id: 'c',
+        launchId: LAUNCH_ID,
+        launch: { kind: 'shell-command', command: 'echo c' }
+      }
+    ])
+  })
+})
+
+describe('runPendingLaunchOnce', () => {
+  it('admits only one of two immediate dispatches and releases after settlement', async () => {
+    const gate = { current: false }
+    let resolve!: () => void
+    const pending = new Promise<void>((done) => {
+      resolve = done
+    })
+    let executions = 0
+    const task = () => {
+      executions++
+      return pending
+    }
+
+    const first = runPendingLaunchOnce(gate, task)
+    const second = runPendingLaunchOnce(gate, task)
+    expect(first).not.toBeNull()
+    expect(second).toBeNull()
+    expect(executions).toBe(1)
+
+    resolve()
+    await first
+    expect(runPendingLaunchOnce(gate, async () => undefined)).not.toBeNull()
+  })
+
+  it('releases after a rejected dispatch without leaking the rejection', async () => {
+    const gate = { current: false }
+    await expect(
+      runPendingLaunchOnce(gate, async () => {
+        throw new Error('private transport failure')
+      })
+    ).rejects.toThrow('private transport failure')
+    expect(gate.current).toBe(false)
+  })
+})
+
+describe('pendingLaunchExecutionKey', () => {
+  it('does not collide when two local nodes carry the same valid launch id', () => {
+    expect(pendingLaunchExecutionKey('term-a', LAUNCH_ID)).not.toBe(
+      pendingLaunchExecutionKey('term-b', LAUNCH_ID)
+    )
   })
 })
 

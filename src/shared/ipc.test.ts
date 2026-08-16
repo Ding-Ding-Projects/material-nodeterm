@@ -18,6 +18,12 @@ describe('IPC channels', () => {
     expect(new Set(channels).size).toBe(channels.length)
   })
 
+  it('exposes the Windows terminal profile channels', () => {
+    expect(IPC.terminalProfilesList).toBe('terminal-profiles:list')
+    expect(IPC.terminalProfilesRefresh).toBe('terminal-profiles:refresh')
+    expect(IPC.ptyRecycleConfirmed).toBe('pty:recycle-confirmed')
+  })
+
   it('exposes the new relay tunnel host channels (distinct from the legacy remote* dialect)', () => {
     expect(IPC.relayHostStart).toBe('relay:host:start')
     expect(IPC.relayHostStop).toBe('relay:host:stop')

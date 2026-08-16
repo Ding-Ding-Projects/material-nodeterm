@@ -3,9 +3,16 @@ import type { KanbanColumn as KanbanColumnT } from '@shared/types'
 import { NODE_COLORS } from '../../state/workspace'
 import { SessionCard } from './SessionCard'
 import type { KanbanCardMeta, KanbanLabel } from '@shared/types'
-import type { KanbanCreateChoice, KanbanCreateOption, KanbanSession } from './KanbanView'
+import type {
+  KanbanCreateChoice,
+  KanbanCreateOption,
+  KanbanCreateSubmenuOption,
+  KanbanSession
+} from './KanbanView'
 import type { GitHubIssueCardView } from '@shared/github-issues'
 import { GitHubIssueCard } from './GitHubIssueCard'
+import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 
 interface KanbanColumnProps {
   /** null = the virtual Ungrouped column: fixed label, no rename/recolor/delete, header not draggable. */
@@ -29,6 +36,8 @@ interface KanbanColumnProps {
   metaOf: (nodeId: string) => KanbanCardMeta | undefined
   /** Resolved board labels for a card (the colored label chips). */
   labelsOf: (nodeId: string) => KanbanLabel[]
+  /** Stable machine-local profile lookup shared by every memoized column. */
+  terminalProfileOf: (nodeId: string) => KanbanTerminalProfilePresentation | undefined
   /** "+ New" menu entries (agents, terminal, sticky) and what to do when one is picked
    *  (columnId null = Ungrouped: no assignment). */
   createOptions: KanbanCreateOption[]
@@ -55,16 +64,22 @@ export const KanbanColumn = memo(function KanbanColumn({
   onRename, onRecolor, onDelete, onOpenCard, onCardContext, onOpenGitHub, onMoveGitHub,
   onGitHubDragStart, onLoadMoreGitHub, hasMoreGitHub,
   createOptions, onCreate, onCardDragStart, onColumnDragStart, onDragEnd, onDropOnColumn,
-  onDropAtCard
+  onDropAtCard, terminalProfileOf
 }: KanbanColumnProps) {
+  const profileText = useLocalizedVocabularyText()
   const [editingTitle, setEditingTitle] = useState(false)
   const [title, setTitle] = useState(column?.title ?? '')
   const [swatchesOpen, setSwatchesOpen] = useState(false)
   const [newMenuOpen, setNewMenuOpen] = useState(false)
+  const [activeCreateSubmenu, setActiveCreateSubmenu] = useState<string | null>(null)
   // The "+ New session" menu normally drops DOWN (top:100%); a column near the window's bottom edge
   // would push it off-screen, so we flip it UP when it doesn't fit below. Measured on open.
   const [menuUp, setMenuUp] = useState(false)
   const newMenuRef = useRef<HTMLDivElement>(null)
+  const newMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const submenuBackRef = useRef<HTMLButtonElement>(null)
+  const rootOptionRefs = useRef(new Map<string, HTMLButtonElement>())
+  const restoreRootOptionRef = useRef<string | null>(null)
   // Trello-style drop highlight: counted enter/leave (dragleave fires when crossing children).
   const [dragOverCount, setDragOverCount] = useState(0)
 
@@ -82,9 +97,28 @@ export const KanbanColumn = memo(function KanbanColumn({
     const spaceAbove = rect.top // menu top ≈ just under the button
     const spaceBelow = window.innerHeight - rect.top
     if (overflowsBelow && spaceAbove > spaceBelow) setMenuUp(true)
-  }, [newMenuOpen])
+    if (activeCreateSubmenu) {
+      submenuBackRef.current?.focus()
+    } else if (restoreRootOptionRef.current) {
+      rootOptionRefs.current.get(restoreRootOptionRef.current)?.focus()
+      restoreRootOptionRef.current = null
+    }
+  }, [newMenuOpen, activeCreateSubmenu])
 
   const colId = column?.id ?? null
+  const activeSubmenu = createOptions.find(
+    (option): option is KanbanCreateSubmenuOption =>
+      option.type === 'submenu' && option.key === activeCreateSubmenu
+  )
+  const returnToCreateRoot = (): void => {
+    if (activeCreateSubmenu) restoreRootOptionRef.current = activeCreateSubmenu
+    setActiveCreateSubmenu(null)
+  }
+  const closeCreateMenu = (): void => {
+    setActiveCreateSubmenu(null)
+    setNewMenuOpen(false)
+    newMenuButtonRef.current?.focus()
+  }
   // Binds this column's id onto the shared card-drop handler; stable while the parent's is.
   const dropAtCard = useCallback(
     (nodeId: string, side: 'before' | 'after') => onDropAtCard(colId, nodeId, side),
@@ -184,6 +218,7 @@ export const KanbanColumn = memo(function KanbanColumn({
           <SessionCard
             key={s.id}
             session={s}
+            terminalProfile={terminalProfileOf(s.id)}
             meta={metaOf(s.id)}
             labels={labelsOf(s.id)}
             onOpen={onOpenCard}
@@ -215,22 +250,84 @@ export const KanbanColumn = memo(function KanbanColumn({
       </div>
       <div className="kanban-col__footer">
         {newMenuOpen && (
-          <div ref={newMenuRef} className={menuUp ? 'kanban-col__newmenu kanban-col__newmenu--up' : 'kanban-col__newmenu'}>
-            {createOptions.map((o) => (
+          <div
+            ref={newMenuRef}
+            id={`kanban-new-menu-${colId ?? 'ungrouped'}`}
+            className={menuUp ? 'kanban-col__newmenu kanban-col__newmenu--up' : 'kanban-col__newmenu'}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') return
+              event.preventDefault()
+              event.stopPropagation()
+              if (activeSubmenu) returnToCreateRoot()
+              else closeCreateMenu()
+            }}
+          >
+            {activeSubmenu && (
               <button
-                key={o.key}
-                onClick={() => {
-                  setNewMenuOpen(false)
-                  onCreate(o.choice, colId)
-                }}
+                ref={submenuBackRef}
+                className="kanban-col__newback"
+                onClick={returnToCreateRoot}
               >
-                <span className="kanban-col__newicon">{o.icon}</span>
-                {o.label}
+                <span aria-hidden>←</span>
+                {profileText(
+                  'terminalProfiles.create.backToNewSessions',
+                  'Back to new sessions'
+                )}
               </button>
-            ))}
+            )}
+            {(activeSubmenu?.children ?? createOptions).map((option) => {
+              if (option.type === 'submenu') {
+                return (
+                  <button
+                    key={option.key}
+                    ref={(element) => {
+                      if (element) rootOptionRefs.current.set(option.key, element)
+                      else rootOptionRefs.current.delete(option.key)
+                    }}
+                    aria-haspopup="true"
+                    aria-expanded={activeCreateSubmenu === option.key}
+                    aria-controls={`kanban-new-menu-${colId ?? 'ungrouped'}`}
+                    onClick={() => setActiveCreateSubmenu(option.key)}
+                  >
+                    <span className="kanban-col__newicon">{option.icon}</span>
+                    <span className="kanban-col__newlabel">{option.label}</span>
+                    <span className="kanban-col__newchevron" aria-hidden>›</span>
+                  </button>
+                )
+              }
+              return (
+                <button
+                  key={option.key}
+                  aria-disabled={option.disabled || undefined}
+                  title={option.hint}
+                  onClick={() => {
+                    if (option.disabled) return
+                    closeCreateMenu()
+                    onCreate(option.choice, colId)
+                  }}
+                >
+                  <span className="kanban-col__newicon">{option.icon}</span>
+                  <span className="kanban-col__newlabel">
+                    {option.label}
+                    {option.disabled && option.hint && (
+                      <span className="kanban-col__newreason">{option.hint}</span>
+                    )}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )}
-        <button className="kanban-col__new" onClick={() => setNewMenuOpen((v) => !v)}>
+        <button
+          ref={newMenuButtonRef}
+          className="kanban-col__new"
+          aria-expanded={newMenuOpen}
+          aria-controls={`kanban-new-menu-${colId ?? 'ungrouped'}`}
+          onClick={() => {
+            setActiveCreateSubmenu(null)
+            setNewMenuOpen((v) => !v)
+          }}
+        >
           + New session
         </button>
       </div>

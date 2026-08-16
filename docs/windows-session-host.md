@@ -5,6 +5,9 @@ platform where a real `tmux` cannot be found), so closing the app — or the app
 longer kills every running terminal and every agent CLI mid-task. It is a standalone,
 long-lived Node process that owns the real PTYs and outlives the Electron app.
 
+This document describes the Windows desktop implementation. It does not embed Microsoft Windows
+Terminal, and it does not change the Server Edition or mobile companion.
+
 Selected automatically, per session, in this order:
 
 ```
@@ -13,8 +16,8 @@ no tmux found, tmuxEnabled       →  session host (this document)
 neither                          →  plain shell (no persistence, as before)
 ```
 
-On Windows, tmux is never found, so the session host is the default persistence backend there.
-On macOS/Linux nothing changes: if tmux is installed, it is still preferred every time.
+Stock Windows provides no native tmux, so the session host is the normal persistence backend
+there. On macOS/Linux nothing changes: if tmux is installed, it is still preferred every time.
 
 ## Why not just port tmux's approach
 
@@ -57,16 +60,41 @@ Electron main process                    Session-host process (standalone, detac
   `session-host-pty.ts` — the Electron-main-side client. `src/core` stays Electron-free
   (`no-electron.test.ts`); these files import only `net`/`fs`/`crypto` and the pure protocol/paths
   modules.
-- `src/core/pty-manager.ts` — the one file with an actual seam: `Session.sessionHost?: boolean`
+- `src/core/pty-manager.ts` — the integration seam: `Session.sessionHost?: boolean`
   marks a session-host-backed `Session`, and every call site that reaches past `session.proc` to
   run a tmux CLI command directly (`sendText`, `paneCommand`, `captureSession`, `captureSnapshot`,
   `snapshotScrollback`, `captureForResync`, the final kill in `destroySession`,
   `listNodetermSessions`) gained one `else if (!this.tmuxPath) { … session-host equivalent … }`
-  branch, in the same shape the existing `sshRemote` branch already used. `spawnSession()`'s
-  branch-selection `if/else if/else` chain gained ONE new `else if` between the tmux branch and
-  the plain-shell fallback, and the `let proc: pty.IPty` construction now has a
-  `useSessionHost` fork that constructs a `SessionHostPty` instead of calling `pty.spawn`
-  directly. Nothing else in that ~3200-line file changed.
+  branch, in the same shape the existing `sshRemote` branch already used. `spawnSession()` selects
+  this backend between the tmux branch and the plain-shell fallback, and constructs a
+  `SessionHostPty` instead of calling `pty.spawn` directly.
+
+## Windows profile resolution
+
+The profile catalog is a trusted desktop service. Its public API returns only a stable `id`,
+display label, kind, availability, and an optional unavailable reason. Executable paths and argv
+remain private. `PtyCreateOptions.profileId` crosses the desktop bridge; the trusted core validates
+and resolves it immediately before either `node-pty` or the session host spawns a process.
+
+Stable ids are `auto`, `pwsh`, `windows-powershell`, `cmd`, `git-bash`, `custom`, and one
+`wsl:<distribution>` per installed WSL distribution. `auto` is the only profile allowed to search
+down a precedence list: PowerShell 7, then Windows PowerShell, then `%COMSPEC%`/`cmd.exe`. An
+explicit unavailable or malformed profile fails; it never becomes a different shell.
+
+For WSL, distribution discovery parses the UTF-16/NUL-padded output of
+`wsl.exe --list --quiet`. The selected distribution's own `wslpath` translates the Windows project
+directory, after which launch keeps the structured `wsl.exe -d <distribution> --cd <linux-path>`
+prefix and runs a trusted distro-side cwd guard before replacing it with the configured default
+shell. The guard independently changes to the positional Linux path so a directory removed after
+translation cannot silently open in `/`. Enumeration,
+translation, and launch failures keep their real reason and perform no fallback spawn. A
+distribution name containing spaces remains one argv element.
+
+The profile id is a machine-local snapshot, not project content. `terminalProfileId`, legacy
+custom `shell`, and advanced SSH execution values are removed from shared project files, portable
+exports, and inbound canvas traffic. A shared file or peer can therefore neither inject argv nor
+select a local executable. See
+[`features/terminals/windows-shell-profiles.md`](features/terminals/windows-shell-profiles.md).
 
 ### The IPty-shim (why the integration is this small)
 
@@ -170,7 +198,7 @@ mode state:
   bracketed-paste, insert mode, origin mode, reverse-wraparound, send-focus, wraparound, the
   alt-buffer switch, AND the cursor position — all embedded directly in the returned string as
   ANSI escape sequences.
-- **The one verified gap:** `SerializeAddon` does not emit `CSI ?1006h` (SGR extended mouse
+- **The one known gap:** `SerializeAddon` does not emit `CSI ?1006h` (SGR extended mouse
   coordinates) even when mouse tracking is active — there is no separate field on the public
   `IModes` API for it to read (`mouseTrackingMode` only says which tracking *protocol* is on:
   none/x10/vt200/drag/any, not the coordinate *encoding*). Filled in explicitly by
@@ -192,6 +220,25 @@ appending after whatever was on screen before the drop). This deliberately reuse
 channel rather than wiring a dedicated `pty:resync` IPC round trip all the way up from this layer
 — a smaller, self-contained fix for what is expected to be a rare case (the host survives a client
 drop by design; only an actual host death turns into a real session loss).
+
+### A provisional attach is not a session
+
+An `attach` is provisional until the host has authenticated the connection and returned the
+correlated successful response. `PtyManager` does not index that shim, report it as persistent, or
+expose it to subscribers before `SessionHostPty.ready` resolves.
+
+If the attach is rejected, times out, or the transport fails:
+
+- the provisional shim is destroyed and never enters the persistent-session index;
+- queued bytes and a late exit from that rejected shim are ignored;
+- every caller coalesced behind the same in-flight create receives the real attach failure;
+- failed subscriber registrations are rolled back, so reconnect cannot replay a ghost attach;
+- capture or kill transport uncertainty remains an error rather than being read as absence; and
+- no plain shell or different profile is spawned as a substitute.
+
+This is deliberately fail-closed. A non-persistent fallback carrying the same node identity would
+look healthy while losing the one property this backend promises, and could run a local command in
+the wrong shell or directory.
 
 ## Lifetime
 
@@ -272,9 +319,10 @@ you chose and why") rather than an oversight.
   snapshot (`snapshotScrollback`) runs for session-host-backed sessions on the same 15-second timer
   as the tmux path, using the same on-disk format (`scrollback-store.ts` is entirely
   backend-agnostic — no changes needed there at all).
-- **A user who wants tmux-grade durability on Windows can install tmux** (WSL, MSYS2, Cygwin, a
-  native Windows tmux port) — if a real tmux is found on the resolved PATH, it still wins, exactly
-  as `findTmux()` already prefers a system tmux over anything this app bundles.
+- **A WSL profile does not turn its distribution's tmux into the Windows backend.** nodeterm
+  launches that distribution's default shell through `wsl.exe`, and the Windows session host owns
+  the resulting process. A genuinely Windows-reachable tmux found by the existing resolver still
+  follows the tmux path; a `tmux` installed only inside WSL is not on the native Windows PATH.
 - **`paneCommand`'s answer can be imprecise** when a session has multiple concurrent child
   processes (an agent CLI plus MCP servers) — see `process-tree.ts`'s doc comment. The one caller
   that depends on it (in-place agent restart) only needs "is a shell back in charge of this pane
@@ -299,45 +347,41 @@ you chose and why") rather than an oversight.
   see the protocol table's "Not implemented" note. Nothing in this app currently calls these for a
   session-host-backed node (they are gated behind `this.tmuxPath` being set), so nothing is
   silently broken; a future feature that wants one of these on Windows needs a new host verb.
-- **A cosmetic ConPTY artifact was observed, not investigated further**: killing a session-host
-  child process on Windows sometimes prints `Error: AttachConsole failed` from
-  `node-pty/lib/conpty_console_list_agent.js` to stderr during that process's own teardown. This
-  fired during manual verification (see below) AFTER every protocol operation in that run had
-  already completed and verified correctly (including the kill itself, confirmed by a follow-up
-  `hasSession` returning `false`) — it is node-pty's own ConPTY helper-process teardown, unrelated
-  to anything in this task's code, and it does not affect the host's own process exit or any
-  session's correctness. Left as a documented observation rather than "fixed" — the underlying
-  cause is inside `node-pty`, the same dependency this app already carries a documented patch for
-  on macOS (`scripts/patch-node-pty.mjs`) for an unrelated leak.
+- **ConPTY helper teardown can emit `Error: AttachConsole failed`** from
+  `node-pty/lib/conpty_console_list_agent.js`. The protocol test determines kill success from the
+  host response and follow-up session state rather than stderr text. Whether this cosmetic
+  dependency message appears in the packaged app remains part of the pending artifact run.
 
-## Verifying by hand
+## Automated verification
 
-1. `npm run host:build` (or `npm run build`, which now runs it too) — confirms
-   `out/session-host/host.cjs` exists.
-2. Spawn it directly and drive the protocol with a small Node script (connect, `hello`, `attach`,
-   `write`, `capture`, second `attach` from a new connection to confirm warm-reattach `screen`,
-   `killSession`, `hasSession` after kill). This is exactly how the implementation itself was
-   verified end-to-end during this task — a real ConPTY `cmd.exe` session, real output capture, a
-   real second-connection warm reattach that correctly returned a non-empty `screen` containing
-   prior output.
-3. On a machine with no tmux on PATH (any stock Windows install), open a terminal node in the
-   app, run something, quit the app, relaunch it — the terminal should reattach with its prior
-   output visible (via the `screen` seed) and the process should still be running, exactly like
-   the tmux backend's own promise on macOS/Linux.
-4. Check `<userData>/session-host.log` for the host's own lifecycle log (start, listen, each
-   attach/kill, grace exit) — this is the only visibility into a process with no attached console.
+The focused suites exercise behaviour rather than scan implementation source:
 
-## What was deliberately not done
+- the Windows profile resolver covers detection precedence, standard Git Bash locations, custom
+  absolute paths containing spaces, `%COMSPEC%`, unavailable executables, malformed ids, WSL
+  UTF-16/NUL output, distribution names containing spaces, and cwd-conversion failures;
+- resolver/spawn tests assert that `node-pty` and session-host creation receive only the trusted
+  launch plan, and that explicit unavailable profiles perform no fallback spawn;
+- `pty-session-host.test.ts` exercises successful creation plus provisional/rejected attach
+  teardown, coalesced callers, late events, and the persistent result;
+- `session-host-client.test.ts` uses real local sockets to exercise the hello transition,
+  correlated responses, failed-subscriber rollback, reconnect replay, and transport uncertainty;
+  and
+- workspace/node-exec tests prove `terminalProfileId` never enters shared/exported/inbound state
+  and that the local overlay survives reload.
 
-- No test suite was written for this task (explicit "ultra-speed" instruction: no new tests, no
-  test-suite run). Correctness was instead verified by hand, end-to-end, against the real built
-  bundle (see "Verifying by hand" above) — a real ConPTY session, a real second-connection warm
-  reattach, a real kill followed by a real `hasSession: false`.
-- `paneOwner`, `bracketPasteRequested`, and a standalone `paneCursor` query were not ported — see
-  "Honest limitations".
-- Windows named-pipe DACL hardening beyond Node's own defaults was not attempted — the bearer
-  token is the enforced boundary, documented as such rather than silently assumed to be perfect.
-- The relay host's `createDetached`/`attachDetached` paths were left to fall through to
-  `spawnSession()`'s new branch automatically (they call it directly with no prior async
-  pre-check), so they work, but were not separately hand-verified end-to-end through the relay
-  feature itself in this pass — only the primary create/join/reconnect/capture/kill paths were.
+The guards were mutation-checked by temporarily accepting a hostile profile, allowing a missing
+WSL distribution to fall back, and removing machine-local stripping; each corresponding focused
+test must turn red. The former source-text shell regression test is intentionally gone.
+
+## Packaged verification still owed
+
+The real Windows x64 installer must still be exercised through the required cheap headless route:
+create every available profile, verify input/output/resize/Unicode/copy/cwd and labels, relaunch
+around a long-running process, switch a node through the destructive profile warning, and record
+the picker, profile terminal, unavailable state, and post-relaunch reattachment. Until that built
+artifact evidence exists, this document makes no claim that packaged/manual verification has
+completed.
+
+`paneOwner`, `bracketPasteRequested`, the standalone `paneCursor` query, and independently audited
+Windows named-pipe DACL hardening remain outside this profile pass as described under
+"Honest limitations".

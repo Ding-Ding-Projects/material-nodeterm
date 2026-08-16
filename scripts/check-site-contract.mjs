@@ -97,6 +97,21 @@ function requireFileContains(relPath, needle, label) {
   return true
 }
 
+function requireFileOmits(relPath, needle, label) {
+  checkedCount += 1
+  const text = readText(relPath)
+  if (text == null) {
+    fail(`${label}: cannot read ${relPath}`)
+    return false
+  }
+  if (text.includes(needle)) {
+    fail(`${label}: ${relPath} still contains retired content (${needle})`)
+    return false
+  }
+  pass(`${label}: ${relPath} omits retired content`)
+  return true
+}
+
 function requireExportedFunction(relPath, fnName, label) {
   return requireFileContains(relPath, new RegExp(`export\\s+(async\\s+)?function\\s+${fnName}\\b`), label || `exports ${fnName}`)
 }
@@ -358,6 +373,48 @@ for (const slug of REQUIRED_DOC_SLUGS) {
   }
 }
 requireFileExists('site/docs/index.html', 'Documentation index page')
+
+// Windows profiles and the session host share the two existing Windows/terminal articles rather
+// than adding a third near-duplicate page. Pin the facts that the retired plain-shell copy
+// contradicted: stock Windows uses the standalone host, reboot is cold restore rather than a live
+// process, and installed-artifact evidence is still pending. Positive checks alone would let
+// somebody paste the stale paragraph back underneath the correct one, so prohibit the old claims
+// explicitly too.
+requireFileContains(
+  'site/docs/windows-support.html',
+  "nodeterm's standalone session host owns each live PTY",
+  'Windows profiles documentation: standalone session host',
+)
+requireFileContains(
+  'site/docs/windows-support.html',
+  'PowerShell 7, Windows PowerShell, Command Prompt, Git Bash, each installed WSL distribution, and an advanced custom executable',
+  'Windows profiles documentation: complete detected profile catalog',
+)
+requireFileContains(
+  'site/docs/windows-support.html',
+  'Packaged Windows interaction and capture evidence',
+  'Windows profiles documentation: packaged verification stays explicit',
+)
+requireFileOmits(
+  'site/docs/windows-support.html',
+  'fall back to a plain shell with no cross-restart continuity',
+  'Windows profiles documentation: retired plain-shell fallback claim',
+)
+requireFileContains(
+  'site/docs/terminal-sessions.html',
+  'Neither keeps that process alive through a machine reboot.',
+  'Terminal continuity documentation: reboot boundary',
+)
+requireFileContains(
+  'site/docs/terminal-sessions.html',
+  "stock Windows uses nodeterm's standalone session host",
+  'Terminal continuity documentation: Windows backend',
+)
+requireFileOmits(
+  'site/docs/terminal-sessions.html',
+  'survives an app restart and even a full machine reboot',
+  'Terminal continuity documentation: retired live-process reboot claim',
+)
 
 // ---------------------------------------------------------------------
 // 3. Dim-sum illustration assets — original SVGs, not third-party images.

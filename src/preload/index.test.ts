@@ -5,7 +5,11 @@
 // the exact invoke/on wiring the real contextBridge would expose.
 import { describe, expect, it, vi } from 'vitest'
 import { IPC } from '../shared/ipc'
-import type { NodeTerminalApi, SshPassphraseRequest } from '../shared/types'
+import type {
+  NodeTerminalApi,
+  SshPassphraseRequest,
+  TerminalLaunchIntent
+} from '../shared/types'
 
 const h = vi.hoisted(() => ({
   invoke: vi.fn(async () => undefined),
@@ -35,7 +39,76 @@ import './index'
 
 const api = h.exposed.nodeTerminal as NodeTerminalApi
 
+async function loadPreloadForPlatform(platform: NodeJS.Platform): Promise<NodeTerminalApi> {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+  try {
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+    h.exposed = {}
+    vi.resetModules()
+    await import('./index')
+    return h.exposed.nodeTerminal as NodeTerminalApi
+  } finally {
+    if (descriptor) Object.defineProperty(process, 'platform', descriptor)
+  }
+}
+
 describe('preload sshProject passphrase wiring', () => {
+  it('exposes Windows terminal profile detection on its exact channels', async () => {
+    if (process.platform === 'win32') {
+      expect(api.terminalProfiles).toBeDefined()
+      await api.terminalProfiles!.list()
+      await api.terminalProfiles!.refresh()
+      expect(h.invoke).toHaveBeenCalledWith(IPC.terminalProfilesList)
+      expect(h.invoke).toHaveBeenCalledWith(IPC.terminalProfilesRefresh)
+    } else {
+      expect(api.terminalProfiles).toBeUndefined()
+    }
+  })
+
+  it('forwards the selected profile id unchanged when creating a PTY', async () => {
+    const options = { profileId: 'wsl:Ubuntu 24.04', cols: 120, rows: 40 }
+    await api.pty.create(options)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.ptyCreate, options)
+  })
+
+  it('exposes delayed launch intent only on Windows and forwards the exact opaque IPC arguments', async () => {
+    const windowsApi = await loadPreloadForPlatform('win32')
+    const intent: TerminalLaunchIntent = {
+      kind: 'agent',
+      action: 'resume',
+      agentId: 'codex',
+      sessionId: 'thread-fixture-1'
+    }
+    const sessionId = 'live-session-fixture-1'
+    const launchId = '123e4567-e89b-42d3-a456-426614174000'
+
+    expect(windowsApi.pty.executeLaunchIntent).toBeTypeOf('function')
+    await windowsApi.pty.executeLaunchIntent!(sessionId, launchId, intent)
+    expect(h.invoke).toHaveBeenCalledWith(
+      IPC.ptyExecuteLaunchIntent,
+      sessionId,
+      launchId,
+      intent
+    )
+
+    const nonWindowsApi = await loadPreloadForPlatform('linux')
+    expect(nonWindowsApi.pty.executeLaunchIntent).toBeUndefined()
+    expect('executeLaunchIntent' in nonWindowsApi.pty).toBe(false)
+  })
+
+  it('exposes an awaited desktop recycle without changing the existing recycle path', async () => {
+    expect(api.pty.recycleConfirmed).toBeDefined()
+    const target = { profileId: 'wsl:Ubuntu 24.04', cwd: 'C:\\work tree' }
+    await api.pty.recycleConfirmed!('node-profile-switch', target)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.ptyRecycleConfirmed, 'node-profile-switch', target)
+
+    await api.pty.recycleConfirmed!('node-profile-switch-legacy')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.ptyRecycleConfirmed, 'node-profile-switch-legacy')
+
+    api.pty.recycle('node-worktree-move')
+    expect(h.send).toHaveBeenCalledWith(IPC.ptyRecycle, 'node-worktree-move')
+  })
+
   it('exposes GitHub issue data and host-control namespaces on their exact channels', async () => {
     await api.githubIssues.query({ projectId: 'p1', columnId: null, pageSize: 50 })
     await api.githubControl.saveToken('write-only-secret')

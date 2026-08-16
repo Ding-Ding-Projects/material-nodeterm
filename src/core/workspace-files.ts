@@ -103,15 +103,15 @@ export interface IndexEntryV3 {
    *  live in this same machine-local file already. */
   localExec?: LocalNodeExecMap
   /**
-   * The one-time exec migration has run for this entry: its project file has been searched once for
-   * the exec values it carried from BEFORE the trust boundary existed (a jump host's `ProxyCommand`
-   * put there by `createSshTerminalNode`), and they were hoisted into `localExec` above.
+   * The one-time exec migration has completed for this entry: its shared project file was readable
+   * and therefore could be loaded through the strip boundary and rewritten without machine-local
+   * execution fields. No value is harvested from that file; only a pre-existing `localExec` above
+   * is trusted.
    *
    * Absent = not migrated yet. Set on the first save after the upgrade for every entry whose file we
-   * could actually READ — an entry that was unavailable at that moment stays unmarked, so its values
-   * are still hoisted when the folder/server comes back. A folder adopted AFTER the upgrade is
-   * written with the flag already set, which is what keeps a cloned project.json (hostile) out of
-   * the hoist. See `hoistLegacyNodeExec`.
+   * could actually READ — an entry that was unavailable at that moment stays unmarked, so its file
+   * is stripped when the folder/server comes back. A folder adopted AFTER the upgrade is written
+   * with the flag already set. See `WorkspaceStore.execOverlay`.
    */
   execMigrated?: boolean
 }
@@ -378,7 +378,12 @@ export function splitWorkspace(
   return { index: { version: 3, activeProjectId: ws.activeProjectId, entries }, files }
 }
 
-/** Pretty, stable-order JSON for the project file (git-diffable; the index stays compact). */
+/** Pretty, stable-order JSON for the project file (git-diffable; the index stays compact).
+ *
+ * Defensively re-strip nodes here even though `projectToFile` already does it. SSH reconciliation
+ * can serialize a parsed/cache `ProjectFileV1` directly; without this last gate, a hostile remote
+ * file could be adopted and then mirrored back with its execution fields intact.
+ */
 export function serializeProjectFile(f: ProjectFileV1): string {
-  return JSON.stringify(f, null, 2)
+  return JSON.stringify({ ...f, nodes: stripSharedNodeExec(f.nodes) }, null, 2)
 }

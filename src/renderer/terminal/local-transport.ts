@@ -1,4 +1,10 @@
-import type { NodeTerminalApi, PtyCreateOptions, PtyCreateResult, RecycledInfo } from '@shared/types'
+import type {
+  NodeTerminalApi,
+  PtyCreateOptions,
+  PtyCreateResult,
+  PtyRecycleTarget,
+  RecycledInfo
+} from '@shared/types'
 import type { ClientId } from '@shared/presence'
 import type { TerminalTransport } from './transport'
 
@@ -63,6 +69,16 @@ export class LocalTransport implements TerminalTransport {
 
   recycle(persistKey: string): void {
     this.pty.recycle(persistKey)
+  }
+
+  recycleConfirmed(persistKey: string, target?: PtyRecycleTarget): Promise<void> {
+    const confirmed = this.pty.recycleConfirmed
+    if (!confirmed) {
+      return Promise.reject(
+        new Error('Confirmed persistent-session recycling is unavailable on this host.')
+      )
+    }
+    return target === undefined ? confirmed(persistKey) : confirmed(persistKey, target)
   }
 
   onData(sessionId: string, listener: (data: string) => void): () => void {

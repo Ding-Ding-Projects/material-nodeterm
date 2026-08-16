@@ -63,12 +63,17 @@ import { connectRelay, type RelayTransport } from './relay-socket'
 import { createTrustGate, type TrustGate } from './relay-trust'
 import { genKeyPair, publicKeyToB64 } from './e2ee'
 import { electronPlatform, type ElectronPlatform } from '../platform-electron'
+import {
+  authorizeRelayPtyCreate,
+  type RelayPtyCreateAuthority
+} from '../relay-pty-create'
 import { peerRegistry, unregisterPeerSink, wirePeerRegistry } from '../peer-registry'
 import { presenceHub } from '../../core/presence/hub'
 import { initCanvasSync } from '../../core/canvas-sync'
 import { initPlatform, resetPlatformForTests } from '../../core/platform'
 import { IPC } from '../../shared/ipc'
 import { decodePtyData, E_UNAUTHORIZED } from '../../shared/rpc'
+import type { CanvasNodeState, Workspace } from '../../shared/types'
 
 const decoder = new TextDecoder()
 
@@ -77,6 +82,13 @@ let flow: Array<{ id: number; sid: string; resume: boolean; owner: string }> = [
 let gone: number[] = []
 let capture = 'CURRENT SCREEN'
 let platform: ElectronPlatform
+let relayPtyAuthority: RelayPtyCreateAuthority
+
+function responseFor(frames: string[], id: number): any {
+  return frames
+    .map((frame) => JSON.parse(frame))
+    .find((message) => message.t === 'res' && message.id === id)
+}
 
 /**
  * A host session bridged to a REAL peer relay socket over an in-process transport pair. `buffered`
@@ -224,7 +236,16 @@ beforeEach(() => {
   flow = []
   gone = []
   capture = 'CURRENT SCREEN'
-  platform = electronPlatform()
+  relayPtyAuthority = {
+    node: () => ({ status: 'missing' }),
+    project: () => null,
+    defaultTerminalProfileId: () => 'auto',
+    sshRemote: () => null
+  }
+  platform = electronPlatform({
+    authorizeRelayPtyCreate: (raw, source) =>
+      authorizeRelayPtyCreate(relayPtyAuthority, raw, source)
+  })
   initPlatform(platform)
   // The BOOT wiring (src/main/index.ts:120) — wired once, with the real PtyManager in production.
   wirePeerRegistry({
@@ -340,6 +361,271 @@ describe('relay host — presence, canvas and RPC reach a bridged peer', () => {
     )
   })
 
+  it('cold-reopens an existing terminal with the host-local profile snapshot, not hostile relay argv', async () => {
+    const created: Array<{ senderId: number; options: any }> = []
+    relayPtyAuthority = {
+      node: () => ({
+        status: 'found',
+        projectId: 'proj-1',
+        node: {
+          id: 'term-local',
+          kind: 'terminal',
+          position: { x: 0, y: 0 },
+          size: { width: 640, height: 360 },
+          title: 'Trusted terminal',
+          color: '#123456',
+          group: null,
+          cwd: String.raw`C:\trusted\node`
+        },
+        localExec: { terminalProfileId: 'pwsh' },
+        projectCwd: String.raw`C:\trusted\project`
+      }),
+      project: () => null,
+      // Simulate the host default changing after this node was snapshotted and its process ended.
+      defaultTerminalProfileId: () => 'cmd',
+      sshRemote: () => null
+    }
+    platform.handleWithSender(IPC.ptyCreate, (senderId, options) => {
+      created.push({ senderId, options })
+      return { sessionId: 'trusted-session', fresh: true }
+    })
+    const s = openHostAgainstFakeRelay({ sharedProjectId: 'proj-1' })
+    await s.openMutually()
+
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req',
+      id: 21,
+      method: IPC.ptyCreate,
+      args: [{
+        cols: 80,
+        rows: 24,
+        persistKey: 'term-local',
+        profileId: 'custom',
+        shell: 'cmd.exe',
+        shellArgs: ['/d', '/s', '/c', 'echo NODETERM_RELAY_ARGV_MARKER'],
+        cwd: String.raw`C:\attacker`,
+        sshRemote: {
+          controlPath: String.raw`C:\attacker\control`,
+          conn: { host: 'attacker.example', user: 'mallory' },
+          remoteCwd: '/attacker'
+        },
+        agentLaunchIntent: {
+          kind: 'agent', action: 'start', agentId: 'claude',
+          prompt: 'NODETERM_RELAY_ARGV_MARKER'
+        },
+        launchId: 'peer-launch-id'
+      }]
+    }))
+
+    await vi.waitFor(() => expect(responseFor(s.textFrames, 21)).toMatchObject({ ok: true }))
+    expect(created).toHaveLength(1)
+    expect(created[0]!.senderId).toBe(s.session.clientId())
+    expect(created[0]!.options).toEqual({
+      cols: 80,
+      rows: 24,
+      persistKey: 'term-local',
+      cwd: String.raw`C:\trusted\node`,
+      profileId: 'pwsh'
+    })
+    expect(JSON.stringify(created)).not.toContain('NODETERM_RELAY_ARGV_MARKER')
+    expect(JSON.stringify(created)).not.toContain('attacker.example')
+  })
+
+  it('snapshots the host default only for an exact session-introduced local node, then retires its deleted id', async () => {
+    const created: any[] = []
+    relayPtyAuthority = {
+      node: () => ({ status: 'missing' }),
+      project: (projectId) =>
+        projectId === 'proj-1'
+          ? { projectId, cwd: String.raw`C:\trusted\project` }
+          : null,
+      defaultTerminalProfileId: () => 'windows-powershell',
+      sshRemote: () => null
+    }
+    platform.handle(IPC.ptyCreate, (options) => {
+      created.push(options)
+      return { sessionId: 'new-session', fresh: true }
+    })
+    const s = openHostAgainstFakeRelay({ sharedProjectId: 'proj-1' })
+    await s.openMutually()
+    const introducedNode = {
+      id: 'new-local',
+      kind: 'terminal',
+      position: { x: 1, y: 2 },
+      size: { width: 640, height: 360 },
+      title: 'New terminal',
+      color: '#123456',
+      group: null,
+      cwd: String.raw`C:\peer\requested`,
+      terminalProfileId: 'custom',
+      shell: 'cmd.exe',
+      pendingLaunch: {
+        after: [],
+        launchId: '00000000-0000-4000-8000-000000000000',
+        launch: { kind: 'shell-command', command: 'NODETERM_RELAY_ARGV_MARKER' }
+      }
+    }
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'cast', method: IPC.canvasMut,
+      args: ['proj-1', { op: 'upsert', node: introducedNode }]
+    }))
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req', id: 22, method: IPC.ptyCreate,
+      args: [{
+        cols: 90, rows: 30, persistKey: 'new-local',
+        profileId: 'custom', shell: 'cmd.exe',
+        shellArgs: ['/c', 'NODETERM_RELAY_ARGV_MARKER'],
+        agentLaunchIntent: {
+          kind: 'agent', action: 'start', agentId: 'claude',
+          prompt: 'NODETERM_RELAY_ARGV_MARKER'
+        }
+      }]
+    }))
+
+    await vi.waitFor(() => expect(responseFor(s.textFrames, 22)).toMatchObject({ ok: true }))
+    expect(created).toEqual([{
+      cols: 90,
+      rows: 30,
+      persistKey: 'new-local',
+      cwd: String.raw`C:\trusted\project`,
+      profileId: 'windows-powershell'
+    }])
+    expect(JSON.stringify(created)).not.toContain('NODETERM_RELAY_ARGV_MARKER')
+
+    // Remove and attempt to reuse the same id in the same approved session. The second upsert is
+    // not reflected/tracked, and pty:create is refused before its handler.
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'cast', method: IPC.canvasMut, args: ['proj-1', { op: 'remove', id: 'new-local' }]
+    }))
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'cast', method: IPC.canvasMut,
+      args: ['proj-1', { op: 'upsert', node: introducedNode }]
+    }))
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req', id: 23, method: IPC.ptyCreate,
+      args: [{ cols: 90, rows: 30, persistKey: 'new-local' }]
+    }))
+
+    await vi.waitFor(() =>
+      expect(responseFor(s.textFrames, 23)).toMatchObject({
+        ok: false,
+        error: { code: 'E_FORBIDDEN' }
+      })
+    )
+    expect(created).toHaveLength(1)
+  })
+
+  it('refuses a cross-project introduced id before PTY creation', async () => {
+    const create = vi.fn()
+    relayPtyAuthority = {
+      node: () => ({ status: 'missing' }),
+      project: (projectId) => ({ projectId, cwd: '/trusted' }),
+      defaultTerminalProfileId: () => 'auto',
+      sshRemote: () => null
+    }
+    platform.handle(IPC.ptyCreate, create)
+    const s = openHostAgainstFakeRelay({ sharedProjectId: 'proj-1' })
+    await s.openMutually()
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'cast', method: IPC.canvasMut,
+      args: ['proj-2', {
+        op: 'upsert',
+        node: {
+          id: 'cross-project', kind: 'terminal', position: { x: 0, y: 0 },
+          size: { width: 640, height: 360 }, title: 'Cross', color: '#123456', group: null
+        }
+      }]
+    }))
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req', id: 24, method: IPC.ptyCreate,
+      args: [{ cols: 80, rows: 24, persistKey: 'cross-project' }]
+    }))
+
+    await vi.waitFor(() =>
+      expect(responseFor(s.textFrames, 24)).toMatchObject({ ok: false, error: { code: 'E_FORBIDDEN' } })
+    )
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('derives SSH launch state from the host binding and refuses a disconnected binding', async () => {
+    const trustedSsh = {
+      server: { host: 'trusted.example', user: 'alice', port: 2222 },
+      remoteCwd: '/srv/project'
+    }
+    const trustedRemote = {
+      controlPath: '/trusted/control.sock',
+      conn: trustedSsh.server,
+      remoteCwd: '/srv/node',
+      hookEndpointPath: '/trusted/hooks.env'
+    }
+    let connected = true
+    relayPtyAuthority = {
+      node: (persistKey) => ({
+        status: 'found',
+        projectId: 'ssh-project',
+        node: {
+          id: persistKey,
+          kind: 'terminal',
+          position: { x: 0, y: 0 },
+          size: { width: 640, height: 360 },
+          title: 'Remote',
+          color: '#123456',
+          group: null,
+          cwd: '/srv/node',
+          sshRemoteTmux: true
+        },
+        projectSsh: trustedSsh
+      }),
+      project: () => null,
+      defaultTerminalProfileId: () => 'cmd',
+      sshRemote: () => connected ? trustedRemote : null
+    }
+    const created: any[] = []
+    platform.handle(IPC.ptyCreate, (options) => {
+      created.push(options)
+      return { sessionId: 'remote-session', fresh: true }
+    })
+    const s = openHostAgainstFakeRelay({ sharedProjectId: 'ssh-project' })
+    await s.openMutually()
+    const forged = {
+      cols: 80,
+      rows: 24,
+      persistKey: 'ssh-node',
+      profileId: 'custom',
+      shell: 'cmd.exe',
+      shellArgs: ['/c', 'NODETERM_RELAY_ARGV_MARKER'],
+      sshRemote: {
+        controlPath: '/attacker/control',
+        conn: { host: 'attacker.example', user: 'mallory', extraArgs: '-o ProxyCommand=marker' },
+        remoteCwd: '/attacker'
+      }
+    }
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req', id: 25, method: IPC.ptyCreate, args: [forged]
+    }))
+
+    await vi.waitFor(() => expect(responseFor(s.textFrames, 25)).toMatchObject({ ok: true }))
+    expect(created).toEqual([{
+      cols: 80,
+      rows: 24,
+      persistKey: 'ssh-node',
+      cwd: '/srv/node',
+      sshRemote: trustedRemote,
+      requireRemote: true
+    }])
+    expect(JSON.stringify(created)).not.toContain('NODETERM_RELAY_ARGV_MARKER')
+    expect(JSON.stringify(created)).not.toContain('attacker.example')
+
+    connected = false
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req', id: 26, method: IPC.ptyCreate, args: [{ ...forged, persistKey: 'ssh-offline' }]
+    }))
+    await vi.waitFor(() =>
+      expect(responseFor(s.textFrames, 26)).toMatchObject({ ok: false, error: { code: 'E_FORBIDDEN' } })
+    )
+    expect(created).toHaveLength(1)
+  })
+
   it('a peer CAST is attributed to the peer clientId', async () => {
     const casts: Array<[number, string]> = []
     platform.onWithSender('pty:write', (clientId: number, data: string) => casts.push([clientId, data]))
@@ -353,7 +639,7 @@ describe('relay host — presence, canvas and RPC reach a bridged peer', () => {
 })
 
 describe('relay host — workspace:load is scoped to the shared project', () => {
-  const threeProjectWorkspace = () => ({
+  const threeProjectWorkspace = (): Workspace => ({
     version: 2,
     activeProjectId: 'proj-0',
     projects: [
@@ -361,6 +647,65 @@ describe('relay host — workspace:load is scoped to the shared project', () => 
       { id: 'proj-1', name: 'one', color: '#111', nodes: [], viewport: { x: 0, y: 0, zoom: 1 } },
       { id: 'proj-2', name: 'two', color: '#222', nodes: [], viewport: { x: 0, y: 0, zoom: 1 } }
     ]
+  })
+
+  it('an approved relay workspace:save is forbidden before the host save handler runs', async () => {
+    const saved: Workspace[] = []
+    platform.handle(IPC.workspaceSave, async (workspace: Workspace) => {
+      saved.push(workspace)
+    })
+    const s = openHostAgainstFakeRelay({ sharedProjectId: 'proj-1' })
+    await s.openMutually()
+
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req',
+      id: 6,
+      method: IPC.workspaceSave,
+      args: [threeProjectWorkspace()]
+    }))
+
+    await vi.waitFor(() =>
+      expect(responseFor(s.textFrames, 6)).toEqual({
+        t: 'res',
+        id: 6,
+        ok: false,
+        error: {
+          code: 'E_FORBIDDEN',
+          message: 'machine-local desktop operation is not available to relay peers'
+        }
+      })
+    )
+    expect(saved).toEqual([])
+  })
+
+  it('an approved relay cannot invoke the host semantic launch API', async () => {
+    const launches: unknown[] = []
+    platform.handle(IPC.ptyExecuteLaunchIntent, async (request: unknown) => {
+      launches.push(request)
+      return { ok: true }
+    })
+    const s = openHostAgainstFakeRelay({ sharedProjectId: 'proj-1' })
+    await s.openMutually()
+
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req',
+      id: 61,
+      method: IPC.ptyExecuteLaunchIntent,
+      args: [{ persistKey: 'term-1', launchId: 'host-only', launch: { kind: 'shell-command', command: 'cmd.exe /c marker' } }]
+    }))
+
+    await vi.waitFor(() =>
+      expect(responseFor(s.textFrames, 61)).toEqual({
+        t: 'res',
+        id: 61,
+        ok: false,
+        error: {
+          code: 'E_FORBIDDEN',
+          message: 'machine-local desktop operation is not available to relay peers'
+        }
+      })
+    )
+    expect(launches).toEqual([])
   })
 
   it('returns ONLY the shared project (activeProjectId retargeted) over a scoped session', async () => {
@@ -405,6 +750,112 @@ describe('relay host — workspace:load is scoped to the shared project', () => 
       expect(res.result.projects.map((p: any) => p.id)).toEqual(['proj-0', 'proj-1', 'proj-2'])
       expect(res.result.activeProjectId).toBe('proj-0')
     })
+  })
+
+  it.each([
+    ['a scoped session', 'proj-1'],
+    ['an unscoped session', undefined]
+  ])('strips machine-local execution state for %s', async (_label, sharedProjectId) => {
+    const workspace = threeProjectWorkspace()
+    const localNode: CanvasNodeState = {
+      id: 'term-1',
+      kind: 'terminal',
+      position: { x: 1, y: 2 },
+      size: { width: 640, height: 360 },
+      title: 'Keep this title',
+      color: '#abcdef',
+      group: null,
+      cwd: 'C:\\work\\project',
+      shell: 'pwsh.exe',
+      terminalProfileId: 'wsl:Ubuntu 24.04',
+      ssh: {
+        host: 'example.internal',
+        user: 'alice',
+        extraArgs: '-o ProxyCommand=corp-proxy %h',
+        execTrusted: true
+      }
+    }
+    workspace.projects[1].nodes = [localNode]
+    platform.handle(IPC.workspaceLoad, async () => workspace)
+    const s = openHostAgainstFakeRelay({ sharedProjectId })
+    await s.openMutually()
+
+    s.peerSendsTunnelText(JSON.stringify({ t: 'req', id: 10, method: IPC.workspaceLoad, args: [] }))
+    await vi.waitFor(() => {
+      const res = JSON.parse(s.textFrames.at(-1)!)
+      const project = res.result.projects.find((p: any) => p.id === 'proj-1')
+      expect(project.nodes[0]).toMatchObject({
+        id: 'term-1',
+        title: 'Keep this title',
+        cwd: 'C:\\work\\project',
+        ssh: { host: 'example.internal', user: 'alice' }
+      })
+      expect(project.nodes[0].shell).toBeUndefined()
+      expect(project.nodes[0].terminalProfileId).toBeUndefined()
+      expect(project.nodes[0].ssh.extraArgs).toBeUndefined()
+      expect(project.nodes[0].ssh.execTrusted).toBeUndefined()
+    })
+
+    // Sanitization belongs at egress; the trusted host workspace remains available to its renderer.
+    expect(localNode.shell).toBe('pwsh.exe')
+    expect(localNode.terminalProfileId).toBe('wsl:Ubuntu 24.04')
+    expect(localNode.ssh?.extraArgs).toBe('-o ProxyCommand=corp-proxy %h')
+    expect(localNode.ssh?.execTrusted).toBe(true)
+  })
+
+  it('sanitizes workspace:probe-folder results before they cross the approved relay', async () => {
+    const probed: CanvasNodeState = {
+      id: 'probe-term',
+      kind: 'terminal',
+      position: { x: 0, y: 0 },
+      size: { width: 640, height: 360 },
+      title: 'Probe',
+      color: '#123456',
+      group: null,
+      shell: 'cmd.exe',
+      terminalProfileId: 'custom',
+      pendingLaunch: {
+        after: [],
+        launchId: '00000000-0000-4000-8000-000000000000',
+        launch: { kind: 'shell-command', command: 'NODETERM_PROBE_MARKER' }
+      },
+      ssh: {
+        host: 'trusted.example',
+        user: 'alice',
+        extraArgs: '-o ProxyCommand=NODETERM_PROBE_MARKER',
+        execTrusted: true
+      }
+    }
+    const project = {
+      id: 'probe-project',
+      name: 'Probed',
+      color: '#123456',
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [probed]
+    }
+    platform.handle(IPC.workspaceProbeFolder, async () => project)
+    const s = openHostAgainstFakeRelay()
+    await s.openMutually()
+
+    s.peerSendsTunnelText(JSON.stringify({
+      t: 'req', id: 27, method: IPC.workspaceProbeFolder, args: ['/trusted/project']
+    }))
+
+    await vi.waitFor(() => expect(responseFor(s.textFrames, 27)).toMatchObject({ ok: true }))
+    expect(responseFor(s.textFrames, 27).result.nodes).toEqual([{
+      id: 'probe-term',
+      kind: 'terminal',
+      position: { x: 0, y: 0 },
+      size: { width: 640, height: 360 },
+      title: 'Probe',
+      color: '#123456',
+      group: null,
+      ssh: { host: 'trusted.example', user: 'alice' }
+    }])
+    expect(JSON.stringify(responseFor(s.textFrames, 27))).not.toContain('NODETERM_PROBE_MARKER')
+    // Egress-only: the host object remains available to its native renderer/store.
+    expect(probed.shell).toBe('cmd.exe')
+    expect(probed.pendingLaunch).toBeDefined()
   })
 })
 

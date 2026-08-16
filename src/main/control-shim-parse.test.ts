@@ -15,6 +15,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { CONTROL_SHIM_SCRIPT } from './canvas-control-core'
+import {
+  POSIX_TEST_SHELL,
+  posixTestEnvPath,
+  posixTestScriptArgs
+} from '../core/test-posix-shell'
 
 let dir = ''
 
@@ -22,17 +27,21 @@ let dir = ''
 const run = (args: string[]): string[] => {
   const log = path.join(dir, 'argv.log')
   fs.writeFileSync(log, '')
-  execFileSync('sh', [path.join(dir, 'shim.sh'), ...args], {
-    env: {
-      PATH: `${path.join(dir, 'bin')}:${process.env.PATH ?? ''}`,
-      NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_HOOK_PORT: '1',
-      NODETERM_NODE_ID: 'n1',
-      NT_ARGV_LOG: log,
-      HOME: dir
-    },
-    encoding: 'utf8'
-  })
+  execFileSync(
+    POSIX_TEST_SHELL,
+    posixTestScriptArgs(path.join(dir, 'shim.sh'), args, [path.join(dir, 'bin')]),
+    {
+      env: {
+        PATH: posixTestEnvPath([path.join(dir, 'bin')]),
+        NODETERM_CANVAS_CONTROL: '1',
+        NODETERM_HOOK_PORT: '1',
+        NODETERM_NODE_ID: 'n1',
+        NT_ARGV_LOG: log,
+        HOME: dir
+      },
+      encoding: 'utf8'
+    }
+  )
   // One argv element per line; keep only the translated pairs (`nodeId=…` and curl's own flags
   // are not part of what this file is about).
   return fs

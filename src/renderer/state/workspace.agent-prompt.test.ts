@@ -31,6 +31,43 @@ describe('createAgentNode — the argv prompt separator', () => {
   })
 })
 
+describe('createAgentNode — shell-independent launch intent', () => {
+  it('keeps spaces, apostrophes, Windows metacharacters, and Unicode as inert prompt data', () => {
+    const prompt = "  O'Brien & %PATH% ! ^ | < > $(`whoami`) 你好 🚀  "
+    const node = createAgentNode(
+      'claude',
+      0,
+      undefined,
+      undefined,
+      prompt,
+      undefined,
+      undefined,
+      'plan'
+    )
+    expect(node.data.agentLaunchIntent).toEqual({
+      kind: 'agent',
+      action: 'start',
+      agentId: 'claude',
+      prompt: "O'Brien & %PATH% ! ^ | < > $(`whoami`) 你好 🚀",
+      permissionMode: 'plan'
+    })
+  })
+
+  it('carries semantic prompts for every builtin without renderer-selected shell syntax', () => {
+    for (const agentId of ['claude', 'codex', 'gemini', 'opencode', 'grok'] as const) {
+      expect(createAgentNode(agentId, 0, undefined, undefined, "say 'hello' & exit").data)
+        .toMatchObject({
+          agentLaunchIntent: {
+            kind: 'agent',
+            action: 'start',
+            agentId,
+            prompt: "say 'hello' & exit"
+          }
+        })
+    }
+  })
+})
+
 /**
  * The separator and the permission-mode flag interact, and pinning each one alone does not catch it:
  * `withPermissionMode` appends LAST, and `--` means END OF OPTIONS. Appended last, the flag lands

@@ -12,6 +12,8 @@ import { BoardLogPanel } from './BoardLogPanel'
 import { CardMetaBar } from './CardMetaBar'
 import { ModalTerminal } from './ModalTerminal'
 import { BrowserSurface } from '../../nodes/BrowserSurface'
+import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
+import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 
 interface CardModalProps {
   session: KanbanSession
@@ -29,12 +31,68 @@ interface CardModalProps {
   onEditSticky: (text: string) => void
   /** Browser navigation write-through (only called for kind 'browser'). */
   onBrowserNav: (patch: { url?: string; title?: string }) => void
+  /** Trusted profile display data for a local Windows terminal/agent card. */
+  terminalProfile?: KanbanTerminalProfilePresentation
+}
+
+/** Compact profile identity in the modal header; unavailable and unknown are never conflated. */
+export function CardModalTerminalProfile({
+  profile
+}: {
+  profile?: KanbanTerminalProfilePresentation
+}): JSX.Element | null {
+  const profileText = useLocalizedVocabularyText()
+  if (!profile) return null
+  const status =
+    profile.availability === 'available'
+      ? profileText('terminalProfiles.header.statusAvailable', 'available')
+      : profile.availability === 'unavailable'
+        ? profileText('terminalProfiles.header.statusUnavailable', 'unavailable')
+        : profileText('terminalProfiles.header.statusUnknown', 'availability unknown')
+  const ariaLabel = profile.hint
+    ? profileText(
+        'terminalProfiles.header.ariaLabelWithHint',
+        'Terminal profile: {profile}, {status}: {hint}',
+        { profile: profile.label, status, hint: profile.hint }
+      )
+    : profileText('terminalProfiles.header.ariaLabel', 'Terminal profile: {profile}, {status}', {
+        profile: profile.label,
+        status
+      })
+  return (
+    <span
+      className={`kanban-modal__profile kanban-modal__profile--${profile.availability}`}
+      title={
+        profile.hint ??
+        profileText('terminalProfiles.header.title', 'Terminal profile: {profile}', {
+          profile: profile.label
+        })
+      }
+      aria-label={ariaLabel}
+    >
+      <span>{profile.label}</span>
+      {profile.availability !== 'available' && (
+        <span className="kanban-modal__profile-status">{status}</span>
+      )}
+    </span>
+  )
 }
 
 /** Trello-style card popup over the board. Scrim click / Esc close it; the board (and the
  *  canvas under it) stay mounted. Terminal cards carry the node header's actions too:
  *  search / dictate / AI-name / markdown view (the node itself is hidden under the board). */
-export function CardModal({ session, columnTitle, board, onChangeBoard, onClose, onOpenCanvas, onRename, onEditSticky, onBrowserNav }: CardModalProps) {
+export function CardModal({
+  session,
+  columnTitle,
+  board,
+  onChangeBoard,
+  onClose,
+  onOpenCanvas,
+  onRename,
+  onEditSticky,
+  onBrowserNav,
+  terminalProfile
+}: CardModalProps) {
   const { api } = useSession()
   const idRef = useRef<string>()
   if (!idRef.current) idRef.current = nextDialogId()
@@ -128,6 +186,7 @@ export function CardModal({ session, columnTitle, board, onChangeBoard, onClose,
               {session.title}
             </span>
           )}
+          {isTerminal && <CardModalTerminalProfile profile={terminalProfile} />}
           <span className="kanban-modal__column">{columnTitle ?? 'Ungrouped'}</span>
           {isTerminal && (
             <>
@@ -145,7 +204,11 @@ export function CardModal({ session, columnTitle, board, onChangeBoard, onClose,
                 className="kanban-modal__action"
                 title="Dictate into this terminal"
                 onClick={() =>
-                  window.dispatchEvent(new CustomEvent('nodeterm:dictate', { detail: { nodeId: session.id } }))
+                  window.dispatchEvent(
+                    new CustomEvent('nodeterm:dictate', {
+                      detail: { nodeId: session.id }
+                    })
+                  )
                 }
               >
                 <IconMic />
@@ -197,6 +260,7 @@ export function CardModal({ session, columnTitle, board, onChangeBoard, onClose,
                     spawn={session.spawn}
                     searchOpen={searchOpen}
                     onCloseSearch={() => setSearchOpen(false)}
+                    onOpenCanvas={onOpenCanvas}
                   />
                 ) : isBrowser ? (
                   // A live browser webview seeded with the node's URL; navigation persists back to

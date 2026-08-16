@@ -12,11 +12,15 @@ export const IPC = {
    *  on every canvas, so co-viewers get the restart notice (`ptyRecycled`) instead of the
    *  permanent, un-respawnable `ptyClosed`. */
   ptyRecycle: 'pty:recycle',
+  /** Desktop-only awaited recycle path used after an explicit destructive-action confirmation. */
+  ptyRecycleConfirmed: 'pty:recycle-confirmed',
   ptyGenerateName: 'pty:generate-name',
   ptyGenerateGroupName: 'pty:generate-group-name',
   ptyCapture: 'pty:capture',
   ptyReadScrollback: 'pty:read-scrollback',
   ptySendText: 'pty:send-text',
+  /** Opaque semantic agent launch; the rendered shell command never crosses this channel. */
+  ptyExecuteLaunchIntent: 'pty:execute-launch-intent',
   ptyTmuxStatus: 'pty:tmux-status',
   /** The foreground command of a node's tmux pane (`#{pane_current_command}`) — how the in-place
    *  agent restart sees that the CLI has exited and a shell owns the pane again. */
@@ -32,6 +36,8 @@ export const IPC = {
    *  administrator-privileges osascript (macOS's own password dialog). Resolves
    *  `PtyLimitFixResult`. NEVER invoked on the app's own initiative — see main/ptmx-limit.ts. */
   ptyRaiseDeviceLimit: 'pty:raise-device-limit',
+  terminalProfilesList: 'terminal-profiles:list',
+  terminalProfilesRefresh: 'terminal-profiles:refresh',
   claudeReadTranscript: 'claude:read-transcript',
   chatReadTranscript: 'chat:read-transcript',
   claudeAccountsAdd: 'claude-accounts:add',

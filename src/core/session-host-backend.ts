@@ -5,9 +5,13 @@
 // see docs/windows-session-host.md for how each of these maps onto the underlying protocol.
 
 import { platform } from './platform'
-import { SessionHostClient } from './session-host-client'
+import {
+  SessionHostClient,
+  SessionHostProtocolCompatibilityError
+} from './session-host-client'
 import { SessionHostPty } from './session-host-pty'
-import type { SessionHostSpawnOptions } from '../session-host/protocol'
+import type { ExecuteLaunchResult, SessionHostSpawnOptions } from '../session-host/protocol'
+import type { PreparedAgentLaunch } from './agent-launch'
 
 let client: SessionHostClient | null = null
 
@@ -51,6 +55,13 @@ export function createSessionHostPty(
   return new SessionHostPty(getClient(), name, spawn, scrollback)
 }
 
+/** Atomically attach to an already-running host session without resolving or transmitting any
+ * spawn profile. If the session exits before this reaches the host, `ready` rejects and no shell
+ * is created. This is the warm cross-process path used before profile/cwd resolution. */
+export function attachExistingSessionHostPty(name: string): SessionHostPty {
+  return new SessionHostPty(getClient(), name, null, 0)
+}
+
 /** Background write — works whether or not this process currently has a live client for `name`,
  *  exactly like `sendText`'s tmux `send-keys -t <name>` needs no attached client. */
 export async function sessionHostSendKeys(name: string, text: string, enter: boolean): Promise<boolean> {
@@ -71,12 +82,31 @@ export async function sessionHostCapture(name: string, full: boolean): Promise<s
   return getClient().capture(name, full)
 }
 
+/** Execute already-rendered trusted input through the persistent generation's exactly-once
+ * launch ledger. The plan never crosses preload/renderer/relay boundaries. */
+export async function sessionHostExecuteLaunch(
+  name: string,
+  launchId: string,
+  plan: PreparedAgentLaunch
+): Promise<ExecuteLaunchResult> {
+  return getClient().executeLaunch(name, launchId, plan)
+}
+
 /** The one call that actually ENDS a session (as opposed to `SessionHostPty.kill()`, which only
  *  detaches). Mirrors `tmux kill-session -t <name>` exactly, and is called from the same place
  *  (`destroySession`'s final kill block). */
-export async function sessionHostKillSession(name: string): Promise<void> {
-  return getClient().killSession(name)
+export async function sessionHostKillSession(
+  name: string,
+  options: {
+    reserveReplacement?: boolean
+    requireV2?: boolean
+    expectedAbsent?: boolean
+  } = {}
+): Promise<void> {
+  return getClient().killSession(name, options)
 }
+
+export { SessionHostProtocolCompatibilityError }
 
 /** `tmux has-session`'s equivalent — currently unused by the create path (which gets `fresh`
  *  straight from the real attach-or-create round trip instead, via `SessionHostPty.ready`) but

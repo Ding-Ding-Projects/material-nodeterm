@@ -115,6 +115,42 @@ describe('ws endpoint', () => {
     ws.close()
   })
 
+  it('keeps authenticated Server Edition workspace:save behavior and payload unchanged', async () => {
+    const saved: unknown[] = []
+    platform.handle(IPC.workspaceSave, async (workspace: unknown) => {
+      saved.push(workspace)
+    })
+    const workspace = {
+      version: 2,
+      activeProjectId: 'project-1',
+      projects: [{
+        id: 'project-1',
+        name: 'Server project',
+        color: '#123456',
+        viewport: { x: 10, y: 20, zoom: 1 },
+        nodes: [{ id: 'term-1', shell: 'bash', terminalProfileId: 'custom' }]
+      }]
+    }
+    const ws = await connect({ cookie, origin: `http://127.0.0.1:${port}` })
+
+    ws.send(JSON.stringify({
+      t: 'req',
+      id: 71,
+      method: IPC.workspaceSave,
+      args: [workspace]
+    }))
+
+    await until(
+      () => received(ws).some((frame) => {
+        const message = JSON.parse(frame)
+        return message.t === 'res' && message.id === 71 && message.ok === true
+      }),
+      'workspace:save response'
+    )
+    expect(saved).toEqual([workspace])
+    ws.close()
+  })
+
   it('survives a receiver protocol error on one connection; others keep working', async () => {
     platform.handle('echo:x', (v: string) => `got:${v}`)
     const ws1 = await connect({ cookie, origin: `http://127.0.0.1:${port}` })

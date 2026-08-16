@@ -17,12 +17,13 @@
 // happens to find already passes cleanly on a codebase that has NONE of the
 // features it should have, because it never looked for anything by name — it
 // can only be surprised by a match, never by an absence it didn't think to
-// check. Every row in FEATURES below names a REAL required file, an exported
-// symbol, a documentation article, and — where the feature has one — a
-// settings-sidebar section id and sidebar icon key, and asserts each is
-// PRESENT. When a new canonical feature is added to the desktop app, add its
-// row here in the same change, or this guard will not know to look for it,
-// and a codebase with that feature silently removed would keep passing.
+// check. Every row in FEATURES below names its real implementation and docs,
+// plus the focused tests, localized copy, persistence, built-artifact
+// interaction, captures, and settings wiring its contract needs. A pending
+// required evidence field is red, not silently accepted. When a new canonical
+// feature is added to the desktop app, add its row here in the same change, or
+// this guard will not know to look for it, and a codebase with that feature
+// silently removed would keep passing.
 //
 // Each settings-backed feature is also checked for being WIRED, not just
 // existing: its section id must be reachable from a *visible* settings
@@ -184,6 +185,7 @@ function requireSettingsSection(sectionId, label) {
 // FEATURES — one row per canonical desktop-app feature. Each row asserts:
 //   - every implementation file listed exists
 //   - every contentCheck substring/regex is present in the named file
+//   - every focused behavioural test listed exists and keeps its named suite boundary
 //   - (optional) the settings section id + sidebar icon are wired
 //   - (optional) a component is actually referenced from its real consumer,
 //     not merely present on disk
@@ -209,6 +211,102 @@ const FEATURES = [
     ],
     contentChecks: [['src/core/session-host-backend.ts', 'export function sessionHostSupported']],
     docs: ['docs/windows-session-host.md'],
+  },
+  {
+    id: 'windows-terminal-profiles',
+    label: 'First-class Windows terminal profiles',
+    implementation: {
+      files: [
+        'src/core/windows-terminal-profiles.ts',
+        'src/renderer/components/settings/sections/ShellSection.tsx',
+        'src/renderer/lib/terminal-profile-actions.ts',
+        'src/renderer/lib/terminal-creation-surfaces.ts',
+        'src/renderer/canvas/Canvas.tsx',
+        'src/shared/node-exec.ts',
+      ],
+      contentChecks: [
+        ['src/core/windows-terminal-profiles.ts', /^export class WindowsTerminalProfileService\b/m],
+        ['src/renderer/components/settings/sections/ShellSection.tsx', /^export function ShellSection\b/m],
+        ['src/renderer/lib/terminal-profile-actions.ts', /^export async function recycleThenApplyTerminalProfile\b/m],
+        ['src/renderer/lib/terminal-creation-surfaces.ts', /^export function terminalProfileCreationActions\b/m],
+        ['src/renderer/canvas/Canvas.tsx', /^function terminalCreationOptionsFor\b/m],
+        ['src/shared/node-exec.ts', /^\s*terminalProfileId\?: string\s*$/m],
+      ],
+    },
+    localizedCopy: {
+      status: 'verified',
+      files: [
+        'src/shared/i18n/catalog.ts',
+        'src/renderer/lib/personalVocabulary/useLocalizedVocabularyText.ts',
+        'src/renderer/components/settings/sections/ShellSection.tsx',
+        'src/renderer/components/Dock.tsx',
+        'src/renderer/components/kanban/KanbanView.tsx',
+        'src/renderer/components/kanban/SessionCard.tsx',
+        'src/renderer/nodes/TerminalNode.tsx',
+      ],
+      contentChecks: [
+        ['src/shared/i18n/catalog.ts', /^\s*'terminalProfiles\.restart\.confirmDescription':\s*\{/m],
+        ['src/renderer/components/settings/sections/ShellSection.tsx', /useLocalizedVocabularyText\(\)/],
+        ['src/renderer/components/Dock.tsx', /terminalProfiles\.create\.menuLabel/],
+        ['src/renderer/components/kanban/KanbanView.tsx', /terminalProfiles\.restart\.progress/],
+        ['src/renderer/components/kanban/SessionCard.tsx', /terminalProfiles\.header\.ariaLabelWithHint/],
+        ['src/renderer/nodes/TerminalNode.tsx', /terminalProfiles\.error\.nodeRecovery/],
+      ],
+      tests: [
+        ['src/shared/i18n/catalog.terminal-profiles.test.ts', /^\s*describe\((['"])Windows terminal-profile localization catalog\1,\s*\(\)\s*=>\s*\{/m],
+        ['src/renderer/components/Dock.terminal-profiles.test.tsx', /^\s*it\((['"])renders profile controls in Cantonese through the shipped language catalog\1,/m],
+        ['src/renderer/components/Dock.terminal-profiles.test.tsx', /^\s*it\((['"])applies personal vocabulary to localized profile prose without rewriting profile facts\1,/m],
+        ['src/renderer/components/kanban/SessionCard.terminal-profile.test.tsx', /^\s*it\((['"])shows a localized accessible profile chip on an agent card without rewriting its dynamic label\1,/m],
+      ],
+    },
+    persistence: {
+      files: ['src/core/settings-store.ts', 'src/shared/node-exec.ts'],
+      contentChecks: [
+        ['src/core/settings-store.ts', 'defaultTerminalProfileId'],
+        ['src/shared/node-exec.ts', /^\s*terminalProfileId\?: string\s*$/m],
+      ],
+      tests: [
+        ['src/core/settings-store.test.ts', /^\s*describe\((['"])legacy defaultShell migration to Windows terminal profiles\1,\s*\(\)\s*=>\s*\{/m],
+        ['src/renderer/state/workspace.terminal-profiles.test.ts', /^\s*describe\((['"])terminal profile workspace propagation\1,\s*\(\)\s*=>\s*\{/m],
+        ['src/shared/node-exec.test.ts', /^\s*it\((['"])removes shell, terminal profile, pending launch, and ssh\.extraArgs before a project file is written\1,\s*\(\)\s*=>\s*\{/m],
+      ],
+    },
+    focusedTests: [
+      ['src/core/windows-terminal-profiles.test.ts', /^\s*describe\((['"])WindowsTerminalProfileService built-in resolution\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/core/pty-terminal-profiles.test.ts', /^\s*describe\((['"])PtyManager trusted Windows profile spawn boundary\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/renderer/components/settings/sections/ShellSection.test.tsx', /^\s*describe\((['"])ShellSection Windows terminal profiles\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/renderer/state/workspace.terminal-profiles.test.ts', /^\s*describe\((['"])terminal profile snapshots on node creation\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/renderer/lib/terminal-profile-actions.test.ts', /^\s*describe\((['"])terminal profile UI actions\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/renderer/lib/terminal-creation-surfaces.test.ts', /^\s*describe\((['"])terminal creation surface funnels\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/renderer/components/CommandPalette.terminal-creation.test.tsx', /^\s*describe\((['"])CommandPalette terminal creation funnel\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/renderer/components/ContextMenu.terminal-creation.test.tsx', /^\s*describe\((['"])ContextMenu terminal creation funnel\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/renderer/components/SessionsSidebar.terminal-creation.test.tsx', /^\s*describe\((['"])SessionsSidebar terminal creation\1,\s*\(\)\s*=>\s*\{/m],
+      ['src/core/windows-terminal-profiles.realwindows.test.ts', /^\s*suite\((['"])REAL Windows terminal profiles \(explicit Electron-as-Node acceptance\)\1,\s*\(\)\s*=>\s*\{/m],
+    ],
+    builtArtifactInteraction: {
+      status: 'pending',
+      reason: 'the current built-artifact interaction harness has no Windows profile picker, spawn, restart, or relaunch assertion',
+    },
+    captures: {
+      status: 'pending',
+      manifest: 'docs/assets/shots/capture-manifest.json',
+      requiredIds: [
+        'windows-terminal-profile-picker',
+        'windows-terminal-profile-terminal',
+        'windows-terminal-profile-unavailable',
+        'windows-terminal-profile-reattached',
+      ],
+      reason: 'the capture manifest does not yet contain real packaged evidence for the required Windows profile states',
+    },
+    settingsSection: 'shell',
+    wired: {
+      file: 'src/renderer/components/settings/SettingsPage.tsx',
+      symbol: 'ShellSection',
+    },
+    docs: [
+      ['docs/features/terminals/windows-shell-profiles.md', '## Verification status'],
+      ['docs/features/terminals/windows-shell-profiles.md', 'does not claim that the pending packaged interaction or capture verification has happened'],
+    ],
   },
   {
     id: 'projects-tabs',
@@ -690,12 +788,170 @@ const FEATURES = [
   },
 ]
 
+// A feature-row check is only fail-closed if removing the whole row, or one of its required
+// evidence columns, is an error. Keep this list independent of the row itself: deriving the
+// requirements from FEATURES would make a deleted field disappear from both the product and the
+// checklist that was supposed to notice it.
+const REQUIRED_EXACT_FEATURE_BOUNDARIES = new Map([
+  ['windows-terminal-profiles', [
+    'implementation',
+    'docs',
+    'localizedCopy',
+    'persistence',
+    'focusedTests',
+    'builtArtifactInteraction',
+    'captures',
+  ]],
+])
+
+function exactFeatureBoundaryFailures(features) {
+  const errors = []
+  for (const [id, fields] of REQUIRED_EXACT_FEATURE_BOUNDARIES) {
+    const rows = features.filter((feature) => feature.id === id)
+    if (rows.length !== 1) {
+      errors.push(`${id}: expected exactly one feature row, found ${rows.length}`)
+      continue
+    }
+    for (const field of fields) {
+      if (!Object.prototype.hasOwnProperty.call(rows[0], field) || rows[0][field] == null) {
+        errors.push(`${id}: missing exact evidence boundary ${field}`)
+      }
+    }
+  }
+  return errors
+}
+
+function checkExactFeatureBoundaries() {
+  checkedCount += 1
+  const liveErrors = exactFeatureBoundaryFailures(FEATURES)
+  if (liveErrors.length > 0) {
+    fail(`Exact feature inventory boundary: ${liveErrors.join('; ')}`)
+  } else {
+    pass('Exact feature inventory boundary: every required row and evidence column is present exactly once')
+  }
+
+  // Executable negative mutation self-test: remove the row, then each exact evidence column in
+  // memory. Every mutant must be rejected by the same validator used above. This proves the guard
+  // does not merely congratulate the fields it happened to discover in the live row.
+  const escapedMutants = []
+  for (const [id, fields] of REQUIRED_EXACT_FEATURE_BOUNDARIES) {
+    const withoutRow = FEATURES.filter((feature) => feature.id !== id)
+    if (exactFeatureBoundaryFailures(withoutRow).length === 0) escapedMutants.push(`${id}:row`)
+
+    for (const field of fields) {
+      const withoutField = FEATURES.map((feature) => {
+        if (feature.id !== id) return feature
+        const mutant = { ...feature }
+        delete mutant[field]
+        return mutant
+      })
+      if (exactFeatureBoundaryFailures(withoutField).length === 0) {
+        escapedMutants.push(`${id}:${field}`)
+      }
+    }
+  }
+
+  checkedCount += 1
+  if (escapedMutants.length > 0) {
+    fail(`Exact feature inventory negative self-test: mutant(s) escaped: ${escapedMutants.join(', ')}`)
+  } else {
+    pass('Exact feature inventory negative self-test: removing every required row/column is rejected')
+  }
+}
+
+function requireFocusedTests(tests, label) {
+  for (const [file, needle] of tests || []) {
+    const ok = requireFileExists(file, `${label}: focused behavioural test`)
+    if (ok) {
+      requireFileContains(file, needle, `${label}: focused behavioural test keeps its exact suite boundary`)
+    }
+  }
+}
+
+function requireEvidenceStatus(evidence, label) {
+  checkedCount += 1
+  if (!evidence || evidence.status !== 'verified') {
+    const state = evidence?.status || 'missing'
+    const reason = evidence?.reason ? ` — ${evidence.reason}` : ''
+    fail(`${label}: ${state}${reason}`)
+    return false
+  }
+  pass(`${label}: verified evidence is registered`)
+  for (const file of evidence.files || []) requireFileExists(file, label)
+  for (const [file, needle] of evidence.contentChecks || []) requireFileContains(file, needle, label)
+  requireFocusedTests(evidence.tests, label)
+  return true
+}
+
+function requireCaptureEvidence(evidence, label) {
+  if (!requireEvidenceStatus(evidence, label)) return
+  const manifestPath = evidence.manifest
+  const manifestText = manifestPath ? readText(manifestPath) : null
+  checkedCount += 1
+  if (manifestText == null) {
+    fail(`${label}: cannot read capture manifest ${manifestPath || '(missing path)'}`)
+    return
+  }
+
+  let manifest
+  try {
+    manifest = JSON.parse(manifestText)
+  } catch (_err) {
+    fail(`${label}: ${manifestPath} is not valid JSON`)
+    return
+  }
+
+  const capturedIds = new Set(
+    Array.isArray(manifest.captured)
+      ? manifest.captured.map((entry) => entry?.id).filter((id) => typeof id === 'string')
+      : [],
+  )
+  const missingIds = (evidence.requiredIds || []).filter((id) => !capturedIds.has(id))
+  const methodMatches = typeof manifest.method === 'string'
+    && manifest.method.includes(evidence.methodNeedle || 'cheap Lowlevel MCP headless')
+  if (missingIds.length > 0 || !methodMatches) {
+    const problems = []
+    if (missingIds.length > 0) problems.push(`missing exact capture id(s): ${missingIds.join(', ')}`)
+    if (!methodMatches) problems.push(`method does not name ${evidence.methodNeedle || 'cheap Lowlevel MCP headless'}`)
+    fail(`${label}: ${problems.join('; ')}`)
+  } else {
+    pass(`${label}: required exact capture ids and cheap headless method are recorded`)
+  }
+}
+
+checkExactFeatureBoundaries()
+
 for (const feature of FEATURES) {
-  for (const file of feature.files || []) {
+  const implementationFiles = [...(feature.files || []), ...(feature.implementation?.files || [])]
+  const implementationChecks = [
+    ...(feature.contentChecks || []),
+    ...(feature.implementation?.contentChecks || []),
+  ]
+  for (const file of implementationFiles) {
     requireFileExists(file, feature.label)
   }
-  for (const [file, needle] of feature.contentChecks || []) {
+  for (const [file, needle] of implementationChecks) {
     requireFileContains(file, needle, feature.label)
+  }
+  requireFocusedTests(feature.tests, feature.label)
+  requireFocusedTests(feature.focusedTests, feature.label)
+  if (feature.persistence) {
+    for (const file of feature.persistence.files || []) {
+      requireFileExists(file, `${feature.label}: persistence`)
+    }
+    for (const [file, needle] of feature.persistence.contentChecks || []) {
+      requireFileContains(file, needle, `${feature.label}: persistence`)
+    }
+    requireFocusedTests(feature.persistence.tests, `${feature.label}: persistence`)
+  }
+  if (Object.prototype.hasOwnProperty.call(feature, 'localizedCopy')) {
+    requireEvidenceStatus(feature.localizedCopy, `${feature.label}: localized copy`)
+  }
+  if (Object.prototype.hasOwnProperty.call(feature, 'builtArtifactInteraction')) {
+    requireEvidenceStatus(feature.builtArtifactInteraction, `${feature.label}: built-artifact interaction`)
+  }
+  if (Object.prototype.hasOwnProperty.call(feature, 'captures')) {
+    requireCaptureEvidence(feature.captures, `${feature.label}: real capture evidence`)
   }
   if (feature.settingsSection) {
     requireSettingsSection(feature.settingsSection, feature.label)

@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from './types'
 
 describe('DEFAULT_SETTINGS', () => {
+  it('uses automatic Windows profile detection for new and migrated settings', () => {
+    expect(DEFAULT_SETTINGS.defaultTerminalProfileId).toBe('auto')
+  })
+
   it('enables git auto-fetch by default', () => {
     expect(DEFAULT_SETTINGS.gitAutoFetch).toBe(true)
   })

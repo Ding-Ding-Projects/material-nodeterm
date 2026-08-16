@@ -33,7 +33,73 @@ import type {
   AuthenticatorRevealResult
 } from './authenticator'
 
+/** Profile-switch replacement intent. The trusted core validates and re-resolves it before teardown. */
+export interface PtyRecycleTarget {
+  profileId: string
+  cwd: string
+}
+
+/**
+ * A shell-independent request to start or resume an agent.
+ *
+ * The renderer deliberately does not turn this into a command line: the trusted core validates
+ * the semantic fields, resolves the current machine-local agent configuration, and encodes the
+ * launch for the concrete shell that owns the live session. In particular, `auto` is not a shell
+ * dialect until immediately before a Windows profile is spawned.
+ */
+export type AgentLaunchIntent =
+  | {
+      kind: 'agent'
+      action: 'start'
+      agentId: AgentId
+      /** Initial prompt for a new conversation. The core rejects control-bearing values. */
+      prompt?: string
+      /** Already version/policy-gated starting mode. The core re-validates it at execution. */
+      permissionMode?: AgentPermissionMode
+      /** Optional provider id minted for this first launch; never reused as a resume id. */
+      newSessionId?: string
+    }
+  | {
+      kind: 'agent'
+      action: 'resume'
+      agentId: AgentId
+      /** Existing provider id. Required for resume and runtime-validated by the trusted core. */
+      sessionId: string
+      /** Starting mode for the reconstructed CLI, where the selected agent supports it. */
+      permissionMode?: AgentPermissionMode
+    }
+
+/**
+ * One locally-authorized launch held behind canvas dependencies.
+ *
+ * `shell-command` is the explicit `open-terminal --cmd` compatibility path. It is opaque shell
+ * source, not something the app can safely parse back into argv. The whole PendingLaunch is
+ * machine-local and must be stripped from shared project files, exports, and inbound mutations.
+ */
+export type TerminalLaunchIntent =
+  | AgentLaunchIntent
+  | { kind: 'shell-command'; command: string }
+
+export type LaunchIntentFailureReason =
+  | 'invalid-intent'
+  | 'agent-unavailable'
+  | 'unsupported-shell'
+  | 'session-unavailable'
+  | 'delivery-failed'
+
+/** Opaque execution outcome. It must never contain a rendered command, executable, or argv. */
+export type LaunchIntentExecutionResult =
+  | { ok: true }
+  | { ok: false; reason: LaunchIntentFailureReason; message: string }
+
 export interface PtyCreateOptions {
+  /** Stable Windows terminal profile id. The trusted core resolves its executable and argv. */
+  profileId?: string
+  /**
+   * Shell-independent agent launch for a newly created Windows-profile session. The trusted core
+   * executes it only for the fresh-create winner; warm attaches and co-attaches execute nothing.
+   */
+  agentLaunchIntent?: AgentLaunchIntent
   shell?: string
   /** Arguments for `shell` when it is run as the session program (e.g. ssh args). */
   shellArgs?: string[]
@@ -98,6 +164,11 @@ export interface PaneCursor {
 export interface PtyCreateResult {
   sessionId: string
   fresh: boolean
+  /**
+   * Outcome of a fresh create's opaque agent launch, when one was requested. No rendered command
+   * or private profile launch material may cross this result boundary.
+   */
+  agentLaunch?: LaunchIntentExecutionResult
   /** Set when the node's `accountId` had no config dir at spawn, so the session fell back to the
    *  system account. The renderer flags the account chip (folder-missing warning) when true. */
   accountFallback?: boolean
@@ -214,10 +285,10 @@ export type NodeKind = 'terminal' | 'sticky' | 'group' | 'editor' | 'diff' | 'vi
  * difference between a fan-out and a graph: a downstream station starts when the upstream
  * ones have produced something for it to read, without an orchestrator sitting in a poll loop.
  *
- * Persisted, because the wait can outlive an app restart — and note that agent state is NOT
- * (it is rebuilt from live hook events), so after a restart an armed node has no way to learn
- * that its deps already finished. That is why the node carries a manual "run now" escape:
- * a stalled station must never be a dead end.
+ * Persisted only in the trusted machine-local execution overlay, because the wait can outlive an
+ * app restart. It is stripped from the shared project document and every peer boundary. Agent
+ * state is rebuilt from live hook events, so after a restart an armed node may not learn that its
+ * deps already finished; the manual "run now" escape keeps that station recoverable.
  */
 export interface PendingLaunch {
   /**
@@ -226,8 +297,13 @@ export interface PendingLaunch {
    * A dep that no longer exists counts as satisfied: a deleted node can never report.
    */
   after: string[]
-  /** Delivered to the node's shell once the wait is over (agent CLI + prompt, or a plain command). */
-  command: string
+  /**
+   * Machine-local idempotency key. The core deduplicates it within one live PTY generation so an
+   * IPC retry or duplicate renderer effect cannot submit the launch twice.
+   */
+  launchId: string
+  /** Executed once the wait is over. This whole record is machine-local execution state. */
+  launch: TerminalLaunchIntent
 }
 
 export interface CanvasNodeState {
@@ -251,6 +327,8 @@ export interface CanvasNodeState {
   /** Parent group node id, if this node belongs to a group frame. */
   parentId?: string
   // terminal-only
+  /** Machine-local Windows terminal profile selection; never execution arguments. */
+  terminalProfileId?: string
   shell?: string
   cwd?: string
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
@@ -589,10 +667,44 @@ export type PtyLimitFixResult =
    *  renderer: nothing failed, so neither may raise an error toast. */
   | { ok: false; error: string; canceled?: boolean; busy?: boolean }
 
+/** Public profile category. Executable paths and launch arguments stay private to the core. */
+export type WindowsTerminalProfileKind =
+  | 'auto'
+  | 'pwsh'
+  | 'windows-powershell'
+  | 'cmd'
+  | 'git-bash'
+  | 'wsl'
+  | 'custom'
+
+/** Renderer-safe description of a Windows terminal profile. */
+export interface WindowsTerminalProfile {
+  id: string
+  label: string
+  kind: WindowsTerminalProfileKind
+  available: boolean
+  unavailableReason?: string
+}
+
+/** Optional desktop capability for detecting the Windows terminal profiles on this machine. */
+export interface TerminalProfilesApi {
+  list(): Promise<WindowsTerminalProfile[]>
+  refresh(): Promise<WindowsTerminalProfile[]>
+}
+
 export interface PtyApi {
   /** Starts a new PTY session; returns its sessionId and whether the session was freshly
    *  created (cold start) vs reattached to a still-running tmux session (warm). */
   create(options: PtyCreateOptions): Promise<PtyCreateResult>
+  /**
+   * Validate and execute an agent intent against the live session's concrete shell dialect.
+   * The rendered command remains private to the core; failure copy is sanitized there.
+   */
+  executeLaunchIntent?(
+    sessionId: string,
+    launchId: string,
+    intent: TerminalLaunchIntent
+  ): Promise<LaunchIntentExecutionResult>
   /** Sends user input to the PTY. */
   write(sessionId: string, data: string): void
   /** Updates the PTY when the terminal is resized. The pty runs at the SMALLEST subscriber's grid,
@@ -623,6 +735,8 @@ export interface PtyApi {
    *  worktree"). Same tmux kill as `destroy`, opposite intent: the node stays on the canvas, so
    *  co-viewers get `onRecycled` (restart + re-attach), never the permanent closed state. */
   recycle(persistKey: string): void
+  /** Desktop-only awaited recycle after the user confirms a destructive profile switch. */
+  recycleConfirmed?(persistKey: string, target?: PtyRecycleTarget): Promise<void>
   /** Suggest a terminal title from its recent output via the configured AI agent. */
   generateName(persistKey: string, cwd: string): Promise<GitResult>
   /** Suggest a group title from its member terminals' recent output via the configured AI agent. */
@@ -995,7 +1109,9 @@ export interface Settings {
   terminalLineHeight: number
   /** Extra horizontal space between cells, in CSS pixels (0 = xterm's default). */
   terminalLetterSpacing: number
-  /** Empty string = use the system default shell. */
+  /** Stable profile used for newly created local Windows terminals. */
+  defaultTerminalProfileId: string
+  /** Compatibility field for the custom profile executable. Empty string = no custom executable. */
   defaultShell: string
   gridSize: number
   snapToGrid: boolean
@@ -1273,6 +1389,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cursorInactiveStyle: 'outline',
   terminalLineHeight: 1,
   terminalLetterSpacing: 0,
+  defaultTerminalProfileId: 'auto',
   defaultShell: '',
   gridSize: 24,
   snapToGrid: false,
@@ -2569,6 +2686,8 @@ export interface AuthenticatorApi {
 
 export interface NodeTerminalApi {
   pty: PtyApi
+  /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
+  terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
   dialog: DialogApi
   settings: SettingsApi

@@ -34,6 +34,30 @@ describe('applyCanvasMutation', () => {
       applyCanvasMutation([n('1'), n('2')], { op: 'remove', id: '1' }).map((x) => x.id)
     ).toEqual(['2'])
   })
+
+  it('phone append stamps the Windows host default once and later default changes do not rewrite it', () => {
+    const hostile = { ...n('phone-new'), terminalProfileId: 'cmd' }
+    const accepted = applyCanvasMutation([], { op: 'upsert', node: hostile }, {
+      defaultTerminalProfileId: 'pwsh'
+    })
+    expect(accepted[0].terminalProfileId).toBe('pwsh')
+
+    const moved = applyCanvasMutation(
+      accepted,
+      { op: 'upsert', node: { ...hostile, position: { x: 25, y: 0 } } },
+      { defaultTerminalProfileId: 'windows-powershell' }
+    )
+    expect(moved[0].position.x).toBe(25)
+    expect(moved[0].terminalProfileId).toBe('pwsh')
+  })
+
+  it('without a Windows host default, a new inbound profile is only stripped', () => {
+    const [accepted] = applyCanvasMutation([], {
+      op: 'upsert',
+      node: { ...n('server-new'), terminalProfileId: 'cmd' }
+    })
+    expect(accepted.terminalProfileId).toBeUndefined()
+  })
 })
 
 describe('diffToMutations', () => {

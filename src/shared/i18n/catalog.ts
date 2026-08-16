@@ -77,7 +77,10 @@ export const CATALOG: Catalog = {
   'settings.section.agents': { en: flat('Agents'), yue: flat('AI 代理') },
   'settings.section.terminal': { en: flat('Terminal'), yue: flat('終端機') },
   'settings.section.appearance': { en: flat('Appearance'), yue: flat('外觀') },
-  'settings.section.notifications': { en: flat('Notifications'), yue: flat('通知') },
+  'settings.section.notifications': {
+    en: flat('Notifications'),
+    yue: flat('通知')
+  },
   'settings.section.updates': { en: flat('Updates'), yue: flat('更新') },
   'settings.section.accounts': { en: flat('Accounts'), yue: flat('帳戶') },
   'settings.section.language': { en: flat('Language'), yue: flat('語言') },
@@ -404,6 +407,450 @@ export const CATALOG: Catalog = {
   'update.downloadManually': {
     en: flat('Download manually'),
     yue: flat('手動下載')
+  },
+
+  // ---------------------------------------------------------------------------------------
+  // Windows terminal profiles. Profile labels, WSL distribution names, executable paths and
+  // trusted-core error details are caller-owned values and stay verbatim in the placeholders.
+  // Only the surrounding renderer copy is localized here.
+  // ---------------------------------------------------------------------------------------
+  'terminalProfiles.common.detectingProfiles': {
+    en: flat('Detecting profiles…'),
+    yue: flat('正在偵測設定檔…')
+  },
+  'terminalProfiles.common.profilesUnavailable': {
+    en: flat('Profiles unavailable'),
+    yue: flat('設定檔無法使用')
+  },
+  'terminalProfiles.common.noProfilesDetected': {
+    en: flat('No Windows terminal profiles were detected.'),
+    yue: flat('偵測唔到任何 Windows 終端機設定檔。')
+  },
+  'terminalProfiles.common.detectionPending': {
+    en: flat('Profile detection has not finished yet.'),
+    yue: flat('設定檔偵測尚未完成。')
+  },
+  'terminalProfiles.common.detectionFailed': {
+    en: flat('Terminal profile detection failed.'),
+    yue: flat('終端機設定檔偵測失敗。')
+  },
+  'terminalProfiles.common.unavailableOnMachine': {
+    en: flat('This profile is unavailable on this machine.'),
+    yue: flat('呢個設定檔喺呢部電腦用唔到。')
+  },
+  'terminalProfiles.common.unavailableHereTitle': {
+    en: flat('Windows profile unavailable here'),
+    yue: flat('呢度用唔到 Windows 設定檔')
+  },
+  'terminalProfiles.common.unavailableHereBody': {
+    en: flat('Local Windows profiles cannot be applied to an SSH or relay terminal.'),
+    yue: flat('本機 Windows 設定檔唔可以套用喺 SSH 或中繼終端機。')
+  },
+  'terminalProfiles.common.noReasonProvided': {
+    en: flat('No reason was provided.'),
+    yue: flat('沒有提供原因。')
+  },
+  'terminalProfiles.common.available': {
+    en: flat('Available'),
+    yue: flat('可用')
+  },
+  'terminalProfiles.common.unavailable': {
+    en: flat('Unavailable'),
+    yue: flat('無法使用')
+  },
+
+  // Fallback labels shown only while detection has not supplied a descriptor. Product names and
+  // WSL distribution names remain verbatim; these generic renderer-owned labels are localized.
+  'terminalProfiles.label.default': {
+    en: flat('Default profile'),
+    yue: flat('預設設定檔')
+  },
+  'terminalProfiles.label.automatic': {
+    en: flat('Automatic'),
+    yue: flat('自動')
+  },
+  'terminalProfiles.label.custom': {
+    en: flat('Custom executable'),
+    yue: flat('自訂執行檔')
+  },
+  'terminalProfiles.label.unavailable': {
+    en: flat('Unavailable terminal profile'),
+    yue: flat('無法使用嘅終端機設定檔')
+  },
+  'terminalProfiles.label.unknown': {
+    en: flat('Unknown profile'),
+    yue: flat('未知設定檔')
+  },
+
+  'terminalProfiles.settings.sectionTitle': {
+    en: flat('Shell'),
+    yue: flat('Shell')
+  },
+  'terminalProfiles.settings.sectionDescription': {
+    en: flat('Choose the Windows profile used for new local terminals.'),
+    yue: flat('揀新本機終端機要用嘅 Windows 設定檔。')
+  },
+  'terminalProfiles.settings.legacySectionDescription': {
+    en: flat('The shell new terminals launch. Empty uses the system default.'),
+    yue: flat('新終端機啟動嘅 Shell。留空會用系統預設值。')
+  },
+  'terminalProfiles.settings.legacyDefaultLabel': {
+    en: flat('Default shell'),
+    yue: flat('預設 Shell')
+  },
+  'terminalProfiles.settings.legacyDefaultDescription': {
+    en: flat('Shell executable (leave empty to use $SHELL or the system default)'),
+    yue: flat('Shell 執行檔（留空以使用 $SHELL 或系統預設值）')
+  },
+  'terminalProfiles.settings.systemDefaultPlaceholder': {
+    en: flat('system default'),
+    yue: flat('系統預設值')
+  },
+  'terminalProfiles.settings.defaultLabel': {
+    en: flat('Default terminal profile'),
+    yue: flat('預設終端機設定檔')
+  },
+  'terminalProfiles.settings.defaultDescription': {
+    en: flat(
+      'Used by every one-click New terminal action. Existing nodes keep their selected profile.'
+    ),
+    yue: flat('所有一按「新增終端機」動作都會用佢。現有節點會保留已揀嘅設定檔。')
+  },
+  'terminalProfiles.settings.availabilityRowTitle': {
+    en: flat('Detected profile availability'),
+    yue: flat('偵測到嘅設定檔可用狀態')
+  },
+  'terminalProfiles.settings.customLabel': {
+    en: flat('Custom executable'),
+    yue: flat('自訂執行檔')
+  },
+  'terminalProfiles.settings.customNeedsRefresh': {
+    en: flat('Refresh detection to verify this executable.'),
+    yue: flat('重新偵測以驗證呢個執行檔。')
+  },
+  'terminalProfiles.settings.customChooseFirst': {
+    en: flat('Choose a custom executable before using this profile.'),
+    yue: flat('使用呢個設定檔之前，請先揀一個自訂執行檔。')
+  },
+  'terminalProfiles.settings.detectingInstalled': {
+    en: flat('Detecting installed terminal profiles…'),
+    yue: flat('正在偵測已安裝嘅終端機設定檔…')
+  },
+  'terminalProfiles.settings.detectionFailedSavedDefault': {
+    en: flat('Profile detection failed. The saved default was not changed.'),
+    yue: flat('設定檔偵測失敗。已儲存嘅預設值沒有改變。')
+  },
+  'terminalProfiles.settings.selectedAvailable': {
+    en: flat('{profile} is available.'),
+    yue: flat('{profile} 可以使用。')
+  },
+  'terminalProfiles.settings.selectedUnavailable': {
+    en: flat('{profile} is unavailable: {reason}'),
+    yue: flat('{profile} 無法使用：{reason}')
+  },
+  'terminalProfiles.settings.savedProfileMissing': {
+    en: flat(
+      '{profile} is unavailable: this saved profile is no longer detected on this computer.'
+    ),
+    yue: flat('{profile} 無法使用：呢部電腦已經偵測唔到呢個已儲存設定檔。')
+  },
+  'terminalProfiles.settings.customEmptyNote': {
+    en: flat(
+      'Unavailable until an executable is chosen. New terminals will not silently fall back.'
+    ),
+    yue: flat('揀好執行檔之前都無法使用。新終端機唔會靜靜鷄轉用其他設定。')
+  },
+  'terminalProfiles.settings.customUnavailable': {
+    en: flat('Unavailable: {reason}'),
+    yue: flat('無法使用：{reason}')
+  },
+  'terminalProfiles.settings.executableUnresolved': {
+    en: flat('The executable could not be resolved.'),
+    yue: flat('無法解析呢個執行檔。')
+  },
+  'terminalProfiles.settings.saveBeforeDetectionFailed': {
+    en: flat('Could not save settings before detection.'),
+    yue: flat('偵測之前無法儲存設定。')
+  },
+  'terminalProfiles.settings.optionDetecting': {
+    en: flat('{profile} — detecting…'),
+    yue: flat('{profile} — 正在偵測…')
+  },
+  'terminalProfiles.settings.optionDetectionFailed': {
+    en: flat('{profile} — detection failed'),
+    yue: flat('{profile} — 偵測失敗')
+  },
+  'terminalProfiles.settings.optionUnavailable': {
+    en: flat('{profile} — unavailable'),
+    yue: flat('{profile} — 無法使用')
+  },
+  'terminalProfiles.settings.optionUnavailableSuffix': {
+    en: flat(' — unavailable'),
+    yue: flat(' — 無法使用')
+  },
+  'terminalProfiles.settings.detectedHeading': {
+    en: flat('Detected profiles'),
+    yue: flat('偵測到嘅設定檔')
+  },
+  'terminalProfiles.settings.detectedDescription': {
+    en: flat(
+      'Missing shells and WSL distributions stay unavailable instead of opening a different profile.'
+    ),
+    yue: flat('缺少嘅 Shell 同 WSL 發行版會保持無法使用，唔會轉開另一個設定檔。')
+  },
+  'terminalProfiles.settings.detecting': {
+    en: flat('Detecting…'),
+    yue: flat('正在偵測…')
+  },
+  'terminalProfiles.settings.refresh': {
+    en: flat('Refresh detection'),
+    yue: flat('重新偵測')
+  },
+  'terminalProfiles.settings.detectionFailedStale': {
+    en: flat('Detection failed: {error} Previous availability may be stale.'),
+    yue: flat('偵測失敗：{error} 之前嘅可用狀態可能已過時。')
+  },
+  'terminalProfiles.settings.availabilityAria': {
+    en: flat('Detected terminal profile availability'),
+    yue: flat('偵測到嘅終端機設定檔可用狀態')
+  },
+  'terminalProfiles.settings.noProfilesReturned': {
+    en: flat('No terminal profiles were returned.'),
+    yue: flat('沒有傳回任何終端機設定檔。')
+  },
+  'terminalProfiles.settings.customDescription': {
+    en: flat(
+      'Executable name or absolute path. Paths with spaces are supported; enter no arguments or quotes.'
+    ),
+    yue: flat('輸入執行檔名稱或絕對路徑。支援有空格嘅路徑；唔好輸入參數或引號。')
+  },
+  'terminalProfiles.settings.chooseExecutableAria': {
+    en: flat('Choose custom terminal executable'),
+    yue: flat('揀自訂終端機執行檔')
+  },
+  'terminalProfiles.settings.chooseExecutable': {
+    en: flat('Choose executable…'),
+    yue: flat('揀執行檔…')
+  },
+
+  'terminalProfiles.create.menuLabel': {
+    en: flat('New terminal with profile…'),
+    yue: flat('用設定檔新增終端機…')
+  },
+  'terminalProfiles.create.chooseProfileAria': {
+    en: flat('Choose terminal profile'),
+    yue: flat('揀終端機設定檔')
+  },
+  'terminalProfiles.create.backToNewNodes': {
+    en: flat('Back to new nodes'),
+    yue: flat('返去新節點')
+  },
+  'terminalProfiles.create.backToNewSessions': {
+    en: flat('Back to new sessions'),
+    yue: flat('返去新階段')
+  },
+  'terminalProfiles.create.unavailableInView': {
+    en: flat('Terminal profile creation is unavailable in this view.'),
+    yue: flat('呢個檢視無法用設定檔建立終端機。')
+  },
+  'terminalProfiles.create.detectionReturnedNone': {
+    en: flat('Profile detection has not returned any profiles.'),
+    yue: flat('設定檔偵測尚未傳回任何設定檔。')
+  },
+  'terminalProfiles.create.commandLabel': {
+    en: flat('New terminal — {profile}'),
+    yue: flat('新終端機 — {profile}')
+  },
+
+  'terminalProfiles.restart.menuLabel': {
+    en: flat('Restart with profile…'),
+    yue: flat('用設定檔重新啟動…')
+  },
+  'terminalProfiles.restart.hostCannotConfirm': {
+    en: flat('This host cannot confirm that the old persistent session ended.'),
+    yue: flat('呢部主機無法確認舊嘅持續階段已經結束。')
+  },
+  'terminalProfiles.restart.noLongerLocal': {
+    en: flat('This node is no longer a local Windows terminal.'),
+    yue: flat('呢個節點已經唔再係本機 Windows 終端機。')
+  },
+  'terminalProfiles.restart.confirmedUnavailable': {
+    en: flat('Confirmed persistent-session recycling is unavailable on this host.'),
+    yue: flat('呢部主機無法使用經確認嘅持續階段重新建立。')
+  },
+  'terminalProfiles.restart.busy': {
+    en: flat('This terminal is already restarting. Wait for that restart to finish.'),
+    yue: flat('呢個終端機已經重新啟動緊。請等呢次重新啟動完成。')
+  },
+  'terminalProfiles.restart.progress': {
+    en: flat('Restarting with profile…'),
+    yue: flat('正在用設定檔重新啟動…')
+  },
+  'terminalProfiles.restart.customAgentMissingConfig': {
+    en: flat(
+      'This custom agent is no longer configured. Restore its launch command before restarting; the live process was not changed.'
+    ),
+    yue: flat('呢個自訂代理已經沒有設定。重新啟動之前請還原佢嘅啟動指令；現時嘅過程沒有改變。')
+  },
+  'terminalProfiles.restart.crossEnvironmentUnavailable': {
+    en: flat(
+      'This agent cannot be restarted across Windows and WSL environments because its CLI and conversation store cannot be verified there. Choose a profile in the current environment.'
+    ),
+    yue: flat(
+      '呢個代理無法跨 Windows 同 WSL 環境重新啟動，因為無法驗證嗰邊嘅 CLI 同對話儲存。請揀當前環境內嘅設定檔。'
+    )
+  },
+  'terminalProfiles.restart.newBuiltInConversationWarning': {
+    en: flat(
+      'No resumable conversation id is available. The agent will start a new conversation after the profile switch.'
+    ),
+    yue: flat('沒有可以繼續嘅對話 ID。轉換設定檔之後，代理會開始新對話。')
+  },
+  'terminalProfiles.restart.newCustomConversationWarning': {
+    en: flat(
+      'This custom agent will restart from its configured launch command in a new conversation.'
+    ),
+    yue: flat('呢個自訂代理會用已設定嘅啟動指令重新啟動，並開始新對話。')
+  },
+  'terminalProfiles.restart.projectChanged': {
+    en: flat('The project changed before confirmation, so nothing was restarted.'),
+    yue: flat('確認之前項目已經改變，所以沒有重新啟動任何東西。')
+  },
+  'terminalProfiles.restart.confirmTitle': {
+    en: flat('Restart “{node}” with {profile}'),
+    yue: flat('用 {profile} 重新啟動「{node}」')
+  },
+  'terminalProfiles.restart.confirmDescription': {
+    en: flat(
+      'The live process and persistent session will end, including anything still running inside it. The node will then be recreated with {profile}.'
+    ),
+    yue: flat(
+      '即時過程同持續階段都會結束，包括內裡仲行緊嘅所有程式。之後會用 {profile} 重新建立呢個節點。'
+    )
+  },
+  'terminalProfiles.restart.confirmButton': {
+    en: flat('Restart'),
+    yue: flat('重新啟動')
+  },
+  'terminalProfiles.restart.failedTitle': {
+    en: flat('Restart with profile failed'),
+    yue: flat('用設定檔重新啟動失敗')
+  },
+  'terminalProfiles.restart.defaultNodeLabel': {
+    en: flat('terminal'),
+    yue: flat('終端機')
+  },
+
+  'terminalProfiles.header.statusAvailable': {
+    en: flat('available'),
+    yue: flat('可用')
+  },
+  'terminalProfiles.header.statusUnavailable': {
+    en: flat('unavailable'),
+    yue: flat('無法使用')
+  },
+  'terminalProfiles.header.statusUnknown': {
+    en: flat('availability unknown'),
+    yue: flat('可用狀態不明')
+  },
+  'terminalProfiles.header.ariaLabel': {
+    en: flat('Terminal profile: {profile}, {status}'),
+    yue: flat('終端機設定檔：{profile}，{status}')
+  },
+  'terminalProfiles.header.ariaLabelWithHint': {
+    en: flat('Terminal profile: {profile}, {status}: {hint}'),
+    yue: flat('終端機設定檔：{profile}，{status}：{hint}')
+  },
+  'terminalProfiles.header.title': {
+    en: flat('Terminal profile: {profile}'),
+    yue: flat('終端機設定檔：{profile}')
+  },
+  'terminalProfiles.header.checkingAvailability': {
+    en: flat('Checking whether this terminal profile is available on this machine.'),
+    yue: flat('正在檢查呢個終端機設定檔喺呢部電腦係否可用。')
+  },
+  'terminalProfiles.header.noLongerDetected': {
+    en: flat('This selected profile is no longer detected on this machine.'),
+    yue: flat('呢部電腦已經偵測唔到已揀嘅設定檔。')
+  },
+  'terminalProfiles.header.availableTitle': {
+    en: flat('{profile} terminal profile'),
+    yue: flat('{profile} 終端機設定檔')
+  },
+  'terminalProfiles.header.unavailableTitle': {
+    en: flat('{profile} is unavailable.'),
+    yue: flat('{profile} 無法使用。')
+  },
+  'terminalProfiles.header.unavailableTitleWithReason': {
+    en: flat('{profile} is unavailable: {reason}'),
+    yue: flat('{profile} 無法使用：{reason}')
+  },
+
+  'terminalProfiles.error.unresolved': {
+    en: flat('The terminal profile could not be resolved.'),
+    yue: flat('無法解析終端機設定檔。')
+  },
+  'terminalProfiles.error.spawnLead': {
+    en: flat('This terminal could not be started. {error}'),
+    yue: flat('呢個終端機無法啟動。{error}')
+  },
+  'terminalProfiles.error.recovery': {
+    en: flat('Choose Restart with profile… from this card’s menu, then try again.'),
+    yue: flat('喺呢張卡嘅選單揀「用設定檔重新啟動…」，然後再試。')
+  },
+  'terminalProfiles.error.nodeRecovery': {
+    en: flat('Choose Restart with profile… from this node’s menu, then try again.'),
+    yue: flat('喺呢個節點嘅選單揀「用設定檔重新啟動…」，然後再試。')
+  },
+  'terminalProfiles.error.tryAgain': {
+    en: flat('Try again'),
+    yue: flat('再試')
+  },
+  'terminalProfiles.error.agentRelaunchLead': {
+    en: flat('This agent could not be relaunched. {reason}'),
+    yue: flat('呢個代理無法重新啟動。{reason}')
+  },
+  'terminalProfiles.error.agentCustomMissing': {
+    en: flat(
+      'This custom agent is no longer configured. Restore its launch command, then try again. No agent was launched in the replacement shell.'
+    ),
+    yue: flat(
+      '呢個自訂代理已經沒有設定。請還原佢嘅啟動指令，然後再試。替換 Shell 內沒有啟動任何代理。'
+    )
+  },
+  'terminalProfiles.error.agentRecycleUnavailable': {
+    en: flat(
+      'This host cannot confirm that the blank replacement session ended. Nothing was restarted.'
+    ),
+    yue: flat('呢部主機無法確認空白替換階段已經結束。沒有重新啟動任何東西。')
+  },
+  'terminalProfiles.error.agentRecycleFailed': {
+    en: flat('Could not safely replace the blank terminal session. Nothing was restarted.'),
+    yue: flat('無法安全替換空白終端機階段。沒有重新啟動任何東西。')
+  },
+  'terminalProfiles.error.agentRecycleFailedWithDetail': {
+    en: flat(
+      'Could not safely replace the blank terminal session: {detail} Nothing was restarted.'
+    ),
+    yue: flat('無法安全替換空白終端機階段：{detail} 沒有重新啟動任何東西。')
+  },
+  'terminalProfiles.error.agentRetryPreparing': {
+    en: flat('Preparing a fresh session…'),
+    yue: flat('正在準備新階段…')
+  },
+  'terminalProfiles.error.agentTryAgain': {
+    en: flat('Try agent again'),
+    yue: flat('再試代理')
+  },
+  'terminalProfiles.error.sessionEnded': {
+    en: flat(
+      'This persistent session ended before a replacement was ready. Nothing was restarted.'
+    ),
+    yue: flat('替換階段準備好之前，呢個持續階段已經結束。沒有重新啟動任何東西。')
+  },
+  'terminalProfiles.error.openCanvasToReopen': {
+    en: flat('Open on canvas to reopen'),
+    yue: flat('喺畫布開啟再重新打開')
   },
 
   // ---------------------------------------------------------------------------------------

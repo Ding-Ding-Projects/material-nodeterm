@@ -16,8 +16,11 @@ import path from 'path'
  * so a node-pty upgrade that silently drops it fails loudly here.
  */
 const PTY_CC = path.resolve(__dirname, '../../node_modules/node-pty/src/unix/pty.cc')
+const CONPTY_CC = path.resolve(__dirname, '../../node_modules/node-pty/src/win/conpty.cc')
+const NODE_PTY_PACKAGE = path.resolve(__dirname, '../../node_modules/node-pty/package.json')
 /** Must stay in sync with PATCH_MARKER in scripts/patch-node-pty.mjs. */
 const PATCH_MARKER = 'NODETERM-PATCH(node-pty#950)'
+const WINDOWS_CONPTY_PATCH_MARKER = 'NODETERM-PATCH(node-pty-conpty-exact-close)'
 
 const HOWTO =
   'Run `node scripts/patch-node-pty.mjs && npm run rebuild`. ' +
@@ -46,5 +49,31 @@ describe('node-pty fd-leak patch (microsoft/node-pty#950)', () => {
         `spawn. ${HOWTO}`
     ).toBe(false)
     expect(source).toContain('size_t opened = count < 3 ? count + 1 : 3;')
+  })
+})
+
+describe('node-pty exact Windows ConPTY close patch', () => {
+  const exists = fs.existsSync(CONPTY_CC) && fs.existsSync(NODE_PTY_PACKAGE)
+  const source = exists ? fs.readFileSync(CONPTY_CC, 'utf8') : ''
+  const packageVersion = exists
+    ? (JSON.parse(fs.readFileSync(NODE_PTY_PACKAGE, 'utf8')) as { version?: unknown }).version
+    : undefined
+
+  it.skipIf(!exists)('stays pinned to the reviewed node-pty native source version', () => {
+    expect(packageVersion).toBe('1.1.0')
+    expect(source).toContain(WINDOWS_CONPTY_PATCH_MARKER)
+  })
+
+  it.skipIf(!exists)('closes the exact HPCON before deleting its shell-exit baton', () => {
+    const closeIndex = source.indexOf('baton->closeExactPseudoConsole();')
+    const removeIndex = source.indexOf('remove_pty_baton(lock, baton->id)')
+    expect(closeIndex).toBeGreaterThan(0)
+    expect(removeIndex).toBeGreaterThan(closeIndex)
+    expect(source).toContain('std::lock_guard<std::mutex> lock(g_ptyHandlesMutex);')
+  })
+
+  it.skipIf(!exists)('returns positive proof instead of the stock void/no-op kill result', () => {
+    expect(source).toContain('closed = handle->closeExactPseudoConsole();')
+    expect(source).toContain('return Napi::Boolean::New(env, closed);')
   })
 })

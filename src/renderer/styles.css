@@ -790,9 +790,28 @@ body,
 }
 
 /* Inert hint rows (e.g. "No accounts on this host yet" in an SSH project). */
-.dock-menu button:disabled {
+.dock-menu button:disabled,
+.dock-menu button[aria-disabled='true'] {
   color: var(--md-on-surface-variant);
   cursor: not-allowed;
+}
+
+.dock-menu button[aria-disabled='true']:hover {
+  background: transparent;
+}
+
+.dock-menu__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dock-menu__hint {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 .dock-menu svg {
@@ -2893,7 +2912,7 @@ body,
   cursor: pointer;
 }
 
-.ctx-item:hover:not(:disabled) {
+.ctx-item:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--panel-header);
 }
 
@@ -2911,12 +2930,13 @@ body,
   color: inherit;
 }
 
-.ctx-item:hover:not(:disabled),
-.ctx-item.kbd-active:not(:disabled) {
+.ctx-item:hover:not(:disabled):not([aria-disabled='true']),
+.ctx-item.kbd-active:not(:disabled):not([aria-disabled='true']) {
   background: var(--panel-header);
 }
 
-.ctx-item:disabled {
+.ctx-item:disabled,
+.ctx-item[aria-disabled='true'] {
   color: var(--muted);
   cursor: not-allowed;
 }
@@ -2925,14 +2945,17 @@ body,
   color: var(--danger);
 }
 
-.ctx-item.danger:hover:not(:disabled) {
+.ctx-item.danger:hover:not(:disabled):not([aria-disabled='true']) {
   background: rgba(247, 118, 142, 0.15);
 }
 
-/* Submenu row + its flyout. The flyout nests inside the row so moving the cursor across
-   the overlap doesn't fire the row's mouseleave (hover bridge). */
-.ctx-item--submenu {
+/* Submenu row + its flyout. A non-interactive host wraps the trigger and flyout so moving the
+   cursor across their overlap doesn't fire mouseleave, without nesting buttons inside a button. */
+.ctx-submenu-host {
   position: relative;
+}
+.ctx-item--submenu {
+  width: 100%;
 }
 .ctx-item--submenu::after {
   content: '▸';
@@ -8674,6 +8697,37 @@ body,
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+.kanban-card__profile {
+  display: inline-flex;
+  max-width: 112px;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid rgba(var(--tint-rgb), 0.16);
+  border-radius: 999px;
+  padding: 1px 5px;
+  color: rgba(var(--tint-rgb), 0.56);
+  font-size: 8.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.kanban-card__profile-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kanban-card__profile--unavailable {
+  border-color: rgba(var(--danger-rgb), 0.35);
+  color: var(--danger);
+}
+.kanban-card__profile--unknown {
+  border-color: rgba(var(--tint-rgb), 0.28);
+  border-style: dashed;
+}
+.kanban-card__profile-status {
+  flex: none;
+  font-weight: 800;
+}
 .kanban-card__kind {
   font-size: 9px;
   text-transform: uppercase;
@@ -8854,6 +8908,49 @@ body,
   padding: 6px 8px;
   cursor: pointer;
 }
+
+.palette__item[aria-disabled='true'] {
+  color: var(--md-on-surface-variant);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.palette__item[aria-disabled='true'].active {
+  background: rgba(var(--tint-rgb), 0.05);
+}
+.kanban-col__newlabel {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+.kanban-col__newreason {
+  margin-top: 2px;
+  color: rgba(var(--tint-rgb), 0.55);
+  font-size: 10px;
+  line-height: 1.3;
+}
+.kanban-col__newchevron {
+  margin-left: auto;
+  color: rgba(var(--tint-rgb), 0.55);
+  font-size: 16px;
+}
+.kanban-col__newmenu button[aria-disabled='true'] {
+  color: rgba(var(--tint-rgb), 0.45);
+  cursor: not-allowed;
+}
+.kanban-col__newmenu button[aria-disabled='true']:hover {
+  background: rgba(var(--tint-rgb), 0.05);
+  color: rgba(var(--tint-rgb), 0.45);
+}
+.kanban-col__newmenu button[aria-disabled='true']:hover .kanban-col__newicon {
+  color: rgba(var(--tint-rgb), 0.45);
+}
+.kanban-col__newback {
+  border-bottom: 1px solid rgba(var(--tint-rgb), 0.08) !important;
+  border-radius: 0 !important;
+  margin-bottom: 2px;
+}
 .kanban-col__newicon {
   display: inline-flex;
   width: 14px;
@@ -8949,6 +9046,37 @@ body,
   font-size: 13px;
   padding: 3px 8px;
   outline: none;
+}
+.kanban-modal__profile {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 220px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(var(--tint-rgb), 0.18);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: rgba(var(--tint-rgb), 0.65);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.kanban-modal__profile > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kanban-modal__profile--unavailable {
+  border-color: rgba(var(--danger-rgb), 0.35);
+  color: var(--danger);
+}
+.kanban-modal__profile--unknown {
+  border-color: rgba(var(--tint-rgb), 0.25);
+  border-style: dashed;
+}
+.kanban-modal__profile-status {
+  flex: none;
+  color: inherit;
+  font-size: 9px;
+  opacity: 0.82;
 }
 .kanban-modal__column {
   font-size: 10px;
@@ -11637,6 +11765,23 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ctx-item__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ctx-item__copy .ctx-item__label {
+  flex: none;
+}
+.ctx-item__hint {
+  color: var(--muted-2);
+  font-size: 11px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .ctx-item__shortcut {
   flex: none;

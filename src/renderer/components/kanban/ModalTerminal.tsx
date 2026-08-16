@@ -3,8 +3,9 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { quantizeCharSize } from '../../terminal/char-size-quantize'
-import { reportsOwnCopy } from '@shared/agents/config'
+import { hasPermissionMode, reportsOwnCopy } from '@shared/agents/config'
 import type { AgentId } from '@shared/agents/config'
+import type { AgentLaunchIntent } from '@shared/types'
 import { readsClaudeTranscript } from '../../lib/transcriptGates'
 import { liveProjectJumpTarget } from '../../lib/projectJump'
 import { FindBar } from '../FindBar'
@@ -19,6 +20,7 @@ import { guardMiddleClickPaste } from '../../terminal/middle-click'
 import { parseOsc52 } from '../../terminal/osc52'
 import { activateUnicode11 } from '../../terminal/unicode-width'
 import { useCopyFeedback } from '../../terminal/useCopyFeedback'
+import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import {
   attachReplay,
   cursorPlacementSeq,
@@ -28,19 +30,36 @@ import {
   toXtermText,
   applyLiveOptions,
   xtermOptionsFromSettings,
+  recycleAction,
   SHIFT_ENTER_SEQ,
   CO_ATTACH_MOUSE_SEQ
 } from '../../terminal/terminal-config'
 import { useXtermVisualSettings } from '../../terminal/useXtermVisualSettings'
 import { resolveSshRemote, reportSshDrop, sshConnectionScope } from '../../nodes/TerminalNode'
 import { buildSshArgs, type SshConnection } from '@shared/ssh'
+import { isWindowsPlatform } from '@shared/platform-utils'
+import { windowsTerminalProfileId } from '../../terminal/windows-terminal-profile'
+import { coldAgentLaunchIntent } from '../../terminal/agent-launch-intent'
+import { ensureActivePermissionMode } from '../../state/permissionMode'
 
 /** The subset of a node's `data` a SECOND client needs to attach to its session the same way the
  *  canvas TerminalNode does. Canvas fills it from the node's data; sticky/chat cards pass `{}`. */
 export interface ModalSpawn {
   shell?: string
+  /** Machine-local stable Windows profile id; executable and argv remain trusted-core-private. */
+  terminalProfileId?: string
+  /**
+   * Generation selected by the owning canvas node. A confirmed profile recycle bumps this value;
+   * the modal must tear down its old co-view and join the replacement instead of staying attached
+   * to the ended session behind an unchanged card id.
+   */
+  respawnNonce?: number
   cwd?: string
   agentId?: string
+  /** Transient semantic first launch; never serialized into the shared project document. */
+  agentLaunchIntent?: AgentLaunchIntent
+  /** Persisted provider id used only to derive a trusted cold-resume intent. */
+  agentSessionId?: string
   accountId?: string
   /** The node's `data.ssh` — a local `ssh <host>` node runs ssh as its pty program. */
   ssh?: SshConnection
@@ -64,12 +83,23 @@ interface ModalTerminalProps {
   /** The modal header's 🔍 toggle — the FindBar renders inside this pane. */
   searchOpen: boolean
   onCloseSearch: () => void
+  /** Return to the primary canvas terminal, which alone is allowed to create a new generation. */
+  onOpenCanvas: () => void
 }
 
-export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: ModalTerminalProps) {
-  const { api } = useSession()
+export function ModalTerminal({
+  nodeId,
+  spawn,
+  searchOpen,
+  onCloseSearch,
+  onOpenCanvas
+}: ModalTerminalProps) {
+  const profileText = useLocalizedVocabularyText()
+  const session = useSession()
+  const { api } = session
   const hostRef = useRef<HTMLDivElement>(null)
   const middleClickPaste = useSettings((st) => st.settings.terminalMiddleClickPaste)
+  const defaultTerminalProfileId = useSettings((st) => st.settings.defaultTerminalProfileId)
   // Chromium pastes the X PRIMARY selection into xterm's hidden textarea on middle click — a path
   // this app never built and the user could not switch off (issue #84). Its own effect, keyed on
   // the setting alone, so it applies to a PARKED terminal being re-adopted just as much as to a
@@ -93,6 +123,20 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
   const visual = useXtermVisualSettings()
   const [dropping, setDropping] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [spawnError, setSpawnError] = useState<string | null>(null)
+  const [sessionEnded, setSessionEnded] = useState(false)
+  const [spawnAttempt, setSpawnAttempt] = useState(0)
+  const terminalProfileId = windowsTerminalProfileId({
+    windows: isWindowsPlatform(),
+    desktopProfilesAvailable: api.terminalProfiles !== undefined,
+    source: session.source,
+    shell: spawn.shell,
+    // Include the marker as well as connection data: malformed SSH-project state must still fail
+    // closed instead of accidentally selecting a local Windows profile.
+    ssh: !!spawn.ssh || !!spawn.sshRemoteTmux,
+    terminalProfileId: spawn.terminalProfileId,
+    defaultTerminalProfileId
+  })
   // Same copy feedback as the canvas node — a copy here is the same act as a copy there, including
   // the agent gate: a claude card stays silent because claude prints its own copy line.
   const copy = useCopyFeedback({
@@ -134,16 +178,20 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
   }
   const handleNext = useCallback(() => {
     search.next()
-    if (search.query.trim() && !search.error) searchAddonRef.current?.findNext(search.query, findOpts)
+    if (search.query.trim() && !search.error)
+      searchAddonRef.current?.findNext(search.query, findOpts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search])
   const handlePrev = useCallback(() => {
     search.prev()
-    if (search.query.trim() && !search.error) searchAddonRef.current?.findPrevious(search.query, findOpts)
+    if (search.query.trim() && !search.error)
+      searchAddonRef.current?.findPrevious(search.query, findOpts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search])
 
   useEffect(() => {
+    setSpawnError(null)
+    setSessionEnded(false)
     // A unique viewerId per mount: the core namespaces it per connection, so uniqueness only has to
     // hold within THIS window. It makes the modal a second subscriber of the node's shared session.
     const viewerId = `modal-${nodeId}-${Math.random().toString(36).slice(2, 8)}`
@@ -215,9 +263,7 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
           : useProjects.getState().activeProjectId
       // SSH-project node: resolve the live ControlMaster (may not be up yet on a cold load).
       const sshRemote =
-        spawn.sshRemoteTmux && spawn.ssh
-          ? await resolveSshRemote(spawn.ssh, spawn.cwd)
-          : undefined
+        spawn.sshRemoteTmux && spawn.ssh ? await resolveSshRemote(spawn.ssh, spawn.cwd) : undefined
       if (dead) return
       // The host is unreachable: spawn NOTHING. A create with no `sshRemote` falls through to
       // core's LOCAL tmux branch, and opening a card for a remote session would silently start a
@@ -233,11 +279,35 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
       // A local `ssh <host>` node runs ssh as its own pty program (shell:'ssh' + buildSshArgs); an
       // SSH-PROJECT node uses tmux on the remote host instead (sshRemote), so it is NOT localSsh.
       const localSsh = !!spawn.ssh && !spawn.sshRemoteTmux
+      let structuredLaunch =
+        terminalProfileId !== undefined && api.pty.executeLaunchIntent
+          ? spawn.agentLaunchIntent
+          : undefined
+      if (
+        terminalProfileId !== undefined &&
+        api.pty.executeLaunchIntent &&
+        !structuredLaunch &&
+        spawn.agentId
+      ) {
+        const customAgentConfigured = useSettings
+          .getState()
+          .settings.customAgents.some((custom) => custom.id === spawn.agentId)
+        structuredLaunch = coldAgentLaunchIntent({
+          agentId: spawn.agentId,
+          priorSessionId: agentSessionId || spawn.agentSessionId,
+          customAgentConfigured,
+          ...(hasPermissionMode(spawn.agentId)
+            ? { permissionMode: await ensureActivePermissionMode(spawn.agentId) }
+            : {})
+        }) ?? undefined
+      }
       const res = await transport.create({
         cols: term.cols,
         rows: term.rows,
         shell: localSsh ? 'ssh' : spawn.shell,
         shellArgs: localSsh ? buildSshArgs(spawn.ssh!) : undefined,
+        profileId: terminalProfileId,
+        ...(structuredLaunch ? { agentLaunchIntent: structuredLaunch } : {}),
         cwd: spawn.cwd,
         persistKey: nodeId,
         agentId: spawn.agentId,
@@ -265,18 +335,33 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
       }
       sessionId = res.sessionId
       sessionIdRef.current = res.sessionId
+      if (structuredLaunch && res.fresh && !res.agentLaunch?.ok) {
+        setSpawnError(
+          res.agentLaunch?.message ??
+            'This host did not confirm the trusted agent launch. Open the canvas terminal to recover.'
+        )
+      }
       cleanups.push(transport.onData(res.sessionId, (d) => term.write(d)))
       cleanups.push(
-        transport.onExit(res.sessionId, () =>
-          term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n')
-        )
+        transport.onExit(res.sessionId, () => term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n'))
       )
+      // The canvas terminal owns replacement creation. It turns ready:true into the node's
+      // respawnNonce, which this modal observes above, and core reserves the replacement for the
+      // primary viewer so a modal can never win a fresh agent shell. A failed peer recycle is
+      // different: automatically creating here could use stale cwd/profile state, so stay ended
+      // and send the user to the primary terminal's explicit reopen control.
+      if (transport.onRecycled)
+        cleanups.push(
+          transport.onRecycled(res.sessionId, (info) => {
+            if (recycleAction(info) !== 'ended') return
+            setSessionEnded(true)
+            term.write('\r\n\x1b[90m[session ended — reopen on canvas to restart]\x1b[0m\r\n')
+          })
+        )
       // The pty runs at the SMALLEST subscriber's grid; render exactly what it tells us and letterbox
       // the rest (the canvas node votes independently — the modal's smaller pane may shrink it).
       if (transport.onSize)
-        cleanups.push(
-          transport.onSize(res.sessionId, (size) => term.resize(size.cols, size.rows))
-        )
+        cleanups.push(transport.onSize(res.sessionId, (size) => term.resize(size.cols, size.rows)))
       term.onData((d) => sessionId && transport.write(sessionId, d))
       // DELIBERATELY omitted vs. TerminalNode: no flow-control pause (transport.setFlow) and no
       // onResync handler. The pty's pacing/backpressure comes from the canvas node's client — the
@@ -293,7 +378,11 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
       // post-await onDisposed check).
       if (dead) return
       const paint = seedPaint({
-        replay: attachReplay({ parked: false, fresh: res.fresh, hasInitialCommand: false }),
+        replay: attachReplay({
+          parked: false,
+          fresh: res.fresh,
+          hasInitialCommand: !!structuredLaunch
+        }),
         superseded: false,
         snapshot,
         screen: res.screen
@@ -323,7 +412,14 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
       cleanups.push(() => ro.disconnect())
       transport.resize(res.sessionId, term.cols, term.rows)
       term.focus()
-    })()
+    })().catch((err: unknown) => {
+      // A rejected profile resolution means core started nothing. Keep the reason as escaped DOM
+      // text (never terminal control bytes) and give the card an in-place recovery path instead of
+      // leaving an unhandled rejection and a blank pane.
+      if (dead) return
+      const message = err instanceof Error ? err.message : String(err)
+      setSpawnError(message)
+    })
 
     return () => {
       dead = true
@@ -338,7 +434,7 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
       transportRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeId])
+  }, [nodeId, spawn.respawnNonce, spawnAttempt])
 
   // Live-apply the appearance settings, mirroring the canvas node's effect (see TerminalNode) —
   // without this the modal kept whatever it was built with, so changing the font or the theme with
@@ -391,12 +487,18 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
     } else if (needsWrite) {
       setUploading(true)
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: false, projectId: '' })
+        paths = await droppedPaths(files, {
+          sshRemoteTmux: false,
+          projectId: ''
+        })
       } finally {
         setUploading(false)
       }
     } else {
-      paths = await droppedPaths(files, { sshRemoteTmux: false, projectId: '' })
+      paths = await droppedPaths(files, {
+        sshRemoteTmux: false,
+        projectId: ''
+      })
     }
     if (!paths.length) return
     // A drag-drop from another OS app doesn't bring our window forward (esp. macOS), so the
@@ -469,6 +571,51 @@ export function ModalTerminal({ nodeId, spawn, searchOpen, onCloseSearch }: Moda
         />
       )}
       <div ref={hostRef} className="kanban-modal__term" />
+      {spawnError !== null && (
+        <div className="term-node__closed nodrag" role="alert">
+          <span>
+            {profileText(
+              'terminalProfiles.error.spawnLead',
+              'This terminal could not be started. {error}',
+              {
+                error:
+                  spawnError ||
+                  profileText(
+                    'terminalProfiles.error.unresolved',
+                    'The terminal profile could not be resolved.'
+                  )
+              }
+            )}
+          </span>
+          <span>
+            {terminalProfileId !== undefined
+              ? profileText(
+                  'terminalProfiles.error.recovery',
+                  'Choose Restart with profile… from this card’s menu, then try again.'
+                )
+              : 'Check the connection or executable, then try again.'}
+          </span>
+          <button
+            className="term-node__reopen"
+            onClick={() => setSpawnAttempt((attempt) => attempt + 1)}
+          >
+            {profileText('terminalProfiles.error.tryAgain', 'Try again')}
+          </button>
+        </div>
+      )}
+      {spawnError === null && sessionEnded && (
+        <div className="term-node__closed nodrag" role="alert">
+          <span>
+            {profileText(
+              'terminalProfiles.error.sessionEnded',
+              'This persistent session ended before a replacement was ready. Nothing was restarted.'
+            )}
+          </span>
+          <button className="term-node__reopen" onClick={onOpenCanvas}>
+            {profileText('terminalProfiles.error.openCanvasToReopen', 'Open on canvas to reopen')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

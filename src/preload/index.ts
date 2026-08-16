@@ -88,6 +88,10 @@ const api: NodeTerminalApi = {
     destroy: (persistKey, opts) =>
       ipcRenderer.send(IPC.ptyDestroy, persistKey, opts?.everySocket === true),
     recycle: (persistKey) => ipcRenderer.send(IPC.ptyRecycle, persistKey),
+    recycleConfirmed: (persistKey, target) =>
+      target === undefined
+        ? ipcRenderer.invoke(IPC.ptyRecycleConfirmed, persistKey)
+        : ipcRenderer.invoke(IPC.ptyRecycleConfirmed, persistKey, target),
     generateName: (persistKey, cwd) => ipcRenderer.invoke(IPC.ptyGenerateName, persistKey, cwd),
     generateGroupName: (memberKeys, cwd) =>
       ipcRenderer.invoke(IPC.ptyGenerateGroupName, memberKeys, cwd),
@@ -95,6 +99,12 @@ const api: NodeTerminalApi = {
     readScrollback: (persistKey) => ipcRenderer.invoke(IPC.ptyReadScrollback, persistKey),
     sendText: (persistKey, text, opts) =>
       ipcRenderer.invoke(IPC.ptySendText, persistKey, text, opts?.enter),
+    ...(process.platform === 'win32'
+      ? {
+          executeLaunchIntent: (sessionId, launchId, intent) =>
+            ipcRenderer.invoke(IPC.ptyExecuteLaunchIntent, sessionId, launchId, intent)
+        }
+      : {}),
     tmuxStatus: () => ipcRenderer.invoke(IPC.ptyTmuxStatus),
     paneCommand: (persistKey) => ipcRenderer.invoke(IPC.ptyPaneCommand, persistKey),
     readSessionName: (sessionId, accountId, agentId) =>
@@ -166,6 +176,14 @@ const api: NodeTerminalApi = {
     load: () => ipcRenderer.invoke(IPC.settingsLoad),
     save: (settings) => ipcRenderer.invoke(IPC.settingsSave, settings)
   },
+  ...(process.platform === 'win32'
+    ? {
+        terminalProfiles: {
+          list: () => ipcRenderer.invoke(IPC.terminalProfilesList),
+          refresh: () => ipcRenderer.invoke(IPC.terminalProfilesRefresh)
+        }
+      }
+    : {}),
   schoolMode: {
     load: () => ipcRenderer.invoke(IPC.schoolModeLoad),
     enable: (pin) => ipcRenderer.invoke(IPC.schoolModeEnable, pin),

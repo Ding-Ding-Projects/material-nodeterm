@@ -26,6 +26,28 @@ describe('LocalTransport injected api', () => {
     void t.create({ persistKey: 'k' } as never)
     expect(create).toHaveBeenCalledWith({ persistKey: 'k' })
   })
+
+  it('awaits the injected core confirmation when recycling before an execution-state change', async () => {
+    const recycleConfirmed = vi.fn(async () => undefined)
+    const api = { pty: { recycleConfirmed } } as unknown as NodeTerminalApi
+    const t = new LocalTransport(api)
+    const target = { profileId: 'wsl:Ubuntu 24.04', cwd: 'C:\\work tree' }
+
+    await expect(t.recycleConfirmed?.('term-1', target)).resolves.toBeUndefined()
+    expect(recycleConfirmed).toHaveBeenCalledWith('term-1', target)
+
+    await expect(t.recycleConfirmed?.('term-legacy')).resolves.toBeUndefined()
+    expect(recycleConfirmed).toHaveBeenCalledWith('term-legacy')
+  })
+
+  it('fails closed when a host has no confirmed recycle RPC', async () => {
+    const api = { pty: {} } as unknown as NodeTerminalApi
+    const t = new LocalTransport(api)
+
+    await expect(t.recycleConfirmed?.('term-1')).rejects.toThrow(
+      'Confirmed persistent-session recycling is unavailable on this host.'
+    )
+  })
 })
 
 describe('LocalTransport co-attach members', () => {

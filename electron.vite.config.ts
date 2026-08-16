@@ -14,7 +14,11 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/main/index.ts') },
+        // Keep the emitted entry name (`out/main/index.js`, as declared in package.json) while
+        // routing through the tiny Squirrel.Windows lifecycle gate. The normal main module is a
+        // dynamic import from startup.ts, so install/update/uninstall invocations cannot run any
+        // userData, settings, session, or window bootstrap as an import side effect.
+        input: { index: resolve(__dirname, 'src/main/startup.ts') },
         // 'electron' is a devDependency, so externalizeDepsPlugin (which reads
         // dependencies) does not externalize it — the npm wrapper at
         // node_modules/electron/index.js would get bundled in, making the app

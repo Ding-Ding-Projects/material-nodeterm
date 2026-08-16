@@ -24,14 +24,14 @@ import {
 } from './agents/node-token-files'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
+import { POSIX_TEST_SHELL, posixTestEnvPath, posixTestScriptArgs } from './test-posix-shell'
 
 const run = promisify(execFile)
 
 /** A real POSIX shell to exec the generated launcher with. There is no literal `/bin/sh` path on
- *  win32, but a POSIX-compatible `sh` (Git for Windows' MSYS sh) is expected on PATH — resolved by
- *  bare name rather than an assumed install location, matching how the launcher's own login-shell
- *  PATH probe already works. A no-op on POSIX, where the literal path is correct as written. */
-const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
+ *  win32, so the shared test helper locates Git for Windows' MSYS sh from PATH or its standard
+ *  install locations. A no-op on POSIX, where the literal path is correct as written. */
+const SH = POSIX_TEST_SHELL
 
 /**
  * The launcher's own `cwd=$PWD` (codex-identity-proxy.ts) is read by a REAL MSYS shell on win32,
@@ -129,7 +129,7 @@ beforeEach(() => {
  */
 function baseEnv(): Record<string, string> {
   return {
-    PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    PATH: posixTestEnvPath([binDir]),
     HOME: dir,
     NODETERM_NODE_ID: 'node-1',
     NODETERM_HOOK_ENDPOINT: hookServer.endpointFilePath(),
@@ -148,7 +148,7 @@ function callLauncher(
 ): Promise<{ stdout: string; stderr: string }> {
   const merged = { ...baseEnv(), ...env }
   for (const [k, v] of Object.entries(merged)) if (v === '') delete (merged as any)[k]
-  return run(SH, [script, ...args], { env: merged, cwd: dir })
+  return run(SH, posixTestScriptArgs(script, args, [binDir]), { env: merged, cwd: dir })
 }
 
 /** What the fake `codex` was exec'd with, one line per invocation. */

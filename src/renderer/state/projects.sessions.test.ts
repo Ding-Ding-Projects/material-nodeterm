@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useProjects } from './projects'
-import type { CanvasNodeState } from '@shared/types'
+import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from '@shared/types'
+
+type DuplicateExecutionState = {
+  initialCommand?: string
+  agentLaunchIntent?: AgentLaunchIntent
+  pendingLaunchError?: string
+  pendingLaunchErrorKind?: 'confirmed' | 'unknown'
+}
+
+type RuntimeCanvasNodeState = CanvasNodeState & DuplicateExecutionState
 
 const mkNode = (id: string): CanvasNodeState => ({
   id,
@@ -43,6 +52,77 @@ describe('projects store node mutations', () => {
     expect(nodes).toHaveLength(2)
     expect(nodes[1].id).not.toBe('n1')
     expect(nodes[1].position).not.toEqual(nodes[0].position)
+  })
+
+  it('clears every execution identity from an inactive-project copy without changing its source', () => {
+    const pendingLaunch: PendingLaunch = {
+      after: ['term-dependency'],
+      launchId: '123e4567-e89b-42d3-a456-426614174000',
+      launch: {
+        kind: 'agent',
+        action: 'resume',
+        agentId: 'claude',
+        sessionId: 'source-session'
+      }
+    }
+    const source: RuntimeCanvasNodeState = {
+      ...mkNode('n1'),
+      initialCommand: 'claude --resume source-session',
+      agentLaunchIntent: {
+        kind: 'agent',
+        action: 'resume',
+        agentId: 'claude',
+        sessionId: 'source-session'
+      },
+      agentSessionId: 'source-session',
+      pendingLaunch,
+      pendingLaunchError: 'delivery failed',
+      pendingLaunchErrorKind: 'unknown'
+    }
+    useProjects.setState({
+      projects: [
+        {
+          id: 'p1',
+          name: 'P1',
+          color: '#111',
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [source]
+        },
+        {
+          id: 'p2',
+          name: 'P2',
+          color: '#222',
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [mkNode('other')]
+        }
+      ],
+      activeProjectId: 'p2'
+    })
+
+    useProjects.getState().duplicateNode('p1', 'n1')
+
+    const nodes = useProjects.getState().getProject('p1')!.nodes as RuntimeCanvasNodeState[]
+    const [storedSource, copy] = nodes
+    expect(storedSource).toBe(source)
+    expect(copy.initialCommand).toBeUndefined()
+    expect(copy.agentLaunchIntent).toBeUndefined()
+    expect(copy.agentSessionId).toBeUndefined()
+    expect(copy.pendingLaunch).toBeUndefined()
+    expect(copy.pendingLaunchError).toBeUndefined()
+    expect(copy.pendingLaunchErrorKind).toBeUndefined()
+
+    expect(source.initialCommand).toBe('claude --resume source-session')
+    expect(source.agentLaunchIntent).toEqual({
+      kind: 'agent',
+      action: 'resume',
+      agentId: 'claude',
+      sessionId: 'source-session'
+    })
+    expect(source.agentSessionId).toBe('source-session')
+    expect(source.pendingLaunch).toBe(pendingLaunch)
+    expect(source.pendingLaunchError).toBe('delivery failed')
+    expect(source.pendingLaunchErrorKind).toBe('unknown')
+    expect(useProjects.getState().getProject('p2')!.nodes.map((node) => node.id)).toEqual(['other'])
   })
 })
 

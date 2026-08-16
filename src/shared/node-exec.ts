@@ -26,15 +26,20 @@
  * a program string carrying shell metacharacters is never handed to tmux.
  */
 
+import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
-import type { CanvasNodeState } from './types'
+import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
   /** `NodeState.shell` — a custom session program for this node. */
   shell?: string
+  /** `NodeState.terminalProfileId` — this machine's snapshotted Windows profile choice. */
+  terminalProfileId?: string
   /** `NodeState.ssh.extraArgs` — raw advanced ssh args for this node's connection. */
   sshExtraArgs?: string
+  /** A delayed launch authorized on this machine; never accepted from project files or peers. */
+  pendingLaunch?: PendingLaunch
 }
 
 /** Node id → the exec values that stay on this machine. */
@@ -47,6 +52,99 @@ export type LocalNodeExecMap = Record<string, LocalNodeExec>
  * would read as an option) are not.
  */
 const SAFE_PROGRAM = /^[A-Za-z0-9_./+@:=-]+$/
+const SAFE_OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/
+const SAFE_CUSTOM_AGENT_ID = /^custom:[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const BUILTIN_AGENT_ID_SET = new Set<string>(BUILTIN_AGENT_IDS)
+const MAX_PENDING_DEPS = 256
+const MAX_INTENT_TEXT = 1024 * 1024
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isSafeAgentId = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  (BUILTIN_AGENT_ID_SET.has(value) || SAFE_CUSTOM_AGENT_ID.test(value))
+
+/**
+ * Validate and deep-clone a locally authorized delayed launch before it enters or leaves the
+ * trusted overlay. Reconstructing the allowlisted shape matters: workspace.json is hand-editable,
+ * and retaining an unknown future field here could accidentally make it executable later.
+ *
+ * Legacy `{ after, command }` records are deliberately rejected. They were formerly written into
+ * git-shared project files, so there is no provenance that can make their rendered shell source
+ * trustworthy after an upgrade.
+ */
+function clonePendingLaunch(value: unknown): PendingLaunch | undefined {
+  if (!isRecord(value)) return undefined
+  if (
+    !Array.isArray(value.after) ||
+    value.after.length > MAX_PENDING_DEPS ||
+    !value.after.every((id): id is string => typeof id === 'string' && SAFE_OPAQUE_ID.test(id)) ||
+    typeof value.launchId !== 'string' ||
+    !UUID_V4.test(value.launchId) ||
+    !isRecord(value.launch)
+  ) {
+    return undefined
+  }
+
+  const raw = value.launch
+  if (raw.kind === 'shell-command') {
+    if (
+      typeof raw.command !== 'string' ||
+      raw.command.length === 0 ||
+      raw.command.length > MAX_INTENT_TEXT
+    )
+      return undefined
+    return {
+      after: [...value.after],
+      launchId: value.launchId,
+      launch: { kind: 'shell-command', command: raw.command }
+    }
+  }
+
+  if (
+    raw.kind !== 'agent' ||
+    (raw.action !== 'start' && raw.action !== 'resume') ||
+    !isSafeAgentId(raw.agentId) ||
+    (raw.permissionMode !== undefined && !isPermissionMode(raw.permissionMode))
+  ) {
+    return undefined
+  }
+
+  if (raw.action === 'start') {
+    if (
+      raw.sessionId !== undefined ||
+      (raw.prompt !== undefined &&
+        (typeof raw.prompt !== 'string' || raw.prompt.length > MAX_INTENT_TEXT)) ||
+      (raw.newSessionId !== undefined &&
+        (typeof raw.newSessionId !== 'string' || !SAFE_OPAQUE_ID.test(raw.newSessionId)))
+    ) {
+      return undefined
+    }
+    const launch: AgentLaunchIntent = {
+      kind: 'agent', action: 'start', agentId: raw.agentId
+    }
+    if (raw.prompt !== undefined) launch.prompt = raw.prompt
+    if (raw.permissionMode !== undefined) launch.permissionMode = raw.permissionMode
+    if (raw.newSessionId !== undefined) launch.newSessionId = raw.newSessionId
+    return { after: [...value.after], launchId: value.launchId, launch }
+  }
+
+  if (
+    raw.prompt !== undefined ||
+    raw.newSessionId !== undefined ||
+    typeof raw.sessionId !== 'string' ||
+    !SAFE_OPAQUE_ID.test(raw.sessionId)
+  ) {
+    return undefined
+  }
+  const launch: AgentLaunchIntent = {
+    kind: 'agent', action: 'resume', agentId: raw.agentId, sessionId: raw.sessionId
+  }
+  if (raw.permissionMode !== undefined) launch.permissionMode = raw.permissionMode
+  return { after: [...value.after], launchId: value.launchId, launch }
+}
 
 /**
  * Validate a session program at the point it becomes a command. Returns the program when it is
@@ -65,13 +163,21 @@ export function safeSessionProgram(shell: string | undefined): string | undefine
 /**
  * Strip every exec-enabling field from the nodes we are about to write into a SHARED project file.
  * The values survive on this machine via `localNodeExec` (below); what leaves for git/the remote
- * host carries no command of any kind.
+ * host carries no command or local profile selection of any kind.
  */
 function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
-  if (n.shell === undefined && n.ssh?.extraArgs === undefined && n.ssh?.execTrusted === undefined)
+  if (
+    n.shell === undefined &&
+    n.terminalProfileId === undefined &&
+    n.pendingLaunch === undefined &&
+    n.ssh?.extraArgs === undefined &&
+    n.ssh?.execTrusted === undefined
+  )
     return n
   const out: CanvasNodeState = { ...n }
   delete out.shell
+  delete out.terminalProfileId
+  delete out.pendingLaunch
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
     // if it could ride a document or a wire frame, a hostile one would simply set it to true.
@@ -96,12 +202,49 @@ export function stripSharedNodeExec(nodes: CanvasNodeState[]): CanvasNodeState[]
  * ever, surviving the peer leaving, being revoked, and the app restarting. The peer laundered an
  * exec field into the trusted store.
  *
- * A peer has no business setting either field on our machine: both are per-machine settings (which
- * program to run here, which ssh options to pass here), and neither is meaningful on a canvas that
- * is merely being mirrored. So they are dropped at ingest, on every surface.
+ * A peer has no business setting any of these fields on our machine: they are per-machine settings
+ * (which profile/program to run here, which ssh options to pass here), and none is meaningful on a
+ * canvas that is merely being mirrored. So they are dropped at ingest, on every surface.
  */
 export function sanitizeInboundNode(node: CanvasNodeState): CanvasNodeState {
   return stripNodeExec(node)
+}
+
+/**
+ * Normalize delayed launches read from a MACHINE-LOCAL legacy/inline workspace record.
+ *
+ * Unlike `sanitizeInboundNode`, this path may retain a valid typed launch because the document is
+ * the local user's own store. It still re-validates and deep-clones the value: workspace.json is
+ * hand-editable, and old versions persisted `{ after, command }` without trustworthy provenance.
+ */
+export function normalizeLocalPendingLaunch(nodes: CanvasNodeState[]): CanvasNodeState[] {
+  return nodes.map((node) => {
+    if (node.pendingLaunch === undefined) return node
+    const pendingLaunch = node.kind === 'terminal'
+      ? clonePendingLaunch(node.pendingLaunch)
+      : undefined
+    const out: CanvasNodeState = { ...node }
+    if (pendingLaunch === undefined) delete out.pendingLaunch
+    else out.pendingLaunch = pendingLaunch
+    return out
+  })
+}
+
+/**
+ * Accept a genuinely new terminal/agent node on a Windows desktop host. The sender's execution
+ * fields are always stripped first; then the receiving host snapshots its own current default.
+ * Existing nodes must not use this helper — their already-snapshotted local selection is carried
+ * by `carryLocalNodeExec`, so a later default change never rewrites them.
+ *
+ * An absent default is the deliberate non-Windows/Server behavior: sanitize only.
+ */
+export function acceptNewInboundNode(
+  node: CanvasNodeState,
+  defaultTerminalProfileId?: string
+): CanvasNodeState {
+  const clean = sanitizeInboundNode(node)
+  if (!defaultTerminalProfileId || clean.kind !== 'terminal' || clean.ssh) return clean
+  return { ...clean, terminalProfileId: defaultTerminalProfileId }
 }
 
 /**
@@ -119,11 +262,20 @@ export function carryLocalNodeExec(
 ): CanvasNodeState {
   if (!prev) return next
   const extraArgs = prev.ssh?.extraArgs
-  if (prev.shell === undefined && extraArgs === undefined) return next
+  const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
+  if (
+    prev.shell === undefined &&
+    prev.terminalProfileId === undefined &&
+    extraArgs === undefined &&
+    pendingLaunch === undefined
+  )
+    return next
   const out: CanvasNodeState = { ...next }
   if (prev.shell !== undefined) out.shell = prev.shell
+  if (prev.terminalProfileId !== undefined) out.terminalProfileId = prev.terminalProfileId
   if (extraArgs !== undefined && out.ssh)
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
+  if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   return out
 }
 
@@ -153,40 +305,21 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
   for (const n of nodes) {
     const entry: LocalNodeExec = {}
     if (n.shell && safeSessionProgram(n.shell)) entry.shell = n.shell
+    // The id is opaque here on purpose: availability is machine state and may change after the
+    // node is saved. The trusted core resolver validates it at spawn and reports an unavailable
+    // profile rather than silently switching shells. This boundary only decides provenance.
+    if (n.terminalProfileId !== undefined) entry.terminalProfileId = n.terminalProfileId
     const extraArgs = n.ssh?.extraArgs
     if (extraArgs && (n.ssh?.execTrusted || !sshExtraArgsEnableLocalExec(extraArgs)))
       entry.sshExtraArgs = extraArgs
-    if (entry.shell || entry.sshExtraArgs) map[n.id] = entry
-  }
-  return Object.keys(map).length ? map : undefined
-}
-
-/**
- * ONE-TIME UPGRADE. Take the exec values a project file carried from BEFORE this trust boundary
- * existed, and adopt them as this machine's own.
- *
- * `ssh.extraArgs` has a real producer (`createSshTerminalNode` copies it out of the machine-local
- * SSH server store), so every existing ssh-terminal node with a jump host or a corporate
- * `ProxyCommand` has one in its CURRENT `.nodeterm/project.json` — and the v3 index has no
- * `localExec` for it. Without this hoist the first load after the upgrade would silently drop the
- * value (the connection breaks with a confusing error) and the next save would erase it from disk
- * and propagate the deletion to every teammate via `rev`.
- *
- * The provenance signal is the one actually available at upgrade time: the project was ALREADY
- * REFERENCED in this machine's `workspace.json`, i.e. it is a folder this user had already opened.
- * The caller runs this exactly once per entry (`IndexEntryV3.execMigrated`), so a project file
- * cloned AFTER the upgrade — the hostile case — never reaches it.
- *
- * `shell` is still validated: it has no producer, so anything there is either junk or an attack,
- * and blessing a value the exec site would refuse anyway buys nothing.
- */
-export function hoistLegacyNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | undefined {
-  const map: LocalNodeExecMap = {}
-  for (const n of nodes) {
-    const entry: LocalNodeExec = {}
-    if (n.shell && safeSessionProgram(n.shell)) entry.shell = n.shell
-    if (n.ssh?.extraArgs) entry.sshExtraArgs = n.ssh.extraArgs
-    if (entry.shell || entry.sshExtraArgs) map[n.id] = entry
+    if (n.kind === 'terminal') entry.pendingLaunch = clonePendingLaunch(n.pendingLaunch)
+    if (
+      entry.shell ||
+      entry.terminalProfileId !== undefined ||
+      entry.sshExtraArgs ||
+      entry.pendingLaunch
+    )
+      map[n.id] = entry
   }
   return Object.keys(map).length ? map : undefined
 }
@@ -206,10 +339,15 @@ export function applyLocalNodeExec(
     const mine = local?.[n.id]
     const out: CanvasNodeState = stripNodeExec(n)
     if (mine?.shell) out.shell = mine.shell
+    if (mine?.terminalProfileId !== undefined) out.terminalProfileId = mine.terminalProfileId
     if (out.ssh && mine?.sshExtraArgs) {
       // Ours: it came out of the machine-local index, so the exec site may honor an option like
       // ProxyCommand (a jump host is a legitimate thing to have configured).
       out.ssh = { ...out.ssh, extraArgs: mine.sshExtraArgs, execTrusted: true }
+    }
+    if (out.kind === 'terminal') {
+      const pendingLaunch = clonePendingLaunch(mine?.pendingLaunch)
+      if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
     }
     return out
   })

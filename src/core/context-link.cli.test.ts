@@ -14,13 +14,14 @@ import { hookServer } from './agents/hook-server'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
 import { posixQuote } from '../shared/ssh'
+import { POSIX_TEST_SHELL, posixTestEnvPath, posixTestScriptArgs } from './test-posix-shell'
 
 const run = promisify(execFile)
 
 /** A real POSIX shell to exec the generated shim with. There is no literal `/bin/sh` path on
- *  win32, but a POSIX-compatible `sh` (Git for Windows' MSYS sh) is expected on PATH — resolved by
- *  bare name rather than an assumed install location. A no-op on POSIX. */
-const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
+ *  win32, so the shared test helper locates Git for Windows' MSYS sh from PATH or its standard
+ *  install locations. A no-op on POSIX. */
+const SH = POSIX_TEST_SHELL
 
 let dir = ''
 let shim = ''
@@ -147,7 +148,7 @@ afterAll(() => {
 async function shimRun(nodeId: string, args: string[]): Promise<string> {
   const { stdout } = await run(SH, [shim, ...args], {
     env: {
-      PATH: process.env.PATH ?? '',
+      PATH: posixTestEnvPath(),
       NODETERM_NODE_ID: nodeId,
       NODETERM_HOOK_PORT: String(hookServer.getPort()),
       NODETERM_HOOK_TOKEN: hookServer.getToken()
@@ -309,7 +310,7 @@ describe('context-link shim presents the per-node token', () => {
 
   function probe(nodeId: string, env: Record<string, string>): Promise<unknown> {
     return run(SH, [shim, 'list'], {
-      env: { PATH: process.env.PATH ?? '', NODETERM_NODE_ID: nodeId, NODETERM_HOOK_TOKEN: 'x', ...env }
+      env: { PATH: posixTestEnvPath(), NODETERM_NODE_ID: nodeId, NODETERM_HOOK_TOKEN: 'x', ...env }
     })
   }
 
@@ -434,9 +435,9 @@ describe('context-link shim keeps credentials off curl\'s command line', () => {
     writeFileSync(argvLog, '')
     writeFileSync(stdinLog, '')
     seen.length = 0
-    await run(SH, [shim, 'list'], {
+    await run(SH, posixTestScriptArgs(shim, ['list'], [binDir]), {
       env: {
-        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        PATH: posixTestEnvPath([binDir]),
         NODETERM_NODE_ID: 'node-A',
         NODETERM_HOOK_TOKEN: 'SECRET-BEARER',
         NODETERM_NODE_TOKEN_DIR: tokenDir,

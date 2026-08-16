@@ -21,9 +21,9 @@ of resetting it, since jumping the view during a background reload elsewhere is 
 
 **Closing a project** (via the tab's caret menu) is non-destructive: the project is hidden from
 the tab bar but its nodes and sessions are left exactly as they were, reachable again from a
-"Recently closed" list. Its tmux sessions simply detach, the same as if you'd switched away.
-Permanently deleting a project — which does tear down its sessions — only happens from that
-"Recently closed" list's own remove action, so an accidental tab close is always recoverable.
+"Recently closed" list. Its persistent sessions simply detach, the same as if you'd switched
+away. Permanently deleting a project — which does tear down its sessions — only happens from
+that "Recently closed" list's own remove action, so an accidental tab close is always recoverable.
 
 ## Configuration
 
@@ -50,10 +50,12 @@ Permanently deleting a project — which does tear down its sessions — only ha
 
 For a local (non-SSH) project, the project file lives alongside your code at
 `<project-folder>/.nodeterm/project.json` in plain, git-shareable JSON — it carries canvas
-layout and node configuration, not credentials. Session identifiers and account bindings that
-are specific to *this machine* are kept out of that shared file and stored in a separate
-machine-local index instead, so committing `.nodeterm/project.json` to a shared repository
-does not leak per-machine state to your collaborators.
+layout and portable node configuration, not credentials or executable selections. Session
+identifiers, account bindings, a node's legacy custom `shell`, Windows `terminalProfileId`, and
+advanced SSH execution fields that are specific to *this machine* are kept out of that shared file
+and stored in the separate `LocalNodeExec`/machine-local index instead. They are also stripped from
+portable exports and inbound canvas mutations, so committing `.nodeterm/project.json` or accepting
+a peer update cannot select an executable or replace this machine's profile snapshot.
 
 ## Verification
 

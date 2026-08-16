@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import os from 'os'
+import path from 'node:path'
 import { localAgentCwd } from './commit-message'
+import { POSIX_TEST_SHELL } from './test-posix-shell'
 
 /**
  * The 2026-08-05 report: "AI commit message" failed on every SSH project with
@@ -79,11 +81,20 @@ describe('runAgent — where the agent is actually spawned', () => {
     const { runAgent } = await import('./commit-message')
     // `sh` rather than the claude/codex branches: `planAgent` resolves a real binary before
     // spawning, and this test is about the cwd, not about what is installed on the test machine.
-    await runAgent('prompt', cwd, {
-      commitAgent: 'custom',
-      commitAgentCommand: 'sh',
-      commitPromptExtra: ''
-    } as never)
+    const inheritedPath = process.env.PATH
+    process.env.PATH = [path.dirname(POSIX_TEST_SHELL), inheritedPath]
+      .filter(Boolean)
+      .join(path.delimiter)
+    try {
+      await runAgent('prompt', cwd, {
+        commitAgent: 'custom',
+        commitAgentCommand: 'sh',
+        commitPromptExtra: ''
+      } as never)
+    } finally {
+      if (inheritedPath === undefined) delete process.env.PATH
+      else process.env.PATH = inheritedPath
+    }
     return seen
   }
 

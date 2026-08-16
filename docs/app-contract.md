@@ -21,30 +21,42 @@ it yourself before considering a desktop-app feature change finished.
 A guard that only validates whatever it happens to find already existing passes cleanly on a
 codebase that implements **none** of the required features, because it never looked for anything
 by name — it can only be surprised by a match, never by an absence it didn't think to check. Every
-row in the `FEATURES` array names a real, specific file, an exported symbol, a documentation
-article, and — where the feature has one — a settings-sidebar section id and sidebar icon key, and
-the guard **fails** when any one of them is missing. When a new canonical feature is added to the
-desktop app, its row must be added here in the same change, or this guard will never know to look
-for it and a codebase that silently dropped the feature would keep passing.
+row in the `FEATURES` array names real implementation files, focused behavioural tests,
+documentation, and — where the feature has them — localized copy, persistence, built-artifact
+interaction, real capture evidence, a settings-sidebar section id, and a sidebar icon key. The
+guard **fails** when any required boundary is missing or still marked pending. When a new canonical
+feature is added to the desktop app, its row must be added here in the same change, or this guard
+will never know to look for it and a codebase that silently dropped the feature would keep passing.
 
 ## What each row checks
 
-A feature row can assert up to five kinds of evidence:
+A feature row can assert up to nine kinds of evidence:
 
 1. **Implementation files exist.** One or more paths under `src/`.
 2. **Content checks.** A required substring or regex is present in a named file (e.g. the exported
    function/class name, a required constant).
-3. **Settings-sidebar wiring**, for features with a Settings screen: the section id must be placed
+3. **Focused behavioural tests.** The named test file must exist and retain an exact suite/test
+   boundary. A source file that still contains the right words is not a substitute for exercised
+   behaviour.
+4. **Localized copy and persistence evidence**, where applicable. A profile or setting cannot
+   count as complete while its user-facing strings bypass the shipped catalogue or its saved/local
+   state boundary is untested.
+5. **Settings-sidebar wiring**, for features with a Settings screen: the section id must be placed
    inside one of `nav.ts`'s `SETTINGS_GROUPS` entries (not merely declared in the
    `SettingsSectionId` type union — a union member nothing ever renders is dead), and
    `SettingsIcons.tsx` must define a sidebar glyph keyed by that same id.
-4. **Wired-symbol checks**, for components with no settings section: the component must be
+6. **Wired-symbol checks**, for components with no settings section: the component must be
    **imported into its real consumer AND referenced outside the import statement** — not merely
    present on disk. See "The wired-symbol check, and the two ways it was wrong" below; this is the
    part of the guard most worth reading before extending it.
-5. **Documentation exists**, optionally with a required substring (used when a feature is
+7. **Documentation exists**, optionally with a required substring (used when a feature is
    documented as a *section* of a broader article rather than its own file — see Support Tickets
    below).
+8. **Built-artifact interaction evidence.** Source/unit coverage does not satisfy this field; the
+   installed or packaged application must be driven and its observable consequence recorded.
+9. **Real capture evidence.** Required capture ids are exact entries in the manifest, and desktop
+   captures must record the approved cheap Lowlevel MCP headless method. A pending marker remains a
+   deliberate red result rather than being silently accepted.
 
 ## The wired-symbol check, and the two ways it was wrong
 
@@ -118,11 +130,9 @@ documented, just not where a naive per-feature-file convention would expect it".
 
 ## Verified: the guard actually turns red
 
-Every check in this guard has been proven to fail for the right reason, restored, and re-verified
-green. Four probes, across four different assertion kinds, each performed by mutating a file,
-running the guard, confirming the exact expected failure line, then restoring with
-`git checkout --` (the guard's own script is the only file left modified — everything it points at
-was returned to its original state, confirmed with `git status --porcelain` after every probe):
+The original four assertion kinds below were each proven to fail for the right reason, restored,
+and re-verified green. They were performed by mutating a file, running the guard, confirming the
+exact expected failure line, then restoring the file:
 
 1. **File existence** — renamed `src/renderer/nodes/DiffNode.tsx` out of the way. Guard reported
    `missing required file src/renderer/nodes/DiffNode.tsx`. Restored, green.
@@ -138,17 +148,25 @@ was returned to its original state, confirmed with `git status --porcelain` afte
    `docs/toy-locks.md` to `## Recovery Desk`. Guard reported `docs/toy-locks.md does not contain
    expected content (## Support Tickets)`. Restored, green.
 
+The guard now also runs an executable negative self-test over the exact first-class Windows profile
+inventory boundary. In memory, it removes the whole `windows-terminal-profiles` row and then each
+of its required evidence columns one at a time. The same validator used on the live inventory must
+reject every mutant. Removing or renaming the real row or any of `implementation`, `docs`,
+`localizedCopy`, `persistence`, `focusedTests`, `builtArtifactInteraction`, or `captures` therefore
+turns the live boundary check red; the self-test itself also turns red if any mutant escapes.
+
 ## Coverage
 
-The guard's `FEATURES` array carries 36 rows, matching the feature list this document's companion
-task named: terminal sessions and tmux continuity, the Windows session host, projects/tabs, node
-kinds, agent support, the canvas, source control and worktrees, the kanban board, remote/SSH, the
-Server Edition, speech/dictation, packaging and auto-update, language modes, funny levels, the emoji
-toggle, the regex builder, School mode, personal vocabulary, the narrator, notifications, the
-notification centre, the command palette, the destructive-confirmation gate, scheduled settings,
-the appearance editor, the infinite colour picker, app rename, app logo, toy locks, the
-authenticator, Support Tickets, exports, bulk actions, local history, the file converter, and the
-Ollama manager. All 36 rows currently pass (358 individual assertions).
+The hand-written `FEATURES` array carries one row for every canonical desktop feature known to this
+guard. Windows session hosting and first-class Windows terminal profiles are deliberately separate
+rows: keeping a PTY alive is not the same contract as detecting, selecting, persisting, resolving,
+and securely spawning a named profile. Run the guard for the live row/assertion count; this document
+does not pin a number that becomes false whenever a feature or exact evidence boundary is added.
+
+The Windows terminal-profile row is currently expected to stay red while two required evidence
+columns are pending: packaged-app interaction and real cheap-headless captures. Its implementation,
+persistence, documentation, localized copy, and focused source/unit behaviour can be green without
+upgrading those unperformed release gates into claimed evidence.
 
 ## The other half: proving controls DO something (`check-app-wired.mjs`)
 

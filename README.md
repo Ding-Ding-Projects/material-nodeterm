@@ -50,8 +50,9 @@ persistent session next to **sticky notes** (link one to a terminal to feed it c
 demand), **Monaco editors**, and **diff views** — six node kinds in total, all panning,
 zooming, resizing and persisting the same way. **Group** nodes are real containers that can
 nest inside each other and optionally bind to a git worktree, so every node created inside one
-inherits that worktree's directory. Quit the app, even restart the machine — sessions come
-back, with their scrollback replayed and any agent CLI resumed.
+inherits that worktree's directory. Quit the app and its persistent backend reattaches to the
+live session. Restart the machine and cold restore reconstructs the node, replays saved scrollback,
+and resumes a supported agent CLI; it does not preserve the original OS process.
 
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 
@@ -75,7 +76,8 @@ is ever interrupted by switching views.
 
 Every terminal node runs inside a persistent [tmux](https://github.com/tmux/tmux) session on
 macOS and Linux, so a shell — and anything running in it, including an in-flight agent turn —
-survives closing a node, switching projects, quitting the app, and rebooting the machine.
+survives closing a node, switching projects, and quitting the app. A machine reboot ends the live
+process; the cold-restore path replays saved scrollback and resumes supported agent conversations.
 **Windows has no tmux binary to bundle**, so nodeterm ships a from-scratch equivalent instead:
 the [Windows session host](#windows), a standalone process that owns the real PTYs and outlives
 the app. See [Windows](#windows) for its two honest caveats.

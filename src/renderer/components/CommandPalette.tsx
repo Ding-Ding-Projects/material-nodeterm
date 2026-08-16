@@ -35,6 +35,8 @@ export interface Command {
   icon?: ReactNode
   /** Searchable body text (e.g. a terminal's visible output) — matched by substring. */
   content?: string
+  /** Inert but still discoverable. Pair with `note` so mouse and keyboard users learn why. */
+  disabled?: boolean
   run: () => void
   /** Optional secondary action shown as a right-aligned button (e.g. "Reveal in Explorer"). */
   onSecondary?: () => void
@@ -140,7 +142,7 @@ export function CommandPalette({
   )
 
   const run = (cmd?: Command) => {
-    if (!cmd) return
+    if (!cmd || cmd.disabled) return
     cmd.run()
     onClose()
   }
@@ -184,7 +186,7 @@ export function CommandPalette({
               } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault()
                 const c = items[active]
-                if (c?.onSecondary) {
+                if (c?.onSecondary && !c.disabled) {
                   c.onSecondary()
                   onClose()
                 }
@@ -220,7 +222,7 @@ export function CommandPalette({
               onHover={() => setActive(i)}
               onRun={() => run(c)}
               onSecondary={
-                c.onSecondary
+                c.onSecondary && !c.disabled
                   ? () => {
                       c.onSecondary?.()
                       onClose()
@@ -292,7 +294,7 @@ function PaletteRow({
       ) : (
         (c.hint ?? c.note) && <span className="palette__hint">{c.hint ?? c.note}</span>
       )}
-      {c.control && everVisible && (
+      {c.control && everVisible && !c.disabled && (
         <span className="palette__control" onClick={(e) => e.stopPropagation()}>
           <InlineControl control={c.control} />
         </span>
@@ -320,16 +322,20 @@ function PaletteRow({
           className={`palette__item palette__row--control${active ? ' active' : ''}`}
           role="option"
           aria-selected={active}
+          aria-disabled={c.disabled || undefined}
+          title={c.disabled ? c.note ?? c.hint : undefined}
           onMouseEnter={onHover}
-          onClick={onRun}
+          onClick={c.disabled ? undefined : onRun}
         >
           {body}
         </div>
       ) : (
         <button
           className={`palette__item${active ? ' active' : ''}`}
+          aria-disabled={c.disabled || undefined}
+          title={c.disabled ? c.note ?? c.hint : undefined}
           onMouseEnter={onHover}
-          onClick={onRun}
+          onClick={c.disabled ? undefined : onRun}
         >
           {body}
         </button>

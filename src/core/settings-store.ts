@@ -17,6 +17,15 @@ import type { HistoryAction } from '../shared/local-history'
 function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   const merged = { ...DEFAULT_SETTINGS, ...saved }
   merged.speech = { ...DEFAULT_SETTINGS.speech, ...saved?.speech }
+  // Windows terminal profiles replaced the old implicit meaning of `defaultShell`. Migrate only
+  // when the new key is genuinely ABSENT: an explicit profile id — including a hand-edited or
+  // currently unavailable one — must survive byte-for-byte so the trusted resolver can fail
+  // closed and the settings UI can explain it. The compatibility path is equally opaque here;
+  // never trim or rewrite it, because an absolute Windows executable may contain spaces.
+  if (!saved || !Object.prototype.hasOwnProperty.call(saved, 'defaultTerminalProfileId')) {
+    merged.defaultTerminalProfileId =
+      typeof saved?.defaultShell === 'string' && saved.defaultShell.length > 0 ? 'custom' : 'auto'
+  }
   // Legacy `terminalGpuRendering` was a boolean whose default (true) was merged into every saved
   // file — so a stored `true` is indistinguishable from "never touched" and maps to the new
   // 'auto' (platform-aware) default, while a stored `false` was always an explicit escape-hatch

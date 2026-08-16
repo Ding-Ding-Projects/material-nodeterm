@@ -10,7 +10,11 @@
 /** Bumped whenever a request/response/event SHAPE changes. Carried in the host's state file so a
  *  client can in principle refuse to talk to an incompatible host — not enforced yet (this is the
  *  first version), but the field exists from day one so it never has to be added under pressure. */
-export const SESSION_HOST_PROTOCOL_VERSION = 1
+export const SESSION_HOST_PROTOCOL_VERSION = 2
+
+/** Concrete parser owned by the live terminal generation. Kept in the host so a new renderer/main
+ * process can safely encode a delayed launch without re-guessing from a stale profile id. */
+export type SessionHostShellDialect = 'posix' | 'pwsh' | 'windows-powershell' | 'cmd'
 
 /** Exactly what node-pty needs to spawn — passed on `attach` so the host never has to compute cwd
  *  resolution, PATH, hook env, etc. itself. The CLIENT (pty-manager.ts, which already resolves all
@@ -22,6 +26,16 @@ export interface SessionHostSpawnOptions {
   env: Record<string, string>
   cols: number
   rows: number
+  /** Required for trusted v2 profile launches; omitted only by legacy/test callers that will not
+   * execute an opaque launch intent on this generation. */
+  launchDialect?: SessionHostShellDialect
+  /** Optional trusted cold-start launch. The host inserts this id into the new generation's
+   * exactly-once ledger before typing any input and completes it before acknowledging attach. */
+  initialLaunch?: {
+    launchId: string
+    command: string
+    stdinAfterStart?: string
+  }
 }
 
 /** Client → host requests. Every request carries a monotonic `id`; the host echoes it on the
@@ -29,7 +43,7 @@ export interface SessionHostSpawnOptions {
  *  same idiom `ControlModeClient` uses for tmux control-mode, minus the positional-FIFO fragility
  *  (JSON here carries its own id, so an out-of-order reply is still recoverable). */
 export type SessionHostRequest =
-  | { id: number; cmd: 'hello'; token: string }
+  | { id: number; cmd: 'hello'; token: string; protocolVersion: number }
   | {
       id: number
       cmd: 'attach'
@@ -38,6 +52,18 @@ export type SessionHostRequest =
       /** Cap on both the emulator's live scrollback buffer and how much `capture`'s `full: true`
        *  returns — mirrors `settings.tmuxScrollback` / tmux's own `history-limit`. */
       scrollback: number
+      /** Capability established by a confirmed kill. Required to cold-create that reserved name;
+       * other authenticated app clients cannot steal the replacement window. */
+      replacementToken?: string
+    }
+  /** Warm attach that is atomic with the host's existence check. It deliberately carries no
+   * spawn plan: absence/exit is an error and can never recreate a session with stale settings. */
+  | {
+      id: number
+      cmd: 'attachExisting'
+      name: string
+      /** When known, prevents a same-name replacement from satisfying a stale warm attach. */
+      expectedGeneration?: string
     }
   | { id: number; cmd: 'hasSession'; name: string }
   | { id: number; cmd: 'write'; name: string; data: string }
@@ -47,7 +73,32 @@ export type SessionHostRequest =
   | { id: number; cmd: 'sendKeys'; name: string; text: string; enter: boolean }
   | { id: number; cmd: 'paneCommand'; name: string }
   | { id: number; cmd: 'capture'; name: string; full: boolean }
-  | { id: number; cmd: 'killSession'; name: string }
+  | {
+      id: number
+      cmd: 'executeLaunch'
+      name: string
+      /** Exact host process generation returned by attach/attachExisting. */
+      generation: string
+      /** Machine-local UUID v4. Host deduplication is scoped to this generation. */
+      launchId: string
+      /** Core-private, already validated and rendered input. Never returned on the wire. */
+      command: string
+      stdinAfterStart?: string
+    }
+  | {
+      id: number
+      cmd: 'killSession'
+      name: string
+      /** Stable across client reconnect/retry. The host caches completed operations so a lost
+       * acknowledgement can never kill a newer same-name generation (multi-client ABA). */
+      operationId: string
+      /** Exact process generation observed by attach/hasSession. A different current generation
+       * proves the requested target is already gone and must not be killed. */
+      expectedGeneration?: string
+      /** Confirmed recycle reserves the now-empty name for the same client operation. Generic
+       * deletion leaves no token and does not block a later ordinary create/undo. */
+      reserveReplacement: boolean
+    }
   | { id: number; cmd: 'detach'; name: string }
   | { id: number; cmd: 'listSessions' }
   | { id: number; cmd: 'ping' }
@@ -60,8 +111,13 @@ export type SessionHostResponse =
 /** Host → client PUSH frames — not correlated to any request id; delivered for as long as this
  *  connection is a subscriber of `name` (see `attach` / `detach`). */
 export type SessionHostEvent =
-  | { type: 'data'; name: string; data: string }
-  | { type: 'exit'; name: string; exitCode: number }
+  | { type: 'data'; name: string; data: string; generation?: string }
+  | {
+      type: 'exit'
+      name: string
+      exitCode: number
+      generation?: string
+    }
 
 export type SessionHostFrame = SessionHostResponse | SessionHostEvent
 
@@ -98,9 +154,26 @@ export interface AttachResult {
    * ("guaranteed non-empty when present").
    */
   screen?: string
+  /** Opaque identity for the exact host-owned process behind this attachment. */
+  /** Required by protocol v2; absent only while interoperating with a live legacy v1 host. */
+  generation?: string
+  /** Exact live parser. Required for generation-safe opaque launch execution. */
+  launchDialect?: SessionHostShellDialect
+  /** Sanitized outcome for an atomic cold-start launch; no rendered input is reflected. */
+  initialLaunchStatus?: 'executed' | 'already-executed'
 }
 export interface HasSessionResult {
   exists: boolean
+  /** Required with exists:true in v2; legacy v1 hosts do not provide it. */
+  generation?: string
+}
+export interface KillSessionResult {
+  /** Present only for a reserveReplacement operation that currently owns the name reservation. */
+  replacementToken?: string
+}
+export interface ExecuteLaunchResult {
+  /** No private command/input details are ever reflected to callers. */
+  status: 'executed' | 'already-executed'
 }
 export interface PaneCommandResult {
   command: string | null

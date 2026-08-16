@@ -4,6 +4,8 @@ import { useAgentStatus } from '../../state/agentStatus'
 import { ContextMeter } from '../ContextMeter'
 import { LabelChips } from './LabelChips'
 import type { KanbanSession } from './KanbanView'
+import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
+import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 
 const PRIO_COLOR: Record<KanbanPriority, string> = {
   low: '#8e8e93',
@@ -14,6 +16,8 @@ const PRIO_COLOR: Record<KanbanPriority, string> = {
 
 interface SessionCardProps {
   session: KanbanSession
+  /** Pre-resolved machine-local profile metadata; stable while detection and this node are stable. */
+  terminalProfile?: KanbanTerminalProfilePresentation
   meta?: KanbanCardMeta
   /** Resolved board labels on this card (LabelChips) — resolved by the board, passed in. */
   labels?: KanbanLabel[]
@@ -29,8 +33,60 @@ interface SessionCardProps {
   onContext: (nodeId: string, x: number, y: number) => void
 }
 
+/** Selected-profile identity on a terminal or agent card. Dynamic labels/reasons stay verbatim. */
+export function SessionCardTerminalProfile({
+  profile
+}: {
+  profile: KanbanTerminalProfilePresentation
+}): JSX.Element {
+  const profileText = useLocalizedVocabularyText()
+  const status =
+    profile.availability === 'available'
+      ? profileText('terminalProfiles.header.statusAvailable', 'available')
+      : profile.availability === 'unavailable'
+        ? profileText('terminalProfiles.header.statusUnavailable', 'unavailable')
+        : profileText('terminalProfiles.header.statusUnknown', 'availability unknown')
+  const ariaLabel = profile.hint
+    ? profileText(
+        'terminalProfiles.header.ariaLabelWithHint',
+        'Terminal profile: {profile}, {status}: {hint}',
+        { profile: profile.label, status, hint: profile.hint }
+      )
+    : profileText('terminalProfiles.header.ariaLabel', 'Terminal profile: {profile}, {status}', {
+        profile: profile.label,
+        status
+      })
+  return (
+    <span
+      className={`kanban-card__profile kanban-card__profile--${profile.availability}`}
+      aria-label={ariaLabel}
+      title={
+        profile.hint ??
+        profileText('terminalProfiles.header.title', 'Terminal profile: {profile}', {
+          profile: profile.label
+        })
+      }
+    >
+      <span className="kanban-card__profile-label">{profile.label}</span>
+      {profile.availability !== 'available' && (
+        <span className="kanban-card__profile-status" aria-hidden>
+          {profile.availability === 'unavailable' ? '!' : '?'}
+        </span>
+      )}
+    </span>
+  )
+}
+
 export const SessionCard = memo(function SessionCard({
-  session, meta, labels = [], onOpen, onDragStart, onDragEnd, onDropAt, onContext
+  session,
+  terminalProfile,
+  meta,
+  labels = [],
+  onOpen,
+  onDragStart,
+  onDragEnd,
+  onDropAt,
+  onContext
 }: SessionCardProps) {
   // THIS card's agent status, subscribed per card rather than threaded down from the board.
   // KanbanView used to hold `useAgentStatus((s) => s.byId)` and pass the map through the column:
@@ -104,6 +160,9 @@ export const SessionCard = memo(function SessionCard({
       <div className="kanban-card__row">
         <span className="kanban-card__nodedot" style={{ background: session.color }} />
         <span className="kanban-card__title">{session.title}</span>
+        {session.kind === 'terminal' && terminalProfile && (
+          <SessionCardTerminalProfile profile={terminalProfile} />
+        )}
         {session.kind === 'sticky' && <span className="kanban-card__kind">note</span>}
         {session.kind === 'browser' && <span className="kanban-card__kind">web</span>}
         {badge === 'running' && <span className="kanban-badge kanban-badge--running">RUNNING</span>}

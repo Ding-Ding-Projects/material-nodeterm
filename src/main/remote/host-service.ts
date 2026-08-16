@@ -34,6 +34,7 @@ import { loadOrCreateHostKeyPair, HostKeyLockedError } from './host-identity'
 import { OP, type Frame } from './framing'
 import { encodeOffer } from './pairing'
 import { sanitizeClientMutation } from './canvas-sync'
+import { stripSharedNodeExec } from '../../shared/node-exec'
 import { connectRelay, type RelaySocket, type RpcRequest } from './relay-socket'
 import { initHostCanvasHub, currentCanvas, subscribeCanvas } from './host-canvas-hub'
 import { createPhonePresence, type PhonePresence } from './phone-presence'
@@ -579,7 +580,15 @@ export function createHostCanvasSync(
   let current: CanvasState | null = null
 
   function broadcastCurrent(): void {
-    if (current) socket.notify(CANVAS_STATE_METHOD, current)
+    if (!current) return
+    // The renderer snapshot includes execution choices restored from THIS machine's local index.
+    // They stay in `current` for local host logic, but the copy crossing the phone/relay boundary
+    // carries shared canvas data only. In particular, never leak a custom program, Windows profile,
+    // or trusted SSH argv/provenance marker to a peer that could echo it back later.
+    socket.notify(CANVAS_STATE_METHOD, {
+      ...current,
+      nodes: stripSharedNodeExec(current.nodes)
+    })
   }
 
   return {

@@ -44,6 +44,7 @@ import {
 } from './peer-registry'
 import { decodePtyData } from '../shared/rpc'
 import { allocateRelayClientId } from '../core/presence/hub'
+import { IPC } from '../shared/ipc'
 
 /** A relay peer id, as allocateRelayClientId() would mint it (≥ 1_000_000 — never a webContents id). */
 const PEER = 1_000_000
@@ -150,6 +151,40 @@ describe('electronPlatform + relay peers', () => {
     expect(s.text).toHaveLength(1) // …and the webContents send did not reach the peer
   })
 
+  it('strips execution overlays from external workspace changes only for peer sinks', () => {
+    const p = electronPlatform()
+    const s = peerSink()
+    registerPeerSink(PEER, s.sink)
+    const project = {
+      id: 'p1',
+      name: 'Local project',
+      nodes: [{
+        id: 'n1',
+        shell: 'pwsh',
+        terminalProfileId: 'wsl:Ubuntu',
+        ssh: {
+          host: 'example.test',
+          extraArgs: '-o ProxyCommand=helper',
+          execTrusted: true
+        }
+      }]
+    }
+
+    p.sendTo(PEER, IPC.workspaceExternalChange, project)
+    const peerProject = JSON.parse(s.text[0]!).args[0]
+    expect(peerProject.nodes[0]).toEqual({
+      id: 'n1',
+      ssh: { host: 'example.test' }
+    })
+
+    // The local renderer still receives the exact live object, including its machine-local
+    // overlay. Sanitizing it would erase the user's profile/SSH configuration on the next save.
+    p.sendTo(1, IPC.workspaceExternalChange, project)
+    expect(h.sent[0]).toEqual({ id: 1, channel: IPC.workspaceExternalChange, args: [project] })
+    expect(h.sent[0]!.args[0]).toBe(project)
+    expect(project.nodes[0]!.terminalProfileId).toBe('wsl:Ubuntu')
+  })
+
   it('sendTo routes a pty:data frame to the peer sink as BINARY', () => {
     const p = electronPlatform()
     const s = peerSink()
@@ -221,6 +256,170 @@ describe('electronPlatform + relay peers', () => {
  * the local window gets, so the two surfaces can never drift.
  */
 describe('electronPlatform.dispatch / cast (the peer inbound path)', () => {
+  it('keeps local pty:create byte-identical but rewrites the relay copy before its handler', async () => {
+    const rewritten = {
+      cols: 80,
+      rows: 24,
+      persistKey: 'term-1',
+      profileId: 'pwsh',
+      cwd: String.raw`C:\trusted`
+    }
+    const authorize = vi.fn(async () => ({ ok: true as const, options: rewritten }))
+    const p = electronPlatform({ authorizeRelayPtyCreate: authorize })
+    const calls: Array<{ senderId: number; options: unknown }> = []
+    p.handleWithSender(IPC.ptyCreate, (senderId, options) => {
+      calls.push({ senderId, options })
+      return { sessionId: 's1', fresh: true }
+    })
+    const hostile = {
+      cols: 80,
+      rows: 24,
+      persistKey: 'term-1',
+      profileId: 'custom',
+      shell: 'cmd.exe',
+      shellArgs: ['/c', 'NODETERM_RELAY_ARGV_MARKER']
+    }
+
+    // Native Electron IPC never enters dispatch: existing local custom/SSH behavior stays exact.
+    await h.handlers[IPC.ptyCreate]({ sender: { id: 7 } }, hostile)
+    expect(calls[0]).toEqual({ senderId: 7, options: hostile })
+    expect(calls[0]!.options).toBe(hostile)
+
+    await expect(
+      p.dispatch(
+        PEER,
+        { t: 'req', id: 70, method: IPC.ptyCreate, args: [hostile] },
+        { sharedProjectId: 'project-1' }
+      )
+    ).resolves.toMatchObject({ t: 'res', id: 70, ok: true })
+    expect(authorize).toHaveBeenCalledWith(hostile, { sharedProjectId: 'project-1' })
+    expect(calls[1]).toEqual({ senderId: PEER, options: rewritten })
+    expect(JSON.stringify(calls[1])).not.toContain('NODETERM_RELAY_ARGV_MARKER')
+  })
+
+  it('fails relay pty:create closed when no host authority is configured', async () => {
+    const p = electronPlatform()
+    const handler = vi.fn()
+    p.handle(IPC.ptyCreate, handler)
+
+    await expect(
+      p.dispatch(PEER, {
+        t: 'req', id: 71, method: IPC.ptyCreate,
+        args: [{ cols: 80, rows: 24, persistKey: 'term-1', shell: 'cmd.exe' }]
+      })
+    ).resolves.toEqual({
+      t: 'res',
+      id: 71,
+      ok: false,
+      error: { code: 'E_FORBIDDEN', message: 'relay terminal launch authority is unavailable' }
+    })
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('does not invoke the PTY handler when host authority refuses the relay launch', async () => {
+    const p = electronPlatform({
+      authorizeRelayPtyCreate: () => ({ ok: false, message: 'unknown terminal identity' })
+    })
+    const handler = vi.fn()
+    p.handle(IPC.ptyCreate, handler)
+
+    await expect(
+      p.dispatch(PEER, {
+        t: 'req', id: 72, method: IPC.ptyCreate,
+        args: [{ cols: 80, rows: 24, persistKey: 'unknown' }]
+      })
+    ).resolves.toMatchObject({
+      t: 'res', id: 72, ok: false,
+      error: { code: 'E_FORBIDDEN', message: 'unknown terminal identity' }
+    })
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('fails PTY authority exceptions closed without exposing their private diagnostic', async () => {
+    const p = electronPlatform({
+      authorizeRelayPtyCreate: () => {
+        throw new Error(String.raw`ENOENT C:\Users\host\private-shell.exe`)
+      }
+    })
+    const handler = vi.fn()
+    p.handle(IPC.ptyCreate, handler)
+
+    await expect(
+      p.dispatch(PEER, {
+        t: 'req', id: 73, method: IPC.ptyCreate,
+        args: [{ cols: 80, rows: 24, persistKey: 'term-1' }]
+      })
+    ).resolves.toEqual({
+      t: 'res',
+      id: 73,
+      ok: false,
+      error: {
+        code: 'E_FORBIDDEN',
+        message: 'host terminal authority could not validate this launch'
+      }
+    })
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    IPC.settingsLoad,
+    IPC.settingsSave,
+    IPC.terminalProfilesList,
+    IPC.terminalProfilesRefresh,
+    IPC.ptyRecycleConfirmed,
+    IPC.ptyExecuteLaunchIntent,
+    IPC.workspaceSave
+  ])('refuses machine-local %s over relay while its local IPC handler still works', async (method) => {
+    const p = electronPlatform()
+    const localResult = { method, local: true }
+
+    // Register through the broadest possible seam on purpose. This models a future refactor
+    // accidentally moving a local-only handler from raw ipcMain onto CorePlatform: the dispatch
+    // boundary must still fail closed, while the desktop renderer's native IPC path remains live.
+    p.handle(method, () => localResult)
+    expect(await h.handlers[method]({ sender: { id: 1 } })).toEqual(localResult)
+    await expect(
+      p.dispatch(PEER, { t: 'req', id: 90, method, args: [] })
+    ).resolves.toEqual({
+      t: 'res',
+      id: 90,
+      ok: false,
+      error: {
+        code: 'E_FORBIDDEN',
+        message: 'machine-local desktop operation is not available to relay peers'
+      }
+    })
+  })
+
+  it('drops forged relay casts for machine-local launch channels before any listener runs', () => {
+    const p = electronPlatform()
+    const listener = vi.fn()
+    p.on(IPC.ptyExecuteLaunchIntent, listener)
+
+    p.cast(1_000_001, IPC.ptyExecuteLaunchIntent, [
+      'session-1',
+      'launch-1',
+      { kind: 'agent', action: 'start', agentId: 'claude' }
+    ])
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('broadcast keeps the local external-change payload live but sanitizes every peer copy', () => {
+    const p = electronPlatform()
+    const s = peerSink()
+    registerPeerSink(PEER, s.sink)
+    const project = {
+      id: 'p2',
+      nodes: [{ id: 'n2', shell: 'cmd.exe', terminalProfileId: 'cmd' }]
+    }
+
+    p.broadcast(IPC.workspaceExternalChange, project)
+
+    expect(h.sent[0]!.args[0]).toBe(project)
+    expect(JSON.parse(s.text[0]!).args[0]).toEqual({ id: 'p2', nodes: [{ id: 'n2' }] })
+  })
+
   it('dispatch answers a peer request from the recorded handler table, with the peer as sender', async () => {
     const p = electronPlatform()
     p.handle('fs:list', (dir: string) => [{ name: 'a.txt', dir: false, path: `${dir}/a.txt` }])

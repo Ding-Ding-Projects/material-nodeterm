@@ -2,7 +2,7 @@
 // the relay host (src/main/remote), the renderer (Canvas), and the canvas-sync reflector
 // (src/core). Pure: no electron, no sockets, no disk.
 
-import { carryLocalNodeExec, sanitizeInboundNode } from './node-exec'
+import { acceptNewInboundNode, carryLocalNodeExec, sanitizeInboundNode } from './node-exec'
 import { REF_MAX_LEN } from './presence'
 import type { CanvasMutation, CanvasNodeState } from './types'
 
@@ -143,18 +143,22 @@ export function createMutationGuard(): (m: CanvasMutation) => boolean {
  *
  * Every caller of this is applying a mutation that came from SOMEONE ELSE (a canvas-sync peer, a
  * relay client), so the node goes through `sanitizeInboundNode` first: the exec-enabling fields
- * (`shell`, `ssh.extraArgs`) are per-machine settings that nobody else gets to write, and letting
- * them into the live node array is how a peer laundered them into the machine-local — "trusted" —
- * workspace.json on the next save (@shared/node-exec).
+ * (`shell`, `terminalProfileId`, `ssh.extraArgs`) are per-machine settings that nobody else gets
+ * to write, and letting them into the live node array is how a peer laundered them into the
+ * machine-local — "trusted" — workspace.json on the next save (@shared/node-exec). A genuinely
+ * new node may receive the accepting Windows host's default through the optional argument; that
+ * value comes from the host, never the mutation.
  */
 export function applyCanvasMutation(
   states: CanvasNodeState[],
-  m: CanvasMutation
+  m: CanvasMutation,
+  options?: { defaultTerminalProfileId?: string }
 ): CanvasNodeState[] {
   if (m.op === 'remove') return states.filter((n) => n.id !== m.id)
+  const idx = states.findIndex((n) => n.id === m.node.id)
+  if (idx === -1)
+    return [...states, acceptNewInboundNode(m.node, options?.defaultTerminalProfileId)]
   const node = sanitizeInboundNode(m.node)
-  const idx = states.findIndex((n) => n.id === node.id)
-  if (idx === -1) return [...states, node]
   const next = states.slice()
   // …and OUR exec fields stay on the node the upsert replaces: they are per-machine, so a peer
   // dragging our ssh terminal must not hand it back stripped of the jump host we configured.

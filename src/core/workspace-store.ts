@@ -13,7 +13,14 @@ import {
   serializeProjectFile, splitWorkspace, validKanban,
   type IndexEntryV3, type ProjectFileV1, type WorkspaceIndexV3
 } from './workspace-files'
-import { hoistLegacyNodeExec, type LocalNodeExecMap } from '../shared/node-exec'
+import {
+  applyLocalNodeExec,
+  localNodeExec,
+  normalizeLocalPendingLaunch,
+  stripSharedNodeExec,
+  type LocalNodeExec,
+  type LocalNodeExecMap
+} from '../shared/node-exec'
 import { collisionSeed, derivedProjectId, freshProjectId } from '../shared/project-id'
 import { appendProjectNode, type RemoteNodeInput } from './project-node-append'
 
@@ -44,6 +51,29 @@ interface LoadedEntry {
   project: Project
   file?: ProjectFileV1
 }
+
+export type TrustedNodeLaunchUnavailableReason =
+  | 'invalid-persist-key'
+  | 'workspace-index-unavailable'
+  | 'project-source-unavailable'
+  | 'duplicate-node-id'
+
+/**
+ * Authoritative host-side state for a relay PTY launch. `missing` is intentionally distinct from
+ * `unavailable`: callers may treat a proven-new node differently, but a failed/corrupt source is
+ * never evidence that the node does not already exist somewhere with machine-local execution state.
+ */
+export type TrustedNodeLaunchLookup =
+  | {
+      status: 'found'
+      projectId: string
+      node: CanvasNodeState
+      localExec?: LocalNodeExec
+      projectCwd?: string
+      projectSsh?: Project['ssh']
+    }
+  | { status: 'missing' }
+  | { status: 'unavailable'; reason: TrustedNodeLaunchUnavailableReason }
 
 let tmpSeq = 0
 async function writeAtomic(filePath: string, content: string): Promise<void> {
@@ -99,12 +129,9 @@ export class WorkspaceStore {
   private lastWritten = new Map<string, string>()
   /** project id -> rev of the last written/loaded file. */
   private revs = new Map<string, number>()
-  /** Entries whose one-time exec migration could NOT run (their project file was unreadable at load).
-   *  They stay unmarked on disk, so the hoist is retried when the folder/server comes back. */
+  /** Entries whose one-time exec migration could not complete because their shared file was
+   * unreadable. They stay unmarked until the file returns and can pass through the strip boundary. */
   private execUnmigrated = new Set<string>()
-  /** A hoist happened this load → show the one-time note (fired with the migration's save, exactly
-   *  like the v2→v3 one: a silent change to how the user's own config is stored is not acceptable). */
-  private pendingExecNote = false
   /** Raw v2 file content, kept until the first save backs it up (migration). */
   private pendingV2Backup: string | null = null
   /** The corrupt-index recovery note is a one-time-per-run banner: every later load in the same run
@@ -216,9 +243,15 @@ export class WorkspaceStore {
     for (const e of index.entries) {
       if (e.project) {
         // Inline projects are stored verbatim in the index (no fileToProject pass), so apply the
-        // same kanban shape guard here — a v1/hand-edited board would otherwise crash the render.
-        const { kanban, ...rest } = e.project
-        built.push({ entry: e, project: validKanban(kanban) ? e.project : rest })
+        // same runtime guards here. In particular, old/hand-edited `pendingLaunch.command` must not
+        // reach the renderer: only a validated typed launch from this machine-local store survives.
+        const project = {
+          ...e.project,
+          nodes: normalizeLocalPendingLaunch(e.project.nodes)
+        }
+        e.project = project
+        const { kanban, ...rest } = project
+        built.push({ entry: e, project: validKanban(kanban) ? project : rest })
       } else if (e.cwd) {
         if (sideline) await sweepStaleTmp(projectFilePath(e.cwd))
         const read = await this.readProjectFile(e.cwd, sideline)
@@ -238,7 +271,7 @@ export class WorkspaceStore {
               closed: e.closed,
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
-              localExec: this.execOverlay(e, p)
+              localExec: this.execOverlay(e)
             })
           })
         } else {
@@ -247,16 +280,21 @@ export class WorkspaceStore {
         }
       } else if (e.ssh) {
         if (e.cache) {
-          this.revs.set(e.id, e.cache.rev)
+          // The cache originated on the SSH host and remains hostile shared input even though its
+          // container (`workspace.json`) is machine-local. Canonicalize it now so raw store readers
+          // cannot later expose a rendered launch that fileToProject would have stripped.
+          const cache = { ...e.cache, nodes: stripSharedNodeExec(e.cache.nodes) }
+          e.cache = cache
+          this.revs.set(e.id, cache.rev)
           built.push({
             entry: e,
-            project: fileToProject(e.cache, {
+            project: fileToProject(cache, {
               id: e.id,
               ssh: e.ssh,
               closed: e.closed,
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
-              localExec: this.execOverlay(e, e.cache)
+              localExec: this.execOverlay(e)
             })
           })
         } else {
@@ -339,32 +377,21 @@ export class WorkspaceStore {
   }
 
   /**
-   * The machine-local exec overlay for one ref'd entry — plus the ONE-TIME migration (see
-   * `IndexEntryV3.execMigrated` / `hoistLegacyNodeExec`).
+   * Return only the execution overlay already stored in this machine-local index entry.
    *
-   * `ssh.extraArgs` had a producer before the trust boundary existed, so an existing user's jump
-   * host / corporate `ProxyCommand` is sitting in the CURRENT project file with no `localExec` to
-   * match. Dropping it would break the connection and then, on the next save, erase it from disk and
-   * propagate the deletion to every teammate. So for an entry that has not been migrated yet — i.e.
-   * one that was ALREADY REFERENCED in this machine's workspace.json at upgrade time, which is the
-   * provenance signal available — the file's own values are hoisted into the overlay once.
-   * `localExec` (if any) still wins per node.
+   * `execMigrated` remains a one-time completion marker so an unreadable reference is not called
+   * migrated until its shared file can actually be inspected and scrubbed. It is NOT provenance:
+   * neither a pre-existing reference nor a legacy file makes `shell`, `ssh.extraArgs`, or
+   * `terminalProfileId` trustworthy. Those shared values are always dropped by `fileToProject`.
    */
-  private execOverlay(e: IndexEntryV3, f: ProjectFileV1): LocalNodeExecMap | undefined {
-    // This entry is readable THIS load, so any earlier deferral (its file was offline when we first
-    // loaded) is now resolved. Clear it so the next save() may record execMigrated=true — otherwise
-    // the entry stays unmarked forever and the hoist re-runs on every full load, which would also
-    // let a project.json swapped in AFTER the deferral get its exec fields hoisted as trusted.
+  private execOverlay(e: IndexEntryV3): LocalNodeExecMap | undefined {
+    // This entry is readable THIS load, so any earlier deferral is resolved. The next save records
+    // `execMigrated=true`; future loads stay complete without ever harvesting the shared file.
     this.execUnmigrated.delete(e.id)
-    if (e.execMigrated) return e.localExec
-    const hoisted = hoistLegacyNodeExec(f.nodes)
-    if (!hoisted) return e.localExec
-    this.pendingExecNote = true
-    return { ...hoisted, ...e.localExec }
+    return e.localExec
   }
 
-  /** The file was unreadable, so the hoist could not run: leave the entry unmarked and retry it on
-   *  a later load. Anything dropped must be visible or recoverable — never silently gone. */
+  /** The file was unreadable, so leave the entry unmarked and complete its strip migration later. */
   private deferExecMigration(e: IndexEntryV3): void {
     if (!e.execMigrated) this.execUnmigrated.add(e.id)
   }
@@ -454,9 +481,10 @@ export class WorkspaceStore {
     // An unavailable placeholder carries no real data. splitWorkspace already dropped its file
     // and cache; here we restore the machine-local payload (ssh offline cache) from the previous
     // index so the index rewrite doesn't drop a good cache we still can't reach.
-    // The one-time exec migration is now recorded, so it never runs again for these entries — which
-    // is what keeps a project.json cloned AFTER the upgrade (the hostile case) out of the hoist. An
-    // entry whose file we could not read at load stays unmarked, so it is retried.
+    // The one-time exec migration is now recorded for every readable reference. This marker never
+    // grants trust: shared execution fields were already dropped on load, and only a pre-existing
+    // machine-local overlay survives. An entry whose file could not be read stays unmarked so its
+    // shared file can be scrubbed when it returns.
     for (const e of index.entries) {
       if (e.project) continue // inline canvases live in this machine-local file already
       if (!this.execUnmigrated.has(e.id)) e.execMigrated = true
@@ -563,11 +591,6 @@ export class WorkspaceStore {
     this.index = index
 
     if (migrating) platform().broadcast(IPC.workspaceMigrated, 'v2')
-    if (this.pendingExecNote) {
-      this.pendingExecNote = false
-      platform().broadcast(IPC.workspaceMigrated, 'exec')
-    }
-
     this.onPersist?.()
   }
 
@@ -721,13 +744,13 @@ export class WorkspaceStore {
   getNode(nodeId: string): CanvasNodeState | undefined {
     for (const e of this.index?.entries ?? []) {
       let nodes: CanvasNodeState[] | undefined
-      if (e.project) nodes = e.project.nodes
-      else if (e.cache) nodes = e.cache.nodes
+      if (e.project) nodes = stripSharedNodeExec(e.project.nodes)
+      else if (e.cache) nodes = stripSharedNodeExec(e.cache.nodes)
       else if (e.cwd) {
         const raw = this.lastWritten.get(projectFilePath(e.cwd))
         if (raw) {
           try {
-            nodes = (JSON.parse(raw) as ProjectFileV1).nodes
+            nodes = stripSharedNodeExec((JSON.parse(raw) as ProjectFileV1).nodes)
           } catch {
             // Corrupt cached content: skip this entry, keep scanning the others.
           }
@@ -737,6 +760,124 @@ export class WorkspaceStore {
       if (node) return node
     }
     return undefined
+  }
+
+  /**
+   * Resolve a relay `persistKey` from trusted host persistence only.
+   *
+   * Request-supplied shell/profile/argv never enter this lookup. Shared cwd/SSH project files and
+   * caches are scrubbed before the machine-local overlay is applied; inline canvases are themselves
+   * machine-local but still pass through the runtime validator. Every source is scanned so duplicate
+   * node ids fail closed instead of silently selecting whichever project happened to come first.
+   */
+  trustedNodeLaunchContext(persistKey: string): TrustedNodeLaunchLookup {
+    if (typeof persistKey !== 'string' || !persistKey || persistKey.length > 512) {
+      return { status: 'unavailable', reason: 'invalid-persist-key' }
+    }
+    if (!this.index) return { status: 'unavailable', reason: 'workspace-index-unavailable' }
+
+    const matches: Array<{
+      projectId: string
+      node: CanvasNodeState
+      localExec?: LocalNodeExec
+      projectCwd?: string
+      projectSsh?: Project['ssh']
+    }> = []
+    let sourceUnavailable = false
+
+    for (const entry of this.index.entries) {
+      let nodes: CanvasNodeState[] | undefined
+      let overlay: LocalNodeExecMap | undefined = entry.localExec
+      let inline = false
+
+      if (entry.project) {
+        if (!Array.isArray(entry.project.nodes)) {
+          sourceUnavailable = true
+          continue
+        }
+        nodes = normalizeLocalPendingLaunch(entry.project.nodes)
+        inline = true
+      } else if (entry.cache) {
+        if (!Array.isArray(entry.cache.nodes)) {
+          sourceUnavailable = true
+          continue
+        }
+        nodes = stripSharedNodeExec(entry.cache.nodes)
+      } else if (entry.cwd) {
+        const raw = this.lastWritten.get(projectFilePath(entry.cwd))
+        if (!raw) {
+          sourceUnavailable = true
+          continue
+        }
+        try {
+          const file = JSON.parse(raw) as ProjectFileV1
+          if (file?.version !== 1 || !Array.isArray(file.nodes)) {
+            sourceUnavailable = true
+            continue
+          }
+          nodes = resolveNodes(stripSharedNodeExec(file.nodes), entry.cwd)
+        } catch {
+          sourceUnavailable = true
+          continue
+        }
+      } else {
+        sourceUnavailable = true
+        continue
+      }
+
+      const sameId = nodes.filter((node) => node?.id === persistKey)
+      for (const rawNode of sameId) {
+        if (inline) overlay = localNodeExec([rawNode])
+        const hydrated = applyLocalNodeExec([rawNode], overlay)[0]
+        const localExec = localNodeExec([hydrated])?.[persistKey]
+        matches.push({
+          projectId: entry.id,
+          node: {
+            ...hydrated,
+            position: { ...hydrated.position },
+            size: { ...hydrated.size },
+            ...(hydrated.tags ? { tags: [...hydrated.tags] } : {}),
+            ...(hydrated.ssh ? { ssh: { ...hydrated.ssh } } : {})
+          },
+          ...(localExec ? { localExec } : {}),
+          ...(entry.cwd || entry.project?.cwd
+            ? { projectCwd: entry.cwd ?? entry.project?.cwd }
+            : {}),
+          ...(entry.ssh || entry.project?.ssh
+            ? { projectSsh: entry.ssh ?? entry.project?.ssh }
+            : {})
+        })
+      }
+    }
+
+    // An unreadable source could contain either the requested node or a duplicate of the one we
+    // found. Until every indexed project was inspected, neither `missing` nor `found` is proven.
+    if (sourceUnavailable) {
+      return { status: 'unavailable', reason: 'project-source-unavailable' }
+    }
+    if (matches.length > 1) return { status: 'unavailable', reason: 'duplicate-node-id' }
+    if (matches.length === 0) return { status: 'missing' }
+    return { status: 'found', ...matches[0] }
+  }
+
+  /**
+   * Prove a project named by a session-introduction flow exists on this host, and return only its
+   * authoritative host cwd/SSH binding. A peer-supplied cwd or connection never participates.
+   */
+  trustedProjectLaunchContext(
+    projectId: string
+  ): { projectId: string; cwd?: string; ssh?: Project['ssh'] } | null {
+    if (!this.index || typeof projectId !== 'string' || !projectId) return null
+    const entries = this.index.entries.filter((entry) => entry.id === projectId)
+    if (entries.length !== 1) return null
+    const entry = entries[0]
+    const cwd = entry.cwd ?? entry.project?.cwd
+    const ssh = entry.ssh ?? entry.project?.ssh
+    return {
+      projectId,
+      ...(cwd ? { cwd } : {}),
+      ...(ssh ? { ssh: { ...ssh, server: { ...ssh.server } } } : {})
+    }
   }
 
   /**
@@ -753,9 +894,13 @@ export class WorkspaceStore {
     const out: Array<{ id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[] }> = []
     for (const e of this.index?.entries ?? []) {
       if (e.project) {
-        out.push({ id: e.project.id, nodes: e.project.nodes, bridges: e.project.bridges })
+        out.push({
+          id: e.project.id,
+          nodes: stripSharedNodeExec(e.project.nodes),
+          bridges: e.project.bridges
+        })
       } else if (e.cache) {
-        out.push({ id: e.id, nodes: e.cache.nodes, bridges: e.cache.bridges })
+        out.push({ id: e.id, nodes: stripSharedNodeExec(e.cache.nodes), bridges: e.cache.bridges })
       } else if (e.cwd) {
         const raw = this.lastWritten.get(projectFilePath(e.cwd))
         if (!raw) continue
@@ -765,7 +910,11 @@ export class WorkspaceStore {
           // a caller sees the same absolute paths the desktop's renderer would have handed it.
           // Keyed by the ENTRY id — the map's consumers look projects up by the id the renderer
           // knows, which is never the git-shared file's (it no longer has one).
-          out.push({ id: e.id, nodes: resolveNodes(f.nodes, e.cwd), bridges: f.bridges })
+          out.push({
+            id: e.id,
+            nodes: resolveNodes(stripSharedNodeExec(f.nodes), e.cwd),
+            bridges: f.bridges
+          })
         } catch {
           // Corrupt cached content: skip this entry, keep scanning the others.
         }
@@ -816,7 +965,12 @@ export class WorkspaceStore {
    * persistedCanvases) were left holding a file they knew was outdated. Record the write like any
    * other and send the notification ourselves.
    */
-  async appendRemoteNode(projectId: string, input: RemoteNodeInput, now = new Date()): Promise<boolean> {
+  async appendRemoteNode(
+    projectId: string,
+    input: RemoteNodeInput,
+    now = new Date(),
+    defaultTerminalProfileId?: string
+  ): Promise<boolean> {
     const e = this.index?.entries.find((x) => x.id === projectId && x.cwd)
     if (!e?.cwd) return false
     const file = projectFilePath(e.cwd)
@@ -839,6 +993,23 @@ export class WorkspaceStore {
     try {
       const parsed = JSON.parse(updated) as ProjectFileV1
       this.revs.set(e.id, parsed.rev)
+      const appended = parsed.nodes.find((node) => node.id === input.id)
+      if (defaultTerminalProfileId && appended && !appended.ssh) {
+        // The phone can choose the portable node identity/presentation, never execution state.
+        // Snapshot THIS Windows host's current default into its machine-local index only. Persist
+        // it before broadcasting so a crash/reload cannot make the node follow a later default.
+        e.localExec = {
+          ...e.localExec,
+          [input.id]: {
+            ...e.localExec?.[input.id],
+            terminalProfileId: defaultTerminalProfileId
+          }
+        }
+        await writeAtomic(this.indexPath, JSON.stringify(this.index)).catch(() => {
+          // The project write already landed; keep the in-memory overlay and let the next normal
+          // workspace save retry it rather than reporting the successfully-created node as absent.
+        })
+      }
       platform().broadcast(
         IPC.workspaceExternalChange,
         fileToProject(parsed, {
@@ -879,7 +1050,9 @@ export class WorkspaceStore {
     if (res.status === 'ok') {
       try {
         const parsed = JSON.parse(res.content) as ProjectFileV1
-        if (parsed?.version === 1 && Array.isArray(parsed.nodes)) remote = parsed
+        if (parsed?.version === 1 && Array.isArray(parsed.nodes)) {
+          remote = { ...parsed, nodes: stripSharedNodeExec(parsed.nodes) }
+        }
       } catch { /* corrupt remote file → treat as absent, our cache pushes up */ }
     }
     this.reconciled.add(e.id)
@@ -979,10 +1152,14 @@ function unavailableProject(e: { id: string; name: string; color: string; closed
 function migrateLegacy(parsed: unknown): Workspace {
   const ws = parsed as Partial<Workspace> & Partial<WorkspaceV1>
   if (ws?.version === 2 && Array.isArray(ws.projects)) {
-    const active = ws.projects.some((p) => p.id === ws.activeProjectId)
+    const projects = ws.projects.map((project) => ({
+      ...project,
+      nodes: normalizeLocalPendingLaunch(project.nodes)
+    }))
+    const active = projects.some((p) => p.id === ws.activeProjectId)
       ? (ws.activeProjectId as string)
-      : (ws.projects[0]?.id ?? '')
-    return { version: 2, activeProjectId: active, projects: ws.projects }
+      : (projects[0]?.id ?? '')
+    return { version: 2, activeProjectId: active, projects }
   }
   if (ws?.version === 1 && Array.isArray(ws.nodes)) {
     return {
@@ -990,7 +1167,8 @@ function migrateLegacy(parsed: unknown): Workspace {
       activeProjectId: DEFAULT_PROJECT_ID,
       projects: [{
         id: DEFAULT_PROJECT_ID, name: 'Project 1', color: '#7aa2f7',
-        viewport: ws.viewport ?? { x: 0, y: 0, zoom: 1 }, nodes: ws.nodes
+        viewport: ws.viewport ?? { x: 0, y: 0, zoom: 1 },
+        nodes: normalizeLocalPendingLaunch(ws.nodes)
       }]
     }
   }

@@ -111,7 +111,7 @@ factories (`createTerminalNode`, `createAgentNode(agentId, …)`, `createStickyN
 `createEditorNode`, `createDiffNode`), the group transforms (`groupSelectedNodes`,
 `ungroupNodes`, `duplicateNode`), and the `nodeStatesToFlow` / `flowToNodeStates`
 serializers. Node kinds: `terminal | sticky | group | editor | diff`. A node's `data`
-carries `title, color, group, tags, collapsed, expandedHeight, shell, cwd, text,
+carries `title, color, group, tags, collapsed, expandedHeight, shell, terminalProfileId, cwd, text,
 initialCommand, filePath, diffStaged`, `agentId` (which agent CLI a terminal node runs —
 persisted), and `accountId` (which managed Claude account a terminal node runs under — immutable,
 resolved at creation, persisted; see **Managed Claude accounts**). `nodeStatesToFlow` defaults a
@@ -139,7 +139,10 @@ Persistence has two layers:
   re-opening the folder is answered by the cwd lookup, not a second adoption.
   **The shared file carries content, not identity**: no project `id`, no `viewport`, no
   `defaultAccountId` — those are machine-local and ride the index entry (`IndexEntryV3`), beside
-  `localApprovalId`/`localExec`. Two folders holding the same committed canvas (worktree, branch
+  `localApprovalId`/`localExec`. `LocalNodeExec` also owns every exec-enabling local choice:
+  legacy `shell`, Windows `terminalProfileId`, and advanced SSH arguments. `projectToFile`, portable
+  exports, and inbound canvas mutations strip them; a shared file or peer can never select this
+  machine's executable or inject argv. Two folders holding the same committed canvas (worktree, branch
   checkout) are two independent projects, and the committed file is byte-identical on every
   machine. The file still carries a machine-INDEPENDENT legacy `id` (`legacyFileId`, derived from
   the canvas name) for one release, because a pre-change build sidelines an id-less file to
@@ -157,8 +160,8 @@ Persistence has two layers:
   (`markUnmirrored`); pending mirrors are flushed before the ControlMasters die at quit; and the
   SSH dialog **dedupes by endpoint+remoteCwd** (`openSshProject`, same contract as
   `openFolderProject`) instead of minting a fresh empty project for a folder that already has one.
-- **Live terminal sessions** (tmux): terminals continue where they left off across node
-  remounts *and* full app restarts, including running processes. See below.
+- **Live terminal sessions** (tmux or the Windows session host): terminals continue where they
+  left off across node remounts *and* full app restarts, including running processes. See below.
 
 `settings.json` is a separate store (`main/settings-store.ts`, `state/settings.ts`).
 
@@ -197,12 +200,12 @@ project's nodes only.** The contract:
   the work".
 - Before any project switch / add / delete, `commitActiveToStore()` serializes the live
   React Flow nodes back into the store, so nothing is lost. Then disk is written.
-- Switching away unmounts the old project's `TerminalNode`s → their tmux clients detach but
-  the sessions keep running; switching back reattaches. tmux session names are per-node-id
-  (globally unique), so projects never collide.
+- Switching away unmounts the old project's `TerminalNode`s → their persistent clients detach but
+  the tmux/session-host sessions keep running; switching back reattaches. Session names are
+  per-node-id (globally unique), so projects never collide.
 - The tab caret menu's **Close project** (`closeProject`) is **non-destructive**: it sets
   `project.closed = true` (hidden from the tab bar, kept on disk with all nodes) and leaves the
-  tmux sessions running, so closing just detaches like a project switch. Closed projects are
+  persistent sessions running, so closing just detaches like a project switch. Closed projects are
   reopenable from the **"Recently closed"** list on `WelcomeScreen` (`reopenProject` → restores
   nodes, which reattach warm or cold-restore). `hasProjects` counts only **open** projects, so
   closing the last open one shows the welcome screen. **Permanent** deletion (`deleteProject`:
@@ -212,16 +215,33 @@ project's nodes only.** The contract:
   node factories so new terminals open there. **Folder ↔ project is deduped:** "Open folder…"
   reuses the existing project with that `cwd` (and its nodes) instead of creating a duplicate.
 
-## Terminal session continuity (tmux)
+## Terminal session continuity (tmux + Windows session host)
 
-**Windows has no tmux at all.** When `PtyManager` finds no local tmux binary (always true on
-Windows, sometimes true elsewhere), it falls back to a standalone **session host** process — a
+**Stock Windows has no native tmux.** When `PtyManager` finds no usable local tmux binary, it uses
+a standalone **session host** process — a
 from-scratch tmux-equivalent (real PTYs + `@xterm/headless` for server-side screen
 reconstruction) that gives Windows the same cross-restart persistence this whole section
 describes for tmux. See `docs/windows-session-host.md` for the full design; the short version is
 `Session.sessionHost?: boolean` in `pty-manager.ts` and a handful of `else if (!this.tmuxPath)`
 branches alongside the existing tmux CLI calls — everything below in this section still describes
 the tmux path exactly as before.
+
+**Windows profile trust boundary:** local Windows creation carries only `profileId` through
+`PtyCreateOptions`. The trusted core validates and resolves that stable id immediately before
+spawn; executable paths and argv never enter the public catalog, renderer state from a peer, or
+the shared project file. Stable ids are `auto`, `pwsh`, `windows-powershell`, `cmd`, `git-bash`,
+`custom`, and `wsl:<distribution>`. `auto` alone may fall through PowerShell 7 → Windows
+PowerShell → `%COMSPEC%`/cmd. Explicit missing profiles fail closed. WSL enumeration parses
+UTF-16/NUL output, uses the exact selected distribution's `wslpath`, then launches
+`wsl.exe -d <distribution> --cd <linux-path>`; any enumeration, translation, or launch failure
+performs no substitute spawn. See `docs/features/terminals/windows-shell-profiles.md`.
+
+**A provisional session-host attach is not persistent state.** Do not add it to the session index
+or report `persistent:true` until authentication and the correlated `attach` response succeed. A
+rejection destroys the shim, ignores queued bytes/late exit, rolls back subscriber registration,
+and rejects every coalesced creator with the real reason. Reconnect may replay only accepted
+subscriptions. Capture/kill transport uncertainty is an error, not evidence the host or session is
+absent, and attach failure never falls through to another shell.
 
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
@@ -282,13 +302,14 @@ Lifecycle, by intent:
   renderer reclaims terminal memory in FOUR places — park window expiry, the park's LRU cap, the
   memory-pressure drop (all three in `park-budget.ts`) and the offscreen viewer release
   (`offscreen-policy.ts`) — and all four were written as if dropping a PTY client were free,
-  because "the tmux session keeps running and re-attach redraws". **That sentence is only true
-  where tmux is actually underneath.** On the plain-shell fallback (no tmux installed, tmux
-  switched off in settings, or an install path `findTmux` missed) the pty IS the shell, so the
+  because "the persistent session keeps running and re-attach redraws". **That sentence is only
+  true where tmux or the session host is actually underneath.** On the plain-shell fallback
+  (persistent support switched off or unavailable) the pty IS the shell, so the
   identical call kills it and everything under it — an agent CLI mid-turn included. Issue #126: a
   project switch terminated a working Claude agent, which then auto-resumed from wherever the kill
-  landed. The predicate is deliberately the narrowest one that closes it — a tmux-backed session is
-  never protected (the kill costs a redraw), and neither is a plain terminal, a finished agent or
+  landed. The predicate is deliberately the narrowest one that closes it — a persistently backed
+  session is never protected (the kill costs a redraw), and neither is a plain terminal, a
+  finished agent or
   an unknown state (nothing is running to lose). **A fifth lever owes the same gate.**
 - **Node unmount (project switch)** → the RENDERER **parks** the terminal (`TerminalNode.tsx`
   `parkedTerminals`): the xterm instance + its attached PTY stay alive with the `.xterm` element
@@ -337,13 +358,17 @@ Lifecycle, by intent:
   (`docs/superpowers/plans/2026-08-03-phase1b-device-checklist.md`) — it is **no longer experimental**,
   and it falls back to the DOM renderer on failure. Non-macOS is deliberately not promoted (no such
   reports there, so no evidence to move it). The four-way setting stays as the escape hatch.
-- **Window close / app quit** → clients detach (`PtyManager.killAll()`); the tmux session keeps
-  running. `killAll()` deliberately does NOT kill sessions.
+- **Window close / app quit** → clients detach (`PtyManager.killAll()`); tmux or the standalone
+  Windows host keeps the session running. `killAll()` deliberately does NOT kill sessions.
 - **Node reopen / app relaunch** (nothing parked) → a new PTY attaches to the same
-  `nt-<nodeId>` session and tmux redraws current state.
-- **User clicks ×** → `destroy(persistKey)` runs `tmux kill-session`, permanently ending it. For a
+  `nt-<nodeId>` session. tmux redraws itself; the session host returns its serialized live screen.
+- **User clicks ×** → `destroy(persistKey)` kills the backend session, permanently ending it. For a
   REMOTE node it kills the remote session **and then the local one of the same name** — normally a
   no-op, but it reaps the orphan the pre-`requireRemote` local fallback below could leave behind.
+- **Windows “Restart with profile…”** → the destructive-action gate must state that the live
+  process and persistent session end. Only confirmation destroys the old session, updates the
+  machine-local `terminalProfileId`, and recreates the node. Cancellation mutates nothing. The
+  profile snapshot is per node, so a later default change affects only newly created nodes.
 - **A remote node is NEVER spawned locally** (`PtyCreateOptions.requireRemote`). `sshRemote` says
   "here is the master to run over"; `requireRemote` says "and if there isn't one, spawn NOTHING".
   Without it, a create with no `sshRemote` falls through to core's local tmux/plain-shell branches
@@ -400,23 +425,27 @@ Lifecycle, by intent:
   Device checklist (8 items) in PR #130 — owed before recommending Eco to anyone.
 
 The node id is the `persistKey` (passed to `transport.create`), so it must stay stable.
-If tmux is unavailable, `PtyManager` falls back to a plain shell (no cross-restart
-continuity). `findTmux()` resolves an absolute path because GUI apps don't inherit the
+If tmux is unavailable while persistent support is enabled, `PtyManager` selects the standalone
+session host; a plain shell is the final non-persistent path when persistence is disabled or cannot
+be used. `findTmux()` resolves an absolute path because GUI apps don't inherit the
 shell PATH, and it tries three sources **in this order: fixed system paths → the shell's
 PATH → the tmux the macOS app SHIPS** (`bundledTmuxPath`). System first is deliberate — a
 machine that already has tmux keeps using its own, so the bundled copy is a floor, never an
 override. `resourcesPath` is `undefined` on the **Server Edition**, so the bundled binary is
 unreachable there by construction; a Linux host is expected to have its own. Under
 `electron-vite dev` the last candidate resolves against `process.cwd()`, which is where
-`scripts/build-tmux.mjs` writes its artifact. If tmux is unavailable from all three,
-`PtyManager` still falls back to a plain shell; `TMUX`/`TMUX_PANE` are stripped from the child env to avoid nesting refusal.
+`scripts/build-tmux.mjs` writes its artifact. If tmux is unavailable from all three, selection
+continues to the session host before the plain fallback; `TMUX`/`TMUX_PANE` are stripped from the
+child env to avoid nesting refusal.
 
 ### Cold restore (machine reboot)
 
-tmux only survives an **app** restart — a **machine reboot kills the tmux server**, so every
-`nt-<nodeId>` session is gone. To bridge that, `create()` returns `PtyCreateResult` with a
-`fresh` flag: it runs `tmux has-session` *before* spawning, so `fresh=false` means a warm
-reattach (tmux redraws) and `fresh=true` means a cold start (first open OR post-reboot). On a
+Both persistent backends survive an **app** restart, not a **machine reboot**: a reboot kills the
+tmux server and the Windows session host, so every `nt-<nodeId>` session is gone. To bridge that,
+`create()` returns `PtyCreateResult` with a `fresh` flag. The tmux path runs `tmux has-session`
+before spawning; the session host returns `fresh` from its authenticated attach response. In both
+cases `fresh=false` means a warm reattach and `fresh=true` means a cold start (first open OR
+post-reboot). On a
 cold start the renderer (`TerminalNode.tsx`) reconstructs state instead of relying on the dead
 session (you can't keep a live OS process across a reboot):
 - **Scrollback replay** — `main/scrollback-store.ts` keeps a byte-capped (`256 KB`) snapshot of
@@ -494,7 +523,7 @@ session.
 
 ## Node kinds (all rendered by React Flow custom nodes)
 
-- **terminal** (`TerminalNode.tsx`) — xterm + tmux (see above). Header: collapse, color,
+- **terminal** (`TerminalNode.tsx`) — xterm + tmux or the Windows session host (see above). Header: collapse, color,
   click-to-rename title, ✦ AI-name, ×. Body has a **hover guard** overlay: dwell
   `settings.panHoverDelay` (default 600 ms) before the terminal takes focus — before that,
   drag = move node, scroll = pan canvas. **Cmd/Ctrl+M** (while hovered) toggles a markdown

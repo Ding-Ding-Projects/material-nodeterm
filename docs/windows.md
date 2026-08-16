@@ -1,7 +1,7 @@
 # nodeterm on Windows
 
-Windows is a first-class desktop target: a native Squirrel.Windows installer, a Windows-shaped
-default shell (PowerShell/cmd, not `bash`), and a Material title bar with the native window
+Windows is a first-class desktop target: a native Squirrel.Windows installer, detected native and
+WSL shell profiles (PowerShell/cmd by default, not `bash`), and a Material title bar with the native window
 buttons on the right instead of macOS's traffic lights on the left.
 
 This page covers what works out of the box, what degrades (and why), how the unsigned installer
@@ -15,10 +15,12 @@ behaves, and how to build it yourself.
 
 ## What works
 
-- **Terminals** — every terminal/agent node spawns a real Windows shell (see [Default shell
-  resolution](#default-shell-resolution) below), with full input/output, resize, copy/paste
+- **Terminals** — every local terminal/agent node spawns a real shell from a detected Windows
+  profile (see [Windows shell profiles](features/terminals/windows-shell-profiles.md)), with full
+  input/output, resize, copy/paste
   (standard Ctrl+C/Ctrl+Shift+C — see the terminal node section of `CLAUDE.md` for the exact
-  chord table), and the WebGL/DOM renderer split.
+  chord table), and the WebGL/DOM renderer split. The app hosts those shells itself through
+  ConPTY; it does not embed Microsoft Windows Terminal.
 - **Agent CLIs** (Claude Code, Codex, Gemini, Grok, custom) — spawn and run exactly as they do on
   macOS/Linux. Hook-based status (RUNNING/NEEDS YOU badges, subagent cards, context meter,
   session naming) all work the same way, because the hook server is a plain loopback HTTP server
@@ -27,49 +29,33 @@ behaves, and how to build it yourself.
   nodes**, **the command palette**, **notifications**, **local Claude account switching** — all
   Electron-free `src/core` logic, none of it POSIX-specific.
 - **SSH projects** — OpenSSH ships as an optional Windows feature since Windows 10 1809 and is
-  resolved automatically (see [SSH resolution](#ssh-resolution)); a remote host's own tmux session
-  still gives you full continuity even though the local Windows side has none of its own.
+  resolved automatically (see [SSH resolution](#ssh-resolution)); these remain remote sessions
+  and never receive a local Windows profile.
 - **The Server Edition** — unaffected by any of this; it targets Linux and is unchanged.
 
+## Session continuity
+
+A stock Windows installation has no native tmux. nodeterm therefore keeps local Windows shells in
+its standalone **session host**: a detached process that owns the ConPTY sessions and reconstructs
+their screens with headless xterm. Closing or crashing the desktop app detaches its clients; the
+session host and the processes it owns continue running. Relaunching nodeterm reattaches to the
+same session and restores its current screen.
+
+A **machine reboot** still ends those OS processes. On the next launch, nodeterm uses the same
+cold-restore path as a rebooted tmux host: it replays the capped scrollback snapshot and resumes a
+supported agent CLI from its recorded conversation when possible. See [Session continuity](features/terminals/session-continuity.md)
+and [Windows session host](windows-session-host.md) for the backend details.
+
+An attach that is provisional, rejected, or cannot be authenticated fails closed. It is never
+reported as persistent, never retained in the local session index, and never replaced by a plain
+shell that only appears to be the requested session. The node shows the real attach/spawn reason
+so it can be recovered deliberately.
+
+WSL profiles do not depend on a native Windows tmux. They launch the selected distribution's
+default Linux shell through `wsl.exe`; the Windows session host owns that process just like the
+other profiles.
+
 ## What degrades
-
-### No cross-restart terminal continuity (no tmux)
-
-The single biggest behavioral difference: **there is no Windows build of tmux**, and nodeterm does
-not bundle one (the bundled binary in `mac.extraResources` is macOS-only —
-`scripts/build-tmux.mjs` never runs for a Windows package). Every terminal on Windows therefore
-runs as a **plain shell**, exactly the fallback path macOS/Linux use when tmux is unavailable
-there too (see the "Terminal session continuity (tmux)" section of `CLAUDE.md`).
-
-Concretely, on Windows:
-
-- Closing a project tab and reopening it **within the same app run** still works — the renderer
-  parks the live shell process for a few minutes (`TERM_PARK_MS`) and reattaches to the *same*
-  process, not a tmux session, so this is unaffected.
-- **Restarting the app, or rebooting the machine, does not survive.** A terminal's process — and
-  anything running in it, including an in-flight agent CLI turn — ends when its plain-shell PTY is
-  torn down. There is no scrollback replay and no `claude --resume`/`codex resume` auto-launch on
-  the next open, because those only fire for a *cold-started tmux session* (`fresh: true`).
-- The **mobile companion app cannot attach** to a Windows-local terminal for the same reason: it
-  attaches to a tmux session, and there isn't one. It works normally for an SSH project the
-  Windows desktop is *connected to*, because that continuity lives on the remote host's tmux, not
-  on the Windows side.
-- **Agent hibernation ("Eco")** and other tmux-lifecycle features that assume a session survives a
-  detached PTY client are effectively inert on Windows — there's no tmux client to detach in the
-  first place, so the plain-shell process (and the agent CLI in it) is what would actually be
-  killed. `terminal/live-work.ts`'s "does the kill end live work" gate already protects against
-  this for the levers it covers; it is the reason those levers stay conservative rather than
-  reaching for it.
-
-**If you want tmux-backed continuity on Windows**, install tmux somewhere it ends up on the
-Windows PATH — the most common route is **MSYS2** (`pacman -S tmux`) with its `usr/bin` added to
-PATH, or **Cygwin**'s tmux package. **WSL's own tmux does not count**: it runs inside a separate
-Linux filesystem/process namespace and is not reachable from a native Windows PATH lookup at all
-— running nodeterm *inside* WSL as a Linux app is a different (and, for terminal continuity,
-better) option if that fits your workflow, but at that point you are running the Linux build, not
-this one. nodeterm's own `findTmux()` skips every macOS/Linux-specific search path on Windows
-(there is nothing at `/opt/homebrew/bin/tmux` etc. to find) and goes straight to a PATH lookup, so
-a Windows-PATH tmux is picked up with no configuration needed.
 
 ### Managed Claude accounts / Keychain scoping
 
@@ -87,19 +73,33 @@ install of Codex does not produce. The gate (`codexManagedRuntimeInstalled`) sim
 `false` there, so this degrades automatically and silently to "one `codex` process per node" —
 functionally correct, just without the RAM-sharing optimization. Nothing to configure.
 
-## Default shell resolution
+## Windows shell profiles
 
-New terminal/agent nodes resolve a program to run in this order:
+Settings → Shell detects profiles with stable ids: `auto`, `pwsh`, `windows-powershell`, `cmd`,
+`git-bash`, one `wsl:<distribution>` for each installed WSL distribution, and `custom` for the
+legacy executable setting. `auto` tries PowerShell 7, then Windows PowerShell, then
+`%COMSPEC%`/`cmd.exe`. Git Bash is detected from `PATH` and the standard Git for Windows system and
+per-user locations. Refresh detection after installing or removing a shell.
 
-1. An explicit program the node was created with (an agent preset's launch command, `ssh` for an
-   SSH-project node, etc).
-2. `settings.defaultShell`, if you've set one in Settings → Terminal.
-3. On Windows: **PowerShell 7+ (`pwsh.exe`)** if it's installed and resolvable (PATH, then the
-   default per-machine install location), else **Windows PowerShell (`powershell.exe`)** (always
-   present — resolved by PATH, then its fixed `System32\WindowsPowerShell\v1.0` location), else
-   whatever `%COMSPEC%` names (normally `cmd.exe`), else a bare `cmd.exe` as the final fallback
-   that can never come back empty.
-4. On macOS/Linux: `$SHELL`, else `bash`.
+One-click terminal creation uses the saved default. Profile submenus let you choose a different
+profile for a new node, and the chosen stable id is snapshotted on that node so later default
+changes affect only newly created nodes. Existing legacy nodes with no snapshot continue to use
+the configured default. A non-empty legacy `defaultShell` becomes the `custom` default without
+changing its executable text; absolute custom paths containing spaces are supported.
+
+For WSL, nodeterm enumerates distributions with `wsl.exe --list --quiet`, asks the selected
+distribution's `wslpath` to translate the Windows project directory, then keeps the structured
+`wsl.exe -d <distribution> --cd <linux-path>` prefix and runs a trusted distro-side cwd guard before
+the configured default shell. The guard prevents a directory removed after translation from
+silently opening in `/`. A missing distribution, failed translation, or
+failed launch is shown as an error for that exact profile. It never opens another distribution or
+a different shell in the wrong directory.
+
+Executable paths and launch arguments remain private to the trusted core. Shared project files
+and peer mutations carry neither them nor `terminalProfileId`; only the stable id in this
+machine's local overlay reaches PTY creation and is revalidated immediately before spawn. See the
+full [Windows shell profiles](features/terminals/windows-shell-profiles.md) article for profile
+switching and the trust boundary.
 
 ## SSH resolution
 
@@ -156,8 +156,14 @@ itself (a durable, explicit project policy, not a missing feature).
 1. Download `nodeterm-Setup-<version>.exe` from the release you want.
 2. Run it. Click through the SmartScreen prompt described above.
 3. Squirrel installs per-user (no admin elevation needed) under
-   `%LOCALAPPDATA%\nodeterm\` and creates Start Menu / desktop shortcuts.
+   `%LOCALAPPDATA%\node-terminal\` (the package id) and creates Start Menu / desktop shortcuts.
 4. Launch **nodeterm** from the Start Menu.
+
+The packaged desktop handles Squirrel's install, update, uninstall, and obsolete-version lifecycle
+invocations before normal app startup. Install/update creates the shortcut for the trusted
+`nodeterm.exe` target, uninstall removes that same shortcut, and obsolete versions exit without
+touching one. These maintenance launches never open a window or initialize settings and terminal
+sessions; updater failures exit with an error instead of continuing into an ordinary app launch.
 
 Uninstall from **Settings → Apps** like any other Windows app (Squirrel registers itself with
 "Programs and Features" the same way).

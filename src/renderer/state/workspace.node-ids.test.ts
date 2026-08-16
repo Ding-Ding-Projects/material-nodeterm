@@ -77,6 +77,66 @@ describe('duplicateNode', () => {
     expect(new Set(ids).size).toBe(200)
     expect(ids.every((id) => SAFE.test(id))).toBe(true)
   })
+
+  it('clears every execution identity from an active-canvas copy without changing its source', async () => {
+    const { duplicateNode } = await freshModule()
+    const pendingLaunch: import('@shared/types').PendingLaunch = {
+      after: ['term-dependency'],
+      launchId: '123e4567-e89b-42d3-a456-426614174000',
+      launch: {
+        kind: 'agent',
+        action: 'resume',
+        agentId: 'claude',
+        sessionId: 'source-session'
+      }
+    }
+    const source = {
+      id: 'term-source',
+      type: 'terminal',
+      position: { x: 10, y: 20 },
+      data: {
+        title: 'Source agent',
+        color: '#888',
+        group: null,
+        initialCommand: 'claude --resume source-session',
+        agentLaunchIntent: {
+          kind: 'agent',
+          action: 'resume',
+          agentId: 'claude',
+          sessionId: 'source-session'
+        },
+        agentSessionId: 'source-session',
+        pendingLaunch,
+        pendingLaunchError: 'delivery failed',
+        pendingLaunchErrorKind: 'unknown'
+      }
+    } as import('./workspace').CanvasNode
+    const sourceData = source.data
+
+    const copy = duplicateNode(source)
+
+    expect(copy.data).not.toBe(sourceData)
+    expect(copy.data).toMatchObject({ title: 'Source agent', color: '#888', group: null })
+    expect(copy.data.initialCommand).toBeUndefined()
+    expect(copy.data.agentLaunchIntent).toBeUndefined()
+    expect(copy.data.agentSessionId).toBeUndefined()
+    expect(copy.data.pendingLaunch).toBeUndefined()
+    expect(copy.data.pendingLaunchError).toBeUndefined()
+    expect(copy.data.pendingLaunchErrorKind).toBeUndefined()
+
+    expect(source.data).toBe(sourceData)
+    expect(source.data.initialCommand).toBe('claude --resume source-session')
+    expect(source.data.agentLaunchIntent).toEqual({
+      kind: 'agent',
+      action: 'resume',
+      agentId: 'claude',
+      sessionId: 'source-session'
+    })
+    expect(source.data.agentSessionId).toBe('source-session')
+    expect(source.data.pendingLaunch).toBe(pendingLaunch)
+    expect(source.data.pendingLaunchError).toBe('delivery failed')
+    expect(source.data.pendingLaunchErrorKind).toBe('unknown')
+  })
 })
 
 // The consequence the ids exist to prevent: `commitCanvas` maps by id, so two projects under one

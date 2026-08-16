@@ -40,6 +40,7 @@ const LOCAL_ONDATA_UNSUB = (): void => {}
  *  preload need real references. Cast so the spread contributes the full NodeTerminalApi shape. */
 function fakeLocalApi() {
   const ptyOnData = vi.fn(() => LOCAL_ONDATA_UNSUB)
+  const localExecuteLaunchIntent = vi.fn()
   const local = {
     updates: { NAME: 'local-updates' },
     clipboard: { NAME: 'local-clipboard' },
@@ -47,11 +48,11 @@ function fakeLocalApi() {
     githubControl: { NAME: 'local-github-control' },
     dialog: { NAME: 'local-dialog' },
     license: { NAME: 'local-license' },
-    pty: { onData: ptyOnData },
+    pty: { onData: ptyOnData, executeLaunchIntent: localExecuteLaunchIntent },
     claude: { cliCaps: () => Promise.resolve({}), readTranscript: () => Promise.reject() },
     relayClient: { disconnect: vi.fn() }
   }
-  return { local: local as unknown as NodeTerminalApi, ptyOnData }
+  return { local: local as unknown as NodeTerminalApi, ptyOnData, localExecuteLaunchIntent }
 }
 
 describe('buildRelayApi', () => {
@@ -134,6 +135,19 @@ describe('buildRelayApi', () => {
     expect(unsub).toBe(LOCAL_ONDATA_UNSUB)
     // No frame was sent for a subscription — proof it did not route through the relay transport.
     expect(t.sent).toHaveLength(0)
+  })
+
+  it('does not copy the local Windows launch-intent capability into a relay session API', () => {
+    const { local, localExecuteLaunchIntent } = fakeLocalApi()
+    ;(globalThis as Record<string, unknown>).window = { nodeTerminal: local }
+    const t = new FakeTransport()
+    const { api } = buildRelayApi('conn-private-launch', t)
+
+    expect(local.pty.executeLaunchIntent).toBe(localExecuteLaunchIntent)
+    expect(api.pty.executeLaunchIntent).toBeUndefined()
+    expect('executeLaunchIntent' in api.pty).toBe(false)
+    expect(t.sent).toHaveLength(0)
+    expect(localExecuteLaunchIntent).not.toHaveBeenCalled()
   })
 
   it('exposes ready() (delegating to the transport) and a close() teardown hook', async () => {

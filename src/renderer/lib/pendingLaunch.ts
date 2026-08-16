@@ -1,10 +1,11 @@
 // Pure logic for ARMED terminal nodes — the canvas-control `--after` dependency edge. A node
-// opened with `--after <ids>` holds its launch command (see PendingLaunch in @shared/types)
+// opened with `--after <ids>` holds its machine-local launch intent (see PendingLaunch in
+// @shared/types)
 // until every station it waits on has gone idle; this module decides when that is, and which
 // dependency edges to draw meanwhile. Kept free of React/store imports so the satisfaction
 // matrix is unit-testable — Canvas.tsx only wraps these in an effect and a setState.
 import type { AgentState } from '@shared/agents/normalize'
-import type { PendingLaunch } from '@shared/types'
+import type { PendingLaunch, TerminalLaunchIntent } from '@shared/types'
 
 /** The subset of a canvas node this module reads. */
 export interface ArmedNode {
@@ -17,7 +18,37 @@ export type StatusById = Record<string, { state?: AgentState } | undefined>
 
 export interface LaunchToFire {
   id: string
-  command: string
+  launchId: string
+  launch: TerminalLaunchIntent
+}
+
+/** Node id is part of the renderer-side ledger key; launch ids are machine-local but not global. */
+export function pendingLaunchExecutionKey(nodeId: string, launchId: string): string {
+  return `${nodeId}:${launchId}`
+}
+
+/**
+ * Synchronous admission gate for a queued launch. React state does not update until a later render,
+ * so two clicks in one event turn can otherwise both mint a launch id and both dispatch. The ref is
+ * flipped before `task` is called and remains held through rejection; callers surface the result but
+ * never need to remember a separate unlock path.
+ */
+export function runPendingLaunchOnce<T>(
+  inFlight: { current: boolean },
+  task: () => Promise<T>
+): Promise<T> | null {
+  if (inFlight.current) return null
+  inFlight.current = true
+  let result: Promise<T>
+  try {
+    result = task()
+  } catch (error) {
+    inFlight.current = false
+    throw error
+  }
+  return result.finally(() => {
+    inFlight.current = false
+  })
 }
 
 /**
@@ -54,8 +85,11 @@ export function launchesToFire(
   const out: LaunchToFire[] = []
   for (const n of nodes) {
     const p = n.data.pendingLaunch
-    if (!p || !p.command) continue
-    if (p.after.every((d) => depSatisfied(d, status, live))) out.push({ id: n.id, command: p.command })
+    if (!p || !p.launchId) continue
+    if (p.launch.kind === 'shell-command' && !p.launch.command) continue
+    if (p.after.every((d) => depSatisfied(d, status, live))) {
+      out.push({ id: n.id, launchId: p.launchId, launch: p.launch })
+    }
   }
   return out
 }

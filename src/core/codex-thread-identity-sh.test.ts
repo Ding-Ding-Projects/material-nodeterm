@@ -9,13 +9,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { codexThreadIdentityResolverSh } from './codex-thread-identity-sh'
+import { POSIX_TEST_SHELL, posixTestEnvPath, posixTestPath } from './test-posix-shell'
 
 const run = promisify(execFile)
 
 /** A real POSIX shell to exec the generated prelude with. There is no literal `/bin/sh` path on
- *  win32, but a POSIX-compatible `sh` (Git for Windows' MSYS sh) is expected on PATH — resolved by
- *  bare name rather than an assumed install location. A no-op on POSIX. */
-const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
+ *  win32, so the shared test helper locates Git for Windows' MSYS sh from PATH or its standard
+ *  install locations. A no-op on POSIX. */
+const SH = POSIX_TEST_SHELL
 
 /**
  * MSYS/Git-Bash represents `C:\Users\x` as `/c/Users/x`. `codexThreadIdentityResolverSh`'s own
@@ -25,8 +26,7 @@ const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
  * already POSIX-shaped and this prelude's contract is native to begin with.
  */
 function shPath(nativePath: string): string {
-  if (process.platform !== 'win32') return nativePath
-  return nativePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`)
+  return posixTestPath(nativePath)
 }
 
 let dir = ''
@@ -55,7 +55,7 @@ function record(threadId: string, body: string): void {
 
 async function resolve(env: Record<string, string>): Promise<string> {
   const { stdout } = await run(SH, [script], {
-    env: { PATH: process.env.PATH ?? '', HOME: dir, ...env }
+    env: { PATH: posixTestEnvPath(), HOME: dir, ...env }
   })
   return stdout.trim()
 }

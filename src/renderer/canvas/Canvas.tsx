@@ -32,6 +32,7 @@ import {
   disposeAllParkedTerminals,
   isNodeRemote,
   isNodeWatched,
+  executePendingLaunchForNode,
   setWatchedNode,
   wakeHibernatedNode
 } from '../nodes/TerminalNode'
@@ -209,6 +210,23 @@ import {
 import { planHibernation, HIBERNATE_SWEEP_MS } from '../terminal/hibernation-policy'
 import { buildHibernationCandidates } from '../lib/hibernationCandidates'
 import { applyLoopDismiss } from '../lib/loopCard'
+import {
+  assessTerminalProfileRestart,
+  canOfferTerminalProfiles,
+  recycleThenApplyTerminalProfile,
+  runExclusiveTerminalProfileRestart,
+  terminalProfileRestartOriginMatches,
+  terminalProfileChoices
+} from '../lib/terminal-profile-actions'
+import {
+  defaultTerminalCreationHandler,
+  defaultTerminalShortcutAction,
+  profileTerminalCreationHandler,
+  terminalProfileCreationActions
+} from '../lib/terminal-creation-surfaces'
+import { armedTerminalLaunchIntent } from '../terminal/armed-launch-intent'
+import { createClaudeBranchCopy } from '../terminal/agent-branch-copy'
+import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 import { prepareQuickOpenFiles, type QuickOpenIndexedFile } from '../lib/quickOpenSearch'
 import { isSafeQuickOpenRelPath } from '@shared/quick-open-filter'
 
@@ -291,12 +309,23 @@ import {
   type RelayTab,
 } from '../session/relay-tab'
 import { buildBackgroundLinkMaps, buildContextLinkNote, buildLinkMap, buildNotePushMessage, classifyLink, hiddenLinkIds, linkIdsCoveredByRopes, pairKey, planBridges, type LinkEndpoint } from '../lib/noteLink'
-import { dependencyEdges, launchesToFire, unmetDeps, type ArmedNode } from '../lib/pendingLaunch'
+import {
+  dependencyEdges,
+  launchesToFire,
+  pendingLaunchExecutionKey,
+  unmetDeps,
+  type ArmedNode
+} from '../lib/pendingLaunch'
+import { uuid } from '../lib/uuid'
 import { freeSpot } from '../lib/placement'
 import { pushSessionRename } from '../lib/sessionRename'
 import { oneLine } from '@shared/one-line'
 import { parseLenses, verifyLensPrompt, verifySynthesisPrompt } from '../lib/verifyPanel'
 import { useSettings } from '../state/settings'
+import {
+  terminalProfileDisplayError,
+  useTerminalProfiles
+} from '../state/terminal-profiles'
 import { useScheduledSettings } from '../state/scheduledSettings'
 import { activePermissionMode } from '../state/permissionMode'
 import { useContextWindow } from '../state/contextWindow'
@@ -305,7 +334,7 @@ import { useSshServers } from '../state/sshServers'
 import { useSshConn } from '../state/sshConn'
 import { useSystemAccount } from '../state/systemAccount'
 import { useEntitlement } from '../state/entitlement'
-import type { SshServer, SshConnection } from '@shared/ssh'
+import type { SshServer } from '@shared/ssh'
 import { sshHostKey } from '@shared/ssh'
 import type {
   CanvasNodeState,
@@ -316,6 +345,7 @@ import type {
   TranscriptHit
 } from '@shared/types'
 import type { KanbanCreateChoice, KanbanSession } from '../components/kanban/KanbanView'
+import { modalSpawnFromNodeData } from '../components/kanban/modal-spawn'
 import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTags, resolveColumnRef, unassigned } from '../lib/kanban'
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
 import { canClearDirty, canCommitCanvas } from '../state/persistGuards'
@@ -341,7 +371,6 @@ import { canvasSyncTarget } from './collab-sync'
 import {
   applyCanvasMutation,
   applyMutationToFlow,
-  claudeLaunchCommand,
   COLLAPSED_HEIGHT,
   alignNodes,
   arrangeNodes,
@@ -378,7 +407,8 @@ import {
   accountsForProject,
   sshAccountsHint,
   ungroupNodes,
-  type CanvasNode
+  type CanvasNode,
+  type TerminalNodeCreationOptions
 } from '../state/workspace'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
@@ -603,19 +633,24 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
     agentId: n.data.agentId as string | undefined,
     // What the card modal's co-attach terminal needs to join THIS node's session the same way the
     // canvas TerminalNode does.
-    spawn: {
-      shell: n.data.shell as string | undefined,
-      cwd: n.data.cwd as string | undefined,
-      agentId: n.data.agentId as string | undefined,
-      accountId: n.data.accountId as string | undefined,
-      ssh: n.data.ssh as SshConnection | undefined,
-      sshRemoteTmux: !!n.data.sshRemoteTmux
-    }
+    spawn: modalSpawnFromNodeData(n.data)
   }
 }
 
 /** Stable empty card list, so the closed board's memo never churns array identity. */
 const NO_KANBAN_SESSIONS: KanbanSession[] = []
+
+/** Every creation funnel passes the session that will own the node. The workspace factory uses
+ * this capability fact to snapshot Windows profiles only for local desktop sessions. */
+function terminalCreationOptionsFor(
+  projectId: string | null | undefined,
+  terminalProfileId?: string
+): TerminalNodeCreationOptions {
+  return {
+    sessionSource: sessionForProject(projectId ?? '').source,
+    ...(terminalProfileId ? { terminalProfileId } : {})
+  }
+}
 
 /** Drop the separators a hidden row leaves dangling: the menu's rules are written between blocks,
  *  so hiding every row of a block would otherwise emit two rules in a row (or one hanging at the
@@ -706,7 +741,22 @@ function StatusAwareMiniMap({ onNodeDoubleClick }: { onNodeDoubleClick: (node: N
 export function Canvas() {
   // This canvas's core api (a context read — stable for the session, no store subscription).
   // For the local session it IS window.nodeTerminal, so every call resolves identically.
-  const { api } = useSession()
+  const { api, source: sessionSource } = useSession()
+  const profileText = useLocalizedVocabularyText()
+  const terminalProfiles = useTerminalProfiles((state) => state.profiles)
+  const terminalProfilesError = useTerminalProfiles((state) => state.error)
+  const terminalProfilesLoading = useTerminalProfiles((state) => state.loading)
+  const terminalProfilesInitialized = useTerminalProfiles((state) => state.initialized)
+  const terminalProfilesDisplayError = terminalProfileDisplayError(
+    terminalProfilesError,
+    profileText(
+      'terminalProfiles.common.detectionFailed',
+      'Terminal profile detection failed.'
+    )
+  )
+  useEffect(() => {
+    if (sessionSource === 'local') void useTerminalProfiles.getState().ensureLoaded()
+  }, [sessionSource])
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([])
   // Persistent context links between Claude nodes (separate from ephemeral subagent/loop edges).
   const [linkEdges, setLinkEdges, onLinkEdgesChange] = useEdgesState<Edge>([])
@@ -1097,8 +1147,17 @@ export function Canvas() {
   const [mergeTarget, setMergeTargetState] = useState<MergeState | null>(null)
   const [mergePush, setMergePush] = useState(false)
   const settings = useSettings((s) => s.settings)
+  // Only the Windows desktop bridge exposes this API. A newly accepted peer/phone terminal gets
+  // THIS host's current default snapshotted once; Server Edition keeps its existing behavior.
+  const trustedHostDefaultTerminalProfileId = window.nodeTerminal.terminalProfiles
+    ? settings.defaultTerminalProfileId
+    : undefined
   const viewportRef = useRef<Viewport>({ x: 0, y: 0, zoom: 1 })
   const nodesRef = useRef<CanvasNode[]>(nodes)
+  const terminalProfileRestartPendingRef = useRef(new Set<string>())
+  const [terminalProfileRestartPending, setTerminalProfileRestartPending] = useState<Set<string>>(
+    () => new Set()
+  )
   /**
    * WHICH project's nodes `nodesRef` currently holds — the epoch tag that pairs with
    * `activeProjectId` (see canCommitCanvas). Written only where the load effect installs a
@@ -1214,9 +1273,28 @@ export function Canvas() {
   const activeSshServer = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.ssh?.server
   )
+  const isRelayProject = useProjects(
+    (s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.remote
+  )
   /** The active project runs on a remote host → every worktree affordance is off (see
    *  WORKTREE_SSH_HINT). Reactive, so the menus rebuild when the user switches projects. */
   const isSshProject = !!activeSshServer
+  const offersTerminalProfiles = canOfferTerminalProfiles(
+    !!api.terminalProfiles,
+    sessionSource,
+    isSshProject || isRelayProject
+  )
+  const terminalProfileMenuChoices = useMemo(
+    () =>
+      terminalProfileChoices(
+        terminalProfiles,
+        profileText(
+          'terminalProfiles.common.unavailableOnMachine',
+          'This profile is unavailable on this machine.'
+        )
+      ),
+    [terminalProfiles, profileText]
+  )
   nodesRef.current = nodes
   /**
    * ONE confirm dialog at a time — mirrored into a ref so the []-dep agent-control effect sees the
@@ -1321,9 +1399,11 @@ export function Canvas() {
   })
   // Bumped to re-run the launch effect after a refused delivery (see LAUNCH_RETRY_MS).
   const [launchRetry, setLaunchRetry] = useState(0)
-  // Ids whose held launch has been handed to the pty. An id stays here FOREVER once delivery
+  // Launch ids whose held launch has been handed to the pty. An id stays here once delivery
   // succeeded — clearing `pendingLaunch` is a state update that can lag a re-render, and this
-  // action is irreversible, so the set (not the node data) is what guarantees exactly-once.
+  // action is irreversible, so the set (plus core's generation-scoped launchId ledger) is what
+  // guarantees exactly-once. A confirmed failure retry mints a new id; transport uncertainty
+  // keeps the same id so the host ledger can answer without re-executing.
   const launchInFlight = useRef<Set<string>>(new Set())
   const launchAttempts = useRef<Map<string, number>>(new Map())
   // Fire armed nodes whose upstream stations have all gone idle. This is the edge that makes
@@ -1335,31 +1415,90 @@ export function Canvas() {
       nodes as unknown as ArmedNode[],
       useAgentStatus.getState().byId,
       live
-    ).filter((f) => !launchInFlight.current.has(f.id))
+    ).filter((f) => !launchInFlight.current.has(pendingLaunchExecutionKey(f.id, f.launchId)))
     for (const f of ready) {
-      launchInFlight.current.add(f.id)
-      const attempt = (launchAttempts.current.get(f.id) ?? 0) + 1
-      launchAttempts.current.set(f.id, attempt)
-      void api.pty.sendText(f.id, f.command).then((ok) => {
-        if (ok) {
-          setNodes((ns) =>
-            ns.map((n) => (n.id === f.id ? { ...n, data: { ...n.data, pendingLaunch: undefined } } : n))
-          )
-          markDirty()
-          return
-        }
-        // Refused: the node's tmux session is most likely still coming up. Let it back out of
-        // flight and re-run shortly — a launch that silently vanishes is worse than a late one.
-        launchInFlight.current.delete(f.id)
+      const executionKey = pendingLaunchExecutionKey(f.id, f.launchId)
+      launchInFlight.current.add(executionKey)
+      const attempt = (launchAttempts.current.get(executionKey) ?? 0) + 1
+      launchAttempts.current.set(executionKey, attempt)
+      const execution = executePendingLaunchForNode(activeSession.id, f.id, {
+        after: [],
+        launchId: f.launchId,
+        launch: f.launch
+      })
+      // The node's PTY may still be mounting. Nothing reached core, so backing this launch id out
+      // is safe; once a concrete executor accepts it, failures are final for that id/generation.
+      if (!execution) {
+        launchInFlight.current.delete(executionKey)
         if (attempt < LAUNCH_DELIVERY_ATTEMPTS) {
           setTimeout(() => setLaunchRetry((v) => v + 1), LAUNCH_RETRY_MS)
-        } else {
-          console.warn('[pending-launch] gave up delivering held launch for', f.id)
         }
-      })
+        continue
+      }
+      void execution
+        .then((result) => {
+          if (result.ok) {
+            setNodes((ns) =>
+              ns.map((n) =>
+                n.id === f.id
+                  ? {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        pendingLaunch: undefined,
+                        pendingLaunchError: undefined,
+                        pendingLaunchErrorKind: undefined
+                      }
+                    }
+                  : n
+              )
+            )
+            markDirty()
+            return
+          }
+          // A core-accepted launch id is final for this generation, failures included. Surface the
+          // sanitized reason; the node's explicit retry control mints a new id before trying again.
+          setNodes((ns) =>
+            ns.map((n) =>
+              n.id === f.id
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      pendingLaunchError: result.message,
+                      pendingLaunchErrorKind: 'confirmed'
+                    }
+                  }
+                : n
+            )
+          )
+        })
+        .catch(() => {
+          // A rejected IPC may have reached the host. Keep the SAME id so the next explicit retry
+          // queries the generation ledger instead of creating a second operation.
+          setNodes((ns) =>
+            ns.map((n) =>
+              n.id === f.id
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      pendingLaunchError:
+                        'The queued launch delivery result is unknown. Retry to check it safely.',
+                      pendingLaunchErrorKind: 'unknown'
+                    }
+                  }
+                  : n
+            )
+          )
+        })
+        .finally(() => {
+          // Deliberately retain executionKey in the generation ledger. Clearing renderer UI
+          // in-flight must never silently submit this operation again.
+        })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- armedDepSig/launchRetry are the triggers
-  }, [nodes, armedDepSig, launchRetry])
+  }, [nodes, armedDepSig, launchRetry, activeSession.id])
 
   // Selection state for ephemeral nodes (they live outside React Flow's managed nodes), owned by
   // the agent-nodes store so the cards themselves can set it — see `selectable: false` below.
@@ -1916,7 +2055,7 @@ export function Canvas() {
       // to switch projects first). Only act if we landed on the requested project.
       if (pendingAddRef.current === useProjects.getState().activeProjectId) {
         pendingAddRef.current = null
-        addTerminal()
+        defaultTerminalCreationHandler(addTerminal)()
       }
     }, 0)
     return () => clearTimeout(t)
@@ -2083,7 +2222,7 @@ export function Canvas() {
     return api.workspace.onMigrated((kind) => {
       setMigrationNote(
         kind === 'exec'
-          ? 'Custom shells and advanced SSH options (e.g. a ProxyCommand jump host) are no longer stored in the shared .nodeterm/project.json — a cloned repo could use them to run code. They still work here: they moved to this machine only, and your teammates no longer receive them.'
+          ? 'Execution settings in the shared .nodeterm/project.json were removed rather than trusted. Existing machine-local profiles, custom shells, and advanced SSH options stay local; any value that existed only in the shared file must be selected again on this machine.'
           : 'Projects now live in a .nodeterm folder inside each project directory. It holds the canvas only — no ids, camera or accounts from this machine — so committing it shares the canvas cleanly, or add it to .gitignore.'
       )
     })
@@ -2145,12 +2284,14 @@ export function Canvas() {
   useEffect(() => {
     return window.nodeTerminal.remoteHost.onApplyMutation((mutation) => {
       setNodes((ns) => {
-        const next = applyCanvasMutation(flowToNodeStates(ns), mutation)
+        const next = applyCanvasMutation(flowToNodeStates(ns), mutation, {
+          defaultTerminalProfileId: trustedHostDefaultTerminalProfileId
+        })
         return nodeStatesToFlow(next)
       })
       markDirty()
     })
-  }, [setNodes, markDirty])
+  }, [setNodes, markDirty, trustedHostDefaultTerminalProfileId])
 
   // Host connection-approval gate: when a client finishes the handshake, prompt the host to
   // verify the SAS and allow/deny before any remote pty/fs RPC is served.
@@ -2321,13 +2462,21 @@ export function Canvas() {
         // PARKED from a recent project switch — dispose it, as an active-project remove does.
         if (mutation.op === 'remove')
           disposeTerminalOnUnmount(sessionForProject(projectId).id, mutation.id)
-        if (useProjects.getState().applyNodeMutation(projectId, mutation)) markDirty()
+        if (useProjects.getState().applyNodeMutation(
+          projectId,
+          mutation,
+          trustedHostDefaultTerminalProfileId
+        )) markDirty()
         return
       }
       // PATCH THE LIVE ARRAY — do not round-trip the canvas through the (lossy) serializers. That
       // wiped your selection, deleted your relay-remote nodes and re-rendered every node component,
       // ~20 times a second while a teammate dragged. See applyMutationToFlow.
-      const flow = applyMutationToFlow(nodesRef.current, mutation)
+      const flow = applyMutationToFlow(
+        nodesRef.current,
+        mutation,
+        trustedHostDefaultTerminalProfileId
+      )
       if (flow === nodesRef.current) return // nothing to do (a remove for a node we do not have)
       if (mutation.op === 'remove') {
         // The peer's delete must also dispose OUR terminal co-state for that node — otherwise the
@@ -2347,11 +2496,21 @@ export function Canvas() {
       // undo debounce was silently dropped from the undo stack whenever a peer's mutation landed
       // first (i.e. constantly, while anyone else was dragging). Rebasing keeps the difference that
       // IS yours, and adds nothing that is theirs.
-      committedRef.current = applyMutationToFlow(committedRef.current, mutation)
+      committedRef.current = applyMutationToFlow(
+        committedRef.current,
+        mutation,
+        trustedHostDefaultTerminalProfileId
+      )
       setNodes(flow)
       markDirty()
     })
-  }, [activeSession.api, setNodes, markDirty, publishableLater])
+  }, [
+    activeSession.api,
+    setNodes,
+    markDirty,
+    publishableLater,
+    trustedHostDefaultTerminalProfileId
+  ])
 
   // Record an undo snapshot when the canvas settles (debounced; skips drag frames/loads).
   useEffect(() => {
@@ -2948,19 +3107,110 @@ export function Canvas() {
       initialCommand?: string,
       groupId?: string,
       /** Force the working directory (e.g. a Source Control action running in a worktree scope). */
-      cwdOverride?: string
+      cwdOverride?: string,
+      /** Explicit Windows profile selection. Omitted means the saved default is snapshotted. */
+      terminalProfileId?: string
     ) => {
       const project = useProjects.getState().getProject(activeProjectId)
+      if (
+        terminalProfileId &&
+        (project?.ssh || project?.remote || sessionForProject(activeProjectId ?? '').source !== 'local')
+      ) {
+        notify({
+          kind: 'error',
+          title: profileText(
+            'terminalProfiles.common.unavailableHereTitle',
+            'Windows profile unavailable here'
+          ),
+          body: profileText(
+            'terminalProfiles.common.unavailableHereBody',
+            'Local Windows profiles cannot be applied to an SSH or relay terminal.'
+          )
+        })
+        return
+      }
       const cwd = cwdOverride ?? cwdForNewNodeIn(groupId) ?? project?.cwd
       setNodes((ns) => {
         // In an SSH project the node is stamped remote (runs over the project's master); the
         // factory takes the project's ssh and roots the terminal at its remoteCwd.
-        const node = createTerminalNode(ns.length, cwd, center ?? emptyNodePos(), initialCommand, project?.ssh)
+        const node = createTerminalNode(
+          ns.length,
+          cwd,
+          center ?? emptyNodePos(),
+          initialCommand,
+          project?.ssh,
+          terminalCreationOptionsFor(activeProjectId, terminalProfileId)
+        )
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
     },
-    [setNodes, markDirty, activeProjectId, emptyNodePos, cwdForNewNodeIn, parentInto]
+    [setNodes, markDirty, activeProjectId, emptyNodePos, cwdForNewNodeIn, parentInto, profileText]
+  )
+
+  /** Profile-explicit sibling of the ordinary "New terminal" action. The direct action keeps
+   * snapshotting the saved default; this submenu stamps the selected stable id on the new node. */
+  const terminalProfileCreationItems = useCallback(
+    (at?: { x: number; y: number }, groupId?: string): MenuItem[] => {
+      if (!offersTerminalProfiles) return []
+      const children: MenuItem[] = terminalProfileMenuChoices.length
+        ? terminalProfileCreationActions(addTerminal, terminalProfileMenuChoices, {
+            center: at,
+            groupId
+          }).map((action) => ({
+            label: action.label,
+            icon: <IconTerminal />,
+            disabled: action.disabled,
+            hint: action.note,
+            onClick: action.run
+          }))
+        : [
+            {
+              label: terminalProfilesLoading
+                ? profileText(
+                    'terminalProfiles.common.detectingProfiles',
+                    'Detecting profiles…'
+                  )
+                : profileText(
+                    'terminalProfiles.common.profilesUnavailable',
+                    'Profiles unavailable'
+                  ),
+              disabled: true,
+              hint:
+                terminalProfilesDisplayError ??
+                (terminalProfilesInitialized
+                  ? profileText(
+                      'terminalProfiles.common.noProfilesDetected',
+                      'No Windows terminal profiles were detected.'
+                    )
+                  : profileText(
+                      'terminalProfiles.common.detectionPending',
+                      'Profile detection has not finished yet.'
+                    )),
+              onClick: () => {}
+            }
+          ]
+      return [
+        {
+          type: 'submenu',
+          label: profileText(
+            'terminalProfiles.create.menuLabel',
+            'New terminal with profile…'
+          ),
+          icon: <IconTerminal />,
+          children
+        }
+      ]
+    },
+    [
+      offersTerminalProfiles,
+      terminalProfileMenuChoices,
+      terminalProfilesLoading,
+      terminalProfilesDisplayError,
+      terminalProfilesInitialized,
+      addTerminal,
+      profileText
+    ]
   )
 
   /** Open a new terminal that runs a command on start (e.g. gh auth login). `cwd` lets a caller
@@ -3364,6 +3614,7 @@ export function Canvas() {
   const explainCommit = useCallback(
     (prompt: string, scopeCwd?: string) => {
       const project = useProjects.getState().getProject(activeProjectId)
+      const cwd = scmCwd(scopeCwd)
       const account = resolveNewNodeAccount(
         undefined,
         project,
@@ -3376,12 +3627,13 @@ export function Canvas() {
           ns.length,
           // Same scope resolution as every other Source Control action (`scmCwd`): the panel's
           // active scope, an SSH project's remoteCwd, else the project's own checkout.
-          scmCwd(scopeCwd),
+          cwd,
           viewCenter(),
           prompt,
-          undefined,
+          nodeSshFor(project?.ssh, cwd),
           account,
-          activePermissionMode()
+          activePermissionMode(),
+          terminalCreationOptionsFor(activeProjectId)
         )
       ])
       markDirty()
@@ -3538,7 +3790,16 @@ export function Canvas() {
       }
       setNodes((ns) => [
         ...ns.map((n) => ({ ...n, selected: false })),
-        { ...createAccountLoginNode(accountId, ns.length, viewCenter(), ssh), selected: true }
+        {
+          ...createAccountLoginNode(
+            accountId,
+            ns.length,
+            viewCenter(),
+            ssh,
+            terminalCreationOptionsFor(useProjects.getState().activeProjectId)
+          ),
+          selected: true
+        }
       ])
       markDirty()
       // The event fires from the full-screen Settings overlay — close it so the user actually
@@ -3589,7 +3850,8 @@ export function Canvas() {
           undefined,
           project?.ssh,
           account,
-          activePermissionMode(agentId)
+          activePermissionMode(agentId),
+          terminalCreationOptionsFor(activeProjectId)
         )
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
@@ -3625,19 +3887,22 @@ export function Canvas() {
   // dedicated hold-mode effect below, which is what fires in that case.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isKanbanOpen(useProjects.getState().activeProjectId)) return
-      if (!(e.metaKey || e.ctrlKey)) return
+      const kanbanOpen = isKanbanOpen(useProjects.getState().activeProjectId)
       const tag = (document.activeElement?.tagName || '').toLowerCase()
-      if (tag === 'input' || tag === 'textarea') return
+      const typing = tag === 'input' || tag === 'textarea'
+      const terminalShortcut = defaultTerminalShortcutAction(e, { kanbanOpen, typing })
+      if (kanbanOpen) return
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (typing) return
       if (matchesShortcut(e, useSettings.getState().settings.speech.shortcut, isMac)) {
         e.preventDefault()
         toggleDictation()
         return
       }
       const k = e.key.toLowerCase()
-      if (k === 't' && !e.shiftKey) {
+      if (terminalShortcut) {
         e.preventDefault()
-        addTerminal()
+        defaultTerminalCreationHandler(addTerminal)()
       } else if (k === 'c' && e.shiftKey) {
         e.preventDefault()
         addAgentNode(useSettings.getState().settings.defaultAgent)
@@ -4663,6 +4928,264 @@ export function Canvas() {
     [setNodes]
   )
 
+  const applyTerminalProfileAndRespawn = useCallback(
+    (nodeId: string, terminalProfileId: string) => {
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === nodeId && node.type === 'terminal'
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  // A legacy custom executable would otherwise continue winning over the newly
+                  // selected trusted profile. Both fields are machine-local execution state.
+                  shell: undefined,
+                  terminalProfileId,
+                  respawnNonce:
+                    ((node.data.respawnNonce as number | undefined) ?? 0) + 1
+                }
+              }
+            : node
+        )
+      )
+      markDirty()
+    },
+    [setNodes, markDirty]
+  )
+
+  const assessProfileRestartForNode = useCallback(
+    (node: CanvasNode, targetProfileId: string) => {
+      const currentSettings = useSettings.getState().settings
+      const agentId = createdAgentId(node.data)
+      const assessment = assessTerminalProfileRestart({
+        currentProfileId:
+          node.data.shell !== undefined
+            ? 'custom'
+            : typeof node.data.terminalProfileId === 'string'
+              ? node.data.terminalProfileId
+              : currentSettings.defaultTerminalProfileId,
+        targetProfileId,
+        currentCustomExecutable:
+          typeof node.data.shell === 'string' ? node.data.shell : currentSettings.defaultShell,
+        targetCustomExecutable: currentSettings.defaultShell,
+        agent: agentId
+          ? {
+              agentId,
+              priorSessionId:
+                useAgentStatus.getState().byId[node.id]?.sessionId ||
+                (typeof node.data.agentSessionId === 'string'
+                  ? node.data.agentSessionId
+                  : undefined),
+              customLaunchCmd: currentSettings.customAgents.find((agent) => agent.id === agentId)
+                ?.launchCmd
+            }
+          : undefined
+      })
+
+      const reason =
+        assessment.reasonCode === 'custom-agent-not-configured'
+          ? profileText(
+              'terminalProfiles.restart.customAgentMissingConfig',
+              'This custom agent is no longer configured. Restore its launch command before restarting; the live process was not changed.'
+            )
+          : assessment.reasonCode === 'agent-cross-environment'
+            ? profileText(
+                'terminalProfiles.restart.crossEnvironmentUnavailable',
+                'This agent cannot be restarted across Windows and WSL environments because its CLI and conversation store cannot be verified there. Choose a profile in the current environment.'
+              )
+            : assessment.reason
+      const warning =
+        assessment.warningCode === 'new-built-in-conversation'
+          ? profileText(
+              'terminalProfiles.restart.newBuiltInConversationWarning',
+              'No resumable conversation id is available. The agent will start a new conversation after the profile switch.'
+            )
+          : assessment.warningCode === 'new-custom-conversation'
+            ? profileText(
+                'terminalProfiles.restart.newCustomConversationWarning',
+                'This custom agent will restart from its configured launch command in a new conversation.'
+              )
+            : assessment.warning
+      return { ...assessment, reason, warning }
+    },
+    [profileText]
+  )
+  const assessProfileRestartChoice = useCallback(
+    (nodeId: string, targetProfileId: string): { disabled: boolean; reason?: string } => {
+      const node = nodesRef.current.find((candidate) => candidate.id === nodeId)
+      if (!node || node.type !== 'terminal') {
+        return {
+          disabled: true,
+          reason: profileText(
+            'terminalProfiles.restart.noLongerLocal',
+            'This node is no longer a local Windows terminal.'
+          )
+        }
+      }
+      const assessment = assessProfileRestartForNode(node, targetProfileId)
+      return { disabled: assessment.disabled, reason: assessment.reason }
+    },
+    [assessProfileRestartForNode, profileText]
+  )
+
+  const restartWithTerminalProfile = useCallback(
+    async (
+      nodeId: string,
+      terminalProfileId: string,
+      originProjectId: string | null
+    ): Promise<void> => {
+      if (terminalProfileRestartPendingRef.current.has(nodeId)) {
+        throw new Error(
+          profileText(
+            'terminalProfiles.restart.busy',
+            'This terminal is already restarting. Wait for that restart to finish.'
+          )
+        )
+      }
+      await runExclusiveTerminalProfileRestart(
+        terminalProfileRestartPendingRef.current,
+        nodeId,
+        (pendingNodeIds) => setTerminalProfileRestartPending(new Set(pendingNodeIds)),
+        async () => {
+          const activeId = useProjects.getState().activeProjectId
+          if (
+            !terminalProfileRestartOriginMatches(
+              originProjectId,
+              activeId,
+              nodesProjectIdRef.current
+            )
+          ) {
+            throw new Error(
+              profileText(
+                'terminalProfiles.restart.projectChanged',
+                'The project changed before confirmation, so nothing was restarted.'
+              )
+            )
+          }
+          const node = nodesRef.current.find((candidate) => candidate.id === nodeId)
+          const project = useProjects.getState().getProject(activeId ?? '')
+          const session = sessionForProject(activeId ?? '')
+          // Re-check at confirmation time. A stale menu or an open gate must never recycle a node
+          // after a peer replaces it with remote execution data.
+          if (
+            !node ||
+            node.type !== 'terminal' ||
+            (project?.ssh || project?.remote) ||
+            session.source !== 'local' ||
+            !session.api.terminalProfiles ||
+            isRemoteSessionNode(node.data)
+          ) {
+            throw new Error(
+              profileText(
+                'terminalProfiles.restart.noLongerLocal',
+                'This node is no longer a local Windows terminal.'
+              )
+            )
+          }
+          const assessment = assessProfileRestartForNode(node, terminalProfileId)
+          if (assessment.disabled) {
+            throw new Error(
+              assessment.reason ??
+                profileText(
+                  'terminalProfiles.restart.noLongerLocal',
+                  'This node is no longer a local Windows terminal.'
+                )
+            )
+          }
+          const confirmedRecycle = transport.recycleConfirmed
+          if (!confirmedRecycle) {
+            throw new Error(
+              profileText(
+                'terminalProfiles.restart.confirmedUnavailable',
+                'Confirmed persistent-session recycling is unavailable on this host.'
+              )
+            )
+          }
+          await recycleThenApplyTerminalProfile(
+            nodeId,
+            terminalProfileId,
+            {
+              profileId: terminalProfileId,
+              cwd: typeof node.data.cwd === 'string' ? node.data.cwd : ''
+            },
+            confirmedRecycle.bind(transport),
+            applyTerminalProfileAndRespawn
+          )
+        }
+      )
+    },
+    [applyTerminalProfileAndRespawn, assessProfileRestartForNode, profileText]
+  )
+
+  const requestRestartWithTerminalProfile = useCallback(
+    (
+      nodeId: string,
+      terminalProfileId: string,
+      profileLabel: string,
+      anchorOverride?: { x: number; y: number }
+    ) => {
+      const node = nodesRef.current.find((candidate) => candidate.id === nodeId)
+      if (!node || node.type !== 'terminal') return
+      const assessment = assessProfileRestartForNode(node, terminalProfileId)
+      if (assessment.disabled) {
+        notify({
+          kind: 'error',
+          title: profileText(
+            'terminalProfiles.restart.failedTitle',
+            'Restart with profile failed'
+          ),
+          body:
+            assessment.reason ??
+            profileText(
+              'terminalProfiles.restart.noLongerLocal',
+              'This node is no longer a local Windows terminal.'
+            )
+        })
+        return
+      }
+      const nodeLabel =
+        (node.data.title as string) ||
+        profileText('terminalProfiles.restart.defaultNodeLabel', 'terminal')
+      const anchor = anchorOverride ?? lastMenuScreenPosRef.current
+      const originProjectId = useProjects.getState().activeProjectId
+      const baseDescription = profileText(
+        'terminalProfiles.restart.confirmDescription',
+        'The live process and persistent session will end, including anything still running inside it. The node will then be recreated with {profile}.',
+        { profile: profileLabel }
+      )
+      openDestructiveGate({
+        title: profileText(
+          'terminalProfiles.restart.confirmTitle',
+          'Restart “{node}” with {profile}',
+          { node: nodeLabel, profile: profileLabel }
+        ),
+        description: assessment.warning
+          ? `${baseDescription}\n\n${assessment.warning}`
+          : baseDescription,
+        affected: [nodeLabel],
+        confirmLabel: profileText('terminalProfiles.restart.confirmButton', 'Restart'),
+        anchor,
+        onConfirm: () => {
+          void restartWithTerminalProfile(
+            nodeId,
+            terminalProfileId,
+            originProjectId
+          ).catch((error: unknown) => {
+            notify({
+              kind: 'error',
+              title: profileText(
+                'terminalProfiles.restart.failedTitle',
+                'Restart with profile failed'
+              ),
+              body: error instanceof Error ? error.message : String(error)
+            })
+          })
+        }
+      })
+    },
+    [assessProfileRestartForNode, restartWithTerminalProfile, profileText]
+  )
+
   // Restart ONE agent CLI in place: quit it and relaunch it with the provider's own `--resume`, so
   // a newly released model shows up in its model list without losing the conversation. The node's
   // registered closure owns the whole choreography (and re-checks eligibility + liveness at call
@@ -4818,17 +5341,11 @@ export function Canvas() {
         }
         originalId = res.originalId
       }
-      const copy = duplicateNode(source)
-      copy.data = {
-        ...copy.data,
-        // Built fresh here (never re-wrapping a persisted command), so it is flagged exactly once.
-        initialCommand: withPermissionMode(
-          `${claudeLaunchCommand()} -r ${originalId}`,
-          'claude',
-          activePermissionMode()
-        ),
-        title: `${source.data.title} (original)`
-      }
+      if (!originalId) return { ok: false, error: 'Branch did not return a resumable session id.' }
+      const branchPermissionMode = activePermissionMode()
+      // Duplicate cleanup happens before the one intended resume is installed, so a stale source
+      // command/pending launch/session id cannot ride into the branch copy beside it.
+      const copy = createClaudeBranchCopy(source, originalId, branchPermissionMode)
       copy.selected = true
       // Where the user right-clicked when the action came from the node menu; beside the source
       // otherwise (the agent-CLI `branch` verb and the header action have no cursor).
@@ -4898,7 +5415,8 @@ export function Canvas() {
         source.data.accountId,
         // The mode belongs to the node being OPENED, so it is gated on the TARGET agent — a
         // handoff into grok must not inherit claude's version gate.
-        activePermissionMode(targetAgentId)
+        activePermissionMode(targetAgentId),
+        terminalCreationOptionsFor(activeProjectId)
       )
       node.selected = true
       const placed = placeSpawned(node, at ?? besideNode(source))
@@ -5348,6 +5866,82 @@ export function Canvas() {
                 ])
           ] as MenuItem[])
         : []),
+      ...(ids.length === 1 && offersTerminalProfiles
+        ? (() => {
+            const node = nodesRef.current.find((candidate) => candidate.id === ids[0])
+            if (!node || node.type !== 'terminal' || isRemoteSessionNode(node.data)) return []
+            const children: MenuItem[] = terminalProfileMenuChoices.length
+              ? terminalProfileMenuChoices.map((profile) => {
+                  const confirmedRecycleUnavailable = !api.pty.recycleConfirmed
+                  const restartPending = terminalProfileRestartPending.has(node.id)
+                  const assessment = assessProfileRestartForNode(node, profile.id)
+                  return {
+                    label: profile.label,
+                    icon: <IconSwitch />,
+                    disabled:
+                      profile.disabled ||
+                      confirmedRecycleUnavailable ||
+                      restartPending ||
+                      assessment.disabled,
+                    hint: restartPending
+                      ? profileText(
+                          'terminalProfiles.restart.busy',
+                          'This terminal is already restarting. Wait for that restart to finish.'
+                        )
+                      : confirmedRecycleUnavailable
+                      ? profileText(
+                          'terminalProfiles.restart.hostCannotConfirm',
+                          'This host cannot confirm that the old persistent session ended.'
+                        )
+                      : assessment.reason ?? profile.hint,
+                    onClick: () =>
+                      requestRestartWithTerminalProfile(node.id, profile.id, profile.label)
+                  }
+                })
+              : [
+                  {
+                    label: terminalProfilesLoading
+                      ? profileText(
+                          'terminalProfiles.common.detectingProfiles',
+                          'Detecting profiles…'
+                        )
+                      : profileText(
+                          'terminalProfiles.common.profilesUnavailable',
+                          'Profiles unavailable'
+                        ),
+                    disabled: true,
+                    hint:
+                      terminalProfilesDisplayError ??
+                      (terminalProfilesInitialized
+                        ? profileText(
+                            'terminalProfiles.common.noProfilesDetected',
+                            'No Windows terminal profiles were detected.'
+                          )
+                        : profileText(
+                            'terminalProfiles.common.detectionPending',
+                            'Profile detection has not finished yet.'
+                          )),
+                    onClick: () => {}
+                  }
+                ]
+            return [
+              {
+                type: 'submenu',
+                label: terminalProfileRestartPending.has(node.id)
+                  ? profileText(
+                      'terminalProfiles.restart.progress',
+                      'Restarting with profile…'
+                    )
+                  : profileText(
+                      'terminalProfiles.restart.menuLabel',
+                      'Restart with profile…'
+                    ),
+                icon: <IconSwitch />,
+                children
+              }
+            ] as MenuItem[]
+          })()
+        : []),
       // Restart the agent CLI itself (single selection): quit it and relaunch with `--resume`, so a
       // newly released model appears in its model list with the conversation intact. Unlike "Reload
       // terminal" above (which re-attaches the pane and leaves the CLI running) this one types into
@@ -5435,7 +6029,17 @@ export function Canvas() {
     toggleCollapseNodes,
     toggleMarkdown,
     reloadTerminals,
-    restartAgentNode
+    offersTerminalProfiles,
+    terminalProfileMenuChoices,
+    terminalProfileRestartPending,
+    terminalProfilesLoading,
+    terminalProfilesDisplayError,
+    terminalProfilesInitialized,
+    api,
+    assessProfileRestartForNode,
+    requestRestartWithTerminalProfile,
+    restartAgentNode,
+    profileText
   ])
 
   /** "New <agent>" creation entries shared by the pane and group context menus.
@@ -5569,8 +6173,9 @@ export function Canvas() {
         {
           label: 'New terminal',
           icon: <IconTerminal />,
-          onClick: () => addTerminal(at, undefined, groupId)
+          onClick: defaultTerminalCreationHandler(addTerminal, { center: at, groupId })
         },
+        ...terminalProfileCreationItems(at, groupId),
         ...agentCreationItems(at, groupId),
         { label: 'New sticky note', icon: <IconNote />, onClick: () => addSticky(at, groupId) },
         { type: 'separator' },
@@ -5607,6 +6212,7 @@ export function Canvas() {
       openWorktreeDialog,
       isSshProject,
       addTerminal,
+      terminalProfileCreationItems,
       agentCreationItems,
       addSticky,
       addToExistingGroup,
@@ -5667,8 +6273,9 @@ export function Canvas() {
             label: 'New terminal',
             icon: <IconTerminal />,
             shortcut: ['⌘', 'T'],
-            onClick: () => addTerminal(at)
+            onClick: defaultTerminalCreationHandler(addTerminal, { center: at })
           },
+          ...terminalProfileCreationItems(at),
           ...agentCreationItems(at),
           {
             label: 'New remote…',
@@ -5717,6 +6324,7 @@ export function Canvas() {
       screenToFlowPosition,
       activeProjectId,
       addTerminal,
+      terminalProfileCreationItems,
       agentCreationItems,
       addSticky,
       addDino,
@@ -5961,11 +6569,36 @@ export function Canvas() {
   const createNodeInColumn = useCallback(
     (choice: KanbanCreateChoice, columnId: string | null) => {
       const project = useProjects.getState().getProject(activeProjectId)
+      if (
+        choice.kind === 'terminal' &&
+        choice.profileId &&
+        (project?.ssh || project?.remote || sessionForProject(activeProjectId ?? '').source !== 'local')
+      ) {
+        notify({
+          kind: 'error',
+          title: profileText(
+            'terminalProfiles.common.unavailableHereTitle',
+            'Windows profile unavailable here'
+          ),
+          body: profileText(
+            'terminalProfiles.common.unavailableHereBody',
+            'Local Windows profiles cannot be applied to an SSH or relay terminal.'
+          )
+        })
+        return
+      }
       const index = nodesRef.current.length
       const at = emptyNodePos() // board has no cursor — drop it in free canvas space, not on a pile
       const node =
         choice.kind === 'terminal'
-          ? createTerminalNode(index, project?.cwd, at, undefined, project?.ssh)
+          ? createTerminalNode(
+              index,
+              project?.cwd,
+              at,
+              undefined,
+              project?.ssh,
+              terminalCreationOptionsFor(activeProjectId, choice.profileId)
+            )
           : choice.kind === 'sticky'
             ? createStickyNode(index, at)
             : choice.kind === 'browser'
@@ -5982,7 +6615,8 @@ export function Canvas() {
                   project,
                   useSettings.getState().settings.claudeAccounts
                 ),
-                activePermissionMode(choice.agentId)
+                activePermissionMode(choice.agentId),
+                terminalCreationOptionsFor(activeProjectId)
               )
       setNodes((ns) => [...ns, node])
       const board = project?.kanban ?? seedBoard
@@ -6013,7 +6647,7 @@ export function Canvas() {
         event: { type: 'card-created', to: toName, title }
       })
     },
-    [activeProjectId, emptyNodePos, setNodes, markDirty, seedBoard, api]
+    [activeProjectId, emptyNodePos, setNodes, markDirty, seedBoard, api, profileText]
   )
 
   // Delete a session from the board.
@@ -6124,11 +6758,32 @@ export function Canvas() {
       // No live node — open a resume node in the active project, using the transcript's cwd.
       const cmd = resumeCommand('claude', hit.sessionId)
       if (!cmd) return
-      const node = createAgentNode('claude', nodesRef.current.length, hit.cwd, viewCenter())
+      const activeId = useProjects.getState().activeProjectId
+      const project = useProjects.getState().getProject(activeId)
+      const resumePermissionMode = activePermissionMode()
+      const node = createAgentNode(
+        'claude',
+        nodesRef.current.length,
+        hit.cwd,
+        viewCenter(),
+        undefined,
+        nodeSshFor(project?.ssh, hit.cwd),
+        undefined,
+        undefined,
+        terminalCreationOptionsFor(activeId)
+      )
       // The resume command replaces (never wraps) the factory's command, so it is flagged once.
       node.data = {
         ...node.data,
-        initialCommand: withPermissionMode(cmd, 'claude', activePermissionMode())
+        initialCommand: withPermissionMode(cmd, 'claude', resumePermissionMode),
+        agentLaunchIntent: {
+          kind: 'agent',
+          action: 'resume',
+          agentId: 'claude',
+          sessionId: hit.sessionId,
+          permissionMode: resumePermissionMode
+        },
+        agentSessionId: hit.sessionId
       }
       node.selected = true
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), node])
@@ -6378,30 +7033,39 @@ export function Canvas() {
         }
         return ids
       }
-      // Hold a freshly-built node's launch instead of running it on open. The factories already
-      // composed the exact command (agent CLI + permission-mode flag + prompt, or --cmd), so it
-      // is MOVED rather than rebuilt — a second construction site is how the two drift apart.
+      // Hold a freshly-built node's launch instead of running it on open. Agent launches stay
+      // semantic until the trusted core knows the live shell dialect; an explicit terminal --cmd
+      // remains opaque, locally-authorized shell source. The whole record is machine-local.
       // `extraLive` names nodes being created in this same tick — `verify` arms its judge on
       // reviewers that are not on the canvas yet, and without this they would look DELETED,
       // which counts as satisfied, and the judge would fire before a single review existed.
       const armAfter = (node: CanvasNode, after: string[], extraLive?: Iterable<string>): CanvasNode => {
-        const command = node.data.initialCommand as string | undefined
-        if (!after.length || !command) return node
+        const launch = armedTerminalLaunchIntent(node.data, {
+          offersTerminalProfiles,
+          hasOpaqueExecutor: !!api.pty.executeLaunchIntent
+        })
+        if (!after.length || !launch) return node
+        const pendingLaunch = { after, launchId: uuid(), launch }
         // If the wait is ALREADY over, don't arm at all — leave the command as the node's
-        // `initialCommand` so its own mount path delivers it through `writeWhenShellReady`
+        // ordinary one-shot launch so its own mount path performs prompt-ready delivery
         // (which waits for the shell prompt and echo-verifies). Arming would instead hand
         // delivery to the canvas effect, which would race the node's PTY into existence and
         // could fire into a session that does not exist yet.
         const live = new Set([...nodesRef.current.map((nd) => nd.id), ...(extraLive ?? [])])
         const unmet = unmetDeps(
-          { id: node.id, data: { pendingLaunch: { after, command } } },
+          { id: node.id, data: { pendingLaunch } },
           useAgentStatus.getState().byId,
           live
         )
         if (!unmet.length) return node
         return {
           ...node,
-          data: { ...node.data, initialCommand: undefined, pendingLaunch: { after, command } }
+          data: {
+            ...node.data,
+            initialCommand: undefined,
+            agentLaunchIntent: undefined,
+            pendingLaunch
+          }
         }
       }
       // Open `count` nodes INTO a group frame: grow the frame FIRST (extent:'parent' would
@@ -6473,7 +7137,8 @@ export function Canvas() {
                   termCwd,
                   placeBelow(i),
                   args.cmd,
-                  sshFor(termCwd)
+                  sshFor(termCwd),
+                  terminalCreationOptionsFor(useProjects.getState().activeProjectId)
                 ),
                 after ?? []
               )
@@ -6524,7 +7189,8 @@ export function Canvas() {
                   args.prompt,
                   sshFor(agentCwd),
                   account,
-                  activePermissionMode(agentId)
+                  activePermissionMode(agentId),
+                  terminalCreationOptionsFor(projStore.activeProjectId)
                 ),
                 after ?? []
               )
@@ -6853,7 +7519,8 @@ export function Canvas() {
                 }),
                 sshFor(targetCwd),
                 vAccount,
-                vMode
+                vMode,
+                terminalCreationOptionsFor(vStore.activeProjectId)
               )
               return armAfter(
                 { ...node, data: { ...node.data, title: `Verify: ${lens}`, titleAuto: false } },
@@ -6877,7 +7544,8 @@ export function Canvas() {
                       }),
                       sshFor(targetCwd),
                       vAccount,
-                      vMode
+                      vMode,
+                      terminalCreationOptionsFor(vStore.activeProjectId)
                     )
                     return { ...j, data: { ...j.data, title: 'Verify: verdict', titleAuto: false } }
                   })(),
@@ -6965,7 +7633,8 @@ export function Canvas() {
                 r.prompt,
                 sshFor(srcCwd),
                 teamAccount,
-                activePermissionMode(memberAgent)
+                activePermissionMode(memberAgent),
+                terminalCreationOptionsFor(teamStore.activeProjectId)
               )
               return r.title ? { ...node, data: { ...node.data, title: r.title, titleAuto: false } } : node
             })
@@ -7552,7 +8221,7 @@ export function Canvas() {
   const addToProject = useCallback(
     (projectId: string) => {
       if (projectId === activeProjectId) {
-        addTerminal()
+        defaultTerminalCreationHandler(addTerminal)()
       } else {
         // Add once the project's nodes have loaded into React Flow (load effect consumes this).
         pendingAddRef.current = projectId
@@ -8470,8 +9139,36 @@ export function Canvas() {
     const disabled = useSettings.getState().settings.disabledAgents
     const activeProject = useProjects.getState().getProject(activeProjectId)
     const newFileHasCwd = !!(activeProject?.ssh?.remoteCwd ?? activeProject?.cwd)
+    const terminalProfileActions = terminalProfileCreationActions(
+      addTerminal,
+      terminalProfileMenuChoices
+    )
     const cmds: Command[] = [
-      { id: 'new-term', label: 'New terminal', section: 'Create', icon: <IconTerminal />, run: () => addTerminal() },
+      {
+        id: 'new-term',
+        label: 'New terminal',
+        section: 'Create',
+        icon: <IconTerminal />,
+        run: defaultTerminalCreationHandler(addTerminal)
+      },
+      ...(offersTerminalProfiles
+        ? terminalProfileActions
+            .map(
+              (action): Command => ({
+                id: action.id,
+                label: profileText(
+                  'terminalProfiles.create.commandLabel',
+                  'New terminal — {profile}',
+                  { profile: action.label }
+                ),
+                section: 'Create',
+                icon: <IconTerminal />,
+                disabled: action.disabled,
+                note: action.note,
+                run: action.run
+              })
+            )
+        : []),
       ...BUILTIN_AGENT_IDS.filter((aid) => !disabled.includes(aid)).map(
         (aid): Command => ({
           id: `new-${aid}`,
@@ -8763,6 +9460,8 @@ export function Canvas() {
     return cmds
   }, [
     addTerminal,
+    offersTerminalProfiles,
+    terminalProfileMenuChoices,
     addAgentNode,
     addSticky,
     addDino,
@@ -8784,6 +9483,7 @@ export function Canvas() {
     restartIdleAgents,
     zoomTo100,
     openSettingsTo,
+    profileText,
     // Not read directly in this closure (the body reads `useSettings.getState().settings` fresh
     // on every call) — a dependency purely so a settings change while the palette is open
     // rebuilds the list and the inline toggle rows' `checked` stays live rather than frozen at
@@ -8984,6 +9684,11 @@ export function Canvas() {
           onDeleteNode={deleteNodeFromKanban}
           onModalNodeChange={setKanbanModalNode}
           onBrowserNav={browserNavFromKanban}
+          onRestartNodeWithProfile={(nodeId, profile, anchor) =>
+            requestRestartWithTerminalProfile(nodeId, profile.id, profile.label, anchor)
+          }
+          assessRestartNodeWithProfile={assessProfileRestartChoice}
+          terminalProfileRestartPending={terminalProfileRestartPending}
         />
       )}
       <UpdateCard />
@@ -9676,7 +10381,34 @@ export function Canvas() {
         canRedo={futureRef.current.length > 0}
         onUndo={undo}
         onRedo={redo}
-        onAddTerminal={addTerminal}
+        onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
+        offersTerminalProfiles={offersTerminalProfiles}
+        terminalProfileChoices={terminalProfileMenuChoices}
+        terminalProfileEmptyState={{
+          label: terminalProfilesLoading
+            ? profileText(
+                'terminalProfiles.common.detectingProfiles',
+                'Detecting profiles…'
+              )
+            : profileText(
+                'terminalProfiles.common.profilesUnavailable',
+                'Profiles unavailable'
+              ),
+          hint:
+            terminalProfilesDisplayError ??
+            (terminalProfilesInitialized
+              ? profileText(
+                  'terminalProfiles.common.noProfilesDetected',
+                  'No Windows terminal profiles were detected.'
+                )
+              : profileText(
+                  'terminalProfiles.common.detectionPending',
+                  'Profile detection has not finished yet.'
+                ))
+        }}
+        onAddTerminalWithProfile={(profileId) =>
+          profileTerminalCreationHandler(addTerminal, profileId)()
+        }
         onAddSticky={addSticky}
         onAddDino={addDino}
         onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}

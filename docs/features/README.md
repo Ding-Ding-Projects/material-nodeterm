@@ -12,7 +12,7 @@ the deep architecture reference these articles are distilled from.
 
 | Category | What's in it |
 | --- | --- |
-| [Terminals](./terminals/README.md) | Real shells as nodes, tmux session continuity across restarts and reboots. |
+| [Terminals](./terminals/README.md) | Real shells as nodes, persistent backends across app restarts, and cold restore after reboot. |
 | [Canvas](./canvas/README.md) | The pan/zoom surface, every node kind, and the terminal-node lifecycle. |
 | [Projects](./projects/README.md) | Projects as tabs, per-project canvases, persistence and folder binding. |
 | [Agents](./agents/README.md) | Claude Code, Codex, Gemini, opencode, Grok and custom agent CLIs as nodes. |
@@ -41,7 +41,7 @@ Every article follows the same shape, so you can skim for the part you need:
 Most features exist on more than one of nodeterm's three shells, and behave slightly
 differently (or not at all) on each:
 
-1. **Desktop** — the Electron app for macOS and Linux.
+1. **Desktop** — the Electron app for Windows, macOS and Linux.
 2. **Server Edition** — the same renderer, self-hosted and reached from any browser.
 3. **Mobile companion** — a separate iOS app that attaches to the same live sessions.
 

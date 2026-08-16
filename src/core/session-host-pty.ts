@@ -14,6 +14,8 @@ export class SessionHostPty {
   private readonly sub: SessionSubscriber
   private readonly dataCbs: Array<(data: string) => void> = []
   private readonly exitCbs: Array<(e: { exitCode: number }) => void> = []
+  private readonly attachErrorCbs: Array<(error: Error) => void> = []
+  private attachError: Error | null = null
   private detached = false
 
   /**
@@ -28,7 +30,7 @@ export class SessionHostPty {
   constructor(
     client: SessionHostClient,
     name: string,
-    spawn: SessionHostSpawnOptions,
+    spawn: SessionHostSpawnOptions | null,
     scrollback: number
   ) {
     this.client = client
@@ -39,9 +41,15 @@ export class SessionHostPty {
       },
       onExit: (exitCode) => {
         for (const cb of this.exitCbs) cb({ exitCode })
+      },
+      onAttachError: (error) => {
+        this.attachError = error
+        for (const cb of this.attachErrorCbs) cb(error)
       }
     }
-    this.ready = client.attach(name, spawn, scrollback, this.sub)
+    this.ready = spawn
+      ? client.attach(name, spawn, scrollback, this.sub)
+      : client.attachExisting(name, this.sub)
     // node-pty's real spawn never rejects asynchronously (a spawn failure throws synchronously,
     // before a Session is even constructed) — an attach failure here is the closest analogue, and
     // it must not become an unhandled rejection just because some callers (write/resize/pause/
@@ -55,6 +63,13 @@ export class SessionHostPty {
 
   onExit(cb: (e: { exitCode: number }) => void): void {
     this.exitCbs.push(cb)
+  }
+
+  /** Reconnect replay failed for a previously-confirmed generation. Late registration receives
+   * the stored error immediately so manager wiring cannot miss a fast rejection. */
+  onAttachError(cb: (error: Error) => void): void {
+    this.attachErrorCbs.push(cb)
+    if (this.attachError) cb(this.attachError)
   }
 
   write(data: string): void {

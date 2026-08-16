@@ -5,17 +5,43 @@ import { useAgentStatus } from '../../state/agentStatus'
 import { useViewMode } from '../../state/viewMode'
 import { useProjects } from '../../state/projects'
 import { useSettings } from '../../state/settings'
+import { terminalProfileDisplayError, useTerminalProfiles } from '../../state/terminal-profiles'
 import {
-  addColumn, assignNode, assignedTo, boardLabels, cardMatchesLabelFilter, cardMeta, columnForNode,
-  deleteColumn, labelsForCard, moveColumn,
-  nextColumnColor, pruneAssignments, recolorColumn, renameColumn, unassigned
+  canOfferTerminalProfiles,
+  terminalProfileChoices
+} from '../../lib/terminal-profile-actions'
+import { isRemoteSessionNode } from '@shared/worktree'
+import {
+  addColumn,
+  assignNode,
+  assignedTo,
+  boardLabels,
+  cardMatchesLabelFilter,
+  cardMeta,
+  columnForNode,
+  deleteColumn,
+  labelsForCard,
+  moveColumn,
+  nextColumnColor,
+  pruneAssignments,
+  recolorColumn,
+  renameColumn,
+  unassigned
 } from '../../lib/kanban'
 import { labelSwatch } from '../../lib/kanbanLabelColors'
 import { CardModal } from './CardModal'
 import { KanbanColumn } from './KanbanColumn'
 import type { ModalSpawn } from './ModalTerminal'
 import { ContextMenu, type MenuItem } from '../ContextMenu'
-import { IconAgent, IconExternal, IconNote, IconSwitch, IconTerminal, IconTrash, IconWeb } from '../icons'
+import {
+  IconAgent,
+  IconExternal,
+  IconNote,
+  IconSwitch,
+  IconTerminal,
+  IconTrash,
+  IconWeb
+} from '../icons'
 import type { GitHubIssueCardView } from '@shared/github-issues'
 import { useGitHubIssues } from '../../state/githubIssues'
 import { useSession } from '../../session/session'
@@ -27,6 +53,15 @@ import {
   githubMoveIntent,
   type GitHubMoveConfirmation
 } from '../../lib/githubIssueMove'
+import {
+  kanbanTerminalProfileCreateOptions,
+  kanbanRestartProfileMenuItem,
+  selectedKanbanTerminalProfile,
+  type KanbanRestartProfileAssessor,
+  type KanbanRestartProfileHandler,
+  type KanbanTerminalProfilePresentation
+} from './terminal-profile-ui'
+import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 
 /** One session node shown as a board card — derived LIVE from the canvas nodes; the board
  *  itself stores only column assignments. */
@@ -47,18 +82,32 @@ export interface KanbanSession {
 
 /** What the per-column "+ New" menu can create. */
 export type KanbanCreateChoice =
-  | { kind: 'terminal' }
+  | { kind: 'terminal'; profileId?: string }
   | { kind: 'sticky' }
   | { kind: 'browser' }
   | { kind: 'agent'; agentId: AgentId }
 
-/** One "+ New" menu entry (label + the choice it fires). */
-export interface KanbanCreateOption {
+/** One actionable "+ New" menu entry. Unavailable profiles remain focusable and explain why. */
+export interface KanbanCreateLeafOption {
+  type?: 'item'
   key: string
   label: string
   choice: KanbanCreateChoice
   icon: JSX.Element
+  disabled?: boolean
+  hint?: string
 }
+
+/** A drill-in submenu avoids clipping profile lists against the board's horizontal scroller. */
+export interface KanbanCreateSubmenuOption {
+  type: 'submenu'
+  key: string
+  label: string
+  icon: JSX.Element
+  children: KanbanCreateLeafOption[]
+}
+
+export type KanbanCreateOption = KanbanCreateLeafOption | KanbanCreateSubmenuOption
 
 export interface KanbanViewProps {
   board: ProjectKanban
@@ -79,12 +128,19 @@ export interface KanbanViewProps {
   onModalNodeChange: (nodeId: string | null) => void
   /** Persist a browser card's navigation (url/title) from the modal webview to the node. */
   onBrowserNav: (nodeId: string, patch: { url?: string; title?: string }) => void
+  /**
+   * Begin the destructive profile-switch gate for a local terminal or agent card. The card menu's
+   * exact screen anchor travels with the request so Canvas never reuses a stale menu position.
+   */
+  onRestartNodeWithProfile?: KanbanRestartProfileHandler
+  /** Node-specific agent continuity guard supplied by Canvas's live node/state view. */
+  assessRestartNodeWithProfile?: KanbanRestartProfileAssessor
+  /** Node ids currently inside the awaited destructive profile-recycle transaction. */
+  terminalProfileRestartPending?: ReadonlySet<string>
 }
 
 type Drag =
-  | { kind: 'card' | 'column'; id: string }
-  | { kind: 'github'; issue: GitHubIssueCardView }
-  | null
+  { kind: 'card' | 'column'; id: string } | { kind: 'github'; issue: GitHubIssueCardView } | null
 
 /** Shared empty results — stable identities so memoized cards/columns see "no change". */
 const NO_LABELS: KanbanLabel[] = []
@@ -97,15 +153,31 @@ const NO_CARDS: KanbanSession[] = []
  *  banners…); with every prop stable (Canvas useCallbacks + memoized board/sessions) those
  *  renders stop at this boundary. */
 export const KanbanView = memo(function KanbanView({
-  board, sessions, onChange, onOpenNode, onCreateNode, onRenameNode, onEditSticky, onDeleteNode,
-  onModalNodeChange, onBrowserNav
+  board,
+  sessions,
+  onChange,
+  onOpenNode,
+  onCreateNode,
+  onRenameNode,
+  onEditSticky,
+  onDeleteNode,
+  onModalNodeChange,
+  onBrowserNav,
+  onRestartNodeWithProfile,
+  assessRestartNodeWithProfile,
+  terminalProfileRestartPending
 }: KanbanViewProps) {
-  const { api } = useSession()
+  const { api, source: sessionSource } = useSession()
+  const profileText = useLocalizedVocabularyText()
   const dragRef = useRef<Drag>(null)
   // One card modal at a time; a deleted node closes it via the byId.has render guard.
   const [modalNodeId, setModalNodeId] = useState<string | null>(null)
   // Right-click card menu (open on canvas / move / delete).
-  const [cardMenu, setCardMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null)
+  const [cardMenu, setCardMenu] = useState<{
+    x: number
+    y: number
+    nodeId: string
+  } | null>(null)
   // Board label filter — transient (per board session; resets when you leave the board). Empty =
   // show everything; otherwise a card must carry at least one selected label (cardMatchesLabelFilter).
   const [labelFilter, setLabelFilter] = useState<string[]>([])
@@ -114,13 +186,30 @@ export const KanbanView = memo(function KanbanView({
   const [modalIssue, setModalIssue] = useState<GitHubIssueCardView | null>(null)
   const [githubRetry, setGitHubRetry] = useState(0)
   // A move that would close or reopen the issue on GitHub waits here for an explicit confirmation.
-  const [pendingGitHubMove, setPendingGitHubMove] = useState<
-    { issue: GitHubIssueCardView; columnId: string | null; confirmation: GitHubMoveConfirmation } | null
-  >(null)
+  const [pendingGitHubMove, setPendingGitHubMove] = useState<{
+    issue: GitHubIssueCardView
+    columnId: string | null
+    confirmation: GitHubMoveConfirmation
+  } | null>(null)
   // Primitive selectors (not one object) — an object selector would re-render on every store set.
   const projectId = useProjects((s) => s.activeProjectId)
   const projectName = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.name)
   const projectColor = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.color)
+  const isSshProject = useProjects((s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh)
+  const isRelayProject = useProjects(
+    (s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.remote
+  )
+  const terminalProfiles = useTerminalProfiles((state) => state.profiles)
+  const terminalProfilesError = useTerminalProfiles((state) => state.error)
+  const terminalProfilesLoading = useTerminalProfiles((state) => state.loading)
+  const terminalProfilesInitialized = useTerminalProfiles((state) => state.initialized)
+  const terminalProfilesDisplayError = terminalProfileDisplayError(
+    terminalProfilesError,
+    profileText('terminalProfiles.common.detectionFailed', 'Terminal profile detection failed.')
+  )
+  useEffect(() => {
+    if (sessionSource === 'local') void useTerminalProfiles.getState().ensureLoaded()
+  }, [sessionSource])
   const github = useGitHubIssues((state) => state.projects[projectId])
   const githubReadOnly = Object.values(github?.pages ?? {}).some((page) => page.readOnly)
   const connectGitHub = useGitHubIssues((state) => state.connect)
@@ -140,15 +229,22 @@ export const KanbanView = memo(function KanbanView({
     }
     return [...labels.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [github?.pages])
-  const localFilterKeys = useMemo(() => new Set(paletteLabels.map((label) => `local:${label.id}`)), [paletteLabels])
+  const localFilterKeys = useMemo(
+    () => new Set(paletteLabels.map((label) => `local:${label.id}`)),
+    [paletteLabels]
+  )
   const activeFilter = useMemo(
     () => labelFilter.filter((id) => localFilterKeys.has(id) || id.startsWith('github:')),
     [labelFilter, localFilterKeys]
   )
-  const activeLocalFilter = useMemo(() => activeFilter
-    .filter((key) => key.startsWith('local:')).map((key) => key.slice(6)), [activeFilter])
-  const activeGitHubFilter = useMemo(() => activeFilter
-    .filter((key) => key.startsWith('github:')), [activeFilter])
+  const activeLocalFilter = useMemo(
+    () => activeFilter.filter((key) => key.startsWith('local:')).map((key) => key.slice(6)),
+    [activeFilter]
+  )
+  const activeGitHubFilter = useMemo(
+    () => activeFilter.filter((key) => key.startsWith('github:')),
+    [activeFilter]
+  )
   const toggleFilter = (id: string): void =>
     setLabelFilter((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]))
   // Opening a card = you're looking at that session: clear its unread badge, and report the open
@@ -178,11 +274,10 @@ export const KanbanView = memo(function KanbanView({
       projectId,
       board.columns.map((column) => column.id),
       activeGitHubFilter
-    )
-      .then((teardown) => {
-        if (disposed) teardown()
-        else disconnect = teardown
-      })
+    ).then((teardown) => {
+      if (disposed) teardown()
+      else disconnect = teardown
+    })
     return () => {
       disposed = true
       disconnect?.()
@@ -202,6 +297,73 @@ export const KanbanView = memo(function KanbanView({
     if (latest && latest.updatedAt !== modalIssue.updatedAt) setModalIssue(latest)
   }, [github, modalIssue])
   const customAgents = useSettings((s) => s.settings.customAgents)
+  const defaultTerminalProfileId = useSettings((s) => s.settings.defaultTerminalProfileId)
+  const offersTerminalProfiles = canOfferTerminalProfiles(
+    !!api.terminalProfiles,
+    sessionSource,
+    isSshProject || isRelayProject
+  )
+  const profileCopy = useMemo(
+    () => ({
+      checkingAvailability: profileText(
+        'terminalProfiles.header.checkingAvailability',
+        'Checking whether this terminal profile is available on this machine.'
+      ),
+      noLongerDetected: profileText(
+        'terminalProfiles.header.noLongerDetected',
+        'This selected profile is no longer detected on this machine.'
+      ),
+      hostCannotConfirm: profileText(
+        'terminalProfiles.restart.hostCannotConfirm',
+        'This host cannot confirm that the old persistent session ended.'
+      ),
+      detectingProfiles: profileText(
+        'terminalProfiles.common.detectingProfiles',
+        'Detecting profiles…'
+      ),
+      profilesUnavailable: profileText(
+        'terminalProfiles.common.profilesUnavailable',
+        'Profiles unavailable'
+      ),
+      noProfilesDetected: profileText(
+        'terminalProfiles.common.noProfilesDetected',
+        'No Windows terminal profiles were detected.'
+      ),
+      detectionPending: profileText(
+        'terminalProfiles.common.detectionPending',
+        'Profile detection has not finished yet.'
+      ),
+      restartMenuLabel: profileText('terminalProfiles.restart.menuLabel', 'Restart with profile…'),
+      restartBusy: profileText(
+        'terminalProfiles.restart.busy',
+        'This terminal is already restarting. Wait for that restart to finish.'
+      ),
+      restartProgress: profileText('terminalProfiles.restart.progress', 'Restarting with profile…'),
+      defaultProfileLabel: profileText('terminalProfiles.label.default', 'Default profile'),
+      automaticLabel: profileText('terminalProfiles.label.automatic', 'Automatic'),
+      customLabel: profileText('terminalProfiles.label.custom', 'Custom executable'),
+      unavailableLabel: profileText(
+        'terminalProfiles.label.unavailable',
+        'Unavailable terminal profile'
+      ),
+      unavailableOnMachine: profileText(
+        'terminalProfiles.common.unavailableOnMachine',
+        'This profile is unavailable on this machine.'
+      )
+    }),
+    [profileText]
+  )
+  const profileChoices = useMemo(
+    () =>
+      terminalProfileChoices(
+        terminalProfiles,
+        profileText(
+          'terminalProfiles.common.unavailableOnMachine',
+          'This profile is unavailable on this machine.'
+        )
+      ),
+    [terminalProfiles, profileText]
+  )
   // "+ New" menu entries: the builtin agents, the user's custom agents, then terminal + sticky
   // (same universe as the dock's add menu, minus canvas-only kinds). Memoized — a fresh array
   // (with fresh icon elements) per render would re-render every memoized column.
@@ -219,14 +381,115 @@ export const KanbanView = memo(function KanbanView({
         choice: { kind: 'agent', agentId: a.id } as KanbanCreateChoice,
         icon: <IconAgent />
       })),
-      { key: 'terminal', label: 'Terminal', choice: { kind: 'terminal' }, icon: <IconTerminal /> },
-      { key: 'browser', label: 'Browser', choice: { kind: 'browser' }, icon: <IconWeb /> },
-      { key: 'sticky', label: 'Sticky note', choice: { kind: 'sticky' }, icon: <IconNote /> }
+      {
+        key: 'terminal',
+        label: 'Terminal',
+        choice: { kind: 'terminal' },
+        icon: <IconTerminal />
+      },
+      ...(offersTerminalProfiles
+        ? [
+            {
+              type: 'submenu' as const,
+              key: 'terminal-profile',
+              label: profileText('terminalProfiles.create.menuLabel', 'New terminal with profile…'),
+              icon: <IconTerminal />,
+              children: profileChoices.length
+                ? kanbanTerminalProfileCreateOptions(profileChoices).map((profile) => ({
+                    ...profile,
+                    choice: profile.choice as KanbanCreateChoice,
+                    icon: <IconTerminal />,
+                  }))
+                : [
+                    {
+                      key: 'terminal-profile:unavailable',
+                      label: terminalProfilesLoading
+                        ? profileText(
+                            'terminalProfiles.common.detectingProfiles',
+                            'Detecting profiles…'
+                          )
+                        : profileText(
+                            'terminalProfiles.common.profilesUnavailable',
+                            'Profiles unavailable'
+                          ),
+                      choice: { kind: 'terminal' } as KanbanCreateChoice,
+                      icon: <IconTerminal />,
+                      disabled: true,
+                      hint:
+                        terminalProfilesDisplayError ??
+                        (terminalProfilesInitialized
+                          ? profileText(
+                              'terminalProfiles.common.noProfilesDetected',
+                              'No Windows terminal profiles were detected.'
+                            )
+                          : profileText(
+                              'terminalProfiles.common.detectionPending',
+                              'Profile detection has not finished yet.'
+                            ))
+                    }
+                  ]
+            }
+          ]
+        : []),
+      {
+        key: 'browser',
+        label: 'Browser',
+        choice: { kind: 'browser' },
+        icon: <IconWeb />
+      },
+      {
+        key: 'sticky',
+        label: 'Sticky note',
+        choice: { kind: 'sticky' },
+        icon: <IconNote />
+      }
     ],
-    [customAgents]
+    [
+      customAgents,
+      offersTerminalProfiles,
+      profileChoices,
+      terminalProfilesLoading,
+      terminalProfilesDisplayError,
+      terminalProfilesInitialized,
+      profileText
+    ]
   )
   const byId = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions])
   const sessionIds = useMemo(() => sessions.map((s) => s.id), [sessions])
+  // Resolve once per profile/session epoch, then hand every memoized column the same lookup. This
+  // avoids allocating a fresh presentation object for each card on unrelated board renders.
+  const terminalProfileByNode = useMemo(() => {
+    const resolved = new Map<string, KanbanTerminalProfilePresentation>()
+    if (!offersTerminalProfiles) return resolved
+    for (const session of sessions) {
+      if (session.kind !== 'terminal' || isRemoteSessionNode(session.spawn)) continue
+      const presentation = selectedKanbanTerminalProfile(
+        session.spawn.terminalProfileId ?? defaultTerminalProfileId,
+        terminalProfiles,
+        {
+          loading: terminalProfilesLoading,
+          initialized: terminalProfilesInitialized,
+          error: terminalProfilesDisplayError
+        },
+        profileCopy
+      )
+      if (presentation) resolved.set(session.id, presentation)
+    }
+    return resolved
+  }, [
+    defaultTerminalProfileId,
+    offersTerminalProfiles,
+    profileCopy,
+    sessions,
+    terminalProfiles,
+    terminalProfilesDisplayError,
+    terminalProfilesInitialized,
+    terminalProfilesLoading
+  ])
+  const terminalProfileOf = useCallback(
+    (nodeId: string) => terminalProfileByNode.get(nodeId),
+    [terminalProfileByNode]
+  )
 
   // Stable per-card label arrays: labelsForCard allocates a fresh array per call, and that
   // identity churn alone would defeat SessionCard's memo. Recomputed only on a board change.
@@ -320,7 +583,9 @@ export const KanbanView = memo(function KanbanView({
   // the sessions, nor the filter, which is what lets the memoized columns skip.
   const columnCards = useMemo(() => {
     const vis = (ids: string[]): string[] =>
-      activeLocalFilter.length ? ids.filter((id) => cardMatchesLabelFilter(board, id, activeLocalFilter)) : ids
+      activeLocalFilter.length
+        ? ids.filter((id) => cardMatchesLabelFilter(board, id, activeLocalFilter))
+        : ids
     const toCards = (ids: string[]): KanbanSession[] => {
       const cards = ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
       return cards.length ? cards : NO_CARDS
@@ -362,17 +627,26 @@ export const KanbanView = memo(function KanbanView({
     [board, commit]
   )
   const handleMoveGitHub = requestGitHubMove
-  const githubPage = useCallback((columnId: string | null) =>
-    github?.pages[columnId ?? 'ungrouped'], [github])
+  const githubPage = useCallback(
+    (columnId: string | null) => github?.pages[columnId ?? 'ungrouped'],
+    [github]
+  )
   const sessionVisible = source !== 'github'
   const githubVisible = source !== 'sessions' && !!board.github
 
-  // Right-click menu for a card: open on canvas, move to another column, delete.
-  const cardMenuItems = (nodeId: string): MenuItem[] => {
+  // Right-click menu for a card: open on canvas, move, profile-restart, or delete.
+  const cardMenuItems = (menu: { x: number; y: number; nodeId: string }): MenuItem[] => {
+    const { nodeId, x, y } = menu
     const curColId = columnForNode(board, nodeId)?.id ?? null
+    const session = byId.get(nodeId)
     const moveTargets: MenuItem[] = [
       ...(curColId !== null
-        ? [{ label: 'Ungrouped', onClick: () => commit(assignNode(board, nodeId, null, null)) }]
+        ? [
+            {
+              label: 'Ungrouped',
+              onClick: () => commit(assignNode(board, nodeId, null, null))
+            }
+          ]
         : []),
       ...board.columns
         .filter((c) => c.id !== curColId)
@@ -382,15 +656,64 @@ export const KanbanView = memo(function KanbanView({
         }))
     ]
     return [
-      { label: 'Open card', icon: <IconExternal />, onClick: () => setModalNodeId(nodeId) },
-      { label: 'Open on canvas', icon: <IconExternal />, onClick: () => onOpenNode(nodeId) },
+      {
+        label: 'Open card',
+        icon: <IconExternal />,
+        onClick: () => setModalNodeId(nodeId)
+      },
+      {
+        label: 'Open on canvas',
+        icon: <IconExternal />,
+        onClick: () => onOpenNode(nodeId)
+      },
       ...(moveTargets.length
-        ? ([{ type: 'submenu', label: 'Move to', icon: <IconSwitch />, children: moveTargets }] as MenuItem[])
+        ? ([
+            {
+              type: 'submenu',
+              label: 'Move to',
+              icon: <IconSwitch />,
+              children: moveTargets
+            }
+          ] as MenuItem[])
+        : []),
+      ...(offersTerminalProfiles &&
+      onRestartNodeWithProfile &&
+      assessRestartNodeWithProfile &&
+      // Agent cards are terminal sessions with `agentId`; this deliberately covers both kinds.
+      session?.kind === 'terminal' &&
+      !isRemoteSessionNode(session.spawn)
+        ? [
+            kanbanRestartProfileMenuItem({
+              nodeId,
+              anchor: { x, y },
+              profiles: profileChoices,
+              detection: {
+                loading: terminalProfilesLoading,
+                initialized: terminalProfilesInitialized,
+                error: terminalProfilesDisplayError
+              },
+              canRecyclePersistentSession: !!api.pty.recycleConfirmed,
+              restartPending: terminalProfileRestartPending?.has(nodeId) ?? false,
+              icon: <IconSwitch />,
+              assessProfile: assessRestartNodeWithProfile,
+              onSelect: onRestartNodeWithProfile,
+              copy: profileCopy
+            })
+          ]
         : []),
       { type: 'separator' },
-      { label: 'Delete', icon: <IconTrash />, danger: true, onClick: () => onDeleteNode(nodeId) }
+      {
+        label: 'Delete',
+        icon: <IconTrash />,
+        danger: true,
+        onClick: () => onDeleteNode(nodeId)
+      }
     ]
   }
+
+  const modalTerminalProfile = modalNodeId
+    ? terminalProfileByNode.get(modalNodeId)
+    : undefined
 
   return (
     <div className="kanban-overlay">
@@ -400,7 +723,9 @@ export const KanbanView = memo(function KanbanView({
         <span className="kanban-header__dot" style={{ background: projectColor }} />
         <span className="kanban-header__name">{projectName}</span>
         {board.github && <KanbanSourceFilter value={source} onChange={setSource} />}
-        {board.github && github?.loading && <span className="kanban-github-status">Loading GitHub issues…</span>}
+        {board.github && github?.loading && (
+          <span className="kanban-github-status">Loading GitHub issues…</span>
+        )}
         {board.github && github?.error && (
           <button
             className="kanban-github-status kanban-github-status--error kanban-github-retry"
@@ -433,8 +758,15 @@ export const KanbanView = memo(function KanbanView({
                     const key = `local:${l.id}`
                     const on = activeFilter.includes(key)
                     return (
-                      <button key={key} className="kanban-filter-row" onClick={() => toggleFilter(key)}>
-                        <span className="kanban-label-chip" style={{ background: s.bg, color: s.fg }}>
+                      <button
+                        key={key}
+                        className="kanban-filter-row"
+                        onClick={() => toggleFilter(key)}
+                      >
+                        <span
+                          className="kanban-label-chip"
+                          style={{ background: s.bg, color: s.fg }}
+                        >
                           {l.name || 'Label'}
                         </span>
                         {on && <span className="label-picker__rowcheck">✓</span>}
@@ -446,11 +778,20 @@ export const KanbanView = memo(function KanbanView({
                     const key = `github:${label.name.normalize('NFKC').toLocaleLowerCase('en-US')}`
                     const on = activeFilter.includes(key)
                     return (
-                      <button key={key} className="kanban-filter-row" onClick={() => toggleFilter(key)}>
-                        <span className="github-issue-label" style={{
-                          borderColor: `#${label.color}`,
-                          color: `#${label.color}`
-                        }}>{label.name}</span>
+                      <button
+                        key={key}
+                        className="kanban-filter-row"
+                        onClick={() => toggleFilter(key)}
+                      >
+                        <span
+                          className="github-issue-label"
+                          style={{
+                            borderColor: `#${label.color}`,
+                            color: `#${label.color}`
+                          }}
+                        >
+                          {label.name}
+                        </span>
                         {on && <span className="label-picker__rowcheck">✓</span>}
                       </button>
                     )
@@ -471,15 +812,18 @@ export const KanbanView = memo(function KanbanView({
           <KanbanColumn
             column={null}
             cards={sessionVisible ? columnCards.ungrouped : NO_CARDS}
-            githubCards={githubVisible ? githubPage(null)?.items ?? [] : []}
+            githubCards={githubVisible ? (githubPage(null)?.items ?? []) : []}
             githubColumns={board.columns}
             githubMoving={github?.moving}
             githubReadOnly={githubReadOnly}
             githubStatus={github?.issueStatus}
-            displayCount={(sessionVisible ? columnCards.ungrouped.length : 0) +
-              (githubVisible ? githubPage(null)?.counts.ungrouped ?? 0 : 0)}
+            displayCount={
+              (sessionVisible ? columnCards.ungrouped.length : 0) +
+              (githubVisible ? (githubPage(null)?.counts.ungrouped ?? 0) : 0)
+            }
             metaOf={metaOf}
             labelsOf={labelsOf}
+            terminalProfileOf={terminalProfileOf}
             onOpenCard={setModalNodeId}
             createOptions={createOptions}
             onCreate={onCreateNode}
@@ -498,16 +842,19 @@ export const KanbanView = memo(function KanbanView({
             <KanbanColumn
               key={col.id}
               column={col}
-              cards={sessionVisible ? columnCards.byColumn.get(col.id) ?? NO_CARDS : NO_CARDS}
-              githubCards={githubVisible ? githubPage(col.id)?.items ?? [] : []}
+              cards={sessionVisible ? (columnCards.byColumn.get(col.id) ?? NO_CARDS) : NO_CARDS}
+              githubCards={githubVisible ? (githubPage(col.id)?.items ?? []) : []}
               githubColumns={board.columns}
               githubMoving={github?.moving}
               githubReadOnly={githubReadOnly}
               githubStatus={github?.issueStatus}
-              displayCount={(sessionVisible ? columnCards.byColumn.get(col.id)?.length ?? 0 : 0) +
-                (githubVisible ? githubPage(col.id)?.counts[col.id] ?? 0 : 0)}
+              displayCount={
+                (sessionVisible ? (columnCards.byColumn.get(col.id)?.length ?? 0) : 0) +
+                (githubVisible ? (githubPage(col.id)?.counts[col.id] ?? 0) : 0)
+              }
               metaOf={metaOf}
               labelsOf={labelsOf}
+              terminalProfileOf={terminalProfileOf}
               onRename={handleRenameColumn}
               onRecolor={handleRecolorColumn}
               onDelete={handleDeleteColumn}
@@ -540,7 +887,7 @@ export const KanbanView = memo(function KanbanView({
           x={cardMenu.x}
           y={cardMenu.y}
           zIndex={60}
-          items={cardMenuItems(cardMenu.nodeId)}
+          items={cardMenuItems(cardMenu)}
           onClose={() => setCardMenu(null)}
         />
       )}
@@ -558,6 +905,7 @@ export const KanbanView = memo(function KanbanView({
           onRename={(t) => onRenameNode(modalNodeId, t)}
           onEditSticky={(t) => onEditSticky(modalNodeId, t)}
           onBrowserNav={(patch) => onBrowserNav(modalNodeId, patch)}
+          terminalProfile={modalTerminalProfile}
         />
       )}
       {modalIssue && (
@@ -581,7 +929,11 @@ export const KanbanView = memo(function KanbanView({
             const { issue, columnId } = pendingGitHubMove
             setPendingGitHubMove(null)
             void moveGitHubState(
-              api.githubIssues, projectId, issue.number, columnId, issue.updatedAt
+              api.githubIssues,
+              projectId,
+              issue.number,
+              columnId,
+              issue.updatedAt
             )
           }}
         />

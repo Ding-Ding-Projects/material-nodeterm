@@ -130,6 +130,39 @@ describe('SettingsStore nested-default merge', () => {
       expect(load({ mode: 'shared' }).get().terminalGpuRendering).toBe('auto')
     })
   })
+
+  describe('legacy defaultShell migration to Windows terminal profiles', () => {
+    const load = (saved: Record<string, unknown>): SettingsStore => {
+      writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(saved), 'utf-8')
+      const store = new SettingsStore()
+      store.init()
+      return store
+    }
+
+    it("maps an absent profile plus empty defaultShell to 'auto'", () => {
+      const settings = load({ defaultShell: '' }).get()
+      expect(settings.defaultTerminalProfileId).toBe('auto')
+      expect(settings.defaultShell).toBe('')
+    })
+
+    it("maps a configured legacy executable to 'custom' without rewriting its path", () => {
+      const executable = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+      const settings = load({ defaultShell: executable }).get()
+      expect(settings.defaultTerminalProfileId).toBe('custom')
+      expect(settings.defaultShell).toBe(executable)
+    })
+
+    it('preserves an explicit modern profile id and custom path byte-for-byte', () => {
+      const profileId = 'wsl:Ubuntu 24.04 LTS'
+      const executable = ' C:\\Program Files\\Git\\bin\\bash.exe '
+      const settings = load({
+        defaultTerminalProfileId: profileId,
+        defaultShell: executable
+      }).get()
+      expect(settings.defaultTerminalProfileId).toBe(profileId)
+      expect(settings.defaultShell).toBe(executable)
+    })
+  })
 })
 
 describe('settings:save atomic write', () => {

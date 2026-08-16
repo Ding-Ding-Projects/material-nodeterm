@@ -17,10 +17,10 @@ set (a 205.8 MB `nodeterm-Setup-0.3.0.exe`, the full `.nupkg`, `RELEASES`), unsi
 That needed one elevated install of the Spectre-mitigated MSVC libraries — see
 [Building](#building).
 
-What has NOT happened is anyone **installing and launching one**. So the runtime behaviour of an
-INSTALLED build is still unverified — though the session-host path underneath it is no longer
-guesswork: it is now exercised directly against a real host, and the three defects that made it
-silently useless are fixed and covered below.
+What has NOT happened for the profile work described below is a completed packaged-app interaction
+and evidence pass. The resolver, spawn boundary, persistence, and attach failure paths are covered
+by behavioural tests; the real installed artifact remains explicitly unverified until the required
+headless Windows route records it.
 
 > An earlier version of this page said no packaged build had ever been produced. That was wrong:
 > it confused "I could not build one on this machine" with "the project does not build one". The
@@ -124,6 +124,40 @@ would aim a directory listing at a network host. And **spaces are not part of a 
 it ends, and allowing spaces made the matcher swallow the rest of the sentence. The POSIX matcher
 takes the same position, so this is parity rather than a Windows shortfall.
 
+### First-class terminal profiles: ids cross the boundary, launch plans do not
+
+The Windows desktop catalog exposes stable ids and public metadata only: `auto`, `pwsh`,
+`windows-powershell`, `cmd`, `git-bash`, `custom`, and `wsl:<distribution>`. Executable paths and
+argv stay private to the trusted core and are resolved again immediately before spawn. This is a
+desktop-only optional bridge; Server Edition, mobile, relay sessions, and SSH-project terminals do
+not receive a local Windows profile.
+
+`auto` is the only fallback profile: PowerShell 7 → Windows PowerShell → `%COMSPEC%`/`cmd.exe`.
+Every explicit profile fails closed when its executable or distribution is unavailable. Treating
+an unrecognised id as an executable, accepting argv from project state, or changing a missing WSL
+distribution into cmd would turn a shared-data field into code execution and would open the wrong
+environment while appearing successful.
+
+WSL discovery is a byte-level Windows problem, not a newline split: `wsl.exe --list --quiet` can
+emit UTF-16 with BOM/NUL padding, and distribution names may contain spaces. Parse the buffer as
+such, keep the selected name as one argv item, run that distribution's own `wslpath` for the
+Windows project cwd, then launch the structured `wsl.exe -d <distribution> --cd <linux-path>`
+prefix followed by a trusted distro-side cwd guard and the configured default shell. The guard
+independently changes to the positional Linux path so a directory removed after translation cannot
+silently open in `/`. An enumeration,
+translation, or launch failure must preserve its real cause and perform zero fallback spawns.
+
+`terminalProfileId`, the legacy custom `shell`, and advanced SSH arguments live in
+`LocalNodeExec`. `projectToFile`, portable exports, and inbound canvas mutation sanitizers all strip
+them. The profile id is snapshotted when a node is created, so changing the setting affects new
+nodes only; a legacy node with no snapshot still follows the configured default.
+
+The behavioural guards cover auto precedence, standard Git Bash locations, custom paths containing
+spaces, `%COMSPEC%`, missing executables, malformed ids, WSL encoding/names/cwd failures, spawn
+arguments, settings migration, creation snapshots, and machine-local stripping. Mutation checks
+must turn them red when a hostile profile is accepted, missing WSL falls back, or stripping is
+removed. Do not replace these with another source-text scan.
+
 ### The session host: every persistent terminal was quietly disposable
 
 Three defects stacked so each hid the next, and two more that made the whole stack invisible. The
@@ -148,11 +182,16 @@ path CHOSEN rather than the outcome. A failed attach still reported `persistent:
 renderer believed a throwaway shell would survive a restart, and every memory lever that spares a
 persistent session was reasoning about a session that did not exist.
 
-**How it was actually confirmed**, after two false summits. `10,017 ms → 6 ms` looked like a fix
-and was not — 10,017 was exactly the new timeout, and 6 ms was an immediate silent failure.
-`persistent: true` looked like a fix and was not. The only check that settled it was asking the
-host itself: `listSessions` now returns the session **by name**. Anything short of that cannot tell
-"reports persistent" from "is persistent".
+The fixed attach is provisional until authentication and the correlated host response succeed.
+Failure destroys the provisional shim, drops queued bytes and late exits, rolls back subscriber
+registration, rejects every caller waiting on that create with the real reason, and leaves no
+persistent index entry. It never opens a plain shell or another profile as a substitute.
+
+Behavioural tests now drive the host/client boundary rather than read its source: real local
+sockets cover hello handoff, correlation, reconnect, failed-subscription rollback, and uncertain
+capture/kill transport; PTY-manager tests cover provisional teardown, coalesced callers, late
+events, and the final persistence result. Asking the host for the named session distinguishes
+"reports persistent" from "is persistent" without relying on an implementation string.
 
 ### Delete-to-stop-something
 
@@ -187,12 +226,12 @@ compile.
 
 ## Known gaps
 
-- **No packaged build has been INSTALLED and launched.** CI builds and publishes the installer on
-  every push (verified: `v0.3.0-ci.165` carries a 206.8 MB `nodeterm-Setup-0.3.0.exe`, non-draft,
-  HTTP 206 on a range request), but nobody has run one. So the runtime behaviour of a real install
-  — tmux absence and the session-host fallback above all (see
-  [windows-session-host.md](windows-session-host.md)) — is unverified. Downloading one and clicking
-  through it is the single highest-value Windows check still outstanding.
+- **The profile/session-host change has no packaged interaction evidence yet.** Resolver and
+  protocol tests cover a separate automated gate, but the Windows x64 installer still
+  needs the required cheap headless run across every available profile, WSL cwd, destructive
+  switching, and post-relaunch process/screen continuity. See
+  [windows-session-host.md](windows-session-host.md); no capture or installed-build claim should be
+  added until that run exists.
 - **Building the installer locally needs one elevated install, once.** The Spectre-mitigated MSVC
   libraries are a separate Visual Studio component and their installer refuses `--quiet` without
   elevation. With them present, `build-installer.bat /s` produces the real Squirrel set locally
@@ -206,6 +245,10 @@ compile.
 - Publish files with `renameAtomic`, never a bare `fs.rename`. A guard enforces it.
 - Ask whether the path is **local** (platform-native) or **remote** (always POSIX, even from a
   Windows client). Getting that distinction wrong is how an SSH fix breaks local behaviour.
+- For a WSL profile, translate the cwd through the selected distribution's `wslpath`; never guess
+  a `/mnt/<drive>` path and never fall back to another distribution when translation fails.
+- Resolve a terminal profile id at the trusted spawn boundary. Never persist or accept an
+  executable/argv pair from shared project state or a canvas peer.
 - Write at least one test with a real `C:\`-shaped input. Every defect on this page was invisible
   to a suite whose fixtures were all POSIX.
 - Use `String.raw` for backslash literals — except when the string ends in one, which a raw

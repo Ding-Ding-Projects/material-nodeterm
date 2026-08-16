@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import type { CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
+import type { AgentLaunchIntent, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import { agentConfig, agentLaunchProgram, mintsSessionId, withSessionId } from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
@@ -8,12 +8,14 @@ import { claudeCliCapsNow } from './permissionMode'
 import { codexSharedIdentity } from './codexIdentity'
 import { sshHostKey } from '@shared/ssh'
 import { useSettings } from './settings'
+import type { SessionSource } from '../session/session'
+import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
 // reflector.
 export { applyCanvasMutation } from '@shared/canvas-mutations'
-import { sanitizeInboundNode } from '@shared/node-exec'
+import { acceptNewInboundNode, sanitizeInboundNode } from '@shared/node-exec'
 
 /** Preset color palette — macOS system colors (dark mode). */
 export const NODE_COLORS = [
@@ -61,11 +63,21 @@ export interface NodeData {
   /** One-shot command run once when the terminal first opens (not persisted). */
   initialCommand?: string
   /**
+   * Shell-independent first launch for a Windows-profile agent node. The trusted core consumes it;
+   * unlike `initialCommand`, no renderer code turns this into Windows shell syntax.
+   */
+  agentLaunchIntent?: AgentLaunchIntent
+  /**
    * Terminal nodes armed with canvas-control's `--after`: the launch is held until every node
-   * in `after` reports idle. Unlike `initialCommand` this IS persisted — the wait is durable
-   * state, not a one-shot open event. Cleared the moment it fires.
+   * in `after` reports idle. Unlike `initialCommand` this is durable in the trusted machine-local
+   * execution overlay, but is stripped from shared project files and peer traffic. Cleared only
+   * after the opaque executor reports success.
    */
   pendingLaunch?: PendingLaunch
+  /** Sanitized failure from the last opaque pending-launch attempt; transient and local-only. */
+  pendingLaunchError?: string
+  /** Whether a retry may mint a new id (`confirmed`) or must query the same host ledger (`unknown`). */
+  pendingLaunchErrorKind?: 'confirmed' | 'unknown'
   /**
    * Transient respawn trigger: bumping this number tears down a terminal node's session and
    * recreates it (used to move an existing terminal into a worktree cwd). Not persisted —
@@ -73,6 +85,12 @@ export interface NodeData {
    */
   respawnNonce?: number
   shell?: string
+  /**
+   * Machine-local Windows terminal profile snapshotted when this node was created. Legacy nodes
+   * deliberately leave this unset so the trusted spawn path can continue using the current
+   * configured default.
+   */
+  terminalProfileId?: string
   cwd?: string
   text?: string
   filePath?: string
@@ -212,14 +230,36 @@ export function nodeSshFor(
   return { server: projectSsh.server, remoteCwd: cwd || projectSsh.remoteCwd }
 }
 
+export interface TerminalNodeCreationOptions {
+  /** Session that will own the node; relay/server cores must resolve their own shell. */
+  sessionSource: SessionSource
+  /** Explicit selection from a profile picker; omitted means snapshot the current default. */
+  terminalProfileId?: string
+}
+
+/**
+ * Profile selection for a newly-created local terminal or agent node. The SSH argument is the
+ * authoritative locality boundary: an SSH-project node must never inherit a Windows profile from
+ * the renderer machine, even when a caller accidentally supplies an explicit one.
+ */
+function terminalProfileForNewNode(
+  ssh: Project['ssh'] | undefined,
+  options: TerminalNodeCreationOptions | undefined
+): string | undefined {
+  if (ssh || options?.sessionSource !== 'local' || !supportsWindowsTerminalProfiles()) return undefined
+  return options?.terminalProfileId ?? useSettings.getState().settings.defaultTerminalProfileId
+}
+
 export function createTerminalNode(
   index: number,
   cwd?: string,
   center?: { x: number; y: number },
   initialCommand?: string,
-  ssh?: Project['ssh']
+  ssh?: Project['ssh'],
+  options?: TerminalNodeCreationOptions
 ): CanvasNode {
   const size = terminalNodeSize()
+  const terminalProfileId = terminalProfileForNewNode(ssh, options)
   return {
     id: nextId('term'),
     type: 'terminal',
@@ -234,6 +274,7 @@ export function createTerminalNode(
       tags: [],
       cwd: ssh ? ssh.remoteCwd : cwd,
       initialCommand,
+      ...(terminalProfileId !== undefined ? { terminalProfileId } : {}),
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
   }
@@ -358,7 +399,8 @@ export function createAgentNode(
   initialPrompt?: string,
   ssh?: Project['ssh'],
   accountId?: string,
-  permissionMode?: AgentPermissionMode
+  permissionMode?: AgentPermissionMode,
+  options?: TerminalNodeCreationOptions
 ): CanvasNode {
   const { label, color, launchCmd } = resolveAgent(agentId)
   // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
@@ -373,9 +415,8 @@ export function createAgentNode(
   // would be misread (opencode treats it as a project path). Everything else keeps the
   // historical argv append, INCLUDING stdin-after-start agents (gemini has always launched
   // via argv here; changing that is a separate decision).
-  const promptArg = initialPrompt
-    ? shellSingleQuote(initialPrompt.replace(/\s+/g, ' ').trim())
-    : null
+  const normalizedPrompt = initialPrompt?.replace(/\s+/g, ' ').trim() || undefined
+  const promptArg = normalizedPrompt ? shellSingleQuote(normalizedPrompt) : null
   // A CLI whose positional prompt shares its slot with subcommands needs a separator, or a
   // one-word prompt runs as a command instead (grok: `grok version` prints the version, `grok --
   // version` asks the model about "version"). Absent for everyone else, so their command line is
@@ -425,7 +466,16 @@ export function createAgentNode(
   //    BEFORE the separator: `grok --permission-mode plan -- 'explain this repo'`, matching grok's
   //    own usage line `grok [OPTIONS] [PROMPT] [COMMAND]`.
   const initialCommand = usesSep ? `${flagged(baseCmd)} ${sep} ${promptArg}` : flagged(withPrompt)
+  const agentLaunchIntent: AgentLaunchIntent = {
+    kind: 'agent',
+    action: 'start',
+    agentId,
+    ...(normalizedPrompt ? { prompt: normalizedPrompt } : {}),
+    ...(permissionMode ? { permissionMode } : {}),
+    ...(mintedSessionId ? { newSessionId: mintedSessionId } : {})
+  }
   const size = terminalNodeSize()
+  const terminalProfileId = terminalProfileForNewNode(ssh, options)
   return {
     id: nextId('term'),
     type: 'terminal',
@@ -448,6 +498,8 @@ export function createAgentNode(
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
       cwd: ssh ? ssh.remoteCwd : cwd,
       initialCommand,
+      agentLaunchIntent,
+      ...(terminalProfileId !== undefined ? { terminalProfileId } : {}),
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
   }
@@ -497,9 +549,10 @@ export function createAccountLoginNode(
   accountId: string,
   index: number,
   center?: { x: number; y: number },
-  ssh?: Project['ssh']
+  ssh?: Project['ssh'],
+  options?: TerminalNodeCreationOptions
 ): CanvasNode {
-  const node = createTerminalNode(index, undefined, center, undefined, ssh)
+  const node = createTerminalNode(index, undefined, center, undefined, ssh, options)
   node.data = {
     ...node.data,
     title: 'Claude login',
@@ -1014,7 +1067,13 @@ export function groupSelectedNodes(
   return fitAncestorChain(groupsFirst([group, ...updated]), parentId)
 }
 
-/** Returns a copy of a node with a fresh id, offset position, and top-level placement. */
+/**
+ * Returns a copy of a node with a fresh id, offset position, and top-level placement.
+ *
+ * A duplicate is a new execution identity, not a second view of the source conversation. Never
+ * carry one-shot launch state, an armed launch, or the provider session id: doing so can make the
+ * copy resume the source conversation or execute work the source already consumed.
+ */
 export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
   const kind: NodeKind = node.type === 'sticky' ? 'sticky' : node.type === 'group' ? 'group' : 'terminal'
   const prefix = kind === 'terminal' ? 'term' : kind
@@ -1025,7 +1084,15 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
     selected: true,
     parentId: undefined,
     extent: undefined,
-    data: { ...node.data, initialCommand: undefined }
+    data: {
+      ...node.data,
+      initialCommand: undefined,
+      agentLaunchIntent: undefined,
+      pendingLaunch: undefined,
+      pendingLaunchError: undefined,
+      pendingLaunchErrorKind: undefined,
+      agentSessionId: undefined
+    }
   }
 }
 
@@ -1279,6 +1346,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         collapsed,
         expandedHeight: n.size.height,
         shell: n.shell,
+        terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         cwd: n.cwd,
         text: n.text,
         filePath: n.filePath,
@@ -1344,6 +1412,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         collapsed: n.data.collapsed,
         parentId: n.parentId,
         shell: n.data.shell,
+        terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
         cwd: n.data.cwd,
         text: n.data.text,
         filePath: n.data.filePath,
@@ -1383,7 +1452,11 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
  * size after a peer resized the node — and re-publish it, fighting the peer. Dropping it lets React
  * Flow re-measure from the incoming `style`, which is what the peer sent.
  */
-export function applyMutationToFlow(nodes: CanvasNode[], m: CanvasMutation): CanvasNode[] {
+export function applyMutationToFlow(
+  nodes: CanvasNode[],
+  m: CanvasMutation,
+  defaultTerminalProfileId?: string
+): CanvasNode[] {
   if (m.op === 'remove') {
     if (!nodes.some((n) => n.id === m.id)) return nodes // already gone — keep identity, skip render
     return nodes.filter((n) => n.id !== m.id)
@@ -1391,8 +1464,14 @@ export function applyMutationToFlow(nodes: CanvasNode[], m: CanvasMutation): Can
   // A peer's node never brings the exec-enabling fields with it (@shared/node-exec): they are
   // per-machine settings, and letting one into the live array is exactly how it ends up harvested
   // into this machine's "trusted" workspace.json on the next save.
-  const incoming = nodeStatesToFlow([sanitizeInboundNode(m.node)])[0]
   const idx = nodes.findIndex((n) => n.id === m.node.id)
+  // A genuinely new local terminal snapshots the receiving Windows host's current default. The
+  // sender's value is stripped inside acceptNewInboundNode; Server/non-Windows callers omit the
+  // optional default and retain the existing sanitize-only behavior.
+  const accepted = idx === -1
+    ? acceptNewInboundNode(m.node, defaultTerminalProfileId)
+    : sanitizeInboundNode(m.node)
+  const incoming = nodeStatesToFlow([accepted])[0]
   if (idx === -1) {
     // Append, then re-sort: React Flow requires a parent to appear BEFORE its children, and a peer
     // grouping nodes sends the new group frame and its (already present) children in one burst.
@@ -1415,6 +1494,11 @@ export function applyMutationToFlow(nodes: CanvasNode[], m: CanvasMutation): Can
       ...prev.data,
       ...incoming.data,
       shell: prev.data.shell,
+      terminalProfileId: incoming.data.ssh ? undefined : prev.data.terminalProfileId,
+      // The peer's pending launch was stripped at ingress. Preserve the already-held local typed
+      // intent exactly like the other machine-local exec fields, or a harmless peer drag would
+      // silently disarm this station before its dependencies finish.
+      pendingLaunch: accepted.kind === 'terminal' ? prev.data.pendingLaunch : undefined,
       ...(incoming.data.ssh && prev.data.ssh?.extraArgs
         ? {
             ssh: {

@@ -30,8 +30,13 @@ import { registerPeerSink, unregisterPeerSink } from '../peer-registry'
 import { allocateRelayClientId, presenceHub } from '../../core/presence/hub'
 import { E_UNAUTHORIZED, parseRpcMessage, type RpcErr, type RpcOk } from '../../shared/rpc'
 import { IPC } from '../../shared/ipc'
-import { scopeWorkspaceToProject } from '../../shared/relay-workspace-scope'
-import type { Workspace } from '../../shared/types'
+import {
+  sanitizeWorkspaceForRelay,
+  scopeWorkspaceToProject
+} from '../../shared/relay-workspace-scope'
+import { isCanvasMutation } from '../../shared/canvas-mutations'
+import { sanitizeInboundNode, stripSharedNodeExec } from '../../shared/node-exec'
+import type { CanvasNodeState, Project, Workspace } from '../../shared/types'
 
 export interface RelayHostSession {
   /** The peer's presence/platform ClientId once it is open, else null. */
@@ -98,11 +103,18 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
   // teardown (see detach) — the host watch is released, and the shared local refcount is never touched
   // below this connection's own contribution (an unbalanced guest unsubscribe is ignored).
   const boardLogSubs = new Map<string, number>()
+  // Nodes introduced over this exact approved session are the only missing WorkspaceStore ids that
+  // may receive the host default at pty:create. A removal permanently retires the id for this
+  // session: remove→upsert cannot recycle a process identity before persistence catches up.
+  const introducedNodes = new Map<string, { projectId: string; node: CanvasNodeState }>()
+  const retiredNodeIds = new Set<string>()
 
   /** The ONE teardown, mirroring src/server/ws.ts's close path exactly: `unregisterPeerSink` IS the
    *  three steps (presenceHub.leave → onPeerGone → PtyManager.dropClient → registry prune). Do NOT
    *  re-implement them here, and do NOT call `wirePeerRegistry` — it is wired once at boot. */
   const detach = (): void => {
+    introducedNodes.clear()
+    retiredNodeIds.clear()
     if (clientId === null) return
     // Release any board-log watches this connection still holds — a dropped guest tab never sends the
     // balancing unsubscribe, so replay one per outstanding count before the client id is gone.
@@ -171,14 +183,27 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
     opts.onOpen(session)
   }
 
-  /** UX scope, NOT a trust boundary: for the ONE `workspace:load` method, when this hosting session
-   *  is bound to a single project, narrow the successful response to that project (see
-   *  scopeWorkspaceToProject). Every other method — and an error response, and an unscoped session —
-   *  passes through byte-identical. This can only NARROW: it never exposes anything the core did not
-   *  already return, and it never touches a non-`workspace:load` response. */
+  /** Strip machine-local execution choices from methods returning workspace/project objects before
+   *  they cross the relay. A scoped workspace:load additionally narrows to its one project. Other
+   *  methods and every error response pass through byte-identical. */
   const scopeResponse = (method: string, res: RpcOk | RpcErr): RpcOk | RpcErr => {
-    if (!opts.sharedProjectId || method !== IPC.workspaceLoad || res.ok !== true) return res
-    return { ...res, result: scopeWorkspaceToProject(res.result as Workspace, opts.sharedProjectId) }
+    if (res.ok !== true) return res
+    if (method === IPC.workspaceLoad) {
+      const workspace = res.result as Workspace
+      return {
+        ...res,
+        result: opts.sharedProjectId
+          ? scopeWorkspaceToProject(workspace, opts.sharedProjectId)
+          : sanitizeWorkspaceForRelay(workspace)
+      }
+    }
+    if (method === IPC.workspaceProbeFolder) {
+      const project = res.result as Project | null
+      return project && Array.isArray(project.nodes)
+        ? { ...res, result: { ...project, nodes: stripSharedNodeExec(project.nodes) } }
+        : res
+    }
+    return res
   }
 
   /** SCOPE jail for the board log (beyond the host registry's own projectId jail): a session bound to
@@ -299,11 +324,54 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
           return
         }
         const id = clientId
+        const rawCreate = m.method === IPC.ptyCreate ? m.args[0] : undefined
+        const persistKey =
+          rawCreate && typeof rawCreate === 'object' &&
+          typeof (rawCreate as { persistKey?: unknown }).persistKey === 'string'
+            ? (rawCreate as { persistKey: string }).persistKey
+            : undefined
         void opts.platform
-          .dispatch(id, m)
+          .dispatch(id, m, {
+            sharedProjectId: opts.sharedProjectId,
+            ...(persistKey && introducedNodes.has(persistKey)
+              ? { introducedNode: introducedNodes.get(persistKey)! }
+              : {}),
+            ...(persistKey && retiredNodeIds.has(persistKey)
+              ? { retiredPersistKey: true }
+              : {})
+          })
           .then((res) => socket.sendTunnelText(JSON.stringify(scopeResponse(m.method, res))))
       } else if (m.t === 'cast') {
         if (githubIssuesOutOfScope(m.method, m.args)) return
+        if (m.method === IPC.canvasMut) {
+          const projectId = m.args[0]
+          const mutation = m.args[1]
+          // The session's project scope applies at ingress, before the generic canvas reflector.
+          if (
+            typeof projectId !== 'string' ||
+            (opts.sharedProjectId !== undefined && projectId !== opts.sharedProjectId) ||
+            !isCanvasMutation(mutation)
+          ) {
+            return
+          }
+          if (mutation.op === 'remove') {
+            introducedNodes.delete(mutation.id)
+            retiredNodeIds.add(mutation.id)
+          } else {
+            const nodeId = mutation.node.id
+            const prior = introducedNodes.get(nodeId)
+            if (retiredNodeIds.has(nodeId) || (prior && prior.projectId !== projectId)) {
+              // Identity reuse/cross-project rebinding is not a canvas edit; do not reflect it.
+              introducedNodes.delete(nodeId)
+              retiredNodeIds.add(nodeId)
+              return
+            }
+            introducedNodes.set(nodeId, {
+              projectId,
+              node: sanitizeInboundNode(mutation.node)
+            })
+          }
+        }
         // Board-log subscribe/unsubscribe: scope-jail out-of-scope projects, and track this
         // connection's net per-project count so a dropped guest's watch is released in detach().
         if (m.method === IPC.boardLogSubscribe || m.method === IPC.boardLogUnsubscribe) {

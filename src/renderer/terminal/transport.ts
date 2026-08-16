@@ -1,4 +1,9 @@
-import type { PtyCreateOptions, PtyCreateResult, RecycledInfo } from '@shared/types'
+import type {
+  PtyCreateOptions,
+  PtyCreateResult,
+  PtyRecycleTarget,
+  RecycledInfo
+} from '@shared/types'
 import type { ClientId } from '@shared/presence'
 
 /**
@@ -40,6 +45,12 @@ export interface TerminalTransport {
    * the replacement session), never the permanent, un-respawnable closed state.
    */
   recycle(persistKey: string): void
+  /**
+   * Recycles the persistent session and resolves only after the core has finished the destructive
+   * teardown. Optional because relay/server transports may not expose the desktop-only confirmed
+   * RPC. Callers that must mutate execution state after teardown must fail closed when absent.
+   */
+  recycleConfirmed?(persistKey: string, target?: PtyRecycleTarget): Promise<void>
 
   /** Listens for output; returns an unsubscribe function. */
   onData(sessionId: string, listener: (data: string) => void): () => void

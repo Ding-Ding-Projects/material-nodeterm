@@ -32,6 +32,7 @@ import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
 import { PtyManager } from '../core/pty-manager'
+import { WindowsTerminalProfileService } from '../core/windows-terminal-profiles'
 import { WorkspaceStore } from '../core/workspace-store'
 import { WorkspaceWatcher } from '../core/workspace-watcher'
 import { SettingsStore } from '../core/settings-store'
@@ -181,6 +182,7 @@ import { createRevoker } from './remote/revocation'
 import { loadApprovedDevices, saveApprovedDevices } from './remote/approved-devices'
 import { publicKeyToB64 } from './remote/e2ee'
 import { connectRelayClient, type RelayClientSession } from './remote/relay-client'
+import { serializeProjectsListWorkspace } from './remote/projects-list-output'
 import { decodeOffer } from './remote/pairing'
 import { loadOrCreatePeerKeyPair } from './remote/peer-identity'
 import { initSshProject } from './remote-ssh/ssh-project'
@@ -196,8 +198,15 @@ import {
 } from './media-protocol'
 import { initPlatform } from '../core/platform'
 import { electronPlatform } from './platform-electron'
+import {
+  authorizeRelayPtyCreate,
+  type RelayPtyCreateAuthority
+} from './relay-pty-create'
 import { wirePeerRegistry } from './peer-registry'
 import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
+import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
+import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
+import { applyWindowsAppUserModelId } from './windows-app-identity'
 
 // Dev-only: NT_MULTI lets a SECOND instance run (host + client testing on one machine) with an
 // isolated userData via NT_USER_DATA — its own device-id/session/license/workspace. Never active
@@ -220,20 +229,24 @@ app.commandLine.appendSwitch('max-active-webgl-contexts', String(WEBGL_CONTEXT_C
 // at-rest encryption of that key.
 if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain')
 
-// Windows identifies apps by this id, not by exe path or window title — it decides whether a
-// desktop `Notification` actually shows (an unset AppUserModelID renders under a generic
-// "Electron" identity, or silently not at all on some builds) and whether the taskbar groups this
-// app's windows together instead of treating each launch as unrelated. Must match `build.appId`
-// in package.json so a Squirrel-installed build's shortcuts/notifications agree with what this
-// process claims to be.
-if (process.platform === 'win32') app.setAppUserModelId('com.nodeterm.app')
+// Windows identifies apps by this id, not by exe path or window title. A Squirrel shortcut's
+// identity is derived from its package id + executable name, which is deliberately separate from
+// electron-builder's build.appId; using build.appId here split taskbar grouping/notifications from
+// the installed shortcut. Keep the pure decision pressed by windows-app-identity.test.ts.
+applyWindowsAppUserModelId(process.platform, (id) => app.setAppUserModelId(id))
 
 // First thing in bootstrap: install the Electron CorePlatform so anything in src/core
 // (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI
 // userData override so userDataDir reads the final path; nothing consumes it yet.
 // Held: a relay peer's inbound RPC is answered from THIS instance's handler table (corePlatform
 // .dispatch / .cast — see platform-electron.ts). `platform()` only exposes the CorePlatform half.
-const corePlatform = electronPlatform()
+let relayPtyCreateAuthority: RelayPtyCreateAuthority | undefined
+const corePlatform = electronPlatform({
+  authorizeRelayPtyCreate: (raw, source) =>
+    relayPtyCreateAuthority
+      ? authorizeRelayPtyCreate(relayPtyCreateAuthority, raw, source)
+      : { ok: false, message: 'host terminal authority is not ready' }
+})
 initPlatform(corePlatform)
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
@@ -255,7 +268,13 @@ const kidsModeStore = new KidsModeStore()
 const scheduledSettingsStore = new ScheduledSettingsStore()
 const scheduledSettingsService = new ScheduledSettingsService(scheduledSettingsStore)
 const sshStore = new SshStore()
-const ptyManager = new PtyManager()
+// One trusted catalog/resolver instance owns both public detection and private launch resolution.
+// The getter is evaluated at use time so a Settings save updates Custom availability immediately;
+// the executable itself never crosses the profile IPC boundary.
+const windowsTerminalProfiles = new WindowsTerminalProfileService({
+  getCustomExecutable: () => settingsStore.get().defaultShell
+})
+const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
 // Dictation: local whisper.cpp models live under userData, one dir per install (same convention
 // as the tmux config / scrollback-store). onProgress pushes { id, pct } to the renderer the same
 // way agent-status events do (sendToMain — resolves the live window at send time).
@@ -300,6 +319,36 @@ const remoteWorkspaceIO = makeRemoteWorkspaceIO(
   (projectId) => workspaceStore.markUnmirrored(projectId)
 )
 const workspaceStore = new WorkspaceStore(remoteWorkspaceIO)
+// Relay pty:create is an execution boundary, not a mirror operation. Resolve every existing node
+// from WorkspaceStore's machine-local overlay and every SSH project through the live host-owned
+// ControlMaster. A peer-supplied executable, argv, cwd, profile, launch intent, or sshRemote never
+// reaches PtyManager; a stale/mismatched master fails closed.
+relayPtyCreateAuthority = {
+  node: (persistKey) => workspaceStore.trustedNodeLaunchContext(persistKey),
+  project: (projectId) => workspaceStore.trustedProjectLaunchContext(projectId),
+  defaultTerminalProfileId: () => settingsStore.get().defaultTerminalProfileId,
+  sshRemote: (projectId, ssh, remoteCwd) => {
+    const ref = sshProjectManager?.refForProject(projectId)
+    if (!ref) return null
+    const expected = ssh.server
+    const live = ref.conn
+    if (
+      live.host !== expected.host ||
+      live.user !== expected.user ||
+      (live.port ?? 22) !== (expected.port ?? 22) ||
+      (live.identityFile ?? '') !== (expected.identityFile ?? '')
+    ) {
+      return null
+    }
+    const remoteHome = sshProjectManager?.remoteHomeFor(projectId)
+    return {
+      controlPath: ref.controlPath,
+      conn: live,
+      remoteCwd,
+      ...(remoteHome ? { remoteHome } : {})
+    }
+  }
+}
 // Watch each local ref's project.json for outside edits (git pull, a teammate's commit).
 // Self-writes match the store's last-written cache and are ignored. Re-synced after every
 // store load/save via onPersist; disposed on quit next to ptyManager.killAll().
@@ -341,7 +390,7 @@ async function listProjectsOutput(): Promise<string> {
     // Read-only: a phone listing projects mid git-merge must NOT sideline a conflict-marked
     // project.json to `.corrupt-<ts>` (the probe/watcher-path fix); sideline is boot/renderer-only.
     .load({ sideline: false })
-    .then((w) => JSON.stringify(w))
+    .then(serializeProjectsListWorkspace)
     .catch(() => '')
   const status = await readFile(join(dir, 'agent-status.json'), 'utf8').catch(() => '')
   const sessions = (await ptyManager.listNodetermSessions().catch(() => [])).join('\n')
@@ -591,6 +640,16 @@ app.whenReady().then(async () => {
 
   settingsStore.init()
   settingsStore.registerIpc()
+  // Native Electron IPC on purpose: profile detection is machine-local desktop state and must not
+  // enter CorePlatform's relay-dispatch table. The same service resolves the chosen id at spawn.
+  // The preload namespace is Windows-only, so keep its handlers absent on every other desktop too.
+  if (process.platform === 'win32') {
+    const disposeTerminalProfileIpc = registerWindowsTerminalProfileIpc(
+      ipcMain,
+      windowsTerminalProfiles
+    )
+    app.once('will-quit', disposeTerminalProfileIpc)
+  }
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
   await kidsModeStore.init()
@@ -2132,6 +2191,15 @@ app.whenReady().then(async () => {
   // host's tails too, instead of leaking them.
   corePlatform.on(IPC.ptyDestroy, (nodeId: string) => releaseNodeTails(nodeId))
   corePlatform.on(IPC.ptyRecycle, (nodeId: string) => releaseNodeTails(nodeId))
+  // Profile switching needs an awaited destroy-before-respawn barrier. Keep this native to the
+  // desktop: unlike the legacy cast above, a relay peer must not be able to invoke a machine-local
+  // Windows profile action. Tails are released only after PtyManager confirms teardown succeeded.
+  const disposeConfirmedRecycleIpc = registerConfirmedRecycleIpc(
+    ipcMain,
+    ptyManager,
+    releaseNodeTails
+  )
+  app.once('will-quit', disposeConfirmedRecycleIpc)
   // Agent canvas control: the spawned agent's `nodeterm` CLI POSTs a verb to the hook server,
   // which we forward to the renderer and await a reply. A pending-request map (keyed by a random
   // requestId) bridges the two async hops; both the reply and the 120s timeout clear the entry.
@@ -2248,7 +2316,12 @@ app.whenReady().then(async () => {
   const hostBridge = {
     git: gitService,
     registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string }) =>
-      workspaceStore.appendRemoteNode(projectId, node),
+      workspaceStore.appendRemoteNode(
+        projectId,
+        node,
+        undefined,
+        process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
+      ),
     // Jail roots beyond the active canvas: the phone browses EVERY project (projects.list), so
     // its fs/git access spans every local project root — not just the tab the desktop happens
     // to have focused (that gap read as "cwd is outside the shared project roots" on the phone).

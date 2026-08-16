@@ -99,7 +99,21 @@ never a substituted nearest match. A hand-editable value that is unrecognised mu
 default, never something more destructive than the default.
 
 **Re-validate hand-editable values at the point of use**, not by their TypeScript type. Settings
-come from git-shared JSON and can end up interpolated into a shell command line.
+are machine-local, while `.nodeterm/project.json` is git-shared; either can be hand-edited before a
+value reaches an execution boundary.
+
+**Windows terminal profiles cross the desktop boundary as stable ids only.** The public catalog may
+expose `id`, label, kind, availability and a reason—never executable paths or argv. Resolve the id
+inside the trusted core immediately before spawn. `terminalProfileId`, legacy custom `shell`, and
+advanced SSH execution fields belong in `LocalNodeExec` and must be stripped from shared files,
+exports, and inbound canvas traffic. Explicit missing profiles fail closed; only `auto` follows
+PowerShell 7 → Windows PowerShell → `%COMSPEC%`/cmd.
+
+**WSL cwd belongs to the selected distribution.** Parse `wsl.exe --list --quiet` as its real
+UTF-16/NUL-padded output, keep names with spaces as one argument, and call that distribution's
+`wslpath` before `wsl.exe -d <distribution> --cd <linux-path>`. A failed enumeration, translation,
+or launch is an actionable error, never permission to guess `/mnt/<drive>`, switch distributions,
+or open a different shell.
 
 **Test generated shell for real.** If you generate a shell command, run it under an actual
 `/bin/sh` against a fixture tree. A composed fixture will not tell you that `echo ##MEM` prints an
@@ -154,6 +168,12 @@ handler, and stayed green on a tree where a shared guard had moved out from unde
 module is untestable because it imports `electron` at the top, that is the thing to fix: lift the
 decision into a pure function next to it (`keydown-intercept.ts`, `main-window.ts`,
 `zoomShortcut.ts`) and press the keys.
+
+The Windows profile/session-host guards are behavioural examples: resolver tests inject
+filesystem/process probes, spawn tests observe the exact trusted launch plan, and real local-socket
+tests exercise provisional attach, reconnect and rollback. Mutation-check them by accepting a
+hostile profile, allowing missing WSL to fall back, and removing machine-local stripping; each
+focused suite must fail before the guard is trusted.
 
 Where a behaviour can only be verified on hardware we do not have in CI (a Mac, a real SSH host, a
 GPU), say so explicitly rather than implying coverage. Several docs carry numbered device
