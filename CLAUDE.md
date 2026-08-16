@@ -2075,6 +2075,14 @@ checker, or a suite whose fixtures are POSIX paths. Twice now, one file in the t
 documented the trap and none of the twenty others doing the same thing knew — which is why these
 are enforced by scanning guards rather than by comments.
 
+Native `path.basename` is not a cross-dialect parser: it follows the process that is reading the
+string. A transcript written on Windows can later be indexed by a Linux Server Edition, and a
+POSIX filename may legally contain a backslash while a Windows desktop reads it. Recorded paths
+without owner metadata use `core/path-basename.ts`: anchored drive/UNC syntax selects
+`path.win32`; everything else selects `path.posix`, preserving ambiguous backslashes as text.
+Every consumer test carries both dialects so replacing the helper with native basename is red on
+either host.
+
 ## Building on Windows: close the app first
 
 `npm run dist:win` and `npm run rebuild` both run electron-rebuild, which deletes and recompiles
