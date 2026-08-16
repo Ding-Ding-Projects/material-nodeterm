@@ -2158,7 +2158,18 @@ still receives its icon and version metadata. The Squirrel package id must remai
 would rename that update identity. Runtime and installed shortcuts instead share the exact
 AppUserModelID `com.squirrel.node-terminal.nodeterm`, derived from the effective package id and
 `nodeterm.exe` rather than from `build.appId`.
-`npm run dist:win` is the local smoke test. `.github/workflows/release.yml` is a manual-only
+`npm run dist:win` routes every supported Windows package through
+`scripts/windows-installer.mjs`. The wrapper requires a clean checkout, regenerates the committed
+seven-frame ICO, proves it equals the current commit's blob, derives a public immutable raw URL
+from the full source SHA, and verifies the downloaded bytes before invoking electron-builder. It
+then rejects stale or unexpected output, requires semantic nupkg ID/version/title plus exact
+`RELEASES` name/size/SHA-1 agreement, and compares the nuspec URL and the icon/version resources in
+Setup, the installed app, and its execution stub. The current commit must already be reachable in
+the public GitHub repository; local-only commits fail before packaging. Squirrel's vendor
+`Update.exe` remains vendor-branded and outside the PE-resource gate because the pinned builder
+exposes no supported project hook for editing it.
+
+`.github/workflows/release.yml` is a manual-only
 `workflow_dispatch` pipeline and its first step refuses every ref except the `main` branch.
 Feature-branch and prerelease artifacts must never become the authority behind
 `releases/latest/download`. The stable tag is exactly `v<package.json version>`; consequently the
@@ -2218,7 +2229,11 @@ The app/runtime keeps those dotted versions; `electron-winstaller` normalizes th
 versions in `.nupkg` filenames and `RELEASES` to `0.4.0-fixture1` / `0.4.0-fixture2`. Only a
 fixture-version build accepts
 `NODETERM_SQUIRREL_FIXTURE_URL`, and only for loopback HTTP(S); a stable or unrelated prerelease
-must refuse that override. Serve the second package with
+must refuse that override. The production `dist:win` wrapper deliberately cannot create this pair:
+the fixture manifest edits make the checkout dirty, while production provenance requires a clean,
+publicly reachable exact commit. A dedicated fixture-only provenance route is still pending; do not
+weaken the production clean-tree guard to manufacture the pair. Once that bounded route exists,
+serve the second package with
 `scripts/serve-squirrel-update-fixture.mjs`, install only in a disposable Windows Sandbox/VM,
 wait at least 10 seconds after the normal `--squirrel-firstrun` app opens, quit it explicitly, then
 launch the installed `.1` executable again with the feed environment. Resolve its install path
@@ -2228,7 +2243,8 @@ persistence after `.2` applies. Quit the fixture and prove every process running
 install root has exited before invoking that registration's Update.exe to uninstall. Building the
 pair or exercising controller Chuts does not substitute for that packaged interaction, and the
 fixture does not substitute for the separate production-identity `0.3.0` → `0.4.0` migration
-proof.
+proof. Until the fixture-only packaging route exists, that packaged interaction remains blocked
+rather than partially verified.
 
 ### Server Edition container image
 
@@ -2325,11 +2341,43 @@ Nothing in that says "close the app", and the usual reactions (admin terminal, r
 macOS/Linux, where unlinking an open file is ordinary — so it only bites on the platform this
 project ships.
 
-`download-dependencies.bat` runs `scripts/check-build-preflight.mjs` after Node bootstrap and
-before `npm ci`/`npm install`, so both root BAT entry points name the exact file and the PID
-holding it even on a machine that started with no Node on `PATH`. The old pre-dependency placement
-skipped the check on exactly that fresh-machine path and never retried it before npm removed
-`node_modules`. The preflight also checks for the **Spectre-mitigated MSVC libraries**: node-pty's own
+After Node bootstrap, `download-dependencies.bat` runs
+`scripts/ensure-windows-build-toolchain.mjs`, `scripts/ensure-windows-python.mjs`, and then
+`scripts/check-build-preflight.mjs`, all before `npm ci`/`npm install`. The toolchain phase installs
+Build Tools + the C++ workload on a fresh machine, or modifies an existing instance, and always
+selects the separate rolling component
+`Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre`; ARM64 hosts also add
+`Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre` while retaining x86/x64. The installed `setup.exe` receives
+`modify --installPath ... --add ... --quiet/--passive --norestart` without `--wait` (unsupported
+there); only the fresh-machine bootstrapper receives `--wait`. Both routes independently recheck
+the workload plus real `.lib` files for every required architecture below
+`VC\Tools\MSVC\*\lib\spectre` instead of trusting exit zero. A fresh machine uses the exact Microsoft
+bootstrapper URL in `dependencies.manifest.json`, hashes it in Node, stages it beneath protected
+Program Files, and runs it only on a match; privileged executable lookup never trusts inherited PATH.
+
+Visual Studio has no user-scoped Build Tools installation, and Microsoft requires programmatic
+quiet/passive changes to start elevated. The script prechecks the token: unelevated callers exit
+with ERROR_ACCESS_DENIED before starting an installer or UAC and print an absolute command ending
+in `--silent --elevated-toolchain-only`. Only that helper command may run elevated. The helper then
+exits; the root BAT must be rerun normally, and explicitly refuses to continue into per-user Python
+or npm under an Administrator token. Do not “helpfully” add `Start-Process -Verb RunAs`: `/s`
+promises no prompts, and ordinary dependency installation is automatic too. This is measured, not
+inferred: an unelevated quiet modify parsed every option, then exited 5007 saying it must be run
+elevated from the beginning.
+
+Python is a separate prerequisite, not part of `Microsoft.VisualStudio.Workload.VCTools`:
+`smart-whisper` runs node-gyp in its install lifecycle, and the root postinstall rebuilds it and
+`node-pty`. The helper accepts a proven 64-bit Python 3.10-3.14; otherwise it installs pinned Python
+3.13 per-user with no launcher or persistent `PATH` mutation. Bare `py.exe`/`python.exe` aliases are
+not probed because current Windows aliases can install or open UI. Canonical winget is tried first, then
+the exact python.org URL/SHA fallback. Exit zero is followed by an isolated exact patch/architecture
+probe, and the absolute executable crosses `setlocal` in process-local `PYTHON`,
+`NODE_GYP_FORCE_PYTHON`, and `npm_config_python` so stale inherited node-gyp settings cannot win.
+
+The preflight placement means both root BAT entry points name the exact locked file and PID even on
+a machine that started with no Node on `PATH`. The old pre-dependency placement skipped the check
+on exactly that fresh-machine path and never retried it before npm removed `node_modules`. The
+preflight independently checks the **Spectre-mitigated MSVC libraries** too: node-pty's own
 `binding.gyp` sets `SpectreMitigation`, that component is not part of a default C++ workload, and
 without it the build dies minutes in with four copies of `MSB8040`. Deliberately not worked around
 with `/p:SpectreMitigation=false` — node-pty asks for the mitigation on purpose, and disabling it

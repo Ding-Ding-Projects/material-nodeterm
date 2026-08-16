@@ -1,5 +1,14 @@
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -12,7 +21,6 @@ const DELTA = 'node-terminal-0.4.0-delta.nupkg'
 const TAG = 'v0.4.0'
 const SHA = 'a'.repeat(40)
 const SETUP_BYTES = Buffer.from('setup executable\n')
-const DELTA_BYTES = Buffer.from('delta package\n')
 
 type ManifestAsset = { name: string; size: number; sha256: string }
 type RemoteAsset = { name: string; size: number; digest?: string; sha256?: string }
@@ -93,6 +101,7 @@ function fullPackage(
 }
 
 const FULL_BYTES = fullPackage()
+const DELTA_BYTES = fullPackage()
 
 function sha1(value: Buffer): string {
   return createHash('sha1').update(value).digest('hex')
@@ -146,7 +155,7 @@ describe('release-assets helper CLI', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'nodeterm-release-assets-'))
-    output = join(root, 'github-output.txt')
+    output = `${root}-github-output.txt`
     writeFileSync(join(root, SETUP), SETUP_BYTES)
     writeFileSync(join(root, FULL), FULL_BYTES)
     writeFileSync(join(root, DELTA), DELTA_BYTES)
@@ -156,6 +165,8 @@ describe('release-assets helper CLI', () => {
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })
+    rmSync(output, { force: true })
+    rmSync(`${root}-junction-target`, { recursive: true, force: true })
   })
 
   function collect(version = '0.4.0', packageId = 'node-terminal', productName = 'nodeterm') {
@@ -337,6 +348,109 @@ describe('release-assets helper CLI', () => {
     })
   })
 
+  it('writes only the exact validated Setup path for local BAT consumption', () => {
+    const packageJson = `${root}-package.json`
+    const resultFile = `${root}-setup-result.txt`
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ name: 'node-terminal', version: '0.4.0', build: { productName: 'nodeterm' } }),
+    )
+    try {
+      const result = spawnSync(process.execPath, [SCRIPT, 'collect-local', root, packageJson, resultFile], {
+        encoding: 'utf8',
+      })
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(resultFile, 'utf8')).toBe(resolve(root, SETUP))
+    } finally {
+      rmSync(packageJson, { force: true })
+      rmSync(resultFile, { force: true })
+    }
+  })
+
+  it.each([
+    ['unrelated file', () => writeFileSync(join(root, 'leftover.txt'), 'stale')],
+    ['unrelated directory', () => mkdirSync(join(root, 'leftover-dir'))],
+    [
+      'unrelated junction',
+      () => {
+        const target = `${root}-junction-target`
+        mkdirSync(target)
+        symlinkSync(target, join(root, 'leftover-link'), process.platform === 'win32' ? 'junction' : 'dir')
+      },
+    ],
+  ])('rejects an %s instead of silently omitting it', (_name, mutate) => {
+    mutate()
+    const result = collect()
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('unexpected Squirrel output entr')
+  })
+
+  it('requires semantic nuspec metadata and rejects archive traversal', () => {
+    const commentedLookalike = storedZip([
+      {
+        name: 'node-terminal.nuspec',
+        value: Buffer.from(
+          '<?xml version="1.0"?><package><!-- <metadata><id>node-terminal</id><version>0.4.0</version><title>nodeterm</title></metadata> --><metadata><id>node-terminal</id><version>0.4.0</version></metadata></package>',
+        ),
+      },
+    ])
+    writeFileSync(join(root, FULL), commentedLookalike)
+    writeFileSync(
+      join(root, 'RELEASES'),
+      `${releasesLine(FULL, commentedLookalike)}\n${releasesLine(DELTA, DELTA_BYTES)}\n`,
+    )
+    let result = collect()
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('non-empty metadata <title>')
+
+    const traversal = storedZip([
+      {
+        name: '../node-terminal.nuspec',
+        value: Buffer.from(
+          '<?xml version="1.0"?><package><metadata><id>node-terminal</id><version>0.4.0</version><title>nodeterm</title></metadata></package>',
+        ),
+      },
+    ])
+    writeFileSync(join(root, FULL), traversal)
+    writeFileSync(
+      join(root, 'RELEASES'),
+      `${releasesLine(FULL, traversal)}\n${releasesLine(DELTA, DELTA_BYTES)}\n`,
+    )
+    result = collect()
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('unsafe archive path')
+  })
+
+  it('validates every package identity, including the optional delta', () => {
+    const wrongDelta = fullPackage('0.3.0')
+    writeFileSync(join(root, DELTA), wrongDelta)
+    writeFileSync(
+      join(root, 'RELEASES'),
+      `${releasesLine(FULL, FULL_BYTES)}\n${releasesLine(DELTA, wrongDelta)}\n`,
+    )
+    const result = collect()
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('internal version mismatch')
+  })
+
+  it('accepts only exact one-line SHA-256 result text', () => {
+    const digestFile = `${root}-digest.txt`
+    try {
+      writeFileSync(digestFile, 'a'.repeat(64))
+      let result = spawnSync(process.execPath, [SCRIPT, 'assert-sha256-file', digestFile], { encoding: 'utf8' })
+      expect(result.status, result.stderr).toBe(0)
+
+      for (const value of [`${'a'.repeat(64)}\n`, '', 'not-a-digest', `prefix${'a'.repeat(64)}`]) {
+        writeFileSync(digestFile, value)
+        result = spawnSync(process.execPath, [SCRIPT, 'assert-sha256-file', digestFile], { encoding: 'utf8' })
+        expect(result.status).not.toBe(0)
+        expect(result.stderr).toContain('exactly 64 hexadecimal')
+      }
+    } finally {
+      rmSync(digestFile, { force: true })
+    }
+  })
+
   it('requires GITHUB_OUTPUT instead of claiming outputs were emitted', () => {
     const result = spawnSync(
       process.execPath,
@@ -352,11 +466,11 @@ describe('release-assets helper CLI', () => {
   })
 
   it.each([
-    ['missing setup', () => unlinkSync(join(root, SETUP)), 'exactly one *-Setup-*.exe'],
+    ['missing setup', () => unlinkSync(join(root, SETUP)), `exactly one ${SETUP}`],
     [
       'duplicate setup',
       () => writeFileSync(join(root, 'other-Setup-0.3.0.exe'), SETUP_BYTES),
-      'exactly one *-Setup-*.exe',
+      'unexpected Squirrel output entry',
     ],
     ['missing RELEASES', () => unlinkSync(join(root, 'RELEASES')), 'exactly one RELEASES'],
     [
@@ -448,7 +562,7 @@ describe('release-assets helper CLI', () => {
 
     const result = collect()
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain(`expected ${SETUP}`)
+    expect(result.stderr).toContain(`exactly one ${SETUP}`)
   })
 
   it('rejects a Setup for the wrong product even when its version is current', () => {
@@ -456,7 +570,7 @@ describe('release-assets helper CLI', () => {
 
     const result = collect()
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain(`expected ${SETUP}`)
+    expect(result.stderr).toContain(`exactly one ${SETUP}`)
   })
 
   it.each([

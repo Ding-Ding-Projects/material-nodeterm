@@ -34,7 +34,7 @@
     "check:app-contract": "node scripts/check-app-contract.mjs",
     "dist": "npm run make-icon && npm run build && electron-builder --mac --arm64 -c.mac.identity=null -c.mac.notarize=false",
     "dist:linux": "npm run make-icon && npm run build && electron-builder --linux",
-    "dist:win": "node scripts/check-build-preflight.mjs && npm run make-icon && npm run build && electron-builder --win squirrel --x64 --publish never",
+    "dist:win": "node scripts/windows-installer.mjs build",
     "release": "npm run make-icon && npm run build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper"
   },
@@ -141,7 +141,6 @@
           ]
         }
       ],
-      "forceCodeSigning": false,
       "signExecutable": false
     },
     "squirrelWindows": {
@@ -192,6 +191,8 @@
     "jsdom": "^30.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "resedit": "^1.7.2",
+    "sax": "^1.6.0",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.1",
     "typescript": "^7.0.2",

@@ -13,6 +13,16 @@ newer one.
 Intel; Linux packages an x64 AppImage and `.deb`. Native dependencies are rebuilt against the
 Electron ABI during installation.
 
+The supported Windows entry point is `npm run dist:win`. Its wrapper starts from a clean checkout,
+regenerates the committed seven-frame ICO, proves that the bytes match the current commit, derives
+an immutable raw URL from that full source SHA, and verifies the public download byte-for-byte.
+After packaging, it requires the exact expected output inventory, semantic nupkg ID/version/title,
+bidirectional `RELEASES` name/size/SHA-1 agreement, the same nuspec `iconUrl`, and matching icon and
+version resources in Setup, the installed app, and its execution stub. The local-installer BAT and
+publication workflow separately accept only exact Setup Authenticode `NotSigned`. Squirrel's vendor
+`Update.exe` remains vendor-branded because the pinned builder exposes no supported project hook
+for rewriting it.
+
 **Windows auto-update.** Packaged Windows builds use Electron's built-in Squirrel updater. On
 launch and every six hours, it reads the stable release asset root at
 `https://github.com/Ding-Ding-Projects/material-nodeterm/releases/latest/download`, downloads a
@@ -54,7 +64,9 @@ applicable to those two surfaces.
 ## Configuration
 
 - `npm run make-icon` regenerates the desktop icons from the project's source mark.
-- `npm run dist:win` produces the unsigned Windows Squirrel set without publishing it.
+- `npm run dist:win` produces the unsigned Windows Squirrel set without publishing it. It requires
+  a clean commit that is already reachable in the public GitHub repository so its exact-SHA icon URL
+  can be proved before packaging.
 - The stable Windows feed is fixed to the project's GitHub Release asset root; it is not an
   end-user setting.
 - Only a build whose version is in the `fixture` prerelease channel may honor
@@ -95,34 +107,14 @@ diagnostics/immediate-restart refusal, duplicate checks and installs, progress t
 ready-before-restart, and offline/404 degradation. Those deterministic Chuts do not replace a
 packaged interaction.
 
-From a disposable copy of the candidate checkout, create the exact isolated pair in this order
-(these manifest edits are fixture input and must never be committed):
-
-```powershell
-$fixtureArtifacts = New-Item -ItemType Directory -Path (Join-Path ([System.IO.Path]::GetTempPath()) ("nodeterm-squirrel-fixture-" + [guid]::NewGuid()))
-$fixtureOne = Join-Path $fixtureArtifacts '0.4.0-fixture.1'
-$fixtureTwo = Join-Path $fixtureArtifacts '0.4.0-fixture.2'
-if (Test-Path -LiteralPath (Join-Path $PWD 'dist\squirrel-windows')) { throw 'Use a disposable checkout with no pre-existing Squirrel output' }
-
-npm pkg set name=node-terminal-squirrel-fixture
-npm pkg set "build.productName=nodeterm Squirrel Fixture"
-npm pkg set build.appId=com.nodeterm.squirrel-fixture
-npm pkg set version=0.4.0-fixture.1
-npm install --package-lock-only --ignore-scripts
-npm run dist:win
-Move-Item -LiteralPath (Join-Path $PWD 'dist\squirrel-windows') -Destination $fixtureOne
-
-npm pkg set version=0.4.0-fixture.2
-npm install --package-lock-only --ignore-scripts
-npm run dist:win
-Move-Item -LiteralPath (Join-Path $PWD 'dist\squirrel-windows') -Destination $fixtureTwo
-
-node scripts/serve-squirrel-update-fixture.mjs $fixtureTwo --port 0
-```
-
-The app/runtime versions remain `0.4.0-fixture.1` and `.2`. `electron-winstaller` normalizes the
-NuGet package versions in the full `.nupkg` names and `RELEASES` to `0.4.0-fixture1` and
-`0.4.0-fixture2`; that filename conversion is expected, not evidence that the wrong build ran.
+The previously documented disposable-checkout commands are intentionally not presented as a
+supported packaging recipe now. They changed `package.json` and `package-lock.json` in place and
+then called `npm run dist:win`, but the production wrapper now correctly refuses a dirty source tree
+and requires the current commit's icon to be publicly reachable. A dedicated fixture-only
+provenance route must be designed and reviewed before creating `0.4.0-fixture.1` and `.2`; the
+production wrapper must not gain a broad dirty-tree exception. When that route exists, the runtime
+versions remain dotted while `electron-winstaller` normalizes their NuGet package versions to
+`0.4.0-fixture1` and `0.4.0-fixture2` in package names and `RELEASES`.
 
 Then perform the installed interaction:
 

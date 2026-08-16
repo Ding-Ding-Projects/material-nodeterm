@@ -195,11 +195,13 @@ npm install
 npm run dist:win
 ```
 
-`dist:win` preflights the native build, then runs `make-icon` (generates `build/icon.ico` — see
-below) → `electron-vite build` → `electron-builder --win squirrel --x64 --publish never`. The
-output lands in `dist/squirrel-windows/`: a Squirrel `Setup.exe`, `RELEASES`, and the full `.nupkg`
-(plus a delta package when one is generated). This command deliberately does not build the zip
-target configured for broader packaging.
+`dist:win` runs the Windows preflight, regenerates `build/icon.ico`, verifies that exact ICO is
+committed and downloadable at the current source SHA, builds with electron-vite, then invokes
+electron-builder's x64 Squirrel target with that immutable URL. The supported command is
+Windows-only, and the source commit must already be available from the public GitHub repository so
+the exact-SHA HTTP proof can succeed. The output lands in `dist/squirrel-windows/`: a Squirrel
+`Setup.exe`, `RELEASES`, and the full `.nupkg` (plus a delta only when Squirrel deliberately emits
+one). This command does not build the zip target configured for broader packaging.
 
 - **Target**: `squirrel` (per project policy — never NSIS, never portable-only). Requires the
   `electron-builder-squirrel-windows` package, declared as a devDependency alongside
@@ -207,22 +209,28 @@ target configured for broader packaging.
 - **Icon**: `scripts/make-icon.mjs` renders the same nodeterm mark SVG used for `build/icon.png`
   into a real multi-resolution `build/icon.ico` (16/24/32/48/64/128/256px PNG-compressed frames
   packed into a hand-written ICO container — no extra npm dependency, and no PNG-renamed-to-.ico
-  shortcut). electron-builder reads it via `build.win.icon`.
+  shortcut). The ICO is committed so Squirrel's Apps & Features URL can name a full immutable
+  source SHA. Packaging verifies the URL download, semantic nuspec ID/version/title, and
+  Setup/app/execution-stub PE icon and version metadata byte-for-byte before success. Squirrel's
+  vendor `Update.exe` remains vendor-branded and outside this gate because the pinned builder
+  plugin exposes no supported project hook for rewriting it.
 - **Signing**: `build.win.signExecutable` and root `build.forceCodeSigning` are explicitly `false`
-  in `package.json`. Resource editing stays enabled so icons and version metadata are still
-  applied. Nothing in this build path requests, discovers, or invokes a signer, per the permanent
-  no-signing policy. Do not add a certificate or a signing script.
+  in `package.json`; the produced installer is intentionally unsigned. `build-installer.bat` and
+  the publication workflow accept only exact Authenticode `NotSigned`.
+  `build.win.signAndEditExecutable` stays enabled at its default so icon and version resources are
+  still written; signing and resource editing are separate controls. Do not add a certificate or
+  signing script.
 - **`npm run rebuild`** still matters on Windows exactly as it does on macOS/Linux: it rebuilds
   `node-pty` (and `smart-whisper`) against Electron's ABI via `electron-rebuild`. The
   `patch-node-pty.mjs` step it runs first patches a **darwin-only** `pty_posix_spawn` fd leak
   (see `CLAUDE.md`) and is a documented no-op on Windows — `src/main/node-pty-patch.test.ts` only
   asserts the marker on the darwin source path.
 
-### Local/CI environments without a Windows machine
+### Windows host requirement
 
-`dist:win` (and `electron-builder --win`) can cross-build a Windows Squirrel installer from
-macOS/Linux using Wine for the resource-editing step — see electron-builder's own docs for the
-Wine prerequisite if you're building off-Windows. Building **on** Windows needs no such setup.
+The supported `npm run dist:win` wrapper refuses non-Windows hosts. Invoking electron-builder
+directly to cross-build would bypass the source, inventory, PE-resource, and identity gates above
+and is not a supported release path.
 
 ## Known gaps / follow-ups
 

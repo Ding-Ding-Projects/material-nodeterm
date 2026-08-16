@@ -8,17 +8,17 @@ Keep the split — a user reading "what degrades" should not have to wade throug
 and a contributor about to touch a path needs the archaeology.
 
 **The Windows installer workflow is manual-only and accepts only `main`, on `windows-latest`.** It
-builds a real Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), unsigned by policy,
-then stages it as a draft, verifies the complete hosted inventory, and only then makes it
+is designed to build a real Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), unsigned
+by policy, then stage it as a draft, verify the complete hosted inventory, and only then make it
 non-draft and downloadable. Automatic publication is disabled because there is no push trigger;
 the workflow remains manually dispatchable. This change does not publish `0.4.0`, and manual
 publication remains pending the two packaged interactions below.
 
-**It also builds locally now**, which it did not for most of this work. `build.bat /s` completes in
-about 107 s and `build-installer.bat /s` in about 199 s, producing the same three-artifact Squirrel
-set (a 205.8 MB `nodeterm-Setup-0.3.0.exe`, the full `.nupkg`, `RELEASES`), unsigned per policy.
-That needed one elevated install of the Spectre-mitigated MSVC libraries — see
-[Building](#building).
+**A prior revision also built locally**, which it did not for most of this work. At
+`19e8296b9f355e0e11e5ee7ab25856f9d3351cef`, `build.bat /s` completed in about 107 s and
+`build-installer.bat /s` in about 199 s, producing a three-artifact `0.3.0` Squirrel set, unsigned
+per policy. That run predates the current source-provenance, immutable-icon, identity, and
+PE-resource wrapper gates; it is not package evidence for the final `0.4.0` tree.
 
 What has NOT happened is either required **packaged transition interaction**. First, installed
 production `0.3.0` cannot discover `0.4.0`: its updater expected NSIS metadata from the old generic
@@ -32,8 +32,8 @@ Sandbox/VM. The latter does not prove the former.
 > An earlier version of this page said no packaged build had ever been produced. That was wrong:
 > it confused "I could not build one on this machine" with "the project does not build one". The
 > distinction matters, because the first is a local toolchain gap and the second would be a
-> release-pipeline failure. Both are now false anyway — the workflow can build one when manually
-> dispatched from `main`, and this machine can build one locally.
+> release-pipeline failure. A prior hosted run and prior local build prove their older packaging
+> paths; neither proves the current wrapper or an installed `0.4.0` artifact.
 
 Windows is the active delivery target, but most of this codebase was written on macOS. That
 asymmetry is the theme of this page: **almost every defect here was code that is genuinely correct
@@ -229,13 +229,31 @@ gone.
 
 ## Building
 
-`download-dependencies.bat` preflights through
-[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs) after it has made Node
-available but before npm replaces `node_modules`; `npm run dist:win` and `npm run rebuild` also
-invoke the same check. This reports **every** failed precondition in one run — discovering them one
-at a time cost three separate multi-minute builds, and the first blocker hid the second entirely
-because the rebuild never reached the compile. Running it after Node bootstrap matters: the old
-root-BAT placement skipped the check on a machine with no initial Node and went straight into npm.
+After making Node available, `download-dependencies.bat` first runs
+[`scripts/ensure-windows-build-toolchain.mjs`](../scripts/ensure-windows-build-toolchain.mjs). It
+accepts a PATH or winget Node only when it runs and satisfies
+`^22.22.2 || ^24.15.0 || >=26.0.0`; otherwise it falls back to the exact manifest-pinned portable
+runtime and verifies that version before persisting the selection. The BAT then
+adds the channel-current x64/x86 Spectre runtime component to an existing Visual Studio instance,
+or verifies and runs the exact Microsoft bootstrapper pinned in the dependency manifest to install
+Build Tools + the C++ workload on a fresh machine. The privileged helper stages that file below
+protected Program Files and never resolves a package manager through a user-controlled `PATH`. On
+ARM64 it also adds the rolling ARM64 Spectre component and verifies ARM64 libraries without dropping
+x86/x64. It then ensures a supported per-user Python through
+[`scripts/ensure-windows-python.mjs`](../scripts/ensure-windows-python.mjs), and preflights through
+[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs)
+before npm replaces `node_modules`; `npm run dist:win` and `npm run rebuild` also invoke the same
+check. The installer result is independently checked on disk, and the preflight reports **every**
+remaining failed precondition in one run — discovering them one at a time cost three separate
+multi-minute builds, and the first blocker hid the second entirely because the rebuild never
+reached the compile. Running both after Node bootstrap matters: the old root-BAT placement skipped
+the check on a machine with no initial Node and went straight into npm.
+
+The supported `npm run dist:win` path additionally requires a clean public commit, derives an
+immutable full-SHA URL for the committed seven-frame ICO, verifies the download, and fails closed
+on stale output or any disagreement among Squirrel identity/version metadata, `RELEASES`, the full
+nupkg nuspec, and Setup/app/execution-stub icon resources. Squirrel's vendor `Update.exe` remains
+outside that branding gate because the pinned builder has no supported resource-edit hook.
 
 1. **A running instance holds `conpty.node`.** Windows will not delete a DLL mapped into a live
    process, so a forgotten `npm start` window makes electron-rebuild die with an `EPERM` about a
@@ -245,8 +263,29 @@ root-BAT placement skipped the check on a machine with no initial Node and went 
 2. **The Spectre-mitigated MSVC libraries are missing.** node-pty's own `binding.gyp` sets
    `SpectreMitigation`, and that component is not part of a default C++ workload. Deliberately not
    worked around with `/p:SpectreMitigation=false`: node-pty asks for the mitigation on purpose,
-   and disabling it would ship an unmitigated native module.
-3. **`NoDefaultCurrentDirectoryInExePath=1`** makes `cmd /c GetCommitHash.bat` fail with "is not
+   and disabling it would ship an unmitigated native module. The bootstrap adds
+   `Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre`; ARM64 hosts also add
+   `Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre`. Both the helper and preflight
+   independently check that the effective VS 2022 toolset contains real `.lib` files for every
+   required architecture below `VC\Tools\MSVC\*\lib\spectre`.
+
+   Visual Studio has no per-user Build Tools install, and Microsoft forbids programmatic
+   `--quiet`/`--passive` use by an unelevated user. The script checks elevation before starting the
+   installer and exits access-denied with an absolute **helper-only** Administrator Command Prompt
+   remedy. Run only the printed `ensure-windows-build-toolchain.mjs ...
+   --elevated-toolchain-only` command elevated, close that prompt, and rerun the root BAT normally.
+   The root BAT refuses to continue toward Python/npm under an Administrator token. It does not
+   trigger UAC, because `/s` is prompt-free and ordinary dependency installs are automatic too.
+   An observed non-elevated `setup.exe modify ... --quiet --norestart` parsed the command but exited
+   5007 with “run elevated from the beginning,” matching the documented boundary.
+3. **Python is missing or unsupported.** npm lifecycle scripts compile `smart-whisper`/`node-pty`
+   through node-gyp, and the Visual Studio C++ workload does not include an interpreter. The BAT
+   reuses an explicitly selected supported 64-bit Python 3.10-3.14 or installs pinned Python 3.13
+   per-user. Bare Store/Python Manager aliases are never launched as a probe. Winget is tried
+   first; the python.org fallback runs only after its manifest SHA-256 matches. The verified exact
+   interpreter is passed process-locally in `PYTHON`, `NODE_GYP_FORCE_PYTHON`, and
+   `npm_config_python`; no launcher or persistent `PATH` is changed.
+4. **`NoDefaultCurrentDirectoryInExePath=1`** makes `cmd /c GetCommitHash.bat` fail with "is not
    recognized" inside node-pty's vendored winpty build, even though the file is right there. This
    one is **not** a user-facing problem — it was set in an agent harness's process environment, not
    in the User or Machine registry — so it is recorded here only so the next person who meets it
@@ -280,10 +319,11 @@ credential and shell-syntax cases continue to run under real Git Bash.
   installed executable/package version metadata, and settings persistence. Uninstall only the
   unique fixture identity. This proof belongs in a disposable Windows Sandbox/VM and does not
   substitute for the production migration above.
-- **The hosted workflow has now produced and validated unsigned Squirrel assets**, and this
-  machine now has the Spectre-mitigated MSVC component. A production-BAT build from the final
-  reconciled commit, followed by a real install/launch/update/uninstall check, is still required;
-  an older local package does not prove the final tree or the installed runtime.
+- **A prior hosted workflow run produced and validated unsigned Squirrel assets**, and a prior
+  local run completed the then-current root BAT path after its toolchain prerequisites were met.
+  Both predate the final wrapper. A production-BAT package from the reconciled commit, followed by
+  real install/launch/update/uninstall checks, is still required; older artifacts do not prove the
+  final tree or installed runtime.
 
 ## If you are adding code that touches a path
 

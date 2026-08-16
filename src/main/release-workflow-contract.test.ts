@@ -213,16 +213,33 @@ describe('release workflow semantic contract', () => {
     expect(missingVersionOutput.output).toMatch(/stable version.*step outputs/i)
   })
 
-  it('rejects a package that is not the explicit unsigned Squirrel target', () => {
+  it('rejects a package that bypasses the guarded unsigned Squirrel wrapper', () => {
     const wrongTarget = check(
       replaceOnce(
         WORKFLOW,
-        'npx electron-builder --win squirrel --x64 --publish never',
-        'npx electron-builder --win nsis --x64 --publish never',
+        'run: npm run dist:win',
+        'run: npm run dist:linux',
       ),
     )
     expect(wrongTarget.status).toBe(1)
-    expect(wrongTarget.output).toMatch(/Squirrel x64/i)
+    expect(wrongTarget.output).toMatch(/guarded Windows installer wrapper/i)
+
+    const bypassedWrapper = check(WORKFLOW, {
+      ...PACKAGE,
+      scripts: { ...PACKAGE.scripts, 'dist:win': 'electron-builder --win squirrel --x64 --publish never' },
+    })
+    expect(bypassedWrapper.status).toBe(1)
+    expect(bypassedWrapper.output).toMatch(/guarded Windows installer wrapper/i)
+
+    const missingIconProof = check(
+      replaceOnce(
+        WORKFLOW,
+        'node scripts/windows-installer.mjs assert-package dist/squirrel-windows dist/windows-icon-contract.json',
+        'echo "packaged icon proof removed"',
+      ),
+    )
+    expect(missingIconProof.status).toBe(1)
+    expect(missingIconProof.output).toMatch(/Setup, app, stub, nuspec, and immutable icon metadata/i)
 
     const weakSignature = check(
       replaceOnce(
@@ -530,7 +547,7 @@ describe('release workflow semantic contract', () => {
   })
 
   it('rejects direct and package-script-hidden validation on the runner', () => {
-    const direct = check(replaceOnce(WORKFLOW, '        run: npm run build', '        run: npm test'))
+    const direct = check(replaceOnce(WORKFLOW, '        run: npm run dist:win', '        run: npm test'))
     expect(direct.status).toBe(1)
     expect(direct.output).toMatch(/forbidden validation.*tests/i)
 
@@ -545,7 +562,7 @@ describe('release workflow semantic contract', () => {
     expect(indirect.status).toBe(1)
     expect(indirect.output).toMatch(/forbidden validation.*type-check/i)
 
-    const npmExec = check(replaceOnce(WORKFLOW, '        run: npm run build', '        run: npm exec -- vitest run'))
+    const npmExec = check(replaceOnce(WORKFLOW, '        run: npm run dist:win', '        run: npm exec -- vitest run'))
     expect(npmExec.status).toBe(1)
     expect(npmExec.output).toMatch(/forbidden validation.*tests/i)
 
