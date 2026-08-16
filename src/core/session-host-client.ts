@@ -141,8 +141,18 @@ export class SessionHostClient {
         if (settled) return
         settled = true
         clearTimeout(timer)
-        socket.removeAllListeners('data')
         if (!ok) {
+          // Only on FAILURE. This used to run unconditionally, and on success it fired straight
+          // after `attachSocket(socket)` — stripping the very data listener that had just been
+          // installed to read replies. The connection then looked perfect and was deaf: every
+          // frame the host sent afterwards, including the answer to the first `attach`, went
+          // unread, so every request hung until its deadline.
+          //
+          // That is the whole reason opening a terminal took ten seconds and came back
+          // non-persistent. The host was innocent throughout — it logged nothing for those
+          // attaches because it never had to: hand-driving the same protocol answered in about a
+          // second. The bug was on this side, one line after the handshake succeeded.
+          socket.removeAllListeners('data')
           try {
             socket.destroy()
           } catch {

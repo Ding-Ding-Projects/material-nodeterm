@@ -1,5 +1,5 @@
 #!/bin/sh
-# Refuse a dew from a checkout without the current shared working dictionary.
+# Refuse a push from a checkout without the current shared working dictionary.
 #
 # Only a SHA-256 lives in the repository — see scripts/check-vocabulary.mjs for why storing the
 # terms themselves in a public repo would defeat the thing they exist for.
