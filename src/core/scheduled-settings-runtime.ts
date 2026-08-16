@@ -30,9 +30,9 @@ export class ScheduledSettingsRuntime {
     return state
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.started) return
-    this.service.stop()
     this.started = false
+    await this.service.stop()
   }
 }

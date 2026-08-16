@@ -113,7 +113,15 @@ describe('real Server shell scheduled-settings startup recovery', () => {
       } finally {
         ws?.terminate()
         await server?.close()
-        fs.rmSync(dataDir, { recursive: true, force: true })
+        // Windows can briefly retain a just-closed HTTP/SQLite directory handle after every
+        // owner has drained. Retry only the fixture-directory removal; a genuinely live handle
+        // still fails once the bounded retry budget is exhausted.
+        await fs.promises.rm(dataDir, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 50
+        })
       }
     },
     30_000

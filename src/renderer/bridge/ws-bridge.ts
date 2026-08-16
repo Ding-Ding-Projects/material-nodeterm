@@ -435,7 +435,7 @@ export function buildRealApi(
   const scheduledSettings: ScheduledSettingsApi = {
     load: () => client.request(IPC.scheduledSettingsLoad) as Promise<ScheduledSettingsLoadState>,
     save: (file: ScheduledSettingsFile) =>
-      client.request(IPC.scheduledSettingsSave, file) as Promise<{ ok: boolean; error?: string }>,
+      client.request(IPC.scheduledSettingsSave, file) as ReturnType<ScheduledSettingsApi['save']>,
     setHomeAssistantToken: (ruleId: string, token: string | null) =>
       client.request(IPC.scheduledSettingsSetHaToken, ruleId, token) as Promise<void>,
     tokenStatus: () => client.request(IPC.scheduledSettingsTokenStatus) as Promise<Record<string, boolean>>,

@@ -29,6 +29,7 @@ function durationLabel(record: ToyLockRecord): string {
 export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const records = useToyLocks((s) => s.records)
   const loaded = useToyLocks((s) => s.loaded)
+  const loadError = useToyLocks((s) => s.loadError)
   const [filter, setFilter] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [removeOne, setRemoveOne] = useState<ToyLockRecord | null>(null)
@@ -76,6 +77,11 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
     >
       <SearchableRow {...ROW}>
         <div className="space-y-3">
+          {loadError && (
+            <p role="alert" className="text-[13px] text-[color:var(--warn)]">
+              {loadError} Existing locks could not be verified.
+            </p>
+          )}
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -97,7 +103,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
 
           {!loaded ? (
             <p className="text-[13px] text-muted">Loading…</p>
-          ) : filtered.length === 0 ? (
+          ) : loadError ? null : filtered.length === 0 ? (
             <p className="text-[13px] text-muted">
               {records.length === 0
                 ? "Nothing is locked yet. Right-click a tab, a node, or the Accent setting and choose “Lock this…”."

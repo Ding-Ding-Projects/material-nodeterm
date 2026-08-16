@@ -60,7 +60,7 @@ describe('relay advertisement temp recovery', () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  it('removes an old UUID temp only when its foreign owner is no longer visible', async () => {
+  it('preserves an old UUID temp even when its foreign owner is not visible locally', async () => {
     const orphan = ownedTemp(424242, 1, VALID_UUID_A)
     await writeOld(orphan)
     const kill = vi.spyOn(process, 'kill').mockImplementation(((pid: number) => {
@@ -70,8 +70,8 @@ describe('relay advertisement temp recovery', () => {
 
     await writeAdvertisement()
 
-    expect(kill).toHaveBeenCalledWith(424242, 0)
-    await expect(fs.access(orphan)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(kill).not.toHaveBeenCalled()
+    expect(await fs.readFile(orphan, 'utf8')).toBe('orphan')
   })
 
   it('preserves a young foreign UUID temp without probing its owner', async () => {
@@ -90,7 +90,7 @@ describe('relay advertisement temp recovery', () => {
     expect(await fs.readFile(young, 'utf8')).toBe('in flight')
   })
 
-  it('preserves old foreign UUID temps whose owners are live or unjudgeable', async () => {
+  it('preserves old foreign UUID temps without namespace-local liveness probes', async () => {
     const live = ownedTemp(616161, 3, VALID_UUID_A)
     const unjudgeable = ownedTemp(717171, 4, VALID_UUID_B)
     await Promise.all([writeOld(live, 'live writer'), writeOld(unjudgeable, 'unknown writer')])
@@ -101,8 +101,7 @@ describe('relay advertisement temp recovery', () => {
 
     await writeAdvertisement()
 
-    expect(kill).toHaveBeenCalledWith(616161, 0)
-    expect(kill).toHaveBeenCalledWith(717171, 0)
+    expect(kill).not.toHaveBeenCalled()
     expect(await fs.readFile(live, 'utf8')).toBe('live writer')
     expect(await fs.readFile(unjudgeable, 'utf8')).toBe('unknown writer')
   })

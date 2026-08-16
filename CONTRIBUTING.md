@@ -112,14 +112,17 @@ need it too, and wire it in the same change.
   name needs random UUID entropy: `Date.now()` is shared by every save in the same millisecond, and
   pid-plus-counter also repeats across PID namespaces, worker isolates, and PID reuse. Keep pid and
   sequence as ownership/diagnostic fields, not as the uniqueness guarantee. And never sweep a temp
-  merely because its pid differs — another live instance may share the directory;
-  `sweepStaleTempFiles` requires a long age grace plus an owner pid no longer visible in this
-  process's namespace; an unjudgeable probe preserves the file. A credential Clear must then use
-  `clearAtomicTarget` and surface `clear-incomplete` while any recognized temp remains — preserving
-  a plausible live writer is correct, but telling the UI its bearer bytes are gone is not.
-  The desktop relay advertisement runs that shared sweep before creating its own temp: it may
-  collect an old, owner-dead `relay.json.<pid>.<seq>.<uuid>.tmp`, but must preserve young, live,
-  unjudgeable, unreadable, and malformed candidates. It never reads a temp's contents.
+  merely because its pid differs or signal zero reports `ESRCH` — another live instance may share
+  the directory through another PID namespace. `sweepStaleTempFiles` never auto-deletes a
+  PID-bearing temp; only the exact aged ownerless legacy `<target>.tmp` shape is collectible. A
+  credential Clear must use `clearAtomicTarget`, perform its final canonical-path recheck, and
+  surface `clear-incomplete` while any recognized temp remains or the canonical credential
+  reappears. Preserving a plausible live writer is correct, but telling the UI its bearer bytes are
+  gone is not.
+  The desktop relay advertisement runs that same sweep before creating its own temp. It may collect
+  only an exact aged ownerless legacy `relay.json.tmp`; PID-bearing UUID temps, young candidates,
+  unreadable metadata, malformed names, and uninspectable directories remain untouched. The sweep
+  never reads a temp's contents.
   Every temp/part staging name must also be unique per call across processes and cleaned by its
   owner —
   including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot
@@ -140,6 +143,19 @@ need it too, and wire it in the same change.
   container image and both shell preflights on the exact supported range above. Do not restore a
   top-level `node:sqlite` import; lazy capability loading is what lets an incompatible runtime emit
   the actionable preflight error instead of dying during dependency evaluation.
+
+- **Credential mutation ordering starts before the strict read.** Serializing only `save()` still
+  lets two callers read one snapshot and publish incompatible derivatives. `SecureStore.mutate`
+  and the scheduled/provider/shared-mode/GitHub credential stores use
+  `core/fs-transaction-lock.ts`: a SQLite `BEGIN IMMEDIATE` transaction spans strict read,
+  mutation, compared publication, clear, and prune. Only `ENOENT` means empty; corrupt/unreadable
+  canonical bytes or lock evidence must remain untouched and reject. A suspended writer keeps the
+  OS lock, a crashed process releases it, and a monotonic bounded busy wait returns `lock-timeout`—
+  never steal ownership with a PID or timestamp lease. The lock key realpaths the parent so aliases
+  converge, and the exact SHA-256 revision is compared before rename. Enqueue before reading, keep
+  local queues recoverable after rejection, and add real two-process barrier/crash/busy/corrupt-
+  evidence Chuts. GitHub's controller queue begins before network validation so Clear cannot be
+  overtaken by a prior Save; separate processes are truthfully ordered at SQLite transaction entry.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.

@@ -592,7 +592,7 @@ export async function startServer(
         // The headless return happens before the serving branch below, so it must stop the same
         // scheduled-settings poller here. Missing this one line leaves its 30s interval and store
         // listener live after SIGTERM-driven teardown (including NODETERM_HEADLESS containers).
-        scheduledSettingsRuntime.stop()
+        await scheduledSettingsRuntime.stop()
         sessionReaper.stop()
         pressure.stop()
         ptyPressure.stop()
@@ -646,7 +646,7 @@ export async function startServer(
     port,
     async close() {
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
-      scheduledSettingsRuntime.stop()
+      await scheduledSettingsRuntime.stop()
       sessionReaper.stop()
       pressure.stop()
       ptyPressure.stop()

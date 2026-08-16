@@ -319,7 +319,23 @@ process (`src/server/index.ts`) — never the renderer/browser — via the shell
   degrade (see `core/platform.ts`'s doc on those two hooks; the exact same pattern
   `agents/node-auth-secret.ts` already uses). Tokens are keyed by **rule id**, one file per rule,
   under `<userData>/scheduled-settings-secrets/`. Deleting a rule (or changing its source away from
-  `'home-assistant'`) deletes its token file (`pruneOrphanedTokens`, run after every save).
+  `'home-assistant'`) deletes its token file. Rule ids at this filesystem boundary must be exact
+  lowercase RFC 4122 v4 UUIDs; lossy filename replacement is forbidden because two hand-edited ids
+  could otherwise alias one credential.
+- **Token mutation is one directory transaction.** Set, Clear, sealed/raw format cleanup, and
+  orphan prune enter one ordered FIFO and one SQLite `BEGIN IMMEDIATE` transaction for the secret
+  directory. This prevents a prune from missing a parked Set or waking after a newer Set and
+  deleting it. A Clear/prune awaits removal of both canonical formats plus every recognized temp;
+  a PID-bearing temp is preserved as potentially live and produces a truthful incomplete-cleanup
+  result. Only `ENOENT` is absence. Malformed, wrong-format, or unreadable token evidence makes its
+  status unknown and keeps Clear available rather than reporting “not stored.”
+- **Schedule publication and credential cleanup have separate truth.** The schedule file is already
+  durable when post-save orphan cleanup runs. The store awaits every change listener, continues
+  sibling listeners, and returns “The schedule was saved, but related credentials could not be
+  fully cleared.” if cleanup fails; it does not roll back or mislabel the disk write. Startup and
+  periodic retries collect crash-gap orphan residue only when `scheduled-settings.json` loaded
+  successfully. During corrupt/unreadable recovery, the safe empty in-memory schedule is not
+  evidence that every credential is orphaned, so token bytes remain untouched.
 - **Never logged.** No fetch in `scheduled-settings-network.ts` ever logs a response body or an
   access token; every failure reported to the caller (and, from there, to the renderer) is a short,
   static-shaped reason string, never the raw text a server sent back — a broken or hostile server
@@ -357,11 +373,15 @@ Automated coverage now lives in:
 - `src/shared/scheduled-settings.test.ts` — strict raw-save validation, normalization and pure
   resolution boundaries;
 - `src/core/scheduled-settings-service.test.ts` — source identity generations, one-owner in-flight
-  fencing, retarget/removal/token invalidation and stale-completion mutation guards;
+  fencing, retarget/removal/token invalidation, stale-completion mutation guards, and recovery-gated
+  startup/periodic orphan cleanup;
+- `src/core/scheduled-settings-secrets.test.ts` and `fs-transaction-lock.process.test.ts` — strict
+  rule/token reads, set/Clear/prune ordering, retained-evidence errors, and real process barriers;
 - `src/core/scheduled-settings-store.test.ts` and `scheduled-settings-runtime.test.ts` — ENOENT,
   corrupt JSON, directory-at-path, EACCES/EIO, disabled fallback and evidence-preserving save lock;
-- `src/renderer/state/scheduled-settings-save.test.ts` and `scheduledSettings.test.ts` — the
-  rejected-save barrier, visible error and later-save recovery; and
+- `src/renderer/state/scheduled-settings-save.test.ts`, `scheduledSettings.test.ts`, and the
+  Schedule section Chuts — the rejected-save barrier, visible error/later-save recovery, owning-rule
+  flush before token mutation, unknown token status, draft retention, and truthful Clear errors; and
 - `test/server/scheduled-settings-startup.test.ts` — a real Server boot plus authenticated WS-RPC
   traversal for every startup read state and the recovery overwrite refusal.
 

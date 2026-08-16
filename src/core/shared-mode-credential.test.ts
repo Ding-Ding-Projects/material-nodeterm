@@ -18,7 +18,7 @@ vi.mock('./platform', () => ({
   })
 }))
 
-const { setCredential, verifyPin, retryAfterMs, resetRateLimitForTests } = await import(
+const { hasCredential, setCredential, verifyPin, retryAfterMs, resetRateLimitForTests } = await import(
   './shared-mode-credential'
 )
 
@@ -36,6 +36,18 @@ afterEach(async () => {
 })
 
 describe('brute-force throttling', () => {
+  it('propagates an unreadable credential instead of reporting that it is absent', async () => {
+    const realAccess = fs.access
+    vi.spyOn(fs, 'access').mockImplementation((async (target: any, ...args: any[]) => {
+      if (String(target) === file) {
+        throw Object.assign(new Error('EACCES: credential is unreadable'), { code: 'EACCES' })
+      }
+      return (realAccess as any)(target, ...args)
+    }) as typeof fs.access)
+
+    await expect(hasCredential(file)).rejects.toMatchObject({ code: 'EACCES' })
+  })
+
   it('lets the first few wrong attempts through, then makes the caller wait', async () => {
     expect(retryAfterMs(file)).toBe(0)
     for (let i = 0; i < 3; i++) expect(await verifyPin(file, '0000')).toBe(false)

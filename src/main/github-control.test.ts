@@ -64,7 +64,60 @@ describe('ElectronGitHubSecretStore', () => {
     const locked = new ElectronGitHubSecretStore(userDataDir, safeStorage({ available: false }))
     await expect(locked.save('replacement-token')).rejects.toMatchObject({ code: 'keyring-locked' })
     expect(await fs.readFile(path.join(userDataDir, 'github-issues-token.json'), 'utf-8')).toBe(before)
-    expect(await locked.readForHost()).toBeNull()
+    await expect(locked.readForHost()).rejects.toMatchObject({ code: 'keyring-locked' })
+  })
+
+  it('rejects corrupt credential bytes on read and save without replacing the evidence', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const corrupt = '{"version":1,"kind":"safe-storage","value":'
+    await fs.writeFile(tokenFile, corrupt, { encoding: 'utf-8', mode: 0o600 })
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+
+    await expect(store.readForHost()).rejects.toMatchObject({ code: 'credential-unavailable' })
+    await expect(store.save('replacement-token')).rejects.toMatchObject({
+      code: 'credential-unavailable'
+    })
+    expect(await fs.readFile(tokenFile, 'utf-8')).toBe(corrupt)
+  })
+
+  it('rejects non-canonical safe-storage bytes before decrypt or replacement', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const malformed = JSON.stringify({ version: 1, kind: 'safe-storage', value: 'not-base64' })
+    await fs.writeFile(tokenFile, malformed, { encoding: 'utf-8', mode: 0o600 })
+    const storage = safeStorage()
+    const decrypt = vi.spyOn(storage, 'decryptString')
+    const store = new ElectronGitHubSecretStore(userDataDir, storage)
+
+    await expect(store.readForHost()).rejects.toMatchObject({ code: 'credential-unavailable' })
+    await expect(store.save('replacement-token')).rejects.toMatchObject({
+      code: 'credential-unavailable'
+    })
+    expect(decrypt).not.toHaveBeenCalled()
+    expect(await fs.readFile(tokenFile, 'utf-8')).toBe(malformed)
+  })
+
+  it('rejects unreadable reads and saves, then recovers the shared queue for another store instance', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const first = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    const second = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await first.save('original-token')
+    const before = await fs.readFile(tokenFile, 'utf-8')
+    const realReadFile = fs.readFile
+    let canonicalReadFailures = 2
+    vi.spyOn(fs, 'readFile').mockImplementation((async (file: any, ...args: any[]) => {
+      if (String(file) === tokenFile && canonicalReadFailures > 0) {
+        canonicalReadFailures -= 1
+        throw Object.assign(new Error('EACCES: credential is unreadable'), { code: 'EACCES' })
+      }
+      return (realReadFile as any)(file, ...args)
+    }) as typeof fs.readFile)
+
+    await expect(first.readForHost()).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(first.save('first-replacement')).rejects.toMatchObject({ code: 'EACCES' })
+    expect(await (realReadFile as any)(tokenFile, 'utf-8')).toBe(before)
+    await expect(second.save('second-replacement')).resolves.toBeUndefined()
+    vi.restoreAllMocks()
+    await expect(second.readForHost()).resolves.toBe('second-replacement')
   })
 
   it('clears only the stored token file', async () => {
@@ -177,6 +230,10 @@ describe('ElectronGitHubSecretStore atomic write', () => {
       `github-issues-token.json.${process.pid + 1}.7.tmp`,
       'github-issues-token.json.tmp'
     ].sort())
+
+    const recovered = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await expect(recovered.save('recovered-token')).resolves.toBeUndefined()
+    await expect(recovered.readForHost()).resolves.toBe('recovered-token')
   })
 
   it('a failed rename removes its own temp and still rejects (a leaked temp here is a live PAT)', async () => {

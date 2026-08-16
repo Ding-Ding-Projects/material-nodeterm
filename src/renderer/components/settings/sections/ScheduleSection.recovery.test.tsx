@@ -32,7 +32,11 @@ describe('ScheduleSection startup recovery', () => {
         path: 'C:/profile/scheduled-settings.json',
         message: 'The scheduled-settings file could not be read.'
       },
-      saveError: null
+      saveError: null,
+      active: null,
+      tokenStatus: {},
+      tokenStatusUnknown: {},
+      tokenErrors: {}
     })
   })
 
@@ -40,7 +44,13 @@ describe('ScheduleSection startup recovery', () => {
     act(() => root.unmount())
     host.remove()
     useSettings.setState({ hydrated: false })
-    useScheduledSettings.setState({ hydrated: false, loadError: null })
+    useScheduledSettings.setState({
+      hydrated: false,
+      loadError: null,
+      tokenStatus: {},
+      tokenStatusUnknown: {},
+      tokenErrors: {}
+    })
   })
 
   it('shows the preserved recovery fact and exposes no schedule mutation control', () => {

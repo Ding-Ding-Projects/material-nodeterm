@@ -326,7 +326,9 @@ export function startUsageService(opts: UsageServiceOptions = {}): UsageService 
     await writeProviderCookie(provider, typeof cookie === 'string' ? cookie : '')
     // Drop the cache so the next read reflects the new cookie instead of the old snapshot.
     providersAt = 0
-    return hasProviderCookie(provider)
+    // The completed mutation is the authoritative result. Re-reading here can fail after a
+    // successful publish and make the UI say "Could not save" while the bearer is already stored.
+    return Boolean(typeof cookie === 'string' && cookie.trim())
   })
   platform().handle(IPC.usageCookieProviders, async () => {
     const stored: Record<string, boolean> = {}

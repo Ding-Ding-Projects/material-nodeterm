@@ -36,7 +36,7 @@ const GROSS_CLOCK_SKEW_HINT_S = 120
 
 type AuthenticatorStore = Pick<
   SecureStore<AuthenticatorEntry>,
-  'load' | 'save' | 'seal' | 'unseal'
+  'load' | 'mutate' | 'seal' | 'unseal'
 >
 
 export function startAuthenticatorService(
@@ -101,11 +101,11 @@ export function startAuthenticatorService(
         createdAt: now,
         updatedAt: now
       }
-      const entries = await store.load()
-      const secretEnc = store.seal({ v: 1, secretBase32 } satisfies StoredSecret)
-      entries.push({ meta, secretEnc })
-      await store.save(entries)
-      return { ok: true, entry: meta }
+      return store.mutate<AuthenticatorAddResult>((entries) => {
+        const secretEnc = store.seal({ v: 1, secretBase32 } satisfies StoredSecret)
+        entries.push({ meta, secretEnc })
+        return { changed: true, result: { ok: true, entry: meta } }
+      })
     }
   )
 
@@ -130,32 +130,35 @@ export function startAuthenticatorService(
         createdAt: now,
         updatedAt: now
       }
-      const entries = await store.load()
-      const secretEnc = store.seal({ v: 1, secretBase32: parsed.secretBase32 } satisfies StoredSecret)
-      entries.push({ meta, secretEnc })
-      await store.save(entries)
-      return { ok: true, entry: meta }
+      return store.mutate<AuthenticatorAddResult>((entries) => {
+        const secretEnc = store.seal({ v: 1, secretBase32: parsed.secretBase32 } satisfies StoredSecret)
+        entries.push({ meta, secretEnc })
+        return { changed: true, result: { ok: true, entry: meta } }
+      })
     }
   )
 
   platform().handle(
     IPC.authenticatorRename,
     async (input: AuthenticatorRenameInput): Promise<AuthenticatorEntry | null> => {
-      const entries = await store.load()
-      const entry = entries.find((e) => e.meta.id === input.id)
-      if (!entry) return null
-      if (input.issuer !== undefined) entry.meta.issuer = input.issuer.trim() || entry.meta.issuer
-      if (input.account !== undefined) entry.meta.account = input.account.trim() || entry.meta.account
-      entry.meta.updatedAt = Date.now()
-      await store.save(entries)
-      return entry.meta
+      return store.mutate<AuthenticatorEntry | null>((entries) => {
+        const entry = entries.find((e) => e.meta.id === input.id)
+        if (!entry) return { changed: false, result: null }
+        if (input.issuer !== undefined) entry.meta.issuer = input.issuer.trim() || entry.meta.issuer
+        if (input.account !== undefined) entry.meta.account = input.account.trim() || entry.meta.account
+        entry.meta.updatedAt = Date.now()
+        return { changed: true, result: entry.meta }
+      })
     }
   )
 
   platform().handle(IPC.authenticatorRemove, async (id: string): Promise<void> => {
-    const entries = await store.load()
-    const next = entries.filter((e) => e.meta.id !== id)
-    if (next.length !== entries.length) await store.save(next)
+    await store.mutate<void>((entries) => {
+      const next = entries.filter((e) => e.meta.id !== id)
+      if (next.length === entries.length) return { changed: false, result: undefined }
+      entries.splice(0, entries.length, ...next)
+      return { changed: true, result: undefined }
+    })
   })
 
   platform().handle(

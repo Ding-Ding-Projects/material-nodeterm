@@ -40,9 +40,9 @@ export async function writeRelayAdvertisement(ad: RelayAdvertisement): Promise<v
   const tmp = tempNameFor(FILE)
   try {
     await fs.mkdir(path.dirname(FILE), { recursive: true, mode: 0o700 })
-    // A killed desktop can strand this file's UUID temp forever. Sweep before creating our own
-    // temp so a concurrent writer is judged only by the shared age + owner-liveness protocol;
-    // unreadable metadata and unjudgeable owners stay untouched rather than becoming "absent".
+    // A killed desktop can strand temp files forever. Sweep before creating our own temp, but only
+    // the exact aged ownerless legacy shape is collectible: a PID-bearing UUID temp may belong to
+    // a live writer in another PID namespace. Unreadable or malformed candidates stay untouched.
     await sweepStaleTempFiles(FILE)
     await fs.writeFile(tmp, JSON.stringify(ad, null, 2) + '\n', { mode: 0o600 })
     await renameAtomic(tmp, FILE)
