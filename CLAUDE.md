@@ -2001,6 +2001,28 @@ lockout is ever added to either, it owes the ladder.* Guarded by an `unlock-ladd
 matches inside `clearLockoutByLadderRENAMED` and `LADDER_BUDGET` matches inside
 `LADDER_BUDGET_WINDOW_MS`, and both stayed green through a deliberate rename before that was fixed.
 
+## School Mode presentation boundary
+
+`useSchoolMode` starts with `{ enabled: false, hydrated: false }`. The `false` is a placeholder,
+not evidence that the shared mode is off. Every language/funny-level, narrator-language,
+personal-vocabulary, and dim-sum boundary must call `schoolModeAllowsOptionalFeatures` and allow
+the optional behavior only for `{ hydrated: true, enabled: false }`. A failed load stays
+unhydrated and retries; a live record that arrives during the initial load wins over its stale
+snapshot.
+
+Re-check at the point of use, not only when rendering a control. A shared update can land after an
+event or input is queued. In particular, both Canvas narrator paths go through
+`canvas/narration-policy.ts`: School Mode enabled or unknown preserves an enabled English narrator
+but strips the Cantonese track and voice. Passing `settings.narratorLanguage` directly to
+`narrate()` recreates the startup/reconnect leak this boundary exists to prevent. Persisted
+preferences remain unchanged and resume only after a confirmed-off record hydrates. Canvas also
+binds an allowed→suppressed live transition to `suppressNarratorTrack('yue')`; queue entries carry
+the track-policy generation captured before debounce and re-check the live policy immediately
+before synthesis. That invalidates old Cantonese work and cancels only an active Cantonese
+utterance, preserving queued/active English and the narrator's important-error guarantee. A
+Cantonese-only event carries a dormant English copy so the same transition degrades it to English
+instead of turning an enabled narrator silent.
+
 ## Speech / dictation (desktop + server)
 
 Voice-to-text input captured via microphone, turned into terminal text via on-device Whisper. Works on desktop (Electron) and Server Edition (browser); iOS support is separate (`nodeterm-ios`, private — see the three-surfaces entry under Conventions).

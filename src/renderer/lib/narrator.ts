@@ -225,6 +225,10 @@ interface QueueEntry {
   rate: number
   pitch: number
   voiceURI: string | null
+  policyGeneration: number
+  canSpeakTrack?: (track: NarratorTrack) => boolean
+  fallbackForTrack?: NarratorTrack
+  fallbackForPolicyGeneration?: number
 }
 
 export interface NarrateRequest {
@@ -248,6 +252,15 @@ export interface NarrateRequest {
   pitch: number
   voiceEn: string | null
   voiceYue: string | null
+  /** Re-check a live presentation policy when a track is about to enter speech synthesis. A
+   *  request may spend time in debounce or behind another utterance, so its event-time language
+   *  decision alone cannot enforce a mode that changes live while it waits. Throwing fails closed
+   *  for that track. */
+  canSpeakTrack?: (track: NarratorTrack) => boolean
+  /** Keep an English copy of a Cantonese-only request dormant in the queue. It becomes eligible
+   *  only when live policy invalidates or refuses the Cantonese track, so a mode transition can
+   *  reduce speech to English without making the event disappear. */
+  englishFallbackWhenYueSuppressed?: boolean
   /** Minimum ms between two narrations of this category actually starting to speak. */
   cooldownMs?: number
   /** If another narrate() for this category arrives within this window, only the latest survives. */
@@ -261,6 +274,8 @@ export interface NarrateRequest {
 
 let queue: QueueEntry[] = []
 let speaking = false
+let activeTrack: NarratorTrack | null = null
+const trackPolicyGeneration: Record<NarratorTrack, number> = { en: 0, yue: 0 }
 // Bumped every time we deliberately interrupt whatever's currently speaking (stopNarrator /
 // previewVoice) or start a new utterance. An in-flight utterance's onend/onerror captures the
 // generation it was started under; if that no longer matches by the time the callback fires, the
@@ -293,13 +308,55 @@ export function planUtterances(
   return out.filter((e) => e.text.trim() !== '')
 }
 
+interface PlannedUtterance {
+  track: NarratorTrack
+  text: string
+  policyGeneration: number
+  fallbackForTrack?: NarratorTrack
+  fallbackForPolicyGeneration?: number
+}
+
+function policyAllowsTrack(
+  canSpeakTrack: ((track: NarratorTrack) => boolean) | undefined,
+  track: NarratorTrack
+): boolean {
+  if (!canSpeakTrack) return true
+  try {
+    return canSpeakTrack(track) === true
+  } catch {
+    return false
+  }
+}
+
+function trackAllowed(
+  utterance: Pick<
+    QueueEntry,
+    | 'track'
+    | 'policyGeneration'
+    | 'canSpeakTrack'
+    | 'fallbackForTrack'
+    | 'fallbackForPolicyGeneration'
+  >
+): boolean {
+  if (utterance.policyGeneration !== trackPolicyGeneration[utterance.track]) return false
+  if (utterance.fallbackForTrack) {
+    const primaryGenerationStillValid =
+      utterance.fallbackForPolicyGeneration ===
+      trackPolicyGeneration[utterance.fallbackForTrack]
+    const primaryStillAllowed = primaryGenerationStillValid &&
+      policyAllowsTrack(utterance.canSpeakTrack, utterance.fallbackForTrack)
+    return !primaryStillAllowed && policyAllowsTrack(utterance.canSpeakTrack, utterance.track)
+  }
+  return policyAllowsTrack(utterance.canSpeakTrack, utterance.track)
+}
+
 function removeQueued(category: string): void {
   if (queue.some((e) => e.category === category)) queue = queue.filter((e) => e.category !== category)
 }
 
 function doEnqueue(
   category: string,
-  utterances: { track: NarratorTrack; text: string }[],
+  utterances: PlannedUtterance[],
   req: NarrateRequest
 ): void {
   for (const u of utterances) {
@@ -309,7 +366,11 @@ function doEnqueue(
       text: u.text,
       rate: req.rate,
       pitch: req.pitch,
-      voiceURI: u.track === 'en' ? req.voiceEn : req.voiceYue
+      voiceURI: u.track === 'en' ? req.voiceEn : req.voiceYue,
+      policyGeneration: u.policyGeneration,
+      canSpeakTrack: req.canSpeakTrack,
+      fallbackForTrack: u.fallbackForTrack,
+      fallbackForPolicyGeneration: u.fallbackForPolicyGeneration
     })
   }
   pump()
@@ -320,7 +381,28 @@ function doEnqueue(
 export function narrate(req: NarrateRequest): void {
   try {
     if (!isSynthesisAvailable()) return
-    const utterances = planUtterances(req)
+    // Capture the track generation at EVENT time, before an ordinary request spends time in
+    // debounce. A live policy transition invalidates that generation so an old Cantonese request
+    // cannot reappear if the mode turns on and then off again before the timer fires.
+    const utterances: PlannedUtterance[] = planUtterances(req).map((utterance) => ({
+      ...utterance,
+      policyGeneration: trackPolicyGeneration[utterance.track]
+    }))
+    if (
+      req.englishFallbackWhenYueSuppressed === true &&
+      req.language === 'yue' &&
+      typeof req.yue === 'string' &&
+      req.yue.trim() !== '' &&
+      req.en.trim() !== ''
+    ) {
+      utterances.push({
+        track: 'en',
+        text: req.en,
+        policyGeneration: trackPolicyGeneration.en,
+        fallbackForTrack: 'yue',
+        fallbackForPolicyGeneration: trackPolicyGeneration.yue
+      })
+    }
     if (utterances.length === 0) return
 
     if (req.important) {
@@ -344,6 +426,10 @@ export function narrate(req: NarrateRequest): void {
     const cooldownMs = req.cooldownMs ?? DEFAULT_COOLDOWN_MS
     const timer = setTimeout(() => {
       debounceTimers.delete(req.category)
+      if (!utterances.some((utterance) => trackAllowed({
+        ...utterance,
+        canSpeakTrack: req.canSpeakTrack
+      }))) return
       const now = Date.now()
       const last = lastSpokenAt.get(req.category) ?? 0
       if (now - last < cooldownMs) return // still cooling down for this category — drop it
@@ -365,6 +451,10 @@ function pump(): void {
   }
   const next = queue.shift()
   if (!next) return
+  if (!trackAllowed(next)) {
+    queueMicrotask(pump)
+    return
+  }
   // Yield to anything already speaking through the SHARED speechSynthesis engine — this is the
   // one real signal a web page has for "something else wants this channel" (see docs/narrator.md
   // for the honest limits: it does NOT detect a native OS screen reader, which speaks outside the
@@ -391,6 +481,7 @@ function pump(): void {
     return
   }
   speaking = true
+  activeTrack = next.track
   const myGen = ++gen
   utter.rate = clampRate(next.rate)
   utter.pitch = clampPitch(next.pitch)
@@ -399,6 +490,7 @@ function pump(): void {
   const done = (): void => {
     if (myGen !== gen) return // superseded (stopNarrator/previewVoice) — not our turn to react
     speaking = false
+    activeTrack = null
     pump()
   }
   utter.onend = done
@@ -408,6 +500,7 @@ function pump(): void {
   } catch {
     if (myGen === gen) {
       speaking = false
+      activeTrack = null
       // `speak()` can reject one provider synchronously. Continue with the next serialized line;
       // waiting for onerror cannot work because an utterance that never entered the engine has no
       // asynchronous completion event.
@@ -433,6 +526,31 @@ export function stopNarrator(): void {
     }
   }
   speaking = false
+  activeTrack = null
+}
+
+/**
+ * Invalidate one track without sacrificing speech on the other. Existing queued and debounced
+ * entries carry the old generation and can never reappear; an active utterance is cancelled only
+ * when it is on the suppressed track. This is how a live School Mode transition removes
+ * Cantonese while preserving English and important app-error narration.
+ */
+export function suppressNarratorTrack(track: NarratorTrack): void {
+  trackPolicyGeneration[track] += 1
+  queue = queue.filter((entry) => entry.track !== track)
+  if (!speaking || activeTrack !== track) return
+  gen++
+  const s = synth()
+  if (s) {
+    try {
+      s.cancel()
+    } catch {
+      // The track is still invalidated even when the provider cannot cancel its current line.
+    }
+  }
+  speaking = false
+  activeTrack = null
+  queueMicrotask(pump)
 }
 
 const PREVIEW_TEXT: Record<NarratorTrack, string> = {
@@ -462,10 +580,12 @@ export function previewVoice(
   utter.voice = voice
   utter.lang = voice.lang
   speaking = true
+  activeTrack = track
   const myGen = ++gen
   const done = (): void => {
     if (myGen !== gen) return
     speaking = false
+    activeTrack = null
   }
   utter.onend = done
   utter.onerror = done
@@ -473,5 +593,6 @@ export function previewVoice(
     s.speak(utter)
   } catch {
     speaking = false
+    activeTrack = null
   }
 }
