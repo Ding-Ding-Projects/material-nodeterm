@@ -89,8 +89,13 @@ PAT, cookie, or Home Assistant token is completely gone while bearer bytes remai
 
 One more race is orthogonal to the temp name. A whole-document flush that snapshots old state can
 stall in the retry loop, let a newer flush publish, then wake and replace it with an intact but stale
-document. `agent-status-mirror` now publishes flush generations FIFO, with a barrier-controlled test
-that recreates the old ordering.
+document. A FIFO fixed this only inside one process. `agent-status-mirror` now reserves a durable
+cross-process generation before snapshotting and performs a locked generation comparison before
+the final retrying rename. Its real two-process barrier test lets generation 2 publish while
+generation 1 is parked, then proves the released older temp cannot replace it; a separate abrupt-
+process-exit test proves an OS-backed SQLite transaction blocks a live peer and is released without
+application cleanup when its owner crashes. No stale timeout can steal from a merely suspended
+Windows process.
 
 A later SSH audit found the same race outside direct `fs` calls: remote shell writes
 shared `<target>.tmp`, scp downloads and media-cache fetches shared `<target>.part`, and upload

@@ -2011,10 +2011,28 @@ still beside the canonical path.
 
 **Unique paths prevent splicing, not stale generations.** A writer that snapshots a whole document
 must also serialize publishes (or reject an out-of-date generation). `agent-status-mirror.flush`
-demonstrated the separate race: flush A captured old state and slept during `renameAtomic`'s
-transient-`EPERM` retry, flush B published new state, then A woke and atomically replaced it with
-the complete but stale document. Its disk writes are FIFO; the barrier test deliberately recreates
-that ordering and must stay red if the queue is removed.
+demonstrated the separate race: flush A captured old state and slept while publishing, flush B
+published new state, then A woke and atomically replaced it with the complete but stale document.
+A FIFO fixed that only inside one process; desktop multi-instance mode and two Server Edition
+processes aimed at one data directory have independent queues. The mirror now uses a two-phase
+cross-process protocol (`core/mirror-publication.ts`): reserve the next durable generation under a
+SQLite `BEGIN IMMEDIATE` transaction **before snapshotting**, write the UUID temp without holding
+the transaction, then lock again, re-read the canonical generation, and rename only if it is still
+older. Gaps are valid (a process may crash after reservation); an absent generation on an old v1
+mirror is generation zero. The sidecar and canonical reads fail closed on malformed/unreadable data
+rather than resetting the counter. Contention retries are bounded, but timeout only abandons this
+best-effort flush: it never steals from a live owner. SQLite's OS file lock is released when a
+process crashes, with no heartbeat window or successor lock that a resumed old owner could remove.
+The lock realpaths the parent before the mirror exists, so symlink aliases of one data directory
+cannot split it. The reservation is the linearization point: this prevents a lower, already-
+reserved generation from publishing after a higher one, but deliberately does not merge two
+independently disagreeing in-memory stores or infer semantic freshness from wall-clock call order.
+The real two-process barrier test parks generation 1 after its temp write, lets generation 2
+publish, releases generation 1, and must stay red if the final generation comparison is removed.
+The crash test holds the real transaction in one live process (proving the peer stays blocked),
+aborts the owner without JS cleanup, and proves that same peer immediately acquires and publishes.
+This orders peers running the generation-aware build; an already-running older binary does not know
+the lock or field and must not share the directory during a rolling upgrade.
 
 **Nothing in the toolchain catches the bare version.** 28 files had it, across three spellings — the user's canvas, their
 settings, their sealed credentials, their pinned devices — and every one of them reads as a correct

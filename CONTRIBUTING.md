@@ -105,9 +105,15 @@ need it too, and wire it in the same change.
   see.
 
 - **Unique temp files do not order whole-document writers.** If two flushes can snapshot the same
-  store concurrently, publish them FIFO (or reject stale generations). Otherwise an older flush can
-  stall inside `renameAtomic`, let a newer document land, then wake and overwrite it intact with
-  stale state. Unique names prevent byte splicing; they do not prevent time from running backwards.
+  store concurrently, publish them FIFO (or reject stale generations). A process-local FIFO is not
+  enough when two supported processes may share one data directory: they have two queues.
+  `agent-status-mirror` reserves a durable generation under an OS-backed SQLite write transaction
+  before it takes its snapshot, then re-reads the published generation under that same lock before
+  rename. An older temp that wakes after a newer complete document is discarded. Never implement
+  this as a stealable timeout lease: a paused live writer is not a dead writer. The reservation is
+  the publication order; it does not merge independently disagreeing in-memory stores. Any new
+  shared-directory store owes an equivalent cross-process order; unique names prevent byte
+  splicing, not time running backwards.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.
