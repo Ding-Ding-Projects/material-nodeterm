@@ -1541,11 +1541,6 @@ export class PtyManager {
           `dot, dash, underscore; max ${NODE_ID_MAX}). A project file with an id like this cannot be ` +
           `trusted — it is how a shared or cloned repo would smuggle a command onto a remote host.`
       )
-    // Co-attach: a live session for this node id already exists in THIS process (another client,
-    // or this client's own second view). Subscribe to it instead of spawning a second tmux client
-    // — `-D` would otherwise kick the first viewer off.
-    const joined = this.join(clientId, options, key)
-    if (joined) return joined
     // Same-tick race: spawnNew() awaits a `tmux has-session` SUBPROCESS (tens of ms, not a
     // microtask) before spawnSession registers the session in `byPersistKey`, so two clients
     // opening the same node in that window would BOTH miss the index and both spawn — and the
@@ -1553,6 +1548,9 @@ export class PtyManager {
     // is published as an in-flight promise from the TOP of create(): a racing create awaits it
     // and then takes the subscribe branch. (No locking primitive: the promise IS the barrier —
     // the single-user path never sees an in-flight entry and behaves exactly as before.)
+    // Check the barrier BEFORE the live-session index. A session-host shim is registered while
+    // its asynchronous attach is still pending; treating that provisional entry as joinable lets
+    // a racing client receive a live-looking id even if `ready` rejects a moment later.
     const inflight = this.inflight.get(key)
     if (inflight) {
       await inflight.catch(() => undefined) // the other spawn failed → fall through and try ourselves
@@ -1565,6 +1563,12 @@ export class PtyManager {
       // on a *new* in-flight entry is exactly the same wait as the one we just did.
       if (this.inflight.get(key)) return this.create(clientId, options)
     }
+    // Co-attach: a live session for this node id already exists in THIS process (another client,
+    // or this client's own second view). Subscribe to it instead of spawning a second tmux client
+    // — `-D` would otherwise kick the first viewer off. This runs after the in-flight barrier, so
+    // every session visible here has completed its asynchronous session-host attach.
+    const joined = this.join(clientId, options, key)
+    if (joined) return joined
     // Another client DELETED this node (and there is no live session for it — `join` above already
     // covers a resurrection by its owner). Refuse rather than spawn: see `tombstones`. Checked
     // AFTER the in-flight barrier so a create racing the owner's own respawn joins it instead.
@@ -1731,11 +1735,17 @@ export class PtyManager {
         const info = await (spawned.proc as unknown as SessionHostPty).ready
         fresh = info.fresh
         screen = info.screen
-      } catch {
-        // The attach itself failed (session-host unreachable / bundle missing after all). Leave
-        // `fresh` at its placeholder `true`: the renderer treats this like any other cold start —
-        // a working, empty terminal — rather than blocking the create on a backend that just
-        // proved it cannot be reached.
+        // A recycle notice must describe a usable replacement, not merely a provisional local
+        // Session record. Session-host registration precedes this async barrier, so publish now.
+        if (spawned.indexKey && this.pendingRecycle.has(spawned.indexKey))
+          this.fireRecycled(spawned.indexKey, true)
+      } catch (error) {
+        // The shim is registered synchronously so output callbacks have somewhere to land, but a
+        // rejected attach means no usable pty ever existed. Retire every local claim and detach
+        // the shim before propagating the real failure; returning its id creates a terminal that
+        // looks alive while every write disappears.
+        if (this.sessions.get(sessionId) === spawned) this.discardFailedSpawn(sessionId, spawned)
+        throw error
       }
     }
     // Surface a missing-account-dir fallback so the renderer can flag the node's account chip.
@@ -2385,18 +2395,43 @@ export class PtyManager {
     // The replacement session for a RECYCLED node (worktree move) is now live and indexed, so its
     // co-viewers can safely be told to restart: their create() will `join` THIS session instead of
     // spawning `nt-<nodeId>` from their own (stale) cwd. This is the whole reason the notice waits.
-    if (session.indexKey && this.pendingRecycle.has(session.indexKey))
+    // A session-host shim is only provisional until its asynchronous `ready` settles. spawnNew()
+    // fires this notice after that barrier; publishing here would wake co-viewers onto a dead id.
+    if (session.indexKey && !session.sessionHost && this.pendingRecycle.has(session.indexKey))
       this.fireRecycled(session.indexKey, true)
 
-    proc.onData((data) => this.queueData(sessionId, session, data))
+    proc.onData((data) => {
+      // A session-host attach can fail after the shim has already delivered startup bytes. Once
+      // rollback removes this exact generation, late callbacks must not recreate its flush timer
+      // or leak bytes into a replacement that happens to reuse the same node id.
+      if (this.sessions.get(sessionId) !== session) return
+      this.queueData(sessionId, session, data)
+    })
 
     proc.onExit(({ exitCode }) => {
+      if (this.sessions.get(sessionId) !== session) return
       this.flush(sessionId, session) // deliver any buffered output before the exit signal
       session.onExit?.(exitCode) // relay host sink (unchanged)
       for (const client of this.clientsOf(session))
         this.send(client, IPC.ptyExit(sessionId), exitCode)
       this.forget(sessionId, session)
     })
+
+    // Detached relay callers cannot await SessionHostPty.ready because their long-standing API
+    // returns a session id synchronously. They still must not retain a zombie Session: retire it
+    // and surface an ordinary non-zero exit to the sink if the asynchronous attach fails.
+    if (useSessionHost && sinks) {
+      void (proc as unknown as SessionHostPty).ready.catch(() => {
+        if (this.sessions.get(sessionId) !== session) return
+        this.discardFailedSpawn(sessionId, session)
+        try {
+          sinks.onExit(1)
+        } catch {
+          // A consumer callback cannot resurrect the already-retired provisional Session, and a
+          // throw here must not become an unhandled rejection from this deliberately detached task.
+        }
+      })
+    }
 
     return sessionId
   }
@@ -2449,6 +2484,39 @@ export class PtyManager {
     this.sessions.delete(sessionId)
     if (session.indexKey && this.byPersistKey.get(session.indexKey) === sessionId)
       this.byPersistKey.delete(session.indexKey)
+  }
+
+  /** Roll back the provisional Session installed before a session-host attach settles. Unlike a
+   * normal release, this records no shadow/released-session metadata and takes no snapshot: there
+   * was never a confirmed live session to preserve. */
+  private discardFailedSpawn(sessionId: string, session: Session): void {
+    if (session.flushTimer) {
+      clearTimeout(session.flushTimer)
+      session.flushTimer = null
+    }
+    session.buf = []
+    session.bufBytes = 0
+    session.subscribers.clear()
+    session.sizes.clear()
+    session.shown.clear()
+    session.pausedBy.clear()
+    // Do not use releasePty here: its defensive resume would issue a fresh host request from a
+    // shim whose attach just failed. SessionHostPty.destroy() is the exact detach/unsubscribe.
+    const hostPty = session.proc as unknown as SessionHostPty
+    hostPty.destroy()
+    this.forget(sessionId, session)
+    // The failed provisional session may have armed both process-lifetime intervals. Do not leave
+    // a timer claiming work exists when this manager has no sessions at all.
+    if (this.sessions.size === 0) {
+      if (this.snapshotTimer) {
+        clearInterval(this.snapshotTimer)
+        this.snapshotTimer = null
+      }
+      if (this.reapTimer) {
+        clearInterval(this.reapTimer)
+        this.reapTimer = null
+      }
+    }
   }
 
   /**

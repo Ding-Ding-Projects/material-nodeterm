@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IPC } from '../shared/ipc'
 import { initPlatform, resetPlatformForTests } from './platform'
-import { fakePlatform } from './platform-fake'
+import { fakePlatform, type FakePlatform } from './platform-fake'
 
 const backend = vi.hoisted(() => ({
   supported: vi.fn(() => true),
@@ -35,11 +36,19 @@ vi.mock('./pty-devices', async (importOriginal) => ({
   readPtyDevices: () => ({ ceiling: 511, inUse: 8 })
 }))
 
-function fakeSessionHostPty() {
+function fakeSessionHostPty(ready = Promise.resolve({ fresh: true })) {
+  let dataCb: ((data: string) => void) | undefined
+  let exitCb: ((e: { exitCode: number }) => void) | undefined
   return {
-    ready: Promise.resolve({ fresh: true }),
-    onData: vi.fn(),
-    onExit: vi.fn(),
+    ready,
+    onData: vi.fn((cb: (data: string) => void) => {
+      dataCb = cb
+    }),
+    onExit: vi.fn((cb: (e: { exitCode: number }) => void) => {
+      exitCb = cb
+    }),
+    emitData: (data: string) => dataCb?.(data),
+    emitExit: (exitCode: number) => exitCb?.({ exitCode }),
     write: vi.fn(),
     resize: vi.fn(),
     pause: vi.fn(),
@@ -51,9 +60,11 @@ function fakeSessionHostPty() {
 
 describe('PtyManager session-host parity', () => {
   let manager: import('./pty-manager').PtyManager | undefined
+  let host: FakePlatform
 
   beforeEach(() => {
-    initPlatform(fakePlatform())
+    host = fakePlatform()
+    initPlatform(host)
     backend.supported.mockReturnValue(true)
     backend.create.mockReset().mockImplementation(() => fakeSessionHostPty())
     backend.capture.mockReset().mockResolvedValue('')
@@ -113,6 +124,79 @@ describe('PtyManager session-host parity', () => {
       expect(spawn.shell).toBe(process.env.SHELL || 'bash')
     }
     expect(spawn.args).toEqual([])
+  })
+
+  it('fails a create closed, parks racing followers, and publishes only the recovered session', async () => {
+    let rejectReady!: (error: Error) => void
+    const pendingReady = new Promise<{ fresh: boolean }>((_, reject) => {
+      rejectReady = reject
+    })
+    const failed = fakeSessionHostPty(pendingReady)
+    const recovered = fakeSessionHostPty()
+    backend.create
+      .mockImplementationOnce(() => failed)
+      .mockImplementationOnce(() => recovered)
+    const m = await makeManager()
+    m.registerIpc()
+    const create = host.handlers[IPC.ptyCreate]
+    const options = { cols: 80, rows: 24, persistKey: 'node-retry' }
+
+    const first = create(7, options) as Promise<unknown>
+    const firstFailure = expect(first).rejects.toThrow('attach refused after connect')
+    await vi.waitFor(() => expect(backend.create).toHaveBeenCalledTimes(1))
+    // These requests arrive after the provisional Session is indexed but before its host attach
+    // settles. They must wait behind the in-flight promise, never join that provisional record.
+    const followerA = create(8, options) as Promise<unknown>
+    const followerB = create(9, options) as Promise<unknown>
+    failed.emitData('queued before the attach failure')
+    rejectReady(new Error('attach refused after connect'))
+
+    await firstFailure
+    // The failed shim is detached immediately. Keeping it registered returns a plausible session
+    // id whose writes can never arrive, and makes the retry co-attach to that dead local record.
+    expect(failed.resume).not.toHaveBeenCalled()
+    expect(failed.destroy).toHaveBeenCalledTimes(1)
+
+    const [a, b] = await Promise.all([followerA, followerB])
+    const recoveredResults = [a, b] as Array<{
+      sessionId: string
+      fresh: boolean
+      persistent: boolean
+    }>
+    expect(recoveredResults.every((r) => r.sessionId === 'pty-2' && r.persistent)).toBe(true)
+    expect(recoveredResults.map((r) => r.fresh).sort()).toEqual([false, true])
+    expect(backend.create).toHaveBeenCalledTimes(2)
+
+    // The queued pre-failure bytes were cancelled, and a late old-generation exit is inert.
+    failed.emitExit(1)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(host.sent.some((m) => m.channel === IPC.ptyData('pty-1'))).toBe(false)
+    expect(host.sent.some((m) => m.channel === IPC.ptyExit('pty-1'))).toBe(false)
+  })
+
+  it('retires a detached session-host shim and signals its sink when ready rejects', async () => {
+    let rejectReady!: (error: Error) => void
+    const pendingReady = new Promise<{ fresh: boolean }>((_, reject) => {
+      rejectReady = reject
+    })
+    const failed = fakeSessionHostPty(pendingReady)
+    backend.create.mockReturnValue(failed)
+    const m = await makeManager()
+    const onData = vi.fn()
+    const onExit = vi.fn()
+
+    expect(
+      m.createDetached(
+        { cols: 80, rows: 24, persistKey: 'relay-node' },
+        { onData, onExit }
+      )
+    ).toBe('pty-1')
+    rejectReady(new Error('relay attach failed'))
+    await vi.waitFor(() => expect(failed.destroy).toHaveBeenCalledTimes(1))
+
+    expect(onExit).toHaveBeenCalledWith(1)
+    failed.emitData('late relay bytes')
+    expect(onData).not.toHaveBeenCalled()
   })
 })
 

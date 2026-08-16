@@ -260,6 +260,16 @@ sockets are destroyed, the listener and owned token/state/endpoint are closed or
 host exits nonzero. Do not rely on an uncaught exception here; the daemon's diagnostic handler logs
 those and intentionally prevents Node's default fatal exit.
 
+The client handshake has a matching publication boundary: remove only its named listeners, verify
+the captured hello request id, install the production frame listener, and only then resolve. Broad
+listener cleanup after `attachSocket()` deletes the production listener and leaves the first real
+request pending on an apparently live socket. Likewise, the local `Session` registered while
+`SessionHostPty.ready` is pending is provisional: `create()` waits on the in-flight promise before
+consulting the co-attach index, and a rejected ready detaches and forgets that exact generation,
+cancels queued output, and propagates the error. Never turn capture/kill rejection into empty/gone:
+only a confirmed host response establishes those facts; snapshot retry and destructive truth both
+depend on the distinction.
+
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
 a generated config (`-f <userData>/tmux.conf`, so the user's `~/.tmux.conf` never

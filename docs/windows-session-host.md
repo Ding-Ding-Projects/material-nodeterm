@@ -147,6 +147,13 @@ new source:
 - `spawnNew()` awaits `ready` (after `spawnSession()` returns) and folds `screen` into the
   `PtyCreateResult` it hands back — the exact field `join()` already populates for a same-process
   co-attach.
+- `ready` rejecting is a failed create, never a cold-but-working terminal. The provisional local
+  `Session` is detached and removed, its queued bytes/timers are cancelled, and the original error
+  reaches the renderer. `create()` checks the in-flight barrier before the co-attach index so a
+  second client cannot join that provisional record while the first attach is unresolved; racing
+  followers retry once the failed generation is gone. A detached relay shim cannot return a
+  promise from its legacy synchronous API, so the same failure removes it and reports a non-zero
+  exit to its sink instead of retaining a zombie session.
 - **The renderer needed zero changes.** `seedPaint()` (`src/renderer/terminal/terminal-config.ts`)
   already treats *any* non-empty `screen` on a `warm-attach` replay as paintable
   (`create-screen`), regardless of whether it arrived via a co-attach join or a plain reattach —
@@ -220,6 +227,21 @@ appending after whatever was on screen before the drop). This deliberately reuse
 channel rather than wiring a dedicated `pty:resync` IPC round trip all the way up from this layer
 — a smaller, self-contained fix for what is expected to be a rare case (the host survives a client
 drop by design; only an actual host death turns into a real session loss).
+
+The `hello` hand-off has an equally strict ownership boundary. The handshake installs named
+`connect`/`data`/`error`/`close` listeners, accepts only the response carrying its captured hello
+request id, removes only those listeners, and then installs the production frame listener before
+resolving the connection promise. Never restore broad `removeAllListeners('data')` cleanup here:
+the original order installed the production listener and immediately deleted it, so the first
+`attach` response and every later frame disappeared while the socket still looked connected.
+
+An initial `attach` registers its local subscriber before sending because startup output may race
+the response. If the request rejects, it rolls back only that subscriber and its own remembered
+attach options; a concurrent co-attach's state is left intact. Capture and kill preserve the same
+failure distinction across reconnects: an empty capture and an idempotently absent kill are both
+confirmed `{ok:true}` host responses, while a transport/request rejection remains unknown and is
+propagated. That propagation is what lets the periodic snapshot keep its dirty bit for a retry and
+what prevents a delete from claiming a persistent process is gone when the host never confirmed it.
 
 ## Lifetime
 
