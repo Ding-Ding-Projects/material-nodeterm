@@ -65,17 +65,24 @@ per-project or user-scoped locations wherever the dependency supports one; Visua
 Tools is necessarily machine-wide.
 
 **Node.js.**
-1. If `node` already resolves on `PATH`, nothing is installed.
+1. On Windows, a `node` already on `PATH` is reused only when it actually runs and satisfies the
+   root build range `^22.22.2 || ^24.15.0 || >=26.0.0`. A missing, broken, malformed, or unsupported
+   candidate is not handed to npm; the BAT falls back to the manifest-pinned portable runtime.
 2. Otherwise, on Windows: tries `winget install --id OpenJS.NodeJS.LTS --source winget --scope user` (a **user
    scope** install, no administrator rights). On macOS: tries `brew install node` if Homebrew is
    present. On Linux: tries `apt-get install nodejs npm` through a non-interactive `sudo -n` (skipped
    entirely if that would need a password prompt).
-3. If the package manager is unavailable or fails, falls back to a **portable extract**: downloads
+   A Windows winget result is subjected to the same supported-version gate before it can be used.
+3. If the package manager is unavailable, fails, or returns an unsupported Windows Node, falls back
+   to a **portable extract**: downloads
    the exact Node.js build pinned in `dependencies.manifest.json` for the current OS/architecture,
    verifies its SHA-256 against the value recorded there, and extracts it into a user-scoped
    toolchain directory (`%LOCALAPPDATA%\nodeterm\toolchain` on Windows, `~/.nodeterm/toolchain` on
    macOS/Linux). A file that does not match its recorded hash is deleted and treated as a failure —
-   it is never used.
+   it is never used. Before extraction, the BAT removes the exact manifest-version destination and
+   refuses to continue if it cannot; a stale `node.exe` can therefore never make an empty or broken
+   archive look successful. The extracted executable must report the manifest's exact version and
+   satisfy the root range.
 4. **Windows C++ build toolchain.** Once Node is callable,
    `scripts/ensure-windows-build-toolchain.mjs` checks for the complete C++ workload and real x86/x64
    libraries below `VC\Tools\MSVC\*\lib\spectre`. If an instance is incomplete, it runs the
@@ -185,8 +192,9 @@ Takes a checkout with nothing installed to a built, runnable program:
    the Spectre check is Windows-only by construction, so there it would be a phase that can never
    fail.
 
-1. Runs `npm run build` (`electron-vite build`) and confirms `out/main/index.js` actually exists
-   afterward — never trusting a green exit code alone.
+1. Removes the complete generated `out/` tree, refuses to start npm if anything keeps that stale
+   tree alive, runs `npm run build` (`electron-vite build`), and confirms `out/main/index.js`
+   actually exists afterward. A green no-output command can never inherit yesterday's artifact.
 2. **Only then**, asks whether to launch the app (`npm start`). This prompt is deliberately the
    **last** thing the script does: a failed build never gets as far as offering to launch nothing.
    In silent mode, the app is never launched automatically — a CI run should not pop a desktop GUI
@@ -208,15 +216,29 @@ the same version as `package.json`:
    - the expected artifact file exists;
    - it is at least 5 MiB (a plausible-size floor that only exists to catch an obviously
      truncated or empty file, not a target);
-   - on Windows, the Squirrel `RELEASES` index and at least one `.nupkg` also exist beside the
-     setup executable;
+   - on Windows, the directory contains the exact versioned Setup and legacy `node-terminal`
+     full package (plus only the matching delta when emitted), exact `RELEASES`, and no other
+     entry. Every package has one nuspec whose ID/version/title match `package.json`, and every
+     RELEASES SHA-1, filename, and byte size is checked bidirectionally;
+   - the generated seven-frame `build/icon.ico` is committed at the exact source SHA, downloadable
+     from that immutable raw GitHub URL with identical bytes, and embedded byte-for-byte in Setup,
+     `nodeterm.exe`, and `nodeterm_ExecutionStub.exe`; their product/version resources must match
+     the package identity, and the full nupkg's sole nuspec must contain the same immutable
+     `iconUrl`. The exact source commit must already be reachable from the public GitHub repository;
+     a local-only commit deliberately fails rather than embedding an unreachable URL. Squirrel's
+     vendor `Update.exe` remains vendor-branded because the pinned builder exposes no supported
+     resource-edit hook;
+   - Windows PowerShell must report exact Authenticode status `NotSigned`; `Valid`, `HashMismatch`,
+     `NotTrusted`, `UnknownError`, an empty result, or a probe error all fail closed;
    - reports the artifact's full path and its **SHA-256**, and (best-effort, if `git` is
      available) the exact commit it was built from and whether the working tree was clean or
      dirty at build time.
 4. States plainly, every time, that **the installer is unsigned**. Code signing is permanently out
-   of scope for this project (see `package.json`'s `win.forceCodeSigning` / `signExecutable` /
-   `signAndEditExecutable`, all pinned to `false`, and the mac build's `identity=null` /
-   `notarize=false`) — installing or opening the artifact will trigger Windows SmartScreen /
+   of scope: root `build.forceCodeSigning` and `build.win.signExecutable` are `false`.
+   `build.win.signAndEditExecutable` remains enabled at its default so electron-builder still writes
+   the application icon and version resources; disabling signing must not disable resource editing.
+   The mac build uses `identity=null` / `notarize=false`. Installing or opening the artifact triggers
+   Windows SmartScreen /
    "unknown publisher" or macOS Gatekeeper warnings. That is expected, not a build defect.
 5. **Never publishes, tags, pushes, or creates a release.** It only builds and verifies a local
    artifact. Shipping a real release is a separate, deliberate action outside these scripts.
@@ -235,8 +257,10 @@ For anyone maintaining `download-dependencies.bat`, `build.bat`, or `build-insta
   every `npm`/`electron-builder` invocation is followed by `set "X_EXIT=%ERRORLEVEL%"` on its own
   line (immediately, before any other command like `popd` can overwrite `%ERRORLEVEL%`), and the
   captured value is checked afterward.
-- **`setlocal DisableDelayedExpansion`** is set at the top of every script. None needs a same-block
-  delayed read, and disabling it preserves a legitimate `!` in an inherited `PATH`. The dependency
+- **`setlocal EnableExtensions DisableDelayedExpansion`** is set at the top of every script, and
+  inherited `ERRORLEVEL`/`RANDOM` variables are cleared before use because they shadow cmd's
+  dynamic pseudo-variables. Explicitly enabling extensions recovers safely from `cmd /e:off`;
+  disabling delayed expansion preserves a legitimate `!` in an inherited `PATH`. The dependency
   script ends its local scope by exporting only `PATH`, `NODETERM_NODE_HOME`, `PYTHON`,
   `NODE_GYP_FORCE_PYTHON`, and `npm_config_python`; every scratch variable remains private to it.
 - **PowerShell is invoked as inline `-Command` text, never as a `.ps1` script file** — timestamp
@@ -264,13 +288,27 @@ The Windows entry points now also have an automated behavioral regression test
 against an isolated checkout-shaped fixture; only external/expensive leaves are replaced. The test
 proves toolchain and Python verification precede preflight/npm, the portable Node `PATH` and
 verified `PYTHON` survive the called batch file's `setlocal`, silent build mode does not launch the
-app, and the installer verifies a plausible Squirrel set plus a real SHA-256. A forced portable
+app, and the installer verifies the exact versioned Squirrel/nuspec/RELEASES/signature/icon
+contracts plus a real SHA-256. Mutation rows prove stale or incomplete build/package output, an
+unsupported or negatively-exiting PATH Node, poisoned cmd pseudo-variables, a stale exact portable
+directory, manifest metacharacters, RELEASES hash/name/size changes, wrong-but-self-consistent
+package identity, extra residue, non-`NotSigned` signatures, and valid-looking digests from failed
+hash processes all turn the real BAT red. A forced portable
   route crosses real `cmd.exe` and a process-boundary PowerShell recorder with spaces, `!`, `&`,
   parentheses, and an apostrophe in its paths. It also plants a stale higher-version Node directory
   and proves the exact manifest-selected directory wins. Reintroducing a manifest path into
   PowerShell source makes that test fail before download; removing the `PATH` export makes both
   parent-entry tests fail with `npm is not recognized`. Installer verification clears an inherited
-  digest and requires exactly 64 hexadecimal characters.
+  digest and requires exactly 64 hexadecimal characters with no second line.
+
+The hosted `windows-latest` release run `31960569072` completed at
+`19e8296b9f355e0e11e5ee7ab25856f9d3351cef` with Node `22.23.2` and published non-draft
+`v0.3.0-ci.182`: a 216,869,888-byte Setup, a 216,748,023-byte full nupkg, and an 84-byte RELEASES
+index. The workflow recorded Setup as Authenticode `NotSigned`. That run used setup-node plus direct
+npm packaging; it predates the current wrapper, icon, and version-identity gates and did not invoke
+the root BAT bootstrap. Nobody has installed or launched its installer. Prior hosted packaging
+proof, current wrapper proof, root-BAT bootstrap proof, and installed-runtime proof remain distinct
+claims.
 
 Both root BAT entry points were also run directly on the current Windows development machine. They
 stop before any installer, Python bootstrap, preflight, or npm because the current standard-user

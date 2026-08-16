@@ -1,5 +1,9 @@
 @echo off
-setlocal DisableDelayedExpansion
+setlocal EnableExtensions DisableDelayedExpansion
+rem Environment variables shadow cmd's dynamic pseudo-variables. Clear inherited poison before
+rem any privilege/status capture or collision-resistant temporary filename is derived.
+set "ERRORLEVEL="
+set "RANDOM="
 rem =============================================================================================
 rem build.bat -- takes a checkout with NOTHING installed to a built, runnable nodeterm.
 rem
@@ -19,6 +23,7 @@ rem ============================================================================
 
 set "NODETERM_ROOT=%~dp0"
 if "%NODETERM_ROOT:~-1%"=="\" set "NODETERM_ROOT=%NODETERM_ROOT:~0,-1%"
+set "NODETERM_OUT=%NODETERM_ROOT%\out"
 
 set "NODETERM_SILENT=0"
 if /I "%~1"=="/s" set "NODETERM_SILENT=1"
@@ -75,6 +80,16 @@ rem ----------------------------------------------------------------------------
 rem Phase 1: build the real artifact through the project's own supported path.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Build (npm run build)"
+if exist "%NODETERM_OUT%" rd /s /q "%NODETERM_OUT%" >nul 2>nul
+if exist "%NODETERM_OUT%" (
+    echo.
+    echo [FAILED] Build
+    echo   Dependency : clean generated output directory
+    echo   Constraint : stale output must be removed before npm run build
+    echo   Source     : "%NODETERM_OUT%"
+    echo   Error      : could not remove the previous output; close processes using it and retry
+    exit /b 1
+)
 pushd "%NODETERM_ROOT%"
 call npm run build
 set "BUILD_EXIT=%ERRORLEVEL%"
@@ -88,15 +103,14 @@ if not "%BUILD_EXIT%"=="0" (
     echo   Error      : npm exited with code %BUILD_EXIT% - see the build output above for the real cause
     exit /b %BUILD_EXIT%
 )
-if not exist "%NODETERM_ROOT%\out\main\index.js" (
-    echo.
-    echo [FAILED] Build
-    echo   Dependency : the built main-process entry point
-    echo   Constraint : out/main/index.js must exist after a successful build
-    echo   Source     : "%NODETERM_ROOT%\out\main\index.js"
-    echo   Error      : npm run build reported success but the expected output file is missing
-    exit /b 1
-)
+call :require_output "%NODETERM_ROOT%\out\main\index.js" "main-process entry point"
+if not "%ERRORLEVEL%"=="0" exit /b 1
+call :require_output "%NODETERM_ROOT%\out\preload\index.js" "preload entry point"
+if not "%ERRORLEVEL%"=="0" exit /b 1
+call :require_output "%NODETERM_ROOT%\out\renderer\index.html" "renderer entry point"
+if not "%ERRORLEVEL%"=="0" exit /b 1
+call :require_output "%NODETERM_ROOT%\out\session-host\host.cjs" "session-host bundle"
+if not "%ERRORLEVEL%"=="0" exit /b 1
 call :phase_end "Build (npm run build)"
 
 echo.
@@ -136,6 +150,16 @@ rem ============================================================================
 echo --- %~1 ---
 for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()"`) do set "PHASE_T0=%%T"
 exit /b 0
+
+:require_output
+if exist "%~1" for %%F in ("%~1") do if %%~zF GTR 0 exit /b 0
+echo.
+echo [FAILED] Build
+echo   Dependency : the built %~2
+echo   Constraint : required output must be a non-empty regular file after a successful build
+echo   Source     : "%~1"
+echo   Error      : npm run build reported success but the expected output file is missing or empty
+exit /b 1
 
 :phase_end
 for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()"`) do set "PHASE_T1=%%T"

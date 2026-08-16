@@ -16,7 +16,7 @@ and it does not run a linter. This is a standing decision, not an oversight:
 - **What this costs.** With no gate in the pipeline, a release can ship from a commit whose
   tests would have failed. The first thing that notices is a person running the installer,
   not a red CI check. That is the accepted trade-off in exchange for artifacts reaching
-  people quickly and unconditionally, on every push.
+  people quickly and unconditionally whenever the release workflow is enabled.
 - **Where checking actually happens.** The repository's own test scripts
   (`npm test`, `npm run typecheck`) still exist and are still meant to be run — just locally,
   by whoever is changing the code, before they push. See `CONTRIBUTING.md`. A failing local
@@ -31,8 +31,10 @@ and it does not run a linter. This is a standing decision, not an oversight:
 
 ## What `release.yml` actually does
 
-Triggered by every `push` (no branch filter) and by `workflow_dispatch`, on `windows-latest`
-— Windows is the active delivery target for this project. One job:
+Configured for every **branch** `push` (`branches: ['**']`, which deliberately excludes tags) and
+for `workflow_dispatch`, on `windows-latest` — Windows is the active delivery target. The workflow
+is currently disabled, so these are its checked-in triggers rather than a claim that it is
+publishing now. One job:
 
 1. **Checkout** with full history (`fetch-depth: 0`) — needed for the line-count report's
    `git blame` attribution and for an honest commit link in the release notes.
@@ -40,30 +42,32 @@ Triggered by every `push` (no branch filter) and by `workflow_dispatch`, on `win
    own `run_started_at`). If this call fails (missing `actions: read` on a fallback token,
    API hiccup) the step warns and leaves it unset — `release-notes.mjs` then reports the
    start time as **missing**, never an estimate.
-3. **Install dependencies** — `npm ci`, which also runs the project's own `postinstall` hook
+3. **Install dependencies** with pinned Node `22.23.2` — `npm ci`, which also runs the project's own `postinstall` hook
    (`scripts/patch-node-pty.mjs` + `electron-rebuild -f -w node-pty,smart-whisper` against
    this runner's Electron ABI). `windows-latest` already ships the Visual Studio Build Tools
    and Python that native module compilation needs; nothing extra is bootstrapped for that.
    If a future dependency needs a tool the runner image does not carry, add a check-then-
    install step here, immediately before it is needed.
-4. **Build** — `npm run make-icon` then `npm run build` (electron-vite: main + preload +
-   renderer).
-5. **Compute a monotonic release tag** — `v<package.json version>-ci.<run number>`. GitHub
+4. **Compute a monotonic release tag** — `v<package.json version>-ci.<run number>`. GitHub
    guarantees a workflow's own run number only ever increases and never repeats, so no two
    runs can collide on a tag and no prior release is ever recycled or overwritten.
-6. **Package the Windows installer** — `electron-builder --win --publish never`, producing a
-   Squirrel.Windows installer (`Setup.exe`, `RELEASES`, the full `.nupkg`, and a delta
-   `.nupkg` on repeat versions) under `dist/squirrel-windows/`.
-7. **Verify the installer is unsigned** — reads its Authenticode signature and fails the run
-   if it is somehow signed (see [Signing](#signing) below).
-8. **Locate the release assets** and generate the release notes
+5. **Build and package through `npm run dist:win`** — preflight, deterministic icon generation,
+   immutable source-SHA icon download/hash proof, electron-vite, and electron-builder's x64
+   Squirrel target. It produces Setup, exact RELEASES, and the full nupkg under
+   `dist/squirrel-windows/`, then checks Setup/app/execution-stub PE icon resources and the nupkg
+   nuspec `iconUrl` before returning success.
+6. **Verify the exact asset and signing contracts** — expected version/product/package ID,
+   sole nuspec identity, RELEASES filename/size/SHA-1 in both directions, no extra output residue,
+   and exact Authenticode `NotSigned` (see
+   [Signing](#signing) below).
+7. **Locate the release assets** through that validated inventory and generate the release notes
    (`scripts/release-notes.mjs`, embedding `scripts/count-lines.mjs`'s report — see
    [Release notes content](#release-notes-content)).
-9. **Create (or, on an idempotent retry, update) the GitHub Release** for the computed tag,
+8. **Create (or, on an idempotent retry, update) the GitHub Release** for the computed tag,
    targeting the exact built commit, non-draft, non-prerelease, from the start.
-10. **Upload the release assets** with `--clobber`, so a retry after a partial upload heals
+9. **Upload the release assets** with `--clobber`, so a retry after a partial upload heals
     itself instead of failing on "asset already exists".
-11. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
+10. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
     the collection and the upload — so a failed run still leaves the packaged output, the
     generated notes, and the run context inspectable, without ever masking or reversing the
     real pass/fail verdict of the steps above it. Only explicitly safe paths are copied: the
@@ -84,10 +88,10 @@ timestamp credential, signing secret, or signer service — it never sets `CSC_L
 `CSC_KEY_PASSWORD`, so electron-builder has no certificate to sign with in the first place.
 The packaging step additionally sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so electron-builder
 cannot opportunistically pick one up from the runner's own certificate store, and
-`package.json`'s root `build.forceCodeSigning: false` (electron-builder's own documented
-default) means a build never aborts over a signing step it was never asked to perform. A
-dedicated verification step reads the built installer's actual Authenticode signature and
-fails the run if it is somehow signed — signing prohibition is enforced, not just documented.
+root `build.forceCodeSigning: false` plus `build.win.signExecutable: false` prevent signing.
+`build.win.signAndEditExecutable` remains enabled at its default because resource/icon editing is
+not signing. A dedicated verification step accepts only actual Authenticode `NotSigned` — signing
+prohibition is enforced, not just documented.
 
 Every release's notes carry an explicit warning: **the installer is unsigned**, and running it
 will trigger Windows SmartScreen and the unknown-publisher warning. That is expected, not a
@@ -107,8 +111,8 @@ printed as **missing**, not guessed at. It always includes:
 2. **The project's line count at that exact commit**, via `scripts/count-lines.mjs` —
    see below.
 3. **What actually ran** — an explicit statement that no tests, type-check, or lint ran in
-   this workflow, alongside the real list of steps that did (`npm ci`, `npm run make-icon`,
-   `npm run build`, `electron-builder --win`). This section exists specifically so a release
+   this workflow, alongside the real supported entry points that did (`npm ci`, then
+   `npm run dist:win` and its documented internal phases). This section exists specifically so a release
    is never read as "passing" a check it never ran.
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
@@ -148,9 +152,10 @@ run of the counter and what a release actually reports can never drift apart.
   instead of silently reporting every count as zero — an empty table and "there is nothing
   here" must never be indistinguishable outcomes.
 
-Both `npm run make-icon` outputs and everything under `resources/` that is genuinely this
-project's own hand-written source (none currently, beyond the license/art exclusions above)
-stay in scope for the count; only the paths named above are excluded.
+The committed binary `build/icon.ico` is listed as an uncounted asset. Generated, gitignored
+`build/icon.png` is not part of the Git ref. Everything under `resources/` that is genuinely this
+project's own hand-written source (none currently, beyond the license/art exclusions above) stays
+in scope for the count; only the paths named above are excluded.
 
 ## The tag-trigger loop (2026-08-15) and how it was actually stopped
 
@@ -212,6 +217,20 @@ made cheap and redundant on purpose: it does not reintroduce a quality gate (not
 test or a linter), it only guarantees the release job cannot be *entered* by the one trigger shape
 that is known to make it self-perpetuating.
 
+## Windows icon provenance
+
+`scripts/make-icon.mjs` contains the original SVG master and deterministically generates the committed
+seven-frame `build/icon.ico`. The Windows packaging wrapper derives a raw GitHub URL from the
+checkout's full source SHA, refuses a mismatched `GITHUB_SHA` or any dirty/uncommitted source,
+requires that commit to be publicly reachable, downloads
+without credentials or redirects, and requires HTTP 200 plus exact bytes/SHA-256. That URL is passed
+as Squirrel's effective `iconUrl`; the post-package gate requires it in the sole full-nupkg nuspec
+and compares all seven icon-frame hashes plus product/version metadata in Setup, `nodeterm.exe`,
+and `nodeterm_ExecutionStub.exe`. Squirrel's vendor `Update.exe` remains vendor-branded because
+the pinned plugin exposes no supported resource-edit hook; it is explicitly outside this gate.
+This closes the old mutable `blob/master/...?...` fallback, which
+packaged successfully even though the ignored file returned 404.
+
 ## What is deliberately out of scope for this lane
 
 - **`security.yml`** (CodeQL + dependency review) is untouched. It runs on `pull_request`/
@@ -225,9 +244,3 @@ that is known to make it self-perpetuating.
   `release.yml`. The active delivery scope for this project is Windows only. Historical
   macOS/Linux release history remains on GitHub as a record; reopening cross-platform delivery
   is a deliberate, explicit decision for later, not an oversight here.
-- **Windows app icon.** `package.json`'s `build.squirrelWindows.iconUrl` currently points at
-  `build/icon.png` on GitHub's raw content host, but `build/icon.png` is generated at build
-  time and is `.gitignore`d — that URL will not resolve today. This only affects the icon
-  Squirrel shows in Windows' "Apps & features" list (cosmetic; it does not fail packaging or
-  the release). A real, committed, multi-resolution `.ico` for this app is tracked as a
-  follow-up under the project's general app-icon/branding work, not this lane.

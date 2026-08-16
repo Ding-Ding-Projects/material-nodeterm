@@ -69,8 +69,12 @@ Selecting a custom image changes **only** what the tab bar's brand mark renders
 and re-package of the app — **cannot**:
 
 - Change the packaged application icon (macOS `.icns`, Windows `.ico`, the taskbar/dock icon, the
-  installer's own icon). Those are generated from `build/icon.png` at **package time**
-  (`scripts/make-icon.mjs`) and baked into the installer; nothing at runtime can rewrite an
+  installer's own icon). `scripts/make-icon.mjs` is the original SVG master; it generates the PNG
+  and committed seven-frame Windows ICO at **package time**, and they are baked into the installer.
+  The Windows package also pins the ICO through an immutable source-SHA URL for Apps & Features;
+  Setup, the installed app, and its execution stub are verified against it. Squirrel's vendor
+  `Update.exe` remains vendor-branded because the builder has no supported resource-edit hook;
+  nothing at runtime can rewrite an
   already-installed app's icon. This is stated in the settings UI itself, not left implicit.
 - Rewrite the package identity, application ID, executable filename, installer identity, update
   feed, data directory, or signing state — exactly the same non-negotiable boundary the app-rename

@@ -72,15 +72,20 @@ need it too, and wire it in the same change.
   `path.basename`/`join`/`sep`, publish files with `renameAtomic`, and write at least one test with
   a real `C:\`-shaped input. Guards enforce some of this and will fail your PR.
 
-- **Building on Windows has two preconditions, and the BAT bootstrap handles/checks both after
-  installing Node but before npm can replace `node_modules`** (`npm run dist:win` also checks them
-  up front).
+- **Building on Windows requires a callable Node runtime in the supported range
+  `^22.22.2 || ^24.15.0 || >=26.0.0`, the Visual Studio C++ workload plus Spectre libraries, a
+  supported 64-bit Python, and an unlocked native-module tree.** The root BAT reuses a supported
+  PATH Node, obtains one through winget when suitable, or falls back to the exact SHA-pinned
+  portable manifest version. It verifies or repairs the toolchain and Python, then runs the
+  two-check preflight before npm can replace `node_modules`; `npm run dist:win` and rebuild rerun
+  that preflight up front.
   Close every running instance of the app first: Windows will not delete a DLL a live process has
   loaded, so a dev window you forgot about makes the build die with an `EPERM` about a `.node`
-  file that says nothing about the real cause. The bootstrap automatically installs the
-  **Spectre-mitigated MSVC libs** — node-pty asks for the mitigation in its own `binding.gyp`, and
-  without them the build dies minutes in with `MSB8040`. Visual Studio changes require elevation;
-  the script never triggers UAC, so an unelevated run exits access-denied and prints one exact
+  file that says nothing about the real cause. The bootstrap detects the
+  **Spectre-mitigated MSVC libs** and repairs them through the separately elevated helper-only
+  command when needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them
+  the build dies minutes in with `MSB8040`. Visual Studio changes require elevation; the script
+  never triggers UAC, so an unelevated run exits access-denied and prints one exact
   **helper-only** command. Run only that helper elevated, close the Administrator prompt, then rerun
   the root BAT normally — npm lifecycle scripts must never inherit elevation. The BAT also ensures
   x86/x64 are always checked and ARM64 is added on ARM64 hosts. The BAT also ensures a supported

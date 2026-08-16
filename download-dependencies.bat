@@ -1,5 +1,9 @@
 @echo off
-setlocal DisableDelayedExpansion
+setlocal EnableExtensions DisableDelayedExpansion
+rem Environment variables shadow cmd's dynamic pseudo-variables. Clear inherited poison before
+rem any privilege/status capture or collision-resistant temporary filename is derived.
+set "ERRORLEVEL="
+set "RANDOM="
 rem =============================================================================================
 rem download-dependencies.bat -- obtains every dependency nodeterm needs to build, run and test,
 rem from canonical upstreams, into per-project or user-scoped locations wherever one exists. It
@@ -80,6 +84,7 @@ rem ----------------------------------------------------------------------------
 rem Phase 1: Node.js runtime
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Node.js runtime"
+set "NODETERM_EXPECTED_NODE_VERSION="
 
 rem Pick up a portable Node this script installed on an earlier run before probing PATH -- see
 rem the comment in :install_portable_node for why this is a dedicated variable rather than a
@@ -90,11 +95,20 @@ if not defined NODETERM_NODE_HOME for /f "usebackq delims=" %%H in (`powershell 
 if defined NODETERM_NODE_HOME if exist "%NODETERM_NODE_HOME%\node.exe" set "PATH=%NODETERM_NODE_HOME%;%PATH%"
 
 where node >nul 2>nul
-if not errorlevel 1 (
-    for /f "delims=" %%V in ('node --version 2^>nul') do echo   Found node %%V already on PATH - nothing to install.
-    goto :node_done
-)
+if errorlevel 1 goto :node_missing
+call :probe_node
+set "NODE_PATH_PROBE_EXIT=%ERRORLEVEL%"
+if not "%NODE_PATH_PROBE_EXIT%"=="0" goto :node_unsupported
+echo   Found node %NODE_PROBE_VERSION% already on PATH - nothing to install.
+goto :node_done
 
+:node_unsupported
+echo   The node executable on PATH is missing, broken, or outside the supported range.
+echo   Required Node range: ^22.22.2 or ^24.15.0 or 26.0.0 and newer.
+echo   Using the manifest-pinned portable runtime instead; details are in "%TEMP%\nodeterm-node-version.log".
+goto :node_portable
+
+:node_missing
 echo   node not found on PATH. Installing...
 where winget >nul 2>nul
 if errorlevel 1 (
@@ -116,12 +130,20 @@ if errorlevel 1 (
     echo   Falling back to a portable extract.
     goto :node_portable
 )
-for /f "delims=" %%V in ('node --version 2^>nul') do echo   Installed node %%V via winget.
+call :probe_node
+set "NODE_WINGET_PROBE_EXIT=%ERRORLEVEL%"
+if not "%NODE_WINGET_PROBE_EXIT%"=="0" (
+    echo   winget installed a Node runtime that is broken or outside the supported range.
+    echo   Falling back to the manifest-pinned portable runtime.
+    goto :node_portable
+)
+echo   Installed node %NODE_PROBE_VERSION% via winget.
 goto :node_done
 
 :node_portable
 call :install_portable_node
-if errorlevel 1 exit /b 1
+set "PORTABLE_NODE_EXIT=%ERRORLEVEL%"
+if not "%PORTABLE_NODE_EXIT%"=="0" exit /b %PORTABLE_NODE_EXIT%
 goto :node_done
 
 :node_done
@@ -255,7 +277,7 @@ if not "%NPM_EXIT%"=="0" (
     echo   Constraint : package-lock.json ^(or package.json when no lockfile exists^)
     echo   Source     : the npm registry ^(https://registry.npmjs.org/^)
     echo   Error      : npm exited with code %NPM_EXIT% - see the npm output above for the real cause
-    exit /b 1
+    exit /b %NPM_EXIT%
 )
 call :phase_end "npm project dependencies"
 
@@ -302,51 +324,32 @@ if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "NODE_ARCH=win-arm64"
 set "NODE_URL="
 set "NODE_SHA256="
 set "NODE_VERSION="
-rem Every path, URL, and selector below crosses into PowerShell as environment DATA. Never splice
-rem one into -Command source: a perfectly valid apostrophe in the repo or LOCALAPPDATA path would
-rem terminate a quoted PowerShell literal before download and hash verification even begin.
+rem Parse AND validate manifest-controlled strings entirely inside PowerShell before cmd ever
+rem expands them. Emitting an unvalidated quote/ampersand through FOR /F would turn JSON data into
+rem batch source. Only canonical digits/dots, the exact official URL, and hex reach this file.
 set "NODETERM_MANIFEST_FILE=%MANIFEST%"
 set "NODETERM_NODE_ARCH=%NODE_ARCH%"
-for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "$p=(Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json).node.portable; $e=$p.PSObject.Properties[$env:NODETERM_NODE_ARCH].Value; $e.url"`) do set "NODE_URL=%%U"
-for /f "usebackq delims=" %%S in (`powershell -NoProfile -Command "$p=(Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json).node.portable; $e=$p.PSObject.Properties[$env:NODETERM_NODE_ARCH].Value; $e.sha256"`) do set "NODE_SHA256=%%S"
-for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "$m=Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json; $m.node.version"`) do set "NODE_VERSION=%%V"
+set "NODE_MANIFEST_RESULT=%TEMP%\nodeterm-node-manifest-%RANDOM%-%RANDOM%.txt"
+if exist "%NODE_MANIFEST_RESULT%" del /f /q "%NODE_MANIFEST_RESULT%" >nul 2>nul
+set "NODETERM_MANIFEST_RESULT=%NODE_MANIFEST_RESULT%"
+powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; $m=Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json; $v=[string]$m.node.version; $e=$m.node.portable.PSObject.Properties[$env:NODETERM_NODE_ARCH].Value; $u=[string]$e.url; $s=[string]$e.sha256; $expected='https://nodejs.org/dist/v'+$v+'/node-v'+$v+'-'+$env:NODETERM_NODE_ARCH+'.zip'; if($v -notmatch '^\d+\.\d+\.\d+$' -or $s -notmatch '^[a-fA-F0-9]{64}$' -or $u -cne $expected){exit 87}; [IO.File]::WriteAllLines($env:NODETERM_MANIFEST_RESULT,@('NODE_VERSION='+$v,'NODE_URL='+$u,'NODE_SHA256='+$s),[Text.UTF8Encoding]::new($false))" >nul 2>nul
+set "NODE_MANIFEST_VALID=%ERRORLEVEL%"
 set "NODETERM_MANIFEST_FILE="
 set "NODETERM_NODE_ARCH="
+set "NODETERM_MANIFEST_RESULT="
+if not "%NODE_MANIFEST_VALID%"=="0" goto :node_manifest_invalid
+if not exist "%NODE_MANIFEST_RESULT%" goto :node_manifest_invalid
+for /f "usebackq tokens=1,* delims==" %%K in ("%NODE_MANIFEST_RESULT%") do set "%%K=%%L"
+del /f /q "%NODE_MANIFEST_RESULT%" >nul 2>nul
+set "NODE_MANIFEST_RESULT="
+if not defined NODE_VERSION goto :node_manifest_invalid
+if not defined NODE_URL goto :node_manifest_invalid
+if not defined NODE_SHA256 goto :node_manifest_invalid
+goto :node_manifest_valid
 
-if not defined NODE_URL (
-    echo.
-    echo [FAILED] Node.js runtime
-    echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
-    echo   Constraint : dependencies.manifest.json -^> node.portable.%NODE_ARCH%
-    echo   Source     : "%MANIFEST%"
-    echo   Error      : manifest has no portable entry for architecture %NODE_ARCH%
-    exit /b 1
-)
-
-if not defined NODE_VERSION (
-    echo.
-    echo [FAILED] Node.js runtime
-    echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
-    echo   Constraint : dependencies.manifest.json -^> node.version
-    echo   Source     : "%MANIFEST%"
-    echo   Error      : manifest has no exact Node version
-    exit /b %NPM_EXIT%
-)
-
-rem Validate manifest-controlled values before any one of them is expanded back into batch syntax.
-rem The expected official URL is derived from the exact version and architecture, and both hashes
-rem must be full SHA-256 digests; malformed data must never become a command or a trusted download.
-set "NODETERM_DOWNLOAD_URL=%NODE_URL%"
-set "NODETERM_EXPECTED_VERSION=%NODE_VERSION%"
-set "NODETERM_EXPECTED_SHA256=%NODE_SHA256%"
-set "NODETERM_NODE_ARCH=%NODE_ARCH%"
-powershell -NoProfile -NonInteractive -Command "$v=$env:NODETERM_EXPECTED_VERSION; $a=$env:NODETERM_NODE_ARCH; $u=$env:NODETERM_DOWNLOAD_URL; $s=$env:NODETERM_EXPECTED_SHA256; $expected='https://nodejs.org/dist/v'+$v+'/node-v'+$v+'-'+$a+'.zip'; if($v -notmatch '^\d+\.\d+\.\d+$' -or $s -notmatch '^[a-fA-F0-9]{64}$' -or $u -cne $expected){exit 87}" >nul 2>nul
-set "NODE_MANIFEST_VALID=%ERRORLEVEL%"
-set "NODETERM_DOWNLOAD_URL="
-set "NODETERM_EXPECTED_VERSION="
-set "NODETERM_EXPECTED_SHA256="
-set "NODETERM_NODE_ARCH="
-if not "%NODE_MANIFEST_VALID%"=="0" (
+:node_manifest_invalid
+if defined NODE_MANIFEST_RESULT if exist "%NODE_MANIFEST_RESULT%" del /f /q "%NODE_MANIFEST_RESULT%" >nul 2>nul
+set "NODE_MANIFEST_RESULT="
     echo.
     echo [FAILED] Node.js runtime
     echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
@@ -354,7 +357,8 @@ if not "%NODE_MANIFEST_VALID%"=="0" (
     echo   Source     : "%MANIFEST%"
     echo   Error      : portable manifest entry failed validation
     exit /b 1
-)
+
+:node_manifest_valid
 
 if not exist "%TOOLCHAIN_DIR%" mkdir "%TOOLCHAIN_DIR%" >nul 2>nul
 set "NODE_ZIP=%TOOLCHAIN_DIR%\node-%NODE_ARCH%.zip"
@@ -383,8 +387,30 @@ rem silently fails to auto-load Get-FileHash, which must never turn a missing di
 rem Pass the path through the environment, not PowerShell source, so an apostrophe in LOCALAPPDATA
 rem is data rather than a broken quote (or executable text).
 set "NODETERM_HASH_FILE=%NODE_ZIP%"
-for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "$s=[Security.Cryptography.SHA256]::Create(); $f=[IO.File]::OpenRead($env:NODETERM_HASH_FILE); try { [BitConverter]::ToString($s.ComputeHash($f)).Replace('-','').ToLowerInvariant() } finally { $f.Dispose(); $s.Dispose() }"`) do set "NODE_ACTUAL_SHA256=%%H"
+set "NODE_HASH_RESULT=%TEMP%\nodeterm-node-sha256-%RANDOM%-%RANDOM%.txt"
+if exist "%NODE_HASH_RESULT%" del /f /q "%NODE_HASH_RESULT%" >nul 2>nul
+set "NODETERM_HASH_RESULT=%NODE_HASH_RESULT%"
+powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; $s=[Security.Cryptography.SHA256]::Create(); $f=[IO.File]::OpenRead($env:NODETERM_HASH_FILE); try { $h=[BitConverter]::ToString($s.ComputeHash($f)).Replace('-','').ToLowerInvariant(); [IO.File]::WriteAllText($env:NODETERM_HASH_RESULT,$h,[Text.UTF8Encoding]::new($false)) } finally { $f.Dispose(); $s.Dispose() }" >nul
+set "NODE_HASH_EXIT=%ERRORLEVEL%"
 set "NODETERM_HASH_FILE="
+set "NODETERM_HASH_RESULT="
+if not "%NODE_HASH_EXIT%"=="0" (
+    if exist "%NODE_HASH_RESULT%" del /f /q "%NODE_HASH_RESULT%" >nul 2>nul
+    echo.
+    echo [FAILED] Node.js runtime
+    echo   Dependency : SHA-256 digest of the portable Node archive
+    echo   Constraint : the hashing process must succeed before its output is trusted
+    echo   Source     : "%NODE_ZIP%"
+    echo   Error      : hashing exited with code %NODE_HASH_EXIT%
+    exit /b %NODE_HASH_EXIT%
+)
+if not exist "%NODE_HASH_RESULT%" (
+    echo [FAILED] Node.js runtime - hashing returned no digest
+    exit /b 1
+)
+set /p "NODE_ACTUAL_SHA256="<"%NODE_HASH_RESULT%"
+del /f /q "%NODE_HASH_RESULT%" >nul 2>nul
+set "NODE_HASH_RESULT="
 if /I not "%NODE_ACTUAL_SHA256%"=="%NODE_SHA256%" (
     del /f /q "%NODE_ZIP%" >nul 2>nul
     echo.
@@ -396,6 +422,18 @@ if /I not "%NODE_ACTUAL_SHA256%"=="%NODE_SHA256%" (
     exit /b 1
 )
 echo   SHA-256 verified: %NODE_ACTUAL_SHA256%
+
+set "NODE_EXTRACT_DIR=%TOOLCHAIN_DIR%\node-v%NODE_VERSION%-%NODE_ARCH%"
+if exist "%NODE_EXTRACT_DIR%" rd /s /q "%NODE_EXTRACT_DIR%" >nul 2>nul
+if exist "%NODE_EXTRACT_DIR%" (
+    echo.
+    echo [FAILED] Node.js runtime
+    echo   Dependency : clean portable Node extraction directory
+    echo   Constraint : stale exact-version files must be removed before extraction
+    echo   Source     : "%NODE_EXTRACT_DIR%"
+    echo   Error      : could not remove the previous extraction; close processes using it and retry
+    exit /b 1
+)
 
 echo   Extracting to "%TOOLCHAIN_DIR%"
 set "NODETERM_ARCHIVE_FILE=%NODE_ZIP%"
@@ -415,7 +453,6 @@ if not "%NODE_EXPAND_EXIT%"=="0" (
 )
 del /f /q "%NODE_ZIP%" >nul 2>nul
 
-set "NODE_EXTRACT_DIR=%TOOLCHAIN_DIR%\node-v%NODE_VERSION%-%NODE_ARCH%"
 if not exist "%NODE_EXTRACT_DIR%\node.exe" (
     echo.
     echo [FAILED] Node.js runtime
@@ -426,24 +463,52 @@ if not exist "%NODE_EXTRACT_DIR%\node.exe" (
     exit /b 1
 )
 
-set "NODETERM_PERSIST_NODE_HOME=%NODE_EXTRACT_DIR%"
-powershell -NoProfile -Command "[Environment]::SetEnvironmentVariable('NODETERM_NODE_HOME',$env:NODETERM_PERSIST_NODE_HOME,'User')" >nul
-set "NODETERM_PERSIST_NODE_HOME="
 set "NODETERM_NODE_HOME=%NODE_EXTRACT_DIR%"
 set "PATH=%NODE_EXTRACT_DIR%;%PATH%"
 
-"%NODE_EXTRACT_DIR%\node.exe" --version >nul 2>nul
-if errorlevel 1 (
+set "NODETERM_EXPECTED_NODE_VERSION=%NODE_VERSION%"
+call :probe_node
+set "PORTABLE_NODE_PROBE_EXIT=%ERRORLEVEL%"
+set "NODETERM_EXPECTED_NODE_VERSION="
+if not "%PORTABLE_NODE_PROBE_EXIT%"=="0" (
     echo.
     echo [FAILED] Node.js runtime
     echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
-    echo   Constraint : n/a
+    echo   Constraint : executable version must exactly match manifest version %NODE_VERSION% and satisfy package.json engines.node
     echo   Source     : "%NODE_EXTRACT_DIR%\node.exe"
-    echo   Error      : the extracted node.exe would not run
+    echo   Error      : the extracted node.exe was missing, broken, unsupported, or reported the wrong version
     exit /b 1
 )
-for /f "delims=" %%V in ('"%NODE_EXTRACT_DIR%\node.exe" --version 2^>nul') do echo   Installed node %%V ^(portable, %NODE_ARCH%^) at "%NODE_EXTRACT_DIR%"
+set "NODETERM_PERSIST_NODE_HOME=%NODE_EXTRACT_DIR%"
+powershell -NoProfile -NonInteractive -Command "[Environment]::SetEnvironmentVariable('NODETERM_NODE_HOME',$env:NODETERM_PERSIST_NODE_HOME,'User')" >nul
+set "NODE_PERSIST_EXIT=%ERRORLEVEL%"
+set "NODETERM_PERSIST_NODE_HOME="
+if not "%NODE_PERSIST_EXIT%"=="0" (
+    echo.
+    echo [FAILED] Node.js runtime
+    echo   Dependency : user-scoped portable Node selection
+    echo   Constraint : NODETERM_NODE_HOME must persist only after the exact runtime passes its probe
+    echo   Source     : "%NODE_EXTRACT_DIR%"
+    echo   Error      : could not persist NODETERM_NODE_HOME ^(exit %NODE_PERSIST_EXIT%^)
+    exit /b %NODE_PERSIST_EXIT%
+)
+echo   Installed node %NODE_PROBE_VERSION% ^(portable, %NODE_ARCH%^) at "%NODE_EXTRACT_DIR%"
 exit /b 0
+
+:probe_node
+set "NODE_PROBE_VERSION="
+set "NODE_PROBE_RESULT=%TEMP%\nodeterm-node-version-%RANDOM%-%RANDOM%.txt"
+if exist "%NODE_PROBE_RESULT%" del /f /q "%NODE_PROBE_RESULT%" >nul 2>nul
+call node "%NODETERM_ROOT%\scripts\check-node-version.cjs" 1>"%NODE_PROBE_RESULT%" 2>"%TEMP%\nodeterm-node-version.log"
+set "NODE_PROBE_EXIT=%ERRORLEVEL%"
+if not "%NODE_PROBE_EXIT%"=="0" goto :probe_node_done
+if not exist "%NODE_PROBE_RESULT%" set "NODE_PROBE_EXIT=1"
+if "%NODE_PROBE_EXIT%"=="0" set /p "NODE_PROBE_VERSION="<"%NODE_PROBE_RESULT%"
+if not defined NODE_PROBE_VERSION set "NODE_PROBE_EXIT=1"
+:probe_node_done
+if exist "%NODE_PROBE_RESULT%" del /f /q "%NODE_PROBE_RESULT%" >nul 2>nul
+set "NODE_PROBE_RESULT="
+exit /b %NODE_PROBE_EXIT%
 
 :phase_begin
 echo --- %~1 ---

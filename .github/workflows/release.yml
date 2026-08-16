@@ -8,8 +8,8 @@ name: Release
 #
 # Windows is the active delivery target: the installer is built on windows-latest and is
 # permanently UNSIGNED (code signing is out of scope for this project — see the "Package"
-# step below). Every push and every manual dispatch publishes exactly one new, uniquely
-# tagged, non-draft GitHub Release carrying the real built installer.
+# step below). When this workflow is deliberately enabled, every branch push and manual
+# dispatch is intended to publish exactly one new, uniquely tagged, non-draft release.
 #
 # Deliberately NO `concurrency: cancel-in-progress` group here — cancelling a run partway
 # through publication could strand a tag with no artifact attached to it. That guard
@@ -87,7 +87,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '22.23.2'
           cache: 'npm'
 
       # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
@@ -99,12 +99,6 @@ jobs:
       # step is where to add the missing bootstrap — check for it, install only if absent.
       - name: Install dependencies
         run: npm ci
-
-      - name: Generate app icon
-        run: npm run make-icon
-
-      - name: Build (electron-vite)
-        run: npm run build
 
       - name: Compute release tag
         id: tag
@@ -122,54 +116,34 @@ jobs:
       # electron-builder has no certificate to sign with in the first place;
       # CSC_IDENTITY_AUTO_DISCOVERY=false additionally stops it from opportunistically
       # picking one up from the runner's own certificate store, and package.json's
-      # `build.forceCodeSigning: false` (the documented default) means a build never aborts
-      # over a signing step it was never asked to perform. The next step independently
+      # root `build.forceCodeSigning: false` plus `build.win.signExecutable: false` prevent
+      # signing, while `build.win.signAndEditExecutable` remains at its default `true` so PE
+      # icon/version resources are still written. The next step independently
       # verifies the produced installer's real Authenticode signature and fails the run if
       # it is somehow signed — belt and braces, not just a documented intent.
       - name: Package Windows installer (Squirrel, unsigned)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --win --publish never
+        run: npm run dist:win
 
       - name: Locate release assets and verify unsigned
         id: assets
         shell: pwsh
         run: |
-          # electron-builder's Squirrel target writes Setup.exe, RELEASES, and the full
-          # .nupkg (plus a delta .nupkg on a repeat version) under dist/squirrel-windows/.
           $dir = 'dist/squirrel-windows'
-          if (-not (Test-Path $dir)) {
-            Write-Error "expected Squirrel output directory '$dir' was not produced"
-            exit 1
-          }
-          $files = Get-ChildItem -Path $dir -File | Where-Object {
-            $_.Name -like '*-Setup-*.exe' -or $_.Name -eq 'RELEASES' -or $_.Extension -eq '.nupkg'
-          }
-          if (-not $files) {
-            Write-Error "no installer/RELEASES/.nupkg files found under $dir"
-            exit 1
-          }
-
-          $setup = $files | Where-Object { $_.Name -like '*-Setup-*.exe' } | Select-Object -First 1
-          if (-not $setup) {
-            Write-Error "no Setup.exe found among the packaged Squirrel assets"
-            exit 1
-          }
-          $sig = Get-AuthenticodeSignature -FilePath $setup.FullName
-          Write-Host "Signature status for $($setup.Name): $($sig.Status)"
-          if ($sig.Status -eq 'Valid') {
-            Write-Error "the packaged installer is SIGNED — this project permanently prohibits code signing; failing the release"
-            exit 1
-          }
-
-          $paths = $files | ForEach-Object { $_.FullName }
-          Write-Host "Release assets:"
-          $paths | ForEach-Object { Write-Host "  $_" }
-          # Multi-line GITHUB_OUTPUT value (also fed to release-notes.mjs verbatim).
-          $delim = "EOF_ASSETS_$([guid]::NewGuid().ToString('N'))"
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "paths<<$delim"
-          $paths | ForEach-Object { Add-Content -Path $env:GITHUB_OUTPUT -Value $_ }
-          Add-Content -Path $env:GITHUB_OUTPUT -Value $delim
+          $result = Join-Path $env:RUNNER_TEMP "nodeterm-setup-$([guid]::NewGuid().ToString('N')).txt"
+          node scripts/release-assets.mjs collect-local $dir package.json $result
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = Get-Content -LiteralPath $result -Raw
+          Remove-Item -LiteralPath $result -Force
+          $sig = Get-AuthenticodeSignature -LiteralPath $setup
+          Write-Host "Signature status for $([IO.Path]::GetFileName($setup)): $($sig.Status)"
+          node scripts/release-assets.mjs assert-unsigned ($sig.Status.ToString())
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/windows-installer.mjs assert-package $dir dist/windows-icon-contract.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/release-assets.mjs collect $dir package.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Generate release notes
         id: notes

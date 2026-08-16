@@ -15,6 +15,15 @@ Native modules (`node-pty`, and the speech-recognition dependency) are rebuilt a
 Electron's exact ABI as part of installing dependencies, since a native module built for a
 system Node.js won't load inside Electron's bundled one.
 
+Windows uses `npm run dist:win` and the x64 Squirrel target. Its supported wrapper regenerates the
+committed multi-resolution ICO, derives an immutable raw URL from the full source SHA, verifies the
+download byte-for-byte, and passes that URL as Squirrel's Apps & Features `iconUrl`. The package
+wrapper is not green until exact package version/ID/product metadata, RELEASES name/size/SHA-1,
+exact output inventory, and the Setup/app/execution-stub PE icon frames all agree with the
+committed ICO. The local-installer BAT and publication workflow separately accept only exact Setup
+Authenticode `NotSigned`. Squirrel's vendor `Update.exe` remains vendor-branded because the pinned
+builder plugin has no supported project hook to rewrite it.
+
 **Auto-update** is handled by `electron-updater`. A packaged build checks a self-hosted update
 feed on launch and every few hours, downloads an available update in the background, and shows
 a non-blocking "Restart to update" banner rather than forcing an interruption — restarting is
@@ -33,7 +42,9 @@ registers it as a systemd service — re-running the same script is how you upda
 
 ## Configuration
 
-- `npm run make-icon` regenerates the app icon from the project's source mark.
+- `npm run make-icon` regenerates the PNG and committed seven-frame Windows ICO from the project's
+  source mark. Regeneration must leave the committed ICO unchanged unless the master intentionally
+  changed.
 - Update-feed and announcement-feed endpoints are configured at build time, not something an
   end user changes; both checks respect `DO_NOT_TRACK` / a telemetry opt-out and are skipped
   entirely in unpackaged development builds.
@@ -47,8 +58,8 @@ registers it as a systemd service — re-running the same script is how you upda
 - **A download is corrupted or fails partway**: `electron-updater`'s own verification refuses
   to apply it; you stay on the current version with no partial-install state.
 - **An unsigned build's OS-level warning**: because these builds are currently unsigned and
-  unnotarized, macOS Gatekeeper (and, for `.deb`, no equivalent on Linux) will show a first-run
-  "unidentified developer" warning. This is expected for the current distribution state and is
+  unnotarized, Windows shows SmartScreen/unknown publisher, while macOS Gatekeeper shows a
+  first-run "unidentified developer" warning (`.deb` has no equivalent). This is expected and is
   disclosed rather than hidden — see [`README.md`](../../../README.md) for the exact
   workaround.
 

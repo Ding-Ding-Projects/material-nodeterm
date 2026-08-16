@@ -7,9 +7,11 @@ platform-difference defects were found, what now guards against them, and what i
 Keep the split — a user reading "what degrades" should not have to wade through regex archaeology,
 and a contributor about to touch a path needs the archaeology.
 
-**The Windows installer is built and published on every push, by CI, on `windows-latest`** — a real
-Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), non-draft, downloadable, unsigned by
-policy. That is the shipping path and it works.
+The last measured hosted Windows package was the unsigned, non-draft Squirrel set from run
+`31960569072` at `19e8296b9f355e0e11e5ee7ab25856f9d3351cef`. The checked-in workflow is
+configured for every branch push when enabled, but it is currently disabled. That prior run
+predates the current wrapper/icon/identity gates and proves only its older direct npm packaging
+path.
 
 What has NOT happened is anyone **installing and launching one**. So the runtime behaviour of a
 packaged build — the session-host fallback where there is no tmux, above all — remains unverified,
@@ -131,7 +133,11 @@ gone.
 
 ## Building
 
-After making Node available, `download-dependencies.bat` first runs
+`download-dependencies.bat` accepts PATH/winget Node only when it runs and satisfies
+`^22.22.2 || ^24.15.0 || >=26.0.0`; otherwise it selects the exact manifest-pinned portable Node.
+The exact portable destination is removed before extraction and the reported executable version
+must equal the manifest, so a stale runtime cannot mask a broken archive. After obtaining a
+supported Node, the BAT first runs
 [`scripts/ensure-windows-build-toolchain.mjs`](../scripts/ensure-windows-build-toolchain.mjs). It
 adds the channel-current x64/x86 Spectre runtime component to an existing Visual Studio instance,
 or verifies and runs the exact Microsoft bootstrapper pinned in the dependency manifest to install
@@ -186,9 +192,13 @@ the check on a machine with no initial Node and went straight into npm.
 
 ## Known gaps
 
-- **No packaged build has been INSTALLED and launched.** CI builds and publishes the installer on
-  every push (verified: `v0.3.0-ci.165` carries a 206.8 MB `nodeterm-Setup-0.3.0.exe`, non-draft,
-  HTTP 206 on a range request), but nobody has run one. So the runtime behaviour of a real install
+- **No packaged build has been INSTALLED and launched.** The successful hosted run `31960569072` at
+  `19e8296b9f355e0e11e5ee7ab25856f9d3351cef` used Node `22.23.2` and published non-draft
+  `v0.3.0-ci.182`: a 216,869,888-byte `nodeterm-Setup-0.3.0.exe`, a 216,748,023-byte full nupkg,
+  and an 84-byte RELEASES file; Setup was Authenticode `NotSigned`. That workflow used setup-node
+  and direct npm packaging rather than the root BAT bootstrap, and predates the current wrapper,
+  icon, and release-identity Chuts. Nobody has run the installer.
+  So the runtime behaviour of a real install
   — tmux absence and the session-host fallback above all (see
   [windows-session-host.md](windows-session-host.md)) — is unverified. Downloading one and clicking
   through it is the single highest-value Windows check still outstanding.
