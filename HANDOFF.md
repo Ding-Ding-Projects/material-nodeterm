@@ -5,7 +5,7 @@ against that commit during the session that wrote this, not recalled. Where some
 it says so — an unverified claim in a handoff is worse than a gap, because the next owner spends
 their time re-deriving it instead of reading it.
 
-## What state the Oak Kay is in
+## What state the repository is in
 
 | | |
 |---|---|
