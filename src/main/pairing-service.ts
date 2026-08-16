@@ -41,6 +41,7 @@ import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
 import { renameAtomic } from '../core/fs-atomic'
 import { openPairingEnvelope, sealPairingResponse } from './pairing-envelope'
+import { withPairingRegistryLock } from './pairing-registry-lock'
 
 const execFileAsync = promisify(execFile)
 
@@ -336,6 +337,8 @@ function readBody(req: IncomingMessage): Promise<string> {
 /** @internal A deterministic barrier for the accepted-socket race test. */
 export interface PairingServiceTestHooks {
   onPairRequestAccepted?(): void
+  /** Barrier after registry publication and before the ownership recheck / SSH grant. */
+  afterDevicePersisted?(): void | Promise<void>
   sealResponse?(
     response: Record<string, unknown>,
     sharedKey: Uint8Array
@@ -369,18 +372,18 @@ export function createPairingService(
   let activeAttempt: PairingAttempt | null = null
 
   /**
-   * Serializes every mutation of agent.json / authorized_keys. Both are read-modify-write over a
-   * whole file and both entry points are unserialized — each `pairing:revoke-device` invoke is
-   * independent (src/main/index.ts) and the pairing POST arrives on its own connection — so two
-   * overlapping mutations each read the ORIGINAL file and write back a copy carrying only their
-   * own change. The revoke case is the dangerous one: the loser's stale read republishes the
-   * device the winner just revoked, key line and agent token both, so a revoked phone silently
-   * keeps SSH and host-agent access. Same idiom as SshStore's writeChain.
+   * Serializes every mutation of agent.json / authorized_keys. The promise chain provides fair
+   * ordering inside this process; the exclusive agent.json.lock covers the authoritative read and
+   * the complete two-file transaction across desktop processes. Every external agent.json writer
+   * must use that same lock before its read or atomic rename alone can still publish a stale copy.
+   * The revoke case is the dangerous one: the loser's stale read republishes the device the winner
+   * just revoked, key line and agent token both, so a revoked phone silently keeps access.
    */
   let mutateChain: Promise<void> = Promise.resolve()
   const serialize = <T>(fn: () => Promise<T>): Promise<T> => {
+    const runLocked = (): Promise<T> => withPairingRegistryLock(AGENT_JSON_PATH, fn)
     // Both arms run `fn`: one mutation failing must not cancel the ones queued behind it…
-    const run = mutateChain.then(fn, fn)
+    const run = mutateChain.then(runLocked, runLocked)
     // …nor surface on them, while the caller still sees ITS OWN failure.
     mutateChain = run.then(() => undefined, () => undefined)
     return run
@@ -391,12 +394,11 @@ export function createPairingService(
    *
    * Lives INSIDE the factory, below `serialize`, so no code path outside this closure can reach
    * it unchained — the same by-construction guarantee as GitHubControlStore's private write().
-   * Overlapping entry points (the pairing POST, renderer revokes) are ordered by the chain; the
-   * per-call temp name covers the writers the chain cannot see — the host agent is a separate
-   * PROCESS writing this same ~/.nodeterm (`writeSeq` stays module-level so a second service
-   * instance in THIS process keeps counting instead of restarting into colliding names), and a
-   * crash between tmp-write and rename. The rename itself now retries a transient Windows
-   * sharing-violation error — see src/core/fs-atomic.ts.
+   * Overlapping entry points (the pairing POST, renderer revokes) are ordered by the chain and
+   * cross-process lock. Per-call temp names still prevent collisions after a crash (`writeSeq`
+   * stays module-level so a second service instance in this process keeps counting instead of
+   * restarting). The rename itself retries a transient Windows sharing-violation error — see
+   * src/core/fs-atomic.ts.
    */
   async function writeAgentJson(obj: Record<string, unknown>): Promise<void> {
     await fs.mkdir(AGENT_DIR, { recursive: true, mode: 0o700 })
@@ -779,8 +781,17 @@ export function createPairingService(
             pairedAt: Date.now(),
             lastSeenAt: 0
           })
+          await testHooks.afterDevicePersisted?.()
+          // stop() and a superseding start poison this attempt synchronously. Re-check after the
+          // registry await: a canceled winner may leave its bearer record visible/revocable, but
+          // it must never activate an SSH key for a phone that will receive no response box.
+          if (!attemptAllowsRequest(attempt, true)) return
           await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
         })
+        if (!attemptAllowsRequest(attempt, true)) {
+          rejectSettled(req, res)
+          return
+        }
         send(res, 200, JSON.stringify(sealedResponse), 'application/json')
         finishAttempt(attempt, {
           ok: true,

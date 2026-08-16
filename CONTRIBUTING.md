@@ -119,7 +119,14 @@ Only `ENOENT` proves the pairing registry absent: corrupt, wrongly-shaped, or un
 `agent.json` must propagate without rewrite. Register a paired device before activating its SSH
 key, so every possibly-live key remains visible and revocable even when the second write fails.
 Likewise, revoke may treat only an `ENOENT` `authorized_keys` read as absence; every other read
-failure must leave the visible registry entry in place rather than hiding a possibly-live SSH key.
+failure must leave the visible registry entry in place rather than hiding a possibly-live SSH key,
+and the UI must retain the row with an explicit retry/access warning. Take
+`~/.nodeterm/agent.json.lock` before every authoritative registry read-modify-write and hold it
+through the related key-file mutation. Atomic rename is not cross-process serialization, and a
+lock timeout must fail closed rather than guessing that another writer is stale. Every external
+host-agent writer must honor the same lock protocol. Pairing owners also need cancellation guards
+after every await: a stopped or superseded attempt may leave a visible registry record, but must not
+activate an SSH key or deliver a bearer.
 
 **Both raw listeners change together** — `src/main/index.ts` and `src/server/agent-status.ts`. A new
 field on a hook event that reaches only the desktop leaves the Server Edition quietly without the
