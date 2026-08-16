@@ -120,6 +120,13 @@ function sessionFrom(req: http.IncomingMessage): string {
   return sessionTokenFromCookie(req.headers.cookie) ?? ''
 }
 
+/** Password lockout identity is the TCP peer observed by Node. Forwarding headers are deliberately
+ *  absent: an Internet client can write X-Forwarded-For as easily as any other header unless a
+ *  separately configured proxy strips it, and rotating a spoofable value would erase the limit. */
+export function authClientKey(req: Pick<http.IncomingMessage, 'socket'>): string {
+  return `peer:${req.socket.remoteAddress || 'unknown'}`
+}
+
 /**
  * The origin the browser will have put in clientDataJSON.
  *
@@ -705,6 +712,7 @@ export function createHttpHandler(
     const url = new URL(req.url || '/', 'http://x')
     const pathname = url.pathname
     const method = req.method || 'GET'
+    const clientKey = authClientKey(req)
 
     const proxyAuthed =
       trustProxy !== undefined && proxyAuthAllowed(trustProxy, req.headers, req.socket.remoteAddress)
@@ -739,10 +747,10 @@ export function createHttpHandler(
         redirect(res, 302, '/setup')
         return
       }
-      if (!auth.loginAllowed()) {
+      if (!auth.loginAllowed(clientKey)) {
         // A password box that silently refuses every entry reads as a broken server. Show the
         // wait, and the way to skip it.
-        sendPage(res, 200, lockedPage(auth.lockoutRemainingMs(), auth.ladder.available()))
+        sendPage(res, 200, lockedPage(auth.lockoutRemainingMs(clientKey), auth.ladderFor(clientKey).available()))
         return
       }
       sendPage(res, 200, loginPage(url.searchParams.has('error'), auth.hasPasskey()))
@@ -756,17 +764,23 @@ export function createHttpHandler(
     // budget. See src/core/unlock-ladder.ts for why each rung is shaped the way it is.
 
     if (pathname === '/auth/unlock/challenge' && method === 'POST') {
-      if (auth.loginAllowed()) {
+      if (auth.loginAllowed(clientKey)) {
         // Not locked out, so there is no wait to skip. Refusing here also stops the ladder being
         // farmed for free challenges while the account is perfectly usable.
         sendJson(res, 409, { error: 'not_locked' })
         return
       }
       const body = (await readJson(req).catch(() => null)) as { rung?: unknown } | null
+      // The wait may expire while a slow body arrives. Do not mint a challenge after there is no
+      // lockout left to clear, especially because every peer draws from one shared ladder budget.
+      if (auth.loginAllowed(clientKey)) {
+        sendJson(res, 409, { error: 'not_locked' })
+        return
+      }
       const asked = body?.rung
       const rung =
         asked === 'math' || asked === 'whack' || asked === 'dimsum' ? (asked as LadderRung) : undefined
-      const challenge = auth.ladder.issue(rung)
+      const challenge = auth.ladderFor(clientKey).issue(rung)
       if (!challenge) {
         sendJson(res, 429, { error: 'no_ladder', message: 'No shortcuts left — wait it out.' })
         return
@@ -776,19 +790,25 @@ export function createHttpHandler(
     }
 
     if (pathname === '/auth/unlock/verify' && method === 'POST') {
-      if (auth.loginAllowed()) {
+      if (auth.loginAllowed(clientKey)) {
         sendJson(res, 409, { error: 'not_locked' })
         return
       }
       const body = (await readJson(req).catch(() => null)) as LadderAnswer | null
+      // This is the authoritative admission check: grading after the body wait could otherwise
+      // spend the global clear budget on a lockout whose clock already ended.
+      if (auth.loginAllowed(clientKey)) {
+        sendJson(res, 409, { error: 'not_locked' })
+        return
+      }
       if (!body || typeof body.nonce !== 'string') {
         sendJson(res, 400, { error: 'bad_request' })
         return
       }
-      const verdict = auth.ladder.verify(body)
+      const verdict = auth.ladderFor(clientKey).verify(body)
       // The ONE effect a cleared ladder has. No session, no cookie, no extra attempts — the user
       // lands back on the ordinary password form.
-      if (verdict.cleared) auth.clearLockoutByLadder()
+      if (verdict.cleared) auth.clearLockoutByLadder(clientKey)
       sendJson(res, 200, verdict)
       return
     }
@@ -821,7 +841,7 @@ export function createHttpHandler(
     }
 
     if (pathname === '/auth/login' && method === 'POST') {
-      if (!auth.loginAllowed()) {
+      if (!auth.loginAllowed(clientKey)) {
         sendJson(res, 429, { error: 'too_many_attempts' })
         return
       }
@@ -833,14 +853,25 @@ export function createHttpHandler(
         return
       }
       const password = form.get('password') || ''
-      if (auth.verifyPassword(password)) {
-        auth.recordLoginSuccess()
+      const attempt = await auth.attemptPassword(clientKey, password)
+      if (attempt === 'success') {
         const session = auth.createSession()
         setSessionCookie(req, res, session)
         redirect(res, 303, '/')
         return
       }
-      auth.recordLoginFailure()
+      if (attempt === 'locked') {
+        sendJson(res, 429, { error: 'too_many_attempts' })
+        return
+      }
+      if (attempt === 'busy') {
+        sendJson(res, 429, { error: 'auth_busy' })
+        return
+      }
+      if (attempt === 'error') {
+        sendJson(res, 503, { error: 'auth_unavailable' })
+        return
+      }
       redirect(res, 303, '/login?error=1')
       return
     }
@@ -862,9 +893,14 @@ export function createHttpHandler(
         sendJson(res, 401, { error: 'unauthorized' })
         return
       }
+      const challenge = auth.newChallenge(clientKey, 'register')
+      if (!challenge) {
+        sendJson(res, 429, { error: 'challenge_capacity' })
+        return
+      }
       const rpId = rpIdFromHost(req.headers.host || '')
       sendJson(res, 200, {
-        challenge: auth.newChallenge(),
+        challenge,
         rp: { id: rpId, name: 'nodeterm' },
         // One account, so a fixed user handle. It is not a secret and identifies nobody.
         user: { id: Buffer.from('nodeterm').toString('base64url'), name: 'nodeterm', displayName: 'nodeterm' },
@@ -886,7 +922,7 @@ export function createHttpHandler(
         sendJson(res, 401, { error: 'unauthorized' })
         return
       }
-      if (!auth.consumeChallenge(String(body.challenge ?? ''))) {
+      if (!auth.consumeChallenge(String(body.challenge ?? ''), clientKey, 'register')) {
         sendJson(res, 400, { error: 'challenge_expired' })
         return
       }
@@ -911,9 +947,11 @@ export function createHttpHandler(
     }
 
     if (pathname === '/auth/passkey/login/options' && method === 'POST') {
-      if (!auth.loginAllowed()) { sendJson(res, 429, { error: 'too_many_attempts' }); return }
+      if (!auth.loginAllowed(clientKey)) { sendJson(res, 429, { error: 'too_many_attempts' }); return }
+      const challenge = auth.newChallenge(clientKey, 'login')
+      if (!challenge) { sendJson(res, 429, { error: 'challenge_capacity' }); return }
       sendJson(res, 200, {
-        challenge: auth.newChallenge(),
+        challenge,
         rpId: rpIdFromHost(req.headers.host || ''),
         allowCredentials: auth.listCredentials().map((c) => ({ type: 'public-key', id: c.id })),
         userVerification: 'preferred',
@@ -923,17 +961,21 @@ export function createHttpHandler(
     }
 
     if (pathname === '/auth/passkey/login/verify' && method === 'POST') {
-      if (!auth.loginAllowed()) { sendJson(res, 429, { error: 'too_many_attempts' }); return }
+      if (!auth.loginAllowed(clientKey)) { sendJson(res, 429, { error: 'too_many_attempts' }); return }
       const body = (await readJson(req).catch(() => null)) as Record<string, string> | null
       if (!body) { sendJson(res, 400, { error: 'bad_request' }); return }
-      if (!auth.consumeChallenge(String(body.challenge ?? ''))) {
+      // The body await is an admission boundary: other requests may have locked this peer while
+      // it was arriving. This check, not the fast pre-body check above, is authoritative.
+      if (!auth.loginAllowed(clientKey)) { sendJson(res, 429, { error: 'too_many_attempts' }); return }
+      if (!auth.consumeChallenge(String(body.challenge ?? ''), clientKey, 'login')) {
         sendJson(res, 400, { error: 'challenge_expired' })
         return
       }
+      if (!auth.admitLoginClient(clientKey)) { sendJson(res, 429, { error: 'auth_busy' }); return }
       const cred = auth.listCredentials().find((c) => c.id === String(body.id ?? ''))
       if (!cred) {
         // Counts as a failure: otherwise an unknown id is a free, unthrottled probe.
-        auth.recordLoginFailure()
+        auth.recordLoginFailure(clientKey)
         sendJson(res, 400, { error: 'unknown_credential' })
         return
       }
@@ -948,18 +990,19 @@ export function createHttpHandler(
           rpId: rpIdFromHost(req.headers.host || '')
         })
         auth.updateCredentialCounter(cred.id, newCounter)
-        auth.recordLoginSuccess()
+        auth.recordLoginSuccess(clientKey)
         setSessionCookie(req, res, auth.createSession())
         sendJson(res, 200, { ok: true })
       } catch (e) {
         console.warn('[passkey] assertion rejected:', e instanceof Error ? e.message : e)
-        auth.recordLoginFailure()
+        auth.recordLoginFailure(clientKey)
         sendJson(res, 400, { error: 'login_failed' })
       }
       return
     }
 
     if (pathname === '/auth/logout' && method === 'POST') {
+      auth.revokeSession(sessionTokenFromCookie(req.headers.cookie))
       clearSessionCookie(req, res)
       redirect(res, 303, '/login')
       return

@@ -234,19 +234,40 @@ Single-user auth. There is one password; sessions are per-browser.
 
 - **Password hashing:** scrypt (`N=16384, r=8, p=1`, 32-byte key, per-password random
   salt), stored as `auth.json` (mode `0600`) in the data dir. Login comparison is
-  constant-time (`crypto.timingSafeEqual`). The app never stores the plaintext.
+  constant-time (`crypto.timingSafeEqual`). The HTTP path uses asynchronous scrypt, at most two
+  active proofs and 32 pending proofs process-wide, with at most five pending for one TCP peer.
+  Same-peer proofs execute FIFO and re-check lockout after every wait, so requests that arrived
+  before the fifth failure cannot keep hashing or reset the resulting lockout. The persisted
+  salt/hash shape and cost parameters are validated at use time before scrypt starts; a hand-edited
+  cost cannot escape those resource bounds. The app never stores the plaintext.
 - **Session cookie:** on successful login the server sets `nt_session=<random>` with
   `HttpOnly; SameSite=Strict; Path=/` (and `Secure` when served over HTTPS). Sessions
   are persisted (`sessions.json`, mode `0600`) with a 30-day TTL and swept lazily.
-  `revokeAll()` exists to drop every session but is only wired programmatically in
-  Phase 2 (no logout-everywhere UI yet; `/auth/logout` clears the current cookie).
+  `/auth/logout` deletes the presented token from that file before clearing its cookie, so replaying
+  the old bearer after logout or a server restart fails while other browsers stay signed in.
+  `revokeAll()` remains the programmatic logout-everywhere operation.
 - **Origin check on WS upgrade:** the WebSocket endpoint requires a valid session
   cookie **and**, when the browser sends an `Origin` header, that its host matches the
   request `Host`. A malformed Origin is rejected (never throws). This blocks
   cross-site WebSocket hijacking. (Non-browser clients without an Origin still must
   present a valid cookie.)
-- **Login rate limit / lockout:** 5 failed password attempts trip a 60-second lockout
-  (further attempts get `429 too_many_attempts`); a success resets the counter.
+- **Login rate limit / lockout:** 5 failed password/passkey attempts from one kernel-observed TCP
+  peer trip that peer's 60-second lockout (further attempts get `429 too_many_attempts`); a success
+  resets only that peer. `X-Forwarded-For`, `Forwarded`, `X-Real-IP`, cookies, user-agent and source
+  port never select this bucket because clients can spoof or churn them. A reverse proxy therefore
+  shares one password bucket for its TCP address; proxy-authenticated requests bypass the password
+  path normally. Peer state is bounded to 1024 entries: locked or pending-password-proof entries
+  are never evicted, while the oldest unlocked inactive source can be replaced so a distributed
+  one-shot flood cannot create a permanent global lockout. Password proof concurrency/backlog
+  limits above remain the process-wide distributed-work backstop.
+- **Passkey challenge bounds:** WebAuthn freshness challenges live for two minutes, are single-use,
+  bound to both the TCP peer and ceremony purpose (`login` versus `register`), and capped at eight
+  per peer / 256 process-wide. Expiry is one complete bounded O(n) pass, including after a backward
+  system-clock adjustment. Repeated unauthenticated option requests therefore cannot grow memory
+  or cleanup work beyond that strict 256-entry bound.
+- **Unlock challenge bounds:** each locked peer can retain at most eight ladder nonces and all peer
+  ladders share a 256-nonce ceiling. A full ledger refuses refreshes until capacity genuinely frees,
+  and grading one answer invalidates every sibling nonce before the climb advances or exhausts.
 - **Auth gate:** every route except the login/setup pages and their POST handlers
   requires a valid session — HTML navigations redirect to `/login`, API/WS get `401`. The raw
   browser upload route is behind this same gate; an unauthenticated request cannot create a staging

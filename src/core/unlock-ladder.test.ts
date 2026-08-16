@@ -5,8 +5,12 @@ import {
   LADDER_BUDGET,
   LADDER_BUDGET_WINDOW_MS,
   LADDER_TTL_MS,
+  MAX_LADDER_CHALLENGES_GLOBAL,
+  MAX_LADDER_CHALLENGES_PER_PEER,
   MATH_QUESTION_COUNT,
   UnlockLadder,
+  UnlockLadderBudget,
+  UnlockLadderChallengeBudget,
   WHACK_DURATION_MS,
   WHACK_REQUIRED_HITS,
   nextLockoutMs,
@@ -213,6 +217,72 @@ describe('the safety boundary', () => {
     expect(v.cleared).toBe(false)
   })
 
+  it('bounds live nonces per peer and across every peer ladder', () => {
+    let now = 1_000
+    let roll = 0
+    const challengeBudget = new UnlockLadderChallengeBudget()
+    const first = new UnlockLadder({
+      now: () => now,
+      rand: (max) => roll++ % max,
+      challengeBudget
+    })
+    const peerChallenges = Array.from(
+      { length: MAX_LADDER_CHALLENGES_PER_PEER },
+      () => first.issue('dimsum') as DimSumChallenge
+    )
+    expect(first.issue('dimsum')).not.toBeNull()
+    expect(first.verify({
+      kind: 'dimsum',
+      nonce: peerChallenges[0].nonce,
+      choice: 'anything'
+    }).message).toMatch(/expired/i)
+    // A full global ledger refuses even a refresh by an existing holder. Existing holders cannot
+    // extend their leases before TTL; after expiry they compete afresh with every other peer.
+    const others = Array.from(
+      { length: MAX_LADDER_CHALLENGES_GLOBAL - MAX_LADDER_CHALLENGES_PER_PEER },
+      () => new UnlockLadder({ now: () => now, rand: () => 0, challengeBudget })
+    )
+    for (const ladder of others) expect(ladder.issue('dimsum')).not.toBeNull()
+    expect(first.issue('dimsum')).toBeNull()
+
+    now += LADDER_TTL_MS + 1
+    const newcomer = new UnlockLadder({ now: () => now, rand: () => 0, challengeBudget })
+    expect(newcomer.issue('dimsum')).not.toBeNull()
+
+    // The newcomer swept every expired global lease. Rolling the wall clock backward must not
+    // resurrect a saved record in an untouched owner after that lease was reused.
+    now = 1_000
+    const saved = peerChallenges[1]
+    const savedRight = DIM_SUM_NAMES.find((dish) => dish.zhHant === saved.prompt)!.en
+    expect(first.verify({ kind: 'dimsum', nonce: saved.nonce, choice: savedRight }).cleared).toBe(false)
+  })
+
+  it('invalidates sibling nonces when one answer advances or exhausts the climb', () => {
+    let t = 1_000
+    let roll = 0
+    const ladder = new UnlockLadder({ now: () => t, rand: (max) => roll++ % max })
+    const saved = ladder.issue('dimsum') as DimSumChallenge
+    const savedRight = DIM_SUM_NAMES.find((d) => d.zhHant === saved.prompt)!.en
+    const current = ladder.issue('dimsum') as DimSumChallenge
+    const currentRight = DIM_SUM_NAMES.find((d) => d.zhHant === current.prompt)!.en
+    const currentWrong = current.choices.find((choice) => choice !== currentRight)!
+    expect(ladder.verify({ kind: 'dimsum', nonce: current.nonce, choice: currentWrong }).cleared).toBe(false)
+    expect(ladder.verify({ kind: 'dimsum', nonce: saved.nonce, choice: savedRight }).cleared).toBe(false)
+
+    const stale = ladder.issue('math') as MathChallenge
+    const whack = ladder.issue('whack') as WhackChallenge
+    t += WHACK_DURATION_MS
+    expect(ladder.verify({ kind: 'whack', nonce: whack.nonce, hits: [] })).toMatchObject({
+      cleared: false,
+      exhausted: true
+    })
+    expect(ladder.verify({
+      kind: 'math',
+      nonce: stale.nonce,
+      answers: stale.questions.map(solve)
+    })).toMatchObject({ cleared: false, exhausted: true })
+  })
+
   it(`skips at most ${LADDER_BUDGET} waits per hour, then makes everyone serve the clock`, () => {
     // THE cap. Every rung is machine-solvable, so this is what stops the ladder from making
     // brute force cheaper than waiting.
@@ -230,6 +300,33 @@ describe('the safety boundary', () => {
     advance(LADDER_BUDGET_WINDOW_MS + 1)
     expect(ladder.budgetLeft()).toBe(LADDER_BUDGET)
     expect(ladder.issue()).not.toBeNull()
+  })
+
+  it('atomically shares the final budget slot across independently issued peer challenges', () => {
+    const budget = new UnlockLadderBudget()
+    const ladders = Array.from(
+      { length: LADDER_BUDGET + 1 },
+      () => new UnlockLadder({ now: () => 1_000, rand: () => 0, budget })
+    )
+    // Issue all challenges while the shared budget still has room. The check at grading time is
+    // load-bearing: issue-time-only accounting lets all four correct answers clear three slots.
+    const challenges = ladders.map((ladder) => ladder.issue() as DimSumChallenge)
+    const verdicts = ladders.map((ladder, i) => {
+      const right = DIM_SUM_NAMES.find((d) => d.zhHant === challenges[i].prompt)!.en
+      return ladder.verify({ kind: 'dimsum', nonce: challenges[i].nonce, choice: right })
+    })
+    expect(verdicts.filter((v) => v.cleared)).toHaveLength(LADDER_BUDGET)
+    expect(verdicts.at(-1)).toMatchObject({ cleared: false, exhausted: true })
+  })
+
+  it('keeps each peer climb isolated while sharing only the clear budget', () => {
+    const budget = new UnlockLadderBudget()
+    const a = new UnlockLadder({ now: () => 1_000, rand: () => 0, budget })
+    const b = new UnlockLadder({ now: () => 1_000, rand: () => 0, budget })
+    const challengeB = b.issue() as DimSumChallenge
+    a.reset()
+    const rightB = DIM_SUM_NAMES.find((d) => d.zhHant === challengeB.prompt)!.en
+    expect(b.verify({ kind: 'dimsum', nonce: challengeB.nonce, choice: rightB }).cleared).toBe(true)
   })
 
   it('reset() clears the climb but NOT the rolling budget', () => {

@@ -2023,20 +2023,43 @@ inherit this host-side allowlist without a protocol change (call out any newly r
 
 ## The unlock ladder (Server Edition lockout)
 
-Five wrong passwords locks the account, and instead of a bare countdown the lockout screen offers a
+Five wrong credentials from one network peer lock that peer's login path, and instead of a bare
+countdown the lockout screen offers a
 way to play out of it: **dim sum** (one dish, four choices) → after 5 wrong dishes **ten easy sums**
 → after one wrong sum **whack-a-mole**. Clear any rung and the wait ends; lose the lot and you are
 where you started, waiting, with the ladder not re-offered for that lockout. State machine is the
 Electron-free `src/core/unlock-ladder.ts`; served at `/auth/unlock/{challenge,verify}` and drawn by
 `lockedPage()` in `src/server/http.ts`. Full write-up: **`docs/unlock-ladder.md`**.
 
+**Lockout decisions are scoped to the kernel-observed TCP peer, never a forwarding header.**
+`authClientKey()` uses `req.socket.remoteAddress` alone; `X-Forwarded-For`, `Forwarded`,
+`X-Real-IP`, source port, cookie and user-agent are spoofable or unstable and cannot select a
+bucket. One peer's five failures therefore cannot impose its exponential wait on another peer.
+Password proofs enter a same-peer FIFO before asynchronous scrypt and share a bounded process-wide
+pool (2 active, 32 pending, 5 pending per peer); lockout is re-checked after the request body, after
+the pool wait, and after the proof, while a generation boundary prevents a pre-lockout proof from
+waking after expiry/ladder clear and charging or clearing the next cycle. The 1024-entry peer table
+never evicts a locked or pending-password-proof peer; at capacity it may replace the oldest unlocked source so a
+one-shot distributed flood cannot manufacture a permanent global lockout. A reverse proxy's
+password callers share its TCP peer bucket; configured proxy-SSO callers do not use password auth.
+
+Each locked peer owns an independent `UnlockLadder`, but every ladder receives one shared
+`UnlockLadderBudget`. The final rolling-hour slot is claimed atomically at grading time, not merely
+when a challenge is issued, so correct answers already outstanding on several peers cannot all
+clear one remaining slot. Ladder nonces are separately capped at 8 per peer / 256 account-wide;
+grading consumes every sibling nonce so an old answer cannot cross a rung or exhaustion boundary.
+WebAuthn freshness state is also bounded (8 per peer, 256 global), peer- and purpose-bound, and swept
+in one bounded O(n) pass that remains correct after clock rollback. Logout revokes the presented
+persisted session before clearing its cookie; a captured old bearer stays revoked across restart
+without signing out other browsers.
+
 **Five rules are the entire safety of it. Keep the games and drop any one and you have shipped a
 second, much weaker password:**
 
 1. **It clears the WAITING, never the CREDENTIAL.** No session, no cookie — the user lands back on
-   the password form. `clearLockoutByLadder()` moves `lockedUntil` and *nothing else*, deliberately;
-   widening that method is precisely how this stops being true. Pinned by a route test asserting no
-   `Set-Cookie`.
+   the password form. `clearLockoutByLadder()` never changes the failure count, escalation streak,
+   credentials, or sessions; it only ends the wait and advances stale-proof bookkeeping. Pinned by
+   a route test asserting no `Set-Cookie`.
 2. **No attempt refund.** Waiting returns five attempts, so the ladder returns five. The moment
    solving beats waiting, brute force gets cheaper — the one thing a lockout exists to prevent.
 3. **`LADDER_BUDGET` (3 clears/rolling hour) is the real defence, not the difficulty.** Every rung
