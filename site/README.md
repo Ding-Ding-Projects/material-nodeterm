@@ -50,6 +50,11 @@ fallback, not a live request) and `app/main.js`/`app/core/engine.js` for how the
 wired together.
 
 The Time machine stores the prior durable values beside each saved-setting change, so **Put back**
-really restores state and the restore itself can be reversed. Exports, conversions and old rows
-without a prior-state snapshot are honest record-only entries and show no restore action. Deleting
-history is durable too: even deleting the final row leaves an explicit empty log after reload.
+really restores state, reapplies live theme/text-size effects, and the restore itself can be
+reversed. Nickname and narrator-speed changes commit on control change rather than on every input
+tick. TOTP records, toy-lock hashes, the School PIN and history itself never enter undo snapshots;
+legacy secret-bearing rows are cleaned at load, and neither settings nor history exports include
+those bytes. Authenticator deletion and Time machine-row deletion are therefore explicit,
+record-only permanent actions instead of fake restores. Exports, conversions and old rows without a
+prior-state snapshot are also honest record-only entries. Deleting the final history row persists an
+explicit empty log after reload.

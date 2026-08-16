@@ -72,9 +72,9 @@ export function registerCoreHandlers(
   const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
   if (deps.settingsStore) {
     const settingsStore = deps.settingsStore
-    settingsStore.setHistoryRecorder((before, after, override) => {
+    settingsStore.setHistoryRecorder(async (before, after, override) => {
       if (override) {
-        void localHistoryStore.record({
+        await localHistoryStore.record({
           domain: 'settings',
           filename: 'settings.json',
           content: JSON.stringify(after, null, 2),
@@ -85,7 +85,7 @@ export function registerCoreHandlers(
       }
       const change = describeSettingsChange(before, after)
       if (!change) return
-      void localHistoryStore.record({
+      await localHistoryStore.record({
         domain: 'settings',
         filename: 'settings.json',
         content: JSON.stringify(after, null, 2),

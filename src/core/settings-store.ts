@@ -54,7 +54,7 @@ export class SettingsStore {
     before: Settings,
     after: Settings,
     override?: { action: HistoryAction; label: string }
-  ) => void
+  ) => void | Promise<void>
 
   private get filePath(): string {
     return path.join(platform().userDataDir, 'settings.json')
@@ -73,7 +73,11 @@ export class SettingsStore {
    *  `applyRestoredSettings`, which reaches `saveNow` with an explicit override so the new
    *  revision is labelled "Restored…" instead of running back through the generic diff. */
   setHistoryRecorder(
-    fn: (before: Settings, after: Settings, override?: { action: HistoryAction; label: string }) => void
+    fn: (
+      before: Settings,
+      after: Settings,
+      override?: { action: HistoryAction; label: string }
+    ) => void | Promise<void>
   ): void {
     this.historyRecorder = fn
   }
@@ -157,7 +161,7 @@ export class SettingsStore {
       // but this catch covers a bad recorder implementation too — belt and braces around the one
       // guarantee this feature is not allowed to break.
       try {
-        this.historyRecorder?.(before, this.cache, historyOverride)
+        await this.historyRecorder?.(before, this.cache, historyOverride)
       } catch {
         // See above.
       }

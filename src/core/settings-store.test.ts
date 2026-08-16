@@ -151,6 +151,55 @@ describe('settings:save atomic write', () => {
   const tmpsLeft = async (): Promise<string[]> =>
     (await fs.readdir(dir)).filter((f) => f.endsWith('.tmp'))
 
+  it('does not report a save complete before its durable history recorder settles', async () => {
+    const store = new SettingsStore()
+    let release!: () => void
+    let entered!: () => void
+    const recorderEntered = new Promise<void>((resolve) => { entered = resolve })
+    const recorderReleased = new Promise<void>((resolve) => { release = resolve })
+    store.setHistoryRecorder(async () => {
+      entered()
+      await recorderReleased
+    })
+    store.registerIpc()
+
+    let settled = false
+    const save = (fake.handlers[IPC.settingsSave]({ ...DEFAULT_SETTINGS, fontSize: 23 }) as Promise<void>)
+      .then(() => { settled = true })
+    await recorderEntered
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+
+    release()
+    await save
+    expect(settled).toBe(true)
+  })
+
+  it('does not report a restore complete before its restored revision settles', async () => {
+    const store = new SettingsStore()
+    let release!: () => void
+    let entered!: () => void
+    const recorderEntered = new Promise<void>((resolve) => { entered = resolve })
+    const recorderReleased = new Promise<void>((resolve) => { release = resolve })
+    store.setHistoryRecorder(async (_before, _after, override) => {
+      expect(override).toMatchObject({ action: 'restored', label: 'Restored settings to abc1234' })
+      entered()
+      await recorderReleased
+    })
+
+    let settled = false
+    const restore = store
+      .applyRestoredSettings({ ...DEFAULT_SETTINGS, fontSize: 31 }, 'Restored settings to abc1234')
+      .then(() => { settled = true })
+    await recorderEntered
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+
+    release()
+    await restore
+    expect(settled).toBe(true)
+  })
+
   // Nothing serializes the settings:save handler, and it has overlapping callers in both builds:
   // on the desktop the renderer's coalesced timer save, the `beforeunload` flush that fires
   // outside that window, and any still-in-flight earlier save are all fire-and-forget

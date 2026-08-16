@@ -10,7 +10,7 @@ import { EXPORT_FORMATS, emit } from '../shared/exportFormats.js'
 import { COVERAGE } from '../shared/data.js'
 import { esc, attr } from '../core/dom.js'
 
-function datasetRecords(store, id) {
+export function datasetRecords(store, id) {
   const s = store.state
   if (id === 'notes') return s.notes.map((n) => ({ title: n.title, body: n.body, tag: n.tag, when: n.when }))
   if (id === 'history') return s.history.map((h) => ({ title: h.title, body: h.body, when: h.when }))
