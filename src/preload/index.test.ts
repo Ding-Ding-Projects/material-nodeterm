@@ -111,4 +111,14 @@ describe('preload IPC wiring', () => {
     off()
     expect(h.removeListener).toHaveBeenCalledWith(IPC.sshPassphraseDismiss, handler)
   })
+
+  it('forwards pairing attempt ownership on both start and targeted stop', async () => {
+    const attemptId = '33333333-3333-4333-8333-333333333333'
+
+    await api.pairing.start(attemptId)
+    await api.pairing.stop(attemptId)
+
+    expect(h.invoke).toHaveBeenCalledWith(IPC.pairingStart, attemptId)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.pairingStop, attemptId)
+  })
 })

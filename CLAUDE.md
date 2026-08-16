@@ -1875,8 +1875,42 @@ shape, `EACCES`, `EIO`, and every other read failure propagate without rewriting
 pairing publishes its device entry before appending `authorized_keys`. Thus a registry failure
 grants no SSH access, while a later append/chmod failure leaves any possibly-live key represented
 by a visible, revocable device entry. The encrypted bearer response is not sent on either failure.
+The append path may treat only `ENOENT` as a new key file: `EACCES`, `EIO`, and unknown read
+failures stop before append, because an unreadable existing file may lack its final newline and a
+blind append would splice the new key into the previous one. The already-published registry row
+stays visible as the revoke handle.
 Pairing completion carries a distinct failure reason, and Settings refreshes the registry even on
 failure so a partial grant is immediately reported and can be revoked rather than called a timeout.
+Revocation has the same absence rule on `authorized_keys`: only `ENOENT` permits the registry entry
+to be removed without a key-file rewrite. `EACCES`, `EIO`, and unknown read failures leave both the
+key and its visible device entry unchanged, so a possibly-live SSH credential is never hidden.
+Settings keeps the device row and shows a persistent “access may still be active” retry warning
+when that revoke rejects; a bridge rejection must never become an unhandled promise or a false
+success.
+
+`agent.json` is a shared cross-process registry. Desktop pairing and revoke take the exclusive
+`~/.nodeterm/agent.json.lock` before the authoritative read and hold it through the complete
+registry/`authorized_keys` transaction. Acquisition is bounded and fails closed; the lock contains
+only owner diagnostics, and an old-looking lock is never deleted on age alone because doing so can
+split a live writer's critical section. Atomic rename prevents torn bytes but does not prevent a
+stale read-modify-write from erasing a concurrent writer. The separately shipped companion host
+agent is also an `agent.json` writer and therefore must adopt this exact lock contract, with a
+symmetric two-process test, before the combined release is considered verified; its source is not
+in this repository, so that adoption remains an external release blocker. Clearing it requires an
+exact companion commit and artifact hash, an inventory proving every writer takes the lock before
+its authoritative read, both real-process contention orderings, a timeout/no-mutation proof, and a
+mixed-artifact run. A host-shaped worker in the desktop Chut proves only this helper—not companion
+adoption; the evidence checklist lives in `docs/ios-protocol-migration.md` §0.1.
+
+Renderer pairing assigns a cryptographic UUID before awaiting `pairing.start(attemptId)`. Main echoes
+that UUID in the start result and every completion event, and `pairing.stop(attemptId)` cancels only
+the matching active attempt. The renderer also invalidates every continuation with an epoch on stop,
+unmount, completion, or replacement. Both checks are required: epochs stop stale state writes inside
+one mounted hook, while the cross-process ID prevents a late unmounted hook or delayed completion
+event from owning a newly mounted replacement. The service rechecks attempt ownership after
+publishing the registry, before activating SSH, and after the key append returns. Cancellation before
+append leaves a visible, revocable registry row without a key; cancellation during append removes
+the attributable key before rejecting the response. Neither path delivers a bearer.
 
 - Phone relay remote access ("Reach this Mac from anywhere") is a **Core (free) feature** as of
   2026-08-01 — the iOS app is itself paid, so a desktop Pro gate double-charged the same feature.

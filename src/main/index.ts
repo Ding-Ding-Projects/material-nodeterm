@@ -865,13 +865,13 @@ app.whenReady().then(async () => {
     apiBase: RELAY_API_BASE,
     relayAllowed
   })
-  ipcMain.handle(IPC.pairingStart, () =>
+  ipcMain.handle(IPC.pairingStart, (_event, attemptId: string) =>
     pairingService.start((result) => {
       const w = getMainWindow()
       if (w && !w.isDestroyed()) w.webContents.send(IPC.pairingDone, result)
-    })
+    }, attemptId)
   )
-  ipcMain.handle(IPC.pairingStop, () => pairingService.stop())
+  ipcMain.handle(IPC.pairingStop, (_event, attemptId: string) => pairingService.stop(attemptId))
   ipcMain.handle(IPC.pairingProbeSsh, () => pairingService.probeSsh())
   // Same pattern as appOpenNotificationSettings: a main-side constant deep link, NOT routed
   // through shellOpenExternal's http(s)-only allowlist (which silently drops x-apple.* URLs —

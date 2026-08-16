@@ -190,6 +190,20 @@ writes an SSH key or bearer. Never restore the old `{token,publicKey}` plaintext
 Only `ENOENT` proves the pairing registry absent: corrupt, wrongly-shaped, or unreadable
 `agent.json` must propagate without rewrite. Register a paired device before activating its SSH
 key, so every possibly-live key remains visible and revocable even when the second write fails.
+The key-append path also treats only `ENOENT` as absence; appending after an unreadable
+`authorized_keys` read can splice two keys when the existing file lacks its final newline.
+Likewise, revoke may treat only an `ENOENT` `authorized_keys` read as absence; every other read
+failure must leave the visible registry entry in place rather than hiding a possibly-live SSH key,
+and the UI must retain the row with an explicit retry/access warning. Take
+`~/.nodeterm/agent.json.lock` before every authoritative registry read-modify-write and hold it
+through the related key-file mutation. Atomic rename is not cross-process serialization, and a
+lock timeout must fail closed rather than guessing that another writer is stale. Every external
+  host-agent writer must honor the same lock protocol. Pairing owners also need a cryptographic
+  attempt ID carried through start, targeted stop, and completion plus cancellation guards after
+  every credential await: a stopped or superseded attempt may leave a visible registry record, but
+  must remove any attributable key activated while cancellation was in flight and must not deliver a
+  bearer. A renderer epoch alone is instance-local and cannot keep an unmounted surface from stopping
+  a newly mounted replacement.
 
 **The Server Edition image has two native addons, not one.** Both `node-pty` and `smart-whisper`
 must be rebuilt for Node's ABI in the Docker deps stage; the normal postinstall targets Electron's

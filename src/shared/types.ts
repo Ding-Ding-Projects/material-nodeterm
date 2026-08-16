@@ -2506,6 +2506,8 @@ export interface PairedDevice {
 
 /** One-shot pairing completion delivered from the desktop host to every renderer surface. */
 export type PairingDoneResult = {
+  /** Correlates this event with the renderer start that owns it. */
+  attemptId: string
   ok: boolean
   /** Present on ok=false so persistence/security failures are never mislabeled as timeouts. */
   reason?: 'timeout' | 'attempts' | 'failed'
@@ -2519,7 +2521,9 @@ export interface PairingApi {
    *  LAN listener / OS SSH-key store exists. UI must show a deliberate degrade, not call stubs. */
   readonly supported: boolean
   /** Start the one-shot LAN listener; resolves with the QR payload + an SSH-reachable hint. */
-  start(): Promise<{
+  start(attemptId: string): Promise<{
+    /** Echo of the cryptographic UUID supplied by the renderer. */
+    attemptId: string
     payload: string
     sshOpen: boolean
     relayPlan?: 'ok' | 'dev' | 'off'
@@ -2530,8 +2534,8 @@ export interface PairingApi {
     /** The LAN listener address (diagnostic/compatibility metadata). */
     manualHost?: string
   }>
-  /** Cancel an in-flight pairing (e.g. when the settings section unmounts). */
-  stop(): Promise<void>
+  /** Cancel only the named pairing attempt. A stale surface must not stop its replacement. */
+  stop(attemptId: string): Promise<void>
   /** Fires once when pairing finishes. Failure reasons keep a commit error distinct from timeout. */
   onDone(cb: (result: PairingDoneResult) => void): () => void
   /** Live re-probe of 127.0.0.1:22, so the Remote Login warning can clear the moment the user

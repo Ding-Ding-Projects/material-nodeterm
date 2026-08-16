@@ -608,8 +608,8 @@ const api: NodeTerminalApi = {
   },
   pairing: {
     supported: true,
-    start: () => ipcRenderer.invoke(IPC.pairingStart),
-    stop: () => ipcRenderer.invoke(IPC.pairingStop),
+    start: (attemptId) => ipcRenderer.invoke(IPC.pairingStart, attemptId),
+    stop: (attemptId) => ipcRenderer.invoke(IPC.pairingStop, attemptId),
     onDone: (cb) => {
       const handler = (_e: unknown, result: PairingDoneResult) => cb(result)
       ipcRenderer.on(IPC.pairingDone, handler)

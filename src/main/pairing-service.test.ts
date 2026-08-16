@@ -330,6 +330,21 @@ describe('revokeDevice', () => {
     expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled'])
   })
 
+  it('serializes revokes from separate service instances through the filesystem lock', async () => {
+    gateReads([AGENT_JSON, AUTH_KEYS])
+    const firstProcessPeer = newService()
+    const secondProcessPeer = newService()
+
+    const results = await Promise.allSettled([
+      firstProcessPeer.revokeDevice('dev-a'),
+      secondProcessPeer.revokeDevice('dev-b')
+    ])
+
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
+    expect(authKeys()).toBe(`${KEY_OTHER}\n`)
+    expect(deviceIds()).toEqual([])
+  })
+
   it('a failed revoke rejects to its caller and does not block the next one', async () => {
     const service = newService()
     // First rename is agent.json's, inside the failing revoke.
@@ -345,6 +360,36 @@ describe('revokeDevice', () => {
     expect(keys).not.toContain('nodeterm-ios-dev-b')
     expect(keys).toContain('nodeterm-ios-dev-a') // the failed revoke really did fail
     expect(deviceIds()).toEqual(['dev-a'])
+  })
+
+  it.each(['EACCES', 'EIO'])(
+    'does not hide a live SSH key when authorized_keys read fails with %s',
+    async (code) => {
+      const beforeKeys = authKeys()
+      const beforeRegistry = readFileSync(AGENT_JSON, 'utf8')
+      const realReadFile = fs.readFile
+      const write = vi.spyOn(fs, 'writeFile')
+      vi.spyOn(fs, 'readFile').mockImplementation((async (file: any, ...rest: any[]) => {
+        if (String(file) === AUTH_KEYS) {
+          throw Object.assign(new Error(`${code}: authorized_keys read failed`), { code })
+        }
+        return (realReadFile as any)(file, ...rest)
+      }) as any)
+
+      await expect(newService().revokeDevice('dev-a')).rejects.toThrow(code)
+
+      expect(authKeys()).toBe(beforeKeys)
+      expect(readFileSync(AGENT_JSON, 'utf8')).toBe(beforeRegistry)
+      expect(write).not.toHaveBeenCalled()
+    }
+  )
+
+  it('treats ENOENT as the only safe absent authorized_keys file', async () => {
+    rmSync(AUTH_KEYS)
+
+    await newService().revokeDevice('dev-a')
+
+    expect(deviceIds()).toEqual(['dev-b'])
   })
 
   it('revokes the SSH key first, so a mid-revoke failure leaves access cut and the device retryable', async () => {
@@ -525,7 +570,11 @@ describe('secure pairing listener', () => {
       expect(response.text).not.toContain(opened.agentToken)
       expect(deviceIds()).toEqual(['dev-a', 'dev-b', opened.deviceId])
       expect(done).toHaveBeenCalledOnce()
-      expect(done).toHaveBeenCalledWith({ ok: true, relay: 'dev' })
+      expect(done).toHaveBeenCalledWith({
+        attemptId: started.attemptId,
+        ok: true,
+        relay: 'dev'
+      })
     } finally {
       service.stop()
     }
@@ -561,7 +610,7 @@ describe('secure pairing listener', () => {
       expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
       expect(authKeys()).toBe(`${KEY_OTHER}\n${KEY_A}\n${KEY_B}\n`)
       expect(done).toHaveBeenCalledOnce()
-      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'failed' })
+      expect(done).toHaveBeenCalledWith(expect.objectContaining({ ok: false, reason: 'failed' }))
     } finally {
       service.stop()
     }
@@ -594,7 +643,7 @@ describe('secure pairing listener', () => {
       expect(append).not.toHaveBeenCalled()
       expect(write).not.toHaveBeenCalled()
       expect(done).toHaveBeenCalledOnce()
-      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'failed' })
+      expect(done).toHaveBeenCalledWith(expect.objectContaining({ ok: false, reason: 'failed' }))
     } finally {
       service.stop()
     }
@@ -635,11 +684,93 @@ describe('secure pairing listener', () => {
       expect((await fs.readdir(path.dirname(AGENT_JSON))).filter((name) => name.endsWith('.tmp'))).toEqual([])
       expect(warn).toHaveBeenCalledWith('[pairing] request failed:', expect.any(Error))
       expect(done).toHaveBeenCalledOnce()
-      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'failed' })
+      expect(done).toHaveBeenCalledWith(expect.objectContaining({ ok: false, reason: 'failed' }))
     } finally {
       service.stop()
     }
   })
+
+  it('does not let a stale targeted stop cancel a replacement listener', async () => {
+    const oldAttemptId = '11111111-1111-4111-8111-111111111111'
+    const replacementAttemptId = '22222222-2222-4222-8222-222222222222'
+    const oldDone = vi.fn()
+    const replacementDone = vi.fn()
+    const service = newService()
+    try {
+      await service.start(oldDone, oldAttemptId)
+      const replacement = await service.start(replacementDone, replacementAttemptId)
+      service.stop(oldAttemptId)
+
+      const { token, pairPort, hostKey } = JSON.parse(replacement.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+      const response = await postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Replacement Phone'
+      })
+
+      expect(response.status).toBe(200)
+      expect(oldDone).not.toHaveBeenCalled()
+      expect(replacementDone).toHaveBeenCalledWith(
+        expect.objectContaining({ attemptId: replacementAttemptId, ok: true })
+      )
+    } finally {
+      service.stop()
+    }
+  })
+
+  it.each(['EACCES', 'EIO'])(
+    'keeps the registry row retryable and appends no key when authorized_keys read fails with %s',
+    async (code) => {
+      const beforeKeys = authKeys()
+      const done = vi.fn()
+      const append = vi.spyOn(fs, 'appendFile')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const realReadFile = fs.readFile.bind(fs)
+      const read = vi.spyOn(fs, 'readFile').mockImplementation(async (file, ...args) => {
+        if (String(file) === AUTH_KEYS) {
+          throw Object.assign(new Error(`${code}: authorized_keys read failed`), { code })
+        }
+        return (realReadFile as (...values: any[]) => Promise<any>)(file, ...args)
+      })
+      const service = newService()
+      try {
+        const started = await service.start(done)
+        const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+          token: string
+          pairPort: number
+          hostKey: string
+        }
+
+        const response = await postSecure(pairPort, hostKey, {
+          token,
+          publicKey: freshEd25519Line(),
+          deviceName: `Unreadable Keys ${code}`
+        })
+
+        expect(response).toMatchObject({ status: 500, text: 'pairing failed' })
+        expect(append).not.toHaveBeenCalled()
+        expect(authKeys()).toBe(beforeKeys)
+        const entry = ((agentJson().devices as DeviceEntry[]) ?? []).find(
+          (candidate) => candidate.name === `Unreadable Keys ${code}`
+        )
+        expect(entry).toBeDefined()
+        expect(warn).toHaveBeenCalledWith('[pairing] request failed:', expect.any(Error))
+        expect(done).toHaveBeenCalledWith(expect.objectContaining({ ok: false, reason: 'failed' }))
+
+        // Once the read failure clears, the visible registry row remains a working revoke handle.
+        read.mockRestore()
+        await service.revokeDevice(entry!.id)
+        expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
+        expect(authKeys()).toBe(beforeKeys)
+      } finally {
+        service.stop()
+      }
+    }
+  )
 
   it('keeps a partially activated SSH key visible and revocable when key finalization fails', async () => {
     const done = vi.fn()
@@ -681,7 +812,7 @@ describe('secure pairing listener', () => {
       })
       expect(warn).toHaveBeenCalledWith('[pairing] request failed:', expect.any(Error))
       expect(done).toHaveBeenCalledOnce()
-      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'failed' })
+      expect(done).toHaveBeenCalledWith(expect.objectContaining({ ok: false, reason: 'failed' }))
 
       // The failed chmod happened after append. Keep the registry until an explicit revoke can
       // remove both the possibly-live key and its bearer record.
@@ -690,6 +821,198 @@ describe('secure pairing listener', () => {
       expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
       expect(authKeys()).not.toContain(`nodeterm-ios-${entry!.id}`)
     } finally {
+      service.stop()
+    }
+  })
+
+  it('does not grant SSH when cancellation lands after registry publication', async () => {
+    let reportPersisted!: () => void
+    const persisted = new Promise<void>((resolve) => {
+      reportPersisted = resolve
+    })
+    let releasePersist!: () => void
+    const release = new Promise<void>((resolve) => {
+      releasePersist = resolve
+    })
+    const done = vi.fn()
+    const beforeKeys = authKeys()
+    const append = vi.spyOn(fs, 'appendFile')
+    const service = newService({
+      afterDevicePersisted: async () => {
+        reportPersisted()
+        await release
+      }
+    })
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+
+      const response = postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Canceled After Registry Phone'
+      })
+      await persisted
+
+      service.stop()
+      releasePersist()
+
+      await expect(response).resolves.toMatchObject({
+        status: 409,
+        text: 'pairing window is closed'
+      })
+      expect(append).not.toHaveBeenCalled()
+      expect(authKeys()).toBe(beforeKeys)
+      const canceled = (await service.listDevices()).find(
+        (candidate) => candidate.name === 'Canceled After Registry Phone'
+      )
+      expect(canceled).toBeDefined()
+      expect(done).not.toHaveBeenCalled()
+
+      await service.revokeDevice(canceled!.id)
+      expect(await service.listDevices()).not.toContainEqual(
+        expect.objectContaining({ id: canceled!.id })
+      )
+      expect(authKeys()).toBe(beforeKeys)
+    } finally {
+      releasePersist()
+      service.stop()
+    }
+  })
+
+  it('removes an attributable SSH key when cancellation lands during key activation', async () => {
+    let reportAppended!: () => void
+    const appended = new Promise<void>((resolve) => {
+      reportAppended = resolve
+    })
+    let releaseAppend!: () => void
+    const release = new Promise<void>((resolve) => {
+      releaseAppend = resolve
+    })
+    const done = vi.fn()
+    const beforeKeys = authKeys()
+    const service = newService({
+      afterAuthorizedKeyAppended: async () => {
+        reportAppended()
+        await release
+      }
+    })
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+
+      const response = postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Canceled During Key Phone'
+      })
+      await appended
+      const published = ((agentJson().devices as DeviceEntry[]) ?? []).find(
+        (candidate) => candidate.name === 'Canceled During Key Phone'
+      )
+      expect(published).toBeDefined()
+      expect(authKeys()).toContain(`nodeterm-ios-${published!.id}`)
+
+      service.stop(started.attemptId)
+      releaseAppend()
+
+      await expect(response).resolves.toMatchObject({
+        status: 409,
+        text: 'pairing window is closed'
+      })
+      expect(authKeys()).toBe(beforeKeys)
+      const canceled = (await service.listDevices()).find(
+        (candidate) => candidate.name === 'Canceled During Key Phone'
+      )
+      expect(canceled).toBeDefined()
+      expect(done).not.toHaveBeenCalled()
+
+      await service.revokeDevice(canceled!.id)
+      expect(await service.listDevices()).not.toContainEqual(
+        expect.objectContaining({ id: canceled!.id })
+      )
+      expect(authKeys()).toBe(beforeKeys)
+    } finally {
+      releaseAppend()
+      service.stop()
+    }
+  })
+
+  it('rolls back a canceled key even when chmod rejects after append', async () => {
+    let reportAppended!: () => void
+    const appended = new Promise<void>((resolve) => {
+      reportAppended = resolve
+    })
+    let releaseAppend!: () => void
+    const release = new Promise<void>((resolve) => {
+      releaseAppend = resolve
+    })
+    const realChmod = fs.chmod.bind(fs)
+    let rejectActivationChmod = true
+    vi.spyOn(fs, 'chmod').mockImplementation(async (file, mode) => {
+      if (String(file) === AUTH_KEYS && mode === 0o600 && rejectActivationChmod) {
+        rejectActivationChmod = false
+        throw Object.assign(new Error('EACCES: activation chmod failed'), { code: 'EACCES' })
+      }
+      return realChmod(file, mode)
+    })
+    const done = vi.fn()
+    const beforeKeys = authKeys()
+    const service = newService({
+      afterAuthorizedKeyAppended: async () => {
+        reportAppended()
+        await release
+      }
+    })
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+
+      const response = postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Canceled Failing Chmod Phone'
+      })
+      await appended
+      const published = ((agentJson().devices as DeviceEntry[]) ?? []).find(
+        (candidate) => candidate.name === 'Canceled Failing Chmod Phone'
+      )
+      expect(published).toBeDefined()
+      expect(authKeys()).toContain(`nodeterm-ios-${published!.id}`)
+
+      service.stop(started.attemptId)
+      releaseAppend()
+
+      await expect(response).resolves.toMatchObject({
+        status: 409,
+        text: 'pairing window is closed'
+      })
+      expect(rejectActivationChmod).toBe(false)
+      expect(authKeys()).toBe(beforeKeys)
+      expect(await service.listDevices()).toContainEqual(
+        expect.objectContaining({ id: published!.id, name: 'Canceled Failing Chmod Phone' })
+      )
+      expect(done).not.toHaveBeenCalled()
+
+      await service.revokeDevice(published!.id)
+      expect(await service.listDevices()).not.toContainEqual(
+        expect.objectContaining({ id: published!.id })
+      )
+      expect(authKeys()).toBe(beforeKeys)
+    } finally {
+      releaseAppend()
       service.stop()
     }
   })
@@ -743,7 +1066,7 @@ describe('secure pairing listener', () => {
         text: 'pairing window is closed'
       })
       expect(done).toHaveBeenCalledOnce()
-      expect(done).toHaveBeenCalledWith({ ok: false, reason: 'attempts' })
+      expect(done).toHaveBeenCalledWith(expect.objectContaining({ ok: false, reason: 'attempts' }))
       expect(append).not.toHaveBeenCalled()
       expect(write).not.toHaveBeenCalled()
       expect(deviceIds()).toEqual(['dev-a', 'dev-b'])

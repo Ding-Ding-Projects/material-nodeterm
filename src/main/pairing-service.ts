@@ -41,6 +41,7 @@ import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
 import { renameAtomic, sweepStaleTempFiles, tempNameFor } from '../core/fs-atomic'
 import { openPairingEnvelope, sealPairingResponse } from './pairing-envelope'
+import { withPairingRegistryLock } from './pairing-registry-lock'
 
 const execFileAsync = promisify(execFile)
 
@@ -153,8 +154,12 @@ const MAX_BODY_BYTES = 64 * 1024
 /** Wrong codes tolerated before the pairing window closes itself. Five is enough for a
  *  mistyped digit and nowhere near enough to walk 10^6. */
 const SHORT_CODE_MAX_ATTEMPTS = 5
+const PAIRING_ATTEMPT_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export interface PairingStartResult {
+  /** Correlation UUID supplied by the renderer and echoed by completion events. */
+  attemptId: string
   /** The single-line JSON to encode into the QR. */
   payload: string
   /** Compatibility credential accepted only inside an authenticated envelope. Same listener and
@@ -172,12 +177,16 @@ export interface PairingStartResult {
 
 /** Fired once when pairing finishes; re-exported for main-side callers and tests. */
 export type PairingDone = PairingDoneResult
+type PairingDonePayload = Omit<PairingDoneResult, 'attemptId'>
 
 export interface PairingService {
   /** Begin pairing; resolves once the listener is up. `onDone` fires exactly once later. */
-  start(onDone: (result: PairingDone) => void): Promise<PairingStartResult>
-  /** Cancel an in-flight pairing (idempotent). Does NOT fire onDone. */
-  stop(): void
+  start(
+    onDone: (result: PairingDone) => void,
+    requestedAttemptId?: string
+  ): Promise<PairingStartResult>
+  /** Cancel the named attempt (or any active attempt for trusted main-side callers/tests). */
+  stop(attemptId?: string): void
   /** All paired devices (token stripped) from ~/.nodeterm/agent.json. */
   listDevices(): Promise<PublicDevice[]>
   /** Revoke a device: drop its agent.json entry AND delete its authorized_keys line. */
@@ -263,7 +272,10 @@ function probeSsh(): Promise<boolean> {
  * permissions. The caller stamps the attributable `nodeterm-ios-<deviceId>` comment via
  * `rewriteKeyComment` before this point.
  */
-async function appendAuthorizedKey(keyLine: string): Promise<void> {
+async function appendAuthorizedKey(
+  keyLine: string,
+  afterBytesAppended?: () => void | Promise<void>
+): Promise<void> {
   const sshDir = path.join(os.homedir(), '.ssh')
   await fs.mkdir(sshDir, { recursive: true, mode: 0o700 })
   await fs.chmod(sshDir, 0o700).catch(() => {})
@@ -272,10 +284,19 @@ async function appendAuthorizedKey(keyLine: string): Promise<void> {
   try {
     const existing = await fs.readFile(AUTH_KEYS_PATH, 'utf8')
     if (existing.length > 0 && !existing.endsWith('\n')) prefix = '\n'
-  } catch {
-    // no file yet — appendFile creates it
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code !== 'ENOENT') {
+      // An unreadable existing file may end without a newline. Appending blindly can splice the
+      // new key into the prior line, corrupting both while the UI claims pairing merely failed.
+      throw new Error(`Could not read authorized_keys${code ? ` (${code})` : ''}.`, {
+        cause: error
+      })
+    }
+    // Confirmed absent — appendFile creates it.
   }
   await fs.appendFile(AUTH_KEYS_PATH, prefix + normalizeAuthorizedKeysLine(keyLine) + '\n')
+  await afterBytesAppended?.()
   await fs.chmod(AUTH_KEYS_PATH, 0o600)
 }
 
@@ -301,6 +322,10 @@ function readBody(req: IncomingMessage): Promise<string> {
 /** @internal A deterministic barrier for the accepted-socket race test. */
 export interface PairingServiceTestHooks {
   onPairRequestAccepted?(): void
+  /** Barrier after registry publication and before the ownership recheck / SSH grant. */
+  afterDevicePersisted?(): void | Promise<void>
+  /** Barrier after SSH bytes append and before chmod / the cancellation rollback. */
+  afterAuthorizedKeyAppended?(): void | Promise<void>
   sealResponse?(
     response: Record<string, unknown>,
     sharedKey: Uint8Array
@@ -308,6 +333,8 @@ export interface PairingServiceTestHooks {
 }
 
 interface PairingAttempt {
+  /** Renderer-generated UUID used to target stop and correlate delayed completion events. */
+  id: string
   /** Synchronous latch: once true, no request belonging to this attempt may reach a write. */
   settled: boolean
   /** Completion/cancellation is separate from settlement while the winning request persists. */
@@ -334,18 +361,18 @@ export function createPairingService(
   let activeAttempt: PairingAttempt | null = null
 
   /**
-   * Serializes every mutation of agent.json / authorized_keys. Both are read-modify-write over a
-   * whole file and both entry points are unserialized — each `pairing:revoke-device` invoke is
-   * independent (src/main/index.ts) and the pairing POST arrives on its own connection — so two
-   * overlapping mutations each read the ORIGINAL file and write back a copy carrying only their
-   * own change. The revoke case is the dangerous one: the loser's stale read republishes the
-   * device the winner just revoked, key line and agent token both, so a revoked phone silently
-   * keeps SSH and host-agent access. Same idiom as SshStore's writeChain.
+   * Serializes every mutation of agent.json / authorized_keys. The promise chain provides fair
+   * ordering inside this process; the exclusive agent.json.lock covers the authoritative read and
+   * the complete two-file transaction across desktop processes. Every external agent.json writer
+   * must use that same lock before its read or atomic rename alone can still publish a stale copy.
+   * The revoke case is the dangerous one: the loser's stale read republishes the device the winner
+   * just revoked, key line and agent token both, so a revoked phone silently keeps access.
    */
   let mutateChain: Promise<void> = Promise.resolve()
   const serialize = <T>(fn: () => Promise<T>): Promise<T> => {
+    const runLocked = (): Promise<T> => withPairingRegistryLock(AGENT_JSON_PATH, fn)
     // Both arms run `fn`: one mutation failing must not cancel the ones queued behind it…
-    const run = mutateChain.then(fn, fn)
+    const run = mutateChain.then(runLocked, runLocked)
     // …nor surface on them, while the caller still sees ITS OWN failure.
     mutateChain = run.then(() => undefined, () => undefined)
     return run
@@ -356,11 +383,10 @@ export function createPairingService(
    *
    * Lives INSIDE the factory, below `serialize`, so no code path outside this closure can reach
    * it unchained — the same by-construction guarantee as GitHubControlStore's private write().
-   * Overlapping entry points (the pairing POST, renderer revokes) are ordered by the chain; the
-   * per-call temp name covers the writers the chain cannot see — the host agent is a separate
-   * PROCESS writing this same ~/.nodeterm, and a crash between tmp-write and rename. `tempNameFor`
-   * supplies UUID entropy so PID namespaces, workers and PID reuse still cannot share its staging
-   * path. The rename itself retries a transient Windows sharing-violation error — see
+   * Overlapping entry points (the pairing POST, renderer revokes) are ordered by the in-process
+   * chain and cross-process lock. `tempNameFor` still supplies UUID entropy so PID namespaces,
+   * workers, PID reuse, and crash litter cannot share a staging path. The rename itself retries a
+   * transient Windows sharing-violation error — see
    * src/core/fs-atomic.ts.
    */
   async function writeAgentJson(obj: Record<string, unknown>): Promise<void> {
@@ -403,8 +429,14 @@ export function createPairingService(
     let content: string
     try {
       content = await fs.readFile(AUTH_KEYS_PATH, 'utf8')
-    } catch {
-      return // no file → nothing to revoke
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code
+      if (code === 'ENOENT') return // confirmed absent → nothing to revoke
+      // "Could not check" is not "no key": continuing would hide the registry entry while an
+      // unreadable authorized_keys file may still contain a live full-shell credential.
+      throw new Error(`Could not read authorized_keys${code ? ` (${code})` : ''}.`, {
+        cause: error
+      })
     }
     const next = filterAuthorizedKeys(content, deviceId)
     if (next === content) return
@@ -445,7 +477,7 @@ export function createPairingService(
   }
 
   /** Fire this attempt's completion callback exactly once, then tear its own resources down. */
-  const finishAttempt = (attempt: PairingAttempt, result: PairingDone): void => {
+  const finishAttempt = (attempt: PairingAttempt, result: PairingDonePayload): void => {
     if (attempt.done) return
     attempt.settled = true
     attempt.done = true
@@ -453,7 +485,7 @@ export function createPairingService(
     attempt.onDone = null
     closeAttemptResources(attempt)
     if (activeAttempt === attempt) activeAttempt = null
-    cb?.(result)
+    cb?.({ ...result, attemptId: attempt.id })
   }
 
   /**
@@ -467,10 +499,20 @@ export function createPairingService(
     return true
   }
 
-  const start = async (onDone: (result: PairingDone) => void): Promise<PairingStartResult> => {
+  const start = async (
+    onDone: (result: PairingDone) => void,
+    requestedAttemptId?: string
+  ): Promise<PairingStartResult> => {
+    const attemptId = requestedAttemptId ?? randomUUID()
+    // IPC callers control this value. Reject malformed or reusable-looking identifiers before
+    // touching the active listener so an invalid renderer request cannot cancel valid pairing.
+    if (!PAIRING_ATTEMPT_ID_RE.test(attemptId)) {
+      throw new Error('Pairing attempt ID must be a cryptographic UUID.')
+    }
     // A prior in-flight pairing is cancelled silently (no onDone) before starting a new one.
     if (activeAttempt) cancelAttempt(activeAttempt)
     const attempt: PairingAttempt = {
+      id: attemptId,
       settled: false,
       done: false,
       server: null,
@@ -739,8 +781,34 @@ export function createPairingService(
             pairedAt: Date.now(),
             lastSeenAt: 0
           })
-          await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
+          await testHooks.afterDevicePersisted?.()
+          // stop() and a superseding start poison this attempt synchronously. Re-check after the
+          // registry await: a canceled winner may leave its bearer record visible/revocable, but
+          // it must never activate an SSH key for a phone that will receive no response box.
+          if (!attemptAllowsRequest(attempt, true)) return
+          let keyAppendStarted = false
+          try {
+            // Set before entering the helper: appendFile can partially write and still reject.
+            // Cancellation cleanup therefore inspects/removes the attributable line after any
+            // activation error, not only after a fully successful append/chmod sequence.
+            keyAppendStarted = true
+            await appendAuthorizedKey(
+              rewriteKeyComment(publicKey, deviceId),
+              testHooks.afterAuthorizedKeyAppended
+            )
+          } finally {
+            // Cancellation can land while append/chmod is awaiting I/O. Remove the attributable
+            // key before the old request is rejected, including when chmod itself rejects after the
+            // append. Keep the registry row so an I/O failure stays visible/retryable through Revoke.
+            if (keyAppendStarted && !attemptAllowsRequest(attempt, true)) {
+              await removeAuthorizedKeysForDevice(deviceId)
+            }
+          }
         })
+        if (!attemptAllowsRequest(attempt, true)) {
+          rejectSettled(req, res)
+          return
+        }
         send(res, 200, JSON.stringify(sealedResponse), 'application/json')
         finishAttempt(attempt, {
           ok: true,
@@ -766,6 +834,7 @@ export function createPairingService(
     }
 
     return {
+      attemptId,
       payload,
       shortCode,
       manualHost: `${host}:${pairPort}`,
@@ -774,8 +843,10 @@ export function createPairingService(
     }
   }
 
-  const stop = (): void => {
-    if (activeAttempt) cancelAttempt(activeAttempt)
+  const stop = (attemptId?: string): void => {
+    if (activeAttempt && (attemptId === undefined || activeAttempt.id === attemptId)) {
+      cancelAttempt(activeAttempt)
+    }
   }
 
   const listDevices = async (): Promise<PublicDevice[]> => {
