@@ -72,15 +72,22 @@ need it too, and wire it in the same change.
   `path.basename`/`join`/`sep`, publish files with `renameAtomic`, and write at least one test with
   a real `C:\`-shaped input. Guards enforce some of this and will fail your PR.
 
-- **Building on Windows has two preconditions, and the BAT bootstrap checks both after installing
-  Node but before npm can replace `node_modules`** (`npm run dist:win` also checks them up front).
+- **Building on Windows has two preconditions, and the BAT bootstrap handles/checks both after
+  installing Node but before npm can replace `node_modules`** (`npm run dist:win` also checks them
+  up front).
   Close every running instance of the app first: Windows will not delete a DLL a live process has
   loaded, so a dev window you forgot about makes the build die with an `EPERM` about a `.node`
-  file that says nothing about the real cause. And install the **Spectre-mitigated MSVC libs**
-  (Visual Studio Installer → Individual components) — node-pty asks for the mitigation in its own
-  `binding.gyp`, and without them the build dies minutes in with `MSB8040`. The preflight names
-  the PID holding a file and the exact component to tick, and reports both problems at once so
-  you fix them in one pass. Neither can happen on macOS or Linux.
+  file that says nothing about the real cause. The bootstrap automatically installs the
+  **Spectre-mitigated MSVC libs** — node-pty asks for the mitigation in its own `binding.gyp`, and
+  without them the build dies minutes in with `MSB8040`. Visual Studio changes require elevation;
+  the script never triggers UAC, so an unelevated run exits access-denied and prints one exact
+  **helper-only** command. Run only that helper elevated, close the Administrator prompt, then rerun
+  the root BAT normally — npm lifecycle scripts must never inherit elevation. The BAT also ensures
+  x86/x64 are always checked and ARM64 is added on ARM64 hosts. The BAT also ensures a supported
+  per-user Python for node-gyp, with SHA-pinned fallbacks for machines without winget, and exports
+  the verified interpreter through every node-gyp precedence channel.
+  The preflight names the PID holding a file and independently verifies the component, reporting
+  both problems at once. Neither check can fail on macOS or Linux.
 
 - **Never publish a file with a bare `fs.rename`.** Use `renameAtomic` or `writeFileAtomic` from
   `src/core/fs-atomic.ts`. On Windows a rename fails with `EPERM` whenever anything has the

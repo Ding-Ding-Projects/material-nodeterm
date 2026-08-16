@@ -34,9 +34,26 @@ if /I "%~1"=="/s" set "NODETERM_SILENT=1"
 if /I "%~1"=="--silent" set "NODETERM_SILENT=1"
 if /I "%SILENT%"=="1" set "NODETERM_SILENT=1"
 
+set "NODETERM_SYSTEM_POWERSHELL=%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%NODETERM_SYSTEM_POWERSHELL%" (
+    echo [FAILED] Privilege boundary - the inbox Windows PowerShell could not be found
+    exit /b 1
+)
+"%NODETERM_SYSTEM_POWERSHELL%" -NoProfile -NonInteractive -Command "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); if($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){exit 86}else{exit 0}" >nul 2>nul
+set "NODETERM_ELEVATION_PROBE=%ERRORLEVEL%"
+if "%NODETERM_ELEVATION_PROBE%"=="86" (
+    echo [FAILED] Privilege boundary - never run the root installer build as Administrator.
+    echo Close this prompt and rerun normally; only the printed toolchain helper may be elevated.
+    exit /b 5
+)
+if not "%NODETERM_ELEVATION_PROBE%"=="0" (
+    echo [FAILED] Privilege boundary - could not prove this is a normal user prompt.
+    exit /b 1
+)
+
 echo.
 echo === nodeterm Windows installer build ===
-echo Repository : %NODETERM_ROOT%
+echo Repository : "%NODETERM_ROOT%"
 echo Target     : Squirrel.Windows ^(unsigned^)
 echo.
 
@@ -61,9 +78,9 @@ echo.
 
 rem ---------------------------------------------------------------------------------------------
 rem Phase 0: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
-rem the two scripts can never silently drift apart. That script bootstraps Node, then runs the
-rem Windows build preflight before npm ci/install; this ordering is what makes a truly fresh
-rem machine diagnosable instead of silently skipping a Node-powered preflight.
+rem the two scripts can never silently drift apart. That script bootstraps Node and the native
+rem toolchain, then runs the Windows build preflight before npm ci/install; this ordering is what
+rem makes a truly fresh machine diagnosable instead of silently skipping a Node-powered preflight.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Dependencies"
 if "%NODETERM_SILENT%"=="1" (
@@ -71,14 +88,15 @@ if "%NODETERM_SILENT%"=="1" (
 ) else (
     call "%NODETERM_ROOT%\download-dependencies.bat"
 )
-if errorlevel 1 (
+set "DEPENDENCIES_EXIT=%ERRORLEVEL%"
+if not "%DEPENDENCIES_EXIT%"=="0" (
     echo.
     echo [FAILED] Dependencies
     echo   Dependency : see download-dependencies.bat output above for the exact one
     echo   Constraint : n/a
     echo   Source     : "%NODETERM_ROOT%\download-dependencies.bat"
-    echo   Error      : download-dependencies.bat exited non-zero
-    exit /b 1
+    echo   Error      : download-dependencies.bat exited with code %DEPENDENCIES_EXIT%
+    exit /b %DEPENDENCIES_EXIT%
 )
 call :phase_end "Dependencies"
 
@@ -90,6 +108,15 @@ rem whether the org's permanent no-signing policy applies today.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Package (npm run dist:win)"
 if exist "%SQUIRREL_OUT%" rd /s /q "%SQUIRREL_OUT%" >nul 2>nul
+if exist "%SQUIRREL_OUT%" (
+    echo.
+    echo [FAILED] Package
+    echo   Dependency : clean Squirrel.Windows output directory
+    echo   Constraint : stale artifacts must be removed before packaging
+    echo   Source     : "%SQUIRREL_OUT%"
+    echo   Error      : could not remove the previous output; close processes using it and retry
+    exit /b 1
+)
 pushd "%NODETERM_ROOT%"
 call npm run dist:win
 set "DIST_EXIT=%ERRORLEVEL%"
@@ -181,6 +208,7 @@ rem silently fails to auto-load Get-FileHash, leaving an empty digest on an othe
 rem Pass the path through the environment, not PowerShell source, so an apostrophe in the checkout
 rem path is data rather than a broken quote (or executable text).
 set "NODETERM_HASH_FILE=%SETUP_EXE%"
+set "SETUP_SHA256="
 for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "$s=[Security.Cryptography.SHA256]::Create(); $f=[IO.File]::OpenRead($env:NODETERM_HASH_FILE); try { [BitConverter]::ToString($s.ComputeHash($f)).Replace('-','').ToLowerInvariant() } finally { $f.Dispose(); $s.Dispose() }"`) do set "SETUP_SHA256=%%H"
 set "NODETERM_HASH_FILE="
 if not defined SETUP_SHA256 (
@@ -190,6 +218,19 @@ if not defined SETUP_SHA256 (
     echo   Constraint : hashing must produce exactly one non-empty digest
     echo   Source     : "%SETUP_EXE%"
     echo   Error      : PowerShell returned no digest
+    exit /b %DIST_EXIT%
+)
+set "NODETERM_SETUP_SHA256=%SETUP_SHA256%"
+powershell -NoProfile -NonInteractive -Command "if($env:NODETERM_SETUP_SHA256 -notmatch '^[a-fA-F0-9]{64}$'){exit 87}" >nul 2>nul
+set "SETUP_HASH_VALID=%ERRORLEVEL%"
+set "NODETERM_SETUP_SHA256="
+if not "%SETUP_HASH_VALID%"=="0" (
+    echo.
+    echo [FAILED] Verify installer
+    echo   Dependency : SHA-256 digest of the Squirrel setup executable
+    echo   Constraint : hashing must produce exactly 64 hexadecimal characters
+    echo   Source     : "%SETUP_EXE%"
+    echo   Error      : the digest returned by PowerShell was malformed
     exit /b 1
 )
 
@@ -197,10 +238,10 @@ call :phase_end "Verify installer"
 
 echo === Installer built and verified. ===
 echo.
-echo Setup executable : %SETUP_EXE%
+echo Setup executable : "%SETUP_EXE%"
 echo Size             : %SETUP_SIZE% bytes ^(~%SETUP_SIZE_MB% MiB^)
 echo SHA-256          : %SETUP_SHA256%
-echo RELEASES index   : %RELEASES_FILE%
+echo RELEASES index   : "%RELEASES_FILE%"
 echo .nupkg count     : %NUPKG_COUNT%
 echo Built from       : commit %BUILD_COMMIT% ^(working tree: %BUILD_TREE_STATE%^)
 echo.

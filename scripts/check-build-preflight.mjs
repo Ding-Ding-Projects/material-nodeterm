@@ -44,10 +44,11 @@
 // the rebuild replace it". It is not: Windows blocks DELETE on a mapped image, and a rename that
 // stays in the same directory does not need it.
 
-import { readdirSync, statSync, openSync, closeSync, existsSync } from 'node:fs'
+import { readdirSync, openSync, closeSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative } from 'node:path'
+import { spectreLibComplaints } from './windows-spectre-preflight.mjs'
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MODULES = join(REPO_ROOT, 'node_modules')
@@ -122,52 +123,6 @@ function holdersOf(file) {
  * Returns a list of complaints, empty when fine or when the answer cannot be determined — an
  * unknown toolchain layout must not block a build that would have worked.
  */
-function spectreLibComplaints() {
-  if (process.platform !== 'win32') return []
-  let installs
-  try {
-    const vswhere = join(
-      process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
-      'Microsoft Visual Studio',
-      'Installer',
-      'vswhere.exe'
-    )
-    installs = JSON.parse(
-      execFileSync(vswhere, ['-all', '-products', '*', '-format', 'json'], {
-        encoding: 'utf8',
-        timeout: 20_000,
-        stdio: ['ignore', 'pipe', 'ignore']
-      })
-    )
-  } catch {
-    return [] // no vswhere, or it refused — cannot tell, so do not block
-  }
-  const out = []
-  for (const inst of installs) {
-    const msvc = join(inst.installationPath ?? '', 'VC', 'Tools', 'MSVC')
-    let toolsets
-    try {
-      toolsets = readdirSync(msvc, { withFileTypes: true }).filter((d) => d.isDirectory())
-    } catch {
-      continue // not a C++ install; nothing to say about it
-    }
-    if (toolsets.length === 0) continue
-    // Any ONE toolset carrying the libs is enough — node-gyp picks a toolset, and a machine with
-    // several may well build fine with the one it chooses.
-    const anyHasSpectre = toolsets.some((t) => existsSync(join(msvc, t.name, 'lib', 'spectre')))
-    if (!anyHasSpectre) {
-      out.push(
-        `${inst.displayName ?? inst.installationPath} — no Spectre-mitigated libs in ` +
-          `${toolsets.map((t) => t.name).join(', ')}`
-      )
-    }
-  }
-  // Every C++ install lacks them → the build cannot succeed. If even one has them, stay quiet.
-  return out.length > 0 && out.length === installs.filter((i) => existsSync(join(i.installationPath ?? '', 'VC', 'Tools', 'MSVC'))).length
-    ? out
-    : []
-}
-
 const locked = []
 for (const file of lockableBinaries(MODULES)) {
   try {
@@ -181,7 +136,8 @@ for (const file of lockableBinaries(MODULES)) {
 
 const problems = []
 
-if (spectreLibComplaints().length > 0) {
+const spectreComplaints = spectreLibComplaints({ execFile: execFileSync })
+if (spectreComplaints.length > 0) {
   problems.push({
     title: 'the Spectre-mitigated MSVC libraries are not installed',
     lines: [
@@ -190,10 +146,13 @@ if (spectreLibComplaints().length > 0) {
       'so a machine that compiles everything else fine still fails here — several minutes in,',
       'with four copies of MSBuild error MSB8040.',
       '',
-      ...spectreLibComplaints().map((l) => `  ${l}`),
+      ...spectreComplaints.map((l) => `  ${l}`),
       '',
-      'Visual Studio Installer → Modify → Individual components → tick',
-      '"MSVC v143 - VS 2022 C++ x64/x86 Spectre-mitigated libs" for your toolset.',
+      'Visual Studio Installer → Modify → Individual components → add',
+      'Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre' +
+        (process.arch === 'arm64'
+          ? ' and Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre.'
+          : '.'),
       '',
       'Not worked around with /p:SpectreMitigation=false: node-pty asks for the mitigation',
       'deliberately, and turning it off would ship an unmitigated native module.'
