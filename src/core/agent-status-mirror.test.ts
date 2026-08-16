@@ -1807,3 +1807,104 @@ describe('workingNodes', () => {
     expect(workingNodes()).toEqual([])
   })
 })
+
+describe('reduceEntry records whether the state transition was verified', () => {
+  it('a verified state transition stamps verifiedAt and sets stateVerified', () => {
+    const e = reduceEntry(undefined, ev({ state: 'done', verified: true }), 1000)
+    expect(e.state).toBe('done')
+    expect(e.stateVerified).toBe(true)
+    expect(e.verifiedAt).toBe(1000)
+  })
+
+  it('an UNVERIFIED transition clears stateVerified — a later legacy event un-proves an earlier proof', () => {
+    const a = reduceEntry(undefined, ev({ state: 'done', verified: true }), 1000)
+    const b = reduceEntry(a, ev({ state: 'working', verified: false, newTurn: true }), 2000)
+    expect(b.stateVerified).toBe(false)
+    // verifiedAt is NOT cleared: it is "when we last saw proof", which stays true.
+    expect(b.verifiedAt).toBe(1000)
+  })
+
+  it('an event that does not change state does not fabricate proof', () => {
+    const a = reduceEntry(undefined, ev({ state: 'done', verified: false }), 1000)
+    const b = reduceEntry(a, ev({ kind: 'context', verified: true } as never), 2000)
+    expect(b.stateVerified).toBe(false)
+  })
+
+  it('a held-off late working leaves the proof of the done it did not override', () => {
+    // The done-holdoff deliberately does not commit the state, so it must not restate the proof
+    // either — the entry still describes the `done`, and that done WAS verified.
+    const a = reduceEntry(undefined, ev({ state: 'done', verified: true }), 1000)
+    const b = reduceEntry(a, ev({ state: 'working', verified: false }), 1000 + DONE_HOLDOFF_MS - 1)
+    expect(b.state).toBe('done')
+    expect(b.stateVerified).toBe(true)
+  })
+
+  it('a session boundary drops the proof with the state it was about', () => {
+    // SessionStart/End reset the node to idle. A `stateVerified: true` left standing beside a
+    // state of `undefined` would assert proof about a state that no longer exists.
+    const a = reduceEntry(undefined, ev({ state: 'done', verified: true }), 1000)
+    const b = reduceEntry(a, ev({ kind: 'session', sessionPhase: 'start' }), 2000)
+    expect(b.state).toBeUndefined()
+    expect(b.stateVerified).toBe(false)
+    expect(b.verifiedAt).toBe(1000)
+  })
+})
+
+describe('a restored entry is never proof', () => {
+  let dir = ''
+  beforeEach(() => {
+    _resetForTest()
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-status-restored-'))
+  })
+  afterEach(() => {
+    _resetForTest()
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('is marked, and carries no proof, however the file was written', () => {
+    const file = path.join(dir, 'agent-status.json')
+    // `stateVerified: true` cannot come out of buildFile — but a hand-edited, downgraded or
+    // future-written file is not a thing this process controls, and the restore is what gate 2
+    // would read. Force the hostile shape.
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        v: 1,
+        updatedAt: Date.now(),
+        nodes: { n1: { state: 'done', agentId: 'claude', stateVerified: true, updatedAt: Date.now() } }
+      })
+    )
+    initAgentStatusMirror(file)
+    expect(_snapshot().n1?.state).toBe('done')
+    expect(_snapshot().n1?.restored).toBe(true)
+    expect(_snapshot().n1?.stateVerified).toBe(false)
+  })
+
+  it('the first live event clears `restored`', () => {
+    const a = { state: 'done', stateVerified: false, restored: true, updatedAt: 0 } as MirrorEntry
+    expect(reduceEntry(a, ev({ state: 'working', verified: true }), 5).restored).toBeUndefined()
+  })
+
+  it('even an event that changes nothing clears it — the entry is live evidence now', () => {
+    // A context/usage event is not a state transition, but it IS this run's traffic from that
+    // node. What `restored` means is "nothing has been heard from this node since boot".
+    const a = { state: 'done', restored: true, updatedAt: 0 } as MirrorEntry
+    expect(reduceEntry(a, ev({ kind: 'context' } as never), 5).restored).toBeUndefined()
+  })
+
+  it('a restored `stateVerified` never survives to disk either', () => {
+    const file = path.join(dir, 'agent-status.json')
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        v: 1,
+        updatedAt: Date.now(),
+        nodes: { n1: { state: 'done', stateVerified: true, restored: true, updatedAt: Date.now() } }
+      })
+    )
+    initAgentStatusMirror(file)
+    const doc = buildFile(_snapshot(), Date.now())
+    expect('stateVerified' in doc.nodes.n1).toBe(false)
+    expect('restored' in doc.nodes.n1).toBe(false)
+  })
+})
