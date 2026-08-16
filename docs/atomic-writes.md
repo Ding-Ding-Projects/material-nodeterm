@@ -83,7 +83,7 @@ temp out from under it so the loser fails with a confusing `ENOENT`.
 
 `writeFileAtomic` and `tempNameFor` generate a per-call unique name
 (`<target>.<pid>.<seq>.<uuid>.tmp`). The UUID is the uniqueness guarantee. PID and sequence remain
-because they make ownership/liveness cleanup and diagnostics possible, but they are not globally
+because they make ownership metadata and diagnostics useful, but they are not globally
 unique: containers can both be PID 1, worker isolates share a PID with independent module counters,
 and an OS can reuse a PID while crash litter remains.
 
@@ -108,12 +108,13 @@ pid-plus-clock and pid-plus-counter names, including the historical
 Cleanup must not reverse the fix. A different pid only means “another process,” not “a dead
 process”: desktop multi-instance mode and two `nodeterm-server --data-dir X` processes can share a
 directory intentionally. All cross-run collection goes through `sweepStaleTempFiles`, which keeps
-fresh files, probes pid-bearing files with signal 0 after a 24-hour grace, and removes only when the
-owner pid is no longer visible in this process's namespace (`ESRCH`). That is deliberately not
-described as global proof of death: a mounted directory can cross PID namespaces, so the long age
-grace remains part of the evidence. `EPERM`/unknown results preserve the file. The legacy fixed
-`<file>.tmp` has no owner to probe, so only the same conservative age grace is available. Current
-writers still remove their own temp immediately when their write fails.
+fresh files and every pid-bearing file. Signal-zero/`ESRCH` is namespace-local, so it cannot prove
+that a writer on a mounted Docker/Server volume died; PID reuse also makes a locally visible pid
+unreliable evidence of life. The only cross-run shape collected automatically is the exact legacy
+fixed `<file>.tmp`, after a 24-hour age grace. Current pid-bearing names are recognized only with a
+canonical lowercase v4 UUID (plus the historical pid-and-sequence form); an arbitrary dot-free
+token is not cleanup authority. Current writers still remove their own temp immediately when their
+write fails.
 
 A credential **Clear** has a stricter reporting contract without a more destructive cleanup
 policy. `clearAtomicTarget` removes the canonical file, runs the conservative sweep, then inspects
@@ -135,6 +136,19 @@ Whole-document writers that can overlap therefore need a FIFO publish chain (or 
 in addition to unique temps. `agent-status-mirror.flush` uses FIFO. Its test blocks the first rename,
 records a newer state, starts the second flush, and proves the newer generation is final; removing
 the queue makes that test deterministically red.
+
+That FIFO orders one JavaScript process. It does not coordinate two desktop/server processes using
+the same data directory; a store that promises cross-process ordering needs a file lock or
+compare-and-swap generation. Without one, last physical publisher remains the honest contract.
+
+A read-modify-write store must enqueue before it reads and hold the same turn through publication.
+Serializing only `save()` faithfully writes both stale derivatives and still loses one caller's
+change. `SecureStore.mutate` therefore coordinates by resolved file path across independent store
+instances and uses a strict mutation read; its ordinary display-oriented `load()` may degrade to an
+empty view only for `ENOENT`; corruption and permission failures propagate as unavailable and are
+never permission to replace the credential document.
+Scheduled token set/clear/prune operations use the same whole-operation principle so a prune cannot
+miss a parked set or wake after a later set and delete it.
 
 The guard checks the PROPERTY, not the helper: an inline `randomUUID()` path is also correct.
 

@@ -20,7 +20,9 @@ import {
  */
 export class ScheduledSettingsStore {
   private cache: ScheduledSettingsFile = defaultScheduledSettingsFile()
-  private listeners = new Set<(file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void>()
+  private listeners = new Set<
+    (file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void | Promise<void>
+  >()
   private saveChain: Promise<unknown> = Promise.resolve()
   private get filePath(): string {
     return path.join(platform().userDataDir, 'scheduled-settings.json')
@@ -28,7 +30,9 @@ export class ScheduledSettingsStore {
 
   /** Fires after every successful save with the new file AND the file it replaced, so a listener
    *  can diff (e.g. prune tokens for rules that disappeared) without keeping its own copy. */
-  onChange(cb: (file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void): () => void {
+  onChange(
+    cb: (file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void | Promise<void>
+  ): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)
   }
@@ -64,8 +68,13 @@ export class ScheduledSettingsStore {
     try {
       await run
       return { ok: true }
-    } catch {
-      return { ok: false, error: 'Could not write the schedule to disk.' }
+    } catch (error) {
+      return error instanceof ScheduledSettingsPostSaveError
+        ? {
+            ok: false,
+            error: 'The schedule was saved, but related credentials could not be fully cleared.'
+          }
+        : { ok: false, error: 'Could not write the schedule to disk.' }
     }
   }
 
@@ -82,12 +91,18 @@ export class ScheduledSettingsStore {
       await fs.rm(tmp, { force: true }).catch(() => {})
       throw e
     }
+    let listenerFailed = false
     for (const cb of this.listeners) {
       try {
-        cb(next, previous)
+        await cb(next, previous)
       } catch {
-        // A listener must never break a save (or its siblings).
+        // Run every sibling, but do not turn a post-publication cleanup failure into a false
+        // "could not write" result. The schedule is durable; its credential lifecycle is not.
+        listenerFailed = true
       }
     }
+    if (listenerFailed) throw new ScheduledSettingsPostSaveError()
   }
 }
+
+class ScheduledSettingsPostSaveError extends Error {}

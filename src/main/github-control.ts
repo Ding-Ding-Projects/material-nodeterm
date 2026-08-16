@@ -45,8 +45,8 @@ async function atomicWrite(file: string, document: TokenDocument): Promise<void>
     await renameAtomic(temporary, file)
   } catch (error) {
     // A failed write MUST remove its own temp, because here a leaked temp IS a leaked PAT: a
-    // unique name is never written again, so only this cleanup (or a later sweep after the age
-    // grace and an owner pid no longer visible here mark it abandoned) will collect it. The error propagates.
+    // unique name is never written again. A later cross-namespace-safe sweep deliberately keeps
+    // pid-bearing temps, so this writer owns the only automatic cleanup. The error propagates.
     await fs.rm(temporary, { force: true }).catch(() => {})
     throw error
   }

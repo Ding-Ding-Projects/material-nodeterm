@@ -89,6 +89,7 @@ function CookieProviderRow({
   description,
   placeholder,
   stored,
+  statusKnown,
   onChange
 }: {
   id: string
@@ -96,13 +97,26 @@ function CookieProviderRow({
   description: string
   placeholder: string
   stored: boolean
+  statusKnown: boolean
   onChange: (stored: boolean) => void
 }): React.JSX.Element {
   const [value, setValue] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const save = async (next: string): Promise<void> => {
-    onChange(await window.nodeTerminal.usage.setProviderCookie(id, next))
-    // Never keep the secret in component state once it has been handed over.
-    setValue('')
+    setError(null)
+    try {
+      onChange(await window.nodeTerminal.usage.setProviderCookie(id, next))
+      setError(null)
+      // Never erase a replacement pasted while this request was in flight.
+      setValue((current) => (current === next ? '' : current))
+    } catch (reason) {
+      const detail = reason instanceof Error && reason.message.trim() ? ` ${reason.message}` : ''
+      setError(
+        next.trim()
+          ? `Could not save the ${label} session credential.${detail}`
+          : `Could not clear the ${label} session credential. It may still be stored.${detail}`
+      )
+    }
   }
   return (
     <FieldRow
@@ -114,20 +128,27 @@ function CookieProviderRow({
           : 'This is a live session credential. It is stored in a 0600 file, not in settings.json, and is never read back into the UI.'
       }
       control={
-        <div className="flex items-center gap-2">
-          <input
-            type="password"
-            className="input w-64"
-            placeholder={stored ? '•••••••• stored' : placeholder}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <Button onClick={() => void save(value)} disabled={!value.trim()}>
-            Save
-          </Button>
-          {stored && <Button onClick={() => void save('')}>Clear</Button>}
+        <div className="max-w-xl space-y-1.5">
+          <div className="flex items-center gap-2">
+            <input
+              type="password"
+              className="input w-64"
+              placeholder={stored ? '•••••••• stored' : placeholder}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <Button onClick={() => void save(value)} disabled={!value.trim()}>
+              Save
+            </Button>
+            {(stored || !statusKnown) && <Button onClick={() => void save('')}>Clear</Button>}
+          </div>
+          {error && (
+            <p role="alert" className="text-[11px] leading-snug text-[color:var(--warn)]">
+              {error}
+            </p>
+          )}
         </div>
       }
     />
@@ -147,12 +168,26 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
 
   // Which cookie providers have one stored — state only; the values never reach the renderer.
   const [cookieStored, setCookieStored] = useState<Record<string, boolean>>({})
+  const [cookieStatusKnown, setCookieStatusKnown] = useState<Record<string, boolean>>({})
+  const [cookieStatusError, setCookieStatusError] = useState<string | null>(null)
   useEffect(() => {
     if (!isActive) return
     let cancelled = false
-    void window.nodeTerminal.usage.cookieProviders().then((v) => {
-      if (!cancelled) setCookieStored(v)
-    })
+    setCookieStatusError(null)
+    void window.nodeTerminal.usage
+      .cookieProviders()
+      .then((v) => {
+        if (!cancelled) {
+          setCookieStored(v)
+          setCookieStatusKnown(Object.fromEntries(COOKIE_PROVIDER_ROWS.map((row) => [row.id, true])))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCookieStatusKnown({})
+          setCookieStatusError('Could not check which web-console credentials are stored.')
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -203,12 +238,24 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
       </SearchableRow>
       <SearchableRow {...ROWS.cookies}>
         <div className="space-y-5">
+          {cookieStatusError && (
+            <p
+              role="alert"
+              className="rounded-md border border-[color:var(--warn)] bg-[color:var(--warn)]/10 px-3 py-2 text-[12px] text-[color:var(--warn)]"
+            >
+              {cookieStatusError}
+            </p>
+          )}
           {COOKIE_PROVIDER_ROWS.map((p) => (
             <CookieProviderRow
               key={p.id}
               {...p}
               stored={!!cookieStored[p.id]}
-              onChange={(stored) => setCookieStored((m) => ({ ...m, [p.id]: stored }))}
+              statusKnown={cookieStatusKnown[p.id] === true}
+              onChange={(stored) => {
+                setCookieStored((m) => ({ ...m, [p.id]: stored }))
+                setCookieStatusKnown((m) => ({ ...m, [p.id]: true }))
+              }}
             />
           ))}
         </div>

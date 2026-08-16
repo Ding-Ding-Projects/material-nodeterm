@@ -1900,11 +1900,12 @@ be PID 1, worker isolates share a PID with separate module counters, and the OS 
 crashes. `tempNameFor` owns UUID uniqueness while retaining pid/sequence for ownership and
 diagnostics. The cleanup is equally strict:
 `sweepStaleTempFiles` never reads “foreign pid” as “dead process”; desktop multi-instance mode and
-two Server Edition processes can deliberately share a directory. It removes a pid-bearing temp
-only after a 24-hour grace and a signal-0 probe says the owner pid is no longer visible in this
-process's namespace; `EPERM` or an unfamiliar probe result preserves it. ESRCH is not global proof
-across PID namespaces, which is why age and UUID entropy are both required. A fresh or unjudgeable
-temp may be an in-flight credential write. Credential clear paths use `clearAtomicTarget`: it
+two Server Edition processes can deliberately share a directory. It never removes a pid-bearing
+temp automatically: signal-zero/`ESRCH` is namespace-local and PID reuse makes the inverse equally
+unreliable. Only the exact historical ownerless `<target>.tmp` shape is collected after the
+24-hour grace. Current names are recognized only with the canonical lowercase v4 UUID shape; broad
+dot-free tokens are not cleanup authority. A pid-bearing temp may be an in-flight credential write.
+Credential clear paths use `clearAtomicTarget`: it
 removes the canonical file without sabotaging that possible writer, inspects for every recognized
 temp, and returns an incomplete result while any remain or inspection fails. The PAT/cookie/token
 callers propagate that as `clear-incomplete`; they must never report success while bearer bytes are
@@ -1915,7 +1916,18 @@ must also serialize publishes (or reject an out-of-date generation). `agent-stat
 demonstrated the separate race: flush A captured old state and slept during `renameAtomic`'s
 transient-`EPERM` retry, flush B published new state, then A woke and atomically replaced it with
 the complete but stale document. Its disk writes are FIFO; the barrier test deliberately recreates
-that ordering and must stay red if the queue is removed.
+that ordering and must stay red if the queue is removed. This FIFO is process-local. Two apps that
+intentionally share the same data directory still have last-publisher semantics unless the store
+adds a cross-process lock or compare-and-swap generation.
+
+For load→mutate→save code, serialize the **whole transaction**, starting before the strict read.
+A save-only queue still allows two callers to read the same document and publish incompatible
+derivatives in sequence. `SecureStore.mutate` applies this path-global (not instance-local) rule to
+toy-lock and authenticator credentials; a mutation read rejects corrupt/unreadable input instead of
+turning “could not read” into “empty.” Scheduled Home Assistant token set, clear, alternate-format
+cleanup and orphan pruning likewise share one process-local FIFO. Their cleanup errors propagate
+through the schedule save result and renderer: a durable schedule plus retained bearer bytes must
+never be mislabeled as either a disk-write failure or a completed credential clear.
 
 **Nothing in the toolchain catches the bare version.** 28 files had it, across three spellings — the user's canvas, their
 settings, their sealed credentials, their pinned devices — and every one of them reads as a correct

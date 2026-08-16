@@ -89,9 +89,10 @@ need it too, and wire it in the same change.
   name needs random UUID entropy: `Date.now()` is shared by every save in the same millisecond, and
   pid-plus-counter also repeats across PID namespaces, worker isolates, and PID reuse. Keep pid and
   sequence as ownership/diagnostic fields, not as the uniqueness guarantee. And never sweep a temp
-  merely because its pid differs — another live instance may share the directory;
-  `sweepStaleTempFiles` requires a long age grace plus an owner pid no longer visible in this
-  process's namespace; an unjudgeable probe preserves the file. A credential Clear must then use
+  merely because its pid differs — another live instance may share the directory. Signal-zero and
+  `ESRCH` are namespace-local, so they cannot prove that a writer on a mounted volume died;
+  `sweepStaleTempFiles` preserves every pid-bearing temp and age-collects only the exact historical
+  ownerless `<target>.tmp` shape. A credential Clear must then use
   `clearAtomicTarget` and surface `clear-incomplete` while any recognized temp remains — preserving
   a plausible live writer is correct, but telling the UI its bearer bytes are gone is not.
 
@@ -99,6 +100,11 @@ need it too, and wire it in the same change.
   store concurrently, publish them FIFO (or reject stale generations). Otherwise an older flush can
   stall inside `renameAtomic`, let a newer document land, then wake and overwrite it intact with
   stale state. Unique names prevent byte splicing; they do not prevent time from running backwards.
+  For a read-modify-write store, the FIFO begins before the read and ends after publication; queuing
+  only `save()` still lets two readers derive conflicting documents. Key it by the resolved physical
+  file, not by an object instance or a lossy logical id.
+  An in-memory FIFO orders one JavaScript process only; a store intentionally shared by multiple
+  processes needs a file lock, compare-and-swap generation, or an explicit last-publisher contract.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.

@@ -4,7 +4,7 @@ import os from 'os'
 import path from 'path'
 import { initPlatform, resetPlatformForTests } from '../platform'
 import { fakePlatform } from '../platform-fake'
-import { readProviderCookie, writeProviderCookie } from './provider-cookie'
+import { hasProviderCookie, readProviderCookie, writeProviderCookie } from './provider-cookie'
 
 describe('provider cookie atomic write', () => {
   let dir: string
@@ -115,6 +115,33 @@ describe('provider cookie atomic write', () => {
       `minimax-cookie.json.${process.pid + 1}.7.tmp`,
       'minimax-cookie.json.tmp'
     ].sort())
+  })
+
+  it('clear rejects truthfully when the canonical credential cannot be deleted', async () => {
+    await writeProviderCookie('minimax', 'secret')
+    vi.spyOn(fs, 'unlink').mockRejectedValue(
+      Object.assign(new Error('EACCES: credential is held open'), { code: 'EACCES' })
+    )
+
+    await expect(writeProviderCookie('minimax', '')).rejects.toMatchObject({
+      code: 'clear-incomplete',
+      message: expect.stringContaining('could not be fully cleared')
+    })
+    await expect(readProviderCookie('minimax')).resolves.toBe('secret')
+  })
+
+  it('does not report absence when an existing cookie cannot be read', async () => {
+    await writeProviderCookie('minimax', 'secret')
+    const realReadFile = fs.readFile
+    vi.spyOn(fs, 'readFile').mockImplementation((async (file: any, ...args: any[]) => {
+      if (String(file) === cookiePath) {
+        throw Object.assign(new Error('EACCES: credential is unreadable'), { code: 'EACCES' })
+      }
+      return (realReadFile as any)(file, ...args)
+    }) as typeof fs.readFile)
+
+    await expect(readProviderCookie('minimax')).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(hasProviderCookie('minimax')).rejects.toMatchObject({ code: 'EACCES' })
   })
 
   it('a failed rename removes its own temp and still rejects (a leaked temp here is a live cookie)', async () => {

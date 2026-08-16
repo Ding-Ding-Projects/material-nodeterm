@@ -333,8 +333,8 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
       await renameAtomic(tmp, AGENT_JSON_PATH)
     } catch (e) {
       // A unique name never self-heals the way the fixed one did (the next write just reused it),
-      // and here a leaked temp IS a leaked credential: only this cleanup — or a later sweep after
-      // the age grace and an owner pid no longer visible here mark it abandoned — will collect it.
+      // and here a leaked temp IS a leaked credential. A later cross-namespace-safe sweep keeps
+      // pid-bearing temps, so this writer owns the only automatic cleanup.
       // The error propagates.
       await fs.rm(tmp, { force: true }).catch(() => {})
       throw e

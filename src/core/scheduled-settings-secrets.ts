@@ -26,30 +26,70 @@ function seals(): boolean {
   return hasSeal
 }
 
-/** Rule ids are our own `uuid()`s, but a value that reaches a `path.join` is never trusted blindly
- *  — collapse to a filesystem-safe form first (defense in depth against a hand-edited
- *  scheduled-settings.json carrying a path-traversal id). */
-function safeId(id: string): string {
-  return id.replace(/[^a-zA-Z0-9-]/g, '_').slice(0, 128) || 'rule'
+// renderer/lib/uuid.ts generates lowercase RFC 4122 v4 ids. Enforce that exact alphabet and
+// version at the filesystem boundary: lossy replacement made distinct hand-edited ids such as
+// "a/b" and "a_b" share one credential, and case folding aliases names on Windows.
+const RULE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+const UUID_V4_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+// Canonical files plus the exact temp shapes emitted by current and historical atomic writers.
+// Keeping this in step with fs-atomic's recognizer lets prune discover a temp-only orphan without
+// treating an arbitrary filename lookalike as deletion authority.
+const TOKEN_ARTIFACT_RE = new RegExp(
+  `^(.+)\\.(json|bin)(?:\\.tmp|\\.\\d+\\.\\d+(?:\\.${UUID_V4_SOURCE})?\\.tmp)?$`
+)
+
+function validRuleId(id: string): boolean {
+  return RULE_ID_RE.test(id)
 }
 
 function dir(): string {
   return path.join(platform().userDataDir, DIR)
 }
 function sealedFile(ruleId: string): string {
-  return path.join(dir(), `${safeId(ruleId)}.json`)
+  return path.join(dir(), `${ruleId}.json`)
 }
 function rawFile(ruleId: string): string {
-  return path.join(dir(), `${safeId(ruleId)}.bin`)
+  return path.join(dir(), `${ruleId}.bin`)
 }
 
 type StoredToken = { version: 1; tokenEnc: string }
+
+// Token mutations are infrequent, while pruning is directory-wide. One FIFO therefore gives the
+// whole module a single order: a prune cannot miss a set parked before rename, and an older prune
+// cannot wake after a newer set and delete it. A per-rule queue cannot provide either guarantee
+// without an additional exclusive prune barrier. The recovered tail keeps a failed mutation from
+// poisoning later calls; the identity check releases completed closures once the queue is idle.
+const idleMutation = Promise.resolve()
+let mutationTail: Promise<void> = idleMutation
+
+function serializeMutation<T>(mutation: () => Promise<T>): Promise<T> {
+  const run = mutationTail.then(mutation)
+  const recovered = run.then(
+    () => undefined,
+    () => undefined
+  )
+  mutationTail = recovered
+  void recovered.then(() => {
+    if (mutationTail === recovered) mutationTail = idleMutation
+  })
+  return run
+}
 
 export class ScheduledSettingsSecretError extends Error {
   readonly code = 'clear-incomplete' as const
 
   constructor() {
-    super('The Home Assistant token file was removed, but credential temp files are still active or could not be inspected.')
+    super(
+      'The Home Assistant token could not be fully cleared; canonical or temporary credential files remain or could not be inspected.'
+    )
+  }
+}
+
+export class InvalidScheduledSettingsRuleIdError extends Error {
+  readonly code = 'invalid-rule-id' as const
+
+  constructor() {
+    super('The scheduled-settings rule id is invalid.')
   }
 }
 
@@ -71,40 +111,70 @@ async function persistFile(file: string, data: string): Promise<void> {
  *  returns the token — the only way to read it back is `hasHomeAssistantToken`'s boolean, which is
  *  all the Settings UI ever needs (a status dot, not the secret itself). */
 export async function setHomeAssistantToken(ruleId: string, token: string | null): Promise<void> {
+  if (!validRuleId(ruleId)) throw new InvalidScheduledSettingsRuleIdError()
   const sf = sealedFile(ruleId)
   const rf = rawFile(ruleId)
-  if (token === null) {
-    const [sealed, raw] = await Promise.all([clearAtomicTarget(sf), clearAtomicTarget(rf)])
-    if (!sealed.cleared || !raw.cleared) throw new ScheduledSettingsSecretError()
-    return
-  }
-  if (seals()) {
-    const p = platform()
-    const tokenEnc = p.sealSecret!(Buffer.from(token, 'utf8')).toString('base64')
-    const body: StoredToken = { version: 1, tokenEnc }
-    await persistFile(sf, `${JSON.stringify(body)}\n`)
-    await fs.rm(rf, { force: true }).catch(() => {})
-  } else {
-    await persistFile(rf, token)
-    await fs.rm(sf, { force: true }).catch(() => {})
-  }
+  // Resolve the platform-dependent representation at invocation time. A queued call must not
+  // follow a later test/server lifecycle's initPlatform() into a different data directory or
+  // switch between sealed/raw formats while it waits its turn.
+  const shouldSeal = token !== null && seals()
+  const sealedBody = shouldSeal
+    ? `${JSON.stringify({
+        version: 1,
+        tokenEnc: platform().sealSecret!(Buffer.from(token, 'utf8')).toString('base64')
+      } satisfies StoredToken)}\n`
+    : null
+
+  return serializeMutation(async () => {
+    if (token === null) {
+      const [sealed, raw] = await Promise.all([clearAtomicTarget(sf), clearAtomicTarget(rf)])
+      if (!sealed.cleared || !raw.cleared) throw new ScheduledSettingsSecretError()
+      return
+    }
+    if (shouldSeal) {
+      await persistFile(sf, sealedBody!)
+      const alternate = await clearAtomicTarget(rf)
+      if (!alternate.cleared) throw new ScheduledSettingsSecretError()
+    } else {
+      await persistFile(rf, token)
+      const alternate = await clearAtomicTarget(sf)
+      if (!alternate.cleared) throw new ScheduledSettingsSecretError()
+    }
+  })
 }
 
 /** Main-process-only read (used by the service to build a request's Authorization header). Never
  *  exposed over IPC — see `scheduled-settings-service.ts`'s IPC surface, which offers only
  *  `setHomeAssistantToken`/`tokenStatus`, never a getter. */
 export async function getHomeAssistantToken(ruleId: string): Promise<string | null> {
+  if (!validRuleId(ruleId)) return null
+  const useSealed = seals()
+  const preferred = useSealed ? sealedFile(ruleId) : rawFile(ruleId)
+  const alternate = useSealed ? rawFile(ruleId) : sealedFile(ruleId)
+  let raw: string
   try {
-    if (seals()) {
-      const raw = await fs.readFile(sealedFile(ruleId), 'utf8')
-      const stored = JSON.parse(raw) as StoredToken
-      if (stored?.version !== 1 || typeof stored.tokenEnc !== 'string') return null
-      return platform().unsealSecret!(Buffer.from(stored.tokenEnc, 'base64')).toString('utf8')
+    raw = await fs.readFile(preferred, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    try {
+      await fs.lstat(alternate)
+    } catch (alternateError) {
+      if ((alternateError as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw alternateError
     }
-    return await fs.readFile(rawFile(ruleId), 'utf8')
-  } catch {
-    return null
+    // A bearer exists, but not in the representation this platform can safely consume. Reporting
+    // null would hide Clear and turn “could not read” into “absent”; status callers surface unknown.
+    throw new Error('The stored Home Assistant token is in an unavailable format.')
   }
+  if (!useSealed) {
+    if (!raw.trim()) throw new Error('The stored Home Assistant token is malformed.')
+    return raw
+  }
+  const stored = JSON.parse(raw) as StoredToken
+  if (stored?.version !== 1 || typeof stored.tokenEnc !== 'string') {
+    throw new Error('The stored Home Assistant token is malformed.')
+  }
+  return platform().unsealSecret!(Buffer.from(stored.tokenEnc, 'base64')).toString('utf8')
 }
 
 export async function hasHomeAssistantToken(ruleId: string): Promise<boolean> {
@@ -125,23 +195,36 @@ export async function homeAssistantTokenStatus(ruleIds: readonly string[]): Prom
 
 /** Delete every stored token whose rule id is not in `liveRuleIds` — called after every save so a
  *  deleted rule (or one whose source changed away from `'home-assistant'`) doesn't leave an orphan
- *  credential sitting on disk forever. Best-effort: a listing failure (e.g. the directory was
- *  never created because no token has ever been saved) is not an error. */
+ *  credential sitting on disk forever. ENOENT is a genuinely empty store; an unreadable directory
+ *  or a retained canonical/temp artifact is an incomplete credential clear and must reach the UI. */
 export async function pruneOrphanedTokens(liveRuleIds: ReadonlySet<string> | readonly string[]): Promise<void> {
-  const live = liveRuleIds instanceof Set ? liveRuleIds : new Set(liveRuleIds)
-  let entries: string[]
-  try {
-    entries = await fs.readdir(dir())
-  } catch {
-    return
-  }
-  await Promise.all(
-    entries.map(async (name) => {
-      const m = /^(.+)\.(json|bin)$/.exec(name)
-      if (!m) return
-      const id = m[1]
-      if (live.has(id)) return
-      await fs.rm(path.join(dir(), name), { force: true }).catch(() => {})
-    })
-  )
+  const secretDir = dir()
+  // Invalid hand-edited ids are not credential identities. Excluding them makes any residue from
+  // the former lossy safeId scheme collectible instead of letting an invalid rule protect it.
+  const live = new Set([...liveRuleIds].filter(validRuleId))
+
+  return serializeMutation(async () => {
+    let entries: string[]
+    try {
+      entries = await fs.readdir(secretDir)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw new ScheduledSettingsSecretError()
+    }
+    const orphanIds = new Set<string>()
+    for (const name of entries) {
+      const match = TOKEN_ARTIFACT_RE.exec(name)
+      if (match && !live.has(match[1])) orphanIds.add(match[1])
+    }
+    let incomplete = false
+    await Promise.all(
+      [...orphanIds].flatMap((id) =>
+        [path.join(secretDir, `${id}.json`), path.join(secretDir, `${id}.bin`)].map(async (file) => {
+          const result = await clearAtomicTarget(file)
+          if (!result.cleared) incomplete = true
+        })
+      )
+    )
+    if (incomplete) throw new ScheduledSettingsSecretError()
+  })
 }

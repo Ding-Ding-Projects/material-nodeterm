@@ -30,7 +30,9 @@ export class ProviderCookieClearError extends Error {
   readonly code = 'clear-incomplete' as const
 
   constructor() {
-    super('The provider cookie file was removed, but credential temp files are still active or could not be inspected.')
+    super(
+      'The provider cookie could not be fully cleared; canonical or temporary credential files remain or could not be inspected.'
+    )
   }
 }
 
@@ -44,13 +46,18 @@ function file(provider: CookieProvider): string {
 
 /** The stored cookie header, or null when this provider has not been configured. */
 export async function readProviderCookie(provider: CookieProvider): Promise<string | null> {
+  let raw: string
   try {
-    const raw = await fs.readFile(file(provider), 'utf-8')
-    const j = JSON.parse(raw) as Record<string, unknown>
-    return typeof j.cookie === 'string' && j.cookie.trim() ? j.cookie : null
-  } catch {
-    return null
+    raw = await fs.readFile(file(provider), 'utf-8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
   }
+  const document = JSON.parse(raw) as Record<string, unknown>
+  if (typeof document.cookie !== 'string' || !document.cookie.trim()) {
+    throw new Error('The stored provider cookie is malformed.')
+  }
+  return document.cookie
 }
 
 /**
@@ -94,8 +101,8 @@ async function writeCookieNow(provider: CookieProvider, cookie: string): Promise
     await renameAtomic(tmp, target)
   } catch (e) {
     // A failed write MUST remove its own temp, because here a leaked temp IS a leaked cookie: a
-    // unique name is never written again, so only this cleanup (or a later sweep after the age
-    // grace and an owner pid no longer visible here mark it abandoned) will collect it. The error propagates.
+    // unique name is never written again. A later cross-namespace-safe sweep deliberately keeps
+    // pid-bearing temps, so this writer owns the only automatic cleanup. The error propagates.
     await fs.rm(tmp, { force: true }).catch(() => {})
     throw e
   }
