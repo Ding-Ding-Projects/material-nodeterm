@@ -44,25 +44,54 @@ export type WebContentsLookup = (id: number) => { getType(): string } | null
  */
 export function registerBrowserGuest(
   guests: Map<number, BrowserGuest>,
-  webContentsId: number,
-  nodeId: string,
-  surface: BrowserSurfaceKind,
+  webContentsId: unknown,
+  nodeId: unknown,
+  surface: unknown,
   lookup: WebContentsLookup
 ): boolean {
-  if (!Number.isInteger(webContentsId) || webContentsId <= 0) return false
-  if (!isSafeNodeId(nodeId)) return false
+  if (typeof webContentsId !== 'number' || !Number.isInteger(webContentsId) || webContentsId <= 0)
+    return false
+  if (typeof nodeId !== 'string' || !isSafeNodeId(nodeId)) return false
   if (surface !== 'canvas' && surface !== 'modal') return false
-  // The lookup can throw for a destroyed id (Electron's own accessors do); a guest that cannot be
-  // looked at is not a guest.
+  // Either lookup or inspection can throw when destruction races registration. A guest that
+  // cannot be inspected all the way through is not a guest.
   let contents: { getType(): string } | null = null
   try {
     contents = lookup(webContentsId)
+    if (!contents || contents.getType() !== 'webview') return false
   } catch {
     return false
   }
-  if (!contents || contents.getType() !== 'webview') return false
   guests.set(webContentsId, { nodeId, surface })
   return true
+}
+
+export interface BrowserGuestRegistrationRefusal {
+  webContentsId: unknown
+  nodeId: unknown
+  surface: unknown
+}
+
+/**
+ * Handle the renderer-facing registration request through the validation boundary.
+ *
+ * `surface` remains optional on the wire for compatibility with the original two-argument
+ * registration. Only absence defaults to `canvas`; a present invalid value is refused. Keeping the
+ * compatibility decision beside `registerBrowserGuest` makes the production IPC callback a thin
+ * transport adapter and lets the complete request behavior run without importing Electron.
+ */
+export function registerBrowserGuestRequest(
+  guests: Map<number, BrowserGuest>,
+  webContentsId: unknown,
+  nodeId: unknown,
+  surface: unknown,
+  lookup: WebContentsLookup,
+  onRefused: (details: BrowserGuestRegistrationRefusal) => void
+): boolean {
+  const kind = surface === undefined ? 'canvas' : surface
+  const accepted = registerBrowserGuest(guests, webContentsId, nodeId, kind, lookup)
+  if (!accepted) onRefused({ webContentsId, nodeId, surface })
+  return accepted
 }
 
 /**

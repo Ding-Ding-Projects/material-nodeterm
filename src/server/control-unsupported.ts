@@ -58,3 +58,12 @@ export async function serverEditionControlHandler({ verb }: { verb: string }): P
 }> {
   return { ok: false, error: CONTROL_UNSUPPORTED_ERROR, message: controlUnsupportedMessage(verb) }
 }
+
+export interface ServerEditionControlTarget {
+  setControlHandler(handler: typeof serverEditionControlHandler): void
+}
+
+/** Install the permanent named refusal on the shared hook-server control seam. */
+export function installServerEditionControlHandler(target: ServerEditionControlTarget): void {
+  target.setControlHandler(serverEditionControlHandler)
+}

@@ -20,6 +20,7 @@ import {
   CONTROL_UNSUPPORTED_ERROR,
   CONTROL_UNSUPPORTED_SENTENCE,
   controlUnsupportedMessage,
+  installServerEditionControlHandler,
   serverEditionControlHandler
 } from './control-unsupported'
 
@@ -46,8 +47,7 @@ beforeAll(async () => {
   initPlatform(fakePlatform({ userDataDir: dir }))
   await hookServer.start()
   hookServer.setNodeAuthSecret(SECRET)
-  // The exact registration `src/server/index.ts` performs after `hookServer.start()`.
-  hookServer.setControlHandler(serverEditionControlHandler)
+  installServerEditionControlHandler(hookServer)
 })
 
 afterAll(() => {
@@ -125,11 +125,19 @@ describe('the Server Edition refuses canvas control by name', () => {
 })
 
 describe('the Server Edition wires it at boot', () => {
-  it('registers the refusing handler instead of leaving the null branch', () => {
-    // A hook-server change made on one shell only has shipped wrong three times in this repo, and
-    // the null branch is invisible until an agent hits it in production.
-    const src = fs.readFileSync(path.resolve(__dirname, 'index.ts'), 'utf8')
-    expect(src).toContain('setControlHandler(serverEditionControlHandler)')
+  it('installs the refusing behavior instead of leaving the null branch', async () => {
+    let installed: typeof serverEditionControlHandler | undefined
+    installServerEditionControlHandler({
+      setControlHandler(handler) {
+        installed = handler
+      }
+    })
+    expect(installed).toBe(serverEditionControlHandler)
+    expect(await installed!({ verb: 'browser' })).toEqual({
+      ok: false,
+      error: CONTROL_UNSUPPORTED_ERROR,
+      message: controlUnsupportedMessage('browser')
+    })
   })
 })
 

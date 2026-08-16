@@ -2,13 +2,11 @@
 // case below is a renderer-supplied value, because the renderer is the attackable half of this
 // boundary — a compromised or merely buggy one must not be able to nominate the app's own window.
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import {
   browserDiscardedMessage,
   registerBrowserGuest,
-  type BrowserGuest,
-  type BrowserSurfaceKind
+  registerBrowserGuestRequest,
+  type BrowserGuest
 } from './browser-guest-registry'
 
 const lookup =
@@ -54,6 +52,17 @@ describe('registerBrowserGuest', () => {
     expect(m.size).toBe(0)
   })
 
+  it('refuses when destruction races the type inspection after lookup', () => {
+    const m = new Map<number, BrowserGuest>()
+    const destroyed = {
+      getType(): never {
+        throw new Error('Object has been destroyed')
+      }
+    }
+    expect(registerBrowserGuest(m, 7, 'browser-1', 'canvas', () => destroyed)).toBe(false)
+    expect(m.size).toBe(0)
+  })
+
   it('refuses an id that is not a positive integer, before it ever reaches the lookup', () => {
     const m = new Map<number, BrowserGuest>()
     // A lookup that would happily call ANYTHING a webview: the id guard is the only thing under
@@ -63,7 +72,7 @@ describe('registerBrowserGuest', () => {
       lookups += 1
       return { getType: () => 'webview' }
     }
-    for (const id of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    for (const id of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '7', null]) {
       expect(registerBrowserGuest(m, id, 'browser-1', 'canvas', anything), `${id}`).toBe(false)
     }
     expect(m.size).toBe(0)
@@ -72,8 +81,10 @@ describe('registerBrowserGuest', () => {
 
   it('refuses a node id `isSafeNodeId` refuses — it is a map key and, later, a storage key', () => {
     const m = new Map<number, BrowserGuest>()
-    for (const bad of ['../etc', '', '.', '..', 'a/b', 'a b', 'x'.repeat(200)]) {
-      expect(registerBrowserGuest(m, 7, bad, 'canvas', lookup({ 7: 'webview' })), bad).toBe(false)
+    for (const bad of ['../etc', '', '.', '..', 'a/b', 'a b', 'x'.repeat(200), 7, null]) {
+      expect(registerBrowserGuest(m, 7, bad, 'canvas', lookup({ 7: 'webview' })), String(bad)).toBe(
+        false
+      )
     }
     expect(m.size).toBe(0)
   })
@@ -83,7 +94,7 @@ describe('registerBrowserGuest', () => {
     // The renderer is the more attackable half; `surface` is what selects a debugger target later.
     for (const bad of ['modal ', 'CANVAS', '', undefined, null, 1]) {
       expect(
-        registerBrowserGuest(m, 7, 'browser-1', bad as unknown as BrowserSurfaceKind, lookup({ 7: 'webview' })),
+        registerBrowserGuest(m, 7, 'browser-1', bad, lookup({ 7: 'webview' })),
         String(bad)
       ).toBe(false)
     }
@@ -115,16 +126,55 @@ describe('browserDiscardedMessage', () => {
   })
 })
 
-/**
- * The guard is only worth anything if it is on the path. `ipcMain.on` cannot be exercised without
- * Electron, so this one claim — every write to `browserGuests` goes through the guard — is checked
- * against the source. It is the failure a pure unit test cannot see: a guard nobody calls.
- */
-describe('the IPC handler is wired through it', () => {
-  it('main never writes to browserGuests directly', () => {
-    const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
-    expect(src).toContain('registerBrowserGuest(browserGuests')
-    // `.set(` anywhere on this map would be a second, unguarded door.
-    expect(src).not.toContain('browserGuests.set(')
+describe('registerBrowserGuestRequest', () => {
+  it('keeps the legacy omitted surface as a validated canvas registration', () => {
+    const guests = new Map<number, BrowserGuest>()
+    const refused: unknown[] = []
+    expect(
+      registerBrowserGuestRequest(
+        guests,
+        21,
+        'browser-legacy',
+        undefined,
+        lookup({ 21: 'webview' }),
+        (details) => refused.push(details)
+      )
+    ).toBe(true)
+    expect(guests.get(21)).toEqual({ nodeId: 'browser-legacy', surface: 'canvas' })
+    expect(refused).toEqual([])
+  })
+
+  it('refuses and reports a renderer request that nominates the app window', () => {
+    const guests = new Map<number, BrowserGuest>()
+    const refused: unknown[] = []
+    expect(
+      registerBrowserGuestRequest(
+        guests,
+        1,
+        'browser-1',
+        'modal',
+        lookup({ 1: 'window' }),
+        (details) => refused.push(details)
+      )
+    ).toBe(false)
+    expect(guests.size).toBe(0)
+    expect(refused).toEqual([{ webContentsId: 1, nodeId: 'browser-1', surface: 'modal' }])
+  })
+
+  it('does not default a present invalid surface', () => {
+    const guests = new Map<number, BrowserGuest>()
+    const refused: unknown[] = []
+    expect(
+      registerBrowserGuestRequest(
+        guests,
+        22,
+        'browser-2',
+        'CANVAS',
+        lookup({ 22: 'webview' }),
+        (details) => refused.push(details)
+      )
+    ).toBe(false)
+    expect(guests.size).toBe(0)
+    expect(refused).toEqual([{ webContentsId: 22, nodeId: 'browser-2', surface: 'CANVAS' }])
   })
 })

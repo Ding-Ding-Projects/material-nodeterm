@@ -30,9 +30,8 @@ import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
 import type { Settings } from '../shared/types'
 import {
-  registerBrowserGuest,
-  type BrowserGuest,
-  type BrowserSurfaceKind
+  registerBrowserGuestRequest,
+  type BrowserGuest
 } from './browser-guest-registry'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import type { RemoteLogExec } from '../core/board-log'
@@ -372,7 +371,7 @@ let quitting = false
 
 // Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
 // belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
-// lands here — see `registerBrowserGuest`.
+// lands here — see `registerBrowserGuestRequest`.
 const browserGuests = new Map<number, BrowserGuest>()
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
@@ -709,20 +708,17 @@ app.whenReady().then(async () => {
 
   ipcMain.on(
     IPC.browserRegister,
-    (_e, webContentsId: number, nodeId: string, surface?: BrowserSurfaceKind) => {
-      // `surface` is optional ON THE WIRE only: both mount sites still send two arguments, so an
-      // absent value means "the canvas one", which is what every registration was taken to be
-      // before the field existed. A value that is present and wrong is refused, not defaulted.
-      const kind = surface === undefined ? 'canvas' : surface
-      if (
-        !registerBrowserGuest(browserGuests, webContentsId, nodeId, kind, (id) =>
-          webContents.fromId(id) ?? null
-        )
-      ) {
+    (_e, webContentsId: unknown, nodeId: unknown, surface?: unknown) => {
+      registerBrowserGuestRequest(
+        browserGuests,
+        webContentsId,
+        nodeId,
+        surface,
+        (id) => webContents.fromId(id) ?? null,
         // Loud, because the symptom otherwise is "popups from this node stopped opening" with
         // nothing anywhere to explain it.
-        console.warn('[browser] refused guest registration', { webContentsId, nodeId, surface })
-      }
+        (details) => console.warn('[browser] refused guest registration', details)
+      )
     }
   )
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
