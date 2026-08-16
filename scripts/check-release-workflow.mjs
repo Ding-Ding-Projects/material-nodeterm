@@ -49,19 +49,31 @@ function conditionUsesDraftResult(step) {
   return typeof step?.if === 'string' && step.if.trim() === "steps.draft.outputs.already_published != 'true'"
 }
 
+function isNonMainRefusal(condition) {
+  if (typeof condition !== 'string') return false
+  const unwrapped = condition
+    .trim()
+    .replace(/^\$\{\{\s*/, '')
+    .replace(/\s*\}\}$/, '')
+  const clauses = unwrapped.split(/\s*\|\|\s*/)
+  if (clauses.length !== 2) return false
+  const normalized = new Set(clauses.map((clause) => clause.replace(/\s+/g, '')))
+  return normalized.has("github.ref!='refs/heads/main'") && normalized.has("github.ref_type!='branch'")
+}
+
 const FORBIDDEN_RUNNER_COMMANDS = [
   [
     'tests',
-    /(?:^|[;&|]\s*|\s)(?:npm\s+(?:run\s+)?test(?::[\w-]+)?(?:\s|$)|(?:npx|npm\s+exec)\s+(?:--\s+)?vitest\b|vitest\s+run\b)/i
+    /(?:^|[;&|]\s*|\s)(?:npm\s+(?:run\s+)?test(?::[\w-]+)?(?:\s|$)|(?:npx|npm\s+exec)\s+(?:--\s+)?vitest\b|vitest\s+run\b)/i,
   ],
   [
     'type-check',
-    /(?:^|[;&|]\s*|\s)(?:npm\s+run\s+typecheck(?::[\w-]+)?(?:\s|$)|(?:npx|npm\s+exec)\s+(?:--\s+)?tsc\b|tsc\s+--noEmit\b)/i
+    /(?:^|[;&|]\s*|\s)(?:npm\s+run\s+typecheck(?::[\w-]+)?(?:\s|$)|(?:npx|npm\s+exec)\s+(?:--\s+)?tsc\b|tsc\s+--noEmit\b)/i,
   ],
   [
     'lint',
-    /(?:^|[;&|]\s*|\s)(?:npm\s+run\s+lint(?::[\w-]+)?(?:\s|$)|(?:npx|npm\s+exec)\s+(?:--\s+)?eslint\b|eslint\s+)/i
-  ]
+    /(?:^|[;&|]\s*|\s)(?:npm\s+run\s+lint(?::[\w-]+)?(?:\s|$)|(?:npx|npm\s+exec)\s+(?:--\s+)?eslint\b|eslint\s+)/i,
+  ],
 ]
 
 function forbiddenCommands(commands) {
@@ -97,7 +109,7 @@ function invokedNpmScripts(commands) {
       'prepublish',
       'preprepare',
       'prepare',
-      'postprepare'
+      'postprepare',
     ]) {
       names.add(lifecycle)
     }
@@ -125,27 +137,14 @@ function transitivePackageCommands(initial, scripts) {
 export function validateReleaseWorkflow(workflow, packageJson) {
   const issues = []
   const trigger = workflow?.on
-  const push = trigger?.push
-  if (!push || !Array.isArray(push.branches) || push.branches.length !== 1 || push.branches[0] !== '**') {
-    issues.push('trigger must cover branch pushes explicitly')
+  if (!trigger || !hasOwn(trigger, 'workflow_dispatch') || Object.keys(trigger).length !== 1) {
+    issues.push('stable publication must be workflow_dispatch-only')
   }
-  if (hasOwn(push, 'tags') || hasOwn(push, 'tags-ignore')) {
-    issues.push('tag pushes must never trigger publication')
-  }
-  if (hasOwn(push, 'paths') || hasOwn(push, 'paths-ignore') || hasOwn(push, 'branches-ignore')) {
-    issues.push('path filters must not skip branch update pushes')
-  }
-  if (!hasOwn(trigger, 'workflow_dispatch')) issues.push('manual dispatch trigger is missing')
 
   const concurrency = workflow?.concurrency
   const concurrencyGroup = concurrency?.group
-  if (
-    typeof concurrencyGroup !== 'string' ||
-    !concurrencyGroup.includes('${{ github.workflow }}') ||
-    !concurrencyGroup.includes('${{ github.run_number }}') ||
-    concurrencyGroup.includes('${{ github.run_attempt }}')
-  ) {
-    issues.push('concurrency must isolate attempts by workflow and run number')
+  if (concurrencyGroup !== 'release-${{ github.workflow }}-${{ github.ref }}') {
+    issues.push('concurrency must serialize release attempts by workflow and ref')
   }
   if (concurrency?.['cancel-in-progress'] !== false) {
     issues.push('publishing attempts must never cancel in progress')
@@ -161,9 +160,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const job = jobs.release ?? {}
   if (job['runs-on'] !== 'windows-latest') issues.push('release job must run on windows-latest')
   if (hasOwn(job, 'needs')) issues.push('release publication must not depend on a validation job')
-  if (typeof job.if !== 'string' || job.if.trim() !== "github.event_name != 'push' || github.event.deleted != true") {
-    issues.push('branch-deletion pushes must be skipped before the release job starts')
-  }
+  if (hasOwn(job, 'if')) issues.push('manual release job must not be conditionally skipped')
   if (job?.env?.GH_TOKEN != null || job?.env?.GITHUB_TOKEN != null) {
     issues.push('write-capable GitHub tokens must never be job-wide')
   }
@@ -171,12 +168,16 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const steps = Array.isArray(job.steps) ? job.steps : []
   const stepById = (id) => steps.find((step) => step?.id === id)
   const criticalShells = new Map([
+    ['guard', 'bash'],
+    ['source', 'bash'],
+    ['tag', 'bash'],
+    ['version', 'bash'],
     ['assets', 'bash'],
     ['unsigned', 'pwsh'],
     ['draft', 'bash'],
     ['upload', 'bash'],
     ['notes', 'bash'],
-    ['publish', 'bash']
+    ['publish', 'bash'],
   ])
   for (const id of ['package', ...criticalShells.keys()]) {
     const step = stepById(id)
@@ -196,9 +197,10 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   }
   const tokenSteps = new Map([
     ['timing', '${{ github.token }}'],
+    ['version', '${{ github.token }}'],
     ['draft', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
     ['upload', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
-    ['publish', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}']
+    ['publish', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
   ])
   for (const step of steps) {
     const token = step?.env?.GH_TOKEN ?? step?.env?.GITHUB_TOKEN
@@ -211,24 +213,52 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     if (stepById(id)?.env?.GH_TOKEN !== token) issues.push(`step ${id} must receive only its approved GitHub token`)
   }
   const releaseDataflow = new Map([
-    ['draft', {
-      RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
-      RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}'
-    }],
-    ['upload', {
-      RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
-      ASSET_PATHS: '${{ steps.assets.outputs.paths }}',
-      RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}'
-    }],
-    ['notes', {
-      RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
-      WORKFLOW_STARTED_AT: '${{ steps.timing.outputs.started_at }}',
-      RELEASE_ASSET_PATHS: '${{ steps.assets.outputs.paths }}'
-    }],
-    ['publish', {
-      RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
-      RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}'
-    }]
+    [
+      'assets',
+      {
+        RELEASE_VERSION: '${{ steps.tag.outputs.version }}',
+        RELEASE_PACKAGE_ID: 'node-terminal',
+        RELEASE_PRODUCT_NAME: 'nodeterm',
+      },
+    ],
+    [
+      'version',
+      {
+        RELEASE_VERSION: '${{ steps.tag.outputs.version }}',
+      },
+    ],
+    [
+      'draft',
+      {
+        RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
+        RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}',
+      },
+    ],
+    [
+      'upload',
+      {
+        RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
+        ASSET_PATHS: '${{ steps.assets.outputs.paths }}',
+        RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}',
+      },
+    ],
+    [
+      'notes',
+      {
+        RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
+        WORKFLOW_STARTED_AT: '${{ steps.timing.outputs.started_at }}',
+        RELEASE_ASSET_PATHS: '${{ steps.assets.outputs.paths }}',
+        RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}',
+      },
+    ],
+    [
+      'publish',
+      {
+        RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
+        RELEASE_VERSION: '${{ steps.tag.outputs.version }}',
+        RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}',
+      },
+    ],
   ])
   for (const [id, expected] of releaseDataflow) {
     const env = stepById(id)?.env ?? {}
@@ -239,33 +269,94 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const allCommands = steps.flatMap((step) => logicalCommands(step?.run))
   const forbidden = [
     ...forbiddenCommands(allCommands),
-    ...forbiddenCommands(transitivePackageCommands(allCommands, packageJson?.scripts))
+    ...forbiddenCommands(transitivePackageCommands(allCommands, packageJson?.scripts)),
   ]
   if (forbidden.length) {
     issues.push(`runner executes forbidden validation commands: ${forbidden.join(' | ')}`)
+  }
+  const releaseJsonViews = allCommands.filter(
+    (command) => /\bgh\s+release\s+view\b/.test(command) && /(?:^|\s)--json\s+/.test(command),
+  )
+  if (
+    releaseJsonViews.length === 0 ||
+    releaseJsonViews.some((command) => !/(?:^|\s)--json\s+[^\s]*\bisPrerelease\b/.test(command))
+  ) {
+    issues.push('every release JSON query must request isPrerelease')
   }
 
   const checkoutAt = steps.findIndex((step) => String(step?.uses ?? '').startsWith('actions/checkout@'))
   if (steps[checkoutAt]?.with?.['persist-credentials'] !== false) {
     issues.push('checkout must not persist the write token for build subprocesses')
   }
-  const tagGuardAt = steps.findIndex(
-    (step) =>
-      typeof step?.if === 'string' &&
-      /github\.ref_type\s*==\s*'tag'/.test(step.if) &&
-      logicalCommands(step.run).some((command) => /^exit\s+1$/.test(command))
+  const mainRefGuardAt = steps.findIndex(
+    (step) => isNonMainRefusal(step?.if) && logicalCommands(step.run).some((command) => /^exit\s+1$/.test(command)),
   )
-  if (tagGuardAt < 0 || checkoutAt < 0 || tagGuardAt >= checkoutAt) {
-    issues.push('a failing tag-ref guard must run before checkout')
+  if (mainRefGuardAt < 0 || checkoutAt < 0 || mainRefGuardAt >= checkoutAt) {
+    issues.push('a failing non-main ref guard must run before checkout')
+  }
+  const sourceAt = stepIndex(steps, 'source')
+  const sourceCommands = logicalCommands(steps[sourceAt]?.run)
+  if (
+    sourceAt !== checkoutAt + 1 ||
+    sourceCommands.indexOf('checked_out="$(git rev-parse HEAD)"') < 0 ||
+    !sourceCommands.includes('node scripts/release-assets.mjs assert-target "$checked_out" "$GITHUB_SHA"')
+  ) {
+    issues.push('checked-out HEAD must be proven equal to GITHUB_SHA immediately after checkout')
   }
 
   const tagAt = stepIndex(steps, 'tag')
-  const tagCommands = logicalCommands(steps[tagAt]?.run).join('\n')
-  if (!tagCommands.includes('GITHUB_RUN_NUMBER') || tagCommands.includes('GITHUB_RUN_ATTEMPT')) {
-    issues.push('tag must be unique per run and stable across retry attempts')
+  const tagCommandList = logicalCommands(steps[tagAt]?.run)
+  const tagCommands = tagCommandList.join('\n')
+  const versionReadAt = tagCommandList.indexOf('version="$(node -p "require(\'./package.json\').version")"')
+  const stableGuardAt = tagCommandList.findIndex(
+    (command) => command.replace(/\s+/g, '') === 'if[[!"$version"=~^[0-9]+\\.[0-9]+\\.[0-9]+$]];then',
+  )
+  const stableGuardEndAt = tagCommandList.findIndex((command, index) => index > stableGuardAt && command === 'fi')
+  const stableGuardExitAt = tagCommandList.findIndex(
+    (command, index) => index > stableGuardAt && index < stableGuardEndAt && command === 'exit 1',
+  )
+  const stableTagAt = tagCommandList.indexOf('tag="v${version}"')
+  if (
+    versionReadAt < 0 ||
+    stableGuardAt <= versionReadAt ||
+    stableGuardExitAt <= stableGuardAt ||
+    stableGuardEndAt <= stableGuardExitAt ||
+    stableTagAt <= stableGuardEndAt ||
+    /GITHUB_RUN_(?:NUMBER|ATTEMPT)/.test(tagCommands) ||
+    /-ci\b/.test(tagCommands)
+  ) {
+    issues.push('tag must be the exact stable v<package.version> value with a fail-closed SemVer guard')
   }
-  if (!/>>\s*"?\$GITHUB_OUTPUT"?/.test(tagCommands)) {
-    issues.push('computed release tag must be exported as a step output')
+  if (typeof packageJson?.version !== 'string' || !/^[0-9]+\.[0-9]+\.[0-9]+$/.test(packageJson.version)) {
+    issues.push('package.version must be a stable major.minor.patch SemVer')
+  }
+  if (
+    !tagCommandList.includes('echo "version=$version" >> "$GITHUB_OUTPUT"') ||
+    !tagCommandList.includes('echo "tag=$tag" >> "$GITHUB_OUTPUT"')
+  ) {
+    issues.push('computed stable version and release tag must be exported as step outputs')
+  }
+
+  const versionAt = stepIndex(steps, 'version')
+  const versionCommands = logicalCommands(steps[versionAt]?.run)
+  const versionTagsAt = versionCommands.indexOf(
+    'gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" > "$RUNNER_TEMP/tags-before-build.json"',
+  )
+  const versionReleasesAt = versionCommands.indexOf(
+    'gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-before-build.json"',
+  )
+  const versionAdvanceAt = versionCommands.indexOf(
+    'node scripts/release-assets.mjs assert-version "$RELEASE_VERSION" "$RUNNER_TEMP/tags-before-build.json" "$RUNNER_TEMP/releases-before-build.json" "$GITHUB_SHA"',
+  )
+  const buildAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm run build'))
+  if (
+    versionAt <= tagAt ||
+    versionAt >= buildAt ||
+    versionTagsAt < 0 ||
+    versionReleasesAt <= versionTagsAt ||
+    versionAdvanceAt <= versionReleasesAt
+  ) {
+    issues.push('stable version advancement must be proven from the complete release inventory before build')
   }
 
   const packageAt = stepIndex(steps, 'package')
@@ -295,17 +386,19 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const assetsCommands = logicalCommands(steps[assetsAt]?.run)
   if (
     !assetsCommands.some((command) =>
-      /^node\s+scripts\/release-assets\.mjs\s+collect\s+dist\/squirrel-windows$/.test(command)
+      /^node\s+scripts\/release-assets\.mjs\s+collect\s+"\$RELEASE_VERSION"\s+"\$RELEASE_PACKAGE_ID"\s+"\$RELEASE_PRODUCT_NAME"\s+dist\/squirrel-windows$/.test(command),
     )
   ) {
-    issues.push('asset step must run the executable Squirrel inventory contract')
+    issues.push('asset step must bind the expected version, package id, and product name to the executable Squirrel inventory contract')
   }
 
   const unsignedAt = stepIndex(steps, 'unsigned')
   const unsignedCommands = logicalCommands(steps[unsignedAt]?.run)
   if (
     steps[unsignedAt]?.env?.SETUP_PATH !== '${{ steps.assets.outputs.setup }}' ||
-    !unsignedCommands.some((command) => /^\$sig\s*=\s*Get-AuthenticodeSignature\s+-FilePath\s+\$env:SETUP_PATH$/.test(command)) ||
+    !unsignedCommands.some((command) =>
+      /^\$sig\s*=\s*Get-AuthenticodeSignature\s+-FilePath\s+\$env:SETUP_PATH$/.test(command),
+    ) ||
     !unsignedCommands.includes('node scripts/release-assets.mjs assert-unsigned "$($sig.Status)"') ||
     !unsignedCommands.includes('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }')
   ) {
@@ -316,65 +409,111 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const uploadAt = stepIndex(steps, 'upload')
   const notesAt = stepIndex(steps, 'notes')
   const publishAt = stepIndex(steps, 'publish')
-  const ordered = [packageAt, assetsAt, unsignedAt, draftAt, uploadAt, notesAt, publishAt]
+  const ordered = [sourceAt, tagAt, versionAt, packageAt, assetsAt, unsignedAt, draftAt, uploadAt, notesAt, publishAt]
   if (ordered.some((index) => index < 0) || ordered.some((index, i) => i > 0 && index <= ordered[i - 1])) {
-    issues.push('package, local verification, draft, upload, notes and publication must stay ordered')
+    issues.push('source, version, package, local verification, draft, upload, notes and publication must stay ordered')
   }
 
   const draftCommands = logicalCommands(steps[draftAt]?.run)
   const createCommands = allCommands.filter((command) => /\bgh\s+release\s+create\b/.test(command))
   const createCommand = createCommands[0] ?? ''
+  const releaseProbeAt = draftCommands.findIndex((command) =>
+    /^if gh api "repos\/\$\{GITHUB_REPOSITORY\}\/releases\/tags\/\$\{RELEASE_TAG\}" --silent 2>"\$RUNNER_TEMP\/release-probe-error\.txt"; then$/.test(
+      command,
+    ),
+  )
+  const confirmedAbsentAt = draftCommands.findIndex(
+    (command, index) =>
+      index > releaseProbeAt && /^elif grep -Eq .*HTTP 404.*release-probe-error\.txt"; then$/.test(command),
+  )
+  const draftCreateAt = draftCommands.indexOf(createCommand)
+  const failedProbeReadAt = draftCommands.findIndex(
+    (command, index) => index > draftCreateAt && command === 'cat "$RUNNER_TEMP/release-probe-error.txt" >&2',
+  )
+  const failedProbeExitAt = draftCommands.findIndex(
+    (command, index) => index > failedProbeReadAt && command === 'exit 1',
+  )
+  if (
+    releaseProbeAt < 0 ||
+    confirmedAbsentAt <= releaseProbeAt ||
+    draftCreateAt <= confirmedAbsentAt ||
+    failedProbeReadAt <= draftCreateAt ||
+    failedProbeExitAt <= failedProbeReadAt
+  ) {
+    issues.push('release creation must follow only a confirmed 404; failed reads must stop')
+  }
   if (
     createCommands.length !== 1 ||
     !/\bgh\s+release\s+create\s+"\$RELEASE_TAG"(?:\s|$)/.test(createCommand) ||
     !/(?:^|\s)--draft(?:\s|$)/.test(createCommand) ||
     createCommand.includes('--draft=false') ||
+    !/(?:^|\s)--prerelease=false(?:\s|$)/.test(createCommand) ||
     !/--target\s+"\$GITHUB_SHA"/.test(createCommand)
   ) {
-    issues.push('exactly one release creation must target GITHUB_SHA as a private draft')
+    issues.push('exactly one release creation must target GITHUB_SHA as a non-prerelease private draft')
   }
   const draftEdits = draftCommands.filter((command) => /\bgh\s+release\s+edit\b/.test(command))
   if (
     !draftEdits.length ||
     draftEdits.some(
       (command) =>
-        !/(?:^|\s)--draft(?:\s|$)/.test(command) || command.includes('--draft=false')
+        !/(?:^|\s)--draft(?:\s|$)/.test(command) ||
+        command.includes('--draft=false') ||
+        !/(?:^|\s)--prerelease=false(?:\s|$)/.test(command),
     )
   ) {
-    issues.push('retry preparation may edit only a draft release')
+    issues.push('retry preparation may edit only a non-prerelease draft release')
   }
   const viewExistingAt = draftCommands.findIndex((command) =>
-    /^gh release view "\$RELEASE_TAG" .*--json isDraft,assets,tagName,targetCommitish > "\$RUNNER_TEMP\/existing-release\.json"$/.test(command)
+    /^gh release view "\$RELEASE_TAG" .*--json isDraft,isPrerelease,assets,tagName,targetCommitish > "\$RUNNER_TEMP\/existing-release\.json"$/.test(
+      command,
+    ),
   )
   const readExistingTagAt = draftCommands.findIndex((command) =>
-    /^tag_sha=\$\(gh api "repos\/\$\{GITHUB_REPOSITORY\}\/git\/ref\/tags\/\$\{RELEASE_TAG\}" --jq \.object\.sha\)$/.test(command)
+    /^tag_sha=\$\(gh api "repos\/\$\{GITHUB_REPOSITORY\}\/git\/ref\/tags\/\$\{RELEASE_TAG\}" --jq \.object\.sha\)$/.test(
+      command,
+    ),
   )
   const assertExistingTagAt = draftCommands.findIndex((command) =>
-    /^node scripts\/release-assets\.mjs assert-target "\$tag_sha" "\$GITHUB_SHA"$/.test(command)
+    /^node scripts\/release-assets\.mjs assert-target "\$tag_sha" "\$GITHUB_SHA"$/.test(command),
   )
   const verifyExistingAt = draftCommands.findIndex((command) =>
-    /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/existing-release\.json" published exact$/.test(command)
+    /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/existing-release\.json" published exact$/.test(command),
   )
-  const reuseExistingAt = draftCommands.findIndex((command) =>
-    /already_published=true.*GITHUB_OUTPUT/.test(command)
+  const viewExistingLatestAt = draftCommands.findIndex((command) =>
+    /^gh release view --repo "\$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "\$RUNNER_TEMP\/existing-latest-release\.json"$/.test(
+      command,
+    ),
   )
+  const verifyExistingLatestAt = draftCommands.findIndex((command) =>
+    /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/existing-latest-release\.json" published exact$/.test(
+      command,
+    ),
+  )
+  const reuseExistingAt = draftCommands.findIndex((command) => /already_published=true.*GITHUB_OUTPUT/.test(command))
   const reuseExitAt = draftCommands.findIndex((command, index) => index > reuseExistingAt && command === 'exit 0')
-  if (
-    !(
-      viewExistingAt >= 0 &&
-      readExistingTagAt > viewExistingAt &&
-      assertExistingTagAt > readExistingTagAt &&
-      verifyExistingAt > assertExistingTagAt &&
-      reuseExistingAt > verifyExistingAt &&
-      reuseExitAt > reuseExistingAt
-    )
-  ) {
-    issues.push('an already-published retry must validate and reuse the complete release')
+  if (!(
+    viewExistingAt >= 0 &&
+    readExistingTagAt > viewExistingAt &&
+    assertExistingTagAt > readExistingTagAt &&
+    verifyExistingAt > assertExistingTagAt &&
+    viewExistingLatestAt > verifyExistingAt &&
+    verifyExistingLatestAt > viewExistingLatestAt &&
+    reuseExistingAt > verifyExistingLatestAt &&
+    reuseExitAt > reuseExistingAt
+  )) {
+    issues.push('an already-published retry must prove and reuse the exact latest stable release')
   }
 
-  const releaseCommands = allCommands.filter((command) => /\bgh\s+release\s+(?:view|create|edit|upload|delete-asset)\b/.test(command))
-  if (releaseCommands.some((command) => !command.includes('"$RELEASE_TAG"'))) {
-    issues.push('every release API command must operate on this run\'s RELEASE_TAG')
+  const releaseCommands = allCommands.filter((command) =>
+    /\bgh\s+release\s+(?:view|create|edit|upload|delete-asset)\b/.test(command),
+  )
+  const isLatestReleaseQuery = (command) =>
+    /^gh release view --repo "\$GITHUB_REPOSITORY" --json .* > "\$RUNNER_TEMP\/(?:existing-)?latest-release\.json"$/.test(
+      command,
+    )
+  if (releaseCommands.some((command) => !command.includes('"$RELEASE_TAG"') && !isLatestReleaseQuery(command))) {
+    issues.push("every release API command must operate on this run's RELEASE_TAG")
   }
 
   const uploadStep = steps[uploadAt]
@@ -386,7 +525,9 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   }
   if (
     !uploadCommand ||
-    !/^gh release upload "\$RELEASE_TAG" "\$\{assets\[@\]\}" --clobber --repo "\$GITHUB_REPOSITORY"$/.test(uploadCommand)
+    !/^gh release upload "\$RELEASE_TAG" "\$\{assets\[@\]\}" --clobber --repo "\$GITHUB_REPOSITORY"$/.test(
+      uploadCommand,
+    )
   ) {
     issues.push('draft upload must fail loudly and be retry-safe with --clobber')
   }
@@ -396,63 +537,94 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   }
   const publishCommands = logicalCommands(steps[publishAt]?.run)
   const viewDraftAt = publishCommands.findIndex((command) =>
-    /^gh release view "\$RELEASE_TAG" .*--json isDraft,assets,tagName,targetCommitish > "\$RUNNER_TEMP\/draft-release\.json"$/.test(command)
+    /^gh release view "\$RELEASE_TAG" .*--json isDraft,isPrerelease,assets,tagName,targetCommitish > "\$RUNNER_TEMP\/draft-release\.json"$/.test(
+      command,
+    ),
   )
   const verifyDraftAt = publishCommands.findIndex((command) =>
-    /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/draft-release\.json" draft exact$/.test(command)
+    /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/draft-release\.json" draft exact$/.test(command),
   )
   const prepublishTagProbeAt = publishCommands.findIndex((command) =>
-    /^if tag_sha=\$\(gh api "repos\/\$\{GITHUB_REPOSITORY\}\/git\/ref\/tags\/\$\{RELEASE_TAG\}" --jq \.object\.sha 2>"\$RUNNER_TEMP\/tag-ref-error\.txt"\); then$/.test(command)
+    /^if tag_sha=\$\(gh api "repos\/\$\{GITHUB_REPOSITORY\}\/git\/ref\/tags\/\$\{RELEASE_TAG\}" --jq \.object\.sha 2>"\$RUNNER_TEMP\/tag-ref-error\.txt"\); then$/.test(
+      command,
+    ),
   )
   const prepublishTagAssertAt = publishCommands.findIndex(
     (command, index) =>
       index > prepublishTagProbeAt &&
-      command === 'node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"'
+      command === 'node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"',
   )
   const confirmedMissingTagAt = publishCommands.findIndex(
     (command, index) =>
-      index > prepublishTagAssertAt &&
-      /^elif grep -Eq .*HTTP 404.*tag-ref-error\.txt"; then$/.test(command)
+      index > prepublishTagAssertAt && /^elif grep -Eq .*HTTP 404.*tag-ref-error\.txt"; then$/.test(command),
   )
   const failedTagReadExitAt = publishCommands.findIndex(
-    (command, index) => index > confirmedMissingTagAt && command === 'exit 1'
+    (command, index) => index > confirmedMissingTagAt && command === 'exit 1',
+  )
+  const prepublishTagsAt = publishCommands.indexOf(
+    'gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" > "$RUNNER_TEMP/tags-before-publish.json"',
+  )
+  const prepublishReleasesAt = publishCommands.indexOf(
+    'gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-before-publish.json"',
+  )
+  const prepublishVersionAt = publishCommands.indexOf(
+    'node scripts/release-assets.mjs assert-version "$RELEASE_VERSION" "$RUNNER_TEMP/tags-before-publish.json" "$RUNNER_TEMP/releases-before-publish.json" "$GITHUB_SHA"',
   )
   const transitionAt = publishCommands.findIndex(
-    (command) => command === 'gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false'
+    (command) =>
+      command ===
+      'gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest',
   )
   const viewPublishedAt = publishCommands.findIndex((command) =>
-    /^gh release view "\$RELEASE_TAG" .*--json isDraft,assets,tagName,targetCommitish > "\$RUNNER_TEMP\/published-release\.json"$/.test(command)
+    /^gh release view "\$RELEASE_TAG" .*--json isDraft,isPrerelease,assets,tagName,targetCommitish > "\$RUNNER_TEMP\/published-release\.json"$/.test(
+      command,
+    ),
   )
   const readPublishedTagAt = publishCommands.findIndex((command) =>
-    /^tag_sha=\$\(gh api "repos\/\$\{GITHUB_REPOSITORY\}\/git\/ref\/tags\/\$\{RELEASE_TAG\}" --jq \.object\.sha\)$/.test(command)
+    /^tag_sha=\$\(gh api "repos\/\$\{GITHUB_REPOSITORY\}\/git\/ref\/tags\/\$\{RELEASE_TAG\}" --jq \.object\.sha\)$/.test(
+      command,
+    ),
   )
   const assertPublishedTagAt = publishCommands.findIndex(
     (command, index) =>
       index > readPublishedTagAt &&
-      /^node scripts\/release-assets\.mjs assert-target "\$tag_sha" "\$GITHUB_SHA"$/.test(command)
+      /^node scripts\/release-assets\.mjs assert-target "\$tag_sha" "\$GITHUB_SHA"$/.test(command),
   )
   const verifyPublishedAt = publishCommands.findIndex((command) =>
-    /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/published-release\.json" published exact$/.test(command)
+    /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/published-release\.json" published exact$/.test(command),
   )
-  if (
-    !(
-      viewDraftAt >= 0 &&
-      verifyDraftAt > viewDraftAt &&
-      prepublishTagProbeAt > verifyDraftAt &&
-      prepublishTagAssertAt > prepublishTagProbeAt &&
-      confirmedMissingTagAt > prepublishTagAssertAt &&
-      failedTagReadExitAt > confirmedMissingTagAt &&
-      transitionAt > failedTagReadExitAt &&
-      readPublishedTagAt > transitionAt &&
-      assertPublishedTagAt > readPublishedTagAt &&
-      viewPublishedAt > assertPublishedTagAt &&
-      verifyPublishedAt > viewPublishedAt
+  const viewLatestAt = publishCommands.findIndex((command) =>
+    /^gh release view --repo "\$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "\$RUNNER_TEMP\/latest-release\.json"$/.test(
+      command,
+    ),
+  )
+  const verifyLatestAt = publishCommands.findIndex((command) =>
+    /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/latest-release\.json" published exact$/.test(command),
+  )
+  if (!(
+    viewDraftAt >= 0 &&
+    verifyDraftAt > viewDraftAt &&
+    prepublishTagProbeAt > verifyDraftAt &&
+    prepublishTagAssertAt > prepublishTagProbeAt &&
+    confirmedMissingTagAt > prepublishTagAssertAt &&
+    failedTagReadExitAt > confirmedMissingTagAt &&
+    prepublishTagsAt > failedTagReadExitAt &&
+    prepublishReleasesAt > prepublishTagsAt &&
+    prepublishVersionAt > prepublishReleasesAt &&
+    transitionAt > prepublishVersionAt &&
+    readPublishedTagAt > transitionAt &&
+    assertPublishedTagAt > readPublishedTagAt &&
+    viewPublishedAt > assertPublishedTagAt &&
+    verifyPublishedAt > viewPublishedAt &&
+    viewLatestAt > verifyPublishedAt &&
+    verifyLatestAt > viewLatestAt
+  )) {
+    issues.push(
+      'exact draft, version, publication and repository-latest proofs must surround the sole publish transition',
     )
-  ) {
-    issues.push('exact remote draft verification must precede the sole publish transition and post-check')
   }
   const allTransitions = allCommands.filter(
-    (command) => /\bgh\s+release\s+edit\b/.test(command) && command.includes('--draft=false')
+    (command) => /\bgh\s+release\s+edit\b/.test(command) && command.includes('--draft=false'),
   )
   if (allTransitions.length !== 1) issues.push('workflow must contain exactly one public transition')
 

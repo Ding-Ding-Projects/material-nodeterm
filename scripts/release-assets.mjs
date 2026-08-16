@@ -5,11 +5,13 @@ import { createReadStream } from 'node:fs'
 import { appendFile, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Open } from 'unzipper'
 
 const SETUP_RE = /^.+-Setup-.+\.exe$/i
 const NUPKG_RE = /\.nupkg$/i
 const FULL_NUPKG_RE = /-full\.nupkg$/i
 const RELEASE_LINE_RE = /^([0-9a-f]{40})\s+(\S+)\s+(\d+)$/i
+const STABLE_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 
 function fail(message) {
   throw new Error(message)
@@ -29,6 +31,81 @@ export function requireReleaseTarget(actual, expected) {
     fail(`release tag target mismatch: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
   }
   return actual
+}
+
+function stableVersionParts(version, description) {
+  const match = STABLE_VERSION_RE.exec(version)
+  if (!match) fail(`${description} must be an exact stable major.minor.patch SemVer, got ${JSON.stringify(version)}`)
+  return match.slice(1).map((part) => BigInt(part))
+}
+
+function compareStableVersions(left, right) {
+  const a = stableVersionParts(left, 'stable version')
+  const b = stableVersionParts(right, 'stable version')
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] < b[index]) return -1
+    if (a[index] > b[index]) return 1
+  }
+  return 0
+}
+
+function flattenGitHubPages(pages, description) {
+  if (!Array.isArray(pages)) fail(`${description} response must be an array`)
+  const nested = pages.every(Array.isArray)
+  const flat = pages.every((entry) => !Array.isArray(entry))
+  if (!nested && !flat) fail(`${description} response must not mix pages and objects`)
+  return nested ? pages.flat() : pages
+}
+
+/** Require a new stable version, except for an exact same-tag/same-commit retry. */
+export function requireStableVersionAdvance(candidate, tagPages, releasePages, expectedTarget) {
+  stableVersionParts(candidate, 'candidate version')
+  if (!/^[0-9a-f]{40}$/i.test(expectedTarget)) fail('expected release target must be a full commit SHA')
+  const tags = flattenGitHubPages(tagPages, 'GitHub tags')
+  const releases = flattenGitHubPages(releasePages, 'GitHub releases')
+  let highest = null
+  const candidateTargets = []
+
+  for (const [index, tag] of tags.entries()) {
+    if (tag == null || typeof tag !== 'object' || Array.isArray(tag)) {
+      fail(`GitHub tag ${index + 1} must be an object`)
+    }
+    const name = tag.name
+    if (typeof name !== 'string' || !name.startsWith('v') || !STABLE_VERSION_RE.test(name.slice(1))) continue
+    const target = tag.commit?.sha
+    if (typeof target !== 'string') fail(`stable tag ${name} must expose commit.sha`)
+    const version = name.slice(1)
+    if (highest == null || compareStableVersions(version, highest) > 0) highest = version
+    if (version === candidate) candidateTargets.push(target)
+  }
+
+  for (const [index, release] of releases.entries()) {
+    if (release == null || typeof release !== 'object' || Array.isArray(release)) {
+      fail(`GitHub release ${index + 1} must be an object`)
+    }
+    const tag = release.tag_name ?? release.tagName
+    if (typeof tag !== 'string' || !tag.startsWith('v') || !STABLE_VERSION_RE.test(tag.slice(1))) continue
+    const target = release.target_commitish ?? release.targetCommitish
+    if (typeof target !== 'string') fail(`stable release ${tag} must expose target_commitish`)
+    const version = tag.slice(1)
+    if (highest == null || compareStableVersions(version, highest) > 0) highest = version
+    if (version === candidate) candidateTargets.push(target)
+  }
+
+  if (highest == null || compareStableVersions(candidate, highest) > 0) {
+    return { kind: 'advance', highest }
+  }
+  if (
+    candidate === highest &&
+    candidateTargets.length > 0 &&
+    candidateTargets.every((target) => target === expectedTarget)
+  ) {
+    return { kind: 'retry', highest }
+  }
+  if (candidate === highest) {
+    fail(`stable tag v${candidate} already targets a different commit; exact retry refused`)
+  }
+  fail(`candidate version ${candidate} must be newer than highest stable version ${highest}`)
 }
 
 function sorted(items, select = (item) => item) {
@@ -85,7 +162,15 @@ export function parseReleases(text) {
 }
 
 async function sha1File(file) {
-  const hash = createHash('sha1')
+  return hashFile(file, 'sha1')
+}
+
+async function sha256File(file) {
+  return hashFile(file, 'sha256')
+}
+
+async function hashFile(file, algorithm) {
+  const hash = createHash(algorithm)
   await new Promise((resolve, reject) => {
     const stream = createReadStream(file)
     stream.on('data', (chunk) => hash.update(chunk))
@@ -93,6 +178,66 @@ async function sha1File(file) {
     stream.on('end', resolve)
   })
   return hash.digest('hex')
+}
+
+function requireReleaseIdentity(version, packageId, productName) {
+  stableVersionParts(version, 'expected release version')
+  if (typeof packageId !== 'string' || !/^[A-Za-z0-9._-]+$/.test(packageId)) {
+    fail(`expected Squirrel package id must contain only letters, digits, dot, underscore, or hyphen, got ${JSON.stringify(packageId)}`)
+  }
+  if (typeof productName !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9 ._-]*$/.test(productName)) {
+    fail(`expected product name must be a safe non-empty Windows filename component, got ${JSON.stringify(productName)}`)
+  }
+  return { version, packageId, productName }
+}
+
+function nuspecValue(text, element, packageName) {
+  const match = new RegExp(`<${element}(?:\\s[^>]*)?>\\s*([^<]+?)\\s*</${element}>`, 'i').exec(text)
+  if (!match) fail(`${packageName} nuspec is missing <${element}> metadata`)
+  return match[1]
+}
+
+async function requireFullPackageIdentity(asset, expected) {
+  let archive
+  try {
+    archive = await Open.file(asset.path)
+  } catch (error) {
+    fail(`could not open full Squirrel package ${asset.name}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  const nuspecEntries = archive.files.filter(
+    (entry) => entry.type === 'File' && entry.path.toLowerCase().endsWith('.nuspec'),
+  )
+  if (nuspecEntries.length !== 1) {
+    fail(`${asset.name} must contain exactly one nuspec, found ${nuspecEntries.length}`)
+  }
+  const nuspec = nuspecEntries[0]
+  const expectedNuspecName = `${expected.packageId}.nuspec`
+  if (nuspec.path !== expectedNuspecName) {
+    fail(`${asset.name} nuspec name mismatch: expected ${expectedNuspecName}, got ${nuspec.path}`)
+  }
+  if (!Number.isSafeInteger(nuspec.uncompressedSize) || nuspec.uncompressedSize <= 0 || nuspec.uncompressedSize > 1_048_576) {
+    fail(`${asset.name} nuspec has an unsafe uncompressed size`)
+  }
+
+  let text
+  try {
+    text = (await nuspec.buffer()).toString('utf8')
+  } catch (error) {
+    fail(`could not read ${asset.name} nuspec: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  const actualId = nuspecValue(text, 'id', asset.name)
+  const actualVersion = nuspecValue(text, 'version', asset.name)
+  const actualTitle = nuspecValue(text, 'title', asset.name)
+  if (actualId !== expected.packageId) {
+    fail(`${asset.name} package id mismatch: expected ${expected.packageId}, got ${actualId}`)
+  }
+  if (actualVersion !== expected.version) {
+    fail(`${asset.name} internal version mismatch: expected ${expected.version}, got ${actualVersion}`)
+  }
+  if (actualTitle !== expected.productName) {
+    fail(`${asset.name} product title mismatch: expected ${expected.productName}, got ${actualTitle}`)
+  }
 }
 
 async function regularFile(directory, entry) {
@@ -105,7 +250,8 @@ async function regularFile(directory, entry) {
 }
 
 /** Collect and validate the complete Squirrel.Windows release asset set. */
-export async function collectReleaseAssets(directory) {
+export async function collectReleaseAssets(directory, expectedVersion, expectedPackageId, expectedProductName) {
+  const expected = requireReleaseIdentity(expectedVersion, expectedPackageId, expectedProductName)
   const root = path.resolve(directory)
   let entries
   try {
@@ -128,13 +274,30 @@ export async function collectReleaseAssets(directory) {
     entries.filter((entry) => NUPKG_RE.test(entry.name)),
     (entry) => entry.name,
   )
-  const fullPackages = packageEntries.filter((entry) => FULL_NUPKG_RE.test(entry.name))
-  if (fullPackages.length === 0) fail('expected at least one *-full.nupkg')
+  const expectedSetupName = `${expected.productName}-Setup-${expected.version}.exe`
+  const expectedFullName = `${expected.packageId}-${expected.version}-full.nupkg`
+  const expectedDeltaName = `${expected.packageId}-${expected.version}-delta.nupkg`
+  const allowedPackageNames = new Set([expectedFullName, expectedDeltaName])
 
   const setup = await regularFile(root, setupEntries[0])
   const releases = await regularFile(root, releaseEntries[0])
   const packages = []
   for (const entry of packageEntries) packages.push(await regularFile(root, entry))
+
+  if (setup.name !== expectedSetupName) {
+    fail(`Setup identity/version mismatch: expected ${expectedSetupName}, got ${setup.name}`)
+  }
+  for (const asset of packages) {
+    if (!allowedPackageNames.has(asset.name)) {
+      fail(
+        `unexpected Squirrel package name: expected ${expectedFullName}` +
+          ` and optional ${expectedDeltaName}, got ${asset.name}`,
+      )
+    }
+  }
+  if (!packages.some((asset) => asset.name === expectedFullName)) {
+    fail(`expected exactly one full Squirrel package named ${expectedFullName}`)
+  }
 
   const releaseRows = parseReleases(await readFile(releases.path, 'utf8'))
   const rowsByName = new Map(releaseRows.map((row) => [row.name, row]))
@@ -156,8 +319,19 @@ export async function collectReleaseAssets(directory) {
     if (!rowsByName.has(asset.name)) fail(`package is not listed in RELEASES: ${asset.name}`)
   }
 
+  await requireFullPackageIdentity(packagesByName.get(expectedFullName), expected)
+
   const assets = sorted([setup, releases, ...packages], (asset) => asset.name)
-  const manifest = { assets: assets.map(({ name, size }) => ({ name, size })) }
+  const manifestAssets = []
+  for (const asset of assets) {
+    manifestAssets.push({ name: asset.name, size: asset.size, sha256: await sha256File(asset.path) })
+  }
+  const manifest = {
+    version: expected.version,
+    packageId: expected.packageId,
+    productName: expected.productName,
+    assets: manifestAssets,
+  }
   return {
     paths: assets.map((asset) => asset.path),
     setup: setup.path,
@@ -169,14 +343,15 @@ function validateExpectedManifest(value) {
   if (value == null || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.assets)) {
     fail('expected release asset manifest must contain an assets array')
   }
+  const identity = requireReleaseIdentity(value.version, value.packageId, value.productName)
   if (value.assets.length === 0) fail('expected release asset manifest assets must not be empty')
   const names = new Set()
-  return sorted(
+  const assets = sorted(
     value.assets.map((asset, index) => {
       if (asset == null || typeof asset !== 'object' || Array.isArray(asset)) {
         fail(`expected manifest asset ${index + 1} must be an object`)
       }
-      const { name, size } = asset
+      const { name, size, sha256 } = asset
       if (typeof name !== 'string' || name.length === 0 || /[\r\n]/.test(name)) {
         fail(`expected manifest asset ${index + 1} has an invalid name`)
       }
@@ -185,10 +360,14 @@ function validateExpectedManifest(value) {
       if (!Number.isSafeInteger(size) || size <= 0) {
         fail(`expected manifest asset ${name} has an invalid size`)
       }
-      return { name, size }
+      if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) {
+        fail(`expected manifest asset ${name} has an invalid SHA-256`)
+      }
+      return { name, size, sha256 }
     }),
     (asset) => asset.name,
   )
+  return { ...identity, assets }
 }
 
 function validateRemoteAssets(value) {
@@ -199,7 +378,7 @@ function validateRemoteAssets(value) {
       if (asset == null || typeof asset !== 'object' || Array.isArray(asset)) {
         fail(`remote release asset ${index + 1} must be an object`)
       }
-      const { name, size } = asset
+      const { name, size, digest } = asset
       if (typeof name !== 'string' || name.length === 0 || /[\r\n]/.test(name)) {
         fail(`remote release asset ${index + 1} has an invalid name`)
       }
@@ -208,13 +387,16 @@ function validateRemoteAssets(value) {
       if (!Number.isSafeInteger(size) || size <= 0) {
         fail(`remote release asset ${name} has an invalid size`)
       }
-      return { name, size }
+      if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(digest)) {
+        fail(`remote release asset ${name} must expose an exact sha256 digest`)
+      }
+      return { name, size, sha256: digest.slice('sha256:'.length) }
     }),
     (asset) => asset.name,
   )
 }
 
-/** Verify a `gh release view --json isDraft,assets` result against a local manifest. */
+/** Verify a `gh release view --json isDraft,isPrerelease,assets` result against a local manifest. */
 export function verifyRemoteRelease(release, expectedManifest, expectedState, comparison = 'exact', identity = {}) {
   if (expectedState !== 'draft' && expectedState !== 'published') {
     fail(`release state must be draft or published, got ${JSON.stringify(expectedState)}`)
@@ -224,10 +406,14 @@ export function verifyRemoteRelease(release, expectedManifest, expectedState, co
     fail('remote release JSON must be an object')
   }
   if (typeof release.isDraft !== 'boolean') fail('remote release JSON must contain boolean isDraft')
+  if (typeof release.isPrerelease !== 'boolean') fail('remote release JSON must contain boolean isPrerelease')
+  if (release.isPrerelease !== false) fail('remote release must be explicitly non-prerelease')
   if (typeof identity.tag !== 'string' || identity.tag.length === 0) fail('expected release tag is required')
   if (!/^[0-9a-f]{40}$/i.test(identity.target)) fail('expected release target must be a full commit SHA')
   if (release.tagName !== identity.tag) {
-    fail(`remote release tag mismatch: expected ${JSON.stringify(identity.tag)}, got ${JSON.stringify(release.tagName)}`)
+    fail(
+      `remote release tag mismatch: expected ${JSON.stringify(identity.tag)}, got ${JSON.stringify(release.tagName)}`,
+    )
   }
   if (release.targetCommitish !== identity.target) {
     fail(
@@ -241,7 +427,8 @@ export function verifyRemoteRelease(release, expectedManifest, expectedState, co
     fail(`remote release state mismatch: expected ${expectedState}, got ${release.isDraft ? 'draft' : 'published'}`)
   }
 
-  const expected = validateExpectedManifest(expectedManifest)
+  const expectedManifestValue = validateExpectedManifest(expectedManifest)
+  const expected = expectedManifestValue.assets
   const actual = validateRemoteAssets(release.assets)
   const expectedNames = expected.map((asset) => asset.name)
   const actualNames = actual.map((asset) => asset.name)
@@ -255,11 +442,14 @@ export function verifyRemoteRelease(release, expectedManifest, expectedState, co
     )
   }
 
-  const expectedByName = new Map(expected.map((asset) => [asset.name, asset.size]))
+  const expectedByName = new Map(expected.map((asset) => [asset.name, asset]))
   for (const asset of actual) {
-    const expectedSize = expectedByName.get(asset.name)
-    if (asset.size !== expectedSize) {
-      fail(`remote release asset size mismatch for ${asset.name}: expected ${expectedSize}, got ${asset.size}`)
+    const expectedAsset = expectedByName.get(asset.name)
+    if (asset.size !== expectedAsset.size) {
+      fail(`remote release asset size mismatch for ${asset.name}: expected ${expectedAsset.size}, got ${asset.size}`)
+    }
+    if (asset.sha256 !== expectedAsset.sha256) {
+      fail(`remote release asset SHA-256 mismatch for ${asset.name}: expected ${expectedAsset.sha256}, got ${asset.sha256}`)
     }
   }
 
@@ -301,9 +491,31 @@ async function main(argv) {
     return
   }
 
+  if (command === 'assert-version') {
+    if (args.length !== 4) {
+      fail(
+        'usage: release-assets.mjs assert-version <candidate-version> <tags-json-file> <releases-json-file> <expected-sha>',
+      )
+    }
+    const [candidate, tagsFile, releasesFile, expectedTarget] = args
+    const tags = parseJson(await readFile(tagsFile, 'utf8'), 'GitHub tags file')
+    const releases = parseJson(await readFile(releasesFile, 'utf8'), 'GitHub releases file')
+    const result = requireStableVersionAdvance(candidate, tags, releases, expectedTarget)
+    console.log(
+      result.kind === 'retry'
+        ? `verified exact retry of stable v${candidate} at ${expectedTarget}`
+        : `verified stable version advance to v${candidate}`,
+    )
+    return
+  }
+
   if (command === 'collect') {
-    if (args.length > 1) fail('usage: release-assets.mjs collect [squirrel-output-directory]')
-    const result = await collectReleaseAssets(args[0] ?? 'dist/squirrel-windows')
+    if (args.length < 3 || args.length > 4) {
+      fail(
+        'usage: release-assets.mjs collect <expected-version> <expected-package-id> <expected-product-name> [squirrel-output-directory]',
+      )
+    }
+    const result = await collectReleaseAssets(args[3] ?? 'dist/squirrel-windows', args[0], args[1], args[2])
     await emitGitHubOutputs(result)
     console.log(`validated ${result.manifest.assets.length} Squirrel release assets`)
     return
@@ -333,7 +545,8 @@ async function main(argv) {
   fail(
     'usage: release-assets.mjs assert-target <actual-sha> <expected-sha>\n' +
       '   or: release-assets.mjs assert-unsigned <Authenticode-status>\n' +
-      '   or: release-assets.mjs collect [squirrel-output-directory]\n' +
+      '   or: release-assets.mjs assert-version <candidate-version> <tags-json-file> <releases-json-file> <expected-sha>\n' +
+      '   or: release-assets.mjs collect <expected-version> <expected-package-id> <expected-product-name> [squirrel-output-directory]\n' +
       '   or: release-assets.mjs verify <remote-json-file> <draft|published> exact',
   )
 }

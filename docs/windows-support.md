@@ -7,11 +7,12 @@ platform-difference defects were found, what now guards against them, and what i
 Keep the split — a user reading "what degrades" should not have to wade through regex archaeology,
 and a contributor about to touch a path needs the archaeology.
 
-**The Windows installer workflow builds and publishes each branch push whose ref contains the
-corrected workflow, on `windows-latest`** — a real Squirrel.Windows set (`Setup.exe`, full
-`.nupkg`, `RELEASES`), unsigned by policy. CI
-stages it as a draft, verifies the complete remote inventory, and only then makes it non-draft and
-downloadable; an upload failure exposes no empty release. That is the shipping path.
+**The Windows installer workflow is manual-only and accepts only `main`, on `windows-latest`.** It
+builds a real Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), unsigned by policy,
+then stages it as a draft, verifies the complete hosted inventory, and only then makes it
+non-draft and downloadable. Automatic publication is disabled because there is no push trigger;
+the workflow remains manually dispatchable. This change does not publish `0.4.0`, and manual
+publication remains pending the two packaged interactions below.
 
 **It also builds locally now**, which it did not for most of this work. `build.bat /s` completes in
 about 107 s and `build-installer.bat /s` in about 199 s, producing the same three-artifact Squirrel
@@ -19,16 +20,20 @@ set (a 205.8 MB `nodeterm-Setup-0.3.0.exe`, the full `.nupkg`, `RELEASES`), unsi
 That needed one elevated install of the Spectre-mitigated MSVC libraries — see
 [Building](#building).
 
-What has NOT happened is anyone **installing and launching one**. So the runtime behaviour of an
-INSTALLED build is still unverified — though the session-host path underneath it is no longer
-guesswork: it is now exercised directly against a real host, and the three defects that made it
-silently useless are fixed and covered below.
+What has NOT happened is either required **packaged transition interaction**. First, installed
+production `0.3.0` cannot discover `0.4.0`: its updater expected NSIS metadata from the old generic
+feed, which does not serve the Squirrel set. Its missing `--squirrel-obsolete` handling means the
+one-time manual Setup proof must exercise separate installs with `0.3.0` closed and running before
+publishing the supported sequence; close-first is only the provisional recommendation. Second,
+prove the updater code first shipped in `0.4.0` with the collision-safe
+`0.4.0-fixture.1` → `.2` loopback pair under an isolated identity in a disposable Windows
+Sandbox/VM. The latter does not prove the former.
 
 > An earlier version of this page said no packaged build had ever been produced. That was wrong:
 > it confused "I could not build one on this machine" with "the project does not build one". The
 > distinction matters, because the first is a local toolchain gap and the second would be a
-> release-pipeline failure. Both are now false anyway — CI builds one on every push, and so does
-> this machine.
+> release-pipeline failure. Both are now false anyway — the workflow can build one when manually
+> dispatched from `main`, and this machine can build one locally.
 
 Windows is the active delivery target, but most of this codebase was written on macOS. That
 asymmetry is the theme of this page: **almost every defect here was code that is genuinely correct
@@ -254,13 +259,18 @@ credential and shell-syntax cases continue to run under real Git Bash.
 
 ## Known gaps
 
-- **No packaged build has been INSTALLED and launched.** CI is configured to build and publish the
-  installer on each update of a branch carrying the corrected workflow (verified historically:
-  `v0.3.0-ci.165` carries a 206.8 MB `nodeterm-Setup-0.3.0.exe`, non-draft,
-  HTTP 206 on a range request), but nobody has run one. So the runtime behaviour of a real install
-  — tmux absence and the session-host fallback above all (see
-  [windows-session-host.md](windows-session-host.md)) — is unverified. Downloading one and clicking
-  through it is the single highest-value Windows check still outstanding.
+- **The `0.3.0` → `0.4.0` manual migration has not been proved.** The old app-side updater's
+  NSIS/dead-feed contract cannot discover the Squirrel candidate. On a real production-identity
+  Windows install, exercise the downloaded `0.4.0` Setup with `0.3.0` closed and, separately, with
+  it running. Verify the app, settings, shortcuts, executable metadata, and uninstall registration
+  survived, then document the supported state. Closing first remains provisional until this proof.
+- **The new updater's packaged interaction has not been proved.** Install the isolated
+  `0.4.0-fixture.1` package, wait out `--squirrel-firstrun`, launch its dynamically resolved
+  installed executable again, serve `.2` from loopback, and verify the indeterminate card plus
+  one-shot immediate restart. After relaunch, confirm Settings → Updates / `app.getVersion()`, the
+  installed executable/package version metadata, and settings persistence. Uninstall only the
+  unique fixture identity. This proof belongs in a disposable Windows Sandbox/VM and does not
+  substitute for the production migration above.
 - **The hosted workflow has now produced and validated unsigned Squirrel assets**, and this
   machine now has the Spectre-mitigated MSVC component. A production-BAT build from the final
   reconciled commit, followed by a real install/launch/update/uninstall check, is still required;

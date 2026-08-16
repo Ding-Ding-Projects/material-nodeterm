@@ -1766,8 +1766,15 @@ export interface GitApi {
 }
 
 export interface UpdateInfo {
-  version: string
+  /** Squirrel.Windows does not reveal the target version until download completion (and some
+   *  releases expose only an opaque release name), so absence must render as "a newer version". */
+  version?: string
   notes?: string
+  /**
+   * Electron's built-in Squirrel.Windows updater does not expose byte progress. When true, the
+   * renderer shows an indeterminate download bar instead of inventing a permanent `0%` reading.
+   */
+  indeterminateProgress?: boolean
   /**
    * The update cannot self-install and must be downloaded manually (Linux .deb/.rpm: no
    * APPIMAGE env, so electron-updater's quitAndInstall would throw). The card shows a
