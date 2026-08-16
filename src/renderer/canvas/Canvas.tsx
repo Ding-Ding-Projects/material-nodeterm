@@ -353,7 +353,7 @@ import type {
 import type { KanbanCreateChoice, KanbanSession } from '../components/kanban/KanbanView'
 import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTags, resolveColumnRef, unassigned } from '../lib/kanban'
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
-import { canClearDirty, canCommitCanvas } from '../state/persistGuards'
+import { canClearDirty, commitActiveCanvas } from '../state/persistGuards'
 import { isHidden } from '../lib/ui-visibility'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
@@ -365,15 +365,11 @@ import {
   type CanvasPublisher
 } from '@shared/canvas-publish'
 import { createCanvasOrder, createReconnectWatch, type CanvasOrder } from '@shared/canvas-order'
-import {
-  applyEdgeMutation,
-  createMutationGuard,
-  isEdgeMutation,
-  type CanvasScene
-} from '@shared/canvas-mutations'
+import { createMutationGuard, isEdgeMutation, type CanvasScene } from '@shared/canvas-mutations'
 import { chordHeld, isHoldChord, isModifierEventKey, matchesShortcut } from '@shared/shortcut'
 import { dispatchDestructiveControl } from '../lib/controlDestructive'
 import { canvasSyncTarget } from './collab-sync'
+import { receiveActiveEdgeMutation } from './team-edge-receive'
 import { CanvasPills } from './CanvasPills'
 import {
   applyCanvasMutation,
@@ -2099,21 +2095,23 @@ export function Canvas() {
 
   // ---- persistence helpers ----
   const commitActiveToStore = useCallback(() => {
-    const id = useProjects.getState().activeProjectId
+    const store = useProjects.getState()
     // Epoch pairing: only commit while the nodes React Flow holds belong to the ACTIVE project.
     // The normal switch flow still commits — every caller commits BEFORE `setActive`, while the two
     // ids still agree — but an autosave timer armed under the previous project now skips instead of
-    // writing its nodes under the new project's id (field bug 2026-08-10).
-    if (canCommitCanvas(nodesProjectIdRef.current, id))
-      useProjects
-        .getState()
-        .commitCanvas(
-          id,
-          flowToNodeStates(nodesRef.current),
-          viewportRef.current,
-          linkEdgesRef.current.map(toBridgeLink),
-          controlEdgesRef.current.map(toBridgeLink)
-        )
+    // writing its nodes under the new project's id (field bug 2026-08-10). The tested commit seam
+    // carries both edge refs too; a peer edge must reach the same whole-file snapshot as the nodes.
+    commitActiveCanvas(
+      {
+        nodesProjectId: nodesProjectIdRef.current,
+        activeProjectId: store.activeProjectId,
+        nodes: flowToNodeStates(nodesRef.current),
+        viewport: viewportRef.current,
+        bridges: linkEdgesRef.current.map(toBridgeLink),
+        ropes: controlEdgesRef.current.map(toBridgeLink)
+      },
+      store.commitCanvas
+    )
   }, [])
 
   const writeDisk = useCallback(async () => {
@@ -2450,36 +2448,44 @@ export function Canvas() {
           const e = prev.find((x) => x.id === link.id)
           return e && e.source === link.source && e.target === link.target ? e : undefined
         }
-        if (mutation.kind === 'bridge') {
-          const next = applyEdgeMutation(linkEdgesRef.current.map(toBridgeLink), 'bridge', mutation)
-          const edges = next.map(
-            (b) =>
-              keep(linkEdgesRef.current, b) ?? {
-                id: b.id,
-                source: b.source,
-                target: b.target,
-                type: 'default'
+        receiveActiveEdgeMutation(
+          { bridges: linkEdgesRef.current, ropes: controlEdgesRef.current },
+          mutation,
+          {
+            toLink: toBridgeLink,
+            rebuild: (kind, link, previous) => {
+              const kept = keep(previous, link)
+              if (kept) return kept
+              if (kind === 'bridge') {
+                return {
+                  id: link.id,
+                  source: link.source,
+                  target: link.target,
+                  type: 'default'
+                }
               }
-          )
-          linkEdgesRef.current = edges
-          setLinkEdges(edges)
-          publisherRef.current?.adopt(publishableLater(nodesRef.current, { bridges: edges }))
-        } else {
-          const next = applyEdgeMutation(controlEdgesRef.current.map(toBridgeLink), 'rope', mutation)
-          // The rope's COLOR is local: it comes from the source node's agent, which every client
-          // resolves from its own copy of that node. Nothing about it travels on the wire.
-          const edges = next.map((r) => {
-            const kept = keep(controlEdgesRef.current, r)
-            if (kept) return kept
-            const srcNode = nodesRef.current.find((nd) => nd.id === r.source)
-            const color = agentConfig((srcNode?.data.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
-            return ropeEdge(r.id, r.source, r.target, color)
-          })
-          controlEdgesRef.current = edges
-          setControlEdges(edges)
-          publisherRef.current?.adopt(publishableLater(nodesRef.current, { ropes: edges }))
-        }
-        markDirty()
+              // The rope's COLOR is local: it comes from the source node's agent, which every
+              // client resolves from its own copy of that node. Nothing about it travels on the wire.
+              const srcNode = nodesRef.current.find((nd) => nd.id === link.source)
+              const color = agentConfig((srcNode?.data.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+              return ropeEdge(link.id, link.source, link.target, color)
+            },
+            setBridges: (edges) => {
+              linkEdgesRef.current = edges
+              setLinkEdges(edges)
+            },
+            setRopes: (edges) => {
+              controlEdgesRef.current = edges
+              setControlEdges(edges)
+            },
+            adopt: ({ bridges, ropes }) => {
+              publisherRef.current?.adopt(
+                publishableLater(nodesRef.current, { bridges, ropes })
+              )
+            },
+            markDirty
+          }
+        )
         return
       }
       if (projectId !== useProjects.getState().activeProjectId) {

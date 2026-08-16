@@ -159,6 +159,25 @@ describe('applyEdgeMutation', () => {
     expect(persisted.bridges).toBeUndefined()
   })
 
+  it('persists one winning kind when the same edge id moves between lists', () => {
+    const project = useProjects.getState().addProject('foreground')
+    useProjects.getState().applyEdgeMutation(project.id, {
+      op: 'edge-upsert',
+      kind: 'bridge',
+      edge: bridge('shared')
+    })
+
+    useProjects.getState().applyEdgeMutation(project.id, {
+      op: 'edge-upsert',
+      kind: 'rope',
+      edge: bridge('shared', 'b', 'c')
+    })
+
+    const persisted = useProjects.getState().toWorkspace().projects[0]
+    expect(persisted.bridges).toEqual([])
+    expect(persisted.ropes).toEqual([bridge('shared', 'b', 'c')])
+  })
+
   it('reports false for an unknown project and creates no persistence record', () => {
     const applied = useProjects.getState().applyEdgeMutation('missing', {
       op: 'edge-upsert',

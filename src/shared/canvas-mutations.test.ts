@@ -178,12 +178,30 @@ describe('applyEdgeMutation', () => {
     expect(list).toEqual([e('x')]) // untouched
   })
 
-  it('leaves the OTHER kind alone, by reference (a rope mutation is not a bridge edit)', () => {
+  it('leaves an unrelated edge in the other kind alone by reference', () => {
     const list = [e('x')]
     expect(applyEdgeMutation(list, 'bridge', { op: 'edge-upsert', kind: 'rope', edge: e('r') })).toBe(
       list
     )
     expect(applyEdgeMutation(list, 'bridge', { op: 'remove', id: 'x' })).toBe(list)
+  })
+
+  it('evicts the same id across kinds because one edge id is one ordered entity', () => {
+    const bridgeList = [e('shared'), e('keep')]
+    expect(
+      applyEdgeMutation(bridgeList, 'bridge', {
+        op: 'edge-upsert',
+        kind: 'rope',
+        edge: e('shared', 'b', 'c')
+      })
+    ).toEqual([e('keep')])
+    expect(
+      applyEdgeMutation(bridgeList, 'bridge', {
+        op: 'edge-remove',
+        kind: 'rope',
+        id: 'shared'
+      })
+    ).toEqual([e('keep')])
   })
 
   it('keeps identity when a remove names an edge we do not have', () => {
@@ -255,6 +273,14 @@ describe('diffToMutations — scenes', () => {
   it('tags each list with its own kind', () => {
     expect(diffToMutations(scene([]), scene([], [], [e('r')]))).toEqual([
       { op: 'edge-upsert', kind: 'rope', edge: e('r') }
+    ])
+  })
+
+  it('moves one edge id between kinds with one upsert and no later self-defeating remove', () => {
+    expect(
+      diffToMutations(scene([], [e('shared', 'a', 'b')]), scene([], [], [e('shared', 'a', 'c')]))
+    ).toEqual([
+      { op: 'edge-upsert', kind: 'rope', edge: e('shared', 'a', 'c') }
     ])
   })
 

@@ -431,7 +431,9 @@ They are in the vocabulary now, and everything around them is the node machinery
   edges, one key space with a prefix (a node id and an edge id are generated independently and could
   collide). The `kind` is deliberately **not** in the key: one id is one edge, and a bridge and a
   rope claiming the same id must be resolved to one thing rather than held as two. Rule 4 (the
-  causal delete) therefore covers an edge exactly as it covers a node.
+  causal delete) therefore covers an edge exactly as it covers a node. Applying the winning upsert
+  evicts that id from the losing kind on both active and background canvases; moving an id between
+  kinds publishes one upsert rather than a later remove that would erase the move.
 - **Publisher** — the snapshot became a `CanvasScene` (`{nodes, bridges, ropes}`), so one diff, one
   throttle and one baseline cover both. The Canvas publish effect has the edge arrays in its deps:
   drawing a link never touches `nodes`, so without that the edit would never be published. React
@@ -447,6 +449,10 @@ They are in the vocabulary now, and everything around them is the node machinery
   moment we do not control and re-published back at us.
 - **Background projects** get `useProjects.applyEdgeMutation`, for the same reason nodes do: that
   project's serialized edges are what our next whole-file save writes.
+- **Foreground projects** update the live React Flow edge refs and setters, adopt both resulting
+  lists before the publisher effect can run, and mark the workspace dirty. The guarded active
+  commit carries those exact bridge and rope refs into `commitCanvas`; its behavioral test drives
+  peer creation and deletion through the whole receive-to-serialized-workspace chain.
 
 What this does **not** change: an edge is still pruned locally when an endpoint disappears, so a
 peer's node delete can leave one drawn against nothing for a tick (see Known risks).

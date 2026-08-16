@@ -212,8 +212,11 @@ export function applyCanvasMutation(
 
 /**
  * Apply one EDGE mutation to one of a project's edge lists, returning a NEW array (the input is
- * never mutated). A mutation for the other kind — or for a node — leaves the list untouched, by
- * reference, so the caller's `next === prev` check still short-circuits.
+ * never mutated). Edge ids share one key space across both kinds (`mutationKey` deliberately omits
+ * `kind`), so a winning upsert also evicts the same id from the other list and a winning remove
+ * clears it from either list. Without that cross-kind eviction, bridge `x` followed by rope `x`
+ * was retained twice even though ordering had resolved it as one entity. A node mutation leaves
+ * the list untouched by reference, as does an unrelated edge whose id is absent.
  *
  * There is nothing to sanitize here the way `sanitizeInboundNode` sanitizes a node: an edge is
  * three ids and carries no exec-enabling field, and `isCanvasMutation` has already bounded all
@@ -227,9 +230,13 @@ export function applyEdgeMutation(
   kind: CanvasEdgeKind,
   m: CanvasMutation
 ): BridgeLink[] {
-  if (!isEdgeMutation(m) || m.kind !== kind) return edges
+  if (!isEdgeMutation(m)) return edges
   if (m.op === 'edge-remove') {
     const next = edges.filter((e) => e.id !== m.id)
+    return next.length === edges.length ? edges : next
+  }
+  if (m.kind !== kind) {
+    const next = edges.filter((e) => e.id !== m.edge.id)
     return next.length === edges.length ? edges : next
   }
   const edge: BridgeLink = { id: m.edge.id, source: m.edge.source, target: m.edge.target }
@@ -260,12 +267,12 @@ function stableStringify(value: unknown): string {
 function diffEdges(
   prev: BridgeLink[],
   next: BridgeLink[],
+  allNextIds: ReadonlySet<string>,
   kind: CanvasEdgeKind,
   upserts: CanvasMutation[],
   removes: CanvasMutation[]
 ): void {
   const prevById = new Map(prev.map((e) => [e.id, e]))
-  const nextIds = new Set(next.map((e) => e.id))
   for (const edge of next) {
     const before = prevById.get(edge.id)
     if (!before || before.source !== edge.source || before.target !== edge.target) {
@@ -273,7 +280,9 @@ function diffEdges(
     }
   }
   for (const edge of prev) {
-    if (!nextIds.has(edge.id)) removes.push({ op: 'edge-remove', kind, id: edge.id })
+    // Moving one id from bridge to rope (or back) is ONE upsert in the shared edge key space, not
+    // an upsert followed by a later remove that would win the total order and erase the move.
+    if (!allNextIds.has(edge.id)) removes.push({ op: 'edge-remove', kind, id: edge.id })
   }
 }
 
@@ -316,8 +325,9 @@ export function diffToMutations(
 
   const edgeUpserts: CanvasMutation[] = []
   const edgeRemoves: CanvasMutation[] = []
-  diffEdges(a.bridges, b.bridges, 'bridge', edgeUpserts, edgeRemoves)
-  diffEdges(a.ropes, b.ropes, 'rope', edgeUpserts, edgeRemoves)
+  const allNextEdgeIds = new Set([...b.bridges, ...b.ropes].map((edge) => edge.id))
+  diffEdges(a.bridges, b.bridges, allNextEdgeIds, 'bridge', edgeUpserts, edgeRemoves)
+  diffEdges(a.ropes, b.ropes, allNextEdgeIds, 'rope', edgeUpserts, edgeRemoves)
 
   return [...upserts, ...edgeUpserts, ...edgeRemoves, ...removes]
 }

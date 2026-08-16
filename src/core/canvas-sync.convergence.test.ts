@@ -393,13 +393,29 @@ describe('canvas convergence (async bus)', () => {
       expect(a.persisted()).toEqual(b.persisted())
     })
 
-    it('bridges and ropes are two lists, and a mutation only touches its own kind', () => {
+    it('keeps unrelated bridge and rope lists separate', () => {
       a.edit([node('n1', 0), node('n2', 0)])
       a.editEdges({ ropes: [{ id: 'ctrl-1', source: 'n1', target: 'n2' }] })
       bus.settle()
 
       expect(b.ropes).toEqual([{ id: 'ctrl-1', source: 'n1', target: 'n2' }])
       expect(b.bridges).toEqual([])
+    })
+
+    it('one ordered edge id converges on the winning kind instead of surviving in both lists', () => {
+      a.edit([node('n1', 0), node('n2', 0)])
+      bus.settle()
+
+      // Both clients create the same id independently, before either sees the other. The
+      // reflector orders A's bridge first and B's rope second, so rope is the one entity that wins.
+      a.editEdges({ bridges: [{ id: 'shared', source: 'n1', target: 'n2' }] })
+      b.editEdges({ ropes: [{ id: 'shared', source: 'n2', target: 'n1' }] })
+      bus.settle()
+
+      expect(a.bridges).toEqual([])
+      expect(b.bridges).toEqual([])
+      expect(a.ropes).toEqual([{ id: 'shared', source: 'n2', target: 'n1' }])
+      expect(a.persisted()).toEqual(b.persisted())
     })
 
     it('a peer edge is applied once and re-published NEVER (the adopt loop guard covers edges)', () => {
