@@ -1664,8 +1664,13 @@ multiply-linked inode whose other name may be outside the staging tree.
 
 - **Context menus** (`components/ContextMenu.tsx`, portal, icons from `components/icons.tsx`):
   pane right-click = add nodes at cursor (terminal / Claude / sticky / open file) + select
-  all + fit + restart-idle-agents (the bulk in-place agent restart, mirrored in ⌘K; both hidden
-  when the canvas holds no restartable agent node, where they could only report "0 restarted");
+  all + fit + **Tidy canvas** (`arrangeAllNodes` — packs every top-level node, including group
+  frames as rigid units, into a non-overlapping grid via `arrangeNodes`, sorted by current
+  (y, x) so the pack roughly preserves reading order; mirrored in ⌘K as "Tidy canvas"; both
+  hidden below 2 top-level nodes, where it could only be a visual no-op that still writes
+  `project.json`) + restart-idle-agents (the bulk in-place agent restart, mirrored in ⌘K; both
+  hidden when the canvas holds no restartable agent node, where they could only report "0
+  restarted");
   node/selection right-click = group, color, duplicate, align-to-grid, collapse,
   markdown-view (terminals), refresh-terminal (terminals — bumps `respawnNonce`: fresh PTY attach
   to the SAME tmux session; manual recovery for a stuck/unpainted terminal, and the same action
