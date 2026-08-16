@@ -208,6 +208,8 @@ it and open a terminal running an arbitrary command. Pass secrets by 0600 file o
 advertise the host's NaCl public key; the client POSTs `{epk,box}`, and the success response is a
 single encrypted `box`. If the host key or encryption is unavailable, pairing refuses before it
 writes an SSH key or bearer. Never restore the old `{token,publicKey}` plaintext fallback.
+`PairingPayloadInput.hostKey` is required, and `buildPairingPayload` must reject a missing or blank
+value at runtime too; TypeScript alone does not protect stale compiled or hand-written callers.
 Only `ENOENT` proves the pairing registry absent: corrupt, wrongly-shaped, or unreadable
 `agent.json` must propagate without rewrite. Register a paired device before activating its SSH
 key, so every possibly-live key remains visible and revocable even when the second write fails.

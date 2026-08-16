@@ -1882,7 +1882,9 @@ the QR. `/pair` accepts only `{epk,box}`: the request (one-time token + SSH publ
 success response (including `agentToken` and an optional `relayDeviceToken`) are authenticated and
 encrypted under the ephemeral-client/host shared key. There is no plaintext-success compatibility
 path; a missing/locked host key, malformed envelope, bad MAC, or response-encryption failure must
-produce no credential write. The attempt's synchronous `settled` latch is separate from
+produce no credential write. `PairingPayloadInput.hostKey` is mandatory and the pure payload builder
+also rejects a missing/blank value at runtime, so stale compiled or hand-written callers cannot
+construct an unsealed QR. The attempt's synchronous `settled` latch is separate from
 `server.close()` because Node keeps already-accepted sockets alive: the fifth wrong short code and
 the first valid request latch before any persistence await, so a parked request cannot wake later
 and write. **Server Edition deliberately does not host this desktop LAN listener** —
