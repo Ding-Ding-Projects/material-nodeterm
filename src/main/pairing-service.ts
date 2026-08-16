@@ -526,9 +526,9 @@ export function createPairingService(
       cancelAttempt(attempt)
       throw new Error("Couldn't detect a LAN IP address — connect to Wi-Fi and try again.")
     }
-    // The QR's hostKey is what authenticates and encrypts the entire LAN exchange. Starting a
-    // listener without it would force clients onto the retired plaintext path, where agentToken
-    // and relayDeviceToken are long-lived bearer credentials. Fail before binding any port.
+    // The QR's hostKey authenticates and encrypts the entire LAN exchange. Without a loadable host
+    // identity no client can build the mandatory sealed request or authenticate returned bearer
+    // credentials, so fail before constructing the payload or binding any port.
     if (!relayDeps) {
       cancelAttempt(attempt)
       throw new Error('Secure pairing is unavailable — this build has no host-key provider.')

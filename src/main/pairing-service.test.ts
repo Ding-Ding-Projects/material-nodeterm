@@ -486,7 +486,7 @@ describe('agent.json read safety', () => {
 })
 
 describe('secure pairing listener', () => {
-  it('refuses to start instead of advertising a plaintext fallback when the host key is unavailable', async () => {
+  it('refuses to construct a pairing request when the host identity is unavailable', async () => {
     const done = vi.fn()
     const missingProvider = createPairingService()
     await expect(missingProvider.start(done)).rejects.toThrow(/no host-key provider/)
@@ -499,7 +499,7 @@ describe('secure pairing listener', () => {
     expect(done).not.toHaveBeenCalled()
   })
 
-  it('rejects plaintext and tampered envelopes without writing either credential store', async () => {
+  it('rejects unsealed and tampered envelopes without writing either credential store', async () => {
     const service = newService()
     const append = vi.spyOn(fs, 'appendFile')
     const write = vi.spyOn(fs, 'writeFile')
@@ -512,8 +512,8 @@ describe('secure pairing listener', () => {
       }
       const requestBody = { token, publicKey: freshEd25519Line(), deviceName: 'New Phone' }
 
-      const plaintext = await postWire(pairPort, requestBody)
-      expect(plaintext).toEqual({ status: 400, text: 'encrypted pairing required' })
+      const unsealed = await postWire(pairPort, requestBody)
+      expect(unsealed).toEqual({ status: 400, text: 'encrypted pairing required' })
 
       const { wire } = sealRequest(hostKey, requestBody)
       const tampered = Uint8Array.from(Buffer.from(wire.box, 'base64'))
