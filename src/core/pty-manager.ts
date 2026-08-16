@@ -1541,11 +1541,6 @@ export class PtyManager {
           `dot, dash, underscore; max ${NODE_ID_MAX}). A project file with an id like this cannot be ` +
           `trusted — it is how a shared or cloned repo would smuggle a command onto a remote host.`
       )
-    // Co-attach: a live session for this node id already exists in THIS process (another client,
-    // or this client's own second view). Subscribe to it instead of spawning a second tmux client
-    // — `-D` would otherwise kick the first viewer off.
-    const joined = this.join(clientId, options, key)
-    if (joined) return joined
     // Same-tick race: spawnNew() awaits a `tmux has-session` SUBPROCESS (tens of ms, not a
     // microtask) before spawnSession registers the session in `byPersistKey`, so two clients
     // opening the same node in that window would BOTH miss the index and both spawn — and the
@@ -1553,6 +1548,8 @@ export class PtyManager {
     // is published as an in-flight promise from the TOP of create(): a racing create awaits it
     // and then takes the subscribe branch. (No locking primitive: the promise IS the barrier —
     // the single-user path never sees an in-flight entry and behaves exactly as before.)
+    // Check the barrier before the live index: a session-host shim is indexed while its async
+    // attach is provisional, and must not be co-attached until ready has succeeded.
     const inflight = this.inflight.get(key)
     if (inflight) {
       await inflight.catch(() => undefined) // the other spawn failed → fall through and try ourselves
@@ -1565,6 +1562,9 @@ export class PtyManager {
       // on a *new* in-flight entry is exactly the same wait as the one we just did.
       if (this.inflight.get(key)) return this.create(clientId, options)
     }
+    // Co-attach only after the in-flight barrier has certified that an indexed session is live.
+    const joined = this.join(clientId, options, key)
+    if (joined) return joined
     // Another client DELETED this node (and there is no live session for it — `join` above already
     // covers a resurrection by its owner). Refuse rather than spawn: see `tombstones`. Checked
     // AFTER the in-flight barrier so a create racing the owner's own respawn joins it instead.
@@ -1729,13 +1729,19 @@ export class PtyManager {
     if (spawned?.sessionHost) {
       try {
         const info = await (spawned.proc as unknown as SessionHostPty).ready
+        if (this.sessions.get(sessionId) !== spawned)
+          throw new Error('session-host session exited before its attach completed')
         fresh = info.fresh
         screen = info.screen
-      } catch {
-        // The attach itself failed (session-host unreachable / bundle missing after all). Leave
-        // `fresh` at its placeholder `true`: the renderer treats this like any other cold start —
-        // a working, empty terminal — rather than blocking the create on a backend that just
-        // proved it cannot be reached.
+        // Registration is provisional until ready. Only now may it clear a deletion tombstone or
+        // wake recycled co-viewers onto this exact, still-live generation.
+        if (spawned.indexKey) {
+          this.tombstones.delete(spawned.indexKey)
+          if (this.pendingRecycle.has(spawned.indexKey)) this.fireRecycled(spawned.indexKey, true)
+        }
+      } catch (error) {
+        if (this.sessions.get(sessionId) === spawned) this.discardFailedSpawn(sessionId, spawned)
+        throw error
       }
     }
     // Surface a missing-account-dir fallback so the renderer can flag the node's account chip.
@@ -2275,7 +2281,7 @@ export class PtyManager {
       // doc comment for exactly what it implements and why that is enough. Its constructor kicks
       // off the attach-or-create round trip asynchronously and never throws synchronously (a
       // rejection surfaces on `.ready`, awaited by `spawnNew` — see there for how a failure
-      // degrades rather than blocking the create).
+      // fails the provisional create closed).
       proc = createSessionHostPty(
         sessionName(options.persistKey as string),
         {
@@ -2381,22 +2387,43 @@ export class PtyManager {
     // destroyer can even reach a spawn for a tombstoned node (create() refuses everyone else), so
     // this is exactly "the owner brought the node back" (⌘Z) — and its co-viewers must be able to
     // join the new session rather than stay refused.
-    if (session.indexKey) this.tombstones.delete(session.indexKey)
+    // A session-host record is provisional until its async attach succeeds. spawnNew() clears the
+    // tombstone after ready so a failed resurrection cannot silently remove deletion protection.
+    if (session.indexKey && !session.sessionHost) this.tombstones.delete(session.indexKey)
     // The replacement session for a RECYCLED node (worktree move) is now live and indexed, so its
     // co-viewers can safely be told to restart: their create() will `join` THIS session instead of
     // spawning `nt-<nodeId>` from their own (stale) cwd. This is the whole reason the notice waits.
-    if (session.indexKey && this.pendingRecycle.has(session.indexKey))
+    if (session.indexKey && !session.sessionHost && this.pendingRecycle.has(session.indexKey))
       this.fireRecycled(session.indexKey, true)
 
-    proc.onData((data) => this.queueData(sessionId, session, data))
+    proc.onData((data) => {
+      if (this.sessions.get(sessionId) !== session) return
+      this.queueData(sessionId, session, data)
+    })
 
     proc.onExit(({ exitCode }) => {
+      if (this.sessions.get(sessionId) !== session) return
       this.flush(sessionId, session) // deliver any buffered output before the exit signal
       session.onExit?.(exitCode) // relay host sink (unchanged)
       for (const client of this.clientsOf(session))
         this.send(client, IPC.ptyExit(sessionId), exitCode)
       this.forget(sessionId, session)
     })
+
+    // Detached relay APIs are synchronous, but their session-host attach is not. Deliver a failed
+    // ready as a non-zero sink exit after retiring the provisional shim, never as a zombie id.
+    if (useSessionHost && sinks) {
+      void (proc as unknown as SessionHostPty).ready.catch(() => {
+        if (this.sessions.get(sessionId) !== session) return
+        this.discardFailedSpawn(sessionId, session)
+        try {
+          sinks.onExit(1)
+        } catch {
+          // The failed generation is already gone; a consumer throw cannot be allowed to become an
+          // unhandled rejection from this deliberately detached task.
+        }
+      })
+    }
 
     return sessionId
   }
@@ -2449,6 +2476,33 @@ export class PtyManager {
     this.sessions.delete(sessionId)
     if (session.indexKey && this.byPersistKey.get(session.indexKey) === sessionId)
       this.byPersistKey.delete(session.indexKey)
+  }
+
+  /** Roll back the provisional Session registered before a session-host attach settles. */
+  private discardFailedSpawn(sessionId: string, session: Session): void {
+    if (session.flushTimer) {
+      clearTimeout(session.flushTimer)
+      session.flushTimer = null
+    }
+    session.buf = []
+    session.bufBytes = 0
+    session.subscribers.clear()
+    session.sizes.clear()
+    session.shown.clear()
+    session.pausedBy.clear()
+    // releasePty resumes first; that would reconnect a shim whose initial attach just failed.
+    const hostPty = session.proc as unknown as SessionHostPty
+    hostPty.destroy()
+    this.forget(sessionId, session)
+    const remaining = [...this.sessions.values()]
+    if (!remaining.some((candidate) => candidate.persistKey) && this.snapshotTimer) {
+      clearInterval(this.snapshotTimer)
+      this.snapshotTimer = null
+    }
+    if (!remaining.some((candidate) => candidate.tmuxBacked) && this.reapTimer) {
+      clearInterval(this.reapTimer)
+      this.reapTimer = null
+    }
   }
 
   /**
