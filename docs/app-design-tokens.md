@@ -132,6 +132,16 @@ flip already carries it, the same way `--text` needs none.
 | `--md-primary-container` | `rgba(var(--accent-rgb), 0.16)` (authored tint of the real accent, not a neutral surface) |
 | `--md-on-primary-container` | `var(--accent-text)` (alias) |
 
+At runtime, a user-selected accent expands into the whole primary family in
+`renderer/lib/accentTokens.ts`: `--accent-hover`, `--accent-text`, `--accent-rgb`,
+`--md-primary`, `--md-on-primary`, `--md-primary-container`, and
+`--md-on-primary-container`. CSS cannot split a hex custom property into an RGB triple or derive a
+readable foreground by itself. The resolver keeps the selected hue, mixes toward the current
+theme's readable pole only as far as the 4.5:1 text floor requires, and re-runs when the app theme
+changes. This prevents a green/red/yellow custom primary from leaving blue text or a blue container
+behind. The persisted default systemBlue and an invalid hand-edited value both remove the inline
+family and restore the stylesheet's separately authored dark/light defaults.
+
 ### Secondary and tertiary — chosen, not deferred
 
 These did not exist before the M3 work and were the only two genuinely new **colour decisions** in

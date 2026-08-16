@@ -1771,7 +1771,15 @@ again; the grace window was never the thing that was wrong.
   a chord that collides with one never reaches the renderer at all
   (`main/menu-accelerator-intercepts.test.ts` pins the three we steal).
 - **Theme**: macOS dark palette as CSS tokens in `styles.css` `:root` (`--accent` = systemBlue,
-  label/separator opacities, SF font stack). Canvas background is black with dot grid.
+  label/separator opacities, SF font stack). Canvas background is black with dot grid. A runtime
+  accent is expanded by `lib/accentTokens.ts`, not assigned as one isolated property: hover,
+  readable text, RGB tint and every Material primary/container foreground move with it and are
+  re-derived against the resolved light/dark panel. HSV and CMYK remain picker/copy formats, while
+  the value crossing into stored/live CSS is RGBA so Chromium accepts it and alpha survives.
+  Custom-logo processing is generation-owned: an older decode/crop/fit may not overwrite a newer
+  adjustment or synchronous preset choice, and shallow `appLogo` patches retain `customImage`
+  unless the explicit Remove action is used. Preset Blob exports share the 30-second delayed URL
+  revocation path; same-turn revocation can cancel Chromium before the download starts.
 
 ## Remote access (phone relay) — free, not Pro
 
