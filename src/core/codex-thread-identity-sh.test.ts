@@ -9,25 +9,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { codexThreadIdentityResolverSh } from './codex-thread-identity-sh'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS,
+  pathForPosixShell
+} from './testing/posix-shell'
 
 const run = promisify(execFile)
-
-/** A real POSIX shell to exec the generated prelude with. There is no literal `/bin/sh` path on
- *  win32, but a POSIX-compatible `sh` (Git for Windows' MSYS sh) is expected on PATH — resolved by
- *  bare name rather than an assumed install location. A no-op on POSIX. */
-const SH = process.platform === 'win32' ? 'sh' : '/bin/sh'
-
-/**
- * MSYS/Git-Bash represents `C:\Users\x` as `/c/Users/x`. `codexThreadIdentityResolverSh`'s own
- * endpoint validation (`case "$nt_codex_endpoint" in /*) ;; …`) requires a literal leading `/`, so
- * on win32 every path fed to — or expected back from — the sh prelude has to be in that POSIX
- * shape, exactly as a real MSYS shell would see it. A no-op on POSIX, where `dir`/`root` are
- * already POSIX-shaped and this prelude's contract is native to begin with.
- */
-function shPath(nativePath: string): string {
-  if (process.platform !== 'win32') return nativePath
-  return nativePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`)
-}
 
 let dir = ''
 let root = ''
@@ -41,7 +30,7 @@ beforeAll(() => {
   script = path.join(dir, 'prelude.sh')
   fs.writeFileSync(
     script,
-    `#!/bin/sh\n${codexThreadIdentityResolverSh(shPath(root))}\n` +
+    `#!/bin/sh\n${codexThreadIdentityResolverSh(pathForPosixShell(root))}\n` +
       `printf '%s|%s|%s\\n' "\${NODETERM_NODE_ID-}" "\${NODETERM_HOOK_ENDPOINT-}" "\${NODETERM_CANVAS_CONTROL-}"\n`,
     { mode: 0o755 }
   )
@@ -54,26 +43,46 @@ function record(threadId: string, body: string): void {
 }
 
 async function resolve(env: Record<string, string>): Promise<string> {
-  const { stdout } = await run(SH, [script], {
-    env: { PATH: process.env.PATH ?? '', HOME: dir, ...env }
+  const { stdout } = await run(REAL_POSIX_SHELL, [pathForPosixShell(script)], {
+    env: environmentForPosixShell({
+      PATH: process.env.PATH ?? '',
+      HOME: pathForPosixShell(dir),
+      ...env
+    })
   })
   return stdout.trim()
 }
 
-describe('codex thread identity prelude', () => {
+describe('codex thread identity prelude', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
+  it('starts through the resolved shell without relying on the parent PATH', async () => {
+    await expect(
+      run(REAL_POSIX_SHELL, ['-c', 'exit 0'], { env: { ...process.env, PATH: '' } })
+    ).resolves.toBeTruthy()
+  })
+
   it('is valid POSIX sh', async () => {
-    await expect(run(SH, ['-n', script])).resolves.toBeTruthy()
+    await expect(
+      run(REAL_POSIX_SHELL, ['-n', pathForPosixShell(script)], {
+        env: environmentForPosixShell()
+      })
+    ).resolves.toBeTruthy()
   })
 
   it('recovers the node binding a tool shell never inherited', async () => {
-    record('thread-1', `nodeId=node-7\nendpoint=${shPath(dir)}/hook-endpoint.env\nsignature=x\n`)
+    record(
+      'thread-1',
+      `nodeId=node-7\nendpoint=${pathForPosixShell(dir)}/hook-endpoint.env\nsignature=x\n`
+    )
     expect(await resolve({ CODEX_THREAD_ID: 'thread-1' })).toBe(
-      `node-7|${shPath(dir)}/hook-endpoint.env|1`
+      `node-7|${pathForPosixShell(dir)}/hook-endpoint.env|1`
     )
   })
 
   it('changes nothing when the session already knows its node', async () => {
-    record('thread-1', `nodeId=node-7\nendpoint=${shPath(dir)}/hook-endpoint.env\nsignature=x\n`)
+    record(
+      'thread-1',
+      `nodeId=node-7\nendpoint=${pathForPosixShell(dir)}/hook-endpoint.env\nsignature=x\n`
+    )
     expect(await resolve({ CODEX_THREAD_ID: 'thread-1', NODETERM_NODE_ID: 'node-own' })).toBe(
       'node-own||'
     )
@@ -89,7 +98,10 @@ describe('codex thread identity prelude', () => {
   })
 
   it('exports nothing when a record carries a node id or endpoint it should not', async () => {
-    record('thread-bad-node', `nodeId=node 7; rm -rf /\nendpoint=${dir}/e\n`)
+    record(
+      'thread-bad-node',
+      `nodeId=node 7; rm -rf /\nendpoint=${pathForPosixShell(dir)}/e\n`
+    )
     expect(await resolve({ CODEX_THREAD_ID: 'thread-bad-node' })).toBe('||')
     record('thread-bad-ep', 'nodeId=node-7\nendpoint=relative/e\n')
     expect(await resolve({ CODEX_THREAD_ID: 'thread-bad-ep' })).toBe('||')

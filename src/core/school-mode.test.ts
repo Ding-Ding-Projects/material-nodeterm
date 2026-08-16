@@ -60,6 +60,14 @@ async function fresh() {
   return s
 }
 
+async function waitUntil(check: () => boolean, timeoutMs = 3_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!check()) {
+    if (Date.now() >= deadline) throw new Error('timed out waiting for the shared record watcher')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
+
 describe('defaults and durability', () => {
   it('starts off, with the shipped name, when nothing has ever been written', async () => {
     const s = await fresh()
@@ -236,5 +244,30 @@ describe('concurrency', () => {
     expect(onDisk.name).toBe(s.get().name)
     expect(['one', 'two', 'three']).toContain(onDisk.name)
     s.dispose()
+  })
+})
+
+describe('live shared-record watching', () => {
+  it('observes an external edit after its first write creates a directory absent at boot', async () => {
+    const s = await fresh()
+
+    // init() ran while ~/.nodeterm/shared did not exist. The first local write creates it;
+    // the same process must then become a live observer rather than staying unwatched forever.
+    await s.rename('Created here')
+    await fs.writeFile(
+      path.join(sharedDir(), 'school-mode.json'),
+      JSON.stringify({ version: 1, enabled: true, name: 'Edited elsewhere' })
+    )
+
+    await waitUntil(() => s.get().name === 'Edited elsewhere')
+    expect(s.get()).toEqual({ version: 1, enabled: true, name: 'Edited elsewhere' })
+    s.dispose()
+
+    await fs.writeFile(
+      path.join(sharedDir(), 'school-mode.json'),
+      JSON.stringify({ version: 1, enabled: false, name: 'After shutdown' })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(s.get().name, 'dispose must close the live watcher').toBe('Edited elsewhere')
   })
 })

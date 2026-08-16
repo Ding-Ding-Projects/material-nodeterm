@@ -29,6 +29,8 @@ import {
   installLinkClickFallback,
   makeDirListingLookup
 } from '../terminal/file-links'
+import { fileLinkDialect } from '../terminal/file-link-dialect'
+import { hostPlatformFor } from '../terminal/host-platform'
 import { sshFs } from '../terminal/ssh-fs'
 import type { FsApi, PendingLaunch } from '@shared/types'
 import {
@@ -140,6 +142,7 @@ import { useSshConn } from '../state/sshConn'
 import { useWorktrees } from '../state/worktrees'
 import { isRemoteSessionNode } from '@shared/worktree'
 import { useSession, useActiveSessionPresence } from '../session/session'
+import { isBrowserRuntime } from '../bridge/runtime'
 import { accountChipLabel, COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
 import { hasHooks, canRecur, canContextLink, hasUsage, canChat, canResume, canRename, canReadTitle, createdAgentId, reportsOwnCopy, resumeCommand, agentConfig, agentLaunchProgram } from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
@@ -888,6 +891,23 @@ export function TerminalNode({
   // namespaces (pty, fs) go through it; app-global ones (clipboard, shell) stay on the global.
   const session = useSession()
   const { api } = session
+  // The path dialect belongs to the core that owns this tab's filesystem, not necessarily this
+  // browser/window. Server Edition and relay tabs can be viewed from a different OS, so their
+  // core reports `process.platform` through the already-core-bound tmux status call. Keep it in a
+  // ref: resolving this fact must not tear down and respawn the terminal lifecycle effect.
+  const corePlatformRef = useRef<string | null>(null)
+  useEffect(() => {
+    let live = true
+    corePlatformRef.current = null
+    void hostPlatformFor(api).then((platform) => {
+      // A failed read is not evidence of Linux. fileLinkDialect fails closed for server/relay;
+      // only the local desktop may use its viewer as the host because they are the same process.
+      if (live) corePlatformRef.current = platform
+    })
+    return () => {
+      live = false
+    }
+  }, [api])
   // The ACTIVE session's presence — where our focus/blur casts go. This node renders under Canvas's
   // active-session provider, so a relay tab reports focus over the relay core and a local tab hits
   // `defaultPresence` (byte-identical to before). Stable for the node's lifetime (a tab switch
@@ -2248,13 +2268,26 @@ export function TerminalNode({
         const project = st.projects.find((p) => p.id === st.activeProjectId)
         return project?.ssh ? { fs: sshFs(project.id), ssh: true } : { fs: api.fs, ssh: false }
       }
-      // Relay-remote nodes have no client fs, so file-path links are skipped (URL-only) — mirrors
-      // the CLAUDE.md note. A relay project carries the runtime-only `remote` flag.
-      const isRelayProject = (): boolean => {
+      const pathConvention = (): { windows?: boolean } | null => {
         const st = useProjects.getState()
-        return !!st.projects.find((p) => p.id === st.activeProjectId)?.remote
+        const project = st.projects.find((p) => p.id === st.activeProjectId)
+        const dialect = fileLinkDialect({
+          source: session.source,
+          browserRuntime: isBrowserRuntime(),
+          viewerWindows: isWindowsPlatform(),
+          corePlatform: corePlatformRef.current,
+          sshProject: !!project?.ssh,
+          // A standalone ssh terminal's output lives on the remote host, but its project's fs API
+          // is local. Disable file links rather than existence-checking a same-looking local path.
+          standaloneSsh: !project?.ssh && isRemoteSessionNode(data)
+        })
+        return dialect ? { windows: dialect === 'windows' } : null
       }
-      const lookup = makeDirListingLookup(async (dir) => projectFs().fs.list(dir))
+      const lookup = makeDirListingLookup(
+        async (dir) => projectFs().fs.list(dir),
+        3000,
+        pathConvention
+      )
       const getCwd = (): string | undefined => (data.cwd as string | undefined) || undefined
       const openFile = (abs: string, isDir: boolean): void => {
         if (isDir) window.dispatchEvent(new CustomEvent('nodeterm:reveal-file', { detail: { path: abs } }))
@@ -2263,13 +2296,8 @@ export function TerminalNode({
             new CustomEvent('nodeterm:open-file', { detail: { path: abs, ssh: projectFs().ssh } })
           )
       }
-      // Which path convention this session's output uses. NOT simply "is the desktop Windows":
-      // an SSH project's paths are POSIX however the client is spelled, so a remote session keeps
-      // the POSIX matcher even on a Windows desktop. Getting that backwards would break the SSH
-      // links that already work in order to fix the local ones that never did.
-      const winPaths = isWindowsPlatform() && !remoteSession
       term.registerLinkProvider(
-        createFileLinkProvider(term, { getCwd, lookup, activate: openFile, windows: winPaths })
+        createFileLinkProvider(term, { getCwd, lookup, activate: openFile, convention: pathConvention })
       )
       // Both providers above rely on xterm's own click handling, which
       // tmux/agent mouse-reporting swallows. This capture-phase mouse-up fallback restores
@@ -2281,8 +2309,8 @@ export function TerminalNode({
           lookup,
           activateFile: openFile,
           openUrl: (uri) => window.nodeTerminal.shell.openExternal(uri),
-          fileEnabled: () => !isRelayProject(),
-          windows: winPaths
+          fileEnabled: () => pathConvention() !== null,
+          convention: pathConvention
         })
       }
     }
@@ -3718,7 +3746,7 @@ export function TerminalNode({
     // Clipboard bytes (a screenshot) have never been a file anywhere, so something has to write
     // one before there is a path to paste — worth the same "this is going somewhere" overlay the
     // SSH upload gets, since neither is instant and both paste nothing until they finish.
-    const needsWrite = files.some((f) => !window.nodeTerminal.getPathForFile(f))
+    const needsWrite = files.some((f) => !api.getPathForFile(f))
 
     let paths: string[]
     if (data.sshRemoteTmux) {
@@ -3736,7 +3764,7 @@ export function TerminalNode({
         text: `Uploading ${files.length === 1 ? files[0].name : `${files.length} files`}…`,
       })
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: true, projectId })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: true, projectId })
       } finally {
         setUploadNote(null)
       }
@@ -3748,7 +3776,7 @@ export function TerminalNode({
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
       setUploadNote({ text: 'Saving pasted file…' })
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: false, projectId: '' })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
       } finally {
         setUploadNote(null)
       }
@@ -3757,7 +3785,7 @@ export function TerminalNode({
         uploadNoteTimer.current = setTimeout(() => setUploadNote(null), 2500)
       }
     } else {
-      paths = await droppedPaths(files, { sshRemoteTmux: false, projectId: '' })
+      paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
     }
     if (!paths.length) return
     // Enter the terminal and paste the path(s) like a real drop (trailing space to continue).
@@ -4299,10 +4327,9 @@ export function TerminalNode({
         <button
           className="term-node__close"
           title="Close (ends the session)"
-          onClick={() => {
-            transport.destroy(id)
-            deleteElements({ nodes: [{ id }] })
-          }}
+          // React Flow's onBeforeDelete boundary asks first; Canvas.deleteNodes ends the session
+          // only after authorization. Destroying here would make the confirmation cosmetic.
+          onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
         </button>

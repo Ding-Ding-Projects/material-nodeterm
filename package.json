@@ -23,6 +23,7 @@
     "server:dev": "npm run build && npm run server:build && node out/server/main.cjs",
     "host:build": "esbuild src/session-host/host.ts --bundle --platform=node --format=cjs --outfile=out/session-host/host.cjs --external:node-pty --tsconfig=tsconfig.node.json",
     "shots": "node scripts/capture-shots.mjs",
+    "check:wired": "node scripts/check-app-wired.mjs",
     "make-social-card": "node scripts/make-social-card.mjs",
     "make-icon": "node scripts/make-icon.mjs",
     "make-social": "node scripts/make-social.mjs",
@@ -138,8 +139,7 @@
         }
       ],
       "forceCodeSigning": false,
-      "signExecutable": false,
-      "signAndEditExecutable": false
+      "signExecutable": false
     },
     "squirrelWindows": {
       "artifactName": "${productName}-Setup-${version}.${ext}"
@@ -185,6 +185,7 @@
     "electron-builder-squirrel-windows": "^26.15.3",
     "electron-vite": "^5.0.0",
     "esbuild": "^0.28.2",
+    "js-yaml": "^4.1.0",
     "jsdom": "^30.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

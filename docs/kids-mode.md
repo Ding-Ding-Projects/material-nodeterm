@@ -44,7 +44,7 @@ bump, not real security".
 | --- | --- |
 | `manual` | allowed — asking every time is exactly right here |
 | `plan` | allowed — the safest of the set; it proposes without acting |
-| `auto` | allowed, and the loosest on the list |
+| `auto` | **refused** — auto-approves most actions, so a child would not see them coming |
 | `acceptEdits` | **refused** — auto-approves file writes, so edits happen with nobody looking |
 | `bypassPermissions` | **refused** — its entire purpose is acting without asking |
 
@@ -70,8 +70,17 @@ exists and written as raw 0600 bytes where it does not (the Server Edition has n
 That mechanism is `src/core/shared-mode-credential.ts`, shared with School mode. It was **extracted
 rather than copied**: a second hand-maintained copy would drift, and a drift here means one mode's
 lock behaving differently from the other's. Only the credential moved — the record storage and
-directory watcher stay per-mode, because a difference there is harmless and coupling two
-near-opposite features further would be wrong.
+record semantics stay per-mode, because coupling two near-opposite features further would be
+wrong. The generic watcher lifecycle is shared only so both records survive the same absent-at-boot
+filesystem shape.
+
+The record watcher itself uses the shared lifecycle in `src/core/shared-record-watch.ts`. A first
+run normally has no `~/.nodeterm/shared/` directory to watch, so it holds exactly one watcher on the
+nearest existing ancestor, promotes toward the shared directory as it appears, and retries the
+promotion immediately after this process writes the first record. Promotion also reloads once:
+another app may have created and written the record before the narrower watcher was armed. There is
+no polling timer to leak at shutdown; `dispose()` closes the one live handle, and a lifecycle
+generation makes an event queued before shutdown inert when it eventually runs.
 
 An unsealable credential (a keychain reset, a machine migration) reads as **"cannot verify"** and
 leaves the mode **locked**, rather than throwing or falling open. The documented recovery is
@@ -83,6 +92,9 @@ Deliberate, and asserted:
 
 - **A corrupt record reads as OFF.** A malformed byte must not leave a child in a mode nobody can
   confirm the state of, and must not lock an adult out of their own app.
+- **A failed read preserves the last-known state.** Only `ENOENT` proves there is no record. A
+  permission or I/O failure says nothing about whether Kids mode is on and must not silently turn
+  it off; on first boot there is no earlier fact to preserve, so the in-memory default remains off.
 - **A shell that cannot reach the IPC leaves the renderer store OFF.** Defaulting to on would apply
   restrictions nobody asked for and imply a protection that is not in force.
 - **A wrong PIN leaves the mode on.** Obviously — but it is tested, because "fails open" is the
@@ -117,31 +129,29 @@ feature is *missing* from the other shell.
   under it, which needs a logged-in agent this environment does not have. Driving the palette
   headlessly to create a Claude node did not reliably land one, so this is stated as unverified
   rather than dressed up.
-- **Wider destructive coverage — and the earlier version of this bullet was WRONG.** It claimed
-  worktree removal "already opens the super gate unconditionally". It does not: it renders a plain
-  `ConfirmDialog` with `enterConfirms`, and its delete-from-disk option defaults to ON for a
-  worktree nodeterm created. A security review caught it. The true state:
+- **Real-device validation with a child and supervising adult.** The implementation security
+  review completed on 2026-08-15 and found the close-surface and worktree-default gaps recorded
+  below; those paths are now covered by behaviour tests and mutation probes. That review is not a
+  substitute for observing whether the disclosure and confirmations are understood on real
+  hardware, so this product-level validation remains outstanding.
 
-  | `GuardedAction` | today |
-  | --- | --- |
-  | `delete-node` | consults the policy ✅ |
-  | `delete-project` | already opens the super gate unconditionally ✅ |
-  | `remove-worktree` | hardened: no Enter-confirm, disk deletion always an unticked opt-in ✅ |
-  | `discard-changes` | two-key gate under kids mode; plain confirm when off ✅ |
-  | `revoke-device` | two-key gate under kids mode; plain confirm when off ✅ |
+## Destructive-action coverage
 
-  So **two of six** remain unprotected. `discard-changes` and `revoke-device` live outside
-  `Canvas.tsx`, which owns `openDestructiveGate`, so wiring them needs the gate plumbed through —
-  real work, not a one-line change, and left undone rather than half-done.
+There are **five** `GuardedAction` values, and all five have a real runtime path:
 
-  `remove-worktree` was handled differently from `delete-node` on purpose. Routing it to the
-  two-key gate would have LOST the disk-deletion choice, because that gate cannot express an
-  option — so instead the choice is always shown and always starts unticked, and no keystroke can
-  confirm. Surfacing an implicit deletion beats replacing it with a harder confirmation of the
-  same implicit thing.
-- **A security review**, before this is offered to anyone as child-safety. The survey that scoped
-  the M3 overhaul was explicit that a child-facing gate in front of a real PTY needs its own review
-  independent of any UI timeline.
+| `GuardedAction` | Current behaviour |
+| --- | --- |
+| `delete-node` | one planner covers canvas key/menu/header, kanban, Cmd/Ctrl+W, sessions sidebar, session-memory panel, and agent-control close; every surface uses the two-key gate in Kids mode ✅ |
+| `delete-project` | always uses the two-key gate ✅ |
+| `remove-worktree` | no Enter-confirm in Kids mode; disk deletion starts unticked, including an already-open dialog when Kids mode turns on ✅ |
+| `discard-changes` | two-key gate in Kids mode; plain confirm when off ✅ |
+| `revoke-device` | two-key gate in Kids mode; plain confirm when off ✅ |
+
+`remove-worktree` is handled differently from `delete-node` on purpose. The two-key gate cannot
+express an option, so replacing the dialog with it would hide whether the directory is deleted.
+Instead, Kids mode keeps that choice visible, resets it to **off** on entry (even while the dialog
+is open), and disables Enter confirmation. The user can still opt in deliberately with the
+checkbox and button.
 
 ## Where the permission gate is actually applied
 
@@ -161,15 +171,18 @@ own coverage.
 
 ## Where the destructive gate is applied
 
-`deleteNodeFromKanban` in `src/renderer/canvas/Canvas.tsx`. With kids mode ON it opens the two-key
-super-confirmation; with it OFF the behaviour is byte-identical to before.
+Every node/session close enters `requestDeleteNodes` in `src/renderer/canvas/Canvas.tsx`, which
+uses the pure `planNodeDeletion` + `dispatchNodeDeletion` funnel in
+`src/renderer/lib/nodeDeletion.ts`. That includes the canvas Delete key and menu, React Flow node
+header × buttons, the kanban menu, Cmd/Ctrl+W, the sessions sidebar and session-memory panel, and
+agent-control `close`. React Flow expands a group deletion to its descendants before its callback;
+the funnel reduces that set back to roots so confirming "delete frame" still frees its children
+rather than deleting them.
 
-Wiring this surfaced a **pre-existing inconsistency**, which is recorded rather than quietly
-resolved: deleting a session from the canvas (the Delete key) has always opened the super gate,
-while deleting the same session from the board opened a one-button confirm — identical action,
-identical node, two different confirmations. Its comment even claimed they matched. Kids mode now
-makes them agree; making them agree for *everyone* is a product decision, not a wiring fix, so the
-off-path was left exactly as it was.
+With Kids mode on, every surface receives the two-key gate. With it off, the historical contracts
+remain: canvas deletion is gated, kanban/sidebar/agent-control use a plain confirmation, and
+Cmd/Ctrl+W closes immediately. This makes Kids mode consistent without silently changing the
+ordinary-mode product contract.
 
 ## Verified against a running build
 
@@ -208,6 +221,7 @@ and by unwiring the gate (red).
 ## Verifying a claim here
 
 ```bash
-npx vitest run src/core/kids-mode.test.ts src/shared/kids-mode-policy.test.ts \n  src/renderer/state/permissionMode.kids.test.ts
+npx vitest run src/core/kids-mode.test.ts src/shared/kids-mode-policy.test.ts \
+  src/renderer/state/permissionMode.kids.test.ts src/renderer/lib/nodeDeletion.test.ts
 node scripts/check-app-contract.mjs
 ```

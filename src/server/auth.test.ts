@@ -9,6 +9,13 @@ beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-auth-')) })
 afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); vi.useRealTimers() })
 
 describe('Auth', () => {
+  it('refuses short passwords from non-HTTP callers', () => {
+    const a = new Auth(dir)
+    expect(() => a.setPassword('1234567')).toThrow(/at least 8/i)
+    expect(() => a.setPassword('12345678')).not.toThrow()
+    expect(a.isConfigured()).toBe(true)
+  })
+
   it('is unconfigured until a password is set; then verifies only the right one', () => {
     const a = new Auth(dir)
     expect(a.isConfigured()).toBe(false)

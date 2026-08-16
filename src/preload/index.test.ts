@@ -8,7 +8,7 @@ import { IPC } from '../shared/ipc'
 import type { NodeTerminalApi, SshPassphraseRequest } from '../shared/types'
 
 const h = vi.hoisted(() => ({
-  invoke: vi.fn(async () => undefined),
+  invoke: vi.fn(async (..._args: unknown[]): Promise<unknown> => undefined),
   send: vi.fn(),
   on: vi.fn(),
   removeListener: vi.fn(),
@@ -35,7 +35,24 @@ import './index'
 
 const api = h.exposed.nodeTerminal as NodeTerminalApi
 
-describe('preload sshProject passphrase wiring', () => {
+describe('preload IPC wiring', () => {
+  it('awaits the main-process clipboard acknowledgement on the request-response channel', async () => {
+    h.invoke.mockResolvedValueOnce(false)
+
+    await expect(
+      api.clipboard.writeText('colour value', { reportFailure: false })
+    ).resolves.toBe(false)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.clipboardWrite, 'colour value')
+    expect(h.send).not.toHaveBeenCalledWith(IPC.clipboardWrite, 'colour value')
+  })
+
+  it('resolves false instead of leaking a rejected clipboard invocation', async () => {
+    h.invoke.mockRejectedValueOnce(new Error('main process unavailable'))
+
+    await expect(api.clipboard.writeText('safe fallback')).resolves.toBe(false)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.clipboardWrite, 'safe fallback')
+  })
+
   it('exposes GitHub issue data and host-control namespaces on their exact channels', async () => {
     await api.githubIssues.query({ projectId: 'p1', columnId: null, pageSize: 50 })
     await api.githubControl.saveToken('write-only-secret')
@@ -93,5 +110,15 @@ describe('preload sshProject passphrase wiring', () => {
     expect(got).toEqual([{ requestId: 'r7' }])
     off()
     expect(h.removeListener).toHaveBeenCalledWith(IPC.sshPassphraseDismiss, handler)
+  })
+
+  it('forwards pairing attempt ownership on both start and targeted stop', async () => {
+    const attemptId = '33333333-3333-4333-8333-333333333333'
+
+    await api.pairing.start(attemptId)
+    await api.pairing.stop(attemptId)
+
+    expect(h.invoke).toHaveBeenCalledWith(IPC.pairingStart, attemptId)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.pairingStop, attemptId)
   })
 })

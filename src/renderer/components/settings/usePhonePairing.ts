@@ -29,6 +29,13 @@ export function pairingDonePresentation(result: PairingDoneResult): {
 /** How often the Remote Login warning re-probes sshd while it is showing. */
 const SSH_RECHECK_MS = 2000
 
+function createPairingAttemptId(): string {
+  if (typeof globalThis.crypto?.randomUUID !== 'function') {
+    throw new Error('Secure pairing is unavailable because cryptographic UUIDs are unavailable.')
+  }
+  return globalThis.crypto.randomUUID()
+}
+
 /**
  * The phone-pairing state machine, shared by Settings → Phone and the quick-pair popover:
  * start/stop, the QR data URL, the completion event, and the live Remote-Login (sshd) re-probe
@@ -73,16 +80,16 @@ export function usePhonePairing(onFinished?: () => void): {
   // Ownership starts BEFORE the IPC await: closing a surface while main is still starting the
   // listener must send stop now, then poison every late continuation. Epochs also keep an older
   // QR render/finally from overwriting a newer start, explicit stop, or completion event.
-  const attemptRef = useRef(false)
+  const attemptRef = useRef<string | null>(null)
   const epochRef = useRef(0)
   const mountedRef = useRef(true)
-  const listenerEpochRef = useRef<number | null>(null)
+  const listenerAttemptRef = useRef<string | null>(null)
   // Only the IPC start handshake is queued. If start B supersedes pending start A, A resolves,
   // sees its stale epoch and stops its listener BEFORE B is dispatched; a global stop API cannot
   // otherwise target A without accidentally canceling B's fresh listener.
   const startDispatchRef = useRef<Promise<void>>(Promise.resolve())
-  const stopHostAttempt = async (): Promise<void> => {
-    await window.nodeTerminal.pairing.stop().catch(() => undefined)
+  const stopHostAttempt = async (attemptId: string): Promise<void> => {
+    await window.nodeTerminal.pairing.stop(attemptId).catch(() => undefined)
   }
 
   // Live re-check while the Remote Login warning is visible: the initial probe runs once at
@@ -112,11 +119,12 @@ export function usePhonePairing(onFinished?: () => void): {
   }, [phase, sshOpen])
 
   const start = async (): Promise<void> => {
+    const attemptId = createPairingAttemptId()
     const predecessor = startDispatchRef.current
-    const previousListenerWasLive = listenerEpochRef.current !== null
+    const previousListenerAttempt = listenerAttemptRef.current
     const epoch = ++epochRef.current
-    attemptRef.current = true
-    listenerEpochRef.current = null
+    attemptRef.current = attemptId
+    listenerAttemptRef.current = null
     setError('')
     setBusy(true)
     setQr('')
@@ -125,21 +133,25 @@ export function usePhonePairing(onFinished?: () => void): {
     try {
       // If the previous start reached main, stop it before dispatching this replacement. If its
       // IPC is still pending, `predecessor` itself performs the late stop before it resolves.
-      const replacementStop = previousListenerWasLive
-        ? stopHostAttempt()
+      const replacementStop = previousListenerAttempt
+        ? stopHostAttempt(previousListenerAttempt)
         : Promise.resolve()
       const startRequest = Promise.all([predecessor, replacementStop]).then(async () => {
         if (!mountedRef.current || epochRef.current !== epoch) {
           throw new Error('Pairing start was superseded.')
         }
-        const started = await window.nodeTerminal.pairing.start()
+        const started = await window.nodeTerminal.pairing.start(attemptId)
         if (!mountedRef.current || epochRef.current !== epoch) {
           // The first stop may have raced ahead of main creating the listener. Do not release the
           // dispatch queue until this second, post-resolution stop has completed.
-          await stopHostAttempt()
+          await stopHostAttempt(attemptId)
           throw new Error('Pairing start was superseded.')
         }
-        listenerEpochRef.current = epoch
+        if (started.attemptId !== attemptId) {
+          await stopHostAttempt(started.attemptId)
+          throw new Error('Pairing start ownership could not be verified.')
+        }
+        listenerAttemptRef.current = attemptId
         return started
       })
       startDispatchRef.current = startRequest.then(
@@ -154,7 +166,7 @@ export function usePhonePairing(onFinished?: () => void): {
         manualHost: mhost
       } = await startRequest
       if (!mountedRef.current || epochRef.current !== epoch) {
-        await stopHostAttempt()
+        await stopHostAttempt(attemptId)
         return
       }
       // Main now owns a live listener; keep ownership true while QR generation is pending so an
@@ -171,12 +183,12 @@ export function usePhonePairing(onFinished?: () => void): {
       setPhase('waiting')
     } catch (err) {
       if (mountedRef.current && epochRef.current === epoch) {
-        const owned = attemptRef.current
-        attemptRef.current = false
-        listenerEpochRef.current = null
+        const owned = attemptRef.current === attemptId
+        attemptRef.current = null
+        listenerAttemptRef.current = null
         // A QR failure happens after main created the listener. Never leave that invisible attempt
         // running just because renderer-side encoding failed.
-        if (owned) await stopHostAttempt()
+        if (owned) await stopHostAttempt(attemptId)
         setError((err as Error).message)
       }
     } finally {
@@ -187,9 +199,9 @@ export function usePhonePairing(onFinished?: () => void): {
   const stop = (): void => {
     epochRef.current += 1
     const owned = attemptRef.current
-    attemptRef.current = false
-    listenerEpochRef.current = null
-    if (owned) void stopHostAttempt()
+    attemptRef.current = null
+    listenerAttemptRef.current = null
+    if (owned) void stopHostAttempt(owned)
     setBusy(false)
     setPhase('idle')
     setQr('')
@@ -206,10 +218,10 @@ export function usePhonePairing(onFinished?: () => void): {
   onFinishedRef.current = onFinished
   useEffect(() => {
     return window.nodeTerminal.pairing.onDone((result) => {
-      if (!attemptRef.current) return
+      if (result.attemptId !== attemptRef.current) return
       epochRef.current += 1
-      attemptRef.current = false
-      listenerEpochRef.current = null
+      attemptRef.current = null
+      listenerAttemptRef.current = null
       setBusy(false)
       setQr('')
       setShortCode('')
@@ -229,9 +241,9 @@ export function usePhonePairing(onFinished?: () => void): {
       mountedRef.current = false
       epochRef.current += 1
       const owned = attemptRef.current
-      attemptRef.current = false
-      listenerEpochRef.current = null
-      if (owned) void stopHostAttempt()
+      attemptRef.current = null
+      listenerAttemptRef.current = null
+      if (owned) void stopHostAttempt(owned)
     }
   }, [])
 

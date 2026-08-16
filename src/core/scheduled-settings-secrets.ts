@@ -12,7 +12,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from './platform'
-import { renameAtomic } from './fs-atomic'
+import { clearAtomicTarget, renameAtomic, sweepStaleTempFiles, tempNameFor } from './fs-atomic'
 
 const DIR = 'scheduled-settings-secrets'
 
@@ -45,9 +45,18 @@ function rawFile(ruleId: string): string {
 
 type StoredToken = { version: 1; tokenEnc: string }
 
+export class ScheduledSettingsSecretError extends Error {
+  readonly code = 'clear-incomplete' as const
+
+  constructor() {
+    super('The Home Assistant token file was removed, but credential temp files are still active or could not be inspected.')
+  }
+}
+
 async function persistFile(file: string, data: string): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+  await sweepStaleTempFiles(file)
+  const tmp = tempNameFor(file)
   try {
     await fs.writeFile(tmp, data, { encoding: 'utf-8', mode: 0o600 })
     // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
@@ -65,8 +74,8 @@ export async function setHomeAssistantToken(ruleId: string, token: string | null
   const sf = sealedFile(ruleId)
   const rf = rawFile(ruleId)
   if (token === null) {
-    await fs.rm(sf, { force: true }).catch(() => {})
-    await fs.rm(rf, { force: true }).catch(() => {})
+    const [sealed, raw] = await Promise.all([clearAtomicTarget(sf), clearAtomicTarget(rf)])
+    if (!sealed.cleared || !raw.cleared) throw new ScheduledSettingsSecretError()
     return
   }
   if (seals()) {

@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal DisableDelayedExpansion
 rem =============================================================================================
 rem download-dependencies.bat -- obtains every dependency nodeterm needs to build, run and test,
 rem from canonical upstreams, into per-project or user-scoped locations. Never machine-wide,
@@ -60,9 +60,11 @@ call :phase_begin "Node.js runtime"
 
 rem Pick up a portable Node this script installed on an earlier run before probing PATH -- see
 rem the comment in :install_portable_node for why this is a dedicated variable rather than a
-rem mutation of the user's real PATH.
-for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('NODETERM_NODE_HOME','User')"`) do set "NODETERM_NODE_HOME=%%H"
-if defined NODETERM_NODE_HOME if exist "!NODETERM_NODE_HOME!\node.exe" set "PATH=!NODETERM_NODE_HOME!;%PATH%"
+rem mutation of the user's real PATH. A valid process-local value wins so an automation caller
+rem can deliberately select an isolated toolchain without rewriting the user's environment.
+if defined NODETERM_NODE_HOME if not exist "%NODETERM_NODE_HOME%\node.exe" set "NODETERM_NODE_HOME="
+if not defined NODETERM_NODE_HOME for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('NODETERM_NODE_HOME','User')"`) do set "NODETERM_NODE_HOME=%%H"
+if defined NODETERM_NODE_HOME if exist "%NODETERM_NODE_HOME%\node.exe" set "PATH=%NODETERM_NODE_HOME%;%PATH%"
 
 where node >nul 2>nul
 if not errorlevel 1 (
@@ -103,7 +105,27 @@ goto :node_done
 call :phase_end "Node.js runtime"
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 2: npm project dependencies
+rem Phase 2: build preflight. This MUST run after Node is bootstrapped but before npm ci/install:
+rem npm removes node_modules wholesale, so it is already too late to give an actionable diagnosis
+rem after a mapped electron.exe blocks deletion. Keeping the preflight here also covers callers
+rem that invoke download-dependencies.bat directly instead of going through either build script.
+rem ---------------------------------------------------------------------------------------------
+call :phase_begin "Build preflight"
+call node "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
+set "PREFLIGHT_EXIT=%ERRORLEVEL%"
+if not "%PREFLIGHT_EXIT%"=="0" (
+    echo.
+    echo [FAILED] Build preflight
+    echo   Dependency : a build precondition listed above
+    echo   Constraint : every precondition must hold before npm removes node_modules
+    echo   Source     : "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
+    echo   Error      : preflight exited with code %PREFLIGHT_EXIT% - see the numbered problems above
+    exit /b %PREFLIGHT_EXIT%
+)
+call :phase_end "Build preflight"
+
+rem ---------------------------------------------------------------------------------------------
+rem Phase 3: npm project dependencies
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "npm project dependencies"
 
@@ -142,11 +164,21 @@ call :phase_end "npm project dependencies"
 
 echo.
 echo === All dependencies are ready. ===
-exit /b 0
+goto :return_success
 
 rem =============================================================================================
 rem Subroutines
 rem =============================================================================================
+
+:return_success
+rem `setlocal` protects callers from every scratch variable above, but PATH is an intentional
+rem output: a portable or just-installed Node must remain callable by build.bat after this CALL
+rem returns. Export only the two documented toolchain values. Delayed expansion is disabled for
+rem the whole file so a legitimate `!` in an inherited PATH survives this handoff byte-for-byte.
+set "NODETERM_RETURN_PATH=%PATH%"
+set "NODETERM_RETURN_NODE_HOME=%NODETERM_NODE_HOME%"
+endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%"
+exit /b 0
 
 :refresh_path
 rem A package manager (winget) writes PATH into the registry for FUTURE processes only -- the
@@ -156,7 +188,7 @@ rem ExpandEnvironmentVariables is used (instead of a raw `reg query`) because th
 rem PATH un-expanded (literal "%SystemRoot%..." segments) -- a naive copy would leave those
 rem un-expanded in our session PATH and break every tool that depends on them.
 for /f "usebackq delims=" %%P in (`powershell -NoProfile -Command "$m=[Environment]::GetEnvironmentVariable('Path','Machine'); $u=[Environment]::GetEnvironmentVariable('Path','User'); [Environment]::ExpandEnvironmentVariables((@($m,$u) -join ';'))"`) do set "PATH=%%P"
-if defined NODETERM_NODE_HOME set "PATH=!NODETERM_NODE_HOME!;%PATH%"
+if defined NODETERM_NODE_HOME set "PATH=%NODETERM_NODE_HOME%;%PATH%"
 exit /b 0
 
 :install_portable_node
@@ -200,7 +232,14 @@ if errorlevel 1 (
 )
 
 set "NODE_ACTUAL_SHA256="
-for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -Path '%NODE_ZIP%').Hash.ToLower()"`) do set "NODE_ACTUAL_SHA256=%%H"
+rem Use .NET directly instead of Get-FileHash. A batch file launched from PowerShell 7 can inherit
+rem its PSModulePath; Windows PowerShell 5.1 then sees incompatible PowerShell 7 modules first and
+rem silently fails to auto-load Get-FileHash, which must never turn a missing digest into trust.
+rem Pass the path through the environment, not PowerShell source, so an apostrophe in LOCALAPPDATA
+rem is data rather than a broken quote (or executable text).
+set "NODETERM_HASH_FILE=%NODE_ZIP%"
+for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "$s=[Security.Cryptography.SHA256]::Create(); $f=[IO.File]::OpenRead($env:NODETERM_HASH_FILE); try { [BitConverter]::ToString($s.ComputeHash($f)).Replace('-','').ToLowerInvariant() } finally { $f.Dispose(); $s.Dispose() }"`) do set "NODE_ACTUAL_SHA256=%%H"
+set "NODETERM_HASH_FILE="
 if /I not "%NODE_ACTUAL_SHA256%"=="%NODE_SHA256%" (
     del /f /q "%NODE_ZIP%" >nul 2>nul
     echo.

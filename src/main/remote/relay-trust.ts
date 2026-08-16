@@ -33,8 +33,8 @@ import {
   recordApproval,
   type MutualApproval
 } from './mutual-approval-core'
-import { loadApprovedDevices, saveApprovedDevices } from './approved-devices'
-import type { ApprovedDevices } from './approved-devices-core'
+import { mutateApprovedDevices } from './approved-devices'
+import type { MutateApprovedDevices } from './approved-devices-core'
 import { parseRpcMessage } from '../../shared/rpc'
 
 /**
@@ -79,8 +79,8 @@ export interface TrustGateOptions {
   sendConfirm: (json: string) => void
   /** Fires exactly once, when both sides have confirmed: the session may open. */
   onOpen: () => void
-  load?: () => Promise<ApprovedDevices>
-  save?: (s: ApprovedDevices) => Promise<void>
+  /** Test/alternate-store seam. Production uses the serialized disk mutation funnel. */
+  mutate?: MutateApprovedDevices
 }
 
 export function createTrustGate(opts: TrustGateOptions): TrustGate {
@@ -98,10 +98,9 @@ export function createTrustGate(opts: TrustGateOptions): TrustGate {
       // Pin FIRST (recordApproval refuses unless BOTH confirmed, and pins only the key carried by
       // the state), then open. A failed write must not strand a session both humans confirmed —
       // it only means the next connect asks for the SAS again, which is the safe direction.
-      const load = opts.load ?? loadApprovedDevices
-      const save = opts.save ?? saveApprovedDevices
+      const mutate = opts.mutate ?? mutateApprovedDevices
       try {
-        await save(recordApproval(await load(), pinned))
+        await mutate((store) => recordApproval(store, pinned))
       } catch {
         // Persisting the pin is best-effort; consent for THIS session is already mutual.
       }

@@ -151,7 +151,11 @@ Everything boots **exactly as usual** — the loopback hook server, the agent-st
 usage poll, the granted push senders (push-notify + Live-Activity), and the pending-approvals
 sweep — **except** the public HTTP/WS listener, which is **never bound**. There is no renderer
 serving and no auth surface. `NODETERM_HOST` / `NODETERM_PORT` are ignored (nothing binds), and
-`platform.broadcast` is a no-op while no browser UI is attached.
+`platform.broadcast` is a no-op while no browser UI is attached. Its shutdown owns the same core
+service lifecycle as the serving path: in particular the scheduled-settings poller is stopped
+before PTY/hook teardown. This matters in a container too — `node` is PID 1, `docker stop` delivers
+SIGTERM, and `NODETERM_HEADLESS=1` must not leave that interval/store listener running while close
+is in flight.
 
 ### Security rationale: zero open ports
 
@@ -242,7 +246,9 @@ Single-user auth. There is one password; sessions are per-browser.
 - **Login rate limit / lockout:** 5 failed password attempts trip a 60-second lockout
   (further attempts get `429 too_many_attempts`); a success resets the counter.
 - **Auth gate:** every route except the login/setup pages and their POST handlers
-  requires a valid session — HTML navigations redirect to `/login`, API/WS get `401`.
+  requires a valid session — HTML navigations redirect to `/login`, API/WS get `401`. The raw
+  browser upload route is behind this same gate; an unauthenticated request cannot create a staging
+  file.
 
 ### Reverse-proxy SSO (header trust)
 
@@ -298,12 +304,20 @@ produces a slim runtime image with `tmux`, `git` and `curl` (the managed hook sc
 through curl). Any Dockerfile-based PaaS (Dokploy, Coolify, plain compose) can deploy it:
 
 ```bash
-docker build -t nodeterm-server .
-docker run -d -p 8443:8443 \
-  -e NODETERM_SERVER_PASSWORD='choose-a-strong-one' \
-  -v nodeterm-data:/data \
-  nodeterm-server
+./host.sh             # macOS / Linux
+host.bat              # Windows
 ```
+
+Both wrappers generate a random first-boot password into the ignored root `.env`, restrict that
+file to the current user (`0600` or a Windows ACL), build through Compose, and wait for the image's
+real `/login` health check. They refuse an inherited `NODETERM_SERVER_PASSWORD`, because Compose
+would let it silently override the credential the wrapper just advertised from `.env`. To drive the
+image directly, pass a password of at least eight characters through an owner-only `--env-file`
+(never as a literal command-line argument), or omit it and use the one-time setup URL from
+`docker logs`. The wrappers require a local Docker socket: their loopback URL, TLS readiness probe,
+and SSH hint all refer to the machine on which the wrapper itself runs. They also pin the Compose
+file, project name, env file and profiles, then export exactly the loopback bind, port and password
+they validated; inherited Compose controls are rejected rather than allowed to redirect the stack.
 
 On Dokploy specifically: create an app from this repo (Dockerfile build), attach a volume at
 `/data`, set `NODETERM_SERVER_PASSWORD`, and point a domain at container port `8443` — Traefik
@@ -312,21 +326,61 @@ and the clipboard runs in a secure context.
 
 Things the image decides for you (see the Dockerfile comments for the full why):
 
-- **node-pty is compiled against Node's ABI, not Electron's.** The repo's `postinstall` runs
-  `electron-rebuild`, which targets Electron — every install in the image uses
-  `--ignore-scripts` plus an explicit `npm rebuild node-pty`. Don't "simplify" that away.
+- **Both native addons are compiled against Node's ABI, not Electron's.** The repo's `postinstall`
+  runs `electron-rebuild`, which targets Electron — every install in the image uses
+  `--ignore-scripts` plus an explicit `npm rebuild node-pty smart-whisper`. Rebuilding only
+  node-pty leaves terminals healthy but browser dictation unable to load its native binding.
+- **The server process is unprivileged.** The entrypoint starts as root, repairs only root-owned
+  uid/gid entries on the literal `/data` filesystem for compatibility with the older image, then
+  immediately `exec`s Node as uid 1000. It never follows an operator-supplied `NODETERM_DATA_DIR`.
 - **`--insecure-http` is passed** because the container must bind `0.0.0.0` for the proxy to
   reach it, and TLS lives in the proxy. Never publish the port directly on a public interface.
 - **A container restart/redeploy kills the tmux server** (it lives inside the container). The
   cold-restore path bridges it — scrollback replays from the `/data` snapshot and resumable
   agents relaunch with `--resume` — but running processes die with each deploy. This is the one
   behavioral difference from a long-lived host install, where only a machine reboot does that.
-- **`/data` must be a volume** — auth, sessions, workspace and scrollback snapshots live there;
-  without it every restart forgets the password and the canvas.
+- **Reuse a `/data` volume across replacements** — auth, sessions, workspace and scrollback
+  snapshots live there. A same-container restart keeps its writable layer, but a replacement or
+  redeploy without the same volume loses the password and canvas.
 
 Agent CLIs (`claude` etc.) are not baked into the image — install them into the running
 container (or extend the image) and authenticate inside a terminal node; their config lives
 under the container user's home, so consider a volume there too if you rely on them.
+
+Run the full repeatable image check after Docker/Compose/host changes:
+
+```bash
+node scripts/test-docker-host.mjs
+# Or select an SSH-backed daemon without changing the current Docker context:
+node scripts/test-docker-host.mjs --docker-host ssh://docker@example.test
+```
+
+It builds the real image, checks `/login`, both renderer/server bundles, `node-pty` and
+`smart-whisper`, verifies PID 1 is uid 1000, observes a clean SIGTERM exit, then proves auth and a
+data marker survive a restart and complete container recreation. It creates uniquely named test
+resources and removes only those resources when it finishes.
+
+The smoke is safe to aim at a shared SSH daemon: its recovery journal pins the daemon identity,
+and every image, volume, server, and helper has a
+cryptographic run id plus role and source-commit labels; every container is recorded by immutable
+id; and cleanup rechecks those identities and labels before removing anything. Runtime containers
+have no published host port, use `network=none`, run under bounded CPU/memory/swap/PID and capability
+limits, and probe HTTP/auth/assets from inside the server container. Passwords enter the probe over
+stdin and never appear in Docker arguments. Inherited Docker context, host, TLS, and builder
+environment controls are cleared after the selected endpoint is resolved.
+
+SSH uses the account's normal persistent host-key inventory. Configure that inventory to accept a
+new key non-interactively and to reject a changed key; the smoke never disables key comparison or
+rewrites global SSH settings. A recovery journal is written outside the repository before resources
+are created. If interruption leaves owned resources behind, run:
+
+```bash
+node scripts/test-docker-host.mjs --cleanup-run <run-uuid>
+```
+
+Recovery still requires the recorded daemon identity, immutable resource identities, and ownership
+labels to match. Cleanup
+residue is a failed smoke result, not a warning.
 
 ### CSP
 
@@ -391,6 +445,36 @@ browser:
   diff) all run against the server's `git` service.
 - **Explorer** — the file tree lists the project `cwd` via `fs:list`.
 
+### Bounded browser uploads
+
+Browser-held files no longer travel as base64 inside `files.saveUpload` WebSocket RPC calls. A
+7 MiB raw file becomes roughly 9.3 MiB after base64 expansion, which exceeds the socket's deliberate
+8 MiB `WS_MAX_PAYLOAD` and used to disconnect every feature multiplexed over that connection.
+
+The Server Edition bridge now sends raw `application/octet-stream` bytes to the authenticated,
+same-origin `POST /upload?name=…` endpoint. The receiver streams the request into a private staging
+file and atomically publishes it only after the body completes. A selected `File` is passed directly
+to `fetch` as its Blob body — the renderer does not materialize an ArrayBuffer, base64 string,
+decoded binary string, and second byte array first. Both sides share a 64 MiB raw-byte ceiling: the
+browser checks `Blob.size` before fetch (and legacy base64 callers check encoded length before
+decoding), while the server checks `Content-Length` when present and counts the body again while
+receiving it, so chunked or dishonestly-labelled requests cannot bypass the limit. Over-limit
+requests receive `413` with the same human-readable limit and leave no partial file. The WebSocket
+ceiling remains 8 MiB — upload capacity is not bought by weakening the socket's memory/backpressure
+boundary. When a chunked sender crosses the limit, the server sends the refusal immediately but
+continues discarding that request to natural EOF. Returning early from Node's default async
+iterator destroys the request stream, resets a slow client before it can reliably read the `413`,
+and prevents keep-alive reuse. Upload roots/directories request mode `0700` and files `0600` on
+POSIX (the mode flags are harmless on Windows); failed writes remove only their own random staging
+directory. Before a new upload, POSIX hosts also tighten a legacy permissive staging tree left by an
+older build. That migration opens the managed root, token directories, and immediate single-link
+files with `O_NOFOLLOW` and applies `0700`/`0600` through the opened descriptor; it skips symlinks,
+hard-linked files, nested directories, and anything outside the upload root.
+
+Authentication remains mandatory for non-browser clients that omit `Origin`. When an `Origin`
+header is present, its host must also match the request `Host`; malformed or cross-host origins are
+rejected before a staging directory is created, matching the WebSocket's cross-site request guard.
+
 The following affordances change shape in the browser (no native OS is reachable):
 
 - **Folder / file picker** — there is **no native dialog**. "Open folder…" and file
@@ -407,7 +491,10 @@ The following affordances change shape in the browser (no native OS is reachable
   only works **inside a user gesture**: the copy shortcut and the click-driven copy
   buttons are fine, but an `OSC 52` write driven by terminal *output* (`vim "+y`, `gh`,
   `yazi`) is not — it fails and raises a **banner** ("the browser blocks clipboard access
-  over plain http"). Copy never fails silently, but if you want it to work properly,
+  over plain http"). The bridge awaits both routes and resolves a truthful boolean. A caller with
+  one more fallback can defer the bridge's banner; the final exhausted route raises exactly one,
+  so a later success is never contradicted by an earlier error. Copy never fails silently, but if
+  you want it to work properly,
   **serve over https (or localhost)** — that is one more reason for the TLS proxy above.
   Note also that **Ctrl+Shift+C** (advertised as copy on Linux/Windows) additionally opens
   Chromium's element inspector and a page cannot suppress that; **Ctrl+Insert** is the
@@ -555,3 +642,7 @@ only exercises the HTTP/auth surface). With `npm run server:dev` running:
     parent node; click it to watch its live transcript stream.
 13. **Context meter (Phase 3b)** — as a Claude session accumulates transcript, the node's
     **context-window meter** should fill.
+14. **Converter upload transport** — open the File converter and add a 7 MiB browser file; it
+    should stage successfully without the WebSocket reconnect overlay appearing. An upload above
+    64 MiB should show the upload-limit refusal, keep the socket connected, and create no queue
+    item or partial staging file.

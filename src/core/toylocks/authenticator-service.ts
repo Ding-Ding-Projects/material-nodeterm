@@ -34,9 +34,14 @@ interface StoredSecret {
  *  VM that never synced), not genuine small drift. */
 const GROSS_CLOCK_SKEW_HINT_S = 120
 
-export function startAuthenticatorService(): { dispose(): void } {
-  const store = new SecureStore<AuthenticatorEntry>('authenticator.json')
+type AuthenticatorStore = Pick<
+  SecureStore<AuthenticatorEntry>,
+  'load' | 'save' | 'seal' | 'unseal'
+>
 
+export function startAuthenticatorService(
+  store: AuthenticatorStore = new SecureStore<AuthenticatorEntry>('authenticator.json')
+): { dispose(): void } {
   const codeFor = (secretBase32: string, entry: AuthenticatorEntry): AuthenticatorCode => {
     const secretBytes = base32Decode(secretBase32)
     const nowS = Math.floor(Date.now() / 1000)

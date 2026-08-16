@@ -29,6 +29,22 @@ src/renderer/components/converter/
   FileConverterPanel.tsx       the whole user-facing panel
 ```
 
+## Session routing and shipped surfaces
+
+The converter drawer is mounted above the canvas' project-keyed `SessionProvider`, so it resolves
+the API from the **active project binding** rather than reading the viewer's global preload. That
+machine boundary applies to every operation: catalog/state reads, file selection and upload,
+preflight, queue mutation, cancellation and retry.
+
+- **Desktop:** the active local project uses the Electron-hosted converter service.
+- **Server Edition:** the browser uses the same converter service in the server process. Browser
+  files are staged on that server through the authenticated HTTP upload route described below.
+- **Relay project:** converter RPC is not routed to the host in this release. The active relay API
+  returns `E_UNSUPPORTED`, and the drawer shows that refusal. It never falls back to converting
+  files on the viewing computer.
+- **Mobile companion:** not applicable. *nodeterm mobile* is a separate app and has no converter
+  management panel; this change does not alter its transport protocol.
+
 ## The bundled rule
 
 Every row in `CONVERTER_CATALOG` declares `bundled` and `available` explicitly. A row is
@@ -93,10 +109,13 @@ queue as `needs-confirm` (reason `lossy`) rather than running; resolving that re
 ## Overwrite protection
 
 A destination path that already exists is never silently overwritten. The item is queued as
-`needs-confirm` (reason `overwrite`); the queue runner **re-checks again immediately before the
-write**, even for an item that was previously cleared, because the destination could have appeared
-in between (another queued item, another process). Only `item.overwriteAllowed === true` — set by
-an explicit `resolvePending(id, { overwrite: true })` — permits the write.
+`needs-confirm` (reason `overwrite`); the queue runner re-checks before writing for a quick prompt,
+but that check is not the safety boundary because another writer can still create the path one
+instruction later. An unapproved conversion publishes its completed, same-directory temporary file
+with an atomic no-clobber hard link. Exactly one of two racing writers can claim an absent name; the
+other receives `EEXIST` and returns to `needs-confirm`. A filesystem that cannot provide that
+primitive fails closed. Only `item.overwriteAllowed === true` — set by an explicit
+`resolvePending(id, { overwrite: true })` — permits replacement through `renameAtomic`.
 
 ## Resource bounds
 
@@ -107,8 +126,15 @@ an explicit `resolvePending(id, { overwrite: true })` — permits the write.
   produced bytes back through the target format's own parser (or, for gzip/brotli, decompresses
   them) before the write is allowed to happen. A validation failure aborts the item as `failed`
   and the destination is never touched.
-- Writes are **atomic**: output goes to `<dest>.part-<pid>-<ts>` and is `rename()`d into place —
-  a crash mid-write can never leave a half-written destination file.
+- Writes use a **unique same-directory temporary name** from `tempNameFor`; a PID and timestamp alone
+  are not unique when concurrent workers share a clock or PID namespace. Each candidate is claimed
+  with an exclusive `wx` open and written through that exact file handle, so a stale collision or
+  pre-created symlink is never followed, truncated, or later removed as if this run owned it. A
+  completed temporary file is published with the no-clobber link above, or with `renameAtomic`
+  after explicit overwrite approval. Failure and cancellation await cleanup of that writer's own
+  temporary file. If the no-clobber publish succeeds but removing its second hard-link name fails,
+  the item truthfully remains `done` and carries a visible cleanup warning rather than inviting a
+  duplicate retry.
 - Bounded concurrency (`CONVERTER_DEFAULT_CONCURRENCY = 2`, configurable 1–`CONVERTER_MAX_CONCURRENCY
   = 6`): only that many items are ever being read+converted+written at once, so peak memory for file
   bytes is bounded regardless of how many items are queued.
@@ -130,6 +156,16 @@ an explicit `resolvePending(id, { overwrite: true })` — permits the write.
   writable, its free disk space (best-effort via `fs.statfsSync` — `null`, never zero, when the
   platform/Node build doesn't support it), and the estimated bytes still needed by everything
   pending in the queue.
+- **Server Edition browser uploads do not ride the RPC WebSocket.** The browser passes the selected
+  `File` directly to the authenticated, same-origin `POST /upload` route as a Blob body; it does not
+  create an ArrayBuffer, base64 string, decoded binary string, or second byte array first. The route
+  streams those bytes into the managed staging directory and publishes the completed file
+  atomically. The browser checks `File.size` against the shared 64 MiB ceiling before fetch;
+  `Content-Length` is only an early server refusal, and streamed/chunked bodies are counted again as
+  they arrive. An oversized upload gets a visible `413` refusal and no partial file is published.
+  The RPC socket deliberately remains capped at 8 MiB, so a 7 MiB file no longer expands into an
+  over-limit base64 RPC frame or disconnects the rest of the UI. The optional Blob carrier exists
+  only on the Server Edition API; desktop and relay APIs retain the legacy base64/RPC method.
 
 ## Batch results
 
@@ -157,11 +193,8 @@ partially-successful batch is never presented as a uniform success or a uniform 
   reasonable follow-up.
 - **The queue list in the panel shows only the first page** (up to 500 items) — the engine itself
   is already paginated (`converter.state(offset, limit)`); a pager control in the UI is a follow-up.
-- **Browser (Server Edition) "Add files…" uploads through the shared `files.saveUpload` RPC**,
-  which rides the same WebSocket frame as everything else and is capped by `WS_MAX_PAYLOAD` (8 MiB,
-  `src/server/ws.ts`) — comfortably fine for the text-based formats this pass bundles, but well
-  under the 64–170 MB per-adapter limits declared for the desktop path. A future pass could chunk
-  large browser uploads instead of sending one RPC frame.
-- **Relay (remote-desktop) tabs do not route the converter to the host.** `converter` stays
-  `E_UNSUPPORTED` over a relay connection rather than silently running on the wrong machine — see
-  `src/renderer/bridge/relay-api.ts`.
+- **Server Edition browser staging is capped at 64 MiB**, even where a desktop adapter declares a
+  larger `maxInputBytes`. Files above that shared upload bound are refused visibly; widening the
+  browser path requires a separate resource/memory decision rather than weakening either guard.
+- **Relay (remote-desktop) tabs do not route the converter to the host.** The visible
+  `E_UNSUPPORTED` refusal is intentional until that core namespace is carried over the relay.

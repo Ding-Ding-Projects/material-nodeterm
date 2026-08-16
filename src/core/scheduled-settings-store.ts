@@ -2,7 +2,7 @@ import { promises as fs, readFileSync } from 'fs'
 import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
-import { renameAtomic } from './fs-atomic'
+import { renameAtomic, tempNameFor } from './fs-atomic'
 import {
   defaultScheduledSettingsFile,
   normalizeScheduledSettingsFile,
@@ -22,8 +22,6 @@ export class ScheduledSettingsStore {
   private cache: ScheduledSettingsFile = defaultScheduledSettingsFile()
   private listeners = new Set<(file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void>()
   private saveChain: Promise<unknown> = Promise.resolve()
-  private writeSeq = 0
-
   private get filePath(): string {
     return path.join(platform().userDataDir, 'scheduled-settings.json')
   }
@@ -74,7 +72,7 @@ export class ScheduledSettingsStore {
   private async saveNow(next: ScheduledSettingsFile): Promise<void> {
     const previous = this.cache
     this.cache = next
-    const tmp = `${this.filePath}.${process.pid}.${++this.writeSeq}.tmp`
+    const tmp = tempNameFor(this.filePath)
     try {
       await fs.writeFile(tmp, JSON.stringify(next, null, 2), { encoding: 'utf-8', mode: 0o600 })
       // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.

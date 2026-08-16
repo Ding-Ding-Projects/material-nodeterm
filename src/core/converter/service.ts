@@ -2,9 +2,8 @@
 // crash-recoverable persistence (store.ts), paged folder discovery (fs-scan.ts), atomic writes,
 // pre-write validation, and the lossy/overwrite confirmation gate. See docs/file-converter.md.
 
-import { open, mkdir, stat, unlink, writeFile } from 'node:fs/promises'
-import { constants as fsConstants } from 'node:fs'
-import { access } from 'node:fs/promises'
+import { access, mkdir, open, stat, type FileHandle } from 'node:fs/promises'
+import { constants as fsConstants, promises as fs } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
 import { freeDiskBytes } from '../disk-space'
 import {
@@ -22,11 +21,17 @@ import { sniffFormat } from './detect'
 import { DEFAULT_SKIP_DIRS, listTopLevelFiles, nextPage, walkFiles } from './fs-scan'
 import { getAdapter } from './registry'
 import { ConverterStore } from './store'
-import { renameAtomic } from '../fs-atomic'
+import { removeAtomic, renameAtomic, tempNameFor } from '../fs-atomic'
 
 let nextId = 1
 function freshId(): string {
   return `cv_${Date.now().toString(36)}_${(nextId++).toString(36)}`
+}
+
+function errorCode(error: unknown): string {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code: unknown }).code)
+    : ''
 }
 
 function uniqueDestPath(destDir: string, sourceName: string, targetExt: string): string {
@@ -450,6 +455,7 @@ export class ConverterService {
     } catch {
       existsNow = false
     }
+    if (this.cancelRequested.has(item.id)) return bail('cancelled')
     if (existsNow && !item.overwriteAllowed) {
       item.status = 'needs-confirm'
       item.confirmReasons = ['overwrite']
@@ -457,15 +463,109 @@ export class ConverterService {
       return
     }
 
+    // The temp belongs to this ONE run. Date.now() is not unique — two same-destination writers in
+    // one process can reach this point in the same millisecond — and a shared temp lets one rename
+    // publish the other writer's bytes or move the file out from under it. `tempNameFor` combines
+    // pid + a process-local counter, so cleanup below can never remove another live writer's temp.
+    let tmp = ''
+    let tempHandle: FileHandle | undefined
+    let tempOwned = false
+    let publishError: unknown
+    let cancelledBeforePublish = false
+    let destinationAppeared = false
+    let published = false
+    let tempConsumed = false
+    let tempRemoved = true
     try {
       await mkdir(dirname(item.destPath), { recursive: true })
-      const tmp = `${item.destPath}.part-${process.pid}-${Date.now()}`
-      await writeFile(tmp, output)
-      await renameAtomic(tmp, item.destPath)
+      if (this.cancelRequested.has(item.id)) {
+        cancelledBeforePublish = true
+      } else {
+        // `tempNameFor` makes collisions exceptional, but a stale temp after PID reuse (or a
+        // pre-created sibling/symlink) is still possible. Claim a fresh path with O_EXCL and write
+        // through that exact handle: never truncate/follow a path this run did not create, and
+        // never remove it in the finally block unless this open established ownership.
+        for (let attempt = 0; ; attempt++) {
+          tmp = tempNameFor(item.destPath)
+          try {
+            tempHandle = await fs.open(tmp, 'wx')
+            tempOwned = true
+            break
+          } catch (e) {
+            if (errorCode(e) !== 'EEXIST' || attempt >= 31) throw e
+          }
+        }
+        // Opening with O_EXCL may wait behind the filesystem or retry occupied names. Recheck
+        // before potentially writing a large output; the finally block will close and remove the
+        // empty temp this run owns when cancellation won that race.
+        if (this.cancelRequested.has(item.id)) {
+          cancelledBeforePublish = true
+        } else {
+          try {
+            await tempHandle.writeFile(output)
+          } finally {
+            await tempHandle.close()
+            tempHandle = undefined
+          }
+          // Cancellation cannot interrupt one atomic rename once it has started. This last check
+          // is therefore the boundary: a request observed after the stream/write but before
+          // publish removes this run's partial and leaves the prior destination byte-for-byte
+          // intact.
+          if (this.cancelRequested.has(item.id)) {
+            cancelledBeforePublish = true
+          } else if (item.overwriteAllowed) {
+            await renameAtomic(tmp, item.destPath)
+            // rename consumes the temp; nothing remains for the finally block to remove.
+            published = true
+            tempConsumed = true
+          } else {
+            // `access()` above is only a helpful early prompt, never the safety boundary: another
+            // writer can create the destination immediately afterwards. A same-directory hard
+            // link atomically publishes the completed temp ONLY while the name is absent. EEXIST
+            // returns this item to the overwrite gate; a filesystem without link semantics fails
+            // closed instead of replacing a file the user never approved overwriting.
+            try {
+              await fs.link(tmp, item.destPath)
+              published = true
+            } catch (e) {
+              if (errorCode(e) === 'EEXIST') destinationAppeared = true
+              else throw e
+            }
+          }
+        }
+      }
     } catch (e) {
-      return bail('failed', `Could not write output: ${(e as Error).message}`)
+      publishError = e
+    } finally {
+      // Await cleanup before reporting a terminal state. A unique temp never self-heals on the
+      // next run, and removing exactly `tmp` is what prevents a failed/cancelled writer from
+      // deleting a different writer that is concurrently targeting the same destination.
+      if (tempHandle) {
+        await tempHandle.close().catch(() => {})
+        tempHandle = undefined
+      }
+      if (tempOwned && !tempConsumed) tempRemoved = await removeAtomic(tmp)
     }
 
+    if (!tempRemoved) {
+      const reason = publishError instanceof Error ? ` after ${publishError.message}` : ''
+      const cleanupWarning = `Could not remove temporary output "${tmp}"${reason}`
+      // A no-clobber link may already have published a complete destination before unlinking its
+      // second name fails. Calling that conversion failed would invite a retry even though the
+      // requested output is correct and visible. Report the litter explicitly while keeping the
+      // truthful `done` result; before publication, cleanup failure remains a real failed write.
+      if (published) warnings = [...warnings, cleanupWarning]
+      else return bail('failed', cleanupWarning)
+    }
+    if (publishError) return bail('failed', `Could not write output: ${(publishError as Error).message}`)
+    if (!published && this.cancelRequested.has(item.id)) cancelledBeforePublish = true
+    if (cancelledBeforePublish) return bail('cancelled')
+    if (destinationAppeared) {
+      item.status = 'needs-confirm'
+      item.confirmReasons = ['overwrite']
+      this.touch(item)
+      return
+    }
     item.progressBytes = item.totalBytes
     item.warnings = warnings.length > 0 ? warnings : undefined
     item.status = 'done'
@@ -484,17 +584,5 @@ export class ConverterService {
     } finally {
       await fh.close()
     }
-  }
-}
-
-/** Remove a stray `.part-*` temp file left by a crash mid-write — best-effort cleanup a shell can
- *  call once at boot for the destination directories it knows about. Not wired to a specific
- *  directory automatically (the converter writes across arbitrary user-chosen folders), so this is
- *  exposed for callers that want it rather than run unconditionally. */
-export async function cleanupPartFile(path: string): Promise<void> {
-  try {
-    await unlink(path)
-  } catch {
-    // already gone — fine
   }
 }

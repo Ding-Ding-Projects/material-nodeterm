@@ -177,7 +177,7 @@ export const SECTIONS = [
   { id: 'export', icon: '📦', label: 'Take it home', kicker: 'save a copy', title: 'Take it home', sub: 'Pick a pile, pick a shape. We warn you first if that shape cannot carry everything.', ph: 'Search the shapes…' },
   { id: 'dish', icon: '🥟', label: 'Dim sum', kicker: 'a little treat', title: 'The dim sum trolley', sub: 'One visit in ten, a dish rolls past by itself. You can also just look at the whole trolley here.', ph: 'Search the trolley…' },
   { id: 'coverage', icon: '✅', label: 'Checklist', kicker: 'nothing hidden', title: 'The big checklist', sub: 'Every promise this page makes, and exactly where it lives. Anything only half-done says so.', ph: 'Search the checklist…' },
-  { id: 'pair', icon: '📱', label: 'Pair a device', kicker: 'phone or laptop', title: 'Pair this device', sub: 'Point this browser at nodeterm on your computer, and it can reach those terminals too. Scan, or type six digits.', ph: 'Search pairing…' },
+  { id: 'pair', icon: '📱', label: 'Remote access', kicker: 'browser or iPhone', title: 'Use nodeterm remotely', sub: 'Open a real Server Edition host in your browser, or pair with nodeterm mobile. This tour never asks for access.', ph: 'Search remote access…' },
   { id: 'play', icon: '🎮', label: 'Playroom', kicker: 'three games', title: 'The playroom', sub: 'Memory pairs, dumpling maths and whack-a-block. Every button really works, and your best score is kept.', ph: 'Search the playroom…' },
   { id: 'settings', icon: '⚙️', label: 'Settings', kicker: 'make it yours', title: 'Make it yours', sub: 'Colours, words, sound, timers, and a toy padlock for any box. Everything is saved in this browser only.', ph: 'Search settings…' },
 ]
@@ -207,6 +207,8 @@ export const YUE = {
   'Pick a pile, pick a shape. We warn you first if that shape cannot carry everything.': '揀一堆資料，揀個格式。如果個格式載唔齊，我們會先講。',
   'One visit in ten, a dish rolls past by itself. You can also just look at the whole trolley here.': '十次入嚟有一次會有點心經過。你都可以在呢度睇齊整車。',
   'Every promise this page makes, and exactly where it lives. Anything only half-done says so.': '呢一頁嘅每個承諾同佢住喺邊。做一半嘅都會照講。',
+  'Use nodeterm remotely': '遠程使用 nodeterm',
+  'Open a real Server Edition host in your browser, or pair with nodeterm mobile. This tour never asks for access.': '用瀏覽器開啟真正嘅 Server Edition 主機，或者用 nodeterm mobile 配對。呢個導覽不會要求存取權。',
   'Memory pairs, dumpling maths and whack-a-block. Every button really works, and your best score is kept.': '記憶配對、點心數學、打地鼠。每個掣都真係work，最佳分數會留住。',
   'Colours, words, sound, timers, and a toy padlock for any box. Everything is saved in this browser only.': '顏色、文字、聲音、定時器，同每個格嘅玩具鎖。全部只存喺呢個瀏覽器。',
   'Every door opens a different room. Some rooms you can lock with your own password, and every single one has a search box and a right-click menu.': '每道門通去唔同房。有啲房可以用你自己嘅密碼鎖起，每間都有搵嘢格同右鍵菜單。',

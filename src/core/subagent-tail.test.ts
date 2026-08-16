@@ -151,11 +151,11 @@ describe('subagent-tail read cap', () => {
   })
 })
 
-describe('tool arguments on Windows paths', () => {
-  // Was `p.split('/').pop()`. A tool call on Windows reports `C:\Users\me\workspace.ts`, which
-  // has no '/' in it — so the split returned the whole absolute path and these cards showed one
-  // instead of the short filename the code's own comment promises. Same class as the fix already
-  // documented in speech/whisper-models.ts, in a file that never got the memo.
+describe('tool arguments use the recorded path dialect', () => {
+  // This first changed from split('/') to native basename(), which was still host-dependent:
+  // Linux treated a recorded Windows path as one long POSIX filename. The POSIX backslash case
+  // below is the inverse discriminator, so replacing the explicit parser with native basename is
+  // red on Windows too.
   const call = (input: Record<string, unknown>): string =>
     formatLine(JSON.stringify({
       type: 'assistant',
@@ -164,7 +164,7 @@ describe('tool arguments on Windows paths', () => {
 
   it('shows the filename for a Windows path, not the whole path', () => {
     const out = call({ file_path: String.raw`C:\Users\me\workspace.ts` })
-    expect(out).toContain('workspace.ts')
+    expect(out).toBe('$ Read workspace.ts')
     // String.raw. Written as '\U...' this is not a valid JS escape, so the string silently
     // becomes 'C:Users' — which can never appear in the output, so the negative assertion
     // passed no matter how broken the code was. A mangled needle in a `not.toContain` is
@@ -172,7 +172,16 @@ describe('tool arguments on Windows paths', () => {
     expect(out).not.toContain(String.raw`C:\Users`)
   })
 
-  it('still shows the filename for a POSIX path', () => {
-    expect(call({ file_path: '/Users/me/workspace.ts' })).toContain('workspace.ts')
+  it.each([
+    ['forward-slash drive path', 'C:/Users/me/workspace.ts'],
+    ['backslash UNC path', String.raw`\\fileserver\share\work\workspace.ts`],
+    ['forward-slash UNC path', '//fileserver/share/work/workspace.ts']
+  ])('shows the filename for a Windows %s', (_case, filePath) => {
+    expect(call({ file_path: filePath })).toBe('$ Read workspace.ts')
+  })
+
+  it('uses POSIX rules for POSIX paths, preserving a legal backslash in the filename', () => {
+    expect(call({ file_path: String.raw`/Users/me/workspace\draft.ts` }))
+      .toBe(String.raw`$ Read workspace\draft.ts`)
   })
 })

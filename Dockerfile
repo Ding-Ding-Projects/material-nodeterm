@@ -1,11 +1,10 @@
 # nodeterm Server Edition — container image (browser canvas backed by the headless server).
 #
-# The one real trap in here is node-pty's ABI: the repo's `postinstall` runs
-# `electron-rebuild -f -w node-pty`, which compiles node-pty against ELECTRON's ABI — but the
-# server runs under plain `node`, which would crash at boot with a NODE_MODULE_VERSION mismatch.
-# So every npm install below uses --ignore-scripts and the deps stage compiles node-pty against
-# Node's own ABI with an explicit `npm rebuild node-pty`. Keep the deps and runtime stages on the
-# SAME Node major (the compiled binary must match the runtime ABI).
+# The two native addons have to target Node's ABI. The repo's `postinstall` runs
+# `electron-rebuild`, which targets ELECTRON's ABI — but this server runs under plain `node`.
+# Every npm install therefore uses --ignore-scripts, then the deps stage explicitly rebuilds
+# node-pty AND smart-whisper for Node. Keep the deps and runtime stages on the SAME Node major
+# (the compiled binaries must match the runtime ABI).
 #
 # TLS is terminated by the reverse proxy in front (Dokploy/Traefik, nginx, Caddy…): the server
 # speaks plain HTTP inside the Docker network, which is why CMD passes --insecure-http (the
@@ -26,37 +25,43 @@ RUN npm run build && npm run server:build
 FROM node:22-bookworm AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm rebuild node-pty
+RUN npm ci --omit=dev --ignore-scripts && npm rebuild node-pty smart-whisper
 
 # ---- runtime: slim image, no compilers ----
 FROM node:22-bookworm-slim
 # tmux: terminal session continuity (without it PtyManager falls back to a plain shell).
 # git: the Source Control panel. curl: the managed agent-hook scripts POST through it,
-# and the HEALTHCHECK uses it. ca-certificates: git/curl over https.
+# and the HEALTHCHECK uses it. ca-certificates: git/curl over https. gosu: the root entrypoint
+# repairs old root-owned /data entries, then immediately execs node as the unprivileged user.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tmux git curl ca-certificates \
+    && apt-get install -y --no-install-recommends tmux git curl ca-certificates gosu \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/out ./out
 COPY package.json ./
+COPY --chmod=755 deploy/docker-entrypoint.sh /usr/local/bin/nodeterm-entrypoint
 
-# Auth, sessions, workspace, settings and scrollback snapshots live here — mount a volume or
-# every restart forgets the password and the canvas. NOTE: the tmux server itself lives INSIDE
-# the container, so a container restart/redeploy kills all tmux sessions (unlike the desktop,
-# where only a machine reboot does); the cold-restore path replays scrollback and resumes
-# resumable agents from /data on the next attach.
-ENV NODETERM_DATA_DIR=/data \
+# Auth, sessions, workspace, settings and scrollback snapshots live here — reuse a named volume
+# when replacing the container or the replacement loses the password and canvas. NOTE: the tmux
+# server itself lives INSIDE the container, so a container restart/redeploy kills all tmux sessions
+# (unlike the desktop, where only a machine reboot does); the cold-restore path replays scrollback
+# and resumes resumable agents from /data on the next attach.
+ENV HOME=/home/node \
+    NODETERM_DATA_DIR=/data \
     NODETERM_HOST=0.0.0.0 \
     NODETERM_PORT=8443
+RUN mkdir -p /data && chown node:node /data
 VOLUME /data
 EXPOSE 8443
 
 # /login is served without auth — a cheap liveness probe.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
-    CMD curl -fsS "http://127.0.0.1:${NODETERM_PORT}/login" > /dev/null || exit 1
+    CMD gosu node curl -fsS "http://127.0.0.1:${NODETERM_PORT}/login" > /dev/null || exit 1
 
-# Seed the first-boot password via NODETERM_SERVER_PASSWORD (ignored once one exists) — with no
-# TTY attached nobody would see the printed one-time setup URL. Exec form: node is PID 1, so
+# NODETERM_SERVER_PASSWORD optionally seeds first boot and is ignored once an account exists;
+# otherwise the one-time setup URL is available in the container logs. The entrypoint repairs
+# root-owned files from the old image, then execs this command as `node`; node is still PID 1, so
 # docker stop's SIGTERM reaches it directly.
+ENTRYPOINT ["/usr/local/bin/nodeterm-entrypoint"]
 CMD ["node", "out/server/main.cjs", "--insecure-http"]

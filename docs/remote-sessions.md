@@ -82,6 +82,14 @@ instead of the global.
   `media`, `settings`, `pairing`): always local. Your update banner shows *your*
   version, never the host's.
 
+There is one easy-to-miss provider boundary: global drawers are mounted above the canvas'
+project-keyed `SessionProvider`. Reading `useSession()` or `window.nodeTerminal` there selects the
+root/viewer's API, not necessarily the active tab's core. A core-bound drawer must resolve
+`useActiveSessionApi()` / `sessionForProject(activeProjectId)` explicitly. An app-global drawer such
+as clipboard remains local by design. If a relay API has no implementation for a core-bound
+namespace, a visible `E_UNSUPPORTED` refusal is the safe outcome; falling back to the viewer is a
+wrong-machine mutation.
+
 **Stores become session-scoped.** `presence` and `agentStatus` hold per-session
 tables (two sessions = two peer tables). This is the riskiest part of the refactor:
 the presence store's module-level state (`connectPresence` idempotence, `lastFocus`,
@@ -249,7 +257,8 @@ the peer's key (each end pins the other's; idempotent). One state per pairing at
 ```ts
 function revoke(store: ApprovedDevices, peerKeyB64: string): ApprovedDevices   // pure unpin, idempotent
 type OnRevoke = (peerId: string) => void | Promise<void>
-interface RevocationDeps { load(): Promise<ApprovedDevices>; save(s: ApprovedDevices): Promise<void>; onRevoke: OnRevoke }
+type MutateApprovedDevices = (change: (current: ApprovedDevices) => ApprovedDevices) => Promise<ApprovedDevices>
+interface RevocationDeps { mutate: MutateApprovedDevices; onRevoke: OnRevoke }
 interface RevokeResult { persisted: boolean; killed: boolean }
 function createRevoker(deps: RevocationDeps): { revoke(peerKeyB64: string): Promise<RevokeResult> }
 ```
@@ -260,6 +269,13 @@ function createRevoker(deps: RevocationDeps): { revoke(peerKeyB64: string): Prom
 the hook. `persisted:false` ⇒ pin may survive, the UI must NOT show "Removed" and must
 retry; `killed:false` ⇒ the cut is unconfirmed. `peerId` is the peer's stable box public
 key (base64).
+
+All three pin-list writers (standing-phone approval, mutual approval, revoke) go through the same
+`mutateApprovedDevices` queue. Atomic rename alone is insufficient: a complete approval snapshot
+loaded before a revoke can otherwise land afterward and restore the revoked key. Only `ENOENT`
+decodes as an empty list; corrupt or unreadable storage rejects, so a later mutation cannot erase
+the evidence by treating a failed read as absence. The queue is process-local, matching packaged
+single-instance operation; `NT_MULTI` acceptance runs use separate `NT_USER_DATA` directories.
 
 **Key-file codec** (pure, `src/main/remote/key-file-codec.ts` — no electron; `safeStorage`
 injected as `SafeStorageLike`):
@@ -341,6 +357,19 @@ users before 4d is wired (it grants `pty.create` to peers).
   **local**. Two load-bearing exceptions: `pty.onData` reads the LOCAL per-session channel (relay
   pty output is re-emitted there by main), and `dialog.selectFolder/selectFile` are the in-app
   **host** directory browser (a remote tab's folder pick is a host pick — obligation d).
+- **Exact peer surface, in both directions** (`src/main/relay-rpc-policy.ts`) — approval grants the
+  reviewed project/session methods and events, not every CorePlatform registration. Unknown raw
+  requests fail `E_FORBIDDEN`; unknown casts and host→peer events are dropped before handler,
+  listener, or peer-sink lookup. This keeps authenticator/TOTP, settings/mode/license/usage state,
+  converter paths, and local model streams on the physical desktop even though those services use
+  the same CorePlatform seam for the Server Edition. Whole-workspace save is deliberately absent:
+  a project-scoped relay must not rewrite the host's unrelated workspace index.
+- **File handoff follows the session machine** — terminal/card/canvas drops pass the active
+  `NodeTerminalApi` into the resolver. A relay API never treats Electron's viewer-local `File` path
+  as a host path; it uploads bytes through host `files.saveUpload` / `saveCanvasImage`, so the path
+  pasted into the shell or persisted in an image node exists where that session runs. The Server
+  Edition's optional raw-Blob carrier avoids base64 expansion; relay retains the 64 MiB-limited
+  base64 RPC carrier.
 - **Remote session as a project tab** (`src/renderer/session/relay-tab.ts` `openRelayTab`,
   `Canvas.tsx`) — `createSession('relay', api, label)` bound to a projects tab; the Canvas subtree
   is keyed by `session.id` so an api swap remounts (4a obligation 3). Presence teardown held +
@@ -396,6 +425,12 @@ users before 4d is wired (it grants `pty.create` to peers).
   never re-renders Canvas (`usePresence` was removed from Canvas entirely). Deferred: a background
   RELAY project (while a LOCAL tab is active) isn't live — only the active session's `onMutation` is
   subscribed; it re-syncs on reactivation.
+- **Global management drawers follow the active session** — the File converter and Ollama manager
+  resolve the active project's API even though they sit outside the canvas provider. Their relay
+  namespaces remain deliberately unsupported in v1, so the panels show `E_UNSUPPORTED` and do not
+  run converter work, pulls, chats, or model deletion against the viewer's machine. Clipboard is
+  intentionally different: it is app-global, so Colour picker Copy uses the viewing app's clipboard
+  bridge (with a browser fallback) even while a relay tab is active.
 
 **Retained on the OLD dialect (do NOT delete — a shipped feature):** the phone server path —
 `host-service.ts`, `standing-host.ts`, `host-canvas-hub.ts`, `framing.ts`, `snapshot.ts`,
@@ -433,6 +468,10 @@ the dialect deletion orphaned, blanking the phone; that flag is gone).
   against the seam and needs no change; what is missing is a subscription per session feeding
   `SessionStores.agentStatus`.
 - **SDK chat node over relay** — refuses (`E_UNSUPPORTED`) in a relay tab, matching Server Edition.
+- **SSH project inside a relay tab** — no scoped carrier exists for the host desktop's
+  ControlMaster. `sshProject`/`sshFs` on the relay API refuse instead of falling back to the
+  viewing desktop's unrelated connection. Ordinary relay file drop and quick-open are host-routed;
+  nested SSH upload/quick-open need a host-scoped composite RPC before they can be enabled.
 - **The preload↔main relay IPC boundary is not covered by vitest** (it needs Electron). Two real
   send/handle + payload-shape bugs were found and fixed by inspection during 4c; the two-instance
   acceptance run is what exercises it live. A preload-shape unit guard would help.
@@ -527,9 +566,11 @@ session):
    chooses a path on the CLIENT machine while the clone runs on the SESSION's core —
    harmless today (same machine), wrong on a remote tab. 4c must route the picker per
    session (the Server Edition's in-app server-directory browser is the precedent).
-5. **Deferred namespaces still read off the global:** `sshProject`, `contextLink`,
-   `context`, `transcripts`, `handoff`, `files`. They live in files 4c rewrites; 4c
-   must decide each one (core-bound → session, or app-global → stays on the client).
+5. **Resolve every former global explicitly.** `files` and `context` are core-bound; terminal and
+   canvas file drops now receive the session API and relay viewer paths are forced through a host
+   upload. `sshProject`/`sshFs` refuse on relay until a scoped host carrier exists. `contextLink`,
+   `transcripts`, and `handoff` remain documented local/deferred surfaces rather than silently
+   pretending their viewer-local results belong to the host.
 
 ## Testing
 

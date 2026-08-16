@@ -1068,19 +1068,28 @@ describe('save corruption hardening', () => {
     expect(litter).toEqual([])
   })
 
-  it('load() sweeps stale tmp litter from dead writers, sparing this process and other files', async () => {
+  it('load() removes aged legacy litter but preserves fresh foreign tmp files', async () => {
     const store = new WorkspaceStore()
     await store.save(ws([project({ cwd: projRoot })]))
     const nodeterm = path.join(projRoot, '.nodeterm')
-    await fs.writeFile(path.join(userData, 'workspace.json.tmp'), 'x') // legacy fixed name
-    await fs.writeFile(path.join(userData, 'workspace.json.99999.1.tmp'), 'x') // dead pid
-    await fs.writeFile(path.join(nodeterm, 'project.json.99999.2.tmp'), 'x') // dead pid
+    const legacyIndex = path.join(userData, 'workspace.json.tmp')
+    const legacyProject = path.join(nodeterm, 'project.json.tmp')
+    await fs.writeFile(legacyIndex, 'x') // legacy fixed names, now demonstrably abandoned
+    await fs.writeFile(legacyProject, 'x')
+    await Promise.all([fs.utimes(legacyIndex, 0, 0), fs.utimes(legacyProject, 0, 0)])
+    await fs.writeFile(path.join(userData, 'workspace.json.99999.1.tmp'), 'x') // may be live
+    await fs.writeFile(path.join(nodeterm, 'project.json.99999.2.tmp'), 'x') // may be live
     const mine = `project.json.${process.pid}.7.tmp` // a live writer of THIS process — never swept
     await fs.writeFile(path.join(nodeterm, mine), 'x')
     const loaded = await new WorkspaceStore().load()
     expect(loaded.projects[0]?.nodes.map((n) => n.id)).toEqual(['term-1']) // real files untouched
-    expect((await fs.readdir(userData)).filter((n) => n.endsWith('.tmp'))).toEqual([])
-    expect((await fs.readdir(nodeterm)).filter((n) => n.endsWith('.tmp'))).toEqual([mine])
+    expect((await fs.readdir(userData)).filter((n) => n.endsWith('.tmp')).sort()).toEqual([
+      'workspace.json.99999.1.tmp'
+    ])
+    expect((await fs.readdir(nodeterm)).filter((n) => n.endsWith('.tmp')).sort()).toEqual([
+      mine,
+      'project.json.99999.2.tmp'
+    ].sort())
   })
 
   it('a read-only load (sideline: false) sweeps nothing', async () => {

@@ -178,7 +178,7 @@ import { initStandingHost } from './remote/standing-host'
 import { killRelayHostsByPeerKey } from './remote/relay-host'
 import { initRelayHost } from './remote/relay-host-service'
 import { createRevoker } from './remote/revocation'
-import { loadApprovedDevices, saveApprovedDevices } from './remote/approved-devices'
+import { loadApprovedDevices, mutateApprovedDevices } from './remote/approved-devices'
 import { publicKeyToB64 } from './remote/e2ee'
 import { connectRelayClient, type RelayClientSession } from './remote/relay-client'
 import { decodeOffer } from './remote/pairing'
@@ -771,9 +771,16 @@ app.whenReady().then(async () => {
   })
 
   // System-clipboard write from the MAIN process. Renderer/preload `clipboard` access is deprecated
-  // in Electron (logs a warning per call); the renderer sends this instead. Text only, fire-and-forget.
-  ipcMain.on(IPC.clipboardWrite, (_e, text: string) => {
-    if (typeof text === 'string') clipboard.writeText(text)
+  // in Electron (logs a warning per call). Return a truthful acknowledgement so UI feedback never
+  // claims success when the OS clipboard rejects the write.
+  ipcMain.handle(IPC.clipboardWrite, (_e, text: unknown) => {
+    if (typeof text !== 'string') return false
+    try {
+      clipboard.writeText(text)
+      return true
+    } catch {
+      return false
+    }
   })
   ipcMain.handle(IPC.clipboardWriteFiles, (_e, paths: unknown) =>
     writeFilesToClipboard(paths, {
@@ -860,13 +867,13 @@ app.whenReady().then(async () => {
     apiBase: RELAY_API_BASE,
     relayAllowed
   })
-  ipcMain.handle(IPC.pairingStart, () =>
+  ipcMain.handle(IPC.pairingStart, (_event, attemptId: string) =>
     pairingService.start((result) => {
       const w = getMainWindow()
       if (w && !w.isDestroyed()) w.webContents.send(IPC.pairingDone, result)
-    })
+    }, attemptId)
   )
-  ipcMain.handle(IPC.pairingStop, () => pairingService.stop())
+  ipcMain.handle(IPC.pairingStop, (_event, attemptId: string) => pairingService.stop(attemptId))
   ipcMain.handle(IPC.pairingProbeSsh, () => pairingService.probeSsh())
   // Same pattern as appOpenNotificationSettings: a main-side constant deep link, NOT routed
   // through shellOpenExternal's http(s)-only allowlist (which silently drops x-apple.* URLs —
@@ -889,8 +896,7 @@ app.whenReady().then(async () => {
   // PtyManager.dropClient → sink prune). Host-security control plane, so it stays on raw ipcMain:
   // a remote peer must never be able to revoke anyone.
   const peerRevoker = createRevoker({
-    load: loadApprovedDevices,
-    save: saveApprovedDevices,
+    mutate: mutateApprovedDevices,
     onRevoke: (peerKeyB64) => killRelayHostsByPeerKey(peerKeyB64)
   })
   ipcMain.handle(IPC.remoteRevokePeer, (_e, peerKeyB64: string) =>
@@ -1218,7 +1224,9 @@ app.whenReady().then(async () => {
     try {
       pushHasPairedPhone = (await loadApprovedDevices()).pubkeys.length > 0
     } catch {
-      pushHasPairedPhone = false
+      // A failed trust-store read says nothing about whether a phone is paired. Preserve the
+      // last-known state; replacing it with false would misroute a transient read failure into the
+      // fallback push-grant path and could make two channels speak for one destination.
     }
     // No paired destination means no host-mode push can be sent. Avoid touching macOS
     // Safe Storage at boot in that state: locally signed development builds otherwise trigger

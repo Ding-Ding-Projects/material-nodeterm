@@ -39,7 +39,7 @@ import { currentCanvas, initHostCanvasHub, subscribeCanvas } from './host-canvas
 import { hostIdFromPublicKeyB64 } from './relay-id'
 import { removeRelayAdvertisement, writeRelayAdvertisement } from './relay-advertise'
 import { isPinned, pinDevice } from './approved-devices-core'
-import { loadApprovedDevices, saveApprovedDevices } from './approved-devices'
+import { loadApprovedDevices, mutateApprovedDevices } from './approved-devices'
 
 // Re-mint the token this long before its expiry (TTL is ~120s). Floored so a bogus/short exp can't
 // spin us.
@@ -251,14 +251,18 @@ export function initStandingHost(
     }
     const s = pooled.session
     const pub = s.peerPublicKeyB64()
-    let store
+    let alreadyPinned = false
     try {
-      store = await loadApprovedDevices()
-    } catch {
-      store = { pubkeys: [] as string[] }
+      const store = await loadApprovedDevices()
+      alreadyPinned = !!pub && isPinned(store, pub)
+    } catch (err) {
+      // An unreadable/corrupt trust file is not evidence that this device is unknown. Degrade the
+      // silent reconnect to the explicit SAS path below; its eventual pin mutation will also refuse
+      // to overwrite the unreadable file, while this explicitly consented session may still open.
+      console.warn('[standing-host] could not read approved devices; requiring explicit approval:', err)
     }
     if (!pool.has(pooled)) return // torn down while the disk read was in flight
-    if (pub && isPinned(store, pub)) {
+    if (alreadyPinned) {
       s.approve() // pinned device → auto-approve silently
       return
     }
@@ -400,8 +404,7 @@ export function initStandingHost(
     const pub = p.session.peerPublicKeyB64() ?? p.approvalPub
     clearApproval(p)
     if (pub) {
-      void loadApprovedDevices()
-        .then((store) => saveApprovedDevices(pinDevice(store, pub)))
+      void mutateApprovedDevices((store) => pinDevice(store, pub))
         .catch(() => {
           // A failed pin is non-fatal: the device re-prompts next connect. Never block on the write.
         })

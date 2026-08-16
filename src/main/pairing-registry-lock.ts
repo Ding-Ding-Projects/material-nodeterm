@@ -23,6 +23,31 @@ const delay = (ms: number): Promise<void> =>
   })
 
 /**
+ * Remove only the lock record this operation created.
+ *
+ * Cooperative writers never unlink a live lock, so an ownership mismatch means the path was
+ * replaced outside the protocol. Refusing here prevents an old owner from erasing a successor's
+ * exclusion record. The exact bytes are diagnostic, not secret; equality is an ownership check,
+ * not an authentication boundary.
+ */
+async function releaseOwnedLock(lockPath: string, owner: string): Promise<void> {
+  let observed: string
+  try {
+    observed = await fs.readFile(lockPath, 'utf8')
+  } catch (error) {
+    throw new Error('Could not verify pairing registry lock ownership; lock was not removed.', {
+      cause: error
+    })
+  }
+  if (observed !== owner) {
+    throw new Error(
+      'Pairing registry lock ownership changed; refusing to remove another writer\'s lock.'
+    )
+  }
+  await fs.rm(lockPath)
+}
+
+/**
  * Serialize a complete agent.json read-modify-write transaction across processes.
  *
  * Acquisition is an O_EXCL create, so observing the lock happens before the authoritative read.
@@ -80,7 +105,7 @@ export async function withPairingRegistryLock<T>(
     throw error
   } finally {
     try {
-      await fs.rm(lockPath)
+      await releaseOwnedLock(lockPath, owner)
     } catch (releaseError) {
       if (operationFailed) {
         throw new AggregateError(

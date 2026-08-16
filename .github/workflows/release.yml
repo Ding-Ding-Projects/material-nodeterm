@@ -2,18 +2,20 @@ name: Release
 
 # Governing policy — see docs/ci-and-releases.md for the full write-up:
 #
-#   This workflow runs NO tests and NO lint. Nothing in it gates the release: it BUILDS,
-#   PACKAGES and PUBLISHES a GitHub Release, and that is the whole job. A run fails only
-#   when the build, packaging, or publication itself fails.
+#   This workflow runs NO tests, type-check or lint. Nothing in it gates the release: it
+#   BUILDS, PACKAGES and PUBLISHES a GitHub Release, and that is the whole job. A run fails
+#   only when the build, packaging, or publication itself fails.
 #
 # Windows is the active delivery target: the installer is built on windows-latest and is
 # permanently UNSIGNED (code signing is out of scope for this project — see the "Package"
-# step below). Every push and every manual dispatch publishes exactly one new, uniquely
-# tagged, non-draft GitHub Release carrying the real built installer.
+# step below). Every branch push and every manual dispatch owns one unique tag. Its release
+# stays a DRAFT while assets upload and becomes public only after the complete remote
+# Squirrel set has been verified.
 #
-# Deliberately NO `concurrency: cancel-in-progress` group here — cancelling a run partway
-# through publication could strand a tag with no artifact attached to it. That guard
-# belongs on non-publishing validation workflows only (see ci.yml).
+# Distinct pushes may build concurrently. Attempts of the SAME run share a group and are
+# never cancelled: cancellation between draft creation and publication would leave work for
+# a retry, while a repository-wide group would silently discard queued pushes (GitHub keeps
+# only one pending member per concurrency group).
 on:
   push:
     # BRANCHES ONLY — never tags. A bare `push:` also fires on tag pushes, and this workflow
@@ -28,31 +30,32 @@ on:
     branches: ['**']
   workflow_dispatch:
 
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.run_number }}
+  cancel-in-progress: false
+
 permissions:
   contents: write # create the GitHub Release and upload its assets
   actions: read # read this run's own run_started_at for the release-notes timing section
 
 jobs:
   release:
+    # GitHub also emits `push` when a branch is deleted. That event carries no deleted
+    # commit to package and can fall back to the default branch's HEAD, so it must not
+    # manufacture a duplicate release.
+    if: github.event_name != 'push' || github.event.deleted != true
     runs-on: windows-latest
-    # GH_TOKEN resolves once for every step in this job, in priority order: a repo-scoped
-    # fine-grained PAT (if configured), then the org-wide token, then the workflow's own
-    # ephemeral token as the guaranteed-available fallback. Never printed, logged, or
-    # echoed — only ever read through the GH_TOKEN/GITHUB_TOKEN environment convention.
-    env:
-      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       # Second line of defense against the exact loop this workflow already caused once
       # (see the `on.push.branches` comment above and docs/ci-and-releases.md): this
       # workflow PUBLISHES a tag every time it runs, so a run triggered by a TAG push
       # would trigger the next run, which publishes the next tag, forever. The branch
       # filter is the primary fix, but a run triggered by a tag checks out and executes
-      # *that tag's* copy of this file — so a future edit that reintroduces a tag trigger,
-      # a manual `workflow_dispatch` aimed at a tag ref, or an old/reverted workflow file
-      # replaying against a tag can all still re-enter the loop, unprotected by a filter
-      # that only lives in the current branch's file. This step is cheap (no checkout, no
-      # dependencies) and runs before anything expensive, so it fails the run in seconds
-      # with a clear reason instead of silently starting the loop again.
+      # *that tag's* copy of this file — so a future edit that loosens only the trigger or
+      # a manual `workflow_dispatch` aimed at a tag ref is still stopped, provided that ref's
+      # copy contains this guard. Truly old copies without the guard require disabling the
+      # workflow or updating/removing those refs. This step is cheap (no checkout, no
+      # dependencies) and fails before anything expensive.
       - name: Refuse to run against a tag ref (release-loop guard)
         if: github.ref_type == 'tag'
         shell: bash
@@ -67,10 +70,14 @@ jobs:
           # blame` across the whole tree, and the release-notes commit link wants the
           # real SHA regardless of shallow-clone default behavior.
           fetch-depth: 0
+          # Do not leave the contents-write token in git config for npm/build subprocesses.
+          persist-credentials: false
 
       - name: Record workflow start time
         id: timing
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         # Prefer GitHub's own `run_started_at` (the workflow run's first-job startedAt) so
         # the reported duration reflects real queue+run time, not just this step's wall
         # clock. Fails open to "unknown" — release-notes.mjs reports a missing start time
@@ -121,116 +128,158 @@ jobs:
       # Unsigned, permanently. No CSC_LINK/CSC_KEY_PASSWORD is ever set in this workflow, so
       # electron-builder has no certificate to sign with in the first place;
       # CSC_IDENTITY_AUTO_DISCOVERY=false additionally stops it from opportunistically
-      # picking one up from the runner's own certificate store, and package.json's
-      # `build.forceCodeSigning: false` (the documented default) means a build never aborts
-      # over a signing step it was never asked to perform. The next step independently
-      # verifies the produced installer's real Authenticode signature and fails the run if
-      # it is somehow signed — belt and braces, not just a documented intent.
+      # picking one up from the runner's own certificate store. package.json's Windows
+      # `signExecutable: false` is the explicit no-sign control while resource editing stays
+      # enabled; `forceCodeSigning: false` additionally permits unsigned output. The next
+      # step independently verifies the produced installer's real Authenticode signature and
+      # fails the run if it is somehow signed — belt and braces, not just documented intent.
       - name: Package Windows installer (Squirrel, unsigned)
+        id: package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --win --publish never
+        run: npx electron-builder --win squirrel --x64 --publish never
 
-      - name: Locate release assets and verify unsigned
+      - name: Validate complete Squirrel asset set
         id: assets
+        shell: bash
+        # This checks all three required kinds independently and proves RELEASES' SHA-1/name/size
+        # records actually describe the .nupkg files being uploaded. "Some files exist" is not a
+        # complete Squirrel release.
+        run: node scripts/release-assets.mjs collect dist/squirrel-windows
+
+      - name: Verify installer is genuinely unsigned
+        id: unsigned
         shell: pwsh
+        env:
+          SETUP_PATH: ${{ steps.assets.outputs.setup }}
         run: |
-          # electron-builder's Squirrel target writes Setup.exe, RELEASES, and the full
-          # .nupkg (plus a delta .nupkg on a repeat version) under dist/squirrel-windows/.
-          $dir = 'dist/squirrel-windows'
-          if (-not (Test-Path $dir)) {
-            Write-Error "expected Squirrel output directory '$dir' was not produced"
-            exit 1
-          }
-          $files = Get-ChildItem -Path $dir -File | Where-Object {
-            $_.Name -like '*-Setup-*.exe' -or $_.Name -eq 'RELEASES' -or $_.Extension -eq '.nupkg'
-          }
-          if (-not $files) {
-            Write-Error "no installer/RELEASES/.nupkg files found under $dir"
-            exit 1
-          }
+          $sig = Get-AuthenticodeSignature -FilePath $env:SETUP_PATH
+          Write-Host "Signature status for ${env:SETUP_PATH}: $($sig.Status)"
+          node scripts/release-assets.mjs assert-unsigned "$($sig.Status)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $setup = $files | Where-Object { $_.Name -like '*-Setup-*.exe' } | Select-Object -First 1
-          if (-not $setup) {
-            Write-Error "no Setup.exe found among the packaged Squirrel assets"
-            exit 1
-          }
-          $sig = Get-AuthenticodeSignature -FilePath $setup.FullName
-          Write-Host "Signature status for $($setup.Name): $($sig.Status)"
-          if ($sig.Status -eq 'Valid') {
-            Write-Error "the packaged installer is SIGNED — this project permanently prohibits code signing; failing the release"
-            exit 1
-          }
+      - name: Stage exactly one draft release
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+        run: |
+          # A successful rerun must not clobber public assets. If this run already published a
+          # complete release, validate it and finish idempotently. An interrupted attempt leaves a
+          # draft, which is safe to edit and replace because nobody can download it as a release.
+          if state=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$state" = "false" ]; then
+              gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,assets,tagName,targetCommitish > "$RUNNER_TEMP/existing-release.json"
+              tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
+              node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"
+              node scripts/release-assets.mjs verify "$RUNNER_TEMP/existing-release.json" published exact
+              echo "already_published=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --title "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --notes "Assets are being staged by GitHub Actions. This draft is not a published release."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --title "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --notes "Assets are being staged by GitHub Actions. This draft is not a published release."
+          fi
+          echo "already_published=false" >> "$GITHUB_OUTPUT"
 
-          $paths = $files | ForEach-Object { $_.FullName }
-          Write-Host "Release assets:"
-          $paths | ForEach-Object { Write-Host "  $_" }
-          # Multi-line GITHUB_OUTPUT value (also fed to release-notes.mjs verbatim).
-          $delim = "EOF_ASSETS_$([guid]::NewGuid().ToString('N'))"
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "paths<<$delim"
-          $paths | ForEach-Object { Add-Content -Path $env:GITHUB_OUTPUT -Value $_ }
-          Add-Content -Path $env:GITHUB_OUTPUT -Value $delim
+      - name: Upload assets to draft
+        id: upload
+        if: steps.draft.outputs.already_published != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          ASSET_PATHS: ${{ steps.assets.outputs.paths }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+        run: |
+          # One direct gh invocation: failure stops this step and the release remains a draft.
+          # Prune leftovers from an older failed attempt first, so exact verification can converge;
+          # --clobber is safe here because it can only replace invisible draft assets.
+          declare -A expected=()
+          while IFS= read -r name; do
+            name="${name%$'\r'}"
+            [ -n "$name" ] && expected["$name"]=1
+          done < <(node -e 'const m=JSON.parse(process.env.RELEASE_ASSET_MANIFEST); for (const a of m.assets) console.log(a.name)')
+          while IFS= read -r name; do
+            name="${name%$'\r'}"
+            if [ -n "$name" ] && [ -z "${expected[$name]+present}" ]; then
+              gh release delete-asset "$RELEASE_TAG" "$name" --yes --repo "$GITHUB_REPOSITORY"
+            fi
+          done < <(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
 
-      - name: Generate release notes
+          mapfile -t assets < <(printf '%s\n' "$ASSET_PATHS" | sed 's/\r$//' | sed '/^$/d')
+          if [ "${#assets[@]}" -lt 3 ]; then
+            echo "::error::the validated release asset list unexpectedly became incomplete"
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Generate final release notes
         id: notes
+        if: steps.draft.outputs.already_published != 'true'
         shell: bash
         env:
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
           WORKFLOW_STARTED_AT: ${{ steps.timing.outputs.started_at }}
           RELEASE_ASSET_PATHS: ${{ steps.assets.outputs.paths }}
         run: |
-          # WORKFLOW_COMPLETED_AT is left unset on purpose: release-notes.mjs stamps its
-          # own "now" (UTC) the moment it runs, which is right here — immediately before
-          # publication, i.e. through the final release-publication step for this
-          # single-job workflow. Nothing meaningful happens between this timestamp and
-          # the release actually going live below.
+          # RELEASE_NOTES_GENERATED_AT is left unset on purpose: release-notes.mjs stamps its
+          # own "now" after the potentially slow upload. It labels that boundary honestly;
+          # verification and publication still happen afterward.
           node scripts/release-notes.mjs > "$RUNNER_TEMP/notes.md"
           echo "notes_path=$RUNNER_TEMP/notes.md" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release
+      - name: Verify draft and publish once
+        id: publish
+        if: steps.draft.outputs.already_published != 'true'
         shell: bash
         env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
         run: |
-          # Idempotent: GITHUB_RUN_NUMBER (part of the tag) stays fixed across a re-run of
-          # this same workflow run, so a retry after a partial failure (release created,
-          # asset upload interrupted) must reuse the existing release rather than fail on
-          # "tag already exists". `gh release edit` refreshes the notes in that case so a
-          # retry's notes (real duration, real line count at this commit) still win.
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "${{ steps.notes.outputs.notes_path }}"
+          # Keep the notes edit explicitly draft. Only the command after an exact remote
+          # name+size comparison may cross the public boundary.
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --notes-file "${{ steps.notes.outputs.notes_path }}"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,assets,tagName,targetCommitish > "$RUNNER_TEMP/draft-release.json"
+          node scripts/release-assets.mjs verify "$RUNNER_TEMP/draft-release.json" draft exact
+
+          # A draft may not have created its tag yet. If the ref exists, however, it must point
+          # at this exact commit before publication; only a confirmed 404 means "not created".
+          # A network/auth failure is not evidence of absence and must stop the transaction.
+          if tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha 2>"$RUNNER_TEMP/tag-ref-error.txt"); then
+            node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"
+          elif grep -Eq '\(HTTP 404\)$' "$RUNNER_TEMP/tag-ref-error.txt"; then
+            echo "Tag does not exist yet; GitHub will create it from the verified draft target."
           else
-            gh release create "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$RELEASE_TAG" \
-              --notes-file "${{ steps.notes.outputs.notes_path }}" \
-              --target "$GITHUB_SHA"
+            cat "$RUNNER_TEMP/tag-ref-error.txt" >&2
+            exit 1
           fi
 
-      - name: Upload release assets
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
-          ASSET_PATHS: ${{ steps.assets.outputs.paths }}
-        run: |
-          # --clobber makes a retry of this step idempotent if a prior attempt uploaded
-          # some but not all assets (network blip mid-upload, runner hiccup, etc.).
-          #
-          # STRIP THE CARRIAGE RETURN. `paths` is produced by the pwsh step above, so the
-          # multiline value arrives CRLF-terminated; `read -r` splits on \n and leaves the \r
-          # welded to the end of every path. The failure is deeply unhelpful — gh reports
-          #   no matches found for D:\...\node-terminal-0.3.0-full.nupkg
-          # with the offending character invisible and a stray newline in the message — for a
-          # file that exists and was verified to exist two steps earlier. Build succeeds,
-          # packaging succeeds, and the release publishes with zero assets attached.
-          echo "$ASSET_PATHS" | while IFS= read -r path; do
-            path="${path%$'\r'}"
-            [ -n "$path" ] || continue
-            # Fail loudly here rather than letting a vanished path fall through to `gh`, whose
-            # "no matches found" reads like a glob problem rather than a missing artifact.
-            [ -f "$path" ] || { echo "::error::expected release asset not found on disk: $path"; exit 1; }
-            gh release upload "$RELEASE_TAG" "$path" --clobber --repo "$GITHUB_REPOSITORY"
-          done
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+          # The pre-publication check is the safety boundary. This post-check proves the state
+          # transition did not change the inventory; if the API read fails, the run is red while
+          # the already-verified complete release remains safe and retryable.
+          tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
+          node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,assets,tagName,targetCommitish > "$RUNNER_TEMP/published-release.json"
+          node scripts/release-assets.mjs verify "$RUNNER_TEMP/published-release.json" published exact
 
       # Runs even when an earlier step failed, so a broken build still leaves something to
       # inspect. Never uploads credentials, node_modules, caches, or the source tree — only
@@ -265,7 +314,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: release-build-${{ github.run_number }}
+          name: release-build-${{ github.run_number }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/artifact-out
           if-no-files-found: warn
           retention-days: 14

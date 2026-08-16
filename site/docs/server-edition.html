@@ -34,6 +34,25 @@
       <h2>Configuration</h2>
       <p>Single-user authentication (a password plus an httpOnly session cookie, with an Origin check) protects the server; there's no multi-user account system.</p>
 
+      <h2>Docker quickstart</h2>
+      <p>In Bash, create an owner-only environment file and read the initial password without echoing it or placing it in the Docker command line:</p>
+      <pre><code>umask 077
+: &gt; nodeterm-server.env
+chmod 600 nodeterm-server.env
+read -rsp 'Initial password: ' NODETERM_PASSWORD
+printf '\nNODETERM_SERVER_PASSWORD=%s\n' "$NODETERM_PASSWORD" &gt; nodeterm-server.env
+unset NODETERM_PASSWORD
+
+docker build -t nodeterm-server .
+docker run -d \
+  -p 127.0.0.1:8443:8443 \
+  --env-file ./nodeterm-server.env \
+  -v nodeterm-data:/data \
+  nodeterm-server</code></pre>
+      <p>Open the host's own URL after it starts; the static project tour is not a proxy or pairing client. Keep <code>/data</code> on a volume so authentication, the workspace, and scrollback snapshots survive a container replacement.</p>
+      <p>The <code>127.0.0.1</code> host bind is deliberate: terminate TLS in a same-host reverse proxy that forwards to <code>http://127.0.0.1:8443</code>. If the proxy is another container, put both containers on a user-defined private Docker network, omit <code>-p</code>, and proxy to <code>http://nodeterm-server:8443</code>. Never replace the loopback bind with <code>-p 8443:8443</code> or expose the image's deliberate plain-HTTP listener directly to the public internet.</p>
+      <p>A container restart also ends processes and the in-container tmux server; persisted scrollback and resumable-agent metadata support cold restore, but they cannot keep a running process alive through the restart.</p>
+
       <h2>Failure modes</h2>
       <p>A feature added to the desktop shell must be added to the server shell too, or it silently doesn't exist there — the project's own boundary tests enforce that core logic never imports Electron directly, but they can't detect a feature that was simply never wired into the server's side of the bridge.</p>
 

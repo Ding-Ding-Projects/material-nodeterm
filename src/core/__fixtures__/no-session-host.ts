@@ -44,6 +44,7 @@ export function noSessionHost(): Record<string, unknown> {
     // backend, which cannot happen here. They resolve to benign empties so that an incidental
     // call (e.g. a broad sweep over all sessions) cannot throw and mask the real assertion.
     sessionHostCapture: async () => '',
+    sessionHostHasSession: async () => false,
     sessionHostKillSession: async () => {},
     sessionHostListSessions: async () => [],
     sessionHostPaneCommand: async () => null,

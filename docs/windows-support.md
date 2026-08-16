@@ -7,9 +7,11 @@ platform-difference defects were found, what now guards against them, and what i
 Keep the split — a user reading "what degrades" should not have to wade through regex archaeology,
 and a contributor about to touch a path needs the archaeology.
 
-**The Windows installer is built and published on every push, by CI, on `windows-latest`** — a real
-Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), non-draft, downloadable, unsigned by
-policy. That is the shipping path and it works.
+**The Windows installer workflow builds and publishes each branch push whose ref contains the
+corrected workflow, on `windows-latest`** — a real Squirrel.Windows set (`Setup.exe`, full
+`.nupkg`, `RELEASES`), unsigned by policy. CI
+stages it as a draft, verifies the complete remote inventory, and only then makes it non-draft and
+downloadable; an upload failure exposes no empty release. That is the shipping path.
 
 What has NOT happened is anyone **installing and launching one**. So the runtime behaviour of a
 packaged build — the session-host fallback where there is no tmux, above all — remains unverified,
@@ -65,11 +67,38 @@ devices.
 
 `renameAtomic` / `renameAtomicSync` / `writeFileAtomic` / `removeAtomic` in
 [`src/core/fs-atomic.ts`](../src/core/fs-atomic.ts) retry briefly; a guard test fails on any bare
-rename anywhere in `src/core`, `src/main` or `src/server`.
+rename anywhere in `src/core`, `src/main`, `src/server` or the standalone `src/session-host`, apart
+from the two platform-appropriate publication helpers themselves.
 
 Five of those sites also shared a **fixed temp name**, so two writers could publish each other's
-half-written bytes. Fixed, and guarded by the property (a pid or a counter in the name) rather than
-by "must call the helper", because several stores build the same name inline and are correct.
+half-written bytes. Fixed, and guarded by the collision-resistant property rather than by “must
+call the helper,” because an inline random UUID is equally valid.
+
+The property is specifically **random UUID entropy**. `Date.now()` collides inside one millisecond;
+pid-plus-counter collides across PID namespaces, worker isolates, and PID reuse. Same-millisecond
+saves collided in the sealed-secret, scheduled-settings-secret,
+shared-mode credential, generic atomic-JSON and Ollama chat stores; the node-token writer had the
+same weak suffix. The old guard also saw only templates ending in `.tmp`, so the two `tmp-…` forms
+were invisible until its matcher was widened. Cross-run cleanup now has one rule too: a foreign pid
+may be a live second instance, so `sweepStaleTempFiles` waits 24 hours and removes a pid-bearing temp
+only when that pid is no longer visible in this process's namespace. Unknown probe results preserve
+the file; ESRCH is not treated as global cross-namespace proof without the age grace.
+
+Credential Clear paths use `clearAtomicTarget`: they remove the canonical file but return an
+explicit `clear-incomplete` failure while any recognized temp remains or the directory could not be
+inspected. That keeps a plausible cross-namespace live writer safe without telling the UI that a
+PAT, cookie, or Home Assistant token is completely gone while bearer bytes remain on disk.
+
+One more race is orthogonal to the temp name. A whole-document flush that snapshots old state can
+stall in the retry loop, let a newer flush publish, then wake and replace it with an intact but stale
+document. `agent-status-mirror` now publishes flush generations FIFO, with a barrier-controlled test
+that recreates the old ordering.
+
+A later SSH audit found the same race outside direct `fs` calls: remote shell writes
+shared `<target>.tmp`, scp downloads and media-cache fetches shared `<target>.part`, and upload
+directories used a timestamp plus a per-manager counter. Those now use per-call UUID staging,
+clean only their own failed stage, and reserve user-visible download names
+across app processes before transferring.
 
 ### Paths
 
@@ -82,6 +111,13 @@ by "must call the helper", because several stores build the same name inline and
 
 The last one is the serious one: it is user-typed input, and the guard refusing `../evil` while
 accepting `..\evil` is exactly what made it look like it worked.
+
+The first repair for `subagent-tail` and `transcript-index-core` changed the split to native
+`path.basename`, which fixed a Windows process but stayed host-dependent: a Linux Server Edition
+still treated a recorded `C:\…` path as one long POSIX filename. Their shared
+`basenameForPathSyntax` now selects `path.win32` only for anchored drive/UNC syntax and
+`path.posix` otherwise. That opposite default matters because a backslash is legal filename text
+on POSIX; blindly accepting both separators would display a different file from the one recorded.
 
 **Explorer reveal** was broken the same way and is now fixed. It compared
 `revealPath.startsWith(base + '/')` — false for every backslash path — so `rel` became the whole
@@ -104,22 +140,37 @@ The token matcher required a `/` and the resolver was POSIX throughout, so a Win
 never even tokenised — the feature was absent rather than wrong, failing *closed* with no link
 offered.
 
-`matchFileTokens` and `resolveFileToken` now take a `{ windows }` option, and the Windows matcher
-is a **separate** regex rather than a widened separator class: the POSIX path is what every
-existing user runs and stays byte-identical, and widening it would start matching Windows-shaped
-text inside a POSIX session, where it can only ever be wrong.
+`matchFileTokens` and `resolveFileToken` take a `{ windows }` option, and the Windows matcher is a
+**separate** regex rather than a widened separator class: the POSIX path is what every existing
+user runs and stays byte-identical, and widening it would start matching Windows-shaped text
+inside a POSIX session, where it can only ever be wrong. Within the Windows matcher, both slash
+styles are accepted (Windows tools emit both), and the parent-directory existence check compares
+entry names case-insensitively while keeping POSIX names case-sensitive.
 
-The gate is **per-session, not per-platform** — an SSH project's paths are POSIX however the client
-is spelled, so `TerminalNode` computes `isWindowsPlatform() && !remoteSession`. Getting that
-backwards would break the SSH links that already work in order to fix the local ones that never
-did.
+The gate is **per-filesystem host, not per-viewer**. A Windows browser may be looking at a Linux
+Server Edition (including one in a container), while a Linux browser may be looking at a Windows
+host; a relay guest and host can differ in the same way. `TerminalNode` therefore uses the
+core-bound `tmuxStatus().platform` fact for Server Edition and relay tabs. An SSH project's paths
+stay POSIX however the client is spelled. If the host-platform read fails, file links are absent
+for that connection — a failed read is not evidence that the host is Linux, and borrowing the
+browser's OS would open the wrong path dialect. The local desktop may use its viewer platform only
+because the viewer and filesystem core are the same process.
 
 Two deliberate limits. A **UNC path is refused** rather than half-handled: there is no drive to
 anchor on, its first two segments are a host and a share rather than directories, and resolving it
-would aim a directory listing at a network host. And **spaces are not part of a segment**, so
+would aim a directory listing at a network host. The tokenizer consumes and refuses the WHOLE UNC
+token; otherwise it can start after the two leading slashes and accidentally reinterpret
+`server\share\file` as a cwd-relative path, bypassing the resolver's refusal. And **spaces are not
+part of a segment**, so
 `C:\Program Files\…` does not link — an unquoted path in terminal output gives no way to tell where
 it ends, and allowing spaces made the matcher swallow the rest of the sentence. The POSIX matcher
 takes the same position, so this is parity rather than a Windows shortfall.
+
+The same host-dialect rule applies to media URLs. `mediaUrlFor` splits only on `path.sep`: splitting
+on both slash styles is required-looking on Windows but corrupts a legal POSIX filename containing
+a literal backslash (`/tmp/a\b.png`) into a different path (`/tmp/a/b.png`). The allowlist then
+correctly rejects the app's own file. The separator is injectable in the pure URL builder only so
+both host dialects are exercised on every test machine.
 
 ### Delete-to-stop-something
 
@@ -131,11 +182,13 @@ gone.
 
 ## Building
 
-`npm run dist:win` and `npm run rebuild` preflight through
-[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs), which reports **every**
-failed precondition in one run — discovering them one at a time cost three separate multi-minute
-builds, and the first blocker hid the second entirely because the rebuild never reached the
-compile.
+`download-dependencies.bat` preflights through
+[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs) after it has made Node
+available but before npm replaces `node_modules`; `npm run dist:win` and `npm run rebuild` also
+invoke the same check. This reports **every** failed precondition in one run — discovering them one
+at a time cost three separate multi-minute builds, and the first blocker hid the second entirely
+because the rebuild never reached the compile. Running it after Node bootstrap matters: the old
+root-BAT placement skipped the check on a machine with no initial Node and went straight into npm.
 
 1. **A running instance holds `conpty.node`.** Windows will not delete a DLL mapped into a live
    process, so a forgotten `npm start` window makes electron-rebuild die with an `EPERM` about a
@@ -152,25 +205,43 @@ compile.
    in the User or Machine registry — so it is recorded here only so the next person who meets it
    does not spend a build on it. Clear it for the build process only; never for the machine.
 
+## Testing generated POSIX shell
+
+Windows has no literal `/bin/sh`, but Git for Windows provides a real POSIX-compatible shell. Tests
+for generated remote commands should use `src/core/testing/posix-shell.ts`, not skip the behavior or
+reimplement it in TypeScript. The adapter derives `usr/bin/sh.exe` from `git --exec-path`, adds the
+matching runtime bins, translates native paths to `/c/...`, and puts a fake tool directory first
+inside the running shell. That last step matters because `Git\bin\sh.exe` initializes its own PATH
+with `/mingw64/bin` ahead of a parent-process prefix; without the adapter, a fake `curl` fixture can
+silently invoke Git's real curl and make the test observe the network path instead of its recorder.
+
+AF_UNIX socket binding is still unavailable in the native Node test host, so those narrowly scoped
+cases retain an explicit `process.platform === 'win32'` skip. The same files' TCP, parser, fallback,
+credential and shell-syntax cases continue to run under real Git Bash.
+
 ## Known gaps
 
-- **No packaged build has been INSTALLED and launched.** CI builds and publishes the installer on
-  every push (verified: `v0.3.0-ci.165` carries a 206.8 MB `nodeterm-Setup-0.3.0.exe`, non-draft,
+- **No packaged build has been INSTALLED and launched.** CI is configured to build and publish the
+  installer on each update of a branch carrying the corrected workflow (verified historically:
+  `v0.3.0-ci.165` carries a 206.8 MB `nodeterm-Setup-0.3.0.exe`, non-draft,
   HTTP 206 on a range request), but nobody has run one. So the runtime behaviour of a real install
   — tmux absence and the session-host fallback above all (see
   [windows-session-host.md](windows-session-host.md)) — is unverified. Downloading one and clicking
   through it is the single highest-value Windows check still outstanding.
 - **Building the installer locally is blocked on this machine**, on the Spectre-mitigated MSVC
-  libraries, whose installer needs elevation. Not a shipping blocker — CI has them — but it does
-  mean a developer here cannot reproduce the release artifact without that component.
+  libraries, whose installer needs elevation. The corrected release workflow has not yet run on
+  a hosted runner, so its native rebuild and resulting Squirrel assets remain unverified too.
 
 ## If you are adding code that touches a path
 
 - Use `path.basename` / `path.join` / `path.sep`. Never `split('/')`, never `startsWith('/')` as an
   is-absolute test.
 - Publish files with `renameAtomic`, never a bare `fs.rename`. A guard enforces it.
-- Ask whether the path is **local** (platform-native) or **remote** (always POSIX, even from a
-  Windows client). Getting that distinction wrong is how an SSH fix breaks local behaviour.
+- Ask which machine owns the filesystem. The browser/viewer OS is irrelevant for Server Edition
+  and relay tabs; SSH is POSIX even from a Windows client. Getting that distinction wrong is how an
+  SSH fix breaks local behaviour, or a Windows browser breaks links on a Linux container host.
+- On POSIX, `\` is filename text. Split on both separators only after the owning dialect is known
+  to be Windows.
 - Write at least one test with a real `C:\`-shaped input. Every defect on this page was invisible
   to a suite whose fixtures were all POSIX.
 - Use `String.raw` for backslash literals — except when the string ends in one, which a raw

@@ -2,7 +2,7 @@
 
 **Category:** [Remote & SSH](./README.md)
 
-The exact same renderer nodeterm's desktop app uses, served headless from a Linux (or macOS)
+The exact same renderer nodeterm's desktop app uses, served headless from a Linux, macOS, or Windows
 host and reached from any browser — so your terminals, editors, source control, board, and
 agents live on a machine you can reach from anywhere, rather than only the one in front of you.
 
@@ -63,6 +63,9 @@ service; re-running the same script updates it in place.
 
 ## Verification
 
+- Run `node scripts/test-docker-host.mjs` with a local Docker daemon to exercise the production
+  image, auth page, native addons, non-root PID 1, graceful shutdown, and persistent volume across a
+  restart and complete container recreation.
 - Run `npm run server:dev`, open the printed URL from a different device on the same network,
   set a password, and confirm you can open a terminal and see it run.
 - Confirm the kanban board, source-control panel, and agent status badges behave identically to

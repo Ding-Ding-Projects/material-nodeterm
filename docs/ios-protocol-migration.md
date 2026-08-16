@@ -67,21 +67,43 @@ The companion host agent and nodeterm desktop both update `~/.nodeterm/agent.jso
 alone cannot stop one process from publishing a stale snapshot that erases the other's fields. The
 companion must adopt the desktop's exact lock protocol before these builds ship together:
 
-1. Exclusively create `~/.nodeterm/agent.json.lock` (`O_CREAT | O_EXCL`, mode `0600`). Its JSON may
-   contain only diagnostic ownership metadata such as version, PID, nonce, and start time—never a
-   token or key.
+1. Exclusively create `~/.nodeterm/agent.json.lock` (`O_CREAT | O_EXCL`, mode `0600`). The desktop
+   writes one UTF-8 JSON line with the exact diagnostic shape
+   `{"v":1,"pid":<integer>,"nonce":"<UUID>","startedAt":<epoch-ms>}\n`; the companion may parse or
+   ignore those fields, but must never put a token or key in this file.
 2. Acquire the lock **before reading** `agent.json`, then hold it across the entire
    read-modify-write and atomic rename. Desktop pairing/revoke additionally holds it across the
    associated `authorized_keys` mutation.
 3. Retry contention for at most 10 seconds, then fail closed without changing either credential
    file. Never remove a lock merely because its timestamp looks old; that can split a slow but live
    writer's critical section.
-4. Release only the lock acquired by that operation, in `finally`. A release failure is an error,
-   not success.
+4. Release only the lock acquired by that operation, in `finally`. Cooperative writers must never
+   unlink, truncate, replace, or age-delete another operation's lock. The desktop compares the
+   ownership bytes it wrote before removal; a mismatch or an unreadable lock fails release and
+   preserves the path. A release failure is an error, not success.
 
 This repository has a real two-process contention test for the desktop half. Because the companion
 host-agent source is maintained separately, its adoption and a symmetric two-process test are
 **unverified release blockers**; desktop-only locking does not make mixed writers safe.
+
+The blocker is cleared only when the release record contains all of this evidence:
+
+1. The exact companion commit and built-artifact hash, plus an inventory of every companion path
+   that reads and later rewrites `agent.json`; every path must enter the same lock before its read.
+2. A companion-side real two-process Chut that runs both orderings (companion holds while a
+   desktop-shaped writer contends, then the reverse), observes contention, and proves the final
+   registry preserves both writers' fields without a leftover lock.
+3. A fail-closed contention Chut that pre-creates the lock, reaches the bounded timeout, and proves
+   neither `agent.json` nor `authorized_keys` changed. It must also prove an old timestamp alone
+   never causes lock deletion.
+4. A mixed-artifact run using the actual release companion binary and this desktop writer against
+   one fixture directory, recorded with both exact commits. A host-shaped test double in this
+   repository proves the desktop helper, but it is not evidence that the separately shipped writer
+   adopted the protocol.
+
+No companion checkout, commit, artifact, or test result is recorded in this repository at this
+desktop revision. Until the evidence above is linked, the adoption status remains **unverified**;
+mention **@eneskirca** on the release review rather than inferring support from compatible JSON.
 
 ---
 

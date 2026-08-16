@@ -34,6 +34,7 @@ vi.mock('./session-host-backend', () => ({
     throw new Error('session-host backend must not be selected in pty-coattach.test.ts')
   },
   sessionHostCapture: async () => '',
+  sessionHostHasSession: async () => false,
   sessionHostKillSession: async () => {},
   sessionHostListSessions: async () => [],
   sessionHostPaneCommand: async () => null,

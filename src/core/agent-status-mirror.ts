@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { platform } from './platform'
-import { renameAtomic } from './fs-atomic'
+import { renameAtomic, tempNameFor } from './fs-atomic'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentState, NormalizedAgentEvent } from '@shared/agents/normalize'
 import { WORKING_STALE_MS, isStaleWorking } from '@shared/agents/stale'
@@ -511,7 +511,11 @@ const STALE_SWEEP_MS = 60_000
 let sweepTimer: ReturnType<typeof setInterval> | null = null
 let targetFile: string | null = null
 let writeTimer: NodeJS.Timeout | null = null
-let writeSeq = 0
+// A flush snapshots the whole mirror before it touches disk. Keep those snapshots in invocation
+// order: an older rename can spend ~310 ms retrying a sharing violation while a newer flush is
+// published, then wake and overwrite the newer state. Unique temp names prevent byte splicing;
+// this FIFO prevents a complete-but-stale document winning afterwards.
+let flushWriteChain: Promise<void> = Promise.resolve()
 const flushListeners = new Set<(doc: MirrorFile) => void>()
 // Supplies the host-level settings block, consulted fresh on every flush (so a mid-session
 // permission-mode / account change is picked up without re-wiring). Null = no block written.
@@ -1578,13 +1582,18 @@ export async function flush(): Promise<void> {
       // A listener must never break the local write (or its sibling listeners).
     }
   }
-  const tmp = `${file}.${process.pid}.${++writeSeq}.tmp`
-  try {
-    await fs.promises.writeFile(tmp, JSON.stringify(doc), { mode: 0o600 })
-    await renameAtomic(tmp, file)
-  } catch {
-    await fs.promises.rm(tmp, { force: true }).catch(() => {})
+  const write = async (): Promise<void> => {
+    const tmp = tempNameFor(file)
+    try {
+      await fs.promises.writeFile(tmp, JSON.stringify(doc), { mode: 0o600 })
+      await renameAtomic(tmp, file)
+    } catch {
+      await fs.promises.rm(tmp, { force: true }).catch(() => {})
+    }
   }
+  const queued = flushWriteChain.then(write, write)
+  flushWriteChain = queued.then(() => undefined, () => undefined)
+  await queued
 }
 
 // ---- Test helpers --------------------------------------------------------------------------

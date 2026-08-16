@@ -10,6 +10,7 @@ import zlib from 'zlib'
 import type { Auth } from './auth'
 import { proxyAuthAllowed, type TrustProxyConfig } from './proxy-trust'
 import { handleDownload } from './download'
+import { handleUpload } from './upload'
 import type { DownloadTickets } from '../core/download-tickets'
 import { rpIdFromHost, verifyAssertion, verifyRegistration } from './webauthn'
 import type { LadderAnswer, LadderRung } from '../core/unlock-ladder'
@@ -56,6 +57,9 @@ export interface HttpHandlerOpts {
   /** Ticket store backing `GET /download` (Explorer file downloads). Omitted in tests that don't
    *  exercise it — the route then simply doesn't exist. */
   downloadTickets?: DownloadTickets
+  /** Data directory backing authenticated raw-byte browser uploads. Omitted by auth-only tests and
+   *  embedders that intentionally do not expose the upload route. */
+  uploadUserDataDir?: string
 }
 
 /** Parse the `nt_session=` value out of a Cookie header. Exported for the WS upgrade (Task 5). */
@@ -688,7 +692,7 @@ async function serveStatic(
 export function createHttpHandler(
   opts: HttpHandlerOpts
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
-  const { auth, rendererDir, trustProxy, downloadTickets } = opts
+  const { auth, rendererDir, trustProxy, downloadTickets, uploadUserDataDir } = opts
 
   return function handler(req: http.IncomingMessage, res: http.ServerResponse): void {
     void handle(req, res).catch(() => {
@@ -972,6 +976,10 @@ export function createHttpHandler(
 
     // Authenticated: an Explorer download redeems its one-shot ticket here (see download.ts).
     if (downloadTickets && (await handleDownload(req, res, url, downloadTickets))) return
+
+    // Authenticated: browser-held bytes stream over HTTP rather than inflating inside the shared
+    // 8 MiB RPC socket. This is after the session/proxy gate on purpose — the route writes files.
+    if (uploadUserDataDir && (await handleUpload(req, res, url, uploadUserDataDir))) return
 
     // Authenticated: serve static renderer files (index.html fallback for '/').
     await serveStatic(req, res, rendererDir, pathname)

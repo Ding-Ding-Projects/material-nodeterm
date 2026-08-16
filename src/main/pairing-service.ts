@@ -39,7 +39,7 @@ import type { PairingDoneResult, Settings } from '../shared/types'
 import { publicKeyToB64, type KeyPair } from './remote/e2ee'
 import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
-import { renameAtomic } from '../core/fs-atomic'
+import { renameAtomic, sweepStaleTempFiles, tempNameFor } from '../core/fs-atomic'
 import { openPairingEnvelope, sealPairingResponse } from './pairing-envelope'
 import { withPairingRegistryLock } from './pairing-registry-lock'
 
@@ -154,8 +154,12 @@ const MAX_BODY_BYTES = 64 * 1024
 /** Wrong codes tolerated before the pairing window closes itself. Five is enough for a
  *  mistyped digit and nowhere near enough to walk 10^6. */
 const SHORT_CODE_MAX_ATTEMPTS = 5
+const PAIRING_ATTEMPT_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export interface PairingStartResult {
+  /** Correlation UUID supplied by the renderer and echoed by completion events. */
+  attemptId: string
   /** The single-line JSON to encode into the QR. */
   payload: string
   /** Compatibility credential accepted only inside an authenticated envelope. Same listener and
@@ -173,12 +177,16 @@ export interface PairingStartResult {
 
 /** Fired once when pairing finishes; re-exported for main-side callers and tests. */
 export type PairingDone = PairingDoneResult
+type PairingDonePayload = Omit<PairingDoneResult, 'attemptId'>
 
 export interface PairingService {
   /** Begin pairing; resolves once the listener is up. `onDone` fires exactly once later. */
-  start(onDone: (result: PairingDone) => void): Promise<PairingStartResult>
-  /** Cancel an in-flight pairing (idempotent). Does NOT fire onDone. */
-  stop(): void
+  start(
+    onDone: (result: PairingDone) => void,
+    requestedAttemptId?: string
+  ): Promise<PairingStartResult>
+  /** Cancel the named attempt (or any active attempt for trusted main-side callers/tests). */
+  stop(attemptId?: string): void
   /** All paired devices (token stripped) from ~/.nodeterm/agent.json. */
   listDevices(): Promise<PublicDevice[]>
   /** Revoke a device: drop its agent.json entry AND delete its authorized_keys line. */
@@ -223,41 +231,6 @@ async function readAgentJson(): Promise<Record<string, unknown>> {
   return obj
 }
 
-/** Paired with `process.pid` in the temp names below: the counter makes a name unique WITHIN this
- *  process, the pid makes it unique ACROSS processes (it restarts at 0 in every new one). Same
- *  scheme as agent-status-mirror's local write (src/core/agent-status-mirror.ts). */
-let writeSeq = 0
-
-/**
- * Remove agent.json temps no writer in THIS process owns: the legacy fixed `agent.json.tmp`
- * (written by builds from before per-call names) and any `agent.json.<pid>.<seq>.tmp` whose pid is
- * not ours. Best effort — a failure here must never break (or skip) the write that follows.
- *
- * agent.json is not config: every device entry carries the `agentToken` bearer the phone presents
- * on the host-agent WebSocket, so an orphan is a live credential at 0600 that nothing will ever
- * overwrite — a unique name is never written twice. Temps bearing our own pid are untouchable: one
- * may belong to a concurrent write sitting between its `writeFile` and its `rename`, and deleting
- * it would recreate the exact race the unique names fixed. A foreign pid can in theory be the HOST
- * AGENT mid-write; ~/.nodeterm is shared with it and has no lock to begin with, and the worst case
- * is that process's rename failing cleanly (ENOENT, rethrown to its caller) instead of a forgotten
- * token file sitting on disk forever.
- */
-async function sweepStaleAgentTmp(): Promise<void> {
-  try {
-    const base = path.basename(AGENT_JSON_PATH)
-    for (const entry of await fs.readdir(AGENT_DIR)) {
-      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>'
-      const owner = /^\.(\d+)\.\d+$/.exec(middle)?.[1]
-      if (middle === '' || (owner && owner !== String(process.pid))) {
-        await fs.rm(path.join(AGENT_DIR, entry), { force: true }).catch(() => undefined)
-      }
-    }
-  } catch {
-    // A dir we cannot read is not a reason to fail (or skip) the write below.
-  }
-}
-
 /** Detect the machine's display name (macOS ComputerName, else hostname). */
 async function computerName(): Promise<string> {
   if (process.platform === 'darwin') {
@@ -299,7 +272,10 @@ function probeSsh(): Promise<boolean> {
  * permissions. The caller stamps the attributable `nodeterm-ios-<deviceId>` comment via
  * `rewriteKeyComment` before this point.
  */
-async function appendAuthorizedKey(keyLine: string): Promise<void> {
+async function appendAuthorizedKey(
+  keyLine: string,
+  afterBytesAppended?: () => void | Promise<void>
+): Promise<void> {
   const sshDir = path.join(os.homedir(), '.ssh')
   await fs.mkdir(sshDir, { recursive: true, mode: 0o700 })
   await fs.chmod(sshDir, 0o700).catch(() => {})
@@ -308,10 +284,19 @@ async function appendAuthorizedKey(keyLine: string): Promise<void> {
   try {
     const existing = await fs.readFile(AUTH_KEYS_PATH, 'utf8')
     if (existing.length > 0 && !existing.endsWith('\n')) prefix = '\n'
-  } catch {
-    // no file yet — appendFile creates it
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code !== 'ENOENT') {
+      // An unreadable existing file may end without a newline. Appending blindly can splice the
+      // new key into the prior line, corrupting both while the UI claims pairing merely failed.
+      throw new Error(`Could not read authorized_keys${code ? ` (${code})` : ''}.`, {
+        cause: error
+      })
+    }
+    // Confirmed absent — appendFile creates it.
   }
   await fs.appendFile(AUTH_KEYS_PATH, prefix + normalizeAuthorizedKeysLine(keyLine) + '\n')
+  await afterBytesAppended?.()
   await fs.chmod(AUTH_KEYS_PATH, 0o600)
 }
 
@@ -339,6 +324,8 @@ export interface PairingServiceTestHooks {
   onPairRequestAccepted?(): void
   /** Barrier after registry publication and before the ownership recheck / SSH grant. */
   afterDevicePersisted?(): void | Promise<void>
+  /** Barrier after SSH bytes append and before chmod / the cancellation rollback. */
+  afterAuthorizedKeyAppended?(): void | Promise<void>
   sealResponse?(
     response: Record<string, unknown>,
     sharedKey: Uint8Array
@@ -346,6 +333,8 @@ export interface PairingServiceTestHooks {
 }
 
 interface PairingAttempt {
+  /** Renderer-generated UUID used to target stop and correlate delayed completion events. */
+  id: string
   /** Synchronous latch: once true, no request belonging to this attempt may reach a write. */
   settled: boolean
   /** Completion/cancellation is separate from settlement while the winning request persists. */
@@ -394,25 +383,26 @@ export function createPairingService(
    *
    * Lives INSIDE the factory, below `serialize`, so no code path outside this closure can reach
    * it unchained — the same by-construction guarantee as GitHubControlStore's private write().
-   * Overlapping entry points (the pairing POST, renderer revokes) are ordered by the chain and
-   * cross-process lock. Per-call temp names still prevent collisions after a crash (`writeSeq`
-   * stays module-level so a second service instance in this process keeps counting instead of
-   * restarting). The rename itself retries a transient Windows sharing-violation error — see
+   * Overlapping entry points (the pairing POST, renderer revokes) are ordered by the in-process
+   * chain and cross-process lock. `tempNameFor` still supplies UUID entropy so PID namespaces,
+   * workers, PID reuse, and crash litter cannot share a staging path. The rename itself retries a
+   * transient Windows sharing-violation error — see
    * src/core/fs-atomic.ts.
    */
   async function writeAgentJson(obj: Record<string, unknown>): Promise<void> {
     await fs.mkdir(AGENT_DIR, { recursive: true, mode: 0o700 })
     await fs.chmod(AGENT_DIR, 0o700).catch(() => {})
-    await sweepStaleAgentTmp()
-    const tmp = `${AGENT_JSON_PATH}.${process.pid}.${++writeSeq}.tmp`
+    await sweepStaleTempFiles(AGENT_JSON_PATH)
+    const tmp = tempNameFor(AGENT_JSON_PATH)
     try {
       await fs.writeFile(tmp, JSON.stringify(obj, null, 2) + '\n', { mode: 0o600 })
       await fs.chmod(tmp, 0o600).catch(() => {})
       await renameAtomic(tmp, AGENT_JSON_PATH)
     } catch (e) {
       // A unique name never self-heals the way the fixed one did (the next write just reused it),
-      // and here a leaked temp IS a leaked credential: only this cleanup — or a later run's sweep,
-      // once this pid is dead — will ever collect it. The error still propagates.
+      // and here a leaked temp IS a leaked credential: only this cleanup — or a later sweep after
+      // the age grace and an owner pid no longer visible here mark it abandoned — will collect it.
+      // The error propagates.
       await fs.rm(tmp, { force: true }).catch(() => {})
       throw e
     }
@@ -450,7 +440,7 @@ export function createPairingService(
     }
     const next = filterAuthorizedKeys(content, deviceId)
     if (next === content) return
-    const tmp = `${AUTH_KEYS_PATH}.${process.pid}.${++writeSeq}.tmp`
+    const tmp = tempNameFor(AUTH_KEYS_PATH)
     try {
       await fs.writeFile(tmp, next, { mode: 0o600 })
       await fs.chmod(tmp, 0o600).catch(() => {})
@@ -487,7 +477,7 @@ export function createPairingService(
   }
 
   /** Fire this attempt's completion callback exactly once, then tear its own resources down. */
-  const finishAttempt = (attempt: PairingAttempt, result: PairingDone): void => {
+  const finishAttempt = (attempt: PairingAttempt, result: PairingDonePayload): void => {
     if (attempt.done) return
     attempt.settled = true
     attempt.done = true
@@ -495,7 +485,7 @@ export function createPairingService(
     attempt.onDone = null
     closeAttemptResources(attempt)
     if (activeAttempt === attempt) activeAttempt = null
-    cb?.(result)
+    cb?.({ ...result, attemptId: attempt.id })
   }
 
   /**
@@ -509,10 +499,20 @@ export function createPairingService(
     return true
   }
 
-  const start = async (onDone: (result: PairingDone) => void): Promise<PairingStartResult> => {
+  const start = async (
+    onDone: (result: PairingDone) => void,
+    requestedAttemptId?: string
+  ): Promise<PairingStartResult> => {
+    const attemptId = requestedAttemptId ?? randomUUID()
+    // IPC callers control this value. Reject malformed or reusable-looking identifiers before
+    // touching the active listener so an invalid renderer request cannot cancel valid pairing.
+    if (!PAIRING_ATTEMPT_ID_RE.test(attemptId)) {
+      throw new Error('Pairing attempt ID must be a cryptographic UUID.')
+    }
     // A prior in-flight pairing is cancelled silently (no onDone) before starting a new one.
     if (activeAttempt) cancelAttempt(activeAttempt)
     const attempt: PairingAttempt = {
+      id: attemptId,
       settled: false,
       done: false,
       server: null,
@@ -786,7 +786,24 @@ export function createPairingService(
           // registry await: a canceled winner may leave its bearer record visible/revocable, but
           // it must never activate an SSH key for a phone that will receive no response box.
           if (!attemptAllowsRequest(attempt, true)) return
-          await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
+          let keyAppendStarted = false
+          try {
+            // Set before entering the helper: appendFile can partially write and still reject.
+            // Cancellation cleanup therefore inspects/removes the attributable line after any
+            // activation error, not only after a fully successful append/chmod sequence.
+            keyAppendStarted = true
+            await appendAuthorizedKey(
+              rewriteKeyComment(publicKey, deviceId),
+              testHooks.afterAuthorizedKeyAppended
+            )
+          } finally {
+            // Cancellation can land while append/chmod is awaiting I/O. Remove the attributable
+            // key before the old request is rejected, including when chmod itself rejects after the
+            // append. Keep the registry row so an I/O failure stays visible/retryable through Revoke.
+            if (keyAppendStarted && !attemptAllowsRequest(attempt, true)) {
+              await removeAuthorizedKeysForDevice(deviceId)
+            }
+          }
         })
         if (!attemptAllowsRequest(attempt, true)) {
           rejectSettled(req, res)
@@ -817,6 +834,7 @@ export function createPairingService(
     }
 
     return {
+      attemptId,
       payload,
       shortCode,
       manualHost: `${host}:${pairPort}`,
@@ -825,8 +843,10 @@ export function createPairingService(
     }
   }
 
-  const stop = (): void => {
-    if (activeAttempt) cancelAttempt(activeAttempt)
+  const stop = (attemptId?: string): void => {
+    if (activeAttempt && (attemptId === undefined || activeAttempt.id === attemptId)) {
+      cancelAttempt(activeAttempt)
+    }
   }
 
   const listDevices = async (): Promise<PublicDevice[]> => {

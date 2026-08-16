@@ -27,9 +27,33 @@ used" row) and an eyedropper sit on top of that as convenience, never as the onl
   change the colour — it changes which numeric representation you're looking at and editing.
   Each tab's fields commit on blur or Enter; an invalid HEX entry is rejected with the last valid
   colour left showing (never silently coerced to something else, never blanked).
-- **Copy**: copies the *currently active tab's* formatted string to the clipboard.
+- **Copy**: copies the *currently active tab's* formatted string through nodeterm's acknowledged
+  clipboard bridge, with the browser clipboard as a fallback when that bridge is absent, reports
+  failure, or rejects.
 - **Named colour**: when the current colour exactly matches a CSS named colour (opaque only), its
   name is shown underneath the entry row.
+
+## Clipboard routing and failure feedback
+
+Clipboard access is app-global rather than project/core-bound: copying from a relay tab is meant to
+write to the viewing computer's clipboard. The picker therefore tries nodeterm's active clipboard
+bridge first (Electron on Desktop, the browser-aware bridge in Server Edition) and awaits its
+truthful success boolean, then tries `navigator.clipboard` only as a fallback. A missing API,
+synchronous throw, rejected promise, or explicit `false` is contained. If no route completes, the
+button remains **Copy** and one failure toast is raised; the picker never shows a false **Copied**
+receipt.
+
+- **Desktop:** preload uses request/response IPC. Main returns `true` only after Electron's system
+  clipboard write completes and converts an invalid input or host exception to `false`; a torn-down
+  renderer IPC request is also caught and resolves `false`, because older copy callers deliberately
+  ignore the safe Promise.
+- **Server Edition:** the bridge uses the secure-context browser clipboard when available and its
+  click-driven `execCommand` fallback on plain HTTP, awaiting both and returning their real result.
+  The picker suppresses that bridge's failure toast while its final direct-browser route remains;
+  only an exhausted copy reports an error, so a successful fallback cannot sit beside a stale red
+  banner.
+- **Mobile companion:** separate and unchanged. The picker in this React renderer is not the
+  private mobile app's colour or clipboard implementation.
 
 ## Translation
 
@@ -72,8 +96,9 @@ tells you.
 
 ## Security & privacy
 
-Entirely local and synchronous: no network request, no external colour-name service, no
-telemetry. The eyedropper is the browser's own OS-level picker (Chromium's `EyeDropper` API) —
+Entirely local: no network request, no external colour-name service, no telemetry. Colour
+conversion is synchronous; the clipboard write may complete asynchronously through the app or
+browser API. The eyedropper is the browser's own OS-level picker (Chromium's `EyeDropper` API) —
 this app never reads screen pixels itself. "Recently used" colours live in memory only for the
 life of the renderer process (a module-level array); they are not persisted to disk or synced.
 

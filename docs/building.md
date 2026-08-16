@@ -72,7 +72,12 @@ per-project or user-scoped locations.
    toolchain directory (`%LOCALAPPDATA%\nodeterm\toolchain` on Windows, `~/.nodeterm/toolchain` on
    macOS/Linux). A file that does not match its recorded hash is deleted and treated as a failure —
    it is never used.
-4. **npm project dependencies.** Runs `npm ci` when `package-lock.json` exists, otherwise
+4. **Windows build preflight.** Once Node is callable, and before npm can remove
+   `node_modules`, `download-dependencies.bat` runs `scripts/check-build-preflight.mjs`.
+   This placement is deliberate: on a truly fresh machine there was no Node with which to run
+   the old pre-dependency preflight, so it was skipped and never retried before `npm ci`.
+   The POSIX script has no equivalent because both checks are Windows-specific.
+5. **npm project dependencies.** Runs `npm ci` when `package-lock.json` exists, otherwise
    `npm install`.
 
 **Why a portable Node install never touches your real `PATH`.** `setx PATH "<huge string>"` on
@@ -81,8 +86,10 @@ close to that limit an arbitrary machine's `PATH` already sits — so `PATH` is 
 persistently. Instead, the portable Node's location is remembered in one dedicated variable
 (`NODETERM_NODE_HOME`, a Windows user environment variable set via `[Environment]::SetEnvironmentVariable`,
 or a one-line file at `~/.nodeterm/node-home` on macOS/Linux) and prepended to `PATH` for the
-current process — and to the current process only. On macOS/Linux, add it to your shell profile
-yourself if you want it to persist:
+current command process — and to that process only. On Windows the batch file uses `setlocal` for
+its scratch values but explicitly exports this refreshed `PATH` and `NODETERM_NODE_HOME` when a
+caller uses `call`; otherwise `build.bat` would immediately lose the Node it had just installed.
+On macOS/Linux, add it to your shell profile yourself if you want it to persist:
 ```sh
 export PATH="$(cat ~/.nodeterm/node-home):$PATH"
 ```
@@ -116,8 +123,10 @@ Nothing the script downloads is ever committed to the repository itself.
 
 Takes a checkout with nothing installed to a built, runnable program:
 
-0. **Preflight** (`scripts/check-build-preflight.mjs`), on Windows the phase that matters most.
-   `npm ci` in the next step removes `node_modules` wholesale, and Windows refuses to delete a
+0. Calls `download-dependencies.{bat,sh}` (by absolute path on Windows — see above), rather than
+   duplicating its logic, so the two scripts can never silently drift apart. On Windows that
+   script bootstraps Node and then runs **the preflight** (`scripts/check-build-preflight.mjs`)
+   before `npm ci` removes `node_modules` wholesale. Windows refuses to delete a
    binary a live process has mapped — so a forgotten dev window kills the install on
    `node_modules\electron\dist\electron.exe`, with npm's own `EPERM` and no mention of the app
    holding it. Measured: `build.bat /s` failed exactly that way, and all its report could say was
@@ -125,18 +134,17 @@ Takes a checkout with nothing installed to a built, runnable program:
    the missing Spectre-mitigated MSVC libraries in the same run — both blockers in about three
    seconds rather than one after several minutes of the other.
 
-   Skipped, not failed, when `node` is not on `PATH` yet: the dependency phase is what installs
-   node, so a genuinely fresh machine must not be blocked by a check that needs it.
+   The preflight is no longer skipped when Node is initially absent: Node bootstrap is its explicit
+   prerequisite, and npm install is its explicit successor. This also covers running
+   `download-dependencies.bat` directly.
 
    The `.sh` scripts do not call it. Unlinking an open file is ordinary on macOS and Linux, and
    the Spectre check is Windows-only by construction, so there it would be a phase that can never
    fail.
 
-1. Calls `download-dependencies.{bat,sh}` (by absolute path on Windows — see above), rather than
-   duplicating its logic, so the two scripts can never silently drift apart.
-2. Runs `npm run build` (`electron-vite build`) and confirms `out/main/index.js` actually exists
+1. Runs `npm run build` (`electron-vite build`) and confirms `out/main/index.js` actually exists
    afterward — never trusting a green exit code alone.
-3. **Only then**, asks whether to launch the app (`npm start`). This prompt is deliberately the
+2. **Only then**, asks whether to launch the app (`npm start`). This prompt is deliberately the
    **last** thing the script does: a failed build never gets as far as offering to launch nothing.
    In silent mode, the app is never launched automatically — a CI run should not pop a desktop GUI
    on somebody's behalf — the script just prints how to start it by hand.
@@ -146,7 +154,8 @@ Takes a checkout with nothing installed to a built, runnable program:
 Produces the same installable artifact CI publishes, through the same supported packaging path and
 the same version as `package.json`:
 
-1. Calls `download-dependencies.{bat,sh}` (by absolute path on Windows).
+1. Calls `download-dependencies.{bat,sh}` (by absolute path on Windows), including the Windows
+   post-bootstrap/pre-npm preflight above.
 2. Packages through `electron-builder`:
    - Windows: `npm run dist:win` → **Squirrel.Windows** (`dist/squirrel-windows/`: the setup
      `.exe`, the `RELEASES` index, and the full `.nupkg`).
@@ -162,8 +171,8 @@ the same version as `package.json`:
      available) the exact commit it was built from and whether the working tree was clean or
      dirty at build time.
 4. States plainly, every time, that **the installer is unsigned**. Code signing is permanently out
-   of scope for this project (see `package.json`'s `win.forceCodeSigning` / `signExecutable` /
-   `signAndEditExecutable`, all pinned to `false`, and the mac build's `identity=null` /
+   of scope for this project (see `package.json`'s `win.forceCodeSigning` / `signExecutable`,
+   pinned to `false`, and the mac build's `identity=null` /
    `notarize=false`) — installing or opening the artifact will trigger Windows SmartScreen /
    "unknown publisher" or macOS Gatekeeper warnings. That is expected, not a build defect.
 5. **Never publishes, tags, pushes, or creates a release.** It only builds and verifies a local
@@ -183,16 +192,17 @@ For anyone maintaining `download-dependencies.bat`, `build.bat`, or `build-insta
   every `npm`/`electron-builder` invocation is followed by `set "X_EXIT=%ERRORLEVEL%"` on its own
   line (immediately, before any other command like `popd` can overwrite `%ERRORLEVEL%`), and the
   captured value is checked afterward.
-- **`setlocal EnableDelayedExpansion`** is set at the top of every script. Plain `%VAR%` expansion
-  is used everywhere it is safe (any read that happens as its own statement, outside a parenthesized
-  block that both set and needs to re-read the same variable); `!VAR!` delayed expansion is used the
-  few places a variable is both set and read within the same `(...)` block.
+- **`setlocal DisableDelayedExpansion`** is set at the top of every script. None needs a same-block
+  delayed read, and disabling it preserves a legitimate `!` in an inherited `PATH`. The dependency
+  script ends its local scope by exporting only `PATH` and `NODETERM_NODE_HOME`; every scratch
+  variable remains private to it.
 - **PowerShell is invoked as inline `-Command` text, never as a `.ps1` script file** — timestamp
   arithmetic for phase timings, JSON parsing of `dependencies.manifest.json`, file hashing, and
   archive extraction all go through one-line `powershell -NoProfile -Command "..."` calls. Execution
   policy only gates running script *files*; inline `-Command` text is unaffected, so there is
   nothing here that needs `-ExecutionPolicy Bypass`, and the machine's persistent policy is never
-  touched.
+  touched. SHA-256 uses .NET directly, not `Get-FileHash`: a batch file launched from PowerShell 7
+  can pass its module path to Windows PowerShell 5.1, where auto-loading that cmdlet then fails.
 
 ## Manual verification performed while writing these scripts
 
@@ -206,3 +216,17 @@ syntax-checked (`sh -n`) and exercised on the same machine through Git Bash for 
 already-on-`PATH` fast path; their OS-specific install branches (Homebrew, `apt-get`, and the
 macOS/Linux portable-Node fallback) could not be exercised on a Windows host and should be
 verified on a real macOS/Linux machine before being relied on unattended.
+
+The Windows entry points now also have an automated behavioral regression test
+(`src/core/build-bat.test.ts`). It runs the production `.bat` files through a real `cmd.exe`
+against an isolated checkout-shaped fixture; only the expensive leaves (npm and the preflight)
+are replaced. The test proves the post-bootstrap preflight runs before npm, the portable Node
+`PATH` survives the called batch file's `setlocal`, silent build mode does not launch the app, and
+the installer verifies a plausible Squirrel set plus a real SHA-256. Its fixture path deliberately
+contains a space and an apostrophe. Removing the `PATH` export makes both parent-entry tests fail
+with `npm is not recognized`, which is the mutation proof for the guard.
+
+Both root BAT entry points were also run directly on the current Windows development machine.
+They reached the post-bootstrap preflight and stopped before npm with the documented missing
+Spectre-libraries diagnosis. `npm run build` succeeds separately; a local Squirrel installer is
+still unverified on that machine until the Visual Studio component is installed.

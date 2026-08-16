@@ -20,6 +20,12 @@ const STARTED = {
   manualHost: '192.0.2.1:12345'
 }
 
+const startedFor = (attemptId: string, overrides: Partial<typeof STARTED> = {}) => ({
+  ...STARTED,
+  ...overrides,
+  attemptId
+})
+
 function deferred<T>(): {
   promise: Promise<T>
   resolve(value: T): void
@@ -61,13 +67,19 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
   }
 
   const startThroughQr = async (): Promise<void> => {
-    startPairing.mockResolvedValueOnce(STARTED)
     qr.toDataURL.mockResolvedValueOnce('data:image/png;base64,fresh')
     await act(async () => current.start())
   }
 
+  const lastAttemptId = (): string => {
+    const call = startPairing.mock.calls.at(-1)
+    if (!call || typeof call[0] !== 'string') throw new Error('pairing.start had no attempt ID')
+    return call[0]
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
+    startPairing.mockImplementation(async (attemptId: string) => startedFor(attemptId))
     qr.toDataURL.mockResolvedValue('data:image/png;base64,default')
     host = document.createElement('div')
     document.body.appendChild(host)
@@ -96,8 +108,11 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
   })
 
   it('stops a listener that resolves after unmount during pairing.start', async () => {
-    const startGate = deferred<typeof STARTED>()
-    startPairing.mockReturnValueOnce(startGate.promise)
+    const startGate = deferred<void>()
+    startPairing.mockImplementationOnce(async (attemptId: string) => {
+      await startGate.promise
+      return startedFor(attemptId)
+    })
     renderHook()
     let task!: Promise<void>
 
@@ -106,22 +121,63 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
       await Promise.resolve()
     })
     expect(startPairing).toHaveBeenCalledOnce()
+    const attemptId = lastAttemptId()
     act(() => root!.unmount())
     root = undefined
 
     expect(stopPairing).toHaveBeenCalledOnce()
-    startGate.resolve(STARTED)
+    startGate.resolve(undefined)
     await act(async () => task)
 
     expect(stopPairing).toHaveBeenCalledTimes(2)
+    expect(stopPairing.mock.calls).toEqual([[attemptId], [attemptId]])
     expect(qr.toDataURL).not.toHaveBeenCalled()
   })
 
+  it('does not let an unmounted start or delayed completion stop a remounted replacement', async () => {
+    const oldGate = deferred<void>()
+    startPairing.mockImplementationOnce(async (attemptId: string) => {
+      await oldGate.promise
+      return startedFor(attemptId)
+    })
+    renderHook()
+    let oldTask!: Promise<void>
+
+    await act(async () => {
+      oldTask = current.start()
+      await Promise.resolve()
+    })
+    const oldAttemptId = lastAttemptId()
+    act(() => root!.unmount())
+    root = createRoot(host)
+    renderHook()
+
+    await act(async () => current.start())
+    const replacementAttemptId = lastAttemptId()
+    expect(replacementAttemptId).not.toBe(oldAttemptId)
+    expect(host.firstElementChild?.getAttribute('data-phase')).toBe('waiting')
+
+    oldGate.resolve(undefined)
+    await act(async () => oldTask)
+
+    expect(stopPairing.mock.calls).toEqual([[oldAttemptId], [oldAttemptId]])
+    act(() => complete?.({ attemptId: oldAttemptId, ok: true, relay: 'off' }))
+    expect(host.firstElementChild?.getAttribute('data-phase')).toBe('waiting')
+
+    act(() => complete?.({ attemptId: replacementAttemptId, ok: true, relay: 'off' }))
+    expect(host.firstElementChild?.getAttribute('data-phase')).toBe('paired')
+  })
+
   it('stops a superseded start before dispatching its replacement', async () => {
-    const firstGate = deferred<typeof STARTED>()
+    const firstGate = deferred<void>()
     startPairing
-      .mockReturnValueOnce(firstGate.promise)
-      .mockResolvedValueOnce({ ...STARTED, shortCode: '654321' })
+      .mockImplementationOnce(async (attemptId: string) => {
+        await firstGate.promise
+        return startedFor(attemptId)
+      })
+      .mockImplementationOnce(async (attemptId: string) =>
+        startedFor(attemptId, { shortCode: '654321' })
+      )
     qr.toDataURL.mockResolvedValueOnce('data:image/png;base64,replacement')
     renderHook()
     let first!: Promise<void>
@@ -131,6 +187,7 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
       first = current.start()
       await Promise.resolve()
     })
+    const firstAttemptId = lastAttemptId()
     await act(async () => {
       second = current.start()
       await Promise.resolve()
@@ -138,11 +195,12 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
     })
     expect(startPairing).toHaveBeenCalledOnce()
 
-    firstGate.resolve(STARTED)
+    firstGate.resolve(undefined)
     await act(async () => Promise.all([first, second]))
 
     expect(startPairing).toHaveBeenCalledTimes(2)
     expect(stopPairing).toHaveBeenCalledOnce()
+    expect(stopPairing).toHaveBeenCalledWith(firstAttemptId)
     expect(stopPairing.mock.invocationCallOrder[0]).toBeLessThan(
       startPairing.mock.invocationCallOrder[1]
     )
@@ -152,7 +210,6 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
 
   it('owns and stops the host listener while QR generation is pending', async () => {
     const qrGate = deferred<string>()
-    startPairing.mockResolvedValueOnce(STARTED)
     qr.toDataURL.mockReturnValueOnce(qrGate.promise)
     renderHook()
     let task!: Promise<void>
@@ -174,7 +231,6 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
 
   it('does not let a late QR continuation undo an explicit stop', async () => {
     const qrGate = deferred<string>()
-    startPairing.mockResolvedValueOnce(STARTED)
     qr.toDataURL.mockReturnValueOnce(qrGate.promise)
     renderHook()
     let task!: Promise<void>
@@ -199,7 +255,6 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
 
   it('does not let a late QR continuation overwrite completion', async () => {
     const qrGate = deferred<string>()
-    startPairing.mockResolvedValueOnce(STARTED)
     qr.toDataURL.mockReturnValueOnce(qrGate.promise)
     renderHook()
     let task!: Promise<void>
@@ -208,7 +263,7 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
       task = current.start()
       await Promise.resolve()
     })
-    act(() => complete?.({ ok: true, relay: 'off' }))
+    act(() => complete?.({ attemptId: lastAttemptId(), ok: true, relay: 'off' }))
 
     expect(host.firstElementChild?.getAttribute('data-phase')).toBe('paired')
     expect(host.firstElementChild?.getAttribute('data-busy')).toBe('false')
@@ -221,7 +276,6 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
   })
 
   it('stops the host attempt when QR generation fails', async () => {
-    startPairing.mockResolvedValueOnce(STARTED)
     qr.toDataURL.mockRejectedValueOnce(new Error('QR renderer failed'))
     renderHook()
 
@@ -238,7 +292,7 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
     renderHook(onFinished)
     await startThroughQr()
 
-    act(() => complete?.({ ok: false, reason: 'failed' }))
+    act(() => complete?.({ attemptId: lastAttemptId(), ok: false, reason: 'failed' }))
 
     expect(host.firstElementChild?.getAttribute('data-phase')).toBe('failed')
     expect(host.textContent).toContain('before credentials were delivered')
@@ -251,7 +305,7 @@ describe('usePhonePairing lifecycle and completion reporting', () => {
     renderHook()
     await startThroughQr()
 
-    act(() => complete?.({ ok: false, reason: 'timeout' }))
+    act(() => complete?.({ attemptId: lastAttemptId(), ok: false, reason: 'timeout' }))
 
     expect(host.firstElementChild?.getAttribute('data-phase')).toBe('timeout')
     expect(host.textContent).toBe('')

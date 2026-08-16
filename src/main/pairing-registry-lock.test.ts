@@ -48,8 +48,10 @@ function waitForExit(child: ChildProcess): Promise<void> {
   })
 }
 
-function spawnWorker(agentJsonPath: string, role: 'host' | 'desktop'): ChildProcess {
-  return fork(workerBundle, [agentJsonPath, role], {
+type WriterRole = 'host' | 'desktop'
+
+function spawnWorker(agentJsonPath: string, role: WriterRole, hold: boolean): ChildProcess {
+  return fork(workerBundle, [agentJsonPath, role, hold ? 'hold' : 'run'], {
     silent: true
   })
 }
@@ -74,29 +76,33 @@ afterAll(() => {
 })
 
 describe('pairing registry cross-process lock', () => {
-  it('preserves a host-agent write and a desktop device write across real processes', async () => {
-    const agentJsonPath = path.join(tempDir, 'agent.json')
-    await fs.writeFile(agentJsonPath, JSON.stringify({ v: 1, port: 1000 }) + '\n')
+  it.each([
+    ['host', 'desktop'],
+    ['desktop', 'host']
+  ] as const)(
+    'preserves both real-process writes when %s holds first and %s contends',
+    async (firstRole, secondRole) => {
+      const agentJsonPath = path.join(tempDir, `agent-${firstRole}-first.json`)
+      await fs.writeFile(agentJsonPath, JSON.stringify({ v: 1, port: 1000 }) + '\n')
 
-    const host = spawnWorker(agentJsonPath, 'host')
-    await waitForMessage(host, 'entered')
-    const desktop = spawnWorker(agentJsonPath, 'desktop')
-    await waitForMessage(desktop, 'contended')
+      const first = spawnWorker(agentJsonPath, firstRole, true)
+      await waitForMessage(first, 'entered')
+      const second = spawnWorker(agentJsonPath, secondRole, false)
+      await waitForMessage(second, 'contended')
 
-    const hostExit = waitForExit(host)
-    const desktopExit = waitForExit(desktop)
-    host.send('release')
-    await Promise.all([hostExit, desktopExit])
+      const firstExit = waitForExit(first)
+      const secondExit = waitForExit(second)
+      first.send('release')
+      await Promise.all([firstExit, secondExit])
 
-    const final = JSON.parse(await fs.readFile(agentJsonPath, 'utf8')) as Record<string, unknown>
-    expect(final).toMatchObject({ v: 1, port: 4321, lastHostWrite: 'preserved' })
-    expect(final.devices).toEqual([
-      { id: 'new-phone', token: 'test-token' }
-    ])
-    await expect(fs.stat(pairingRegistryLockPath(agentJsonPath))).rejects.toMatchObject({
-      code: 'ENOENT'
-    })
-  })
+      const final = JSON.parse(await fs.readFile(agentJsonPath, 'utf8')) as Record<string, unknown>
+      expect(final).toMatchObject({ v: 1, port: 4321, lastHostWrite: 'preserved' })
+      expect(final.devices).toEqual([{ id: 'new-phone', token: 'test-token' }])
+      await expect(fs.stat(pairingRegistryLockPath(agentJsonPath))).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
+    }
+  )
 
   it('times out closed without running a mutation when another owner holds the lock', async () => {
     const agentJsonPath = path.join(tempDir, 'timeout-agent.json')
@@ -112,5 +118,19 @@ describe('pairing registry cross-process lock', () => {
     await expect(fs.readFile(pairingRegistryLockPath(agentJsonPath), 'utf8')).resolves.toBe(
       'occupied\n'
     )
+  })
+
+  it('refuses to remove a lock path whose ownership bytes were replaced', async () => {
+    const agentJsonPath = path.join(tempDir, 'replaced-agent.json')
+    const lockPath = pairingRegistryLockPath(agentJsonPath)
+    await fs.writeFile(agentJsonPath, '{}\n')
+
+    await expect(
+      withPairingRegistryLock(agentJsonPath, async () => {
+        await fs.writeFile(lockPath, 'replacement-owner\n')
+      })
+    ).rejects.toThrow(/ownership changed/)
+
+    await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe('replacement-owner\n')
   })
 })

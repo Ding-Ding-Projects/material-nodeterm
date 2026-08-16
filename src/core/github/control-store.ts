@@ -158,8 +158,8 @@ export class GitHubControlStore {
     await fs.mkdir(this.userDataDir, { recursive: true })
     // The fixed temp name is safe only because there is exactly ONE store instance per data dir and
     // every write reaches here through THAT instance's mutate() writeQueue. A second instance on the
-    // same dir, or a caller that skips the queue, needs a unique `<file>.<pid>.<seq>.tmp` name (see
-    // workspace-store's writeAtomic) — otherwise two writers share this one temp and one rename
+    // same dir, or a caller that skips the queue, needs a UUID-unique temp name (see
+    // workspace-store's writeAtomic) — otherwise two writers share one temp and one rename
     // publishes the other's half-written bytes. The rename itself retries briefly on Windows if the
     // destination is momentarily held open (see fs-atomic.ts).
     // Unique per call rather than a fixed `<file>.tmp`. The old comment reasoned that one store

@@ -7,6 +7,12 @@ dist/
 .vite/
 *.tsbuildinfo
 
+# host.sh / host.bat write the first-boot server password here. It is runtime state and must
+# never become a tempting untracked credential that can be added to a commit by accident.
+/.env
+/.env.bak
+/.nodeterm-env-*
+
 build/icon.png
 build/icon.ico
 

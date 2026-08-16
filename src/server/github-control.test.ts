@@ -58,9 +58,9 @@ describe('ServerGitHubSecretStore atomic write', () => {
   it('overlapping token saves never reuse a tmp name (no torn write, no leftovers)', async () => {
     const store = new ServerGitHubSecretStore(userDataDir)
     // The store's chain serializes its own mutations, so the writes arrive one after the other —
-    // uniqueness is carried by the `<pid>.<seq>` name alone. That name is what protects writers
-    // the chain cannot see (a second server process on the same data dir) and the crash window
-    // between tmp-write and rename, so it stays pinned here.
+    // UUID uniqueness protects writers the chain cannot see (a second server process or PID
+    // namespace on the same data dir) and the crash window between tmp-write and rename, so the
+    // distinct filesystem paths stay pinned here.
     const long = `github_pat_${'a'.repeat(600)}`
     const short = `github_pat_${'b'.repeat(7)}`
     const tmps: string[] = []
@@ -104,10 +104,10 @@ describe('ServerGitHubSecretStore atomic write', () => {
     expect(existsSync(tokenFile())).toBe(false)
   })
 
-  it('sweeps orphan temps left by dead writers, but never one bearing our own pid', async () => {
+  it('sweeps aged legacy litter but never a fresh temp merely because its pid differs', async () => {
     const store = new ServerGitHubSecretStore(userDataDir)
     const legacy = `${tokenFile()}.tmp` // a build from before per-call tmp names
-    const foreign = `${tokenFile()}.${process.pid + 1}.7.tmp` // a run that died before its rename
+    const foreign = `${tokenFile()}.${process.pid + 1}.7.tmp` // may be a second live process
     const ours = `${tokenFile()}.${process.pid}.999.tmp`
     for (const file of [legacy, foreign, ours]) {
       await fs.writeFile(file, JSON.stringify({ version: 1, token: 'stale-secret' }), {
@@ -115,19 +115,19 @@ describe('ServerGitHubSecretStore atomic write', () => {
         mode: 0o600
       })
     }
+    await fs.utimes(legacy, 0, 0)
 
     await store.save('github_pat_fresh')
 
     expect(await store.readForHost()).toBe('github_pat_fresh')
-    // Unique names are never reused, so an orphan is a 0600 file holding a live PAT forever.
+    // The legacy path is decades old. The foreign temp is fresh and may belong to another live
+    // server sharing --data-dir, so its different pid is not permission to remove it.
     expect(existsSync(legacy)).toBe(false)
-    expect(existsSync(foreign)).toBe(false)
-    // Our own pid is off limits: it may be a CONCURRENT writer sitting between its write and its
-    // rename, and deleting it would reintroduce the very race the unique names fixed.
+    expect(existsSync(foreign)).toBe(true)
     expect(existsSync(ours)).toBe(true)
   })
 
-  it('sweeps orphan temps on the clear path too — a "cleared" token must leave nothing behind', async () => {
+  it('clear removes the canonical token but rejects while credential temps remain', async () => {
     const store = new ServerGitHubSecretStore(userDataDir)
     await store.save('github_pat_secret')
     for (const file of [`${tokenFile()}.tmp`, `${tokenFile()}.${process.pid + 1}.7.tmp`]) {
@@ -137,11 +137,14 @@ describe('ServerGitHubSecretStore atomic write', () => {
       })
     }
 
-    await store.clear()
+    await expect(store.clear()).rejects.toMatchObject({ code: 'clear-incomplete' })
 
     expect(await store.readForHost()).toBeNull()
     expect(existsSync(tokenFile())).toBe(false)
-    expect(await tmpsLeft()).toEqual([])
+    expect((await tmpsLeft()).sort()).toEqual([
+      `github-issues-token.json.${process.pid + 1}.7.tmp`,
+      'github-issues-token.json.tmp'
+    ].sort())
   })
 
   it('a failed rename removes its own temp and still rejects (a leaked temp here is a live PAT)', async () => {
