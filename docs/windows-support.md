@@ -229,13 +229,22 @@ gone.
 
 ## Building
 
-`download-dependencies.bat` preflights through
-[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs) after it has made Node
-available but before npm replaces `node_modules`; `npm run dist:win` and `npm run rebuild` also
-invoke the same check. This reports **every** failed precondition in one run — discovering them one
-at a time cost three separate multi-minute builds, and the first blocker hid the second entirely
-because the rebuild never reached the compile. Running it after Node bootstrap matters: the old
-root-BAT placement skipped the check on a machine with no initial Node and went straight into npm.
+After making Node available, `download-dependencies.bat` first runs
+[`scripts/ensure-windows-build-toolchain.mjs`](../scripts/ensure-windows-build-toolchain.mjs). It
+adds the channel-current x64/x86 Spectre runtime component to an existing Visual Studio instance,
+or verifies and runs the exact Microsoft bootstrapper pinned in the dependency manifest to install
+Build Tools + the C++ workload on a fresh machine. The privileged helper stages that file below
+protected Program Files and never resolves a package manager through a user-controlled `PATH`. On
+ARM64 it also adds the rolling ARM64 Spectre component and verifies ARM64 libraries without dropping
+x86/x64. It then ensures a supported per-user Python through
+[`scripts/ensure-windows-python.mjs`](../scripts/ensure-windows-python.mjs), and preflights through
+[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs)
+before npm replaces `node_modules`; `npm run dist:win` and `npm run rebuild` also invoke the same
+check. The installer result is independently checked on disk, and the preflight reports **every**
+remaining failed precondition in one run — discovering them one at a time cost three separate
+multi-minute builds, and the first blocker hid the second entirely because the rebuild never
+reached the compile. Running both after Node bootstrap matters: the old root-BAT placement skipped
+the check on a machine with no initial Node and went straight into npm.
 
 1. **A running instance holds `conpty.node`.** Windows will not delete a DLL mapped into a live
    process, so a forgotten `npm start` window makes electron-rebuild die with an `EPERM` about a
@@ -245,8 +254,29 @@ root-BAT placement skipped the check on a machine with no initial Node and went 
 2. **The Spectre-mitigated MSVC libraries are missing.** node-pty's own `binding.gyp` sets
    `SpectreMitigation`, and that component is not part of a default C++ workload. Deliberately not
    worked around with `/p:SpectreMitigation=false`: node-pty asks for the mitigation on purpose,
-   and disabling it would ship an unmitigated native module.
-3. **`NoDefaultCurrentDirectoryInExePath=1`** makes `cmd /c GetCommitHash.bat` fail with "is not
+   and disabling it would ship an unmitigated native module. The bootstrap adds
+   `Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre`; ARM64 hosts also add
+   `Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre`. Both the helper and preflight
+   independently check that the effective VS 2022 toolset contains real `.lib` files for every
+   required architecture below `VC\Tools\MSVC\*\lib\spectre`.
+
+   Visual Studio has no per-user Build Tools install, and Microsoft forbids programmatic
+   `--quiet`/`--passive` use by an unelevated user. The script checks elevation before starting the
+   installer and exits access-denied with an absolute **helper-only** Administrator Command Prompt
+   remedy. Run only the printed `ensure-windows-build-toolchain.mjs ...
+   --elevated-toolchain-only` command elevated, close that prompt, and rerun the root BAT normally.
+   The root BAT refuses to continue toward Python/npm under an Administrator token. It does not
+   trigger UAC, because `/s` is prompt-free and ordinary dependency installs are automatic too.
+   An observed non-elevated `setup.exe modify ... --quiet --norestart` parsed the command but exited
+   5007 with “run elevated from the beginning,” matching the documented boundary.
+3. **Python is missing or unsupported.** npm lifecycle scripts compile `smart-whisper`/`node-pty`
+   through node-gyp, and the Visual Studio C++ workload does not include an interpreter. The BAT
+   reuses an explicitly selected supported 64-bit Python 3.10-3.14 or installs pinned Python 3.13
+   per-user. Bare Store/Python Manager aliases are never launched as a probe. Winget is tried
+   first; the python.org fallback runs only after its manifest SHA-256 matches. The verified exact
+   interpreter is passed process-locally in `PYTHON`, `NODE_GYP_FORCE_PYTHON`, and
+   `npm_config_python`; no launcher or persistent `PATH` is changed.
+4. **`NoDefaultCurrentDirectoryInExePath=1`** makes `cmd /c GetCommitHash.bat` fail with "is not
    recognized" inside node-pty's vendored winpty build, even though the file is right there. This
    one is **not** a user-facing problem — it was set in an agent harness's process environment, not
    in the User or Machine registry — so it is recorded here only so the next person who meets it

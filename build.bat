@@ -25,16 +25,33 @@ if /I "%~1"=="/s" set "NODETERM_SILENT=1"
 if /I "%~1"=="--silent" set "NODETERM_SILENT=1"
 if /I "%SILENT%"=="1" set "NODETERM_SILENT=1"
 
+set "NODETERM_SYSTEM_POWERSHELL=%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%NODETERM_SYSTEM_POWERSHELL%" (
+    echo [FAILED] Privilege boundary - the inbox Windows PowerShell could not be found
+    exit /b 1
+)
+"%NODETERM_SYSTEM_POWERSHELL%" -NoProfile -NonInteractive -Command "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); if($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){exit 86}else{exit 0}" >nul 2>nul
+set "NODETERM_ELEVATION_PROBE=%ERRORLEVEL%"
+if "%NODETERM_ELEVATION_PROBE%"=="86" (
+    echo [FAILED] Privilege boundary - never run the root build as Administrator.
+    echo Close this prompt and rerun normally; only the printed toolchain helper may be elevated.
+    exit /b 5
+)
+if not "%NODETERM_ELEVATION_PROBE%"=="0" (
+    echo [FAILED] Privilege boundary - could not prove this is a normal user prompt.
+    exit /b 1
+)
+
 echo.
 echo === nodeterm build ===
-echo Repository : %NODETERM_ROOT%
+echo Repository : "%NODETERM_ROOT%"
 echo.
 
 rem ---------------------------------------------------------------------------------------------
 rem Phase 0: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
-rem the two scripts can never silently drift apart. That script bootstraps Node, then runs the
-rem Windows build preflight before npm ci/install; this ordering is what makes a truly fresh
-rem machine diagnosable instead of silently skipping a Node-powered preflight.
+rem the two scripts can never silently drift apart. That script bootstraps Node and the native
+rem toolchain, then runs the Windows build preflight before npm ci/install; this ordering is what
+rem makes a truly fresh machine diagnosable instead of silently skipping a Node-powered preflight.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Dependencies"
 if "%NODETERM_SILENT%"=="1" (
@@ -42,14 +59,15 @@ if "%NODETERM_SILENT%"=="1" (
 ) else (
     call "%NODETERM_ROOT%\download-dependencies.bat"
 )
-if errorlevel 1 (
+set "DEPENDENCIES_EXIT=%ERRORLEVEL%"
+if not "%DEPENDENCIES_EXIT%"=="0" (
     echo.
     echo [FAILED] Dependencies
     echo   Dependency : see download-dependencies.bat output above for the exact one
     echo   Constraint : n/a
     echo   Source     : "%NODETERM_ROOT%\download-dependencies.bat"
-    echo   Error      : download-dependencies.bat exited non-zero
-    exit /b 1
+    echo   Error      : download-dependencies.bat exited with code %DEPENDENCIES_EXIT%
+    exit /b %DEPENDENCIES_EXIT%
 )
 call :phase_end "Dependencies"
 
@@ -68,7 +86,7 @@ if not "%BUILD_EXIT%"=="0" (
     echo   Constraint : npm run build must exit 0
     echo   Source     : "%NODETERM_ROOT%\package.json" -^> scripts.build
     echo   Error      : npm exited with code %BUILD_EXIT% - see the build output above for the real cause
-    exit /b 1
+    exit /b %BUILD_EXIT%
 )
 if not exist "%NODETERM_ROOT%\out\main\index.js" (
     echo.
@@ -83,7 +101,7 @@ call :phase_end "Build (npm run build)"
 
 echo.
 echo === Build complete. ===
-echo Built output : %NODETERM_ROOT%\out
+echo Built output : "%NODETERM_ROOT%\out"
 echo.
 
 rem ---------------------------------------------------------------------------------------------

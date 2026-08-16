@@ -2,8 +2,11 @@
 setlocal DisableDelayedExpansion
 rem =============================================================================================
 rem download-dependencies.bat -- obtains every dependency nodeterm needs to build, run and test,
-rem from canonical upstreams, into per-project or user-scoped locations. Never machine-wide,
-rem never requiring administrator rights when a user-scoped path exists.
+rem from canonical upstreams, into per-project or user-scoped locations wherever one exists. It
+rem never requires administrator rights when a dependency supports a user-scoped path.
+rem Visual Studio Build Tools has no user-scoped install; if it is missing or needs modification,
+rem this script stops with the exact helper-only command to run elevated, then resumes from a
+rem normal prompt. The root bootstrap and npm lifecycle scripts must never run as Administrator.
 rem
 rem Full contract: docs/building.md
 rem
@@ -38,17 +41,37 @@ if /I "%~1"=="/s" set "NODETERM_SILENT=1"
 if /I "%~1"=="--silent" set "NODETERM_SILENT=1"
 if /I "%SILENT%"=="1" set "NODETERM_SILENT=1"
 
+rem Refuse elevation before reading the manifest or running ANY user/package-manager executable.
+rem Otherwise an elevated fresh root could bootstrap Node before the later toolchain helper had a
+rem chance to protect npm. Use the inbox PowerShell by absolute system path, never PATH lookup.
+set "NODETERM_SYSTEM_POWERSHELL=%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%NODETERM_SYSTEM_POWERSHELL%" (
+    echo [FAILED] Privilege boundary - the inbox Windows PowerShell could not be found
+    exit /b 1
+)
+"%NODETERM_SYSTEM_POWERSHELL%" -NoProfile -NonInteractive -Command "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); if($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){exit 86}else{exit 0}" >nul 2>nul
+set "NODETERM_ELEVATION_PROBE=%ERRORLEVEL%"
+if "%NODETERM_ELEVATION_PROBE%"=="86" (
+    echo [FAILED] Privilege boundary - never run the root dependency bootstrap as Administrator.
+    echo Close this prompt and rerun normally; only the printed toolchain helper may be elevated.
+    exit /b 5
+)
+if not "%NODETERM_ELEVATION_PROBE%"=="0" (
+    echo [FAILED] Privilege boundary - could not prove this is a normal user prompt.
+    exit /b 1
+)
+
 echo.
 echo === nodeterm dependency bootstrap ===
-echo Repository : %NODETERM_ROOT%
-echo Manifest   : %MANIFEST%
+echo Repository : "%NODETERM_ROOT%"
+echo Manifest   : "%MANIFEST%"
 echo.
 
 if not exist "%MANIFEST%" (
     echo [FAILED] dependencies.manifest.json is missing
     echo   Dependency : dependencies.manifest.json itself
     echo   Constraint : must sit next to this script at the repository root
-    echo   Source     : %MANIFEST%
+    echo   Source     : "%MANIFEST%"
     echo   Error      : file not found
     exit /b 1
 )
@@ -80,7 +103,7 @@ if errorlevel 1 (
 )
 
 echo   Trying winget ^(package OpenJS.NodeJS.LTS, user scope^)...
-winget install --id OpenJS.NodeJS.LTS --scope user -e --accept-source-agreements --accept-package-agreements --disable-interactivity 1>"%TEMP%\nodeterm-winget-node.log" 2>&1
+winget install --id OpenJS.NodeJS.LTS --source winget --scope user -e --accept-source-agreements --accept-package-agreements --disable-interactivity 1>"%TEMP%\nodeterm-winget-node.log" 2>&1
 if errorlevel 1 (
     echo   winget install failed - see "%TEMP%\nodeterm-winget-node.log" - falling back to a portable extract.
     goto :node_portable
@@ -105,7 +128,81 @@ goto :node_done
 call :phase_end "Node.js runtime"
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 2: build preflight. This MUST run after Node is bootstrapped but before npm ci/install:
+rem Phase 2: native Windows build toolchain. Visual Studio has no per-user installation path and
+rem Microsoft's quiet/passive modes require an already-elevated caller. The helper never triggers
+rem UAC and refuses an elevated ROOT bootstrap; it exits access-denied with the exact helper-only
+rem command to run elevated. This MUST precede Python/preflight so a missing component is repaired
+rem rather than merely diagnosed without ever handing npm an Administrator token.
+rem ---------------------------------------------------------------------------------------------
+call :phase_begin "Visual Studio C++ build toolchain"
+if "%NODETERM_SILENT%"=="1" (
+    call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs" --silent
+) else (
+    call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
+)
+set "TOOLCHAIN_EXIT=%ERRORLEVEL%"
+if not "%TOOLCHAIN_EXIT%"=="0" exit /b %TOOLCHAIN_EXIT%
+call :phase_end "Visual Studio C++ build toolchain"
+
+rem ---------------------------------------------------------------------------------------------
+rem Phase 3: Python for node-gyp. The locked dependency graph runs native install scripts during
+rem npm ci, and the Visual Studio C++ workload does not include a Python interpreter. This phase
+rem runs only after the toolchain helper has refused an elevated root prompt, so Python is always
+rem installed/reused under the normal user token and npm never inherits Administrator rights.
+rem ---------------------------------------------------------------------------------------------
+call :phase_begin "Python runtime for native builds"
+set "NODETERM_PYTHON_RESULT_FILE=%TEMP%\nodeterm-python-path-%RANDOM%-%RANDOM%.txt"
+if exist "%NODETERM_PYTHON_RESULT_FILE%" del /f /q "%NODETERM_PYTHON_RESULT_FILE%" >nul 2>nul
+if "%NODETERM_SILENT%"=="1" (
+    call node "%NODETERM_ROOT%\scripts\ensure-windows-python.mjs" --silent --result-file "%NODETERM_PYTHON_RESULT_FILE%"
+) else (
+    call node "%NODETERM_ROOT%\scripts\ensure-windows-python.mjs" --result-file "%NODETERM_PYTHON_RESULT_FILE%"
+)
+set "PYTHON_BOOTSTRAP_EXIT=%ERRORLEVEL%"
+if not "%PYTHON_BOOTSTRAP_EXIT%"=="0" (
+    del /f /q "%NODETERM_PYTHON_RESULT_FILE%" >nul 2>nul
+    exit /b %PYTHON_BOOTSTRAP_EXIT%
+)
+if not exist "%NODETERM_PYTHON_RESULT_FILE%" (
+    echo.
+    echo [FAILED] Python runtime for native builds
+    echo   Dependency : supported 64-bit Python for node-gyp
+    echo   Constraint : helper must return the verified interpreter path
+    echo   Source     : "%NODETERM_ROOT%\scripts\ensure-windows-python.mjs"
+    echo   Error      : helper exited successfully without writing its result file
+    exit /b 1
+)
+set "PYTHON="
+set /p "PYTHON="<"%NODETERM_PYTHON_RESULT_FILE%"
+del /f /q "%NODETERM_PYTHON_RESULT_FILE%" >nul 2>nul
+set "NODETERM_PYTHON_RESULT_FILE="
+if not defined PYTHON (
+    echo.
+    echo [FAILED] Python runtime for native builds
+    echo   Dependency : supported 64-bit Python for node-gyp
+    echo   Constraint : helper must return the verified interpreter path
+    echo   Source     : "%NODETERM_ROOT%\scripts\ensure-windows-python.mjs"
+    echo   Error      : helper returned an empty interpreter path
+    exit /b 1
+)
+if not exist "%PYTHON%" (
+    echo.
+    echo [FAILED] Python runtime for native builds
+    echo   Dependency : supported 64-bit Python for node-gyp
+    echo   Constraint : PYTHON must name the verified python.exe
+    echo   Source     : "%PYTHON%"
+    echo   Error      : helper returned a path that no longer exists
+    exit /b 1
+)
+rem node-gyp gives NODE_GYP_FORCE_PYTHON precedence over every other discovery channel, followed
+rem by npm_config_python and PYTHON. Override all three so a stale inherited value cannot defeat the
+rem interpreter this phase just verified.
+set "NODE_GYP_FORCE_PYTHON=%PYTHON%"
+set "npm_config_python=%PYTHON%"
+call :phase_end "Python runtime for native builds"
+
+rem ---------------------------------------------------------------------------------------------
+rem Phase 4: build preflight. This MUST run after all bootstraps but before npm ci/install:
 rem npm removes node_modules wholesale, so it is already too late to give an actionable diagnosis
 rem after a mapped electron.exe blocks deletion. Keeping the preflight here also covers callers
 rem that invoke download-dependencies.bat directly instead of going through either build script.
@@ -125,7 +222,7 @@ if not "%PREFLIGHT_EXIT%"=="0" (
 call :phase_end "Build preflight"
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 3: npm project dependencies
+rem Phase 5: npm project dependencies
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "npm project dependencies"
 
@@ -177,7 +274,8 @@ rem returns. Export only the two documented toolchain values. Delayed expansion 
 rem the whole file so a legitimate `!` in an inherited PATH survives this handoff byte-for-byte.
 set "NODETERM_RETURN_PATH=%PATH%"
 set "NODETERM_RETURN_NODE_HOME=%NODETERM_NODE_HOME%"
-endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%"
+set "NODETERM_RETURN_PYTHON=%PYTHON%"
+endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%"
 exit /b 0
 
 :refresh_path
@@ -203,30 +301,77 @@ if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "NODE_ARCH=win-arm64"
 
 set "NODE_URL="
 set "NODE_SHA256="
-for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "(Get-Content -Raw '%MANIFEST%' | ConvertFrom-Json).node.portable.'%NODE_ARCH%'.url"`) do set "NODE_URL=%%U"
-for /f "usebackq delims=" %%S in (`powershell -NoProfile -Command "(Get-Content -Raw '%MANIFEST%' | ConvertFrom-Json).node.portable.'%NODE_ARCH%'.sha256"`) do set "NODE_SHA256=%%S"
+set "NODE_VERSION="
+rem Every path, URL, and selector below crosses into PowerShell as environment DATA. Never splice
+rem one into -Command source: a perfectly valid apostrophe in the repo or LOCALAPPDATA path would
+rem terminate a quoted PowerShell literal before download and hash verification even begin.
+set "NODETERM_MANIFEST_FILE=%MANIFEST%"
+set "NODETERM_NODE_ARCH=%NODE_ARCH%"
+for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "$p=(Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json).node.portable; $e=$p.PSObject.Properties[$env:NODETERM_NODE_ARCH].Value; $e.url"`) do set "NODE_URL=%%U"
+for /f "usebackq delims=" %%S in (`powershell -NoProfile -Command "$p=(Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json).node.portable; $e=$p.PSObject.Properties[$env:NODETERM_NODE_ARCH].Value; $e.sha256"`) do set "NODE_SHA256=%%S"
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "$m=Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json; $m.node.version"`) do set "NODE_VERSION=%%V"
+set "NODETERM_MANIFEST_FILE="
+set "NODETERM_NODE_ARCH="
 
 if not defined NODE_URL (
     echo.
     echo [FAILED] Node.js runtime
     echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
     echo   Constraint : dependencies.manifest.json -^> node.portable.%NODE_ARCH%
-    echo   Source     : %MANIFEST%
+    echo   Source     : "%MANIFEST%"
     echo   Error      : manifest has no portable entry for architecture %NODE_ARCH%
+    exit /b 1
+)
+
+if not defined NODE_VERSION (
+    echo.
+    echo [FAILED] Node.js runtime
+    echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
+    echo   Constraint : dependencies.manifest.json -^> node.version
+    echo   Source     : "%MANIFEST%"
+    echo   Error      : manifest has no exact Node version
+    exit /b %NPM_EXIT%
+)
+
+rem Validate manifest-controlled values before any one of them is expanded back into batch syntax.
+rem The expected official URL is derived from the exact version and architecture, and both hashes
+rem must be full SHA-256 digests; malformed data must never become a command or a trusted download.
+set "NODETERM_DOWNLOAD_URL=%NODE_URL%"
+set "NODETERM_EXPECTED_VERSION=%NODE_VERSION%"
+set "NODETERM_EXPECTED_SHA256=%NODE_SHA256%"
+set "NODETERM_NODE_ARCH=%NODE_ARCH%"
+powershell -NoProfile -NonInteractive -Command "$v=$env:NODETERM_EXPECTED_VERSION; $a=$env:NODETERM_NODE_ARCH; $u=$env:NODETERM_DOWNLOAD_URL; $s=$env:NODETERM_EXPECTED_SHA256; $expected='https://nodejs.org/dist/v'+$v+'/node-v'+$v+'-'+$a+'.zip'; if($v -notmatch '^\d+\.\d+\.\d+$' -or $s -notmatch '^[a-fA-F0-9]{64}$' -or $u -cne $expected){exit 87}" >nul 2>nul
+set "NODE_MANIFEST_VALID=%ERRORLEVEL%"
+set "NODETERM_DOWNLOAD_URL="
+set "NODETERM_EXPECTED_VERSION="
+set "NODETERM_EXPECTED_SHA256="
+set "NODETERM_NODE_ARCH="
+if not "%NODE_MANIFEST_VALID%"=="0" (
+    echo.
+    echo [FAILED] Node.js runtime
+    echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
+    echo   Constraint : exact version, official nodejs.org URL, and 64-hex SHA-256
+    echo   Source     : "%MANIFEST%"
+    echo   Error      : portable manifest entry failed validation
     exit /b 1
 )
 
 if not exist "%TOOLCHAIN_DIR%" mkdir "%TOOLCHAIN_DIR%" >nul 2>nul
 set "NODE_ZIP=%TOOLCHAIN_DIR%\node-%NODE_ARCH%.zip"
 
-echo   Downloading %NODE_URL%
-powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri '%NODE_URL%' -OutFile '%NODE_ZIP%' -UseBasicParsing"
-if errorlevel 1 (
+echo   Downloading "%NODE_URL%"
+set "NODETERM_DOWNLOAD_URL=%NODE_URL%"
+set "NODETERM_DOWNLOAD_FILE=%NODE_ZIP%"
+powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri $env:NODETERM_DOWNLOAD_URL -OutFile $env:NODETERM_DOWNLOAD_FILE -UseBasicParsing"
+set "NODE_DOWNLOAD_EXIT=%ERRORLEVEL%"
+set "NODETERM_DOWNLOAD_URL="
+set "NODETERM_DOWNLOAD_FILE="
+if not "%NODE_DOWNLOAD_EXIT%"=="0" (
     echo.
     echo [FAILED] Node.js runtime
     echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
     echo   Constraint : pinned in dependencies.manifest.json
-    echo   Source     : %NODE_URL%
+    echo   Source     : "%NODE_URL%"
     echo   Error      : download failed - see the PowerShell output above for the real cause
     exit /b 1
 )
@@ -245,39 +390,45 @@ if /I not "%NODE_ACTUAL_SHA256%"=="%NODE_SHA256%" (
     echo.
     echo [FAILED] Node.js runtime
     echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
-    echo   Constraint : sha256 %NODE_SHA256% recorded in dependencies.manifest.json
-    echo   Source     : %NODE_URL%
-    echo   Error      : downloaded file hashed to %NODE_ACTUAL_SHA256% instead - refusing to use an unverified binary
+    echo   Constraint : sha256 "%NODE_SHA256%" recorded in dependencies.manifest.json
+    echo   Source     : "%NODE_URL%"
+    echo   Error      : downloaded file hashed to "%NODE_ACTUAL_SHA256%" instead - refusing to use an unverified binary
     exit /b 1
 )
 echo   SHA-256 verified: %NODE_ACTUAL_SHA256%
 
-echo   Extracting to %TOOLCHAIN_DIR%
-powershell -NoProfile -Command "Expand-Archive -Path '%NODE_ZIP%' -DestinationPath '%TOOLCHAIN_DIR%' -Force"
-if errorlevel 1 (
+echo   Extracting to "%TOOLCHAIN_DIR%"
+set "NODETERM_ARCHIVE_FILE=%NODE_ZIP%"
+set "NODETERM_ARCHIVE_DESTINATION=%TOOLCHAIN_DIR%"
+powershell -NoProfile -Command "Expand-Archive -LiteralPath $env:NODETERM_ARCHIVE_FILE -DestinationPath $env:NODETERM_ARCHIVE_DESTINATION -Force"
+set "NODE_EXPAND_EXIT=%ERRORLEVEL%"
+set "NODETERM_ARCHIVE_FILE="
+set "NODETERM_ARCHIVE_DESTINATION="
+if not "%NODE_EXPAND_EXIT%"=="0" (
     echo.
     echo [FAILED] Node.js runtime
     echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
     echo   Constraint : n/a
-    echo   Source     : %NODE_ZIP%
+    echo   Source     : "%NODE_ZIP%"
     echo   Error      : Expand-Archive failed - see the PowerShell output above for the real cause
     exit /b 1
 )
 del /f /q "%NODE_ZIP%" >nul 2>nul
 
-set "NODE_EXTRACT_DIR="
-for /d %%D in ("%TOOLCHAIN_DIR%\node-v*-%NODE_ARCH%") do set "NODE_EXTRACT_DIR=%%D"
-if not defined NODE_EXTRACT_DIR (
+set "NODE_EXTRACT_DIR=%TOOLCHAIN_DIR%\node-v%NODE_VERSION%-%NODE_ARCH%"
+if not exist "%NODE_EXTRACT_DIR%\node.exe" (
     echo.
     echo [FAILED] Node.js runtime
     echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
-    echo   Constraint : n/a
-    echo   Source     : %TOOLCHAIN_DIR%
-    echo   Error      : extracted archive did not contain the expected node-v*-%NODE_ARCH% folder
+    echo   Constraint : archive must contain node-v%NODE_VERSION%-%NODE_ARCH%\node.exe
+    echo   Source     : "%TOOLCHAIN_DIR%"
+    echo   Error      : extracted archive did not contain the exact manifest-selected Node folder
     exit /b 1
 )
 
-powershell -NoProfile -Command "[Environment]::SetEnvironmentVariable('NODETERM_NODE_HOME','%NODE_EXTRACT_DIR%','User')" >nul
+set "NODETERM_PERSIST_NODE_HOME=%NODE_EXTRACT_DIR%"
+powershell -NoProfile -Command "[Environment]::SetEnvironmentVariable('NODETERM_NODE_HOME',$env:NODETERM_PERSIST_NODE_HOME,'User')" >nul
+set "NODETERM_PERSIST_NODE_HOME="
 set "NODETERM_NODE_HOME=%NODE_EXTRACT_DIR%"
 set "PATH=%NODE_EXTRACT_DIR%;%PATH%"
 
@@ -287,11 +438,11 @@ if errorlevel 1 (
     echo [FAILED] Node.js runtime
     echo   Dependency : node.js ^(portable, %NODE_ARCH%^)
     echo   Constraint : n/a
-    echo   Source     : %NODE_EXTRACT_DIR%\node.exe
+    echo   Source     : "%NODE_EXTRACT_DIR%\node.exe"
     echo   Error      : the extracted node.exe would not run
     exit /b 1
 )
-for /f "delims=" %%V in ('"%NODE_EXTRACT_DIR%\node.exe" --version 2^>nul') do echo   Installed node %%V ^(portable, %NODE_ARCH%^) at %NODE_EXTRACT_DIR%
+for /f "delims=" %%V in ('"%NODE_EXTRACT_DIR%\node.exe" --version 2^>nul') do echo   Installed node %%V ^(portable, %NODE_ARCH%^) at "%NODE_EXTRACT_DIR%"
 exit /b 0
 
 :phase_begin

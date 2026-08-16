@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Pinned versions and verification data for every binary download-dependencies.{bat,sh} may place on disk. Nothing this manifest points at is committed to the repository.",
+  "description": "Auditable package/component selectors and verification data for every binary download-dependencies.{bat,sh} may place on disk. Direct downloads are version/SHA-pinned; winget verifies the SHA-256 in its package manifests. Nothing this manifest points at is committed to the repository.",
   "node": {
     "version": "24.19.0",
     "winget": {
@@ -27,6 +27,44 @@
       "linux-x64": {
         "url": "https://nodejs.org/dist/v24.19.0/node-v24.19.0-linux-x64.tar.xz",
         "sha256": "14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647"
+      }
+    }
+  },
+  "python": {
+    "version": "3.13.15",
+    "winget": {
+      "packageId": "Python.Python.3.13"
+    },
+    "windows": {
+      "x64": {
+        "url": "https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.exe",
+        "sha256": "edec09c4853aeae9ac36efb8c9f95b6b8e2fee65eee56d9767a8b7c69c574403"
+      },
+      "arm64": {
+        "url": "https://www.python.org/ftp/python/3.13.15/python-3.13.15-arm64.exe",
+        "sha256": "c252c676087c49e6b94e95a273536b78921c28a5fc9f86d15d25392328247249"
+      }
+    }
+  },
+  "visualStudioBuildTools": {
+    "bootstrapper": {
+      "url": "https://download.visualstudio.microsoft.com/download/pr/f7f5ecbc-83ca-4cf0-bdb2-aaf70efb6d97/e0b8ea16494b4a79c68da26773131562aefecc8d87f1923c24d579c7a72e0575/vs_BuildTools.exe",
+      "sha256": "e0b8ea16494b4a79c68da26773131562aefecc8d87f1923c24d579c7a72e0575"
+    },
+    "workloadId": "Microsoft.VisualStudio.Workload.VCTools",
+    "architectures": {
+      "x64": {
+        "componentIds": [
+          "Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre"
+        ],
+        "libraryArchitectures": ["x86", "x64"]
+      },
+      "arm64": {
+        "componentIds": [
+          "Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre",
+          "Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre"
+        ],
+        "libraryArchitectures": ["x86", "x64", "arm64"]
       }
     }
   }

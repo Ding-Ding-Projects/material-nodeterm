@@ -2325,11 +2325,43 @@ Nothing in that says "close the app", and the usual reactions (admin terminal, r
 macOS/Linux, where unlinking an open file is ordinary — so it only bites on the platform this
 project ships.
 
-`download-dependencies.bat` runs `scripts/check-build-preflight.mjs` after Node bootstrap and
-before `npm ci`/`npm install`, so both root BAT entry points name the exact file and the PID
-holding it even on a machine that started with no Node on `PATH`. The old pre-dependency placement
-skipped the check on exactly that fresh-machine path and never retried it before npm removed
-`node_modules`. The preflight also checks for the **Spectre-mitigated MSVC libraries**: node-pty's own
+After Node bootstrap, `download-dependencies.bat` runs
+`scripts/ensure-windows-build-toolchain.mjs`, `scripts/ensure-windows-python.mjs`, and then
+`scripts/check-build-preflight.mjs`, all before `npm ci`/`npm install`. The toolchain phase installs
+Build Tools + the C++ workload on a fresh machine, or modifies an existing instance, and always
+selects the separate rolling component
+`Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre`; ARM64 hosts also add
+`Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre` while retaining x86/x64. The installed `setup.exe` receives
+`modify --installPath ... --add ... --quiet/--passive --norestart` without `--wait` (unsupported
+there); only the fresh-machine bootstrapper receives `--wait`. Both routes independently recheck
+the workload plus real `.lib` files for every required architecture below
+`VC\Tools\MSVC\*\lib\spectre` instead of trusting exit zero. A fresh machine uses the exact Microsoft
+bootstrapper URL in `dependencies.manifest.json`, hashes it in Node, stages it beneath protected
+Program Files, and runs it only on a match; privileged executable lookup never trusts inherited PATH.
+
+Visual Studio has no user-scoped Build Tools installation, and Microsoft requires programmatic
+quiet/passive changes to start elevated. The script prechecks the token: unelevated callers exit
+with ERROR_ACCESS_DENIED before starting an installer or UAC and print an absolute command ending
+in `--silent --elevated-toolchain-only`. Only that helper command may run elevated. The helper then
+exits; the root BAT must be rerun normally, and explicitly refuses to continue into per-user Python
+or npm under an Administrator token. Do not “helpfully” add `Start-Process -Verb RunAs`: `/s`
+promises no prompts, and ordinary dependency installation is automatic too. This is measured, not
+inferred: an unelevated quiet modify parsed every option, then exited 5007 saying it must be run
+elevated from the beginning.
+
+Python is a separate prerequisite, not part of `Microsoft.VisualStudio.Workload.VCTools`:
+`smart-whisper` runs node-gyp in its install lifecycle, and the root postinstall rebuilds it and
+`node-pty`. The helper accepts a proven 64-bit Python 3.10-3.14; otherwise it installs pinned Python
+3.13 per-user with no launcher or persistent `PATH` mutation. Bare `py.exe`/`python.exe` aliases are
+not probed because current Windows aliases can install or open UI. Canonical winget is tried first, then
+the exact python.org URL/SHA fallback. Exit zero is followed by an isolated exact patch/architecture
+probe, and the absolute executable crosses `setlocal` in process-local `PYTHON`,
+`NODE_GYP_FORCE_PYTHON`, and `npm_config_python` so stale inherited node-gyp settings cannot win.
+
+The preflight placement means both root BAT entry points name the exact locked file and PID even on
+a machine that started with no Node on `PATH`. The old pre-dependency placement skipped the check
+on exactly that fresh-machine path and never retried it before npm removed `node_modules`. The
+preflight independently checks the **Spectre-mitigated MSVC libraries** too: node-pty's own
 `binding.gyp` sets `SpectreMitigation`, that component is not part of a default C++ workload, and
 without it the build dies minutes in with four copies of `MSB8040`. Deliberately not worked around
 with `/p:SpectreMitigation=false` — node-pty asks for the mitigation on purpose, and disabling it
