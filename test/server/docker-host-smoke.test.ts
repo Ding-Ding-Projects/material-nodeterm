@@ -171,7 +171,7 @@ describe('Docker host smoke safety policy', () => {
       PidsLimit: 256,
       SecurityOpt: ['no-new-privileges=true'],
       CapDrop: ['ALL'],
-      CapAdd: ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID'],
+      CapAdd: ['CAP_CHOWN', 'CAP_DAC_OVERRIDE', 'CAP_FOWNER', 'CAP_SETGID', 'CAP_SETUID'],
       Privileged: false,
       Binds: ['nodeterm-smoke-' + RUN_ID + '-data:/data']
     }
@@ -182,7 +182,46 @@ describe('Docker host smoke safety policy', () => {
     }, RUN_ID)).toThrow(/published a host port/)
     expect(() => assertRuntimePolicy('server-first', {
       ...serverPolicy,
-      CapAdd: [...serverPolicy.CapAdd, 'SYS_ADMIN']
+      CapAdd: [...serverPolicy.CapAdd, 'CAP_SYS_ADMIN']
+    }, RUN_ID)).toThrow(/capability allowlist/)
+  })
+
+  it('matches the exact capability sets returned by Docker inspect for every helper role', () => {
+    const helperPolicy = {
+      PortBindings: {},
+      NetworkMode: 'none',
+      NanoCpus: 1_000_000_000,
+      Memory: 512 * 1024 ** 2,
+      MemorySwap: 512 * 1024 ** 2,
+      PidsLimit: 128,
+      SecurityOpt: ['no-new-privileges=true'],
+      CapDrop: ['ALL'],
+      Privileged: false
+    }
+    const rootCaps = ['CAP_CHOWN', 'CAP_DAC_OVERRIDE', 'CAP_FOWNER']
+    const migrationCaps = [...rootCaps, 'CAP_SETGID', 'CAP_SETUID']
+    const dataBind = 'nodeterm-smoke-' + RUN_ID + '-data:/data'
+    const outsideBind = 'nodeterm-smoke-' + RUN_ID + '-outside:/outside'
+
+    expect(() => assertRuntimePolicy('seed-legacy', {
+      ...helperPolicy,
+      CapAdd: rootCaps,
+      Binds: [dataBind, outsideBind]
+    }, RUN_ID)).not.toThrow()
+    expect(() => assertRuntimePolicy('verify-migration', {
+      ...helperPolicy,
+      CapAdd: migrationCaps,
+      Binds: [dataBind, outsideBind]
+    }, RUN_ID)).not.toThrow()
+    expect(() => assertRuntimePolicy('seed-mixed', {
+      ...helperPolicy,
+      CapAdd: rootCaps,
+      Binds: [dataBind]
+    }, RUN_ID)).not.toThrow()
+    expect(() => assertRuntimePolicy('seed-legacy', {
+      ...helperPolicy,
+      CapAdd: [...rootCaps, 'CAP_SYS_ADMIN'],
+      Binds: [dataBind, outsideBind]
     }, RUN_ID)).toThrow(/capability allowlist/)
   })
 
