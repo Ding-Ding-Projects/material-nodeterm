@@ -29,7 +29,10 @@ export interface SessionSubscriber {
   onExit(exitCode: number): void
 }
 
-type PendingEntry = { resolve: (v: { ok: true; result?: unknown }) => void; reject: (e: Error) => void }
+type PendingEntry = {
+  resolve: (v: { ok: true; result?: unknown }) => void
+  reject: (e: Error) => void
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -113,13 +116,16 @@ export class SessionHostClient {
   }
 
   private tryConnectOnce(): Promise<boolean> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const paths = sessionHostPaths(this.deps.userDataDir)
       let token: string
       try {
         token = fs.readFileSync(paths.tokenPath, 'utf8').trim()
-      } catch {
-        resolve(false)
+      } catch (error) {
+        // Absence means "no host to connect to yet". EACCES/EIO/corruption means the probe itself
+        // failed; treating that as absence would spawn a competing host and hide the real fault.
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') resolve(false)
+        else reject(error)
         return
       }
       if (!token) {
@@ -130,12 +136,45 @@ export class SessionHostClient {
       const socket = net.connect(paths.endpoint)
       socket.unref?.() // never keep the app process alive on our account
       const framer = new LineFramer()
+      let helloId: number | null = null
+      const thisClient = this
+      function onHandshakeError(): void {
+        finish(false)
+      }
+      function onHandshakeClose(): void {
+        finish(false)
+      }
+      function onHandshakeConnect(): void {
+        helloId = thisClient.nextId++
+        socket.write(encodeFrame({ id: helloId, cmd: 'hello', token }))
+      }
+      function onHandshakeData(chunk: Buffer): void {
+        for (const frame of framer.push<{ id: number; ok?: boolean }>(chunk.toString('utf8'))) {
+          // Authentication is a correlated request, not "the first optimistic frame on the
+          // socket". Ignoring another id prevents a stray/stale success from authenticating a
+          // connection whose actual hello response is a refusal.
+          if (frame.id !== helloId) continue
+          finish(frame.ok === true)
+          return
+        }
+      }
       const finish = (ok: boolean): void => {
         if (settled) return
         settled = true
         clearTimeout(timer)
-        socket.removeAllListeners('data')
-        if (!ok) {
+        // Remove only the listeners THIS handshake installed. On success the same socket is
+        // synchronously handed to attachSocket(), which installs the production frame listener;
+        // broad cleanup after that hand-off deleted the new listener too and left the first real
+        // attach/write waiting forever.
+        socket.removeListener('connect', onHandshakeConnect)
+        socket.removeListener('data', onHandshakeData)
+        socket.removeListener('error', onHandshakeError)
+        socket.removeListener('close', onHandshakeClose)
+        if (ok) {
+          // Complete the ownership transition BEFORE resolving ensureConnected(): its promise
+          // continuation may send the first production request immediately.
+          this.attachSocket(socket)
+        } else {
           try {
             socket.destroy()
           } catch {
@@ -145,21 +184,10 @@ export class SessionHostClient {
         resolve(ok)
       }
       const timer = setTimeout(() => finish(false), 2000)
-      socket.once('error', () => finish(false))
-      socket.once('connect', () => {
-        socket.write(encodeFrame({ id: this.nextId++, cmd: 'hello', token }))
-      })
-      socket.on('data', (chunk: Buffer) => {
-        for (const frame of framer.push<{ id: number; ok?: boolean }>(chunk.toString('utf8'))) {
-          if (frame.ok === true) {
-            this.attachSocket(socket)
-            finish(true)
-            return
-          }
-          finish(false)
-          return
-        }
-      })
+      socket.once('error', onHandshakeError)
+      socket.once('close', onHandshakeClose)
+      socket.once('connect', onHandshakeConnect)
+      socket.on('data', onHandshakeData)
     })
   }
 
@@ -167,7 +195,6 @@ export class SessionHostClient {
     this.socket = socket
     this.everConnected = true
     this.framer = new LineFramer()
-    socket.removeAllListeners('data')
     socket.on('data', (chunk: Buffer) => {
       for (const frame of this.framer.push<SessionHostFrame>(chunk.toString('utf8'))) {
         this.handleFrame(frame)
@@ -222,7 +249,13 @@ export class SessionHostClient {
         reject
       })
       try {
-        socket.write(encodeFrame(full))
+        socket.write(encodeFrame(full), (error) => {
+          if (!error) return
+          const current = this.pending.get(id)
+          if (!current) return
+          this.pending.delete(id)
+          current.reject(error)
+        })
       } catch (e) {
         this.pending.delete(id)
         reject(e instanceof Error ? e : new Error(String(e)))
@@ -245,9 +278,33 @@ export class SessionHostClient {
       set = new Set()
       this.subs.set(name, set)
     }
+    const added = !set.has(sub)
     set.add(sub)
-    this.attachMemory.set(name, { spawn, scrollback })
-    return this.request<AttachResult>({ cmd: 'attach', name, spawn, scrollback })
+    // Unique object identity lets failure rollback distinguish this attempt from a concurrent
+    // co-attach that has already replaced the remembered options for the same session name.
+    const previousMemory = this.attachMemory.get(name)
+    const memory = { spawn, scrollback }
+    this.attachMemory.set(name, memory)
+    try {
+      return await this.request<AttachResult>({
+        cmd: 'attach',
+        name,
+        spawn,
+        scrollback
+      })
+    } catch (error) {
+      const current = this.subs.get(name)
+      if (added && current) current.delete(sub)
+      if (current?.size === 0) {
+        this.subs.delete(name)
+        if (this.attachMemory.get(name) === memory) this.attachMemory.delete(name)
+      } else if (this.attachMemory.get(name) === memory && previousMemory) {
+        // Another subscriber pre-dated this attempt. Restore the options that belonged to that
+        // confirmed attachment; options installed by a later concurrent attempt win by identity.
+        this.attachMemory.set(name, previousMemory)
+      }
+      throw error
+    }
   }
 
   /** Stop delivering `name`'s frames to `sub`. When it was the LAST local subscriber, also tells
@@ -274,7 +331,12 @@ export class SessionHostClient {
       const set = this.subs.get(name)
       if (!set || set.size === 0) continue
       try {
-        const result = await this.request<AttachResult>({ cmd: 'attach', name, spawn, scrollback })
+        const result = await this.request<AttachResult>({
+          cmd: 'attach',
+          name,
+          spawn,
+          scrollback
+        })
         if (result.screen) {
           const repaint = '\x1b[2J\x1b[H' + result.screen
           for (const sub of set) sub.onData(repaint)
@@ -322,7 +384,10 @@ export class SessionHostClient {
 
   async paneCommand(name: string): Promise<string | null> {
     try {
-      const r = await this.request<PaneCommandResult>({ cmd: 'paneCommand', name })
+      const r = await this.request<PaneCommandResult>({
+        cmd: 'paneCommand',
+        name
+      })
       return r.command
     } catch {
       return null
@@ -330,20 +395,18 @@ export class SessionHostClient {
   }
 
   async capture(name: string, full: boolean): Promise<string> {
-    try {
-      const r = await this.request<CaptureResult>({ cmd: 'capture', name, full })
-      return r.text
-    } catch {
-      return ''
-    }
+    // Empty output is a valid, measured capture. A transport/request failure is UNKNOWN and must
+    // reject so snapshotScrollback keeps its dirty bit and retries instead of permanently
+    // recording a quiet session as successfully snapshotted.
+    const r = await this.request<CaptureResult>({ cmd: 'capture', name, full })
+    return r.text
   }
 
   async killSession(name: string): Promise<void> {
-    try {
-      await this.request({ cmd: 'killSession', name })
-    } catch {
-      /* session may already be gone / host unreachable — nothing left to kill */
-    }
+    // The host defines a genuinely absent session as idempotent `{ok:true}`. Any rejection is
+    // therefore transport ambiguity, not evidence that nothing remains; propagate it and retain
+    // reconnect memory until the destructive operation is confirmed.
+    await this.request({ cmd: 'killSession', name })
     this.subs.delete(name)
     this.attachMemory.delete(name)
   }

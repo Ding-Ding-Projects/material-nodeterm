@@ -86,26 +86,26 @@ the one module the standalone bundle and the Electron-main bundle genuinely shar
 carries a monotonic `id`; the host echoes it on the response, so replies self-correlate over one
 long-lived connection (no positional-FIFO fragility, unlike this app's tmux control-mode client).
 
-| Verb (`SessionHostRequest.cmd`) | tmux equivalent                         | Coverage |
-|---|---|---|
-| `hello`                          | (no tmux equivalent — auth handshake)   | full |
-| `attach`                         | `new-session -A` / `attach-session`     | full, plus a screen the tmux path never needed (see below) |
-| `hasSession`                     | `has-session -t <name>`                 | full (implemented; not on the hot create path — see below) |
-| `write`                          | raw bytes on an attached client's stdin | full |
-| `resize`                         | ConPTY/pty resize + `refresh-client -C` | full |
-| `pause` / `resume`               | node-pty `pause()`/`resume()`           | full; per-viewer in core and per-connection in the host (first pause / last resume) |
-| `sendKeys`                       | `send-keys -l -- <text>` (+ `Enter`)    | full — works with no attached client, exactly like tmux |
-| `paneCommand`                    | `display-message -p '#{pane_current_command}'` | approximated — see `process-tree.ts` |
-| `capture`                        | `capture-pane -p -e [-S -N]`            | full, and strictly more (mode restoration — tmux's plain-text capture carries none) |
-| `killSession`                    | `kill-session -t <name>`                | full |
-| `detach`                         | a client's own `tmux detach-client`     | full |
-| `listSessions`                   | `list-sessions -F '#{session_name}'`    | full |
-| `ping`                           | (liveness probe used during the startup race) | full |
+| Verb (`SessionHostRequest.cmd`) | tmux equivalent                                | Coverage                                                                            |
+| ------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `hello`                         | (no tmux equivalent — auth handshake)          | full                                                                                |
+| `attach`                        | `new-session -A` / `attach-session`            | full, plus a screen the tmux path never needed (see below)                          |
+| `hasSession`                    | `has-session -t <name>`                        | full (implemented; not on the hot create path — see below)                          |
+| `write`                         | raw bytes on an attached client's stdin        | full                                                                                |
+| `resize`                        | ConPTY/pty resize + `refresh-client -C`        | full                                                                                |
+| `pause` / `resume`              | node-pty `pause()`/`resume()`                  | full; per-viewer in core and per-connection in the host (first pause / last resume) |
+| `sendKeys`                      | `send-keys -l -- <text>` (+ `Enter`)           | full — works with no attached client, exactly like tmux                             |
+| `paneCommand`                   | `display-message -p '#{pane_current_command}'` | approximated — see `process-tree.ts`                                                |
+| `capture`                       | `capture-pane -p -e [-S -N]`                   | full, and strictly more (mode restoration — tmux's plain-text capture carries none) |
+| `killSession`                   | `kill-session -t <name>`                       | full                                                                                |
+| `detach`                        | a client's own `tmux detach-client`            | full                                                                                |
+| `listSessions`                  | `list-sessions -F '#{session_name}'`           | full                                                                                |
+| `ping`                          | (liveness probe used during the startup race)  | full                                                                                |
 
 **Not implemented — deliberately out of scope for this pass:**
 
 - `paneOwner` / bracketed-paste detection (`bracket_paste_flag`) / `#{cursor_x} #{cursor_y}
-  #{cursor_flag}` as a *separate* query. These are real tmux features this app also uses
+#{cursor_flag}` as a _separate_ query. These are real tmux features this app also uses
   (`pty-manager.ts`'s `paneOwner`, `bracketPasteRequested`, `paneCursor`), but none of them are in
   the task's minimum verb list, and cursor position is already carried for free inside `capture`'s
   output (`SerializeAddon` repositions the cursor as part of its own serialization — see below), so
@@ -147,8 +147,15 @@ new source:
 - `spawnNew()` awaits `ready` (after `spawnSession()` returns) and folds `screen` into the
   `PtyCreateResult` it hands back — the exact field `join()` already populates for a same-process
   co-attach.
+- `ready` rejecting is a failed create, never a cold-but-working terminal. The provisional local
+  `Session` is detached and removed, its queued bytes/timers are cancelled, and the original error
+  reaches the renderer. `create()` checks the in-flight barrier before the co-attach index so a
+  second client cannot join that provisional record while the first attach is unresolved; racing
+  followers retry once the failed generation is gone. A detached relay shim cannot return a
+  promise from its legacy synchronous API, so the same failure removes it and reports a non-zero
+  exit to its sink instead of retaining a zombie session.
 - **The renderer needed zero changes.** `seedPaint()` (`src/renderer/terminal/terminal-config.ts`)
-  already treats *any* non-empty `screen` on a `warm-attach` replay as paintable
+  already treats _any_ non-empty `screen` on a `warm-attach` replay as paintable
   (`create-screen`), regardless of whether it arrived via a co-attach join or a plain reattach —
   that generality already existed, unused by anything but `join()`, before this task. Verified by
   reading `seedPaint`'s body rather than assumed.
@@ -178,8 +185,8 @@ mode state:
   ANSI escape sequences.
 - **The one verified gap:** `SerializeAddon` does not emit `CSI ?1006h` (SGR extended mouse
   coordinates) even when mouse tracking is active — there is no separate field on the public
-  `IModes` API for it to read (`mouseTrackingMode` only says which tracking *protocol* is on:
-  none/x10/vt200/drag/any, not the coordinate *encoding*). Filled in explicitly by
+  `IModes` API for it to read (`mouseTrackingMode` only says which tracking _protocol_ is on:
+  none/x10/vt200/drag/any, not the coordinate _encoding_). Filled in explicitly by
   `TerminalEmulator.serialize()` in `src/session-host/terminal-emulator.ts`: whenever
   `mouseTrackingMode !== 'none'`, `\x1b[?1006h` is appended by hand.
 
@@ -195,7 +202,7 @@ those promises in arrival order, and every warm attach, capture, resize and fina
 same tail before it reads or disposes the emulator. Do not replace that with a fire-and-forget
 `void term.write(data)`: a relay/phone can then receive a warm snapshot missing output the host has
 already observed, and an attach racing a pending write can get the same chunk once live and once in
-its seed. The new socket joins the subscriber set only *after* the barrier and snapshot, which is
+its seed. The new socket joins the subscriber set only _after_ the barrier and snapshot, which is
 the other half of avoiding that duplicate.
 
 The same name is also a generation boundary. Data and exit events contain a session name but no
@@ -220,6 +227,21 @@ appending after whatever was on screen before the drop). This deliberately reuse
 channel rather than wiring a dedicated `pty:resync` IPC round trip all the way up from this layer
 — a smaller, self-contained fix for what is expected to be a rare case (the host survives a client
 drop by design; only an actual host death turns into a real session loss).
+
+The `hello` hand-off has an equally strict ownership boundary. The handshake installs named
+`connect`/`data`/`error`/`close` listeners, accepts only the response carrying its captured hello
+request id, removes only those listeners, and then installs the production frame listener before
+resolving the connection promise. Never restore broad `removeAllListeners('data')` cleanup here:
+the original order installed the production listener and immediately deleted it, so the first
+`attach` response and every later frame disappeared while the socket still looked connected.
+
+An initial `attach` registers its local subscriber before sending because startup output may race
+the response. If the request rejects, it rolls back only that subscriber and its own remembered
+attach options; a concurrent co-attach's state is left intact. Capture and kill preserve the same
+failure distinction across reconnects: an empty capture and an idempotently absent kill are both
+confirmed `{ok:true}` host responses, while a transport/request rejection remains unknown and is
+propagated. That propagation is what lets the periodic snapshot keep its dirty bit for a retry and
+what prevents a delete from claiming a persistent process is gone when the host never confirmed it.
 
 ## Lifetime
 
@@ -251,7 +273,7 @@ Mirrors tmux's server lifetime rule as closely as a different OS allows:
   quietly. A state file that resolves to nothing alive within that window is treated as stale
   (a previous host crashed mid-startup) and reclaimed. The same "connect first, only spawn if that
   fails" shape is what `SessionHostClient.doConnect()` does from the app side, so a host from a
-  *previous* app run is found and reused rather than duplicated.
+  _previous_ app run is found and reused rather than duplicated.
   The winning state publication uses a PID+counter temp path and a bounded retrying atomic rename
   (`session-host/state-file.ts`, kept local so the standalone bundle does not import `src/core`). A
   fixed `<state>.tmp` lets a stale-lock reclaim collide with another publisher, and a bare rename

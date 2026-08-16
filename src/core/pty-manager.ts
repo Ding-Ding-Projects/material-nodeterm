@@ -37,22 +37,10 @@ import { parsePaneCursor } from './pane-cursor'
 import { PANE_OWNER_FMT, foregroundArgvArgs, paneOwnerFrom, parsePaneOwner } from './agents/pane-owner'
 import type { PaneOwner } from '../shared/agents/pane-owner-predicate'
 import { readSpawnResources, spawnResourceNote } from './spawn-resources'
-import {
-  primePtyCeiling,
-  ptyDevicesExhausted,
-  readPtyDevices,
-  spawnFailureHint,
-  type PtyDevices
-} from './pty-devices'
+import { primePtyCeiling, ptyDevicesExhausted, readPtyDevices, spawnFailureHint, type PtyDevices } from './pty-devices'
 import { REAP_SWEEP_MS, shouldReap } from './pty-reap'
 import { ControlModeClient, type ControlSpawn } from './tmux-control-client'
-import {
-  TMUX_SOCKET,
-  sessionName,
-  isSessionName,
-  localTmuxSendKeysArgs,
-  localTmuxEnterArgs
-} from './tmux-naming'
+import { TMUX_SOCKET, sessionName, isSessionName, localTmuxSendKeysArgs, localTmuxEnterArgs } from './tmux-naming'
 import { encodeSendKeysHex } from './tmux-control'
 import { bracketedInjection, sanitizePasteText } from './paste-injection'
 import { releasePty, type ReleasablePty } from './pty-release'
@@ -60,21 +48,11 @@ import { effectiveSize, type PtySize } from './pty-size'
 import { machOArch, archMismatch } from './macho-arch'
 import { writeScrollback, readScrollback, deleteScrollback } from './scrollback-store'
 import { claudeConfigDirFor } from './claude-config-dir'
-import {
-  findExecutableSync,
-  findInPathString,
-  opensshFallbacks,
-  resolveShellPath,
-  shellPathNow
-} from './exec-path'
+import { findExecutableSync, findInPathString, opensshFallbacks, resolveShellPath, shellPathNow } from './exec-path'
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { NODE_ID_MAX, isSafeNodeId } from './remote-safety'
 import { presenceHub } from './presence/hub'
-import {
-  codexLauncherDir,
-  forgetCodexThreadIdentitiesForNode,
-  installCodexLauncher
-} from './codex-identity-proxy'
+import { codexLauncherDir, forgetCodexThreadIdentitiesForNode, installCodexLauncher } from './codex-identity-proxy'
 import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents/node-token-service'
 import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
 // Third persistence backend, selected when no local tmux was found (primarily Windows, where
@@ -138,10 +116,14 @@ const PROBE_TIMEOUT_MS = 6_000
  * just as invisible. Callers may still pass their own `timeout` for the rare op that needs longer.
  */
 const runAsync = ((file: string, args: readonly string[], opts?: object) =>
-  execFileAsync(file, args as string[], {
-    timeout: PROC_TIMEOUT_MS,
-    ...(opts ?? {})
-  } as never)) as unknown as typeof execFileAsync
+  execFileAsync(
+    file,
+    args as string[],
+    {
+      timeout: PROC_TIMEOUT_MS,
+      ...(opts ?? {})
+    } as never
+  )) as unknown as typeof execFileAsync
 
 // Minimal tmux config so the user's ~/.tmux.conf never interferes. The tmux server
 // (under our socket) keeps sessions alive while no client is attached, which is what
@@ -269,12 +251,7 @@ let cachedSsh: string | null | undefined
 function spawnHelperArchMismatch(): string | null {
   if (os.platform() !== 'darwin') return null
   try {
-    const helper = path.join(
-      path.dirname(require.resolve('node-pty/package.json')),
-      'build',
-      'Release',
-      'spawn-helper'
-    )
+    const helper = path.join(path.dirname(require.resolve('node-pty/package.json')), 'build', 'Release', 'spawn-helper')
     const fd = fs.openSync(helper, 'r')
     const buf = Buffer.alloc(8)
     fs.readSync(fd, buf, 0, 8, 0)
@@ -329,8 +306,7 @@ function resolveWindowsShell(): string {
   const pwsh = findInPathString('pwsh', pathStr) ?? (fs.existsSync(WIN_PWSH_FALLBACK) ? WIN_PWSH_FALLBACK : null)
   if (pwsh) return pwsh
   const winPsFallback = WIN_POWERSHELL_FALLBACK()
-  const powershell =
-    findInPathString('powershell', pathStr) ?? (fs.existsSync(winPsFallback) ? winPsFallback : null)
+  const powershell = findInPathString('powershell', pathStr) ?? (fs.existsSync(winPsFallback) ? winPsFallback : null)
   if (powershell) return powershell
   return process.env.COMSPEC || 'cmd.exe'
 }
@@ -678,7 +654,11 @@ export class PtyManager {
    *  spawn the node in its own stale cwd. See `recycleSession`. */
   private pendingRecycle = new Map<
     string,
-    { sessionId: string; clients: Set<ClientId>; timer: ReturnType<typeof setTimeout> }
+    {
+      sessionId: string
+      clients: Set<ClientId>
+      timer: ReturnType<typeof setTimeout>
+    }
   >()
   /**
    * persistKey (node id) → the client that DELETED it. The respawn guard for clients the
@@ -831,12 +811,15 @@ export class PtyManager {
     for (const [sessionId, session] of [...this.sessions]) {
       // A relay sink is a watcher (somebody's phone is mirroring this session); a parked terminal
       // is still a subscriber, and its client is still attached.
-      const watched =
-        !!session.onData || [...session.subscribers].some((sub) => live.has(subClient(sub)))
+      const watched = !!session.onData || [...session.subscribers].some((sub) => live.has(subClient(sub)))
       if (watched) session.unwatchedSince = null
       else session.unwatchedSince ??= now
       const reap = shouldReap(
-        { tmuxBacked: session.tmuxBacked, watched, unwatchedSince: session.unwatchedSince },
+        {
+          tmuxBacked: session.tmuxBacked,
+          watched,
+          unwatchedSince: session.unwatchedSince
+        },
         now
       )
       if (reap) this.releaseClient(sessionId, session)
@@ -1003,8 +986,7 @@ export class PtyManager {
   shadowedTmuxSessions(socket: string): string[] {
     if (socket !== TMUX_SOCKET) return []
     const names: string[] = []
-    for (const [persistKey, client] of this.shadows)
-      if (client.alive) names.push(sessionName(persistKey))
+    for (const [persistKey, client] of this.shadows) if (client.alive) names.push(sessionName(persistKey))
     // The shared background-write client is a tmux client of the session it attached to, exactly
     // like a shadow, and is subtracted the same way. It can never DOUBLE with a shadow of that same
     // session — `shadowAttach` retires it first — which is what keeps the budget's "minus one
@@ -1035,10 +1017,7 @@ export class PtyManager {
    * `client.command()` would be issuing an unbounded command, which is the one thing this whole
    * mechanism cannot survive.
    */
-  async shadowCommand(
-    persistKey: string,
-    line: string
-  ): Promise<{ ok: boolean; body: string[] } | null> {
+  async shadowCommand(persistKey: string, line: string): Promise<{ ok: boolean; body: string[] } | null> {
     const client = this.shadows.get(persistKey)
     if (!client) return null
     return this.controlCommand(client, line, () => {
@@ -1309,10 +1288,8 @@ export class PtyManager {
   }
 
   registerIpc(): void {
-    platform().handleWithSender(
-      IPC.ptyCreate,
-      (senderId, options: PtyCreateOptions): Promise<PtyCreateResult> =>
-        this.create(senderId, options)
+    platform().handleWithSender(IPC.ptyCreate, (senderId, options: PtyCreateOptions): Promise<PtyCreateResult> =>
+      this.create(senderId, options)
     )
     // Sender-aware: with co-attach, a keystroke arriving here is no longer self-evidently "the one
     // user's" — WHO typed it is what lights the "X is typing" ring on everyone else's canvas (see
@@ -1372,19 +1349,15 @@ export class PtyManager {
     // Optional TRAILING `everySocket`: only the session-memory panel's SPECULATIVE kill sets it,
     // and only for a row it holds no session for (see `localKillSockets`). `=== true` because the
     // value arrives verbatim off the wire; absent ⇒ the narrow, historical single-socket kill.
-    platform().onWithSender(
-      IPC.ptyDestroy,
-      (senderId: number, persistKey: string, everySocket?: unknown) =>
-        this.endFromClient(senderId, IPC.ptyDestroy, persistKey, 'delete', everySocket === true)
+    platform().onWithSender(IPC.ptyDestroy, (senderId: number, persistKey: string, everySocket?: unknown) =>
+      this.endFromClient(senderId, IPC.ptyDestroy, persistKey, 'delete', everySocket === true)
     )
     // Sender-aware for the opposite reason: the client that RECYCLED the node drives its own
     // respawn, so it is the one client that must NOT be sent the restart notice.
     platform().onWithSender(IPC.ptyRecycle, (senderId: number, persistKey: string) =>
       this.endFromClient(senderId, IPC.ptyRecycle, persistKey, 'recycle')
     )
-    platform().handle(IPC.ptyReadScrollback, (persistKey: string) =>
-      readScrollback(persistKey)
-    )
+    platform().handle(IPC.ptyReadScrollback, (persistKey: string) => readScrollback(persistKey))
     platform().handle(IPC.ptySendText, (persistKey: string, text: string, enter?: boolean) =>
       this.sendText(persistKey, text, enter === undefined ? undefined : { enter })
     )
@@ -1401,9 +1374,7 @@ export class PtyManager {
     // successful probe here is what makes new sessions tmux-backed without a restart.
     if (!this.tmuxPath) this.ensureTmux()
     const available = !!this.tmuxPath
-    const hint = available
-      ? null
-      : tmuxInstall(process.platform, (cmd) => findCommand(cmd, process.env, fs.existsSync))
+    const hint = available ? null : tmuxInstall(process.platform, (cmd) => findCommand(cmd, process.env, fs.existsSync))
     return {
       available,
       installCommand: hint?.command ?? null,
@@ -1468,8 +1439,7 @@ export class PtyManager {
     intent: EndIntent,
     everySocket = false
   ): Promise<void> {
-    if (typeof persistKey !== 'string' || !persistKey || persistKey.length > REF_MAX_LEN)
-      return Promise.resolve()
+    if (typeof persistKey !== 'string' || !persistKey || persistKey.length > REF_MAX_LEN) return Promise.resolve()
     if (!this.allowEnd(clientId, channel)) return Promise.resolve()
     return this.endSession(clientId, persistKey, intent, everySocket)
   }
@@ -1482,10 +1452,7 @@ export class PtyManager {
     const prev = this.endBuckets.get(key)
     // A client starts with a full bucket and refills at `perSec`, capped at `burst`.
     const tokens = prev
-      ? Math.min(
-          PTY_END_BUDGET.burst,
-          prev.tokens + ((now - prev.at) / 1000) * PTY_END_BUDGET.perSec
-        )
+      ? Math.min(PTY_END_BUDGET.burst, prev.tokens + ((now - prev.at) / 1000) * PTY_END_BUDGET.perSec)
       : PTY_END_BUDGET.burst
     if (tokens < 1) {
       this.endBuckets.set(key, { tokens, at: now })
@@ -1541,11 +1508,6 @@ export class PtyManager {
           `dot, dash, underscore; max ${NODE_ID_MAX}). A project file with an id like this cannot be ` +
           `trusted — it is how a shared or cloned repo would smuggle a command onto a remote host.`
       )
-    // Co-attach: a live session for this node id already exists in THIS process (another client,
-    // or this client's own second view). Subscribe to it instead of spawning a second tmux client
-    // — `-D` would otherwise kick the first viewer off.
-    const joined = this.join(clientId, options, key)
-    if (joined) return joined
     // Same-tick race: spawnNew() awaits a `tmux has-session` SUBPROCESS (tens of ms, not a
     // microtask) before spawnSession registers the session in `byPersistKey`, so two clients
     // opening the same node in that window would BOTH miss the index and both spawn — and the
@@ -1553,6 +1515,9 @@ export class PtyManager {
     // is published as an in-flight promise from the TOP of create(): a racing create awaits it
     // and then takes the subscribe branch. (No locking primitive: the promise IS the barrier —
     // the single-user path never sees an in-flight entry and behaves exactly as before.)
+    // Check the barrier BEFORE the live-session index. A session-host shim is registered while
+    // its asynchronous attach is still pending; treating that provisional entry as joinable lets
+    // a racing client receive a live-looking id even if `ready` rejects a moment later.
     const inflight = this.inflight.get(key)
     if (inflight) {
       await inflight.catch(() => undefined) // the other spawn failed → fall through and try ourselves
@@ -1565,6 +1530,12 @@ export class PtyManager {
       // on a *new* in-flight entry is exactly the same wait as the one we just did.
       if (this.inflight.get(key)) return this.create(clientId, options)
     }
+    // Co-attach: a live session for this node id already exists in THIS process (another client,
+    // or this client's own second view). Subscribe to it instead of spawning a second tmux client
+    // — `-D` would otherwise kick the first viewer off. This runs after the in-flight barrier, so
+    // every session visible here has completed its asynchronous session-host attach.
+    const joined = this.join(clientId, options, key)
+    if (joined) return joined
     // Another client DELETED this node (and there is no live session for it — `join` above already
     // covers a resurrection by its owner). Refuse rather than spawn: see `tombstones`. Checked
     // AFTER the in-flight barrier so a create racing the owner's own respawn joins it instead.
@@ -1626,8 +1597,7 @@ export class PtyManager {
     existing.shown.set(sub, size)
     const before = existing.appliedSize
     this.applySize(existingId, existing)
-    const resized =
-      before?.cols !== existing.appliedSize?.cols || before?.rows !== existing.appliedSize?.rows
+    const resized = before?.cols !== existing.appliedSize?.cols || before?.rows !== existing.appliedSize?.rows
     // A (re)joining client's backlog is empty by definition, so its fresh page will never issue a
     // resume its PREVIOUS page owed us — a renderer reload keeps the same ClientId, so without this
     // the reloaded terminal would stay frozen forever with no data arriving to unstick it. Return
@@ -1648,7 +1618,13 @@ export class PtyManager {
     // session it landed on survives losing a client, because its own unmount may park it.
     const persistent = !!existing.persistKey
     const base: PtyCreateResult = existing.accountFallback
-      ? { sessionId: existingId, fresh: false, accountFallback: true, coAttachMouse, persistent }
+      ? {
+          sessionId: existingId,
+          fresh: false,
+          accountFallback: true,
+          coAttachMouse,
+          persistent
+        }
       : { sessionId: existingId, fresh: false, coAttachMouse, persistent }
     if (resized) return Promise.resolve(base) // tmux is redrawing this client — do not paint twice
     // An empty capture (plain shell — no tmux to capture; a tmux/ssh blip) is OMITTED, never sent
@@ -1663,9 +1639,7 @@ export class PtyManager {
     return Promise.all([
       this.captureForResync(existingId).catch(() => ''),
       this.paneCursor(existingId).catch(() => undefined)
-    ]).then(([screen, cursor]) =>
-      screen ? { ...base, screen, ...(cursor ? { cursor } : {}) } : base
-    )
+    ]).then(([screen, cursor]) => (screen ? { ...base, screen, ...(cursor ? { cursor } : {}) } : base))
   }
 
   /** Spawn a brand-new session for this client (the non-co-attach path). */
@@ -1688,8 +1662,7 @@ export class PtyManager {
     // — i.e. first open, or after a machine reboot killed the tmux server. Plain (non-tmux)
     // sessions are always fresh: they have no cross-restart continuity. The renderer uses this
     // to decide whether to replay the persisted scrollback and re-launch a resumable agent.
-    const tmuxBacked =
-      !!this.tmuxPath && this.getSettings().tmuxEnabled && !!options.persistKey
+    const tmuxBacked = !!this.tmuxPath && this.getSettings().tmuxEnabled && !!options.persistKey
     // For an SSH-project node, "fresh" is decided by the REMOTE tmux server (over the project's
     // ControlMaster), not the local one. The remote `has-session` is a full network round-trip,
     // so it MUST be async (`runAsync`) — a synchronous probe here would freeze every window/IPC
@@ -1701,10 +1674,7 @@ export class PtyManager {
     // backend's attach-or-create IS the probe — see the `spawned?.sessionHost` branch below, which
     // overwrites both `fresh` and `screen` from that same round trip once `spawnSession` returns.
     let fresh = options.sshRemote
-      ? !(await this.remoteSessionExists(
-          options.sshRemote,
-          sessionName(options.persistKey as string)
-        ))
+      ? !(await this.remoteSessionExists(options.sshRemote, sessionName(options.persistKey as string)))
       : tmuxBacked
         ? !(await this.tmuxSessionExists(options.persistKey as string))
         : true
@@ -1731,11 +1701,16 @@ export class PtyManager {
         const info = await (spawned.proc as unknown as SessionHostPty).ready
         fresh = info.fresh
         screen = info.screen
-      } catch {
-        // The attach itself failed (session-host unreachable / bundle missing after all). Leave
-        // `fresh` at its placeholder `true`: the renderer treats this like any other cold start —
-        // a working, empty terminal — rather than blocking the create on a backend that just
-        // proved it cannot be reached.
+        // A recycle notice must describe a usable replacement, not merely a provisional local
+        // Session record. Session-host registration precedes this async barrier, so publish now.
+        if (spawned.indexKey && this.pendingRecycle.has(spawned.indexKey)) this.fireRecycled(spawned.indexKey, true)
+      } catch (error) {
+        // The shim is registered synchronously so output callbacks have somewhere to land, but a
+        // rejected attach means no usable pty ever existed. Retire every local claim and detach
+        // the shim before propagating the real failure; returning its id creates a terminal that
+        // looks alive while every write disappears.
+        if (this.sessions.get(sessionId) === spawned) this.discardFailedSpawn(sessionId, spawned)
+        throw error
       }
     }
     // Surface a missing-account-dir fallback so the renderer can flag the node's account chip.
@@ -1745,7 +1720,13 @@ export class PtyManager {
     // which is what the renderer's cache-dispose levers must not assume. See PtyCreateResult.
     const persistent = !!spawned?.persistKey
     return accountFallback
-      ? { sessionId, fresh, accountFallback, persistent, ...(screen ? { screen } : {}) }
+      ? {
+          sessionId,
+          fresh,
+          accountFallback,
+          persistent,
+          ...(screen ? { screen } : {})
+        }
       : { sessionId, fresh, persistent, ...(screen ? { screen } : {}) }
   }
 
@@ -1782,9 +1763,7 @@ export class PtyManager {
    * Used by the remote context/subagent tails to read the node's transcript over the same
    * ControlMaster. Returns undefined for local sessions or unknown nodes.
    */
-  sshRemoteForNode(
-    nodeId: string
-  ): { controlPath: string; conn: import('../shared/ssh').SshConnection } | undefined {
+  sshRemoteForNode(nodeId: string): { controlPath: string; conn: import('../shared/ssh').SshConnection } | undefined {
     const s = this.sessionByPersistKey(nodeId)
     if (!s?.sshRemote) return undefined
     return { controlPath: s.sshRemote.controlPath, conn: s.sshRemote.conn }
@@ -1921,9 +1900,7 @@ export class PtyManager {
         `\`npm run rebuild\` in the repo — a release build may have rebuilt node-pty ` +
         `for the wrong architecture.`
     )
-    return new Error(
-      `Failed to spawn terminal (${reason}). Program: ${file}, cwd: ${cwd}, ${resources} ${hint}`
-    )
+    return new Error(`Failed to spawn terminal (${reason}). Program: ${file}, cwd: ${cwd}, ${resources} ${hint}`)
   }
 
   private spawnSession(
@@ -2057,9 +2034,7 @@ export class PtyManager {
     // wait-branch for claude sessions when the setting is on. `permWaitSecs > 0` injects
     // NODETERM_PERM_WAIT_SECS; off / non-claude ⇒ 0 ⇒ absent ⇒ legacy behavior.
     const permWaitSecs =
-      this.getSettings().hookReplyApprovals && (options.agentId ?? 'claude') === 'claude'
-        ? PERM_WAIT_SECS_DEFAULT
-        : 0
+      this.getSettings().hookReplyApprovals && (options.agentId ?? 'claude') === 'claude' ? PERM_WAIT_SECS_DEFAULT : 0
     // Materialise this node's token BEFORE the session exists, so the very first hook event the
     // agent fires can already read it. Local sessions only: a remote node's token is written on the
     // HOST (see remote-hooks), because the host is where its hook script runs.
@@ -2084,8 +2059,7 @@ export class PtyManager {
     // ANTHROPIC_API_KEY wins over CLAUDE_CONFIG_DIR credentials). System-default nodes
     // (no accountId) are untouched. Remote (ssh) sessions get their account env via the
     // remote tmux `-e` list instead (the local ssh client process doesn't need it).
-    let accountDir =
-      options.accountId && !options.sshRemote ? claudeConfigDirFor(options.accountId) : null
+    let accountDir = options.accountId && !options.sshRemote ? claudeConfigDirFor(options.accountId) : null
     // Missing/deleted account dir (spec: error handling) → fall back to system default
     // instead of pointing claude at a dead dir; the node then behaves like an unbound one.
     // `accountFallback` is surfaced to the renderer (warning chip) via the create() result.
@@ -2119,7 +2093,7 @@ export class PtyManager {
     // never to execution. @shared/node-exec keeps foreign values out of `options.shell` in the
     // first place; this is the second layer.
     const reqShell = safeSessionProgram(options.shell)
-    const program = reqShell === 'ssh' ? findSsh() ?? 'ssh' : reqShell
+    const program = reqShell === 'ssh' ? (findSsh() ?? 'ssh') : reqShell
     const programArgs = options.shellArgs ?? []
     const localSessionShell = resolveLocalSessionShell(program, settings.defaultShell)
     const localSessionArgs = program ? programArgs : []
@@ -2244,12 +2218,7 @@ export class PtyManager {
         args.push(shell)
         args.push(...programArgs)
       }
-    } else if (
-      !options.sshRemote &&
-      options.persistKey &&
-      settings.tmuxEnabled &&
-      sessionHostSupported()
-    ) {
+    } else if (!options.sshRemote && options.persistKey && settings.tmuxEnabled && sessionHostSupported()) {
       // Third persistence backend, selected only when tmux itself was not found (primarily
       // Windows, where tmux does not exist at all) — see docs/windows-session-host.md. `file`/
       // `args` are left unused: the real spawn happens INSIDE the session-host process, driven by
@@ -2332,10 +2301,7 @@ export class PtyManager {
         spawnSub === null
           ? new Map<SubKey | null, PtySize>()
           : new Map<SubKey | null, PtySize>([[spawnSub, spawnSize]]),
-      shown:
-        spawnSub === null
-          ? new Map<SubKey, PtySize>()
-          : new Map<SubKey, PtySize>([[spawnSub, spawnSize]]),
+      shown: spawnSub === null ? new Map<SubKey, PtySize>() : new Map<SubKey, PtySize>([[spawnSub, spawnSize]]),
       // node-pty was just spawned with these cols/rows, so the pty ALREADY has this size — record
       // it so a co-attach (or a fit that reports the same numbers) doesn't ioctl it needlessly.
       // A detached (relay-served) pty is left unseeded: its first `resize` must reach the pty,
@@ -2381,18 +2347,42 @@ export class PtyManager {
     // The replacement session for a RECYCLED node (worktree move) is now live and indexed, so its
     // co-viewers can safely be told to restart: their create() will `join` THIS session instead of
     // spawning `nt-<nodeId>` from their own (stale) cwd. This is the whole reason the notice waits.
-    if (session.indexKey && this.pendingRecycle.has(session.indexKey))
+    // A session-host shim is only provisional until its asynchronous `ready` settles. spawnNew()
+    // fires this notice after that barrier; publishing here would wake co-viewers onto a dead id.
+    if (session.indexKey && !session.sessionHost && this.pendingRecycle.has(session.indexKey))
       this.fireRecycled(session.indexKey, true)
 
-    proc.onData((data) => this.queueData(sessionId, session, data))
+    proc.onData((data) => {
+      // A session-host attach can fail after the shim has already delivered startup bytes. Once
+      // rollback removes this exact generation, late callbacks must not recreate its flush timer
+      // or leak bytes into a replacement that happens to reuse the same node id.
+      if (this.sessions.get(sessionId) !== session) return
+      this.queueData(sessionId, session, data)
+    })
 
     proc.onExit(({ exitCode }) => {
+      if (this.sessions.get(sessionId) !== session) return
       this.flush(sessionId, session) // deliver any buffered output before the exit signal
       session.onExit?.(exitCode) // relay host sink (unchanged)
-      for (const client of this.clientsOf(session))
-        this.send(client, IPC.ptyExit(sessionId), exitCode)
+      for (const client of this.clientsOf(session)) this.send(client, IPC.ptyExit(sessionId), exitCode)
       this.forget(sessionId, session)
     })
+
+    // Detached relay callers cannot await SessionHostPty.ready because their long-standing API
+    // returns a session id synchronously. They still must not retain a zombie Session: retire it
+    // and surface an ordinary non-zero exit to the sink if the asynchronous attach fails.
+    if (useSessionHost && sinks) {
+      void (proc as unknown as SessionHostPty).ready.catch(() => {
+        if (this.sessions.get(sessionId) !== session) return
+        this.discardFailedSpawn(sessionId, session)
+        try {
+          sinks.onExit(1)
+        } catch {
+          // A consumer callback cannot resurrect the already-retired provisional Session, and a
+          // throw here must not become an unhandled rejection from this deliberately detached task.
+        }
+      })
+    }
 
     return sessionId
   }
@@ -2445,6 +2435,39 @@ export class PtyManager {
     this.sessions.delete(sessionId)
     if (session.indexKey && this.byPersistKey.get(session.indexKey) === sessionId)
       this.byPersistKey.delete(session.indexKey)
+  }
+
+  /** Roll back the provisional Session installed before a session-host attach settles. Unlike a
+   * normal release, this records no shadow/released-session metadata and takes no snapshot: there
+   * was never a confirmed live session to preserve. */
+  private discardFailedSpawn(sessionId: string, session: Session): void {
+    if (session.flushTimer) {
+      clearTimeout(session.flushTimer)
+      session.flushTimer = null
+    }
+    session.buf = []
+    session.bufBytes = 0
+    session.subscribers.clear()
+    session.sizes.clear()
+    session.shown.clear()
+    session.pausedBy.clear()
+    // Do not use releasePty here: its defensive resume would issue a fresh host request from a
+    // shim whose attach just failed. SessionHostPty.destroy() is the exact detach/unsubscribe.
+    const hostPty = session.proc as unknown as SessionHostPty
+    hostPty.destroy()
+    this.forget(sessionId, session)
+    // The failed provisional session may have armed both process-lifetime intervals. Do not leave
+    // a timer claiming work exists when this manager has no sessions at all.
+    if (this.sessions.size === 0) {
+      if (this.snapshotTimer) {
+        clearInterval(this.snapshotTimer)
+        this.snapshotTimer = null
+      }
+      if (this.reapTimer) {
+        clearInterval(this.reapTimer)
+        this.reapTimer = null
+      }
+    }
   }
 
   /**
@@ -2767,8 +2790,7 @@ export class PtyManager {
     // A pause owed by a DIFFERENT client that is still here is untouched either way (the pty stays
     // paused until IT drains — its renderer cannot re-pause; see `Session.pausedBy`).
     if (clientId === null) this.releaseFlow(session, sub)
-    else if ([...session.subscribers].some((s) => subClient(s) === clientId))
-      this.releaseFlow(session, sub, 'renderer')
+    else if ([...session.subscribers].some((s) => subClient(s) === clientId)) this.releaseFlow(session, sub, 'renderer')
     else this.releaseFlowForClient(session, clientId)
     if (session.subscribers.size > 0 || session.onData) {
       // Somebody is still watching: the departing client's size no longer constrains the pty.
@@ -2813,8 +2835,7 @@ export class PtyManager {
       let changed = false
       for (const key of [...session.sizes.keys()])
         if (key !== null && subClient(key) === clientId && session.sizes.delete(key)) changed = true
-      for (const key of [...session.shown.keys()])
-        if (subClient(key) === clientId) session.shown.delete(key)
+      for (const key of [...session.shown.keys()]) if (subClient(key) === clientId) session.shown.delete(key)
       // Every owner's ticket, not just the renderer's: a vanished client's SOCKET pause is as
       // unreturnable as its renderer's (invariant (a) — the pty would freeze for every co-viewer).
       if (this.releaseFlowForClient(session, clientId)) changed = true
@@ -3019,19 +3040,14 @@ export class PtyManager {
     // docs/windows-session-host.md). Its `sendKeys` needs no attached client, exactly like
     // tmux's own `send-keys -t <name>` below — the host looks the session up by NAME.
     if (!this.tmuxPath) {
-      return this.getSettings().tmuxEnabled && sessionHostSupported()
-        ? sessionHostSendKeys(target, text, enter)
-        : false
+      return this.getSettings().tmuxEnabled && sessionHostSupported() ? sessionHostSendKeys(target, text, enter) : false
     }
     try {
       if (await this.bracketPasteRequested(target)) {
         // Paste-aware target (agent TUIs, multiplexers like herdr): one atomic write — the
         // text framed in paste markers plus the Enter — so the composer sees a definitive
         // paste boundary and the Enter can never be re-chunked into the paste (issue #47).
-        await runAsync(
-          this.tmuxPath,
-          localTmuxSendKeysArgs(TMUX_SOCKET, target, bracketedInjection(text, enter))
-        )
+        await runAsync(this.tmuxPath, localTmuxSendKeysArgs(TMUX_SOCKET, target, bracketedInjection(text, enter)))
         return true
       }
       // The literal text and the Enter (when sent) must go in order, so await sequentially.
@@ -3071,10 +3087,7 @@ export class PtyManager {
       const ssh = findSsh()
       if (!ssh) return null
       try {
-        const { stdout } = await runAsync(
-          ssh,
-          remotePaneCommandArgs(sshRemote.conn, sshRemote.controlPath, target)
-        )
+        const { stdout } = await runAsync(ssh, remotePaneCommandArgs(sshRemote.conn, sshRemote.controlPath, target))
         return stdout.trim() || null
       } catch {
         return null
@@ -3083,9 +3096,7 @@ export class PtyManager {
     // No local tmux: ask the session-host backend's own `#{pane_current_command}` equivalent (a
     // descendant-process walk — see process-tree.ts for the imprecision that carries).
     if (!this.tmuxPath) {
-      return this.getSettings().tmuxEnabled && sessionHostSupported()
-        ? sessionHostPaneCommand(target)
-        : null
+      return this.getSettings().tmuxEnabled && sessionHostSupported() ? sessionHostPaneCommand(target) : null
     }
     try {
       const { stdout } = await runAsync(this.tmuxPath, [
@@ -3134,10 +3145,7 @@ export class PtyManager {
       if (sshRemote) {
         const ssh = findSsh()
         if (!ssh) return null
-        const first = await runAsync(
-          ssh,
-          remotePaneOwnerArgs(sshRemote.conn, sshRemote.controlPath, target)
-        )
+        const first = await runAsync(ssh, remotePaneOwnerArgs(sshRemote.conn, sshRemote.controlPath, target))
         const identity = parsePaneOwner(first.stdout)
         if (!identity) return null
         const psArgs = remoteForegroundArgvArgs(sshRemote.conn, sshRemote.controlPath, identity.tty)
@@ -3202,13 +3210,7 @@ export class PtyManager {
       return this.getSettings().tmuxEnabled && sessionHostSupported() ? sessionHostListSessions() : []
     }
     try {
-      const { stdout } = await runAsync(this.tmuxPath, [
-        '-L',
-        TMUX_SOCKET,
-        'list-sessions',
-        '-F',
-        '#{session_name}'
-      ])
+      const { stdout } = await runAsync(this.tmuxPath, ['-L', TMUX_SOCKET, 'list-sessions', '-F', '#{session_name}'])
       return stdout
         .split('\n')
         .map((line) => line.trim())
@@ -3237,11 +3239,7 @@ export class PtyManager {
    *
    * `clientId` is null when nothing/no-one attributable did it (an internal caller).
    */
-  destroySession(
-    clientId: ClientId | null,
-    persistKey: string,
-    opts?: { everySocket?: boolean }
-  ): Promise<void> {
+  destroySession(clientId: ClientId | null, persistKey: string, opts?: { everySocket?: boolean }): Promise<void> {
     return this.endSession(clientId, persistKey, 'delete', opts?.everySocket === true)
   }
 
@@ -3313,9 +3311,7 @@ export class PtyManager {
       // are per-ClientId events (a client's two views share one channel and hear it once), and
       // viewer granularity is invisible to peers. The destroyer is excluded whether it watched via
       // the canvas node, the modal, or both.
-      const others = [...new Set([...dying.subscribers].map(subClient))].filter(
-        (c) => c !== clientId
-      )
+      const others = [...new Set([...dying.subscribers].map(subClient))].filter((c) => c !== clientId)
       if (intent === 'delete') {
         const channel = IPC.ptyClosed(dyingId)
         for (const client of others) this.send(client, channel, { by: clientId })
