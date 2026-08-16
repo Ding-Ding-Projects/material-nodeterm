@@ -240,7 +240,9 @@ describe('recordAgentEvent + atomic write', () => {
     const overlapped = new Promise<void>((resolve) => { overlappingRenameObserved = resolve })
     const released = new Promise<void>((resolve) => { releaseFirstRename = resolve })
     const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (from, to) => {
-      if (firstAttempt) {
+      // Generation reservations have their own atomic sidecar write. Park only publication of
+      // agent-status.json itself or this would test the counter rather than the mirror retry.
+      if (to === file && firstAttempt) {
         firstAttempt = false
         firstRenameObserved()
         await released
@@ -248,7 +250,7 @@ describe('recordAgentEvent + atomic write', () => {
         error.code = 'EPERM'
         throw error
       }
-      overlappingRenameObserved()
+      if (to === file) overlappingRenameObserved()
       return realRename(from, to)
     })
 

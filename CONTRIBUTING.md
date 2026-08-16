@@ -19,6 +19,14 @@ npm test           # vitest, unit + integration
 
 `npm run server:dev` boots the Server Edition (browser UI) if you are working on that surface.
 
+The supported Node runtime is **`^22.22.2 || ^24.15.0 || >=26.0.0`**. This is a minor/patch
+boundary, not
+"Node 22" shorthand: the cross-process agent-status mirror uses `node:sqlite`, which was absent in
+22.0–22.4 and remained opt-in through 22.12, while the locked dependency graph sets the stricter
+floors above and excludes Node 23 and 25. Both Desktop and Server Edition probe the real
+`DatabaseSync` capability at
+startup, so a custom build or `--no-experimental-sqlite` fails before persistent services start.
+
 **If `src/main/node-pty-patch.test.ts` is red, your `node_modules` is unpatched — not your code.**
 Run `npm run rebuild`. node-pty 1.1.0 leaks a pty device per spawn on macOS
 ([node-pty#950](https://github.com/microsoft/node-pty/issues/950)); we patch its source before
@@ -116,9 +124,19 @@ need it too, and wire it in the same change.
   with a UUID suffix turns an atomic write into a guaranteed `ENAMETOOLONG` failure.
 
 - **Unique temp files do not order whole-document writers.** If two flushes can snapshot the same
-  store concurrently, publish them FIFO (or reject stale generations). Otherwise an older flush can
-  stall inside `renameAtomic`, let a newer document land, then wake and overwrite it intact with
-  stale state. Unique names prevent byte splicing; they do not prevent time from running backwards.
+  store concurrently, publish them FIFO (or reject stale generations). A process-local FIFO is not
+  enough when two supported processes may share one data directory: they have two queues.
+  `agent-status-mirror` reserves a durable generation under an OS-backed SQLite write transaction
+  before it takes its snapshot, then re-reads the published generation under that same lock before
+  rename. An older temp that wakes after a newer complete document is discarded. Never implement
+  this as a stealable timeout lease: a paused live writer is not a dead writer. The reservation is
+  the publication order; it does not merge independently disagreeing in-memory stores. Any new
+  shared-directory store owes an equivalent cross-process order; unique names prevent byte
+  splicing, not time running backwards.
+  This protocol makes the runtime floor load-bearing: keep `package.json`, the Server installer,
+  container image and both shell preflights on the exact supported range above. Do not restore a
+  top-level `node:sqlite` import; lazy capability loading is what lets an incompatible runtime emit
+  the actionable preflight error instead of dying during dependency evaluation.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.

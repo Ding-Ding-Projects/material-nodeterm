@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { platform } from './platform'
-import { renameAtomic, tempNameFor } from './fs-atomic'
+import { publishMirrorGeneration, reserveMirrorGeneration } from './mirror-publication'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentState, NormalizedAgentEvent } from '@shared/agents/normalize'
 import { WORKING_STALE_MS, isStaleWorking } from '@shared/agents/stale'
@@ -89,6 +89,11 @@ export interface MirrorSettings {
 
 export interface MirrorFile {
   v: 1
+  /**
+   * Cross-process publication order. Absent on pre-generation v1 files (treated as generation 0)
+   * and ignored by older readers. A lower generation may never replace a higher one.
+   */
+  generation?: number
   updatedAt: number
   nodes: Record<
     string,
@@ -376,7 +381,12 @@ export function reduceEntry(
 export function filterMirrorForNodes(doc: MirrorFile, nodeIds: ReadonlySet<string>): MirrorFile {
   const nodes: MirrorFile['nodes'] = {}
   for (const [id, e] of Object.entries(doc.nodes)) if (nodeIds.has(id)) nodes[id] = e
-  const out: MirrorFile = { v: doc.v, updatedAt: doc.updatedAt, nodes }
+  const out: MirrorFile = {
+    v: doc.v,
+    ...(doc.generation === undefined ? {} : { generation: doc.generation }),
+    updatedAt: doc.updatedAt,
+    nodes
+  }
   if (doc.inbox) {
     const inboxNodes: Record<string, InboxNodeNow> = {}
     for (const [id, n] of Object.entries(doc.inbox.nodes)) if (nodeIds.has(id)) inboxNodes[id] = n
@@ -511,10 +521,10 @@ const STALE_SWEEP_MS = 60_000
 let sweepTimer: ReturnType<typeof setInterval> | null = null
 let targetFile: string | null = null
 let writeTimer: NodeJS.Timeout | null = null
-// A flush snapshots the whole mirror before it touches disk. Keep those snapshots in invocation
-// order: an older rename can spend ~310 ms retrying a sharing violation while a newer flush is
-// published, then wake and overwrite the newer state. Unique temp names prevent byte splicing;
-// this FIFO prevents a complete-but-stale document winning afterwards.
+// Keep flush invocations FIFO inside one process. mirror-publication.ts adds the other half:
+// durable generations plus a lock/CAS boundary across processes that share the data directory.
+// Unique temp names prevent byte splicing; both ordering layers prevent a complete-but-stale
+// document winning afterwards.
 let flushWriteChain: Promise<void> = Promise.resolve()
 const flushListeners = new Set<(doc: MirrorFile) => void>()
 // Supplies the host-level settings block, consulted fresh on every flush (so a mid-session
@@ -1563,35 +1573,58 @@ function scheduleWrite(): void {
   writeTimer.unref?.()
 }
 
-/** Prune + atomically write the file (tmp + rename, mode 0600). Best-effort. The rename retries
- *  briefly on Windows if the destination is momentarily held open (see fs-atomic.ts). */
-export async function flush(): Promise<void> {
-  const file = resolveFile()
-  if (!file) return
+function buildCurrentMirror(generation?: number): MirrorFile {
   const now = Date.now()
   const inbox: MirrorInbox = { events: inboxEvents, nodes: Object.fromEntries(inboxNodes) }
   const doc = buildFile(Object.fromEntries(state), now, undefined, safeSettings(), safeUsage(), inbox, safeServer())
+  if (generation !== undefined) doc.generation = generation
   // Also drop expired entries from memory so the map itself can't grow without bound.
   for (const [id, e] of state) if (now - e.updatedAt > EXPIRE_MS) state.delete(id)
   // Prune stale per-node activity the same way (events stay — they are capped feed history).
   for (const [id, n] of inboxNodes) if (now - n.updatedAt > EXPIRE_MS) inboxNodes.delete(id)
+  return doc
+}
+
+async function flushOne(file: string): Promise<void> {
+  let generation: number
+  try {
+    // Reserve before snapshotting. The reservation order is the cross-process invocation order;
+    // a process delayed before it reserves has not captured an older document that could later
+    // masquerade as newer.
+    generation = await reserveMirrorGeneration(file)
+  } catch {
+    return
+  }
+
+  const doc = buildCurrentMirror(generation)
+  try {
+    await publishMirrorGeneration(file, generation, JSON.stringify(doc))
+  } catch {
+    // The mirror is best-effort. A failed counter/read/lock/write must not take down either shell,
+    // and the next flush reserves a later generation and retries from current in-memory state.
+  }
+}
+
+/**
+ * Prune + publish the file (mode 0600), ordered across this process and every other supported
+ * process sharing the mirror path. Generation reservation happens before the snapshot; the final
+ * locked compare rejects a writer that a newer complete generation overtook. Best-effort.
+ */
+export async function flush(): Promise<void> {
+  const file = resolveFile()
+  if (!file) return
+  // onMirrorFlush is a live side-channel (remote status pushes use it), not an assertion that
+  // this machine's mirror reached disk. Fire it from the call-time snapshot before any lock or I/O
+  // can wait/fail, preserving the pre-generation contract exactly.
+  const liveDoc = buildCurrentMirror()
   for (const cb of flushListeners) {
     try {
-      cb(doc)
+      cb(liveDoc)
     } catch {
       // A listener must never break the local write (or its sibling listeners).
     }
   }
-  const write = async (): Promise<void> => {
-    const tmp = tempNameFor(file)
-    try {
-      await fs.promises.writeFile(tmp, JSON.stringify(doc), { mode: 0o600 })
-      await renameAtomic(tmp, file)
-    } catch {
-      await fs.promises.rm(tmp, { force: true }).catch(() => {})
-    }
-  }
-  const queued = flushWriteChain.then(write, write)
+  const queued = flushWriteChain.then(() => flushOne(file), () => flushOne(file))
   flushWriteChain = queued.then(() => undefined, () => undefined)
   await queued
 }
@@ -1606,6 +1639,7 @@ export function _resetForTest(): void {
   targetFile = null
   if (writeTimer) clearTimeout(writeTimer)
   writeTimer = null
+  flushWriteChain = Promise.resolve()
   flushListeners.clear()
   settingsProvider = null
   usageProvider = null
@@ -1617,6 +1651,12 @@ export function _resetForTest(): void {
   nodeStateChangeListeners.clear()
   nodeNowChangeListeners.clear()
   pendingQuestions.clear()
+}
+
+/** Cancel only the debounced disk write while retaining in-memory state. Test-process helper. */
+export function _cancelScheduledWriteForTest(): void {
+  if (writeTimer) clearTimeout(writeTimer)
+  writeTimer = null
 }
 
 /** Snapshot the in-memory map. Test-only. */

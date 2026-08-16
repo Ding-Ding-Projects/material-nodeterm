@@ -72,6 +72,7 @@ import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { isPremium, getStoredEntitlement } from '../core/license'
+import { assertSupportedNodeRuntime } from '../core/node-runtime'
 
 // Same env-override + default as src/core/check.ts / license.ts / src/main/telemetry.ts — each
 // shell derives it locally rather than sharing an import (src/server must not import src/main).
@@ -130,6 +131,8 @@ function readInstallMeta(dataDir: string): MirrorServer | undefined {
 export async function startServer(
   config: ServerConfig
 ): Promise<{ port: number; close(): Promise<void> }> {
+  // Tests and embedders may call startServer without going through server/main.ts.
+  assertSupportedNodeRuntime()
   fs.mkdirSync(config.dataDir, { recursive: true })
 
   // Core platform boundary — must be initialized before any core service registers handlers.

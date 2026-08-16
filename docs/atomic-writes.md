@@ -161,11 +161,59 @@ writer B can publish newer state, and then A can wake and atomically overwrite i
 the final document is simply stale.
 
 Whole-document writers that can overlap therefore need a FIFO publish chain (or a generation check)
-in addition to unique temps. `agent-status-mirror.flush` uses FIFO. Its test blocks the first rename,
-records a newer state, starts the second flush, and proves the newer generation is final; removing
-the queue makes that test deterministically red.
+in addition to unique temps. A FIFO is sufficient only when every writer lives in one process.
+`agent-status-mirror` is intentionally shared by desktop multi-instance mode and by Server Edition
+processes pointed at the same data directory, so two writers also have two independent queues.
 
-The guard checks the PROPERTY, not the helper: an inline `randomUUID()` path is also correct.
+The mirror uses a durable two-phase generation protocol in `src/core/mirror-publication.ts`:
+
+This protocol requires the unflagged `node:sqlite` capability. The supported runtime is
+`^22.22.2 || ^24.15.0 || >=26.0.0`; Desktop and Server Edition check the version and real `DatabaseSync`
+capability before starting services, while the installer and pinned container image enforce the
+same boundary. The production module loads SQLite lazily so an incompatible runtime reaches that
+diagnostic instead of failing during static dependency evaluation.
+
+1. Briefly acquire an OS-backed SQLite `BEGIN IMMEDIATE` transaction on
+   `agent-status.json.publication.sqlite3` and atomically advance
+   `agent-status.json.generation`. The number is reserved **before** the process snapshots its
+   in-memory mirror. Gaps are valid when a process crashes after reservation.
+2. Write that generation's complete document to its own UUID temp without holding the transaction.
+3. Reacquire the transaction, read the canonical document's generation, and publish only when it is
+   still lower. The bounded Windows rename retry runs inside this final critical section.
+
+The optional `generation` field is additive to the existing v1 document; an older v1 file has
+generation zero and older readers ignore the new key. The sidecar write, sidecar read and canonical
+read are all part of the ordering proof: malformed or unreadable data fails the local disk flush
+instead of being treated as zero, while the live `onMirrorFlush` side-channel still fires. The next
+successful flush reserves a later number and retries from current memory.
+
+Only SQLite's `SQLITE_BUSY` contention result is retried, with a bounded wait. Exhausting that wait
+abandons this best-effort flush instead of stealing the lock: a live process paused for an arbitrary
+time still owns its transaction. An abrupt process exit closes its database handle in the OS and
+therefore releases the lock immediately; there is no stale threshold, heartbeat, or lock-directory
+cleanup that can fence incorrectly. A missing/inaccessible parent or corrupt lock database keeps
+the established immediate best-effort failure. The lock target resolves the parent directory even
+before `agent-status.json` exists, so symlink aliases of one data directory do not create separate
+locks. Generation-aware peers are the supported sharing contract during a release; a pre-generation
+binary does not know the transaction or field and must not be left running against the same
+directory during an upgrade.
+
+The generation reservation is the protocol's linearization point, not the JavaScript call's
+wall-clock start. It orders complete publication attempts and rejects a lower generation that wakes
+after a higher one; it intentionally does not merge independently disagreeing in-memory stores or
+guess which one is semantically fresher. A process that reserves later is a later writer under this
+contract, so every caller remains responsible for flushing its current authoritative state.
+
+The behavior test bundles and runs two real Node processes. Generation 1 is parked after writing its
+complete temp, generation 2 publishes, and only then is generation 1 released; the canonical file
+must remain generation 2. Removing the final generation comparison makes that test deterministically
+red. A second process test starts a peer while a live owner holds the real SQLite transaction,
+proves it cannot publish, aborts the owner without JS cleanup, and proves the waiting peer
+immediately acquires and publishes.
+
+The guard checks the temp-name PROPERTY, not the helper: an inline `randomUUID()` path is also
+correct. Publication ordering is behavior-tested separately because a source-text scan cannot prove
+which snapshot wins.
 
 ## The rule, and how it is enforced
 
