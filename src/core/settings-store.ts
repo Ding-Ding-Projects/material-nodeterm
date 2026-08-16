@@ -4,6 +4,7 @@ import { IPC } from '../shared/ipc'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
 import { DEFAULT_SETTINGS, type Settings } from '../shared/types'
+import { normalizeLanguageMode } from '../shared/i18n'
 import type { HistoryAction } from '../shared/local-history'
 
 /**
@@ -30,6 +31,11 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   if (gpu === false) merged.terminalGpuRendering = 'off'
   else if (gpu !== 'on' && gpu !== 'off' && gpu !== 'auto' && gpu !== 'shared')
     merged.terminalGpuRendering = 'auto'
+  // The JSON is hand-editable. A TypeScript `LanguageMode` annotation cannot stop a garbage
+  // runtime string from reaching the renderer, where the previously-exhaustive switch then
+  // returned `undefined` and took whole localized surfaces down. Normalize both load and save
+  // through this merge so Desktop and Server Edition persist the same safe English fallback.
+  merged.languageMode = normalizeLanguageMode(saved?.languageMode)
   return merged
 }
 

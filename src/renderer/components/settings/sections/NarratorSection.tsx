@@ -76,6 +76,7 @@ function VoicePicker({
   voiceURI,
   rate,
   pitch,
+  disabled,
   onChange
 }: {
   track: NarratorTrack
@@ -83,6 +84,7 @@ function VoicePicker({
   voiceURI: string | null
   rate: number
   pitch: number
+  disabled: boolean
   onChange: (voiceURI: string | null) => void
 }): React.JSX.Element {
   const { voices, ready } = useTrackVoices(track)
@@ -99,6 +101,7 @@ function VoicePicker({
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-2">
             <Select
+              disabled={disabled}
               aria-label={label}
               className="w-56"
               value={voiceURI ?? ''}
@@ -113,8 +116,10 @@ function VoicePicker({
               ))}
             </Select>
             <Button
-              onClick={() => previewVoice(track, voiceURI, rate, pitch)}
-              disabled={!status.voice}
+              onClick={() => {
+                if (!disabled) previewVoice(track, voiceURI, rate, pitch)
+              }}
+              disabled={disabled || !status.voice}
               title={status.voice ? 'Play a short sample' : 'No voice available to preview'}
             >
               Preview
@@ -146,6 +151,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
   const narratorPitch = useSettings((s) => s.settings.narratorPitch)
   const update = useSettings((s) => s.update)
   const available = isSynthesisAvailable()
+  const narratorControlsDisabled = !narratorEnabled || !available
 
   return (
     <SettingsSection
@@ -176,11 +182,20 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
           }
         />
       </SearchableRow>
-      <div
+      <fieldset
+        disabled={narratorControlsDisabled}
+        ref={(element) => {
+          // React 18's DOM typings predate `inert`, but Chromium/Electron implement it. Keep the
+          // native disabled fieldset for form controls and inert the whole subtree for any future
+          // focusable non-form descendant.
+          element?.toggleAttribute('inert', narratorControlsDisabled)
+        }}
         className={
-          'space-y-5' + (narratorEnabled && available ? '' : ' pointer-events-none opacity-40')
+          'm-0 min-w-0 space-y-5 border-0 p-0' +
+          (narratorEnabled && available ? '' : ' pointer-events-none opacity-40')
         }
-        aria-disabled={!narratorEnabled || !available}
+        aria-disabled={narratorControlsDisabled}
+        data-narrator-controls=""
       >
         <SearchableRow {...ROWS.language}>
           <FieldRow
@@ -203,6 +218,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
             voiceURI={narratorVoiceEn}
             rate={narratorRate}
             pitch={narratorPitch}
+            disabled={narratorControlsDisabled}
             onChange={(v) => update({ narratorVoiceEn: v })}
           />
         </SearchableRow>
@@ -213,6 +229,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
             voiceURI={narratorVoiceYue}
             rate={narratorRate}
             pitch={narratorPitch}
+            disabled={narratorControlsDisabled}
             onChange={(v) => update({ narratorVoiceYue: v })}
           />
         </SearchableRow>
@@ -262,7 +279,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
             }
           />
         </SearchableRow>
-      </div>
+      </fieldset>
     </SettingsSection>
   )
 }

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { usePersonalVocabulary } from '../../../state/personalVocabulary'
 import { useSchoolMode } from '../../../state/schoolMode'
+import { schoolModeAllowsOptionalFeatures } from '../../../lib/schoolModePolicy'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
@@ -33,6 +34,7 @@ function humanBytes(n: number): string {
  */
 export function PersonalVocabularySection({ isActive }: { isActive: boolean }): React.JSX.Element | null {
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
   const status = usePersonalVocabulary((s) => s.status)
   const entryCount = usePersonalVocabulary((s) => s.entryCount)
   const lastError = usePersonalVocabulary((s) => s.lastError)
@@ -41,7 +43,13 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
 
-  if (schoolModeEnabled) return null
+  if (
+    !schoolModeAllowsOptionalFeatures({
+      enabled: schoolModeEnabled,
+      hydrated: schoolModeHydrated
+    })
+  )
+    return null
 
   const handleFile = (file: File): void => {
     setBusy(true)

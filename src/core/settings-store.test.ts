@@ -91,6 +91,19 @@ describe('SettingsStore nested-default merge', () => {
     expect(store.get()).toEqual(DEFAULT_SETTINGS)
   })
 
+  it('normalizes a hand-edited invalid languageMode to English on load', () => {
+    writeFileSync(
+      path.join(dir, 'settings.json'),
+      JSON.stringify({ languageMode: 'pirate', fontSize: 17 }),
+      'utf-8'
+    )
+    const store = new SettingsStore()
+    store.init()
+    expect(store.get().languageMode).toBe('en')
+    // Discriminate normalization from throwing the entire file away.
+    expect(store.get().fontSize).toBe(17)
+  })
+
   describe('legacy terminalGpuRendering boolean migration', () => {
     const load = (value: unknown): SettingsStore => {
       writeFileSync(

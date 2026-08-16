@@ -8,6 +8,9 @@ import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { SectionReset } from '../SectionReset'
 import { LANGUAGE_RESET_KEYS } from '@renderer/lib/settingsReset'
 import type { FunnyLevel, LanguageMode } from '@shared/i18n'
+import { normalizeLanguageMode } from '@shared/i18n'
+import { useSchoolMode } from '../../../state/schoolMode'
+import { schoolModeAllowsOptionalFeatures } from '../../../lib/schoolModePolicy'
 
 const ROWS = {
   mode: {
@@ -75,19 +78,35 @@ function FunnyLevelSlider({
  * states, plainly, that the slider changes tone and never facts (src/shared/i18n/catalog.ts
  * carries the same rule as a comment for anyone adding a string).
  */
-export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.Element | null {
   const languageMode = useSettings((s) => s.settings.languageMode)
   const funnyLevelEn = useSettings((s) => s.settings.funnyLevelEn)
   const funnyLevelYue = useSettings((s) => s.settings.funnyLevelYue)
   const showEmojiInDialogs = useSettings((s) => s.settings.showEmojiInDialogs)
   const update = useSettings((s) => s.update)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
   const { t } = useI18n()
+  const languageFeaturesAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
+  const updateIfAllowed = (patch: Parameters<typeof update>[0]): void => {
+    // Re-check at the point of use: a shared-mode update can arrive between the browser queuing
+    // an input event and React removing this section. A stale control must not write through the
+    // School-mode suppression boundary during that narrow window.
+    if (schoolModeAllowsOptionalFeatures(useSchoolMode.getState())) update(patch)
+  }
 
   const title = t('settings.section.language', 'Language')
   const description = t(
     'settings.language.description',
     'Choose the language nodeterm speaks to you in, and how playful each language sounds.'
   )
+
+  // School mode's contract is omission, not a disabled panel. Unknown hydration is omitted too:
+  // a failed read is not proof that the shared mode is off.
+  if (!languageFeaturesAllowed) return null
 
   return (
     <SettingsSection
@@ -102,9 +121,9 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
           label={t('settings.language.mode.label', 'Language mode').primary}
           control={
             <SegmentedPill<LanguageMode>
-              value={languageMode}
+              value={normalizeLanguageMode(languageMode)}
               ariaLabel="Language mode"
-              onChange={(v) => update({ languageMode: v })}
+              onChange={(v) => updateIfAllowed({ languageMode: v })}
               options={[
                 { value: 'en', label: t('settings.language.mode.option.en', 'English').primary },
                 { value: 'yue', label: t('settings.language.mode.option.yue', 'Cantonese').primary },
@@ -125,7 +144,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
             <FunnyLevelSlider
               value={funnyLevelEn}
               ariaLabel="English funny level, 1 to 5"
-              onChange={(v) => update({ funnyLevelEn: v })}
+              onChange={(v) => updateIfAllowed({ funnyLevelEn: v })}
             />
           }
         />
@@ -138,7 +157,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
             <FunnyLevelSlider
               value={funnyLevelYue}
               ariaLabel="Cantonese funny level, 1 to 5"
-              onChange={(v) => update({ funnyLevelYue: v })}
+              onChange={(v) => updateIfAllowed({ funnyLevelYue: v })}
             />
           }
         />
@@ -168,7 +187,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
             <Switch
               checked={showEmojiInDialogs}
               ariaLabel="Show emojis in dialogs and message boxes"
-              onChange={(v) => update({ showEmojiInDialogs: v })}
+              onChange={(v) => updateIfAllowed({ showEmojiInDialogs: v })}
             />
           }
         />
