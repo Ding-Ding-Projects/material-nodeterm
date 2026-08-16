@@ -246,6 +246,9 @@ describe('no local .tmp publisher uses a shared temp name', () => {
     expect(tempNameTemplates('  const tmp = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)')).toHaveLength(1)
     expect(tempNameTemplates('  return `${target}.${pid}.${sequence}.${uuid()}.tmp`')).toHaveLength(1)
     const importsUuid = "import { randomUUID } from 'crypto'"
+    const importsUuidAlias = "import { randomUUID as freshId } from 'node:crypto'"
+    const importsDefaultCrypto = "import crypto from 'node:crypto'"
+    const importsNamespaceCrypto = "import * as entropy from 'crypto'"
     expect(isUniqueTempName('${this.path}.tmp', 'core/store.ts', '')).toBe(false)
     expect(isUniqueTempName(
       '${file}.${process.pid}.${++writeSeq}.${randomUUID()}.tmp',
@@ -259,10 +262,70 @@ describe('no local .tmp publisher uses a shared temp name', () => {
     )).toBe(true)
     expect(isUniqueTempName('${file}.${Date.now()}-${randomUUID()}.tmp', 'core/store.ts', importsUuid))
       .toBe(true)
+    expect(isUniqueTempName(
+      '${file}.${freshId()}.tmp',
+      'core/store.ts',
+      importsUuidAlias
+    )).toBe(true)
+    expect(isUniqueTempName(
+      '${file}.${crypto.randomUUID()}.tmp',
+      'server/upload.ts',
+      importsDefaultCrypto
+    )).toBe(true)
+    expect(isUniqueTempName(
+      '${file}.${entropy.randomUUID()}.tmp',
+      'server/upload.ts',
+      importsNamespaceCrypto
+    )).toBe(true)
+    expect(isUniqueTempName(
+      '${file}.${diskEntropy.randomUUID()}.tmp',
+      'server/upload.ts',
+      "const diskEntropy = require('node:crypto')"
+    )).toBe(true)
+    expect(isUniqueTempName(
+      '${file}.${freshId()}.tmp',
+      'server/upload.ts',
+      "const { randomUUID: freshId } = require('crypto')"
+    )).toBe(true)
     // A function merely NAMED uuid/randomUUID is not entropy. Only the two helpers may use their
-    // behavior-tested injected uuid seam; inline sites must import crypto.randomUUID directly.
+    // behavior-tested injected uuid seam; inline sites must call a binding imported from crypto.
     expect(isUniqueTempName('${file}.${uuid()}.tmp', 'core/other.ts', '')).toBe(false)
     expect(isUniqueTempName('${file}.${randomUUID()}.tmp', 'core/other.ts', '')).toBe(false)
+    expect(isUniqueTempName(
+      '${file}.${crypto.randomUUID()}.tmp',
+      'core/other.ts',
+      "import crypto from './crypto'"
+    )).toBe(false)
+    expect(isUniqueTempName(
+      '${file}.${fake.randomUUID()}.tmp',
+      'core/other.ts',
+      importsUuid
+    )).toBe(false)
+    expect(isUniqueTempName(
+      '${file}.${randomUUID()}.tmp',
+      'core/other.ts',
+      importsNamespaceCrypto
+    )).toBe(false)
+    expect(isUniqueTempName(
+      '${file}.${crypto.randomUUID}.tmp',
+      'core/other.ts',
+      importsDefaultCrypto
+    )).toBe(false)
+    expect(isUniqueTempName(
+      '${file}.${crypto.randomUUID()}.tmp',
+      'core/other.ts',
+      "const crypto = { randomUUID: () => 'fixed' }"
+    )).toBe(false)
+    expect(isUniqueTempName(
+      '${file}.${"crypto.randomUUID("}.tmp',
+      'core/other.ts',
+      importsDefaultCrypto
+    )).toBe(false)
+    expect(isUniqueTempName(
+      '${file}.${crypto.randomUUID()}.tmp',
+      'core/other.ts',
+      "// import crypto from 'node:crypto'"
+    )).toBe(false)
     // A clock tick is shared by every writer in that millisecond. A pid only separates processes;
     // neither one separates two calls in the same process.
     expect(isUniqueTempName('${file}.${Date.now()}.tmp', 'core/store.ts', '')).toBe(false)
@@ -287,18 +350,111 @@ function tempNameTemplates(text: string): RegExpMatchArray[] {
   )]
 }
 
+interface CryptoRandomUuidBindings {
+  namespaces: Set<string>
+  directCalls: Set<string>
+}
+
+const CRYPTO_MODULE = /^(node:)?crypto$/
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Resolve only bindings that come from Node's crypto module. Matching the call spelling alone
+ * let an unrelated object named `crypto` or `fake.randomUUID()` satisfy the uniqueness guard. */
+function cryptoRandomUuidBindings(source: string): CryptoRandomUuidBindings {
+  const found: CryptoRandomUuidBindings = {
+    namespaces: new Set(),
+    directCalls: new Set()
+  }
+
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+
+  for (const match of code.matchAll(
+    /^\s*import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]\s*;?/gm
+  )) {
+    if (!CRYPTO_MODULE.test(match[2])) continue
+    const clause = match[1].trim()
+    if (/^type\b/.test(clause)) continue
+
+    const defaultImport = clause.match(/^([A-Za-z_$][\w$]*)(?:\s*,|$)/)
+    if (defaultImport) found.namespaces.add(defaultImport[1])
+
+    const namespaceImport = clause.match(/(?:^|,)\s*\*\s+as\s+([A-Za-z_$][\w$]*)\s*$/)
+    if (namespaceImport) found.namespaces.add(namespaceImport[1])
+
+    const namedImports = clause.match(/\{([\s\S]*?)\}/)
+    if (!namedImports) continue
+    for (const rawMember of namedImports[1].split(',')) {
+      const member = rawMember.trim().match(
+        /^randomUUID(?:\s+as\s+([A-Za-z_$][\w$]*))?$/
+      )
+      const local = member?.[1] ?? (member ? 'randomUUID' : '')
+      if (IDENTIFIER.test(local)) found.directCalls.add(local)
+    }
+  }
+
+  for (const match of code.matchAll(
+    /^\s*import\s+([A-Za-z_$][\w$]*)\s*=\s*require\(\s*['"]([^'"]+)['"]\s*\)/gm
+  )) {
+    if (CRYPTO_MODULE.test(match[2])) found.namespaces.add(match[1])
+  }
+
+  // A few process-boundary files retain CommonJS imports. They get the same binding check rather
+  // than turning `require('crypto')` into a quiet false-red or an arbitrary local alias green.
+  for (const match of code.matchAll(
+    /^\s*(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*require\(\s*['"]([^'"]+)['"]\s*\)/gm
+  )) {
+    if (CRYPTO_MODULE.test(match[2])) found.namespaces.add(match[1])
+  }
+  for (const match of code.matchAll(
+    /^\s*(?:const|let)\s*\{([^}]*)\}\s*=\s*require\(\s*['"]([^'"]+)['"]\s*\)/gm
+  )) {
+    if (!CRYPTO_MODULE.test(match[2])) continue
+    for (const rawMember of match[1].split(',')) {
+      const member = rawMember.trim().match(
+        /^randomUUID(?:\s*:\s*([A-Za-z_$][\w$]*))?$/
+      )
+      const local = member?.[1] ?? (member ? 'randomUUID' : '')
+      if (IDENTIFIER.test(local)) found.directCalls.add(local)
+    }
+  }
+
+  return found
+}
+
 /** A random UUID is the unique dimension. PID+counter is valuable ownership metadata, but two
  * containers can both be PID 1 with a fresh module counter, worker isolates share a PID with
  * separate counters, and an OS can reuse a PID while crash litter remains. */
 function isUniqueTempName(name: string, relativeFile: string, source: string): boolean {
   const helperWithBehavioralUuidChut =
     relativeFile === 'core/fs-atomic.ts' || relativeFile === 'session-host/state-file.ts'
-  if (helperWithBehavioralUuidChut && /\$\{[^}]*\buuid\s*\(/.test(name)) return true
-  if (!/\$\{[^}]*\brandomUUID\s*\(/.test(name)) return false
-  for (const match of source.matchAll(
-    /import\s*\{([^}]*)\}\s*from\s*['"](?:node:)?crypto['"]/g
-  )) {
-    if (match[1].split(',').some((member) => /^randomUUID$/.test(member.trim()))) return true
+  const bindings = cryptoRandomUuidBindings(source)
+  const interpolationBodies = [...name.matchAll(/\$\{([^}]*)\}/g)].map((match) =>
+    match[1]
+      .replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/g, '')
+  )
+
+  if (helperWithBehavioralUuidChut) {
+    if (interpolationBodies.some((body) => /(?<![A-Za-z0-9_$.])uuid\s*\(/.test(body))) {
+      return true
+    }
+  }
+  for (const namespace of bindings.namespaces) {
+    const call = new RegExp(
+      `(?<![A-Za-z0-9_$.])${escapeRegExp(namespace)}\\.randomUUID\\s*\\(`
+    )
+    if (interpolationBodies.some((body) => call.test(body))) return true
+  }
+  for (const directCall of bindings.directCalls) {
+    const call = new RegExp(`(?<![A-Za-z0-9_$.])${escapeRegExp(directCall)}\\s*\\(`)
+    if (interpolationBodies.some((body) => call.test(body))) return true
   }
   return false
 }
