@@ -130,6 +130,7 @@ export type GuardedAction =
   | 'discard-changes'
   | 'remove-worktree'
   | 'remove-account'
+  | 'remove-authenticator'
   | 'revoke-device'
 
 /**

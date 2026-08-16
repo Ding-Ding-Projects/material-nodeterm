@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   NODE_DELETE_SURFACES,
+  createNodeDeletionCommitBarrier,
   dispatchNodeDeletion,
   initialWorktreeDeleteFromDisk,
   managedDeletionRoots,
+  nodeDeletionTargetIncarnation,
+  nodeDeletionTargetIdentity,
+  orphanSessionRuntimeIdentity,
   planNodeDeletion,
   worktreeDeleteFromDiskAfterModeChange
 } from './nodeDeletion'
@@ -107,11 +111,35 @@ describe('node deletion funnel', () => {
 
     expect(accepted).toBe(true)
     expect(perform).not.toHaveBeenCalled()
-    request?.onCancel?.()
-    expect(cancel).toHaveBeenCalledOnce()
-    expect(perform).not.toHaveBeenCalled()
     request?.onConfirm()
     expect(perform).toHaveBeenCalledOnce()
+    expect(perform).toHaveBeenCalledWith('two-key')
+    request?.onConfirm()
+    expect(perform).toHaveBeenCalledOnce()
+    expect(cancel).not.toHaveBeenCalled()
+  })
+
+  it('treats cancellation as the final one-shot decision', () => {
+    const perform = vi.fn()
+    const cancel = vi.fn()
+    let request: Parameters<Parameters<typeof dispatchNodeDeletion>[1]['openConfirm']>[0] | undefined
+    dispatchNodeDeletion(
+      planNodeDeletion({ surface: 'kanban', kidsModeOn: false, titles: ['Session'] }),
+      {
+        perform,
+        cancel,
+        openGate: vi.fn(() => true),
+        openConfirm(next) {
+          request = next
+          return true
+        }
+      }
+    )
+
+    request?.onCancel?.()
+    request?.onConfirm()
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(perform).not.toHaveBeenCalled()
   })
 
   it('does not perform a plain-confirm deletion until that dialog authorizes it', () => {
@@ -133,6 +161,7 @@ describe('node deletion funnel', () => {
     expect(perform).not.toHaveBeenCalled()
     request?.onConfirm()
     expect(perform).toHaveBeenCalledOnce()
+    expect(perform).toHaveBeenCalledWith('ordinary')
   })
 
   it('reports a refused gate without performing the deletion', () => {
@@ -168,6 +197,104 @@ describe('node deletion funnel', () => {
     expect(
       managedDeletionRoots([{ id: 'child', parentId: 'group' }], new Set(['group', 'child']))
     ).toEqual(['child'])
+  })
+
+  it('binds authorization to project, group, node incarnation, and session generation', () => {
+    const node = { id: 'node-a' }
+    const incarnation = nodeDeletionTargetIncarnation(node)
+    const original = nodeDeletionTargetIdentity([
+      {
+        projectId: 'project-a',
+        id: node.id,
+        parentId: 'group-a',
+        incarnation,
+        runtimeIdentity: 'session-a'
+      }
+    ])
+    const variants = [
+      { projectId: 'project-b', id: node.id, parentId: 'group-a', incarnation, runtimeIdentity: 'session-a' },
+      { projectId: 'project-a', id: node.id, parentId: 'group-b', incarnation, runtimeIdentity: 'session-a' },
+      { projectId: 'project-a', id: node.id, parentId: 'group-a', incarnation: incarnation + 1, runtimeIdentity: 'session-a' },
+      { projectId: 'project-a', id: node.id, parentId: 'group-a', incarnation, runtimeIdentity: 'session-b' }
+    ]
+    for (const variant of variants) expect(nodeDeletionTargetIdentity([variant])).not.toBe(original)
+    expect(nodeDeletionTargetIncarnation(node)).toBe(incarnation)
+    expect(nodeDeletionTargetIncarnation({ id: 'node-a' })).not.toBe(incarnation)
+  })
+
+  it('refuses a same-id replacement after asynchronous confirmation', () => {
+    const disclosed = [
+      {
+        projectId: 'project-a',
+        id: 'node-a',
+        incarnation: 1,
+        runtimeIdentity: 'session-a'
+      }
+    ]
+    const perform = vi.fn()
+    const refuse = vi.fn()
+    const commit = createNodeDeletionCommitBarrier({
+      disclosedTargets: disclosed,
+      authorization: 'two-key',
+      readCurrent: () => [{ ...disclosed[0], incarnation: 2 }],
+      kidsGateRequired: () => true,
+      perform,
+      upgradeToTwoKey: vi.fn(),
+      refuse
+    })
+
+    expect(commit()).toBe('target-changed')
+    expect(perform).not.toHaveBeenCalled()
+    expect(refuse).toHaveBeenCalledWith('target-changed')
+  })
+
+  it('upgrades an ordinary approval if authoritative Kids policy tightens while it is open', () => {
+    const target = [{ projectId: 'project-a', id: 'node-a', incarnation: 1, runtimeIdentity: 'session-a' }]
+    const perform = vi.fn()
+    const upgrade = vi.fn()
+    const commit = createNodeDeletionCommitBarrier({
+      disclosedTargets: target,
+      authorization: 'ordinary',
+      readCurrent: () => target,
+      kidsGateRequired: () => true,
+      perform,
+      upgradeToTwoKey: upgrade
+    })
+
+    expect(commit()).toBe('upgraded-to-two-key')
+    expect(perform).not.toHaveBeenCalled()
+    expect(upgrade).toHaveBeenCalledWith(target)
+  })
+
+  it.each([
+    ['missing target', (): null => null],
+    ['failed target read', (): never => { throw new Error('unreadable') }],
+    ['failed policy read', () => [{ projectId: 'project-a', id: 'node-a', incarnation: 1, runtimeIdentity: 'session-a' }]]
+  ] as const)('%s causes zero mutation', (label, readCurrent) => {
+    const target = [{ projectId: 'project-a', id: 'node-a', incarnation: 1, runtimeIdentity: 'session-a' }]
+    const perform = vi.fn()
+    const commit = createNodeDeletionCommitBarrier({
+      disclosedTargets: target,
+      authorization: 'two-key',
+      readCurrent,
+      kidsGateRequired: () => {
+        if (label === 'failed policy read') throw new Error('policy unavailable')
+        return true
+      },
+      perform,
+      upgradeToTwoKey: vi.fn()
+    })
+
+    expect(commit()).toBe('target-unavailable')
+    expect(perform).not.toHaveBeenCalled()
+  })
+
+  it('uses external session facts to distinguish a reused orphan id', () => {
+    expect(
+      orphanSessionRuntimeIdentity({ session: 'scope-a', nodeId: 'orphan', panePid: 10, command: 'bash' })
+    ).not.toBe(
+      orphanSessionRuntimeIdentity({ session: 'scope-a', nodeId: 'orphan', panePid: 11, command: 'bash' })
+    )
   })
 })
 

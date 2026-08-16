@@ -47,14 +47,14 @@ describe('account-removal transaction gate', () => {
     let accountPresent = true
     let loginSessionOpen = true
     const secondGate = vi.fn(() => true)
-    const perform = vi.fn(() => {
+    const perform = vi.fn((authorization: 'ordinary' | 'two-key') => {
       accountPresent = false
       dispatchNodeDeletion(
         planNodeDeletion({
           surface: 'account-removal',
           kidsModeOn: true,
           titles: ['Account login'],
-          authorizedBy: 'remove-account'
+          authorizedBy: { action: 'remove-account', authorization }
         }),
         {
           perform: () => {
@@ -96,7 +96,7 @@ describe('account-removal transaction gate', () => {
       | { ids: string[]; request: AuthorizedAccountLoginDeletion }
       | undefined
 
-    const handled = requestAccountRemovalTeardown('account-1', continueRemoval, (detail) => {
+    const handled = requestAccountRemovalTeardown('account-1', 'two-key', continueRemoval, (detail) => {
       handleAccountRemovalTeardown(
         detail,
         [
@@ -125,7 +125,7 @@ describe('account-removal transaction gate', () => {
     expect(captured?.ids).toEqual(['login'])
     expect(captured?.request).toMatchObject({
       surface: 'account-removal',
-      authorizedBy: 'remove-account'
+      authorizedBy: { action: 'remove-account', authorization: 'two-key' }
     })
     expect(deleteNodes).not.toHaveBeenCalled()
     expect(continueRemoval).not.toHaveBeenCalled()
@@ -149,7 +149,7 @@ describe('account-removal transaction gate', () => {
     }))
     let perform: (() => void) | undefined
 
-    requestAccountRemovalTeardown('account-1', continueRemoval, (detail) => {
+    requestAccountRemovalTeardown('account-1', 'two-key', continueRemoval, (detail) => {
       handleAccountRemovalTeardown(
         detail,
         [{ id: 'login', data: { accountId: 'account-1', accountLogin: true } }],
@@ -177,7 +177,7 @@ describe('account-removal transaction gate', () => {
   it('does not start the account transaction when no Canvas accepts the teardown', () => {
     const continueRemoval = vi.fn()
 
-    expect(requestAccountRemovalTeardown('account-1', continueRemoval, () => {})).toBe(false)
+    expect(requestAccountRemovalTeardown('account-1', 'ordinary', continueRemoval, () => {})).toBe(false)
     expect(continueRemoval).not.toHaveBeenCalled()
   })
 
@@ -185,6 +185,7 @@ describe('account-removal transaction gate', () => {
     const order: string[] = []
     const detail: AccountRemovalTeardownDetail = {
       accountId: 'account-1',
+      authorization: 'ordinary',
       handled: false,
       continueRemoval: () => order.push('continue')
     }

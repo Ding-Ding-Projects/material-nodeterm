@@ -230,12 +230,16 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     }
   }
 
-  const beginApprovedRemove = (account: ClaudeAccount): void => {
+  const beginApprovedRemove = (
+    account: ClaudeAccount,
+    authorization: import('../../../lib/destructiveAuthorization').DestructiveAuthorization
+  ): void => {
     // This dispatch is synchronous. Canvas must accept the already-authorized live-node teardown
     // and close/reconcile the account's active login terminals BEFORE it calls continueRemoval.
     // If Canvas is not mounted (or refuses), credentials and account state remain untouched.
     const handled = requestAccountRemovalTeardown(
       account.id,
+      authorization,
       () => void performRemove(account),
       (detail: AccountRemovalTeardownDetail) =>
         window.dispatchEvent(new CustomEvent(ACCOUNT_REMOVAL_TEARDOWN_EVENT, { detail }))
@@ -261,7 +265,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     })
     const rect = anchorEl?.getBoundingClientRect()
     return dispatchAccountRemoval(plan, {
-      perform: () => beginApprovedRemove(account),
+      perform: (authorization) => beginApprovedRemove(account, authorization),
       openGate: (request) =>
         openDestructiveGate({
           ...request,

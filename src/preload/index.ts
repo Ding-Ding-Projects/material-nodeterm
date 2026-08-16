@@ -337,8 +337,10 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.gitWorktreeAdd, repoPath, wtPath, branch, baseRef, isNew),
     worktreeMerge: (repoPath, branch, baseRef, push) =>
       ipcRenderer.invoke(IPC.gitWorktreeMerge, repoPath, branch, baseRef, push),
-    worktreeRemove: (repoPath, wtPath, deleteBranch, pruneOnly) =>
-      ipcRenderer.invoke(IPC.gitWorktreeRemove, repoPath, wtPath, deleteBranch, pruneOnly),
+    worktreeRemovalProof: (repoPath, wtPath) =>
+      ipcRenderer.invoke(IPC.gitWorktreeRemovalProof, repoPath, wtPath),
+    worktreeRemove: (repoPath, wtPath, request) =>
+      ipcRenderer.invoke(IPC.gitWorktreeRemove, repoPath, wtPath, request),
     setActiveRemote: (projectId) => ipcRenderer.invoke(IPC.gitSetActiveRemote, projectId)
   },
   clipboard: {
@@ -494,7 +496,7 @@ const api: NodeTerminalApi = {
     addManual: (input) => ipcRenderer.invoke(IPC.authenticatorAddManual, input),
     addFromUri: (uri) => ipcRenderer.invoke(IPC.authenticatorAddUri, uri),
     rename: (input) => ipcRenderer.invoke(IPC.authenticatorRename, input),
-    remove: (id) => ipcRenderer.invoke(IPC.authenticatorRemove, id),
+    remove: (input) => ipcRenderer.invoke(IPC.authenticatorRemove, input),
     code: (id) => ipcRenderer.invoke(IPC.authenticatorCode, id),
     codes: (ids) => ipcRenderer.invoke(IPC.authenticatorCodes, ids),
     reveal: (id) => ipcRenderer.invoke(IPC.authenticatorReveal, id),
