@@ -46,6 +46,7 @@ import { runGitHubCliCommand } from '../core/github/credentials'
 import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './github-control'
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
+import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
 import { hookServer } from '../core/agents/hook-server'
 import { askpassServer, ensureAskpassScript } from './remote-ssh/ssh-askpass'
@@ -228,10 +229,10 @@ if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use
 // Windows identifies apps by this id, not by exe path or window title — it decides whether a
 // desktop `Notification` actually shows (an unset AppUserModelID renders under a generic
 // "Electron" identity, or silently not at all on some builds) and whether the taskbar groups this
-// app's windows together instead of treating each launch as unrelated. Must match `build.appId`
-// in package.json so a Squirrel-installed build's shortcuts/notifications agree with what this
-// process claims to be.
-if (process.platform === 'win32') app.setAppUserModelId('com.nodeterm.app')
+// app's windows together instead of treating each launch as unrelated. Squirrel prefixes the
+// configured package id and executable name, so derive the runtime value from the same build
+// metadata instead of maintaining a second literal that can drift from installed shortcuts.
+applyWindowsSquirrelAppUserModelId(process.platform, app)
 
 // First thing in bootstrap: install the Electron CorePlatform so anything in src/core
 // (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI

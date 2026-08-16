@@ -3700,6 +3700,31 @@ body,
   transition: width 0.2s ease;
 }
 
+.update-card__error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--md-error);
+}
+
+/* Electron's Squirrel.Windows API reports download start/completion but no byte progress. */
+.update-card__bar-fill--indeterminate {
+  width: 42%;
+  animation: update-card-indeterminate 1.25s ease-in-out infinite;
+}
+
+@keyframes update-card-indeterminate {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-card__bar-fill--indeterminate {
+    width: 100%;
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
 .update-card__pct {
   margin: 0;
   font-size: 12.5px;

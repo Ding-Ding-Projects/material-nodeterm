@@ -104,6 +104,27 @@ need it too, and wire it in the same change.
   the PID holding a file and the exact component to tick, and reports both problems at once so
   you fix them in one pass. Neither can happen on macOS or Linux.
 
+- **Windows packaging and Windows updating are one Squirrel contract.** `npm run dist:win`
+  produces an unsigned `Setup.exe`, `RELEASES`, and full `.nupkg`; the installed app consumes that
+  set with Electron's built-in updater, not `electron-updater`'s NSIS metadata. Stable update
+  continuity depends on the existing Squirrel package id `node-terminal`: do not enable
+  `useAppIdAsId`. The runtime and installed shortcut AppUserModelID must both remain
+  `com.squirrel.node-terminal.nodeterm`, derived from the effective package id and executable.
+  Stable update authority is one manually dispatched release from `main`, tagged exactly with a
+  newly advanced stable package version. Never publish a feature-branch build behind
+  `releases/latest/download`,
+  never manufacture byte progress that Squirrel does not expose, and handle Squirrel lifecycle
+  arguments before loading the normal app. The one-shot button controls an immediate restart; a
+  downloaded update can still apply on the next normal launch, so the stable publisher—not a
+  post-download UI check—is the channel boundary. Use the isolated `0.4.0-fixture.1` →
+  `0.4.0-fixture.2` loopback fixture in a disposable Windows VM/Sandbox for a real update proof;
+  that proves the new updater code, not the one-time production migration. Installed Windows
+  `0.3.0` expects NSIS metadata at the old generic feed and cannot discover the Squirrel `0.4.0`
+  release. Separately prove `0.3.0` → `0.4.0` with the downloaded Setup while the old app is
+  closed and while it is running, then document which sequence is supported. Closing first is a
+  provisional recommendation, not a verified fact. The Server Edition and mobile companion do
+  not use this desktop installer.
+
 - **Never publish a file with a bare `fs.rename`.** Use `renameAtomic` or `writeFileAtomic` from
   `src/core/fs-atomic.ts`. On Windows a rename fails with `EPERM` whenever anything has the
   destination open — Defender scanning the file you just wrote, the search indexer, OneDrive — so

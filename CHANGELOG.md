@@ -27,12 +27,34 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Changed
 
+- **Windows updates now use the protocol the Windows installer actually ships.** Packaged
+  Windows builds use Electron's built-in Squirrel updater against the stable GitHub Release
+  asset root (`RELEASES` plus the full `.nupkg`); macOS and Linux deliberately retain their
+  existing `electron-updater` path. The Windows card reports Squirrel's download as
+  indeterminate instead of inventing a byte percentage. **Restart now** is an explicit, one-shot
+  action after the update is ready; a successfully downloaded Squirrel update can also apply on
+  the next normal app launch.
+- **Stable Windows releases are manual and `main`-only.** The release workflow no longer
+  publishes feature-branch builds. A release tag is the stable package version, which advances
+  from `0.3.0` to `0.4.0`. Automatic publication is disabled; the workflow remains manually
+  dispatchable, but publication is pending the final packaged install/update interactions.
+- **Windows `0.3.0` needs a one-time manual installer migration.** Its updater expected NSIS
+  metadata from the old generic feed, which does not serve the Squirrel release set, so it cannot
+  discover `0.4.0`; a manual `0.4.0` Setup is required. Closing `0.3.0` first is only a provisional
+  recommendation: the real Windows proof must exercise Setup with the old app both closed and
+  running before documenting the supported sequence. The isolated `0.4.0-fixture.1` → `.2`
+  loopback proof separately exercises only the new updater code.
 - Retheme onto the M3 roles: the canvas zoom/lock rail, the minimap frame, the bottom dock, the
   settings switch, the welcome screen, the notification centre and the command palette. Visual
   only — no layout, markup or behaviour changed, and every surface kept its full feature set.
 
 ### Fixed
 
+- Windows' previous updater expected NSIS metadata at a generic feed that did not carry the
+  Squirrel artifacts produced by the release pipeline. Squirrel startup events are now handled
+  before the main application graph loads, first-run checks wait for Squirrel's package lock,
+  duplicate checks/installs are coalesced, and an offline or missing feed leaves the installed
+  version running with an honest non-blocking error for user-requested checks.
 - **Seven chrome highlights were frozen to the dark theme** and never followed the light theme or
   a user-chosen accent colour: the canvas lock button, the dock's active button, the welcome
   screen's remove-recent hover, the palette's secondary hover, the success and error toast icons,
