@@ -117,6 +117,16 @@ bug.
 different facts and must stay distinguishable at every layer. Collapsing them is how a panel ends up
 reporting "no sessions" on a host running thirty.
 
+**School Mode optional features require a confirmed-off record at their execution boundary.** The
+renderer begins with `enabled: false` before it has loaded anything; that placeholder is not
+permission to use Cantonese/bilingual copy, funny levels, personal vocabulary, dim sum, or
+Cantonese narration. Use `schoolModeAllowsOptionalFeatures`, and re-check it immediately before an
+effect or write. Both Canvas narrator paths must go through `canvas/narration-policy.ts`: enabled or
+unknown School Mode keeps an opted-in English narrator, but never passes the persisted Cantonese
+track or voice to `narrate()`. Keep the queue's actual-start check and selective Cantonese
+invalidation too; canceling the whole narrator would wrongly discard English app errors, while
+dropping a Cantonese-only track without its dormant English fallback would silence that event.
+
 **Serialize a shared store's decision, not only its final write.** Atomic rename prevents torn
 bytes, but it does not stop two callers from loading the same snapshot and publishing complete,
 conflicting replacements. Funnel read-modify-write operations through one mutation API; the

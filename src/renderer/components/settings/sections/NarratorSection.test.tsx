@@ -80,3 +80,28 @@ describe('Narrator OFF control boundary', () => {
     expect(host.querySelector<HTMLButtonElement>('[role="switch"]')?.disabled).toBe(false)
   })
 })
+
+describe('Narrator School Mode boundary', () => {
+  it.each([
+    { enabled: false, hydrated: false },
+    { enabled: true, hydrated: true }
+  ])('omits every Cantonese control while the shared mode is unknown or enabled', (schoolMode) => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      narratorEnabled: true,
+      narratorLanguage: 'both' as const,
+      narratorVoiceYue: 'yue'
+    }
+    useSettings.setState({ settings, base: settings, hydrated: true })
+    useSchoolMode.setState({ ...schoolMode, name: 'School mode' })
+
+    act(() => root.render(<NarratorSection isActive />))
+
+    expect(host.textContent).not.toContain('Narrated language')
+    expect(host.querySelector('[aria-label="Cantonese voice"]')).toBeNull()
+    expect(host.querySelector('[aria-label="English voice"]')).toBeTruthy()
+    expect([...host.querySelectorAll('button')].filter((button) => button.textContent === 'Preview'))
+      .toHaveLength(1)
+    expect(speak).not.toHaveBeenCalled()
+  })
+})

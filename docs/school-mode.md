@@ -76,22 +76,32 @@ recover.
 
 ## What "behaves as if not installed" means in this app today
 
-This repository does not yet ship the broader Cantonese/bilingual/funny-level system described in
-the shared instructions this feature is modeled on — those are separate, larger features tracked
-elsewhere. Within *this* codebase, School mode's scope is:
+The renderer does not treat its initial `enabled: false` value as permission. Every optional
+capability below calls `schoolModeAllowsOptionalFeatures({ enabled, hydrated })`, which returns true
+only after a successful read has proved the shared mode is off. During startup, a failed bridge
+read, or a Server Edition reconnect, the safe presentation is therefore the same reduced English
+surface as enabled School Mode; saved preferences are suppressed, not erased.
+
+Within *this* codebase, School Mode's scope is:
+
+- **Language and funny levels** ([docs/language-modes.md](language-modes.md)) resolve to plain
+  English at funny level 1. The Language Settings section is omitted, and a stale input event
+  re-checks the live policy before writing. Confirmed-off hydration restores the saved language
+  and independent funny levels without a restart.
+- **Narrator event speech** ([docs/narrator.md](narrator.md)) keeps the user's narrator on/off
+  choice, but both Canvas execution paths force English and remove the Cantonese text/voice from
+  the request while School Mode is enabled or unknown. Only a confirmed-off record may use the
+  saved Cantonese or bilingual narrator preference. Cantonese language/voice controls and their
+  search entries are omitted too, and Preview re-checks the live policy before speaking.
 
 - **The dim-sum surprise** ([docs/dim-sum.md](dim-sum.md)) never rolls while the mode is on
-  (`DimSumSurprise.tsx` reads `useSchoolMode().enabled` as one of its reveal gates).
+  or unknown; it re-checks the live policy immediately before revealing a previously scheduled
+  dish.
 - **The personal-vocabulary capability** ([docs/personal-vocabulary.md](personal-vocabulary.md))
   is fully suppressed two ways: the Settings upload control is **omitted** entirely (not shown
-  disabled) while the mode is on, and any already-uploaded vocabulary's text substitution is
-  skipped everywhere (`useVocabularyText` short-circuits to the original text when
-  `useSchoolMode().enabled` is true) — so a file uploaded before entering the mode is neither
-  lost nor applied while the mode is on, and resumes the instant it goes off.
-
-Wiring a future language-mode/funny-level system is expected to hook into the same
-`useSchoolMode().enabled` boolean; nothing about this design is specific to the two capabilities
-it currently gates.
+  disabled) while the mode is on or unknown, and any already-uploaded vocabulary's text
+  substitution is skipped everywhere. A file uploaded before entering the mode is neither lost
+  nor applied while the mode is on, and resumes once a real off record hydrates.
 
 ## Interface
 
@@ -128,8 +138,11 @@ tab you are looking at, never routed to the remote host.
 ## Verification
 
 - Enable with no prior credential and a short PIN (< 4 chars) → rejected.
-- Enable with a valid PIN → `enabled: true`, dish surprise stops rolling, vocabulary substitution
-  stops applying, a second app/window watching the same file sees the change without restarting.
+- Enable with a valid PIN → `enabled: true`, presentation and narrator speech become plain English,
+  dish surprise stops rolling, vocabulary substitution stops applying, and a second app/window
+  watching the same file sees the change without restarting.
+- Make the initial renderer load fail or remain pending → the same reduced English policy remains
+  in force; a default `enabled: false` is not treated as a confirmed-off record.
 - Disable with the wrong PIN → `{ok:false, error:'incorrect PIN'}`, record unchanged.
 - Disable with the correct PIN → `enabled: false`, everything above resumes.
 - Rename while on or off → every surface (sidebar, section title, descriptions) shows the new name

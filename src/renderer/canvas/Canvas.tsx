@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { playSfx, primeSfx } from '@renderer/lib/sfx'
-import { narrate } from '@renderer/lib/narrator'
-import { agentDonePhrase, agentNeedsYouPhrase } from '@renderer/lib/narratorPhrases'
+import { narrate, suppressNarratorTrack } from '@renderer/lib/narrator'
+import {
+  bindCanvasNarrationToSchoolMode,
+  executeAgentStatusNarration,
+  executeAppErrorNarration
+} from './narration-policy'
 import {
   addEdge,
   applyEdgeChanges,
@@ -306,6 +310,7 @@ import { pushSessionRename } from '../lib/sessionRename'
 import { oneLine } from '@shared/one-line'
 import { parseLenses, verifyLensPrompt, verifySynthesisPrompt } from '../lib/verifyPanel'
 import { useSettings } from '../state/settings'
+import { useSchoolMode } from '../state/schoolMode'
 import { useScheduledSettings } from '../state/scheduledSettings'
 import { activePermissionMode } from '../state/permissionMode'
 import { useContextWindow } from '../state/contextWindow'
@@ -1060,22 +1065,19 @@ export function Canvas() {
   // `narrate()` falls back to speaking them in English even under a Cantonese-only preference
   // (see narrator.ts `planUtterances` — never dropping the content wins over a language mismatch).
   // `important: true` means the rate limiter can never swallow a failure the user needs to hear.
+  useEffect(
+    () => bindCanvasNarrationToSchoolMode(
+      useSchoolMode.subscribe,
+      () => suppressNarratorTrack('yue')
+    ),
+    []
+  )
   useEffect(() => {
     const onToast = (e: Event): void => {
       const detail = (e as CustomEvent<{ kind: string; message: string }>).detail
       if (detail?.kind !== 'error' || !detail.message) return
       const snd = useSettings.getState().settings
-      if (!snd.narratorEnabled) return
-      narrate({
-        category: 'app-error',
-        language: snd.narratorLanguage,
-        en: detail.message,
-        rate: snd.narratorRate,
-        pitch: snd.narratorPitch,
-        voiceEn: snd.narratorVoiceEn,
-        voiceYue: snd.narratorVoiceYue,
-        important: true
-      })
+      executeAppErrorNarration(snd, useSchoolMode.getState, detail.message, narrate)
     }
     window.addEventListener('nodeterm:toast', onToast)
     return () => window.removeEventListener('nodeterm:toast', onToast)
@@ -7813,22 +7815,12 @@ export function Canvas() {
         // backgrounded (that's what the OS notification below is for). Categorized per-node so a
         // busy canvas debounces/cools down per node rather than one node's chatter silencing
         // another's.
-        if (snd.narratorEnabled) {
-          const phrase =
-            sound === 'done'
-              ? agentDonePhrase(agentLabel, contextFor(e.nodeId))
-              : agentNeedsYouPhrase(agentLabel, contextFor(e.nodeId))
-          narrate({
-            category: `agent-${sound}:${e.nodeId}`,
-            language: snd.narratorLanguage,
-            en: phrase.en,
-            yue: phrase.yue,
-            rate: snd.narratorRate,
-            pitch: snd.narratorPitch,
-            voiceEn: snd.narratorVoiceEn,
-            voiceYue: snd.narratorVoiceYue
-          })
-        }
+        executeAgentStatusNarration(snd, useSchoolMode.getState, {
+          sound,
+          nodeId: e.nodeId,
+          agentLabel,
+          context: contextFor(e.nodeId)
+        }, narrate)
         // OS notification only when the whole window is in the background.
         if (document.hasFocus()) return
         const s = useSettings.getState().settings
