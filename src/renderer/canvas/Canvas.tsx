@@ -231,7 +231,6 @@ import { sshFs } from '../terminal/ssh-fs'
 import {
   agentHibernateFns,
   agentRestartFn,
-  guardConcurrentRestart,
   planBulkRestart,
   restartEligibility,
   settleRestart,
@@ -6727,26 +6726,17 @@ export function Canvas() {
                   onCancel: request.onCancel
                 }),
               performWrite: async (nodeId, text) => {
-                // The SAME per-node lock the restart, hibernate-exit and wake-resume runs take.
-                // Without it a confirmed write can splice into their KILL_LINE + `/exit` or an
-                // echo-verified launch line; the dialog makes overlap rare, not impossible.
                 let thrown: string | null = null
-                const outcome = await guardConcurrentRestart(nodeId, async () => {
-                  try {
-                    const ok = await api.pty.sendText(nodeId, text)
-                    return ok ? ('sent' as const) : ('failed' as const)
-                  } catch (error) {
-                    thrown = String(error)
-                    return 'failed' as const
-                  }
-                })()
-                if (outcome === 'not-eligible') {
-                  return { ok: false, error: 'target is busy with a restart or wake — try again' }
+                let ok = false
+                try {
+                  ok = await api.pty.sendText(nodeId, text)
+                } catch (error) {
+                  thrown = String(error)
                 }
                 return {
-                  ok: outcome === 'sent',
-                  message: outcome === 'sent' ? 'sent' : 'failed',
-                  error: outcome === 'sent' ? undefined : (thrown ?? 'sendText failed')
+                  ok,
+                  message: ok ? 'sent' : 'failed',
+                  error: ok ? undefined : (thrown ?? 'sendText failed')
                 }
               },
               performClose: (nodeId) => {

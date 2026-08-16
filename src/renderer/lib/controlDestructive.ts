@@ -1,4 +1,5 @@
 import { isDestructiveVerb } from '@shared/control-verbs'
+import { guardConcurrentRestart } from '../terminal/agent-restart'
 
 export interface ControlActionReply {
   ok: boolean
@@ -75,7 +76,22 @@ export function dispatchDestructiveControl(
       message: `Agent "${request.sourceTitle}" wants to send to ${nodeId}:\n\n${request.args.text ?? ''}`,
       confirmLabel: 'Send',
       requestedBy: request.sourceTitle,
-      onConfirm: async () => dependencies.reply(await dependencies.performWrite(nodeId, request.args.text ?? '')),
+      onConfirm: async () => {
+        // Own the restart lock in the behavior-level dispatcher, not in Canvas's injected effect.
+        // That makes the confirmation boundary and the shared per-node exclusion one indivisible
+        // contract: every confirmed write routed here is guarded, and the executable dispatcher
+        // Chut can prove the wiring without scanning a React component's source text.
+        let actionReply: ControlActionReply | undefined
+        const outcome = await guardConcurrentRestart(nodeId, async () => {
+          actionReply = await dependencies.performWrite(nodeId, request.args.text ?? '')
+          return 'performed' as const
+        })()
+        dependencies.reply(
+          outcome === 'not-eligible'
+            ? { ok: false, error: 'target is busy with a restart or wake — try again' }
+            : (actionReply ?? { ok: false, error: 'write did not return a result' })
+        )
+      },
       onCancel: cancel
     })
     return true

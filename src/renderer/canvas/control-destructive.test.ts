@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DESTRUCTIVE_VERBS } from '@shared/control-verbs'
 import {
   dispatchDestructiveControl,
   type ControlActionReply
 } from '../lib/controlDestructive'
+import { __resetAgentRestartForTests, guardConcurrentRestart } from '../terminal/agent-restart'
 
 function harness(verb: string, confirmationBusy = false) {
   let writeConfirm: (() => void | Promise<void>) | undefined
@@ -49,6 +50,8 @@ function harness(verb: string, confirmationBusy = false) {
 }
 
 describe('destructive canvas-control behavior', () => {
+  beforeEach(() => __resetAgentRestartForTests())
+
   it('has an exact, behavior-implemented destructive inventory', () => {
     expect([...DESTRUCTIVE_VERBS].sort()).toEqual(['close', 'write'])
     for (const verb of DESTRUCTIVE_VERBS) {
@@ -101,6 +104,26 @@ describe('destructive canvas-control behavior', () => {
     expect(run.handled).toBe(false)
     expect(run.confirm).toBeUndefined()
     expect(run.replies).toEqual([])
+  })
+
+  it('a confirmed write cannot perform while the target is owned by a restart', async () => {
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const restart = guardConcurrentRestart('node-1', async () => {
+      await held
+      return 'restarted' as const
+    })()
+
+    const run = harness('write')
+    await run.confirm?.()
+
+    expect(run.performWrite).not.toHaveBeenCalled()
+    expect(run.replies).toEqual([
+      { ok: false, error: 'target is busy with a restart or wake — try again' }
+    ])
+
+    release()
+    await restart
   })
 
   it('answers a malformed destructive request without opening or performing', () => {
