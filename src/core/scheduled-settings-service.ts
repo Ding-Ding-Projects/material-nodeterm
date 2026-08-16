@@ -37,7 +37,7 @@ import {
  *  interval only governs the steady re-check while a rule stays enabled with an external source. */
 const TICK_MS = 30_000
 
-type ScheduledSettingsStorePort = Pick<ScheduledSettingsStore, 'get' | 'onChange'>
+type ScheduledSettingsStorePort = Pick<ScheduledSettingsStore, 'get' | 'loadState' | 'onChange'>
 
 export interface ScheduledSettingsServiceDependencies {
   now(): number
@@ -91,6 +91,7 @@ export class ScheduledSettingsService {
   private timer: ReturnType<typeof setInterval> | null = null
   private lastPushSignature: string | null = null
   private unsubscribeStore: (() => void) | null = null
+  private credentialPruneInFlight: Promise<void> | null = null
 
   private readonly dependencies: ScheduledSettingsServiceDependencies
 
@@ -104,15 +105,33 @@ export class ScheduledSettingsService {
   start(): void {
     this.unsubscribeStore = this.store.onChange((file, previous) => this.onFileChanged(file, previous))
     this.registerIpc()
+    this.retryOrphanedCredentialPrune()
     this.tick() // recompute (and kick off any due refreshes) immediately — don't wait 30s at boot
-    this.timer = setInterval(() => this.tick(), TICK_MS)
+    this.timer = setInterval(() => {
+      this.retryOrphanedCredentialPrune()
+      this.tick()
+    }, TICK_MS)
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
     this.unsubscribeStore?.()
     this.unsubscribeStore = null
+
+    // Startup/interval cleanup owns a SQLite handle until its transaction settles. Shutdown must
+    // drain that bounded owner before a shell removes or reuses userData; otherwise Windows can
+    // observe an EPERM/EBUSY sidecar even though the service has stopped scheduling new work.
+    // Background cleanup already reports its own warning, so a prior failure must not turn an
+    // otherwise orderly shell shutdown into a rejection.
+    const prune = this.credentialPruneInFlight
+    if (prune) {
+      try {
+        await prune
+      } catch {
+        // The retry warning is emitted by retryOrphanedCredentialPrune's attached handler.
+      }
+    }
   }
 
   private invalidateSource(ruleId: string): void {
@@ -142,9 +161,7 @@ export class ScheduledSettingsService {
     }
 
     try {
-      await this.dependencies.pruneOrphanedTokens(
-        new Set(file.rules.filter((r) => r.source.kind === 'home-assistant').map((r) => r.id))
-      )
+      await this.prunePublishedCredentials(file)
     } finally {
       // Recompute even when cleanup is incomplete. The store surfaces that failure, while the
       // running schedule must still reflect the file that was successfully published.
@@ -152,15 +169,70 @@ export class ScheduledSettingsService {
     }
   }
 
+  /** Save-triggered cleanup must run after any older background attempt, then own a fresh prune
+   * for the schedule that was actually published. A background failure is retried here rather
+   * than being mistaken for this save's result. */
+  private async prunePublishedCredentials(file: ScheduledSettingsFile): Promise<void> {
+    while (this.credentialPruneInFlight) {
+      const previous = this.credentialPruneInFlight
+      try {
+        await previous
+      } catch {
+        // Background cleanup reports its own warning. This publication still needs its own
+        // current-ID attempt, whose failure is propagated to the store.
+      }
+    }
+    // A failed load deliberately installs a safe empty cache. It is not evidence that no rules
+    // exist, so it can never authorize deleting credential files.
+    if (!this.store.loadState().ok) return
+    await this.startCredentialPrune(
+      new Set(file.rules.filter((rule) => rule.source.kind === 'home-assistant').map((rule) => rule.id))
+    )
+  }
+
+  private startCredentialPrune(liveIds: ReadonlySet<string>): Promise<void> {
+    if (this.credentialPruneInFlight) {
+      throw new Error('A scheduled credential cleanup already owns the mutation boundary.')
+    }
+    const run: Promise<void> = Promise.resolve()
+      .then(() => this.dependencies.pruneOrphanedTokens(liveIds))
+      .finally(() => {
+        if (this.credentialPruneInFlight === run) this.credentialPruneInFlight = null
+      })
+    this.credentialPruneInFlight = run
+    return run
+  }
+
+  /** Retry startup/crash-gap residue even when no later schedule edit occurs. The awaited save
+   * path reports failures inline; background retries are bounded to one operation and avoid
+   * logging credential paths or ids. */
+  private retryOrphanedCredentialPrune(): void {
+    if (this.credentialPruneInFlight) return
+    const load = this.store.loadState()
+    if (!load.ok) return
+    const liveIds = new Set(
+      load.file.rules
+        .filter((rule) => rule.source.kind === 'home-assistant')
+        .map((rule) => rule.id)
+    )
+    const run = this.startCredentialPrune(liveIds)
+    void run.catch(() => {
+      console.warn('[scheduled-settings] orphaned credential cleanup is incomplete; retrying')
+    })
+  }
+
   private registerIpc(): void {
     platform().handle(IPC.scheduledSettingsSetHaToken, async (ruleId: string, token: string | null) => {
-      await this.dependencies.setHomeAssistantToken(ruleId, token)
-      // A credential change is a source-generation change even though the JSON source fields are
-      // identical. In particular, Clear must remove a last-known `on` state synchronously before
-      // its IPC promise resolves; an old token read or HA response cannot re-activate it later.
-      this.invalidateSource(ruleId)
-      this.recomputeAndBroadcast()
-      this.tick()
+      try {
+        await this.dependencies.setHomeAssistantToken(ruleId, token)
+      } finally {
+        // A credential mutation can change canonical state and then reject while cleaning an
+        // alternate artifact. Invalidate for every settled attempt so a partially-applied Clear
+        // cannot retain cached `on` state or accept an older bearer response.
+        this.invalidateSource(ruleId)
+        this.recomputeAndBroadcast()
+        this.tick()
+      }
     })
     // Deliberately no "get token" handler anywhere in this file — only a status boolean ever
     // crosses the IPC boundary. See scheduled-settings-secrets.ts's doc on getHomeAssistantToken.

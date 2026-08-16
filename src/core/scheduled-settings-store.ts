@@ -1,6 +1,7 @@
 import fs, { promises as fsPromises } from 'fs'
 import path from 'path'
 import { IPC } from '../shared/ipc'
+import type { ScheduledSettingsSaveResult } from '../shared/types'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
 import {
@@ -23,7 +24,9 @@ import {
 export class ScheduledSettingsStore {
   private cache: ScheduledSettingsFile = defaultScheduledSettingsFile()
   private loadError: ScheduledSettingsLoadError | null = null
-  private listeners = new Set<(file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void>()
+  private listeners = new Set<
+    (file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void | Promise<void>
+  >()
   private saveChain: Promise<unknown> = Promise.resolve()
   private get filePath(): string {
     return path.join(platform().userDataDir, 'scheduled-settings.json')
@@ -31,7 +34,9 @@ export class ScheduledSettingsStore {
 
   /** Fires after every successful save with the new file AND the file it replaced, so a listener
    *  can diff (e.g. prune tokens for rules that disappeared) without keeping its own copy. */
-  onChange(cb: (file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void): () => void {
+  onChange(
+    cb: (file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void | Promise<void>
+  ): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)
   }
@@ -87,7 +92,7 @@ export class ScheduledSettingsStore {
   /** Returns `{ok:false, error}` on a bounds/shape violation OR a disk-level failure — never
    *  throws — so the renderer can always show `error` inline next to the Save button rather than
    *  treating either kind of failure as an IPC crash. */
-  async save(raw: ScheduledSettingsFile): Promise<{ ok: boolean; error?: string }> {
+  async save(raw: ScheduledSettingsFile): Promise<ScheduledSettingsSaveResult> {
     // Never overwrite the only recovery evidence. The operator must repair/move the original and
     // restart; until then the structured load error stays visible and the safe empty cache stays
     // authoritative. This is distinct from a first run (ENOENT), where saving is allowed.
@@ -109,8 +114,15 @@ export class ScheduledSettingsStore {
     try {
       await run
       return { ok: true }
-    } catch {
-      return { ok: false, error: 'Could not write the schedule to disk.' }
+    } catch (error) {
+      return error instanceof ScheduledSettingsPostSaveError
+        ? {
+            ok: false,
+            persisted: true,
+            warning: 'credential-cleanup-incomplete',
+            error: 'The schedule was saved, but related credentials could not be fully cleared.'
+          }
+        : { ok: false, error: 'Could not write the schedule to disk.' }
     }
   }
 
@@ -127,12 +139,18 @@ export class ScheduledSettingsStore {
       await fsPromises.rm(tmp, { force: true }).catch(() => {})
       throw e
     }
+    let listenerFailed = false
     for (const cb of this.listeners) {
       try {
-        cb(next, previous)
+        await cb(next, previous)
       } catch {
-        // A listener must never break a save (or its siblings).
+        // Run every sibling, but do not turn a post-publication cleanup failure into a false
+        // "could not write" result. The schedule is durable; its credential lifecycle is not.
+        listenerFailed = true
       }
     }
+    if (listenerFailed) throw new ScheduledSettingsPostSaveError()
   }
 }
+
+class ScheduledSettingsPostSaveError extends Error {}

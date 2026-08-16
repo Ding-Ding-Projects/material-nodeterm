@@ -93,6 +93,9 @@ function fixture() {
     listRepositoryLabels: vi.fn(),
     createLabel: vi.fn()
   }
+  const validateToken = vi.fn(async (value: string) => value === 'valid-token'
+    ? { userId: '1', login: 'octocat' }
+    : null)
   const controller = new GitHubHostController({
     project: vi.fn(async (id: string) => id === project.id
       ? { project, localApprovalId: 'local-private-id' }
@@ -101,12 +104,10 @@ function fixture() {
     controls,
     resolver,
     secret,
-    validateToken: vi.fn(async (value: string) => value === 'valid-token'
-      ? { userId: '1', login: 'octocat' }
-      : null),
+    validateToken,
     client: vi.fn(() => client)
   })
-  return { controller, controls, resolver, secret, client }
+  return { controller, controls, resolver, secret, validateToken, client }
 }
 
 describe('GitHubHostController', () => {
@@ -148,5 +149,41 @@ describe('GitHubHostController', () => {
     const view = await controller.saveToken('valid-token')
     expect(secret.save).toHaveBeenCalledWith('valid-token')
     expect(JSON.stringify(view)).not.toContain('valid-token')
+  })
+
+  it('queues Clear behind an earlier Save network validation so the token cannot resurrect', async () => {
+    const { controller, secret, validateToken } = fixture()
+    let releaseValidation!: (identity: { userId: string; login: string }) => void
+    validateToken.mockImplementationOnce(() => new Promise((resolve) => {
+      releaseValidation = resolve
+    }))
+
+    const saving = controller.saveToken('slow-valid-token')
+    await vi.waitFor(() => expect(validateToken).toHaveBeenCalledWith('slow-valid-token'))
+    const clearing = controller.clearToken()
+    await Promise.resolve()
+    expect(secret.clear).not.toHaveBeenCalled()
+
+    releaseValidation({ userId: '1', login: 'octocat' })
+    await expect(saving).resolves.toMatchObject({ auth: { tokenPresent: true } })
+    await expect(clearing).resolves.toMatchObject({ auth: { tokenPresent: false } })
+    expect(secret.save.mock.invocationCallOrder[0]).toBeLessThan(secret.clear.mock.invocationCallOrder[0])
+  })
+
+  it('recovers the credential queue after validation and store-save failures', async () => {
+    const { controller, secret } = fixture()
+
+    const invalid = controller.saveToken('bad')
+    const clearAfterValidation = controller.clearToken()
+    await expect(invalid).rejects.toMatchObject({ code: 'invalid-token' })
+    await expect(clearAfterValidation).resolves.toMatchObject({ auth: { tokenPresent: false } })
+
+    secret.save.mockRejectedValueOnce(Object.assign(new Error('EACCES: store unavailable'), {
+      code: 'EACCES'
+    }))
+    const failedSave = controller.saveToken('valid-token')
+    const clearAfterSave = controller.clearToken()
+    await expect(failedSave).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(clearAfterSave).resolves.toMatchObject({ auth: { tokenPresent: false } })
   })
 })

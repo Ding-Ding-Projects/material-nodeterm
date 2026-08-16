@@ -25,7 +25,7 @@ describe('Desktop + Server scheduled-settings runtime startup', () => {
   })
 
   afterEach(async () => {
-    runtime?.stop()
+    await runtime?.stop()
     vi.restoreAllMocks()
     resetPlatformForTests()
     await fsPromises.rm(userData, { recursive: true, force: true })

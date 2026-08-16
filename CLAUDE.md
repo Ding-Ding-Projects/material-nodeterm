@@ -2273,15 +2273,13 @@ be PID 1, worker isolates share a PID with separate module counters, and the OS 
 crashes. `tempNameFor` owns UUID uniqueness while retaining pid/sequence for ownership and
 diagnostics. The cleanup is equally strict:
 `sweepStaleTempFiles` never reads “foreign pid” as “dead process”; desktop multi-instance mode and
-two Server Edition processes can deliberately share a directory. It removes a pid-bearing temp
-only after a 24-hour grace and a signal-0 probe says the owner pid is no longer visible in this
-process's namespace; `EPERM` or an unfamiliar probe result preserves it. ESRCH is not global proof
-across PID namespaces, which is why age and UUID entropy are both required. A fresh or unjudgeable
-temp may be an in-flight credential write. Credential clear paths use `clearAtomicTarget`: it
-removes the canonical file without sabotaging that possible writer, inspects for every recognized
-temp, and returns an incomplete result while any remain or inspection fails. The PAT/cookie/token
-callers propagate that as `clear-incomplete`; they must never report success while bearer bytes are
-still beside the canonical path.
+two Server Edition processes can deliberately share a directory. It never auto-deletes a
+PID-bearing temp: signal-0/`ESRCH` is namespace-local and cannot prove a writer on a shared volume
+is dead. Only the exact historical ownerless `<target>.tmp` shape is collectible after the 24-hour
+grace. Credential clear paths use `clearAtomicTarget`: it removes the canonical file without
+sabotaging that possible writer, inspects for every canonical-lowercase-v4 or legacy temp, and
+rechecks the canonical path last. The PAT/cookie/token callers propagate `clear-incomplete` while
+bearer bytes remain, inspection fails, or a concurrent publisher recreates the destination.
 
 **Unique paths prevent splicing, not stale generations.** A writer that snapshots a whole document
 must also serialize publishes (or reject an out-of-date generation). `agent-status-mirror.flush`
@@ -2307,6 +2305,27 @@ The crash test holds the real transaction in one live process (proving the peer 
 aborts the owner without JS cleanup, and proves that same peer immediately acquires and publishes.
 This orders peers running the generation-aware build; an already-running older binary does not know
 the lock or field and must not share the directory during a rolling upgrade.
+
+**Credential documents hold a separate cross-process transaction across the strict read.** A
+save-only queue cannot close load → mutate → save lost updates, and a process-local FIFO does not
+coordinate Desktop and Server Edition processes sharing one data directory.
+`core/fs-transaction-lock.ts` uses SQLite `BEGIN IMMEDIATE` across strict read, mutation, exact-
+revision publication, clear, and prune. Enqueue begins before the read; only `ENOENT` is empty.
+Corrupt/unreadable canonical bytes and sidecars remain evidence and fail closed. The lock rendezvous
+realpaths the existing parent so symlink/junction aliases converge, and publication compares the
+SHA-256 revision read inside the transaction immediately before rename.
+
+Do not replace this with a PID/timestamp lease. A suspended process keeps SQLite's OS lock, process
+death releases it, and bounded busy retry uses a monotonic deadline ending in `lock-timeout` without
+deleting foreign ownership evidence. `SecureStore.mutate` applies this physical-file-global rule
+to toy-lock and authenticator credentials, rejecting duplicate/non-v4 IDs and malformed documents.
+Scheduled Home Assistant set/clear/alternate-format cleanup/prune uses one directory transaction;
+provider-cookie, shared-mode, and Desktop/Server GitHub credentials use the same primitive. GitHub's
+controller FIFO begins before network validation so a later Clear cannot be resurrected by an
+earlier Save. Separate processes have no shared pre-validation clock and are ordered at their final
+SQLite transaction entry. The real process Chut proves blocked stale reads, crash release, bounded
+busy timeout, alias convergence, queue recovery, and exact corrupt-evidence preservation; replacing
+`BEGIN IMMEDIATE` with `BEGIN` must turn the barrier red.
 
 The SQLite module is loaded only after `core/node-runtime.ts` has performed the exact startup
 preflight. Keep it lazy: a static `node:sqlite` import is evaluated before either shell can print an

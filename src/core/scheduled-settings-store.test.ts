@@ -10,10 +10,19 @@ import {
   SCHEDULE_LIMITS,
   defaultScheduledSettingsFile,
   newScheduleRule,
+  type ScheduleRule,
   type ScheduledSettingsFile
 } from '../shared/scheduled-settings'
 
 const RULE_ID = '18d73e9b-2af4-481e-91bf-443d44c8e569'
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
 
 function validFile(): ScheduledSettingsFile {
   return {
@@ -49,6 +58,10 @@ describe('ScheduledSettingsStore', () => {
     const original = '{broken json'
     await fs.writeFile(filePath, original, 'utf8')
     const store = new ScheduledSettingsStore()
+    let listenerCalls = 0
+    store.onChange(() => {
+      listenerCalls += 1
+    })
 
     expect(store.init()).toMatchObject({
       ok: false,
@@ -56,7 +69,11 @@ describe('ScheduledSettingsStore', () => {
       error: { kind: 'corrupt', path: filePath }
     })
     expect(store.get().rules).toEqual([])
-    expect((await store.save(validFile())).ok).toBe(false)
+    const lockedResult = await store.save(validFile())
+    expect(lockedResult.ok).toBe(false)
+    expect(lockedResult).not.toHaveProperty('persisted')
+    expect(lockedResult).not.toHaveProperty('warning')
+    expect(listenerCalls).toBe(0)
     expect(await fs.readFile(filePath, 'utf8')).toBe(original)
   })
 
@@ -88,6 +105,118 @@ describe('ScheduledSettingsStore', () => {
     const store = new ScheduledSettingsStore()
     store.init()
     expect(store.get().rules[0]).toMatchObject({ enabled: false, source: { kind: 'api', url: '' } })
+  })
+
+  it('awaits every post-save listener and distinctly reports cleanup failure after durable publication', async () => {
+    const store = new ScheduledSettingsStore()
+    const listenerStarted = deferred<void>()
+    const releaseListener = deferred<void>()
+    const events: string[] = []
+    store.onChange(async () => {
+      events.push('cleanup-started')
+      listenerStarted.resolve(undefined)
+      await releaseListener.promise
+      events.push('cleanup-failed')
+      throw new Error('simulated credential cleanup failure')
+    })
+    store.onChange(async () => {
+      events.push('sibling-finished')
+    })
+
+    let settled = false
+    const saving = store.save(validFile()).then((result) => {
+      settled = true
+      return result
+    })
+    await listenerStarted.promise
+
+    expect(settled).toBe(false)
+    expect(events).toEqual(['cleanup-started'])
+    releaseListener.resolve(undefined)
+
+    await expect(saving).resolves.toEqual({
+      ok: false,
+      persisted: true,
+      warning: 'credential-cleanup-incomplete',
+      error: 'The schedule was saved, but related credentials could not be fully cleared.'
+    })
+    expect(events).toEqual(['cleanup-started', 'cleanup-failed', 'sibling-finished'])
+    expect(store.get().rules.map((rule) => rule.id)).toEqual([RULE_ID])
+    expect(JSON.parse(await fs.readFile(filePath, 'utf8')).rules.map((rule: ScheduleRule) => rule.id)).toEqual([
+      RULE_ID
+    ])
+  })
+
+  it('serializes later saves behind the complete listener phase of the prior save', async () => {
+    const store = new ScheduledSettingsStore()
+    const firstListenerStarted = deferred<void>()
+    const releaseFirstListener = deferred<void>()
+    const observedLabels: string[] = []
+    store.onChange(async (file) => {
+      const label = file.rules[0]?.label ?? ''
+      observedLabels.push(label)
+      if (label === 'first') {
+        firstListenerStarted.resolve(undefined)
+        await releaseFirstListener.promise
+      }
+    })
+    const first = validFile()
+    first.rules[0].label = 'first'
+    const second = validFile()
+    second.rules[0].label = 'second'
+
+    const firstSave = store.save(first)
+    await firstListenerStarted.promise
+    const secondSave = store.save(second)
+
+    expect(store.get().rules[0]?.label).toBe('first')
+    expect(observedLabels).toEqual(['first'])
+    releaseFirstListener.resolve(undefined)
+
+    await expect(firstSave).resolves.toEqual({ ok: true })
+    await expect(secondSave).resolves.toEqual({ ok: true })
+    expect(observedLabels).toEqual(['first', 'second'])
+    expect(store.get().rules[0]?.label).toBe('second')
+    expect(JSON.parse(await fs.readFile(filePath, 'utf8')).rules[0].label).toBe('second')
+  })
+
+  it('recovers the save queue after a post-publication cleanup failure', async () => {
+    const store = new ScheduledSettingsStore()
+    const previousLabels: string[] = []
+    let listenerCalls = 0
+    store.onChange((_file, previous) => {
+      listenerCalls += 1
+      previousLabels.push(previous.rules[0]?.label ?? 'empty')
+      if (listenerCalls === 1) throw new Error('simulated first cleanup failure')
+    })
+    const first = validFile()
+    first.rules[0].label = 'published-first'
+    const second = validFile()
+    second.rules[0].label = 'published-second'
+
+    await expect(store.save(first)).resolves.toMatchObject({
+      ok: false,
+      persisted: true,
+      warning: 'credential-cleanup-incomplete',
+      error: 'The schedule was saved, but related credentials could not be fully cleared.'
+    })
+    await expect(store.save(second)).resolves.toEqual({ ok: true })
+
+    expect(previousLabels).toEqual(['empty', 'published-first'])
+    expect(store.get().rules[0]?.label).toBe('published-second')
+    expect(JSON.parse(await fs.readFile(filePath, 'utf8')).rules[0].label).toBe('published-second')
+  })
+
+  it('does not mark a disk-write failure as persisted or attach a cleanup warning', async () => {
+    const store = new ScheduledSettingsStore()
+    await fs.rm(userData, { recursive: true, force: true })
+
+    const result = await store.save(validFile())
+
+    expect(result).toEqual({ ok: false, error: 'Could not write the schedule to disk.' })
+    expect(result).not.toHaveProperty('persisted')
+    expect(result).not.toHaveProperty('warning')
+    expect(store.get().rules).toEqual([])
   })
 
   it.each([

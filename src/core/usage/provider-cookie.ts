@@ -17,7 +17,13 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
-import { clearAtomicTarget, renameAtomic, sweepStaleTempFiles, tempNameFor } from '../fs-atomic'
+import { clearAtomicTarget, sweepStaleTempFiles } from '../fs-atomic'
+import {
+  readAtomicFileSnapshot,
+  withCrossProcessLock,
+  writeAtomicFileCompared,
+  type CrossProcessLease
+} from '../fs-transaction-lock'
 
 /** Owner read/write only. The whole reason these are separate files. */
 const MODE = 0o600
@@ -30,7 +36,17 @@ export class ProviderCookieClearError extends Error {
   readonly code = 'clear-incomplete' as const
 
   constructor() {
-    super('The provider cookie file was removed, but credential temp files are still active or could not be inspected.')
+    super(
+      'The provider cookie could not be fully cleared; canonical or temporary credential files remain or could not be inspected.'
+    )
+  }
+}
+
+export class ProviderCookieInvalidError extends Error {
+  readonly code = 'invalid-cookie' as const
+
+  constructor(options: { cause?: unknown } = {}) {
+    super('The provider cookie is malformed.', options)
   }
 }
 
@@ -42,15 +58,41 @@ function file(provider: CookieProvider): string {
   return path.join(platform().userDataDir, `${provider}-cookie.json`)
 }
 
+function validCookie(cookie: string): boolean {
+  return (
+    cookie.trim() === cookie &&
+    cookie.length > 0 &&
+    cookie.length <= 32 * 1024 &&
+    !/[\r\n\0]/u.test(cookie)
+  )
+}
+
+function parseCookieDocument(raw: string): string {
+  let document: unknown
+  try {
+    document = JSON.parse(raw)
+  } catch (cause) {
+    throw new ProviderCookieInvalidError({ cause })
+  }
+  const cookie = document && typeof document === 'object'
+    ? (document as { cookie?: unknown }).cookie
+    : undefined
+  if (typeof cookie !== 'string' || !validCookie(cookie)) {
+    throw new ProviderCookieInvalidError()
+  }
+  return cookie
+}
+
 /** The stored cookie header, or null when this provider has not been configured. */
 export async function readProviderCookie(provider: CookieProvider): Promise<string | null> {
+  let raw: string
   try {
-    const raw = await fs.readFile(file(provider), 'utf-8')
-    const j = JSON.parse(raw) as Record<string, unknown>
-    return typeof j.cookie === 'string' && j.cookie.trim() ? j.cookie : null
-  } catch {
-    return null
+    raw = await fs.readFile(file(provider), 'utf-8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
   }
+  return parseCookieDocument(raw)
 }
 
 /**
@@ -69,39 +111,49 @@ export function writeProviderCookie(provider: CookieProvider, cookie: string): P
   // an earlier set sits between tmp-write and rename — the parked rename then resurrects the
   // credential the UI just reported cleared. Unique tmp names cannot fix that; only ordering can.
   // Each caller still sees only its own write's failure.
-  const prev = writeChains.get(provider) ?? Promise.resolve()
-  const run = prev.then(() => writeCookieNow(provider, cookie))
-  writeChains.set(provider, run.catch(() => {}))
+  const target = file(provider)
+  const key = path.resolve(target)
+  const prev = writeChains.get(key) ?? Promise.resolve()
+  const run = prev.then(() =>
+    withCrossProcessLock(target, (lease) => writeCookieNow(target, cookie, lease))
+  )
+  const recovered = run.then(
+    () => undefined,
+    () => undefined
+  )
+  writeChains.set(key, recovered)
+  void recovered.then(() => {
+    if (writeChains.get(key) === recovered) writeChains.delete(key)
+  })
   return run
 }
 
-const writeChains = new Map<CookieProvider, Promise<unknown>>()
+const writeChains = new Map<string, Promise<unknown>>()
 
-async function writeCookieNow(provider: CookieProvider, cookie: string): Promise<void> {
-  const target = file(provider)
+async function writeCookieNow(
+  target: string,
+  cookie: string,
+  lease: CrossProcessLease
+): Promise<void> {
   if (!cookie.trim()) {
     // A fresh foreign temp may be a live writer and must survive. That makes this clear
     // incomplete, though: surface it instead of reporting that bearer bytes are gone.
+    await lease.fence()
     const result = await clearAtomicTarget(target)
     if (!result.cleared) throw new ProviderCookieClearError()
     return
   }
+  if (!validCookie(cookie)) throw new ProviderCookieInvalidError()
   await sweepStaleTempFiles(target)
-  const tmp = tempNameFor(target)
-  try {
-    await fs.writeFile(tmp, JSON.stringify({ cookie }), { encoding: 'utf-8', mode: MODE })
-    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
-    await renameAtomic(tmp, target)
-  } catch (e) {
-    // A failed write MUST remove its own temp, because here a leaked temp IS a leaked cookie: a
-    // unique name is never written again, so only this cleanup (or a later sweep after the age
-    // grace and an owner pid no longer visible here mark it abandoned) will collect it. The error propagates.
-    await fs.rm(tmp, { force: true }).catch(() => {})
-    throw e
-  }
-  // Defense in depth on the PUBLISHED file: the temp is created 0600 and rename preserves the
-  // mode, so this is a second lock on the door — cheap, and the one thing an attacker would need.
-  await fs.chmod(target, MODE).catch(() => undefined)
+  const current = await readAtomicFileSnapshot(target)
+  if (current.exists) parseCookieDocument(current.data.toString('utf8'))
+  await writeAtomicFileCompared(
+    target,
+    JSON.stringify({ cookie }),
+    current.revision,
+    lease,
+    { encoding: 'utf8', mode: MODE }
+  )
 }
 
 /** Whether a cookie is stored — for the settings UI, which must never read the value back. */

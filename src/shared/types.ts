@@ -1465,14 +1465,26 @@ export interface SchoolModeApi {
  *  date+time window, gated by a local switch, an HTTPS API, or a Home Assistant boolean entity.
  *  All network access and the periodic evaluator live in the main process (or the Server
  *  Edition's equivalent boundary) — the renderer only ever reads the resolved result. */
+export type ScheduledSettingsSaveResult =
+  | { ok: true; error?: never; persisted?: true; warning?: never }
+  | { ok: false; error: string; persisted?: never; warning?: never }
+  | {
+      ok: false
+      error: string
+      persisted: true
+      warning: 'credential-cleanup-incomplete'
+    }
+
 export interface ScheduledSettingsApi {
   /** A successful file or a safe disabled fallback plus the exact recovery fact. A failed read is
    * never represented as an ordinary empty schedule. */
   load(): Promise<import('./scheduled-settings').ScheduledSettingsLoadState>
-  /** `{ok:false, error}` on a bounds/shape violation — never thrown. */
+  /** A failed publication has only `{ok:false,error}`. If the schedule was published but related
+   * credential cleanup failed, `persisted` and `warning` distinguish that truthful warning from a
+   * write failure without parsing presentation copy. */
   save(
     file: import('./scheduled-settings').ScheduledSettingsFile
-  ): Promise<{ ok: boolean; error?: string }>
+  ): Promise<ScheduledSettingsSaveResult>
   /** Store (`token`) or clear (`null`) the Home Assistant access token for one rule. The token is
    *  never read back over IPC — see `tokenStatus`. */
   setHomeAssistantToken(ruleId: string, token: string | null): Promise<void>

@@ -5,7 +5,8 @@ import {
   defaultScheduledSettingsFile,
   newScheduleRule,
   type ScheduleRule,
-  type ScheduledSettingsFile
+  type ScheduledSettingsFile,
+  type ScheduledSettingsLoadState
 } from '../shared/scheduled-settings'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform, type FakePlatform } from './platform-fake'
@@ -17,12 +18,18 @@ import type { ApiFetchResult, HaFetchResult } from './scheduled-settings-network
 
 const RULE_ID = '97d84c12-59ba-431a-926d-d706d1206460'
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => {
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((done, fail) => {
     resolve = done
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -34,10 +41,28 @@ class MemoryScheduledSettingsStore {
     (file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void | Promise<void>
   >()
 
-  constructor(private file: ScheduledSettingsFile) {}
+  constructor(
+    private file: ScheduledSettingsFile,
+    private readonly loadOk = true
+  ) {}
 
   get(): ScheduledSettingsFile {
     return this.file
+  }
+
+  loadState(): ScheduledSettingsLoadState {
+    return this.loadOk
+      ? { ok: true, file: this.file, error: null }
+      : {
+          ok: false,
+          file: this.file,
+          error: {
+            kind: 'unreadable',
+            code: 'EACCES',
+            path: 'scheduled-settings.json',
+            message: 'The scheduled-settings file could not be read.'
+          }
+        }
   }
 
   onChange(
@@ -81,7 +106,7 @@ function baseDependencies(): Partial<ScheduledSettingsServiceDependencies> {
   }
 }
 
-describe('ScheduledSettingsService source ownership', () => {
+describe('ScheduledSettingsService', () => {
   let platform: FakePlatform
   let service: ScheduledSettingsService | null
 
@@ -93,11 +118,152 @@ describe('ScheduledSettingsService source ownership', () => {
     service = null
   })
 
-  afterEach(() => {
-    service?.stop()
+  afterEach(async () => {
+    await service?.stop()
     vi.useRealTimers()
     vi.restoreAllMocks()
     resetPlatformForTests()
+  })
+
+  it('drains the active background credential transaction before stop resolves', async () => {
+    const startupPrune = deferred<void>()
+    const prune = vi.fn(() => startupPrune.promise)
+    const store = new MemoryScheduledSettingsStore(fileWith(haRule()))
+    service = new ScheduledSettingsService(store, {
+      ...baseDependencies(),
+      pruneOrphanedTokens: prune
+    })
+
+    service.start()
+    await flushMicrotasks()
+    expect(prune).toHaveBeenCalledTimes(1)
+
+    let stopped = false
+    const stopping = service.stop().then(() => {
+      stopped = true
+    })
+    await flushMicrotasks()
+    expect(stopped).toBe(false)
+
+    startupPrune.resolve()
+    await stopping
+    expect(stopped).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(prune).toHaveBeenCalledTimes(1)
+  })
+
+  it('prunes startup residue and retries a failed prune periodically without overlapping owners', async () => {
+    const firstPrune = deferred<void>()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const prune = vi
+      .fn<(liveRuleIds: ReadonlySet<string> | readonly string[]) => Promise<void>>()
+      .mockImplementationOnce(() => firstPrune.promise)
+      .mockResolvedValue(undefined)
+    const store = new MemoryScheduledSettingsStore(fileWith(haRule()))
+    service = new ScheduledSettingsService(store, {
+      ...baseDependencies(),
+      pruneOrphanedTokens: prune
+    })
+
+    service.start()
+    await flushMicrotasks()
+    expect(prune).toHaveBeenCalledTimes(1)
+    expect([...((prune.mock.calls[0][0] as ReadonlySet<string>) ?? [])]).toEqual([RULE_ID])
+
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(prune).toHaveBeenCalledTimes(1)
+
+    firstPrune.reject(new Error('simulated cleanup failure'))
+    await flushMicrotasks()
+    expect(warn).toHaveBeenCalledWith(
+      '[scheduled-settings] orphaned credential cleanup is incomplete; retrying'
+    )
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(prune).toHaveBeenCalledTimes(2)
+    expect([...((prune.mock.calls[1][0] as ReadonlySet<string>) ?? [])]).toEqual([RULE_ID])
+  })
+
+  it('serializes save-triggered pruning behind background cleanup and blocks periodic overlap', async () => {
+    const startupPrune = deferred<void>()
+    const savePrune = deferred<void>()
+    const prune = vi
+      .fn<(liveRuleIds: ReadonlySet<string> | readonly string[]) => Promise<void>>()
+      .mockImplementationOnce(() => startupPrune.promise)
+      .mockImplementationOnce(() => savePrune.promise)
+      .mockResolvedValue(undefined)
+    const store = new MemoryScheduledSettingsStore(fileWith(haRule()))
+    service = new ScheduledSettingsService(store, {
+      ...baseDependencies(),
+      pruneOrphanedTokens: prune
+    })
+    service.start()
+    await flushMicrotasks()
+    expect(prune).toHaveBeenCalledTimes(1)
+
+    let saveSettled = false
+    const replacing = store.replace(defaultScheduledSettingsFile()).finally(() => {
+      saveSettled = true
+    })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(prune).toHaveBeenCalledTimes(1)
+    expect(saveSettled).toBe(false)
+
+    startupPrune.resolve(undefined)
+    await flushMicrotasks()
+    expect(prune).toHaveBeenCalledTimes(2)
+    expect([...((prune.mock.calls[1][0] as ReadonlySet<string>) ?? [])]).toEqual([])
+    expect(saveSettled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(prune).toHaveBeenCalledTimes(2)
+    savePrune.resolve(undefined)
+    await replacing
+    expect(saveSettled).toBe(true)
+  })
+
+  it('never treats a failed-load safe-empty cache as authority to prune credentials', async () => {
+    const prune = vi.fn(async () => {})
+    const store = new MemoryScheduledSettingsStore(defaultScheduledSettingsFile(), false)
+    service = new ScheduledSettingsService(store, {
+      ...baseDependencies(),
+      pruneOrphanedTokens: prune
+    })
+
+    service.start()
+    await vi.advanceTimersByTimeAsync(120_000)
+    await store.replace(fileWith(haRule()))
+    await flushMicrotasks()
+
+    expect(prune).not.toHaveBeenCalled()
+  })
+
+  it('awaits save-triggered credential pruning and propagates its failure to the store listener', async () => {
+    const savePrune = deferred<void>()
+    const prune = vi
+      .fn<(liveRuleIds: ReadonlySet<string> | readonly string[]) => Promise<void>>()
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(() => savePrune.promise)
+    const store = new MemoryScheduledSettingsStore(fileWith(haRule()))
+    service = new ScheduledSettingsService(store, {
+      ...baseDependencies(),
+      pruneOrphanedTokens: prune
+    })
+    service.start()
+    await flushMicrotasks()
+
+    let settled = false
+    const replacing = store.replace(defaultScheduledSettingsFile()).finally(() => {
+      settled = true
+    })
+    await flushMicrotasks()
+    expect(prune).toHaveBeenCalledTimes(2)
+    expect(settled).toBe(false)
+
+    savePrune.reject(new Error('simulated credential cleanup failure'))
+    await expect(replacing).rejects.toThrow('simulated credential cleanup failure')
+    expect(settled).toBe(true)
   })
 
   it('refreshes a same-kind API retarget immediately and never lets the old response win', async () => {
@@ -216,6 +382,44 @@ describe('ScheduledSettingsService source ownership', () => {
     await flushMicrotasks()
     expect((platform.handlers[IPC.scheduledSettingsActiveState]() as { active: unknown }).active).toBeNull()
     // The immediate post-clear refresh observes no token and therefore makes no bearer request.
+    expect(fetchHa).toHaveBeenCalledTimes(2)
+  })
+
+  it('fences cached state and an older HA response when a partially-applied token mutation rejects', async () => {
+    const secondFetch = deferred<HaFetchResult>()
+    let token: string | null = 'old-token'
+    let fetchNumber = 0
+    const fetchHa = vi.fn(async (): Promise<HaFetchResult> => {
+      fetchNumber += 1
+      return fetchNumber === 1 ? { ok: true, on: true } : secondFetch.promise
+    })
+    const store = new MemoryScheduledSettingsStore(fileWith(haRule()))
+    service = new ScheduledSettingsService(store, {
+      ...baseDependencies(),
+      getHomeAssistantToken: async () => token,
+      setHomeAssistantToken: async (_id, next) => {
+        token = next
+        throw new Error('alternate credential cleanup failed')
+      },
+      fetchHomeAssistantState: fetchHa
+    })
+    service.start()
+    await flushMicrotasks()
+    expect((platform.handlers[IPC.scheduledSettingsActiveState]() as { active: unknown }).active).not.toBeNull()
+
+    const retry = Promise.resolve(platform.handlers[IPC.scheduledSettingsRefreshRule](RULE_ID))
+    await flushMicrotasks()
+    expect(fetchHa).toHaveBeenCalledTimes(2)
+
+    await expect(platform.handlers[IPC.scheduledSettingsSetHaToken](RULE_ID, null)).rejects.toThrow(
+      'alternate credential cleanup failed'
+    )
+    expect((platform.handlers[IPC.scheduledSettingsActiveState]() as { active: unknown }).active).toBeNull()
+
+    secondFetch.resolve({ ok: true, on: true })
+    await retry
+    await flushMicrotasks()
+    expect((platform.handlers[IPC.scheduledSettingsActiveState]() as { active: unknown }).active).toBeNull()
     expect(fetchHa).toHaveBeenCalledTimes(2)
   })
 

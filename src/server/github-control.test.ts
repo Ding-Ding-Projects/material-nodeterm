@@ -40,6 +40,60 @@ describe('ServerGitHubSecretStore', () => {
     await expect(store.save('x'.repeat(4097))).rejects.toMatchObject({ code: 'invalid-token' })
     expect(await store.readForHost()).toBe('original-token')
   })
+
+  it('reads the exact legacy version-one server envelope and canonicalizes it on save', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    await fs.writeFile(tokenFile, JSON.stringify({ version: 1, token: 'legacy-token' }), {
+      encoding: 'utf-8',
+      mode: 0o600
+    })
+    const store = new ServerGitHubSecretStore(userDataDir)
+
+    await expect(store.readForHost()).resolves.toBe('legacy-token')
+    await store.save('canonical-token')
+    expect(JSON.parse(await fs.readFile(tokenFile, 'utf-8'))).toEqual({
+      version: 1,
+      kind: 'restricted-file',
+      token: 'canonical-token'
+    })
+  })
+
+  it('rejects corrupt credential bytes on read and save without replacing the evidence', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const corrupt = '{"version":1,"token":'
+    await fs.writeFile(tokenFile, corrupt, { encoding: 'utf-8', mode: 0o600 })
+    const store = new ServerGitHubSecretStore(userDataDir)
+
+    await expect(store.readForHost()).rejects.toMatchObject({ code: 'credential-unavailable' })
+    await expect(store.save('replacement-token')).rejects.toMatchObject({
+      code: 'credential-unavailable'
+    })
+    expect(await fs.readFile(tokenFile, 'utf-8')).toBe(corrupt)
+  })
+
+  it('rejects unreadable reads and saves, then recovers the shared queue for another store instance', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const first = new ServerGitHubSecretStore(userDataDir)
+    const second = new ServerGitHubSecretStore(userDataDir)
+    await first.save('original-token')
+    const before = await fs.readFile(tokenFile, 'utf-8')
+    const realReadFile = fs.readFile
+    let canonicalReadFailures = 2
+    vi.spyOn(fs, 'readFile').mockImplementation((async (file: any, ...args: any[]) => {
+      if (String(file) === tokenFile && canonicalReadFailures > 0) {
+        canonicalReadFailures -= 1
+        throw Object.assign(new Error('EACCES: credential is unreadable'), { code: 'EACCES' })
+      }
+      return (realReadFile as any)(file, ...args)
+    }) as typeof fs.readFile)
+
+    await expect(first.readForHost()).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(first.save('first-replacement')).rejects.toMatchObject({ code: 'EACCES' })
+    expect(await (realReadFile as any)(tokenFile, 'utf-8')).toBe(before)
+    await expect(second.save('second-replacement')).resolves.toBeUndefined()
+    vi.restoreAllMocks()
+    await expect(second.readForHost()).resolves.toBe('second-replacement')
+  })
 })
 
 describe('ServerGitHubSecretStore atomic write', () => {
@@ -145,6 +199,10 @@ describe('ServerGitHubSecretStore atomic write', () => {
       `github-issues-token.json.${process.pid + 1}.7.tmp`,
       'github-issues-token.json.tmp'
     ].sort())
+
+    const recovered = new ServerGitHubSecretStore(userDataDir)
+    await expect(recovered.save('recovered-token')).resolves.toBeUndefined()
+    await expect(recovered.readForHost()).resolves.toBe('recovered-token')
   })
 
   it('a failed rename removes its own temp and still rejects (a leaked temp here is a live PAT)', async () => {

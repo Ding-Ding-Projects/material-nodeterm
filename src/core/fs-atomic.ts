@@ -130,34 +130,15 @@ const SLEEP_SLOT = new Int32Array(new SharedArrayBuffer(4))
 /**
  * Minimum age before a startup/save sweep may consider temp litter abandoned.
  *
- * The grace is intentionally long. A temp from another pid can belong to a second live app or
- * Server Edition process using the same data directory, and process liveness is only a snapshot.
- * Waiting a day makes a just-started or momentarily hard-to-probe writer untouchable while still
- * collecting credential copies left by a process that really died.
+ * The grace is intentionally long. PID-bearing temps are never collected automatically because
+ * local process liveness says nothing reliable about a writer in another PID namespace. The age
+ * applies only to the historical ownerless `<target>.tmp` shape.
  */
 export const STALE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export interface SweepStaleTempOptions {
   /** Test seam; production uses the wall clock. */
   now?: number
-  /** Test seam; production probes with signal 0. `true` means live OR not safely judgeable. */
-  processAlive?: (pid: number) => boolean
-}
-
-/**
- * Signal 0 does not deliver a signal; it only asks whether the pid is visible from this process's
- * namespace. ESRCH means “not visible here,” not globally dead (another PID namespace can own the
- * file). That result is usable only together with the long age grace below. EPERM and every
- * unfamiliar platform response mean “cannot judge” and therefore preserve the temp.
- */
-function processIsAlive(pid: number): boolean {
-  if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) return true
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return codeOf(error) !== 'ESRCH'
-  }
 }
 
 interface AtomicTempCandidate {
@@ -171,9 +152,9 @@ function atomicTempCandidate(base: string, entry: string): AtomicTempCandidate |
   if (!entry.startsWith(base)) return null
   const suffix = entry.slice(base.length)
   if (suffix === '.tmp') return {}
-  // Accept both the historical pid+sequence name and the current pid+sequence+UUID name so an
-  // upgrade can still report or collect old crash litter.
-  const owned = /^\.(\d+)\.\d+(?:\.[^.]+)?\.tmp$/.exec(suffix)
+  // Accept the historical pid+sequence name and ONLY the canonical v4 UUID shape emitted now.
+  // A broad "anything without a dot" token made unrelated lookalikes part of cleanup policy.
+  const owned = /^\.(\d+)\.\d+(?:\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?\.tmp$/.exec(suffix)
   return owned ? { ownerPid: Number(owned[1]) } : null
 }
 
@@ -182,11 +163,12 @@ function atomicTempCandidate(base: string, entry: string): AtomicTempCandidate |
  *
  * Current temp names are `<target>.<pid>.<seq>.<uuid>.tmp`; the prior pid+sequence form is also
  * recognized during upgrades. A different pid is NOT proof that a writer died: desktop
- * multi-instance mode and two Server Edition processes may deliberately share a data directory. A
- * pid-bearing temp is removed only after the age grace AND after its owner pid is no longer visible
- * in this namespace. The age is essential because a shared mounted directory can cross PID
- * namespaces. An unjudgeable probe preserves it. The legacy fixed `<target>.tmp` name has no owner
- * to probe, so age is the only evidence available and the same conservative grace applies.
+ * multi-instance mode and two Server Edition processes may deliberately share a data directory.
+ * A pid-bearing temp is never removed automatically. Signal-0/ESRCH is namespace-local, so it
+ * cannot prove that a writer on a shared Docker/Server volume is dead; PID reuse makes the inverse
+ * equally unreliable. Credential Clear reports such a temp as incomplete instead. The legacy
+ * fixed `<target>.tmp` name has no owner or UUID and predates cross-process-safe writers, so the
+ * long age grace is the only evidence available for collecting that one exact shape.
  *
  * Unknown temp-name shapes are left alone. Every current writer removes its own temp on failure;
  * this sweep exists only for process death and must never recreate the writer-vs-sweeper race that
@@ -197,7 +179,6 @@ export async function sweepStaleTempFiles(
   opts: SweepStaleTempOptions = {}
 ): Promise<void> {
   const now = opts.now ?? Date.now()
-  const isAlive = opts.processAlive ?? processIsAlive
   try {
     const directory = path.dirname(target)
     const base = path.basename(target)
@@ -214,16 +195,8 @@ export async function sweepStaleTempFiles(
       }
       if (!Number.isFinite(mtimeMs) || now - mtimeMs < STALE_TEMP_AGE_MS) continue
 
-      if (candidate.ownerPid !== undefined) {
-        const owner = candidate.ownerPid
-        let alive = true
-        try {
-          alive = isAlive(owner)
-        } catch {
-          alive = true
-        }
-        if (alive) continue
-      }
+      // Foreign ownership cannot be proved dead across PID namespaces; fail conservative.
+      if (candidate.ownerPid !== undefined) continue
       await fs.rm(temp, { force: true }).catch(() => undefined)
     }
   } catch {
@@ -287,8 +260,8 @@ export interface ClearAtomicTargetResult {
 /**
  * Remove an atomic target without claiming a credential clear that did not actually finish.
  *
- * The ordinary sweep remains conservative: a young foreign temp may be a live writer in another
- * PID namespace and must not be deleted merely because signal 0 reports ESRCH here. Clear removes
+ * The ordinary sweep remains conservative: a pid-bearing temp may be a live writer in another PID
+ * namespace at any age and must not be deleted merely because signal 0 reports ESRCH here. Clear removes
  * the canonical file, then reports every recognized temp still present. Callers can surface an
  * explicit incomplete-clear error instead of telling the UI that a PAT/cookie is gone while its
  * bearer bytes remain next door. This is a point-in-time result, not a cross-process lock; a
@@ -299,7 +272,7 @@ export async function clearAtomicTarget(
   opts: SweepStaleTempOptions = {}
 ): Promise<ClearAtomicTargetResult> {
   await sweepStaleTempFiles(target, opts)
-  const canonicalRemoved = await removeAtomic(target)
+  const removeSucceeded = await removeAtomic(target)
   const directory = path.dirname(target)
   const base = path.basename(target)
   let retainedTempCount = 0
@@ -310,9 +283,21 @@ export async function clearAtomicTarget(
   } catch (error) {
     if (codeOf(error) !== 'ENOENT') inspectionComplete = false
   }
+  // A foreign writer can rename its temp onto the canonical path after our unlink and before the
+  // directory scan. Temp-count zero is therefore not enough: recheck the destination last so this
+  // point-in-time result cannot report success over a credential that has already reappeared.
+  let canonicalAbsent = removeSucceeded
+  if (canonicalAbsent) {
+    try {
+      await fs.lstat(target)
+      canonicalAbsent = false
+    } catch (error) {
+      if (codeOf(error) !== 'ENOENT') canonicalAbsent = false
+    }
+  }
   return {
-    cleared: canonicalRemoved && inspectionComplete && retainedTempCount === 0,
-    canonicalRemoved,
+    cleared: canonicalAbsent && inspectionComplete && retainedTempCount === 0,
+    canonicalRemoved: canonicalAbsent,
     retainedTempCount,
     inspectionComplete
   }

@@ -83,14 +83,18 @@ saves collided in the sealed-secret, scheduled-settings-secret,
 shared-mode credential, generic atomic-JSON and Ollama chat stores; the node-token writer had the
 same weak suffix. The old guard also saw only templates ending in `.tmp`, so the two `tmp-…` forms
 were invisible until its matcher was widened. Cross-run cleanup now has one rule too: a foreign pid
-may be a live second instance, so `sweepStaleTempFiles` waits 24 hours and removes a pid-bearing temp
-only when that pid is no longer visible in this process's namespace. Unknown probe results preserve
-the file; ESRCH is not treated as global cross-namespace proof without the age grace.
+may be a live second instance or a writer in another PID namespace, so `sweepStaleTempFiles` never
+auto-deletes a PID-bearing temp. Signal-0/`ESRCH` is not global proof of death. Only the exact
+ownerless legacy `<target>.tmp` shape is collectible after the 24-hour grace; current writers clean
+their own UUID temp on failure.
 
 Credential Clear paths use `clearAtomicTarget`: they remove the canonical file but return an
 explicit `clear-incomplete` failure while any recognized temp remains or the directory could not be
-inspected. That keeps a plausible cross-namespace live writer safe without telling the UI that a
-PAT, cookie, or Home Assistant token is completely gone while bearer bytes remain on disk.
+inspected, then recheck the canonical path so a concurrent republish is not falsely reported as
+cleared. That keeps a plausible cross-namespace live writer safe without telling the UI that a PAT,
+cookie, or Home Assistant token is completely gone while bearer bytes remain on disk. Credential
+stores perform this under their SQLite transaction so another supported process cannot publish
+during removal and inspection.
 
 One more race is orthogonal to the temp name. A whole-document flush that snapshots old state can
 stall in the retry loop, let a newer flush publish, then wake and replace it with an intact but stale

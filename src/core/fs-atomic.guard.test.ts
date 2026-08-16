@@ -109,6 +109,13 @@ describe('every store publishes through renameAtomic', () => {
     for (const match of text.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/g)) {
       if (!FS_MODULE.test(match[2])) continue
       for (const rawMember of match[1].split(',')) {
+        const promises = rawMember
+          .trim()
+          .match(/^promises(?:\s+as\s+([A-Za-z_$][\w$]*))?$/)
+        if (promises && !/\/promises$/.test(match[2])) {
+          found.namespaces.add(promises[1] ?? 'promises')
+          continue
+        }
         const member = rawMember.trim().match(/^(rename|renameSync)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/)
         if (!member) continue
         const local = member[2] ?? member[1]
@@ -167,6 +174,8 @@ describe('every store publishes through renameAtomic', () => {
     expect(renameHits("import fs from 'fs'\nawait fs.rename(a, b)")).not.toEqual([])
     expect(renameHits("import nodeFs from 'node:fs'\nnodeFs.renameSync(a, b)")).not.toEqual([])
     expect(renameHits("import fs from 'fs'\nawait fs.promises.rename(a, b)")).not.toEqual([])
+    expect(renameHits("import { promises as disk } from 'node:fs'\nawait disk.rename(a, b)"))
+      .not.toEqual([])
     expect(renameHits("import { renameSync } from 'fs'\nrenameSync(tmp, file)")).not.toEqual([])
     expect(renameHits("import { rename as move } from 'node:fs/promises'\nawait move(a, b)")).not.toEqual([])
     expect(renameHits("const disk = require('fs')\ndisk.renameSync(a, b)")).not.toEqual([])
@@ -226,9 +235,9 @@ describe('no local .tmp publisher uses a shared temp name', () => {
     for (const f of files) {
       const text = readFileSync(f, 'utf8')
       const rel = sourceRelativePath(f)
-      for (const m of tempNameTemplates(text)) {
-        if (isUniqueTempName(m[1], rel, text)) continue
-        offenders.push(`${rel}  \`${m[1]}\``)
+      for (const name of tempNameExpressions(text)) {
+        if (isUniqueTempName(name, rel, text)) continue
+        offenders.push(`${rel}  \`${name}\``)
       }
     }
     expect(
@@ -240,11 +249,17 @@ describe('no local .tmp publisher uses a shared temp name', () => {
   })
 
   it('the needle tells a shared name from a safe one', () => {
-    expect(tempNameTemplates('  const tmp = `${this.path}.tmp`')).toHaveLength(1)
-    expect(tempNameTemplates('  const tmp = `${this.path}.tmp-${process.pid}-${Date.now()}`')).toHaveLength(1)
-    expect(tempNameTemplates('  const tmp = path.join(dir, `.${nodeId}.${process.pid}.${Date.now()}.tmp`)')).toHaveLength(1)
-    expect(tempNameTemplates('  const tmp = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)')).toHaveLength(1)
-    expect(tempNameTemplates('  return `${target}.${pid}.${sequence}.${uuid()}.tmp`')).toHaveLength(1)
+    expect(tempNameExpressions('  const tmp = `${this.path}.tmp`')).toHaveLength(1)
+    expect(tempNameExpressions('  const tmp = `${this.path}.tmp-${process.pid}-${Date.now()}`')).toHaveLength(1)
+    expect(tempNameExpressions('  const tmp = path.join(dir, `.${nodeId}.${process.pid}.${Date.now()}.tmp`)')).toHaveLength(1)
+    expect(tempNameExpressions('  const tmp = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)')).toHaveLength(1)
+    expect(tempNameExpressions('  return `${target}.${pid}.${sequence}.${uuid()}.tmp`')).toHaveLength(1)
+    expect(tempNameExpressions(
+      '  const tmp: string = path.join(\n    dir,\n    `${file}.${Date.now()}.tmp`\n  )'
+    )).toEqual(['${file}.${Date.now()}.tmp'])
+    expect(tempNameExpressions("  const tmp = file + '.tmp'")).toEqual(["file + '.tmp'"])
+    expect(tempNameExpressions("  const tmp =\n    file +\n    '.tmp'"))
+      .toEqual(["file + '.tmp'"])
     const importsUuid = "import { randomUUID } from 'crypto'"
     const importsUuidAlias = "import { randomUUID as freshId } from 'node:crypto'"
     const importsDefaultCrypto = "import crypto from 'node:crypto'"
@@ -337,17 +352,48 @@ describe('no local .tmp publisher uses a shared temp name', () => {
     expect(isUniqueTempName('${file}.${process.pid}.${++writeSeq}.tmp', 'core/store.ts', '')).toBe(false)
     expect(isUniqueTempName('${file}.${process.pid}.${writeSeq++ % 2}.tmp', 'core/store.ts', ''))
       .toBe(false)
+    expect(isUniqueTempName("file + '.tmp'", 'core/store.ts', '')).toBe(false)
+    expect(isUniqueTempName(
+      "file + '.' + randomUUID() + '.tmp'",
+      'core/store.ts',
+      importsUuid
+    )).toBe(true)
   })
 })
 
-/** Find temp-path templates returned by a helper or assigned directly/through path.join. Keeping
- * the expression bounded to one line avoids walking into an unrelated later template when a
- * declaration is not a path. The nested form matters: the historical node-token collision lived
- * inside path.join and the old direct-only needle silently missed it. */
-function tempNameTemplates(text: string): RegExpMatchArray[] {
-  return [...text.matchAll(
-    /^\s*(?:(?:const|let)\s+\w+\s*=\s*(?:(?:path\.)?join\([^`\r\n]*?)?|return\s+)`([^`]*(?:\.tmp|tmp-)[^`]*)`/gm
-  )]
+/** Find temp-path templates returned by a helper or assigned directly/through path.join, including
+ * typed/multiline joins and the common `tmp = file + '.tmp'` concatenation. Each join is bounded
+ * by its semicolon/backtick and each concatenation by its declaration line, so an unrelated later
+ * string cannot become false entropy. The historical node-token collision lived inside path.join;
+ * the old direct-only needle silently missed it. */
+function tempNameExpressions(text: string): string[] {
+  const templates = [...text.matchAll(
+    /^\s*(?:(?:const|let)\s+\w+(?:\s*:\s*[^=;\r\n]+)?\s*=\s*(?:(?:path\.)?join\([^`;]*?)?|return\s+)`([^`]*(?:\.tmp|tmp-)[^`]*)`/gm
+  )].map((match) => match[1])
+  const concatenations: string[] = []
+  const lines = text.split(/\r?\n/)
+  for (let index = 0; index < lines.length; index++) {
+    const declaration = /^\s*(?:const|let)\s+\w*(?:tmp|temp)\w*(?:\s*:\s*[^=]+)?\s*=\s*(.*)$/i
+      .exec(lines[index])
+    if (!declaration) continue
+    let expression = declaration[1]
+    let next = index + 1
+    const continues = (): boolean => {
+      const compact = expression.trim()
+      const opens = (expression.match(/[([{]/g) ?? []).length
+      const closes = (expression.match(/[)\]}]/g) ?? []).length
+      return compact === '' || /[+,(]$/.test(compact) || opens > closes || /^\s*\+/.test(lines[next] ?? '')
+    }
+    while (next < lines.length && continues()) {
+      expression += ` ${lines[next].trim()}`
+      next++
+    }
+    if (/['"][^'"]*(?:\.tmp|tmp-)[^'"]*['"]/.test(expression)) {
+      concatenations.push(expression.trim().replace(/\s+/g, ' '))
+      index = next - 1
+    }
+  }
+  return [...templates, ...concatenations]
 }
 
 interface CryptoRandomUuidBindings {
@@ -440,9 +486,15 @@ function isUniqueTempName(name: string, relativeFile: string, source: string): b
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/.*$/g, '')
   )
+  const inspectedBodies = interpolationBodies.length > 0
+    ? interpolationBodies
+    : [name
+        .replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/g, '')]
 
   if (helperWithBehavioralUuidChut) {
-    if (interpolationBodies.some((body) => /(?<![A-Za-z0-9_$.])uuid\s*\(/.test(body))) {
+    if (inspectedBodies.some((body) => /(?<![A-Za-z0-9_$.])uuid\s*\(/.test(body))) {
       return true
     }
   }
@@ -450,11 +502,11 @@ function isUniqueTempName(name: string, relativeFile: string, source: string): b
     const call = new RegExp(
       `(?<![A-Za-z0-9_$.])${escapeRegExp(namespace)}\\.randomUUID\\s*\\(`
     )
-    if (interpolationBodies.some((body) => call.test(body))) return true
+    if (inspectedBodies.some((body) => call.test(body))) return true
   }
   for (const directCall of bindings.directCalls) {
     const call = new RegExp(`(?<![A-Za-z0-9_$.])${escapeRegExp(directCall)}\\s*\\(`)
-    if (interpolationBodies.some((body) => call.test(body))) return true
+    if (inspectedBodies.some((body) => call.test(body))) return true
   }
   return false
 }

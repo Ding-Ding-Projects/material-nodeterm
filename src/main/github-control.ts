@@ -1,7 +1,19 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { clearAtomicTarget, renameAtomic, sweepStaleTempFiles, tempNameFor } from '../core/fs-atomic'
+import { clearAtomicTarget, sweepStaleTempFiles } from '../core/fs-atomic'
+import {
+  readAtomicFileSnapshot,
+  withCrossProcessLock,
+  writeAtomicFileCompared,
+  type CrossProcessLease
+} from '../core/fs-transaction-lock'
 import type { GitHubSecretStore } from '../core/github/credentials'
+import {
+  GitHubTokenDocumentError,
+  parseGitHubTokenDocument,
+  validGitHubToken,
+  type GitHubTokenDocument
+} from '../core/github/token-document'
 import type { GitHubSecretAvailability } from '../shared/github-issues'
 import { IPC } from '../shared/ipc'
 import type { GitHubHostController } from '../core/github/host'
@@ -15,42 +27,24 @@ export interface SafeStorageLike {
   decryptString(value: Buffer): string
 }
 
-type TokenDocument =
-  | { version: 1; kind: 'safe-storage'; value: string }
-  | { version: 1; kind: 'restricted-file'; token: string }
-
 export class GitHubSecretError extends Error {
   constructor(readonly code: 'invalid-token' | 'keyring-locked' | 'clear-incomplete') {
     super(code)
   }
 }
 
-function validToken(token: string): boolean {
-  return token.trim() === token && token.length > 0 && token.length <= 4096 && !/[\r\n\0]/.test(token)
-}
-
-async function atomicWrite(file: string, document: TokenDocument): Promise<void> {
+async function atomicWrite(
+  file: string,
+  document: GitHubTokenDocument,
+  expectedRevision: string,
+  lease: CrossProcessLease
+): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
   await sweepStaleTempFiles(file)
-  // The store's per-instance chain orders this write against its sibling mutations; the per-call
-  // temp name covers the writers the chain cannot see — a second app process on the same
-  // userDataDir, even across a PID namespace, and a crash between tmp-write and rename. With a
-  // shared name one writer's rename publishes the other's
-  // half-written PAT, or moves the file out from under it entirely and the loser's rename fails.
-  // The rename itself now retries a transient Windows sharing-violation error — see src/core/fs-atomic.ts.
-  const temporary = tempNameFor(file)
-  try {
-    await fs.writeFile(temporary, JSON.stringify(document), { encoding: 'utf-8', mode: 0o600 })
-    await fs.chmod(temporary, 0o600)
-    await renameAtomic(temporary, file)
-  } catch (error) {
-    // A failed write MUST remove its own temp, because here a leaked temp IS a leaked PAT: a
-    // unique name is never written again, so only this cleanup (or a later sweep after the age
-    // grace and an owner pid no longer visible here mark it abandoned) will collect it. The error propagates.
-    await fs.rm(temporary, { force: true }).catch(() => {})
-    throw error
-  }
-  await fs.chmod(file, 0o600)
+  await writeAtomicFileCompared(file, JSON.stringify(document), expectedRevision, lease, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
 }
 
 export class ElectronGitHubSecretStore implements GitHubSecretStore {
@@ -80,42 +74,58 @@ export class ElectronGitHubSecretStore implements GitHubSecretStore {
   }
 
   save(token: string): Promise<void> {
-    return this.chained(() => this.saveNow(token))
+    return this.chained(() =>
+      withCrossProcessLock(this.filePath, (lease) => this.saveNow(token, lease))
+    )
   }
 
-  private async saveNow(token: string): Promise<void> {
-    if (!validToken(token)) throw new GitHubSecretError('invalid-token')
-    const current = await this.readDocument()
-    if (current?.kind === 'safe-storage' && !this.canEncrypt()) {
+  private async saveNow(token: string, lease: CrossProcessLease): Promise<void> {
+    if (!validGitHubToken(token)) throw new GitHubSecretError('invalid-token')
+    const current = await this.readDocumentSnapshot()
+    if (current.document?.kind === 'safe-storage' && !this.canEncrypt()) {
       throw new GitHubSecretError('keyring-locked')
     }
-    const document: TokenDocument = this.canEncrypt()
+    if (current.document?.kind === 'safe-storage') {
+      // A syntactically valid envelope can still carry undecryptable keyring bytes. Preserve that
+      // evidence instead of accepting a replacement as though the prior credential were absent.
+      this.decryptDocument(current.document)
+    }
+    const document: GitHubTokenDocument = this.canEncrypt()
       ? {
           version: 1,
           kind: 'safe-storage',
           value: this.safeStorage.encryptString(token).toString('base64')
         }
       : { version: 1, kind: 'restricted-file', token }
-    await atomicWrite(this.filePath, document)
+    await atomicWrite(this.filePath, document, current.revision, lease)
   }
 
   clear(): Promise<void> {
-    return this.chained(async () => {
-      const result = await clearAtomicTarget(this.filePath)
-      if (!result.cleared) throw new GitHubSecretError('clear-incomplete')
-    })
+    return this.chained(() =>
+      withCrossProcessLock(this.filePath, async (lease) => {
+        await lease.fence()
+        const result = await clearAtomicTarget(this.filePath)
+        if (!result.cleared) throw new GitHubSecretError('clear-incomplete')
+      })
+    )
   }
 
   async readForHost(): Promise<string | null> {
     const document = await this.readDocument()
     if (!document) return null
-    if (document.kind === 'restricted-file') return validToken(document.token) ? document.token : null
-    if (!this.canEncrypt()) return null
+    if (document.kind === 'restricted-file') return document.token
+    if (!this.canEncrypt()) throw new GitHubSecretError('keyring-locked')
+    return this.decryptDocument(document)
+  }
+
+  private decryptDocument(document: Extract<GitHubTokenDocument, { kind: 'safe-storage' }>): string {
     try {
       const token = this.safeStorage.decryptString(Buffer.from(document.value, 'base64'))
-      return validToken(token) ? token : null
-    } catch {
-      return null
+      if (!validGitHubToken(token)) throw new GitHubTokenDocumentError()
+      return token
+    } catch (error) {
+      if (error instanceof GitHubTokenDocumentError) throw error
+      throw new GitHubTokenDocumentError('The encrypted GitHub credential could not be decrypted.')
     }
   }
 
@@ -128,22 +138,23 @@ export class ElectronGitHubSecretStore implements GitHubSecretStore {
     }
   }
 
-  private async readDocument(): Promise<TokenDocument | null> {
+  private async readDocument(): Promise<GitHubTokenDocument | null> {
+    return (await this.readDocumentSnapshot()).document
+  }
+
+  private async readDocumentSnapshot(): Promise<{
+    document: GitHubTokenDocument | null
+    revision: string
+  }> {
+    const snapshot = await readAtomicFileSnapshot(this.filePath)
+    if (!snapshot.exists) return { document: null, revision: snapshot.revision }
+    let value: unknown
     try {
-      const value: unknown = JSON.parse(await fs.readFile(this.filePath, 'utf-8'))
-      if (!value || typeof value !== 'object') return null
-      const document = value as Partial<TokenDocument>
-      if (document.version !== 1) return null
-      if (document.kind === 'safe-storage' && typeof document.value === 'string') {
-        return document as TokenDocument
-      }
-      if (document.kind === 'restricted-file' && typeof document.token === 'string') {
-        return document as TokenDocument
-      }
-      return null
-    } catch {
-      return null
+      value = JSON.parse(snapshot.data.toString('utf8'))
+    } catch (cause) {
+      throw new GitHubTokenDocumentError('The stored GitHub credential document is corrupt.', { cause })
     }
+    return { document: parseGitHubTokenDocument(value), revision: snapshot.revision }
   }
 }
 
