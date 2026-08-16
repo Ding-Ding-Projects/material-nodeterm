@@ -72,7 +72,9 @@ export function createStore() {
     if (saved[k] !== undefined) state[k] = saved[k]
   })
   if (!state.notes || !state.notes.length) state.notes = defaultNotes()
-  if (!state.history || !state.history.length) state.history = defaultHistory()
+  // An explicitly empty history means the user deleted every row. Treating [] as first-run data
+  // resurrects the welcome entry on reload and makes the deletion button a lie.
+  if (!Array.isArray(state.history)) state.history = defaultHistory()
   if (!state.auth) state.auth = []
 
   const listeners = []
@@ -104,6 +106,17 @@ export function createStore() {
     scheduleRender()
   }
 
+  function captureDurableBefore(patch) {
+    const before = {}
+    Object.keys(patch).forEach((key) => {
+      if (!PERSISTED_KEYS.includes(key)) return
+      // Persisted playground state is JSON data by definition. Clone it here so a later immutable
+      // update cannot mutate the prior-state snapshot held by a history row.
+      before[key] = JSON.parse(JSON.stringify(state[key]))
+    })
+    return before
+  }
+
   return {
     state,
     setState,
@@ -111,6 +124,7 @@ export function createStore() {
       listeners.push(fn)
     },
     persist,
+    captureDurableBefore,
   }
 }
 

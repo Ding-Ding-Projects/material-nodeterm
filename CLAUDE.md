@@ -169,6 +169,20 @@ Persistence has two layers:
 
 `settings.json` is a separate store (`main/settings-store.ts`, `state/settings.ts`).
 
+**Local settings history is one ordered transaction across core and renderer**
+(`core/local-history.ts`, `renderer/state/settings.ts`, full write-up in
+`docs/local-history.md`). Each domain has one Git working repository, so `record()` serializes the
+complete write/add/commit decision FIFO; unique bytes alone cannot stop one caller staging another's
+content or committing it under the wrong label. `list()`/`restoreContent()` join the existing write
+tail for read-your-own-write behavior, and an initialized repository without `HEAD` returns `[]`
+rather than laundering Git's unborn-branch exit into "could not read". Restoring settings then
+suspends and epochs the renderer's 300 ms save lane, waits for already-dispatched saves, applies the
+core revision, and immediately reloads both Zustand `base` and live override-resolved `settings`.
+A failed restore reschedules the canceled edit; a successful chosen revision supersedes edits queued
+during the restore. The public Pages playground is separate browser-only state: saved changes carry
+real prior-value patches, record-only events expose no undo, and deleting the final log row persists
+an explicit empty list.
+
 **The shared School/Kids mode records must become watchable even when their directory is absent at
 boot.** Both stores use `core/shared-record-watch.ts`: one `fs.watch` handle sits on the nearest
 existing ancestor, promotes toward `~/.nodeterm/shared/` as it appears, and retries promotion after

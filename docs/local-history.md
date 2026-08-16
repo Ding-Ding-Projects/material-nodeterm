@@ -29,6 +29,11 @@ project the user owns, and never the project's own `.git`. Today there is exactl
 The repo's commit identity (`user.name`/`user.email`) is set **locally**, inside that repo only —
 never the user's global git config. `git init` runs once, lazily, on first use.
 
+A repository that has been initialized but has no commits yet is a successful **empty history**:
+`list()` probes `HEAD` with quiet `rev-parse` and returns `[]`. Letting `git log` fail on that
+ordinary unborn state collapses "we looked and there is nothing" into the same `null` used for a
+real read failure, and makes a first-run History panel report that Git is broken.
+
 ## Append-only, always
 
 Every save that actually changed something writes **one new commit**. Restoring an old revision
@@ -37,6 +42,28 @@ path** — it is recorded as a brand-new commit, labelled `"Restored settings to
 action `'restored'`, never a `git reset`/`git checkout` that would rewrite or lose history. That is
 the whole point: a restore can itself be restored away from later, and the one thing this history
 can never do is destroy a revision that already landed.
+
+The whole working-file → index → commit decision is **FIFO per domain**, not only the file write.
+A git working tree and index are shared mutable state: two concurrent `record()` calls can otherwise
+stage each other's bytes, attach the wrong label to a snapshot, or leave the later commit with a
+clean index and silently lose it. `LocalHistoryStore` publishes its per-domain tail before its first
+`await`; different domains remain independent. `list()` and `restoreContent()` join the tail that
+exists when their read begins, so the panel immediately after a restore sees the revision whose
+background recorder was started by that restore.
+
+## A restore is also a renderer transaction
+
+Applying `settings.json` in core is only half of a live restore. The renderer's Zustand store still
+holds the pre-restore object, and `renderer/state/settings.ts` may have a coalesced save waiting for
+its 300 ms timer. If that callback lands afterward, the UI both renders and republishes the state
+the user explicitly replaced.
+
+`restoreSettingsRevision()` therefore suspends settings persistence, epochs and cancels every
+not-yet-dispatched snapshot, joins the already-dispatched save tail, invokes the core restore, then
+loads the authoritative settings straight back into both `base` and the override-resolved live
+`settings`. A failed restore re-schedules the canceled user edit. Edits queued while a successful
+restore is in flight are superseded by the chosen revision and discarded. The barrier/timer tests
+in `renderer/state/settings.test.ts` pin all three orderings.
 
 ## A write must never break the operation it is recording
 
@@ -127,3 +154,17 @@ Server Edition's browser gets the exact same settings history, acting on the **s
 special-cased: `history`/`vscode`/`export` all stay on `...local` there, the same as `settings`
 already does — a relay guest's settings history is the guest's own machine's history, never the
 remote host's.
+
+**Mobile companion:** N/A today. *nodeterm mobile* does not render or mutate the desktop/server
+settings store, and the terminal transport has no local-history protocol. If settings management is
+added to the private iOS app, it must add the same restore/rehydrate ordering there; mention
+@eneskirca in that follow-up rather than silently treating the desktop IPC as mobile coverage.
+
+## The Pages playground is a separate browser-only time machine
+
+The public `site/` does not use Git or this IPC. Its `save()` helper stores the prior values of the
+durable keys changed by that operation in the history row, and `undoEntry()` applies those values as
+one persisted state transition while recording a reversible inverse. Pure events such as an export
+or conversion are record-only and expose no fake restore action. Removing history rows uses the
+ordinary persistent store path, including the empty-list case; an explicit `[]` is never mistaken
+for first-run data and repopulated after reload.

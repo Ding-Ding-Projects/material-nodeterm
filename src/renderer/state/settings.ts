@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { DEFAULT_SETTINGS, type Settings } from '@shared/types'
 import type { SchedulableSettingsPatch } from '@shared/scheduled-settings'
+import type { HistoryRestoreResult } from '@shared/local-history'
 
 interface SettingsState {
   /** What actually RENDERS: `base` with the currently-active scheduled-settings override (if
@@ -30,22 +31,53 @@ interface SettingsState {
 // window, always with the latest snapshot.
 const SAVE_COALESCE_MS = 300
 let saveTimer: ReturnType<typeof setTimeout> | null = null
-let pendingSave: Settings | null = null
+let saveGeneration = 0
+let savesSuspended = false
+let pendingSave: { settings: Settings; generation: number } | null = null
+let saveTail: Promise<void> = Promise.resolve()
+
+function dispatchSave(next: Settings): void {
+  // Track dispatched writes as well as the timer. A history restore first joins this tail, so a
+  // save that already crossed IPC cannot wake after the restored revision and put stale renderer
+  // state back on disk. Each failure stays fire-and-forget for the ordinary settings UI, while
+  // the next operation can still advance past it.
+  const run = saveTail.catch(() => {}).then(() => window.nodeTerminal.settings.save(next))
+  saveTail = run
+  void run.catch(() => {})
+}
+
 function scheduleSave(next: Settings): void {
-  pendingSave = next
-  if (saveTimer) return
+  pendingSave = { settings: next, generation: saveGeneration }
+  if (saveTimer || savesSuspended) return
   saveTimer = setTimeout(() => {
     saveTimer = null
-    if (pendingSave) void window.nodeTerminal.settings.save(pendingSave)
+    const queued = pendingSave
     pendingSave = null
+    if (queued && queued.generation === saveGeneration && !savesSuspended) {
+      dispatchSave(queued.settings)
+    }
   }, SAVE_COALESCE_MS)
+}
+
+/** Cancel every not-yet-dispatched snapshot and make any callback already copied out of the old
+ * generation inert. Returns whether a user edit was waiting, so a failed restore can resume it. */
+function invalidateQueuedSave(): boolean {
+  const hadPending = pendingSave !== null
+  saveGeneration += 1
+  pendingSave = null
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = null
+  return hadPending
 }
 // Reload/quit inside the coalesce window must not lose the last edit. (Guarded: this module
 // is transitively imported by node-environment unit tests, where `window` doesn't exist.)
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    if (pendingSave) void window.nodeTerminal.settings.save(pendingSave)
+    const queued = pendingSave
     pendingSave = null
+    if (queued && queued.generation === saveGeneration && !savesSuspended) {
+      dispatchSave(queued.settings)
+    }
   })
 }
 
@@ -85,3 +117,62 @@ export const useSettings = create<SettingsState>((set, get) => ({
     set({ settings: withOverride(get().base) })
   }
 }))
+
+let restoreTail: Promise<HistoryRestoreResult> = Promise.resolve({ ok: true })
+
+/**
+ * Run a settings-history restore as one renderer transaction.
+ *
+ * The local-history IPC applies the old document in core, but that alone leaves Zustand rendering
+ * the pre-restore object. Worse, its 300 ms coalesced save can then overwrite the revision the user
+ * just chose. Suspend and epoch pending callbacks, wait for any already-dispatched save, apply the
+ * restore, and immediately load the authoritative settings back into both `base` and `settings`.
+ * A failed restore resumes a canceled user edit; a successful one deliberately discards it because
+ * choosing the revision superseded that state.
+ */
+export function restoreSettingsRevision(
+  restore: () => Promise<HistoryRestoreResult>
+): Promise<HistoryRestoreResult> {
+  const run = restoreTail.catch(() => ({ ok: true }) as HistoryRestoreResult).then(async () => {
+    const hadPendingBeforeRestore = invalidateQueuedSave()
+    savesSuspended = true
+    await saveTail.catch(() => {})
+
+    let result: HistoryRestoreResult
+    try {
+      result = await restore()
+    } catch (e) {
+      result = { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+
+    if (!result.ok) {
+      const needsResave = hadPendingBeforeRestore || pendingSave !== null
+      pendingSave = null
+      savesSuspended = false
+      if (needsResave) scheduleSave(useSettings.getState().base)
+      return result
+    }
+
+    try {
+      const loaded = await window.nodeTerminal.settings.load()
+      // A modal restore is the winner. Drop updates queued while either IPC was in flight before
+      // publishing the restored object to the live UI; otherwise that callback is merely delayed,
+      // not canceled, and can resurrect the state on the next timer turn.
+      invalidateQueuedSave()
+      const base = { ...DEFAULT_SETTINGS, ...loaded }
+      useSettings.setState({ base, settings: withOverride(base), hydrated: true })
+      return result
+    } catch (e) {
+      return {
+        ok: false,
+        error: `The revision was restored, but the live settings view could not reload it: ${e instanceof Error ? e.message : String(e)}`
+      }
+    } finally {
+      pendingSave = null
+      savesSuspended = false
+    }
+  })
+
+  restoreTail = run
+  return run
+}

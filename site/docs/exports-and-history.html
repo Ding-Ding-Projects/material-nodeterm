@@ -29,7 +29,7 @@
       <p>Every notification and every meaningful settings change on this site is recorded locally and stays reviewable — with full bulk-select actions — and every one of those data sets can be exported in whichever format best represents it.</p>
 
       <h2>Behaviour</h2>
-      <p>Notifications (success/info messages, and warnings/errors that persist until dismissed) stay reviewable in a Notifications panel after they disappear from the corner toast stack. A separate Local history panel records a plain, human-readable description of every meaningful settings change — a language mode switch, a vocabulary file loaded, a lock created — oldest entries pruned automatically once the cap is reached.</p>
+      <p>Notifications (success/info messages, and warnings/errors that persist until dismissed) stay reviewable in a Notifications panel after they disappear from the corner toast stack. A separate Local history panel records a plain, human-readable description of every meaningful settings change — a language mode switch, a vocabulary file loaded, a lock created — and keeps the prior saved values so putting a change back really restores them. Putting that restore back works too. Record-only events such as exports and conversions stay labelled as log entries and do not pretend to be reversible; deleted history rows stay deleted after a reload. Oldest entries are pruned automatically once the cap is reached.</p>
         <p>Both lists get the full bulk-action contract: multi-select with shift-click ranges, a select-all that states what it means, inverse selection, and a reviewable count-and-preview before anything destructive runs.</p>
 
       <h2>Configuration</h2>
