@@ -341,6 +341,7 @@ import { useEntitlement } from '../state/entitlement'
 import type { SshServer, SshConnection } from '@shared/ssh'
 import { sshHostKey } from '@shared/ssh'
 import type {
+  BridgeLink,
   CanvasNodeState,
   Project,
   ProjectKanban,
@@ -351,7 +352,7 @@ import type {
 import type { KanbanCreateChoice, KanbanSession } from '../components/kanban/KanbanView'
 import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTags, resolveColumnRef, unassigned } from '../lib/kanban'
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
-import { canClearDirty, canCommitCanvas } from '../state/persistGuards'
+import { canClearDirty, commitActiveCanvas } from '../state/persistGuards'
 import { isHidden } from '../lib/ui-visibility'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
@@ -359,14 +360,15 @@ import { isKanbanOpen, useViewMode, viewFor } from '../state/viewMode'
 import {
   createCanvasPublisher,
   isEphemeralNodeId,
-  publishableStates,
+  publishableScene,
   type CanvasPublisher
 } from '@shared/canvas-publish'
 import { createCanvasOrder, createReconnectWatch, type CanvasOrder } from '@shared/canvas-order'
-import { createMutationGuard } from '@shared/canvas-mutations'
+import { createMutationGuard, isEdgeMutation, type CanvasScene } from '@shared/canvas-mutations'
 import { chordHeld, isHoldChord, isModifierEventKey, matchesShortcut } from '@shared/shortcut'
 import { dispatchDestructiveControl } from '../lib/controlDestructive'
 import { canvasSyncTarget } from './collab-sync'
+import { receiveActiveEdgeMutation } from './team-edge-receive'
 import { CanvasPills } from './CanvasPills'
 import {
   applyCanvasMutation,
@@ -606,6 +608,9 @@ const ropeEdge = (id: string, source: string, target: string, color: string): Ed
   markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 }
 })
 
+/** A React Flow edge reduced to what is PERSISTED (and what goes on the wire). The decoration —
+ *  color, markers, handles — is re-derived on every client from its own nodes, so it never travels. */
+const toBridgeLink = (e: Edge): BridgeLink => ({ id: e.id, source: e.source, target: e.target })
 
 const minimapNodeColor = (n: Node): string =>
   (n.data as { color?: string })?.color ?? '#0a84ff'
@@ -2058,28 +2063,54 @@ export function Canvas() {
   // once per drag FRAME — so handing over an array meant a solo user paid the whole cost of a
   // feature the publisher's own solo gate then declined to use. What must NOT be deferred is the
   // ephemeral-id set: it is read from a live store, so it is captured here, as of this call.
-  const publishableLater = useCallback((flow: CanvasNode[]): (() => CanvasNodeState[]) => {
-    const ephIds = new Set(Object.keys(useAgentNodes.getState().byId))
-    return () => publishableStates(flowToNodeStates(flow), ephIds)
-  }, [])
+  //
+  // The two PERSISTED edge lists ride along, because they ride the same whole-file save and were
+  // the one thing canvas sync did not carry: an edge you drew never reached your teammate, and
+  // their next save — of a canvas that never had it — DELETED it. They are read from the refs
+  // LAZILY (inside the thunk), so the solo gate still skips the whole cost; `override` is for the
+  // one caller that has just computed the next edges and cannot wait for the ref to catch up (the
+  // refs are assigned during render, so immediately after a setLinkEdges they still hold the
+  // previous array).
+  const publishableLater = useCallback(
+    (
+      flow: CanvasNode[],
+      override?: { bridges?: Edge[]; ropes?: Edge[] }
+    ): (() => CanvasScene) => {
+      const ephIds = new Set(Object.keys(useAgentNodes.getState().byId))
+      const overrideBridges = override?.bridges
+      const overrideRopes = override?.ropes
+      return () =>
+        publishableScene(
+          {
+            nodes: flowToNodeStates(flow),
+            bridges: (overrideBridges ?? linkEdgesRef.current).map(toBridgeLink),
+            ropes: (overrideRopes ?? controlEdgesRef.current).map(toBridgeLink)
+          },
+          ephIds
+        )
+    },
+    []
+  )
 
   // ---- persistence helpers ----
   const commitActiveToStore = useCallback(() => {
-    const id = useProjects.getState().activeProjectId
+    const store = useProjects.getState()
     // Epoch pairing: only commit while the nodes React Flow holds belong to the ACTIVE project.
     // The normal switch flow still commits — every caller commits BEFORE `setActive`, while the two
     // ids still agree — but an autosave timer armed under the previous project now skips instead of
-    // writing its nodes under the new project's id (field bug 2026-08-10).
-    if (canCommitCanvas(nodesProjectIdRef.current, id))
-      useProjects
-        .getState()
-        .commitCanvas(
-          id,
-          flowToNodeStates(nodesRef.current),
-          viewportRef.current,
-          linkEdgesRef.current.map((e) => ({ id: e.id, source: e.source, target: e.target })),
-          controlEdgesRef.current.map((e) => ({ id: e.id, source: e.source, target: e.target }))
-        )
+    // writing its nodes under the new project's id (field bug 2026-08-10). The tested commit seam
+    // carries both edge refs too; a peer edge must reach the same whole-file snapshot as the nodes.
+    commitActiveCanvas(
+      {
+        nodesProjectId: nodesProjectIdRef.current,
+        activeProjectId: store.activeProjectId,
+        nodes: flowToNodeStates(nodesRef.current),
+        viewport: viewportRef.current,
+        bridges: linkEdgesRef.current.map(toBridgeLink),
+        ropes: controlEdgesRef.current.map(toBridgeLink)
+      },
+      store.commitCanvas
+    )
   }, [])
 
   const writeDisk = useCallback(async () => {
@@ -2303,6 +2334,11 @@ export function Canvas() {
       (m) => {
         const projectId = useProjects.getState().activeProjectId
         if (!projectId) return false // no active canvas: nothing was cast — retry on the next publish
+        // Stamp our causal position FIRST (canvas-order rule 4: what we had applied when we cast —
+        // it is what lets a teammate's delete beat this frame instead of being resurrected by it),
+        // so the size guard below judges the EXACT payload that goes on the wire. `stamp` is pure:
+        // a refusal still records no pending entry.
+        const stamped = order.stamp(m)
         // The reflector REFUSES an oversized / malformed mutation at ingest, silently: no peer ever
         // sees it and there is no negative ack. Ask the same predicate FIRST, so a refusal costs us
         // neither a pending entry (which would deafen this node to its peers for the whole TTL — a
@@ -2310,20 +2346,20 @@ export function Canvas() {
         // resurrect their node) nor the retry (the publisher keeps the node in its baseline). The
         // only thing that can legitimately blow the cap is free text, i.e. a sticky's body — so say
         // so, instead of letting the note silently never sync.
-        if (!guard(m)) {
+        if (!guard(stamped)) {
           setSyncNote(
             'This note is too large to share with your teammates (over 250 KB). It stays on your ' +
               'canvas, but they will not see it until you shorten it.'
           )
           return false
         }
-        order.onLocal(m)
+        order.onLocal(stamped)
         // Cast to the ACTIVE session's core — a relay tab publishes to the relay HOST, not to B's
         // own local core (the bug this fixes). Byte-identical on a local tab (`activeSession.api`
         // IS `window.nodeTerminal`). `canvasSyncTarget` decides the GATE (hasPeers) at bind time;
         // the cast target is just the session's api, so reach it directly — no per-cast allocation
         // on this ~20 Hz path.
-        activeSession.api.canvas.mutate(projectId, m)
+        activeSession.api.canvas.mutate(projectId, stamped)
         return true
       },
       { src, shouldPublish: () => hasPeersRef.current }
@@ -2357,7 +2393,12 @@ export function Canvas() {
       return
     }
     pub.publish(states, { throttle: draggingRef.current })
-  }, [nodes, publishableLater])
+    // Edges are in the deps for the same reason the publisher diffs them: drawing (or deleting) a
+    // context link / rope never touches `nodes`, so without this the edit would never be published
+    // — and the peer's next whole-file save would delete it. React Flow also re-creates these
+    // arrays on a mere SELECTION change; that costs one diff which yields no mutation (the diff
+    // compares id/source/target only), and a solo user does not even pay that (the solo gate).
+  }, [nodes, linkEdges, controlEdges, publishableLater])
 
   // Receiving side: apply an incoming mutation. Deliberately separate from the relay
   // `remoteHost.onApplyMutation` effect above — that one is host↔client, this one is peer↔peer.
@@ -2388,6 +2429,64 @@ export function Canvas() {
     return activeSession.api.canvas.onMutation((projectId, mutation) => {
       hasPeersRef.current = true // proof of a peer, whatever the presence table says
       if (!orderRef.current?.accept(mutation)) return
+      // ---- edges (context links + "spawned by" ropes) ----
+      // They live outside React Flow's `nodes` array, in their own state, so they take their own
+      // apply path — but everything around it is the node path's contract, unchanged: the ordering
+      // gate above has already decided this mutation wins, `adopt` is still the loop guard, and a
+      // background project is still patched in the store so our next save cannot delete the edge.
+      if (isEdgeMutation(mutation)) {
+        if (projectId !== useProjects.getState().activeProjectId) {
+          if (useProjects.getState().applyEdgeMutation(projectId, mutation)) markDirty()
+          return
+        }
+        // Rebuilt EDGE-BY-EDGE, reusing the existing object whenever its three ids are unchanged —
+        // the same discipline `applyMutationToFlow` follows for nodes, and for the same reason: a
+        // freshly built object loses `selected`, so re-creating the whole list would wipe the
+        // user's edge selection every time a teammate touched any OTHER edge.
+        const keep = <T extends Edge>(prev: T[], link: BridgeLink): T | undefined => {
+          const e = prev.find((x) => x.id === link.id)
+          return e && e.source === link.source && e.target === link.target ? e : undefined
+        }
+        receiveActiveEdgeMutation(
+          { bridges: linkEdgesRef.current, ropes: controlEdgesRef.current },
+          mutation,
+          {
+            toLink: toBridgeLink,
+            rebuild: (kind, link, previous) => {
+              const kept = keep(previous, link)
+              if (kept) return kept
+              if (kind === 'bridge') {
+                return {
+                  id: link.id,
+                  source: link.source,
+                  target: link.target,
+                  type: 'default'
+                }
+              }
+              // The rope's COLOR is local: it comes from the source node's agent, which every
+              // client resolves from its own copy of that node. Nothing about it travels on the wire.
+              const srcNode = nodesRef.current.find((nd) => nd.id === link.source)
+              const color = agentConfig((srcNode?.data.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+              return ropeEdge(link.id, link.source, link.target, color)
+            },
+            setBridges: (edges) => {
+              linkEdgesRef.current = edges
+              setLinkEdges(edges)
+            },
+            setRopes: (edges) => {
+              controlEdgesRef.current = edges
+              setControlEdges(edges)
+            },
+            adopt: ({ bridges, ropes }) => {
+              publisherRef.current?.adopt(
+                publishableLater(nodesRef.current, { bridges, ropes })
+              )
+            },
+            markDirty
+          }
+        )
+        return
+      }
       if (projectId !== useProjects.getState().activeProjectId) {
         // Not on screen (a parked / background project): no terminal is mounted, but one may be
         // PARKED from a recent project switch — dispose it, as an active-project remove does.
@@ -2423,7 +2522,7 @@ export function Canvas() {
       setNodes(flow)
       markDirty()
     })
-  }, [activeSession.api, setNodes, markDirty, publishableLater])
+  }, [activeSession.api, setNodes, setLinkEdges, setControlEdges, markDirty, publishableLater])
 
   // Record an undo snapshot when the canvas settles (debounced; skips drag frames/loads).
   useEffect(() => {

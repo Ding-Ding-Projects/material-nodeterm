@@ -172,6 +172,81 @@ describe('createCanvasOrder', () => {
     expect(o.accept(unstamped)).toBe(true)
   })
 
+  // RULE 4 — a delete is not an edit, and `seq` alone cannot tell them apart. Before this, A's
+  // delete losing the order race to B's next drag frame left the node ALIVE on every canvas as a
+  // shell around a tmux session `kill-session` had already killed. `seen` (what the sender had
+  // applied when it cast) separates "a stale frame" from "a deliberate re-creation".
+  describe('rule 4 — a stale frame cannot resurrect a deleted node', () => {
+    it('drops an upsert whose sender had not yet seen the delete', () => {
+      const o = createCanvasOrder('me')
+      expect(o.accept(rm('n1', 'a', 10))).toBe(true)
+      // B's drag frame: ordered AFTER the remove, but produced when B knew only up to seq 9.
+      expect(o.accept({ ...up('n1', 42, 'b', 11), seen: 9 })).toBe(false)
+    })
+
+    it('applies an upsert whose sender HAD seen the delete (a deliberate re-creation)', () => {
+      const o = createCanvasOrder('me')
+      expect(o.accept(rm('n1', 'a', 10))).toBe(true)
+      // A's own ⌘Z, or anyone adding the node back: cast in full knowledge of the delete.
+      expect(o.accept({ ...up('n1', 42, 'a', 11), seen: 10 })).toBe(true)
+      // …and the node is alive again, so an ordinary later edit is not blocked by a dead entry.
+      expect(o.accept({ ...up('n1', 43, 'b', 12), seen: 11 })).toBe(true)
+    })
+
+    it('does not judge an unstamped upsert (an older peer degrades, it does not break)', () => {
+      const o = createCanvasOrder('me')
+      expect(o.accept(rm('n1', 'a', 10))).toBe(true)
+      expect(o.accept(up('n1', 42, 'b', 11))).toBe(true) // no `seen`: the pre-rule-4 verdict
+    })
+
+    // The mirror on the receiving side. Rule 2 rests on "our unacked mutation is later in the total
+    // order, so it wins everywhere" — under rule 4 it does not, because every peer is about to drop
+    // it as older than this delete. Suppressing the remove here is the one way to disagree with them.
+    it('a remove is never held off by our own unacked drag (rule 2 does not apply to it)', () => {
+      const o = createCanvasOrder('me')
+      o.onLocal(o.stamp(up('n1', 1, 'me', 0))) // we are mid-drag, nothing acked yet
+      expect(o.accept(up('n1', 5, 'peer', 7))).toBe(false) // a peer's EDIT still loses to ours
+      expect(o.accept(rm('n1', 'peer', 8))).toBe(true) // …a peer's DELETE does not
+    })
+
+    // …and our own frames, echoed back after that delete, must not put the node back on OUR canvas
+    // alone (every other client dropped them for being older than the remove).
+    it('our own echo cannot resurrect a node a peer deleted mid-drag', () => {
+      let t = 1000
+      const o = createCanvasOrder('me', { now: () => t })
+      o.onLocal(o.stamp(up('n1', 1, 'me', 0)))
+      t += PENDING_TTL_MS + 1 // our ack is stuck; rule 3 would otherwise call the echo a repair
+      expect(o.accept(rm('n1', 'peer', 20))).toBe(true)
+      expect(o.accept({ ...up('n1', 1, 'me', 21), seen: 5 })).toBe(false)
+    })
+
+    it('stamps our casts with the highest seq we have processed, our own echo included', () => {
+      const o = createCanvasOrder('me')
+      expect(o.stamp(up('n1', 0, 'me', 0)).seen).toBe(0) // nothing applied yet
+      o.accept(up('n2', 1, 'peer', 4))
+      expect(o.stamp(up('n1', 0, 'me', 0)).seen).toBe(4)
+      o.accept(up('n2', 2, 'me', 9)) // our own ack still advances our causal position
+      expect(o.stamp(up('n1', 0, 'me', 0)).seen).toBe(9)
+      o.accept(up('n2', 3, 'peer', 2)) // a straggler proves the order reached 2 — never lowers it
+      expect(o.stamp(up('n1', 0, 'me', 0)).seen).toBe(9)
+    })
+
+    it('stamp is pure — it records no pending entry (a refused cast must cost nothing)', () => {
+      const o = createCanvasOrder('me')
+      o.stamp(up('n1', 1, 'me', 0)) // …the size guard then refuses it: onLocal is never called
+      expect(o.accept(up('n1', 5, 'peer', 3))).toBe(true) // so the node is NOT deafened to peers
+    })
+
+    it('reset clears the removed set (a fresh core restarts its seq at 0)', () => {
+      const o = createCanvasOrder('me')
+      expect(o.accept(rm('n1', 'a', 10))).toBe(true)
+      o.reset()
+      // Same low seq the new core would hand out: without the clear, the old entry (10) would
+      // outrank every new mutation and blackhole this node for the rest of the session.
+      expect(o.accept({ ...up('n1', 1, 'b', 1), seen: 0 })).toBe(true)
+    })
+  })
+
   it('reset forgets the order and the pending edits (project switch / reconnect)', () => {
     const o = createCanvasOrder('me')
     o.onLocal(up('n1', 1, 'me', 0))

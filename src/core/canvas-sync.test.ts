@@ -93,6 +93,28 @@ describe('stampMutation', () => {
       stampMutation({ op: 'remove', id: 'n1', src: 42 as unknown as string }, 1).src
     ).toBeUndefined()
   })
+
+  // `seen` (canvas-order rule 4) is the one client-supplied field that DECIDES something: an upsert
+  // claiming to have seen a node's delete is applied over it. A forged one resurrects a node a
+  // teammate deleted — on every canvas. It can never legitimately reach the order it is being given.
+  it('passes an honest `seen` through untouched', () => {
+    expect(stampMutation({ op: 'upsert', node: node('n1'), seen: 6 }, 9).seen).toBe(6)
+    expect(stampMutation({ op: 'upsert', node: node('n1'), seen: 0 }, 1).seen).toBe(0)
+  })
+
+  it('clamps a forged `seen` to just below the order it is being given', () => {
+    expect(stampMutation({ op: 'upsert', node: node('n1'), seen: 999_999 }, 9).seen).toBe(8)
+    expect(stampMutation({ op: 'upsert', node: node('n1'), seen: 9 }, 9).seen).toBe(8)
+  })
+
+  it('drops a non-integer / negative `seen` — degrading to unstamped, never to outranking a delete', () => {
+    for (const bad of [-1, 1.5, NaN, Infinity, '5', null]) {
+      expect(
+        stampMutation({ op: 'upsert', node: node('n1'), seen: bad as unknown as number }, 4).seen
+      ).toBeUndefined()
+    }
+    expect(stampMutation({ op: 'upsert', node: node('n1') }, 4).seen).toBeUndefined()
+  })
 })
 
 describe('isCanvasMutation', () => {

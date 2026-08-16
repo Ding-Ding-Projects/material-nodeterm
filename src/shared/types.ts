@@ -325,11 +325,35 @@ export interface CanvasState {
  *    that echo is the ACK that tells the sender where its edit landed in the total order).
  *  - `seq` is stamped by the reflector (src/core/canvas-sync.ts) and is the TOTAL ORDER. It is
  *    server-authoritative: a client-supplied `seq` is overwritten at ingest, never trusted.
- * The relay's host↔client mirror (src/main/remote) uses the same vocabulary and simply omits both.
+ *  - `seen` is the sender's CAUSAL stamp: the highest `seq` it had applied at the moment it cast.
+ *    It answers the one question `seq` alone cannot — "did this client already know about the
+ *    delete?" — which is what lets a delete beat a concurrent drag frame instead of being
+ *    resurrected by it (canvas-order's rule 4). Client-supplied, so the reflector BOUNDS it
+ *    (it can never legitimately reach the order it is being given); a mutation without it is
+ *    judged exactly as before, so an unstamped peer degrades rather than breaks.
+ * The relay's host↔client mirror (src/main/remote) uses the same vocabulary and simply omits them.
  */
 export type CanvasMutation =
-  | { op: 'upsert'; node: CanvasNodeState; src?: string; seq?: number }
-  | { op: 'remove'; id: string; src?: string; seq?: number }
+  | { op: 'upsert'; node: CanvasNodeState; src?: string; seq?: number; seen?: number }
+  | { op: 'remove'; id: string; src?: string; seq?: number; seen?: number }
+  | {
+      op: 'edge-upsert'
+      kind: CanvasEdgeKind
+      edge: BridgeLink
+      src?: string
+      seq?: number
+      seen?: number
+    }
+  | { op: 'edge-remove'; kind: CanvasEdgeKind; id: string; src?: string; seq?: number; seen?: number }
+
+/**
+ * Which persisted edge list a mutation addresses — `bridges` (context links, which an agent can
+ * actually READ through) or `ropes` (display-only "spawned by" lineage). They are two arrays on
+ * the project with two different meanings, so the kind travels with the mutation; the ORDER,
+ * however, is keyed on the edge id alone (canvas-order's `e:<id>`), because one id is one edge and
+ * two clients must never end up holding it as both a bridge and a rope.
+ */
+export type CanvasEdgeKind = 'bridge' | 'rope'
 
 /** Canvas pan/zoom state. */
 export interface Viewport {
