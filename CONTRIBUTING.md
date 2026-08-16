@@ -166,6 +166,18 @@ on the host too: we shipped the hook bearer that way and any other account on th
 it and open a terminal running an arbitrary command. Pass secrets by 0600 file or by **stdin**
 (`curl --config -`), and never add an argv fallback. See `docs/node-identity.md`.
 
+**Server password admission is one ordered, bounded decision per TCP peer.** Do not put a synchronous
+password hash back in the HTTP handler or split `loginAllowed` from the proof/result update: slow
+request bodies can all pass an early check, and synchronous scrypt stalls every terminal socket.
+`Auth.attemptPassword` owns the same-peer FIFO, bounded async-scrypt pool and authoritative checks
+after each wait. Lockout identity comes only from `req.socket.remoteAddress`; forwarding headers,
+cookies, user-agent and source port are caller-controlled or unstable. Peers have independent
+failure/escalation/ladder state over one shared ladder-clear budget. Ladder and WebAuthn challenges
+have per-peer plus process-wide ceilings; old ladder nonces cannot cross a rung transition, while
+WebAuthn nonces bind the peer plus login/register purpose. Logout must delete the presented persisted
+bearer before clearing its cookie. The deterministic barriers and restart replay proofs live in
+`src/server/auth.test.ts`, `src/server/http.test.ts` and `src/server/unlock-ladder-routes.test.ts`.
+
 **Phone-pairing credentials never ride plaintext LAN HTTP.** A pairing start must load and
 advertise the host's NaCl public key; the client POSTs `{epk,box}`, and the success response is a
 single encrypted `box`. If the host key or encryption is unavailable, pairing refuses before it

@@ -4,15 +4,18 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import zlib from 'zlib'
-import { Auth } from './auth'
+import { Auth, MAX_CHALLENGES_GLOBAL } from './auth'
 import {
   createHttpHandler,
+  authClientKey,
   sessionTokenFromCookie,
   negotiateEncoding,
   _resetStaticCacheForTest,
   SESSION_COOKIE
 } from './http'
 import { parseTrustedNets } from './proxy-trust'
+import { DIM_SUM_NAMES } from '../shared/dimsum-names'
+import type { DimSumChallenge } from '../core/unlock-ladder'
 
 let dir: string, rendererDir: string, server: http.Server, base: string, auth: Auth
 
@@ -93,6 +96,249 @@ describe('http layer', () => {
       redirect: 'manual'
     })
     expect(locked.status).toBe(429)
+  })
+
+  it('orders already-arrived slow password requests before each expensive proof', async () => {
+    let calls = 0
+    const releases: Array<() => void> = []
+    const barrierAuth = new Auth(dir, {
+      passwordVerifier: async () => {
+        calls += 1
+        await new Promise<void>((resolve) => releases.push(resolve))
+        return false
+      }
+    })
+    barrierAuth.setPassword('configured-password')
+    const barrierServer = http.createServer(createHttpHandler({ auth: barrierAuth, rendererDir }))
+    await new Promise<void>((resolve) => barrierServer.listen(0, '127.0.0.1', resolve))
+    const barrierBase = `http://127.0.0.1:${(barrierServer.address() as { port: number }).port}`
+    try {
+      const requests = Array.from({ length: 6 }, () =>
+        fetch(`${barrierBase}/auth/login`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: 'password=wrong',
+          redirect: 'manual'
+        })
+      )
+      await vi.waitFor(() => expect(calls).toBe(1))
+      for (let completed = 0; completed < 5; completed++) {
+        releases.shift()!()
+        if (completed < 4) await vi.waitFor(() => expect(calls).toBe(completed + 2))
+      }
+      const responses = await Promise.all(requests)
+      expect(responses.filter((r) => r.status === 303)).toHaveLength(5)
+      expect(responses.filter((r) => r.status === 429)).toHaveLength(1)
+      expect(calls).toBe(5)
+    } finally {
+      await new Promise((resolve) => barrierServer.close(resolve))
+    }
+  })
+
+  it('rechecks passkey lockout after a slow JSON body finishes arriving', async () => {
+    const body = JSON.stringify({ challenge: 'not-consumed-because-lockout-wins' })
+    const allowed = vi.spyOn(auth, 'loginAllowed')
+    let request!: http.ClientRequest
+    const response = new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const target = new URL('/auth/passkey/login/verify', base)
+      request = http.request(
+        target,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
+        },
+        (res) => {
+          const chunks: Buffer[] = []
+          res.on('data', (chunk: Buffer) => chunks.push(chunk))
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString() }))
+        }
+      )
+      request.on('error', reject)
+      request.write(body.slice(0, 1))
+    })
+    try {
+      await vi.waitFor(() => expect(allowed).toHaveBeenCalledWith('peer:127.0.0.1'))
+      for (let i = 0; i < 5; i++) auth.recordLoginFailure('peer:127.0.0.1')
+      request.end(body.slice(1))
+      await expect(response).resolves.toMatchObject({
+        status: 429,
+        body: expect.stringContaining('too_many_attempts')
+      })
+    } finally {
+      allowed.mockRestore()
+    }
+  })
+
+  it('wires each passkey options route to its matching bounded ceremony purpose', async () => {
+    const cookie = await setupAndLogin()
+    const loginOptions = await fetch(`${base}/auth/passkey/login/options`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}'
+    })
+    expect(loginOptions.status).toBe(200)
+    const loginChallenge = String(((await loginOptions.json()) as { challenge: string }).challenge)
+    const loginVerify = await fetch(`${base}/auth/passkey/login/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ challenge: loginChallenge, id: 'missing-credential' })
+    })
+    expect(loginVerify.status).toBe(400)
+    await expect(loginVerify.json()).resolves.toMatchObject({ error: 'unknown_credential' })
+
+    const registerOptions = await fetch(`${base}/auth/passkey/register/options`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: '{}'
+    })
+    expect(registerOptions.status).toBe(200)
+    const registerChallenge = String(((await registerOptions.json()) as { challenge: string }).challenge)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const registerVerify = await fetch(`${base}/auth/passkey/register/verify`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ challenge: registerChallenge })
+      })
+      expect(registerVerify.status).toBe(400)
+      await expect(registerVerify.json()).resolves.toMatchObject({ error: 'registration_failed' })
+    } finally {
+      warn.mockRestore()
+    }
+
+    for (let i = 0; i < MAX_CHALLENGES_GLOBAL; i++) {
+      expect(auth.newChallenge(`capacity-peer-${i}`, 'login')).not.toBeNull()
+    }
+    const full = await fetch(`${base}/auth/passkey/login/options`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}'
+    })
+    expect(full.status).toBe(429)
+    await expect(full.json()).resolves.toMatchObject({ error: 'challenge_capacity' })
+  })
+
+  it('refuses slow unlock bodies after their lockout expires', async () => {
+    let now = 1_000
+    const clockAuth = new Auth(dir, { now: () => now })
+    const clockServer = http.createServer(createHttpHandler({ auth: clockAuth, rendererDir }))
+    await new Promise<void>((resolve) => clockServer.listen(0, '127.0.0.1', resolve))
+    const clockBase = `http://127.0.0.1:${(clockServer.address() as { port: number }).port}`
+    const peer = 'peer:127.0.0.1'
+    const lock = () => {
+      for (let i = 0; i < 5; i++) expect(clockAuth.recordLoginFailure(peer)).toBe(true)
+      expect(clockAuth.loginAllowed(peer)).toBe(false)
+    }
+    const slowPost = (pathname: string, body: string) => {
+      let request!: http.ClientRequest
+      const response = new Promise<{ status: number; body: string }>((resolve, reject) => {
+        request = http.request(
+          new URL(pathname, clockBase),
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
+          },
+          (res) => {
+            const chunks: Buffer[] = []
+            res.on('data', (chunk: Buffer) => chunks.push(chunk))
+            res.on('end', () => resolve({
+              status: res.statusCode ?? 0,
+              body: Buffer.concat(chunks).toString()
+            }))
+          }
+        )
+        request.on('error', reject)
+        request.write(body.slice(0, 1))
+      })
+      return { request, response }
+    }
+
+    try {
+      lock()
+      const allowed = vi.spyOn(clockAuth, 'loginAllowed')
+      const challenge = slowPost('/auth/unlock/challenge', '{}')
+      await vi.waitFor(() => expect(allowed).toHaveBeenCalledWith(peer))
+      now += clockAuth.lockoutRemainingMs(peer) + 1
+      challenge.request.end('}')
+      await expect(challenge.response).resolves.toMatchObject({
+        status: 409,
+        body: expect.stringContaining('not_locked')
+      })
+
+      allowed.mockClear()
+      lock()
+      const issuedResponse = await fetch(`${clockBase}/auth/unlock/challenge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}'
+      })
+      expect(issuedResponse.status).toBe(200)
+      const issued = (await issuedResponse.json()) as DimSumChallenge
+      const right = DIM_SUM_NAMES.find((dish) => dish.zhHant === issued.prompt)!.en
+      const answer = JSON.stringify({ kind: 'dimsum', nonce: issued.nonce, choice: right })
+      allowed.mockClear()
+      const verify = slowPost('/auth/unlock/verify', answer)
+      await vi.waitFor(() => expect(allowed).toHaveBeenCalledWith(peer))
+      now += clockAuth.lockoutRemainingMs(peer) + 1
+      verify.request.end(answer.slice(1))
+      await expect(verify.response).resolves.toMatchObject({
+        status: 409,
+        body: expect.stringContaining('not_locked')
+      })
+      allowed.mockRestore()
+    } finally {
+      await new Promise((resolve) => clockServer.close(resolve))
+    }
+  })
+
+  it('logout revokes only the captured session bearer on disk before clearing the cookie', async () => {
+    const cookie = await setupAndLogin()
+    const token = sessionTokenFromCookie(cookie)!
+    const otherToken = auth.createSession()
+    const otherCookie = `${SESSION_COOKIE}=${otherToken}`
+
+    const logout = await fetch(`${base}/auth/logout`, {
+      method: 'POST',
+      headers: { cookie },
+      redirect: 'manual'
+    })
+    expect(logout.status).toBe(303)
+    expect(logout.headers.get('set-cookie')).toContain('Max-Age=0')
+
+    const replay = await fetch(`${base}/`, {
+      headers: { cookie, accept: 'text/html' },
+      redirect: 'manual'
+    })
+    expect(replay.status).toBe(302)
+    expect((await fetch(`${base}/`, { headers: { cookie: otherCookie } })).status).toBe(200)
+
+    const restarted = new Auth(dir)
+    expect(restarted.validateSession(token)).toBe(false)
+    expect(restarted.validateSession(otherToken)).toBe(true)
+  })
+
+  it('keys lockout only from the TCP peer, never spoofable forwarding metadata or source port', () => {
+    const socket = { remoteAddress: '10.20.30.40', remotePort: 1234 }
+    const req = {
+      socket,
+      headers: {
+        'x-forwarded-for': '198.51.100.1',
+        forwarded: 'for=198.51.100.2',
+        'x-real-ip': '198.51.100.3',
+        'user-agent': 'first',
+        cookie: 'anything=one'
+      }
+    } as unknown as http.IncomingMessage
+    const key = authClientKey(req)
+    socket.remotePort = 65000
+    req.headers['x-forwarded-for'] = '203.0.113.9'
+    req.headers.forwarded = 'for=203.0.113.10'
+    req.headers['x-real-ip'] = '203.0.113.11'
+    req.headers['user-agent'] = 'second'
+    req.headers.cookie = 'anything=two'
+    expect(authClientKey(req)).toBe(key)
+    expect(authClientKey({ socket: { remoteAddress: '10.20.30.41' } } as http.IncomingMessage)).not.toBe(key)
+    expect(authClientKey({ socket: {} } as http.IncomingMessage)).toBe('peer:unknown')
   })
 
   it('serves static with CSP rewrite on index.html and blocks traversal', async () => {
