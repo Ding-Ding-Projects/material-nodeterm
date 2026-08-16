@@ -46,6 +46,23 @@ microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring
 `npm test` runs the vitest suite (unit + integration; the remote e2e suites skip when the
 companion server repo isn't checked out). `npm run typecheck` is the fastest correctness gate.
 
+**Node runtime floor: `^22.22.2 || ^24.15.0 || >=26.0.0`.** Do not simplify that to a
+major-only check.
+`node:sqlite` arrived in 22.5 but required `--experimental-sqlite` through 22.12; 22.13 made it
+unflagged. The locked dependency graph sets the stricter install/build floors above and excludes
+Node 23 and 25. `core/node-runtime.ts` checks both the exact version range and the actual
+`DatabaseSync` capability before Desktop or Server Edition initializes persistent services. The
+installer uses the same contract through `scripts/check-node-runtime.mjs`, and the container pins
+24.15.0 rather than floating on a Node major. A supported version launched with
+`--no-experimental-sqlite`, or a custom build without SQLite, is still unsupported and fails closed.
+
+`npm run build && npm run check:wired` is the built-app interaction gate. It launches with
+`NT_MULTI=1` and a disposable `NT_USER_DATA`, drives real controls over CDP, and removes both that
+profile and every checkout-owned Electron process it created from a `finally` block. Do not point
+it at the operator's real profile, weaken cleanup failure into success, or prove app wiring with an
+element the probe invented itself. Settings persistence crosses a renderer reload; the appearance
+probe changes a production Switch's computed background, then restores it.
+
 ## Process model (Electron, three contexts)
 
 The codebase is split by Electron process boundary — keep code on the correct side:
@@ -1928,6 +1945,15 @@ turning “could not read” into “empty.” Scheduled Home Assistant token se
 cleanup and orphan pruning likewise share one process-local FIFO. Their cleanup errors propagate
 through the schedule save result and renderer: a durable schedule plus retained bearer bytes must
 never be mislabeled as either a disk-write failure or a completed credential clear.
+
+The SQLite module is loaded only after `core/node-runtime.ts` has performed the exact startup
+preflight. Keep it lazy: a static `node:sqlite` import is evaluated before either shell can print an
+actionable incompatibility error. The supported runtime is
+`^22.22.2 || ^24.15.0 || >=26.0.0`; package engines,
+the headless installer, the pinned container stages and both shell preflights are one contract.
+`scripts/check-node-runtime.mjs` also opens and closes an in-memory database, because a version
+number does not prove a custom build or a runtime launched with `--no-experimental-sqlite` exposes
+the capability.
 
 **Nothing in the toolchain catches the bare version.** 28 files had it, across three spellings — the user's canvas, their
 settings, their sealed credentials, their pinned devices — and every one of them reads as a correct
