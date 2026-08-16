@@ -51,7 +51,7 @@ interactions. Once deliberately dispatched, one job:
    own `run_started_at`). If this call fails (missing `actions: read` on a fallback token,
    API hiccup) the step warns and leaves it unset — `release-notes.mjs` then reports the
    start time as **missing**, never an estimate.
-5. **Set up Node 22** with the npm cache, then compute the stable release tag — exactly
+5. **Set up Node 22.23.2** with the npm cache, then compute the stable release tag — exactly
    `v<package.json version>`. The version must be a stable `major.minor.patch` value; a run-number
    or prerelease suffix is refused because the Windows updater's `latest/download` feed must never
    point at a feature build masquerading as stable.
@@ -64,35 +64,35 @@ interactions. Once deliberately dispatched, one job:
    and Python that native module compilation needs; nothing extra is bootstrapped for that.
    If a future dependency needs a tool the runner image does not carry, add a check-then-
    install step here, immediately before it is needed.
-8. **Build** — `npm run make-icon` then `npm run build` (electron-vite: main + preload +
-   renderer).
-9. **Package only the Windows Squirrel target** —
-   `electron-builder --win squirrel --x64 --publish never`, producing `Setup.exe`, `RELEASES`,
-   the full `.nupkg` (and a delta `.nupkg` when present) under `dist/squirrel-windows/`.
-10. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: exactly one
-   setup executable, exactly one `RELEASES`, at least one full `.nupkg`, no empty assets, and
-   every package entry in `RELEASES` matching the file's SHA-1 and byte size. "The directory
-   contained something" is deliberately not enough.
-11. **Verify the setup is genuinely unsigned** — Authenticode must report exactly `NotSigned`.
+8. **Build and package through `npm run dist:win`.** The Windows-only wrapper runs the native
+   preflight, regenerates and proves the committed seven-frame ICO at an immutable source-SHA URL,
+   clears stale generated output, builds the app and session host, invokes only the x64 Squirrel
+   target with publishing disabled, then verifies the nuspec and Setup/app/stub PE resources.
+9. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: the exact
+   version/product Setup, legacy `node-terminal` full package, optional matching delta, exact
+   `RELEASES`, no other output entry, semantic ID/version/title in every nupkg, and bidirectional
+   RELEASES SHA-1/name/size agreement. It emits the exact name/size/SHA-256 manifest later checked
+   against GitHub's hosted digests. The workflow also reruns the packaged icon/nuspec proof.
+10. **Verify the setup is genuinely unsigned** — Authenticode must report exactly `NotSigned`.
    An invalid, untrusted, or otherwise anomalous signature is not accepted as a synonym for
    unsigned (see [Signing](#signing) below).
-12. **Stage one draft release** for the stable tag. A retry reuses its existing draft; a retry of
+11. **Stage one draft release** for the stable tag. A retry reuses its existing draft; a retry of
    an already-successful run verifies the release tag still resolves to this run's exact commit,
    then validates every public asset name and byte size before exiting without touching them.
    This avoids `gh release upload --clobber`'s delete-before-replace behaviour ever operating on
    a public asset.
-13. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
+12. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
     and expected names are replaced with `--clobber`. Any failure leaves a private draft, never
     a public empty or partial release.
-14. **Generate the final release notes after upload** (`scripts/release-notes.mjs`, embedding
+13. **Generate the final release notes after upload** (`scripts/release-notes.mjs`, embedding
     `scripts/count-lines.mjs`'s report — see [Release notes content](#release-notes-content)).
-15. **Read the draft back and recheck version authority immediately before publication.** The
+14. **Read the draft back and recheck version authority immediately before publication.** The
     exact hosted asset inventory, draft/non-prerelease state, target/tag ownership, and stable
     version ordering must all still hold; this catches a newer stable release created while the
     build ran.
-16. **Publish once, explicitly as latest and non-prerelease**, then re-read the tag, release, and
+15. **Publish once, explicitly as latest and non-prerelease**, then re-read the tag, release, and
     latest-release view to prove the complete inventory and exact target survived the transition.
-17. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
+16. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
     the collection and the upload — so a failed run still leaves the packaged output, the
     generated notes, and the run context inspectable, without ever masking or reversing the
     real pass/fail verdict of the steps above it. Only explicitly safe paths are copied: the
@@ -182,8 +182,8 @@ printed as **missing**, not guessed at. It always includes:
 2. **The project's line count at that exact commit**, via `scripts/count-lines.mjs` —
    see below.
 3. **What actually ran** — an explicit statement that no tests, type-check, or lint ran in
-   this workflow, alongside the real list of steps that did (`npm ci`, `npm run make-icon`,
-   `npm run build`, `electron-builder --win squirrel --x64 --publish never`). This section exists
+   this workflow, alongside the real list of steps that did (`npm ci`, then the guarded
+   `npm run dist:win` preflight/icon/build/Squirrel/post-package path). This section exists
    specifically so a release is never read as "passing" a check it never ran.
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
@@ -204,7 +204,9 @@ run of the counter and what a release actually reports can never drift apart.
   under `resources/mascot/` and `docs/assets/`, and prebuilt vendored binaries under
   `resources/bin/`. Any tracked file with an extension the counter does not recognize (images,
   fonts, `.plist`, `Dockerfile`, dotfiles, `.jsonl` fixtures, …) is listed separately as
-  uncounted rather than silently folded into either total.
+  uncounted rather than silently folded into either total. The committed `build/icon.ico` therefore
+  appears as an explicitly uncounted binary asset; generated, gitignored `build/icon.png` is not
+  part of the counted ref.
 - **Project total vs. grand total.** This repository has no tracked vendored source subtree,
   so the two are currently identical and the report says so plainly. The distinction is kept
   in the output shape anyway, so a future vendored subtree cannot silently merge into the
@@ -300,6 +302,18 @@ that explicit reason, made cheap and redundant on purpose: they do not reintrodu
 (nothing here runs a test or a linter); they constrain publication to one deliberate stable
 candidate instead of letting an ordinary branch or tag event enter the release job.
 
+## Windows icon provenance
+
+`scripts/make-icon.mjs` contains the original SVG master and deterministically generates the
+committed seven-frame `build/icon.ico`. The Windows packaging wrapper derives a raw-content URL
+from the checkout's full source SHA, refuses a mismatched `GITHUB_SHA` or dirty/uncommitted source,
+requires that commit to be publicly reachable, downloads without credentials or redirects, and
+requires HTTP 200 plus exact bytes/SHA-256. It passes that URL as Squirrel's effective `iconUrl`.
+The post-package gate requires the URL in the full-nupkg semantic nuspec and compares all seven
+icon-frame hashes plus product/version metadata in Setup, `nodeterm.exe`, and
+`nodeterm_ExecutionStub.exe`. Squirrel's vendor `Update.exe` remains vendor-branded because the
+pinned plugin exposes no supported resource-edit hook; it is explicitly outside this gate.
+
 ## What is deliberately out of scope for this lane
 
 - **`security.yml`** (CodeQL + dependency review) is untouched. It runs on `pull_request`/
@@ -313,8 +327,3 @@ candidate instead of letting an ordinary branch or tag event enter the release j
   `release.yml`. The active delivery scope for this project is Windows only. Historical
   macOS/Linux release history remains on GitHub as a record; reopening cross-platform delivery
   is a deliberate, explicit decision for later, not an oversight here.
-- **Windows app icon URL.** No `build.squirrelWindows.iconUrl` is configured. Electron-builder
-  derives a repository URL for the generated build-resource icon, but that file is ignored and
-  the derived URL may not resolve. This only affects the icon Squirrel shows in Windows'
-  "Apps & features" list (cosmetic; it does not fail packaging or the release). A real,
-  committed, multi-resolution `.ico` remains branding follow-up work.

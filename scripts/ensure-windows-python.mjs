@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Ensure node-gyp has a supported 64-bit Python before npm starts dependency lifecycle scripts.
 
 import { spawnSync } from 'node:child_process'

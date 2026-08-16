@@ -267,9 +267,14 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     }
   }
   const allCommands = steps.flatMap((step) => logicalCommands(step?.run))
+  // The guarded Windows wrapper invokes these package scripts programmatically. Include them in
+  // the semantic command graph so validation cannot be hidden behind the JS wrapper.
+  const windowsWrapperCommands = ['npm run make-icon', 'npm run build']
   const forbidden = [
     ...forbiddenCommands(allCommands),
-    ...forbiddenCommands(transitivePackageCommands(allCommands, packageJson?.scripts)),
+    ...forbiddenCommands(
+      transitivePackageCommands([...allCommands, ...windowsWrapperCommands], packageJson?.scripts),
+    ),
   ]
   if (forbidden.length) {
     issues.push(`runner executes forbidden validation commands: ${forbidden.join(' | ')}`)
@@ -348,7 +353,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const versionAdvanceAt = versionCommands.indexOf(
     'node scripts/release-assets.mjs assert-version "$RELEASE_VERSION" "$RUNNER_TEMP/tags-before-build.json" "$RUNNER_TEMP/releases-before-build.json" "$GITHUB_SHA"',
   )
-  const buildAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm run build'))
+  const buildAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm run dist:win'))
   if (
     versionAt <= tagAt ||
     versionAt >= buildAt ||
@@ -362,14 +367,11 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const packageAt = stepIndex(steps, 'package')
   const packageStep = steps[packageAt]
   const packageCommands = logicalCommands(packageStep?.run)
-  const packageCommand = packageCommands.find((command) => /\bnpx\s+electron-builder\b/.test(command))
   if (
-    !packageCommand ||
-    !/--win\s+squirrel(?:\s|$)/.test(packageCommand) ||
-    !/(?:^|\s)--x64(?:\s|$)/.test(packageCommand) ||
-    !/--publish\s+never(?:\s|$)/.test(packageCommand)
+    !packageCommands.includes('npm run dist:win') ||
+    packageJson?.scripts?.['dist:win'] !== 'node scripts/windows-installer.mjs build'
   ) {
-    issues.push('package step must explicitly build Squirrel x64 with publishing disabled')
+    issues.push('package step must use the exact guarded Windows installer wrapper')
   }
   if (packageStep?.env?.CSC_IDENTITY_AUTO_DISCOVERY !== 'false') {
     issues.push('package step must disable signing identity auto-discovery')
@@ -390,6 +392,17 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     )
   ) {
     issues.push('asset step must bind the expected version, package id, and product name to the executable Squirrel inventory contract')
+  }
+
+  const iconContractAt = stepIndex(steps, 'icon_contract')
+  const iconContractCommands = logicalCommands(steps[iconContractAt]?.run)
+  if (
+    iconContractAt <= assetsAt ||
+    !iconContractCommands.includes(
+      'node scripts/windows-installer.mjs assert-package dist/squirrel-windows dist/windows-icon-contract.json',
+    )
+  ) {
+    issues.push('packaged Setup, app, stub, nuspec, and immutable icon metadata must be verified before publication')
   }
 
   const unsignedAt = stepIndex(steps, 'unsigned')

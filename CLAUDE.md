@@ -2158,7 +2158,18 @@ still receives its icon and version metadata. The Squirrel package id must remai
 would rename that update identity. Runtime and installed shortcuts instead share the exact
 AppUserModelID `com.squirrel.node-terminal.nodeterm`, derived from the effective package id and
 `nodeterm.exe` rather than from `build.appId`.
-`npm run dist:win` is the local smoke test. `.github/workflows/release.yml` is a manual-only
+`npm run dist:win` routes every supported Windows package through
+`scripts/windows-installer.mjs`. The wrapper requires a clean checkout, regenerates the committed
+seven-frame ICO, proves it equals the current commit's blob, derives a public immutable raw URL
+from the full source SHA, and verifies the downloaded bytes before invoking electron-builder. It
+then rejects stale or unexpected output, requires semantic nupkg ID/version/title plus exact
+`RELEASES` name/size/SHA-1 agreement, and compares the nuspec URL and the icon/version resources in
+Setup, the installed app, and its execution stub. The current commit must already be reachable in
+the public GitHub repository; local-only commits fail before packaging. Squirrel's vendor
+`Update.exe` remains vendor-branded and outside the PE-resource gate because the pinned builder
+exposes no supported project hook for editing it.
+
+`.github/workflows/release.yml` is a manual-only
 `workflow_dispatch` pipeline and its first step refuses every ref except the `main` branch.
 Feature-branch and prerelease artifacts must never become the authority behind
 `releases/latest/download`. The stable tag is exactly `v<package.json version>`; consequently the
@@ -2218,7 +2229,11 @@ The app/runtime keeps those dotted versions; `electron-winstaller` normalizes th
 versions in `.nupkg` filenames and `RELEASES` to `0.4.0-fixture1` / `0.4.0-fixture2`. Only a
 fixture-version build accepts
 `NODETERM_SQUIRREL_FIXTURE_URL`, and only for loopback HTTP(S); a stable or unrelated prerelease
-must refuse that override. Serve the second package with
+must refuse that override. The production `dist:win` wrapper deliberately cannot create this pair:
+the fixture manifest edits make the checkout dirty, while production provenance requires a clean,
+publicly reachable exact commit. A dedicated fixture-only provenance route is still pending; do not
+weaken the production clean-tree guard to manufacture the pair. Once that bounded route exists,
+serve the second package with
 `scripts/serve-squirrel-update-fixture.mjs`, install only in a disposable Windows Sandbox/VM,
 wait at least 10 seconds after the normal `--squirrel-firstrun` app opens, quit it explicitly, then
 launch the installed `.1` executable again with the feed environment. Resolve its install path
@@ -2228,7 +2243,8 @@ persistence after `.2` applies. Quit the fixture and prove every process running
 install root has exited before invoking that registration's Update.exe to uninstall. Building the
 pair or exercising controller Chuts does not substitute for that packaged interaction, and the
 fixture does not substitute for the separate production-identity `0.3.0` → `0.4.0` migration
-proof.
+proof. Until the fixture-only packaging route exists, that packaged interaction remains blocked
+rather than partially verified.
 
 ### Server Edition container image
 

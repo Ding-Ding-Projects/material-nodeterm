@@ -14,7 +14,6 @@ dist/
 /.nodeterm-env-*
 
 build/icon.png
-build/icon.ico
 
 # bundled tmux — a ~2MB universal binary, built by scripts/build-tmux.mjs (the source of truth)
 # and copied into the app by electron-builder's mac extraResources. Never committed.

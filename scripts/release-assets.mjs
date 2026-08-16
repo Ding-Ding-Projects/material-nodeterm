@@ -1,17 +1,16 @@
-#!/usr/bin/env node
-
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { appendFile, readFile, readdir, stat } from 'node:fs/promises'
+import { appendFile, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import sax from 'sax'
 import { Open } from 'unzipper'
 
-const SETUP_RE = /^.+-Setup-.+\.exe$/i
 const NUPKG_RE = /\.nupkg$/i
-const FULL_NUPKG_RE = /-full\.nupkg$/i
 const RELEASE_LINE_RE = /^([0-9a-f]{40})\s+(\S+)\s+(\d+)$/i
 const STABLE_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
+const SEMVER_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+const PACKAGE_ID_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/
 
 function fail(message) {
   throw new Error(message)
@@ -31,6 +30,14 @@ export function requireReleaseTarget(actual, expected) {
     fail(`release tag target mismatch: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
   }
   return actual
+}
+
+/** Validate a digest result file without accepting whitespace, inherited text, or partial output. */
+export function requireSha256Text(text) {
+  if (!/^[0-9a-f]{64}$/i.test(text)) {
+    fail('SHA-256 result must contain exactly 64 hexadecimal characters and nothing else')
+  }
+  return text.toLowerCase()
 }
 
 function stableVersionParts(version, description) {
@@ -149,8 +156,9 @@ export function parseReleases(text) {
     if (!NUPKG_RE.test(name)) {
       fail(`RELEASES line ${index + 1} does not reference a .nupkg: ${name}`)
     }
-    if (names.has(name)) fail(`RELEASES contains duplicate package entry: ${name}`)
-    names.add(name)
+    const foldedName = name.toLowerCase()
+    if (names.has(foldedName)) fail(`RELEASES contains duplicate package entry: ${name}`)
+    names.add(foldedName)
 
     const size = Number(sizeRaw)
     if (!Number.isSafeInteger(size) || size <= 0) {
@@ -180,55 +188,141 @@ async function hashFile(file, algorithm) {
   return hash.digest('hex')
 }
 
-function requireReleaseIdentity(version, packageId, productName) {
-  stableVersionParts(version, 'expected release version')
-  if (typeof packageId !== 'string' || !/^[A-Za-z0-9._-]+$/.test(packageId)) {
-    fail(`expected Squirrel package id must contain only letters, digits, dot, underscore, or hyphen, got ${JSON.stringify(packageId)}`)
+function safeProductName(value) {
+  return typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 100 &&
+    !/[<>:"/\\|?*\u0000-\u001f]/.test(value) &&
+    !/[ .]$/.test(value) &&
+    value !== '.' &&
+    value !== '..'
+}
+
+/** Read the exact package identity which every Squirrel artifact must carry. */
+export async function readReleaseIdentity(packageJsonFile) {
+  let value
+  try {
+    value = JSON.parse(await readFile(path.resolve(packageJsonFile), 'utf8'))
+  } catch (error) {
+    fail(`could not read release identity from package.json: ${error instanceof Error ? error.message : String(error)}`)
   }
-  if (typeof productName !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9 ._-]*$/.test(productName)) {
+  return requireReleaseIdentity(value?.version, value?.name, value?.build?.productName)
+}
+
+function requireReleaseIdentity(versionOrIdentity, packageId, productName) {
+  const identity = versionOrIdentity && typeof versionOrIdentity === 'object'
+    ? versionOrIdentity
+    : { version: versionOrIdentity, packageId, productName }
+  const version = identity.version
+  packageId = identity.packageId
+  productName = identity.productName
+  if (typeof version !== 'string' || !SEMVER_RE.test(version)) {
+    fail(`expected package version must be an exact semantic version, got ${JSON.stringify(version)}`)
+  }
+  if (typeof packageId !== 'string' || !PACKAGE_ID_RE.test(packageId)) {
+    fail(`expected Squirrel package id is invalid: ${JSON.stringify(packageId)}`)
+  }
+  if (!safeProductName(productName)) {
     fail(`expected product name must be a safe non-empty Windows filename component, got ${JSON.stringify(productName)}`)
   }
   return { version, packageId, productName }
 }
 
-function nuspecValue(text, element, packageName) {
-  const match = new RegExp(`<${element}(?:\\s[^>]*)?>\\s*([^<]+?)\\s*</${element}>`, 'i').exec(text)
-  if (!match) fail(`${packageName} nuspec is missing <${element}> metadata`)
-  return match[1]
+/** Parse only direct package/metadata children; comments and duplicate lookalikes cannot satisfy it. */
+export function parseNuspecMetadata(nuspec, description = 'nuspec') {
+  if (typeof nuspec !== 'string') fail(`${description} must be UTF-8 XML text`)
+  const parser = sax.parser(true, { xmlns: true, trim: false, normalize: false })
+  const stack = []
+  const values = new Map()
+  let parseError = null
+  let packageRoots = 0
+  let metadataNodes = 0
+  parser.ondoctype = () => { parseError = new Error('DOCTYPE is not allowed') }
+  parser.onopentag = (node) => {
+    const local = node.local
+    stack.push(local)
+    if (stack.length === 1) {
+      if (local !== 'package') parseError = new Error('root element must be package')
+      packageRoots += 1
+      return
+    }
+    if (stack.length === 2 && local === 'metadata' && stack[0] === 'package') {
+      metadataNodes += 1
+      return
+    }
+    if (stack.length > 3 && stack[0] === 'package' && stack[1] === 'metadata' && values.has(stack[2])) {
+      parseError = new Error(`metadata <${stack[2]}> must contain text only`)
+    }
+    if (stack.length === 3 && stack[0] === 'package' && stack[1] === 'metadata') {
+      if (values.has(local)) parseError = new Error(`duplicate metadata <${local}>`)
+      else values.set(local, '')
+    }
+  }
+  const appendText = (text) => {
+    if (stack.length === 3 && stack[0] === 'package' && stack[1] === 'metadata' && values.has(stack[2])) {
+      values.set(stack[2], values.get(stack[2]) + text)
+    }
+  }
+  parser.ontext = appendText
+  parser.oncdata = appendText
+  parser.onclosetag = () => { stack.pop() }
+  parser.onerror = (error) => { parseError = error }
+  try {
+    parser.write(nuspec).close()
+  } catch (error) {
+    parseError = error
+  }
+  if (parseError) fail(`${description} is not safe, well-formed nuspec XML: ${parseError.message}`)
+  if (packageRoots !== 1 || metadataNodes !== 1) {
+    fail(`${description} must contain exactly one direct package metadata element`)
+  }
+  return new Map([...values].map(([name, value]) => [name, value.trim()]))
 }
 
-async function requireFullPackageIdentity(asset, expected) {
+export function nuspecMetadataElement(nuspec, name, description = 'nuspec') {
+  const metadata = parseNuspecMetadata(nuspec, description)
+  if (!metadata.has(name) || metadata.get(name) === '') {
+    fail(`${description} must contain exactly one non-empty metadata <${name}>`)
+  }
+  return metadata.get(name)
+}
+
+async function entryBuffer(entry, description, maxBytes = 1024 * 1024) {
+  if (Number(entry.uncompressedSize) > maxBytes) fail(`${description} is too large to inspect safely`)
+  const value = await entry.buffer()
+  if (value.length === 0 || value.length > maxBytes) fail(`${description} has an invalid byte size`)
+  return value
+}
+
+async function inspectPackageIdentity(asset, expected) {
   let archive
   try {
     archive = await Open.file(asset.path)
   } catch (error) {
-    fail(`could not open full Squirrel package ${asset.name}: ${error instanceof Error ? error.message : String(error)}`)
+    fail(`could not open ${asset.name} as a nupkg: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  const nuspecEntries = archive.files.filter(
-    (entry) => entry.type === 'File' && entry.path.toLowerCase().endsWith('.nuspec'),
+  const unsafe = archive.files.filter((entry) => {
+    const normalized = entry.path.replaceAll('\\', '/')
+    return normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized) || normalized.split('/').includes('..')
+  })
+  if (unsafe.length > 0) fail(`${asset.name} contains an unsafe archive path: ${unsafe[0].path}`)
+  const nuspecEntries = archive.files.filter((entry) =>
+    entry.type === 'File' && /(^|\/)[^/]+\.nuspec$/i.test(entry.path.replaceAll('\\', '/')),
   )
   if (nuspecEntries.length !== 1) {
-    fail(`${asset.name} must contain exactly one nuspec, found ${nuspecEntries.length}`)
+    fail(`${asset.name} must contain exactly one .nuspec, found ${nuspecEntries.length}`)
   }
   const nuspec = nuspecEntries[0]
   const expectedNuspecName = `${expected.packageId}.nuspec`
-  if (nuspec.path !== expectedNuspecName) {
+  if (path.posix.basename(nuspec.path.replaceAll('\\', '/')) !== expectedNuspecName) {
     fail(`${asset.name} nuspec name mismatch: expected ${expectedNuspecName}, got ${nuspec.path}`)
   }
-  if (!Number.isSafeInteger(nuspec.uncompressedSize) || nuspec.uncompressedSize <= 0 || nuspec.uncompressedSize > 1_048_576) {
-    fail(`${asset.name} nuspec has an unsafe uncompressed size`)
-  }
-
-  let text
-  try {
-    text = (await nuspec.buffer()).toString('utf8')
-  } catch (error) {
-    fail(`could not read ${asset.name} nuspec: ${error instanceof Error ? error.message : String(error)}`)
-  }
-  const actualId = nuspecValue(text, 'id', asset.name)
-  const actualVersion = nuspecValue(text, 'version', asset.name)
-  const actualTitle = nuspecValue(text, 'title', asset.name)
+  const description = `${asset.name} nuspec`
+  const text = (await entryBuffer(nuspec, description)).toString('utf8')
+  const actualId = nuspecMetadataElement(text, 'id', description)
+  const actualVersion = nuspecMetadataElement(text, 'version', description)
+  const actualTitle = nuspecMetadataElement(text, 'title', description)
   if (actualId !== expected.packageId) {
     fail(`${asset.name} package id mismatch: expected ${expected.packageId}, got ${actualId}`)
   }
@@ -260,9 +354,10 @@ export async function collectReleaseAssets(directory, expectedVersion, expectedP
     fail(`could not read Squirrel output directory ${root}: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  const setupEntries = entries.filter((entry) => SETUP_RE.test(entry.name))
+  const expectedSetupName = `${expected.productName}-Setup-${expected.version}.exe`
+  const setupEntries = entries.filter((entry) => entry.name === expectedSetupName)
   if (setupEntries.length !== 1) {
-    fail(`expected exactly one *-Setup-*.exe, found ${setupEntries.length}`)
+    fail(`expected exactly one ${expectedSetupName}, found ${setupEntries.length}`)
   }
 
   const releaseEntries = entries.filter((entry) => entry.name === 'RELEASES')
@@ -274,26 +369,39 @@ export async function collectReleaseAssets(directory, expectedVersion, expectedP
     entries.filter((entry) => NUPKG_RE.test(entry.name)),
     (entry) => entry.name,
   )
-  const expectedSetupName = `${expected.productName}-Setup-${expected.version}.exe`
   const expectedFullName = `${expected.packageId}-${expected.version}-full.nupkg`
   const expectedDeltaName = `${expected.packageId}-${expected.version}-delta.nupkg`
   const allowedPackageNames = new Set([expectedFullName, expectedDeltaName])
 
+  for (const entry of packageEntries) {
+    if (!allowedPackageNames.has(entry.name)) {
+      fail(
+        `unexpected Squirrel package name: expected ${expectedFullName}` +
+          ` and optional ${expectedDeltaName}, got ${entry.name}`,
+      )
+    }
+  }
+
+  const allowedNames = new Set([expectedSetupName, 'RELEASES', ...packageEntries.map((entry) => entry.name)])
+  const unexpectedEntries = sorted(entries.filter((entry) => !allowedNames.has(entry.name)), (entry) => entry.name)
+  if (unexpectedEntries.length > 0) {
+    fail(
+      `unexpected Squirrel output entr${unexpectedEntries.length === 1 ? 'y' : 'ies'}: ` +
+        unexpectedEntries.map((entry) => entry.name).join(', '),
+    )
+  }
+
   const setup = await regularFile(root, setupEntries[0])
   const releases = await regularFile(root, releaseEntries[0])
   const packages = []
-  for (const entry of packageEntries) packages.push(await regularFile(root, entry))
+  for (const entry of packageEntries) {
+    const asset = await regularFile(root, entry)
+    await inspectPackageIdentity(asset, expected)
+    packages.push(asset)
+  }
 
   if (setup.name !== expectedSetupName) {
     fail(`Setup identity/version mismatch: expected ${expectedSetupName}, got ${setup.name}`)
-  }
-  for (const asset of packages) {
-    if (!allowedPackageNames.has(asset.name)) {
-      fail(
-        `unexpected Squirrel package name: expected ${expectedFullName}` +
-          ` and optional ${expectedDeltaName}, got ${asset.name}`,
-      )
-    }
   }
   if (!packages.some((asset) => asset.name === expectedFullName)) {
     fail(`expected exactly one full Squirrel package named ${expectedFullName}`)
@@ -319,8 +427,6 @@ export async function collectReleaseAssets(directory, expectedVersion, expectedP
     if (!rowsByName.has(asset.name)) fail(`package is not listed in RELEASES: ${asset.name}`)
   }
 
-  await requireFullPackageIdentity(packagesByName.get(expectedFullName), expected)
-
   const assets = sorted([setup, releases, ...packages], (asset) => asset.name)
   const manifestAssets = []
   for (const asset of assets) {
@@ -335,6 +441,9 @@ export async function collectReleaseAssets(directory, expectedVersion, expectedP
   return {
     paths: assets.map((asset) => asset.path),
     setup: setup.path,
+    releases: releases.path,
+    packages: packages.map((asset) => asset.path),
+    identity: expected,
     manifest,
   }
 }
@@ -491,6 +600,12 @@ async function main(argv) {
     return
   }
 
+  if (command === 'assert-sha256-file') {
+    if (args.length !== 1) fail('usage: release-assets.mjs assert-sha256-file <result-file>')
+    requireSha256Text(await readFile(args[0], 'utf8'))
+    return
+  }
+
   if (command === 'assert-version') {
     if (args.length !== 4) {
       fail(
@@ -521,6 +636,17 @@ async function main(argv) {
     return
   }
 
+  if (command === 'collect-local') {
+    if (args.length !== 3) {
+      fail('usage: release-assets.mjs collect-local <squirrel-output-directory> <package-json> <setup-result-file>')
+    }
+    const result = await collectReleaseAssets(args[0], await readReleaseIdentity(args[1]))
+    if (/\r|\n/.test(result.setup)) fail('setup path must not contain CR or LF')
+    await writeFile(args[2], result.setup, { encoding: 'utf8', flag: 'wx' })
+    console.log(`validated ${result.manifest.assets.length} Squirrel release assets`)
+    return
+  }
+
   if (command === 'verify') {
     if (args.length !== 3) {
       fail('usage: release-assets.mjs verify <remote-json-file> <draft|published> exact')
@@ -545,8 +671,10 @@ async function main(argv) {
   fail(
     'usage: release-assets.mjs assert-target <actual-sha> <expected-sha>\n' +
       '   or: release-assets.mjs assert-unsigned <Authenticode-status>\n' +
+      '   or: release-assets.mjs assert-sha256-file <result-file>\n' +
       '   or: release-assets.mjs assert-version <candidate-version> <tags-json-file> <releases-json-file> <expected-sha>\n' +
       '   or: release-assets.mjs collect <expected-version> <expected-package-id> <expected-product-name> [squirrel-output-directory]\n' +
+      '   or: release-assets.mjs collect-local <squirrel-output-directory> <package-json> <setup-result-file>\n' +
       '   or: release-assets.mjs verify <remote-json-file> <draft|published> exact',
   )
 }

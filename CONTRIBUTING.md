@@ -94,15 +94,20 @@ need it too, and wire it in the same change.
   current process, not a serialized path: for records that can cross hosts, select `path.win32` or
   `path.posix` from explicit owner metadata or anchored drive/UNC syntax instead of the runner OS.
 
-- **Building on Windows has two preconditions, and the BAT bootstrap handles/checks both after
-  installing Node but before npm can replace `node_modules`** (`npm run dist:win` also checks them
-  up front).
+- **Building on Windows requires a callable Node runtime in the supported range
+  `^22.22.2 || ^24.15.0 || >=26.0.0`, the Visual Studio C++ workload plus Spectre libraries, a
+  supported 64-bit Python, and an unlocked native-module tree.** The root BAT reuses a supported
+  PATH Node, obtains one through winget when suitable, or falls back to the exact SHA-pinned
+  portable manifest version. It verifies or repairs the toolchain and Python, then runs the
+  two-check preflight before npm can replace `node_modules`; `npm run dist:win` and rebuild rerun
+  that preflight up front.
   Close every running instance of the app first: Windows will not delete a DLL a live process has
   loaded, so a dev window you forgot about makes the build die with an `EPERM` about a `.node`
-  file that says nothing about the real cause. The bootstrap automatically installs the
-  **Spectre-mitigated MSVC libs** — node-pty asks for the mitigation in its own `binding.gyp`, and
-  without them the build dies minutes in with `MSB8040`. Visual Studio changes require elevation;
-  the script never triggers UAC, so an unelevated run exits access-denied and prints one exact
+  file that says nothing about the real cause. The bootstrap detects the
+  **Spectre-mitigated MSVC libs** and repairs them through the separately elevated helper-only
+  command when needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them
+  the build dies minutes in with `MSB8040`. Visual Studio changes require elevation; the script
+  never triggers UAC, so an unelevated run exits access-denied and prints one exact
   **helper-only** command. Run only that helper elevated, close the Administrator prompt, then rerun
   the root BAT normally — npm lifecycle scripts must never inherit elevation. The BAT also ensures
   x86/x64 are always checked and ARM64 is added on ARM64 hosts. The BAT also ensures a supported
@@ -129,8 +134,11 @@ need it too, and wire it in the same change.
   `0.3.0` expects NSIS metadata at the old generic feed and cannot discover the Squirrel `0.4.0`
   release. Separately prove `0.3.0` → `0.4.0` with the downloaded Setup while the old app is
   closed and while it is running, then document which sequence is supported. Closing first is a
-  provisional recommendation, not a verified fact. The Server Edition and mobile companion do
-  not use this desktop installer.
+  provisional recommendation, not a verified fact. The collision-safe fixture identity and
+  loopback runtime contract exist, but its dedicated dirty-manifest-safe packaging provenance
+  route is still pending; do not weaken the production wrapper's clean-tree/exact-commit guard to
+  create fixture artifacts. The Server Edition and mobile companion do not use this desktop
+  installer.
 
 - **Never publish a file with a bare `fs.rename`.** Use `renameAtomic` or `writeFileAtomic` from
   `src/core/fs-atomic.ts`. On Windows a rename fails with `EPERM` whenever anything has the

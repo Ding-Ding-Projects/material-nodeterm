@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Ensure the Windows native-module toolchain exists before npm reaches electron-rebuild.
 //
 // Node can be installed per-user, but Visual Studio Build Tools and changes to an existing

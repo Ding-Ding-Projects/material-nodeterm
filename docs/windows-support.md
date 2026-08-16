@@ -8,17 +8,17 @@ Keep the split — a user reading "what degrades" should not have to wade throug
 and a contributor about to touch a path needs the archaeology.
 
 **The Windows installer workflow is manual-only and accepts only `main`, on `windows-latest`.** It
-builds a real Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), unsigned by policy,
-then stages it as a draft, verifies the complete hosted inventory, and only then makes it
+is designed to build a real Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), unsigned
+by policy, then stage it as a draft, verify the complete hosted inventory, and only then make it
 non-draft and downloadable. Automatic publication is disabled because there is no push trigger;
 the workflow remains manually dispatchable. This change does not publish `0.4.0`, and manual
 publication remains pending the two packaged interactions below.
 
-**It also builds locally now**, which it did not for most of this work. `build.bat /s` completes in
-about 107 s and `build-installer.bat /s` in about 199 s, producing the same three-artifact Squirrel
-set (a 205.8 MB `nodeterm-Setup-0.3.0.exe`, the full `.nupkg`, `RELEASES`), unsigned per policy.
-That needed one elevated install of the Spectre-mitigated MSVC libraries — see
-[Building](#building).
+**A prior revision also built locally**, which it did not for most of this work. At
+`19e8296b9f355e0e11e5ee7ab25856f9d3351cef`, `build.bat /s` completed in about 107 s and
+`build-installer.bat /s` in about 199 s, producing a three-artifact `0.3.0` Squirrel set, unsigned
+per policy. That run predates the current source-provenance, immutable-icon, identity, and
+PE-resource wrapper gates; it is not package evidence for the final `0.4.0` tree.
 
 What has NOT happened is either required **packaged transition interaction**. First, installed
 production `0.3.0` cannot discover `0.4.0`: its updater expected NSIS metadata from the old generic
@@ -32,8 +32,8 @@ Sandbox/VM. The latter does not prove the former.
 > An earlier version of this page said no packaged build had ever been produced. That was wrong:
 > it confused "I could not build one on this machine" with "the project does not build one". The
 > distinction matters, because the first is a local toolchain gap and the second would be a
-> release-pipeline failure. Both are now false anyway — the workflow can build one when manually
-> dispatched from `main`, and this machine can build one locally.
+> release-pipeline failure. A prior hosted run and prior local build prove their older packaging
+> paths; neither proves the current wrapper or an installed `0.4.0` artifact.
 
 Windows is the active delivery target, but most of this codebase was written on macOS. That
 asymmetry is the theme of this page: **almost every defect here was code that is genuinely correct
@@ -231,6 +231,9 @@ gone.
 
 After making Node available, `download-dependencies.bat` first runs
 [`scripts/ensure-windows-build-toolchain.mjs`](../scripts/ensure-windows-build-toolchain.mjs). It
+accepts a PATH or winget Node only when it runs and satisfies
+`^22.22.2 || ^24.15.0 || >=26.0.0`; otherwise it falls back to the exact manifest-pinned portable
+runtime and verifies that version before persisting the selection. The BAT then
 adds the channel-current x64/x86 Spectre runtime component to an existing Visual Studio instance,
 or verifies and runs the exact Microsoft bootstrapper pinned in the dependency manifest to install
 Build Tools + the C++ workload on a fresh machine. The privileged helper stages that file below
@@ -245,6 +248,12 @@ remaining failed precondition in one run — discovering them one at a time cost
 multi-minute builds, and the first blocker hid the second entirely because the rebuild never
 reached the compile. Running both after Node bootstrap matters: the old root-BAT placement skipped
 the check on a machine with no initial Node and went straight into npm.
+
+The supported `npm run dist:win` path additionally requires a clean public commit, derives an
+immutable full-SHA URL for the committed seven-frame ICO, verifies the download, and fails closed
+on stale output or any disagreement among Squirrel identity/version metadata, `RELEASES`, the full
+nupkg nuspec, and Setup/app/execution-stub icon resources. Squirrel's vendor `Update.exe` remains
+outside that branding gate because the pinned builder has no supported resource-edit hook.
 
 1. **A running instance holds `conpty.node`.** Windows will not delete a DLL mapped into a live
    process, so a forgotten `npm start` window makes electron-rebuild die with an `EPERM` about a
@@ -310,10 +319,11 @@ credential and shell-syntax cases continue to run under real Git Bash.
   installed executable/package version metadata, and settings persistence. Uninstall only the
   unique fixture identity. This proof belongs in a disposable Windows Sandbox/VM and does not
   substitute for the production migration above.
-- **The hosted workflow has now produced and validated unsigned Squirrel assets**, and this
-  machine now has the Spectre-mitigated MSVC component. A production-BAT build from the final
-  reconciled commit, followed by a real install/launch/update/uninstall check, is still required;
-  an older local package does not prove the final tree or the installed runtime.
+- **A prior hosted workflow run produced and validated unsigned Squirrel assets**, and a prior
+  local run completed the then-current root BAT path after its toolchain prerequisites were met.
+  Both predate the final wrapper. A production-BAT package from the reconciled commit, followed by
+  real install/launch/update/uninstall checks, is still required; older artifacts do not prove the
+  final tree or installed runtime.
 
 ## If you are adding code that touches a path
 
