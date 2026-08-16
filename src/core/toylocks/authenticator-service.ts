@@ -5,7 +5,7 @@
 // live `code`/`codes` computation (which hands back a computed 6–8 digit CODE, never the secret
 // that produced it).
 
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { platform } from '../platform'
 import { IPC } from '../../shared/ipc'
 import { SecureStore } from '../secure-store'
@@ -19,6 +19,8 @@ import type {
   AuthenticatorExportInput,
   AuthenticatorExportResult,
   AuthenticatorRenameInput,
+  AuthenticatorRemoveInput,
+  AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from '../../shared/authenticator'
 
@@ -34,15 +36,41 @@ interface StoredSecret {
  *  VM that never synced), not genuine small drift. */
 const GROSS_CLOCK_SKEW_HINT_S = 120
 
+type StoredAuthenticatorEntry = Omit<AuthenticatorEntry, 'revision'>
+
 type AuthenticatorStore = Pick<
-  SecureStore<AuthenticatorEntry>,
+  SecureStore<StoredAuthenticatorEntry>,
   'load' | 'mutate' | 'seal' | 'unseal'
 >
 
+function publicEntry(entry: { meta: StoredAuthenticatorEntry; secretEnc: string }): AuthenticatorEntry {
+  const meta = entry.meta
+  // The digest never exposes the secret, but it does bind the destructive request to both the
+  // displayed metadata and the exact sealed payload. Length-delimited JSON fields avoid the
+  // ambiguous concatenation that a plain joined string would create.
+  const revision = createHash('sha256')
+    .update(
+      JSON.stringify([
+        meta.id,
+        meta.issuer,
+        meta.account,
+        meta.algorithm,
+        meta.digits,
+        meta.period,
+        meta.createdAt,
+        meta.updatedAt,
+        meta.linkedToyLockId ?? null,
+        entry.secretEnc
+      ])
+    )
+    .digest('hex')
+  return { ...meta, revision }
+}
+
 export function startAuthenticatorService(
-  store: AuthenticatorStore = new SecureStore<AuthenticatorEntry>('authenticator.json')
+  store: AuthenticatorStore = new SecureStore<StoredAuthenticatorEntry>('authenticator.json')
 ): { dispose(): void } {
-  const codeFor = (secretBase32: string, entry: AuthenticatorEntry): AuthenticatorCode => {
+  const codeFor = (secretBase32: string, entry: StoredAuthenticatorEntry): AuthenticatorCode => {
     const secretBytes = base32Decode(secretBase32)
     const nowS = Math.floor(Date.now() / 1000)
     const counter = totpCounterForTime(nowS, entry.period)
@@ -79,7 +107,7 @@ export function startAuthenticatorService(
 
   platform().handle(IPC.authenticatorList, async (): Promise<AuthenticatorEntry[]> => {
     const entries = await store.load()
-    return entries.map((e) => e.meta).sort((a, b) => a.issuer.localeCompare(b.issuer) || a.account.localeCompare(b.account))
+    return entries.map(publicEntry).sort((a, b) => a.issuer.localeCompare(b.issuer) || a.account.localeCompare(b.account))
   })
 
   platform().handle(
@@ -91,7 +119,7 @@ export function startAuthenticatorService(
         return { ok: false, error: 'Give this entry an issuer or an account name.' }
       }
       const now = Date.now()
-      const meta: AuthenticatorEntry = {
+      const meta: StoredAuthenticatorEntry = {
         id: randomUUID(),
         issuer: input.issuer.trim() || 'Account',
         account: input.account.trim() || input.issuer.trim() || 'Account',
@@ -104,7 +132,7 @@ export function startAuthenticatorService(
       return store.mutate<AuthenticatorAddResult>((entries) => {
         const secretEnc = store.seal({ v: 1, secretBase32 } satisfies StoredSecret)
         entries.push({ meta, secretEnc })
-        return { changed: true, result: { ok: true, entry: meta } }
+        return { changed: true, result: { ok: true, entry: publicEntry({ meta, secretEnc }) } }
       })
     }
   )
@@ -120,7 +148,7 @@ export function startAuthenticatorService(
         }
       }
       const now = Date.now()
-      const meta: AuthenticatorEntry = {
+      const meta: StoredAuthenticatorEntry = {
         id: randomUUID(),
         issuer: parsed.issuer,
         account: parsed.account,
@@ -133,7 +161,7 @@ export function startAuthenticatorService(
       return store.mutate<AuthenticatorAddResult>((entries) => {
         const secretEnc = store.seal({ v: 1, secretBase32: parsed.secretBase32 } satisfies StoredSecret)
         entries.push({ meta, secretEnc })
-        return { changed: true, result: { ok: true, entry: meta } }
+        return { changed: true, result: { ok: true, entry: publicEntry({ meta, secretEnc }) } }
       })
     }
   )
@@ -147,17 +175,33 @@ export function startAuthenticatorService(
         if (input.issuer !== undefined) entry.meta.issuer = input.issuer.trim() || entry.meta.issuer
         if (input.account !== undefined) entry.meta.account = input.account.trim() || entry.meta.account
         entry.meta.updatedAt = Date.now()
-        return { changed: true, result: entry.meta }
+        return { changed: true, result: publicEntry(entry) }
       })
     }
   )
 
-  platform().handle(IPC.authenticatorRemove, async (id: string): Promise<void> => {
-    await store.mutate<void>((entries) => {
-      const next = entries.filter((e) => e.meta.id !== id)
-      if (next.length === entries.length) return { changed: false, result: undefined }
-      entries.splice(0, entries.length, ...next)
-      return { changed: true, result: undefined }
+  platform().handle(IPC.authenticatorRemove, async (input: AuthenticatorRemoveInput): Promise<AuthenticatorRemoveResult> => {
+    return store.mutate<AuthenticatorRemoveResult>((entries) => {
+      const index = entries.findIndex((e) => e.meta.id === input.id)
+      if (index < 0) {
+        return {
+          changed: false,
+          result: { ok: false, error: 'not-found', message: 'This authenticator entry no longer exists.' }
+        }
+      }
+      const current = publicEntry(entries[index])
+      if (current.revision !== input.revision) {
+        return {
+          changed: false,
+          result: {
+            ok: false,
+            error: 'changed',
+            message: 'This authenticator entry changed after the confirmation opened. Review it and try again.'
+          }
+        }
+      }
+      entries.splice(index, 1)
+      return { changed: true, result: { ok: true, removed: current } }
     })
   })
 

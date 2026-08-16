@@ -79,6 +79,7 @@ const RELAY_REQUEST_METHODS = new Set<string>([
   IPC.gitWorktreeList,
   IPC.gitWorktreeAdd,
   IPC.gitWorktreeMerge,
+  IPC.gitWorktreeRemovalProof,
   IPC.gitWorktreeRemove,
   IPC.commitGenerate,
 

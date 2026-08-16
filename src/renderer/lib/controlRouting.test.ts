@@ -60,6 +60,34 @@ describe('routeControlSource', () => {
     // reported as travel-worthy.
     expect(routeControlSource(projects, 'p-open', 'term-b-1')).toEqual({ kind: 'active' })
   })
+
+  it('fails closed when two projects claim the same source node id', () => {
+    expect(
+      routeControlSource(
+        [P('project-a', [{ id: 'duplicate' }]), P('project-b', [{ id: 'duplicate' }])],
+        'project-a',
+        'duplicate',
+        true
+      )
+    ).toEqual({ kind: 'ambiguous', projectIds: ['project-a', 'project-b'] })
+  })
+
+  it('accepts a just-created live source missing from the serialized snapshot', () => {
+    expect(routeControlSource([P('project-a', [])], 'project-a', 'fresh-node', true)).toEqual({
+      kind: 'active'
+    })
+  })
+
+  it('treats a live source plus another project owner as ambiguous', () => {
+    expect(
+      routeControlSource(
+        [P('project-a', []), P('project-b', [{ id: 'fresh-node' }])],
+        'project-a',
+        'fresh-node',
+        true
+      )
+    ).toEqual({ kind: 'ambiguous', projectIds: ['project-a', 'project-b'] })
+  })
 })
 
 describe('needsLiveCanvas', () => {

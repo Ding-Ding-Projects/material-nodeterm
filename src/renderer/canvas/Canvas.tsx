@@ -153,16 +153,31 @@ import { PtyPressureBanner } from '../components/PtyPressureBanner'
 import { ConflictBar } from '../components/ConflictBar'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { openDestructiveGate, useDestructiveGate } from '../state/destructiveGate'
-import { requiresDestructiveGate } from '@shared/kids-mode-policy'
-import { useKidsMode } from '../state/kidsMode'
+import { kidsDestructiveGateRequired, useKidsMode } from '../state/kidsMode'
 import {
+  createNodeDeletionCommitBarrier,
   dispatchNodeDeletion,
   initialWorktreeDeleteFromDisk,
   managedDeletionRoots,
+  nodeDeletionTargetIncarnation,
+  orphanSessionRuntimeIdentity,
   planNodeDeletion,
   worktreeDeleteFromDiskAfterModeChange,
+  type NodeDeletionTarget,
   type NodeDeleteSurface
 } from '../lib/nodeDeletion'
+import type { DestructiveAuthorization } from '../lib/destructiveAuthorization'
+import {
+  createWorktreeDiskRemovalCommit,
+  sameWorktreeRemovalBinding,
+  sameWorktreeRemovalTarget,
+  worktreeRemovalProofForTarget,
+  worktreeRemovalProofWarning,
+  worktreeRemovalTargetIdentity,
+  type IdentifiedGroupWorktree,
+  type WorktreeRemovalTarget
+} from '../lib/worktreeRemoval'
+import { uuid } from '../lib/uuid'
 import {
   ACCOUNT_REMOVAL_COMMITTED_EVENT,
   ACCOUNT_REMOVAL_TEARDOWN_EVENT,
@@ -343,6 +358,8 @@ import { sshHostKey } from '@shared/ssh'
 import type {
   BridgeLink,
   CanvasNodeState,
+  GitResult,
+  GitWorktreeRemovalProof,
   Project,
   ProjectKanban,
   SshPassphraseRequest,
@@ -467,21 +484,35 @@ interface RequestDeleteNodesOptions {
   /** False only for a session-memory orphan, which has no canvas node behind it. */
   removesNode?: boolean
   /** The account-removal gate already authorized its disclosed login-node closure. */
-  authorizedBy?: 'remove-account'
+  authorizedBy?:
+    | 'remove-account'
+    | { action: 'remove-account'; authorization: DestructiveAuthorization }
   /** The owning project when the request came from a cross-project surface such as the sidebar. */
   targetProjectId?: string
   /** Override the active-canvas teardown (used by inactive sidebar sessions). */
-  perform?: (epoch: DeleteRequestEpoch) => void
+  perform?: (
+    epoch: DeleteRequestEpoch,
+    authorization: DestructiveAuthorization
+  ) => void | Promise<void>
+  /** Exact target reader for a non-canvas session incarnation such as a session-memory orphan. */
+  readCurrentTarget?: () => NodeDeletionTarget[] | null
   onCancel?: () => void
   /** A second dialog was refused; agent callers need an explicit reply rather than a hang. */
   onRejected?: () => void
+  /** Target/project/session/policy evidence changed or became unreadable before commit. */
+  onStale?: () => void
 }
 type DeleteRequestEpoch = ProjectEndRequestEpoch<
   ReturnType<typeof projectSessionScope>,
   CanvasNode
 >
 interface RemoveState {
+  projectId: string
   groupId: string
+  groupIncarnation: number
+  affectedNodes: WorktreeRemovalTarget['affectedNodes']
+  worktree: IdentifiedGroupWorktree
+  proof: GitWorktreeRemovalProof
   warning: string
   /** nodeterm created this directory (`worktree.createdByApp`), so deleting it is ours to offer as
    *  the default. A worktree the user made outside the app defaults to Unbind, and deleting it from
@@ -1140,13 +1171,16 @@ export function Canvas() {
    * they never read.
    */
   const removePendingRef = useRef(false)
+  /** One consumed worktree dialog/gate may own at most one proof-and-remove transaction. */
+  const worktreeRemovalOperationRef = useRef<symbol | null>(null)
+  /** Prevent deleting the group node while its exact binding is being removed from disk. */
+  const worktreeRemovalInFlightRef = useRef(new Set<string>())
   const [deleteFromDisk, setDeleteFromDisk] = useState(false)
   // Whether kids mode requires the hardened path for a worktree removal. Read at render
   // rather than captured when the dialog opened: the mode is a shared record another
   // process can flip, and a dialog left open across that change must honour the new state.
-  const kidsModeOn = useKidsMode((s) => s.enabled)
-  const kidsGateRequired = requiresDestructiveGate('remove-worktree', kidsModeOn).required
-  const previousKidsModeOnRef = useRef(kidsModeOn)
+  const kidsGateRequired = useKidsMode(kidsDestructiveGateRequired)
+  const previousKidsGateRequiredRef = useRef(kidsGateRequired)
   useLayoutEffect(() => {
     // Reset before paint on the OFF→ON edge. An already-open dialog must never flash or retain an
     // implicit disk deletion after another window/process enables Kids mode. Repeated ON renders
@@ -1154,12 +1188,12 @@ export function Canvas() {
     setDeleteFromDisk((current) =>
       worktreeDeleteFromDiskAfterModeChange(
         current,
-        previousKidsModeOnRef.current,
-        kidsModeOn
+        previousKidsGateRequiredRef.current,
+        kidsGateRequired
       )
     )
-    previousKidsModeOnRef.current = kidsModeOn
-  }, [kidsModeOn])
+    previousKidsGateRequiredRef.current = kidsGateRequired
+  }, [kidsGateRequired])
   // Group awaiting confirmation to merge its worktree into the base branch. `hasOrigin` decides
   // whether the dialog offers (and warns about) the push to origin — a repo with no `origin` must
   // never be threatened with a publish that cannot happen.
@@ -4055,7 +4089,7 @@ export function Canvas() {
       // A failed prune must still let the binding go — dropping it is the user's ask, and a
       // registration we could not clean up is not a reason to trap them in a dead group.
       await api.git
-        .worktreeRemove(wt.repoPath, wt.path, false, true)
+        .worktreeRemove(wt.repoPath, wt.path, { mode: 'prune' })
         .catch(() => {})
     },
     [isSshProject, resetDisplacedCwd]
@@ -4207,14 +4241,64 @@ export function Canvas() {
   const requestDeleteNodes = useCallback(
     (ids: string[], options: RequestDeleteNodesOptions = {}): boolean => {
       if (!ids.length) return false
-      const titles =
-        options.titles ??
-        ids.map(
-          (id) => (nodesRef.current.find((n) => n.id === id)?.data.title as string | undefined) ?? id
-        )
+      if (ids.some((id) => worktreeRemovalInFlightRef.current.has(id))) {
+        options.onRejected?.()
+        setNotice({
+          kind: 'error',
+          text: 'That worktree binding is being removed from disk. Wait for it to finish before deleting the group.'
+        })
+        return false
+      }
+
+      const targetProjectId =
+        options.targetProjectId ?? useProjects.getState().activeProjectId ?? ''
+      const requestEpoch = captureProjectEndRequest(
+        targetProjectId,
+        projectSessionScope(targetProjectId),
+        nodesProjectIdRef.current,
+        nodesRef.current,
+        ids
+      )
+      const requested = new Set(ids)
+      const defaultReadCurrentTarget = (): NodeDeletionTarget[] | null => {
+        const store = useProjects.getState()
+        const runtimeIdentity = sessionForProject(targetProjectId).id
+        const source:
+          | readonly CanvasNode[]
+          | readonly CanvasNodeState[]
+          | null =
+          store.activeProjectId === targetProjectId && nodesProjectIdRef.current === targetProjectId
+            ? nodesRef.current
+            : store.getProject(targetProjectId)?.nodes ?? null
+        if (!source) return null
+        const current = ids.map((id) => source.find((node) => node.id === id))
+        if (current.some((node) => !node)) return null
+        return current.map((node) => {
+          const live = node as CanvasNode
+          const stored = node as CanvasNodeState
+          return {
+            projectId: targetProjectId,
+            id: node!.id,
+            type: 'type' in node! ? live.type : stored.kind,
+            title: String('data' in node! ? live.data.title ?? '' : stored.title ?? ''),
+            accountId:
+              ('data' in node! ? live.data.accountId : stored.accountId) as string | undefined,
+            parentId: ('parentId' in node! ? node!.parentId : undefined) ?? undefined,
+            incarnation: nodeDeletionTargetIncarnation(node!),
+            runtimeIdentity
+          }
+        })
+      }
+      const readCurrentTarget = options.readCurrentTarget ?? defaultReadCurrentTarget
+      const disclosedTargets = readCurrentTarget()
+      if (!disclosedTargets || disclosedTargets.length !== requested.size) {
+        options.onStale?.()
+        return false
+      }
+      const titles = options.titles ?? disclosedTargets.map((target) => target.title || target.id)
       const plan = planNodeDeletion({
         surface: options.surface ?? 'canvas',
-        kidsModeOn: useKidsMode.getState().enabled,
+        kidsModeOn: kidsDestructiveGateRequired(),
         titles,
         requestedBy: options.requestedBy,
         removesNode: options.removesNode,
@@ -4228,21 +4312,26 @@ export function Canvas() {
         return false
       }
 
-      // Capture before the confirmation opens. The user can switch A -> B while the dialog is up;
-      // Confirm must still address A's core and A's node snapshot, never whichever canvas is live.
-      const targetProjectId =
-        options.targetProjectId ?? useProjects.getState().activeProjectId ?? ''
-      const requestEpoch = captureProjectEndRequest(
-        targetProjectId,
-        projectSessionScope(targetProjectId),
-        nodesProjectIdRef.current,
-        nodesRef.current,
-        ids
-      )
-
       const accepted = dispatchNodeDeletion(plan, {
-        perform: () =>
-          options.perform ? options.perform(requestEpoch) : void deleteNodes(ids, requestEpoch),
+        perform: (authorization) => {
+          const commit = createNodeDeletionCommitBarrier({
+            disclosedTargets,
+            authorization,
+            readCurrent: readCurrentTarget,
+            kidsGateRequired: kidsDestructiveGateRequired,
+            perform: () => {
+              if (options.perform) void options.perform(requestEpoch, authorization)
+              else void deleteNodes(ids, requestEpoch)
+            },
+            upgradeToTwoKey: () => {
+              // The ordinary approval is spent. Start over so the two-key gate discloses a fresh
+              // project/node/session incarnation under the now-authoritative stricter policy.
+              requestDeleteNodes(ids, options)
+            },
+            refuse: () => options.onStale?.()
+          })
+          commit()
+        },
         cancel: options.onCancel,
         openGate: (request) =>
           openDestructiveGate({
@@ -4270,7 +4359,7 @@ export function Canvas() {
       if (!accepted) options.onRejected?.()
       return accepted
     },
-    [confirmBusy, deleteNodes, setConfirm]
+    [confirmBusy, deleteNodes, setConfirm, setNotice]
   )
 
   // Node header × buttons call React Flow's `deleteElements` directly. Intercept that one API at
@@ -4542,7 +4631,7 @@ export function Canvas() {
         return
       }
       // We created this directory, so `createdByApp` is true — Remove may delete it.
-      attachWorktree(target, worktreeFromCreate(v))
+      attachWorktree(target, worktreeFromCreate({ ...v, ownership: res.worktreeOwnership }))
       setWorktreeDialog(null)
     },
     [attachWorktree, worktreeDialog]
@@ -4572,9 +4661,60 @@ export function Canvas() {
     [attachWorktree, worktreeDialog]
   )
 
-  // Ask-first worktree removal. Gather any uncommitted-work info, then open a safety dialog
-  // before doing anything destructive. GitStatus has no `files` field — the dirty count is
-  // staged + unstaged changes.
+  /** Mint and persist a stable generation id before a legacy binding can be disclosed. */
+  const normalizeWorktreeBinding = useCallback((projectId: string, groupId: string): boolean => {
+    if (
+      useProjects.getState().activeProjectId !== projectId ||
+      nodesProjectIdRef.current !== projectId
+    ) return false
+    const group = nodesRef.current.find((node) => node.id === groupId)
+    const worktree = group?.data.worktree
+    if (!group || group.type !== 'group' || !worktree) return false
+    if (worktree.bindingId) return true
+    const normalized = { ...worktree, bindingId: uuid() }
+    const next = nodesRef.current.map((node) =>
+      node.id === groupId
+        ? { ...node, data: { ...node.data, worktree: normalized } }
+        : node
+    ) as CanvasNode[]
+    nodesRef.current = next
+    setNodes(next)
+    markDirty()
+    return true
+  }, [setNodes, markDirty])
+
+  /** Exact renderer-side incarnation/binding target paired with the core's physical proof. */
+  const liveWorktreeRemovalTarget = useCallback(
+    (projectId: string, groupId: string): WorktreeRemovalTarget | null => {
+      if (
+        useProjects.getState().activeProjectId !== projectId ||
+        nodesProjectIdRef.current !== projectId
+      ) return null
+      const group = nodesRef.current.find((node) => node.id === groupId)
+      const worktree = group?.data.worktree
+      if (!group || group.type !== 'group' || !worktree?.bindingId) return null
+      const affected = displacedByWorktree(nodesRef.current, groupId, worktree.path)
+      const affectedNodes = nodesRef.current
+        .filter((node) => affected.has(node.id))
+        .map((node) => ({
+          id: node.id,
+          incarnation: nodeDeletionTargetIncarnation(node),
+          cwd: node.data.cwd as string | undefined,
+          filePath: node.data.filePath as string | undefined
+        }))
+      return {
+        projectId,
+        groupId,
+        groupIncarnation: nodeDeletionTargetIncarnation(group),
+        affectedNodes,
+        worktree: worktree as IdentifiedGroupWorktree
+      }
+    },
+    []
+  )
+
+  // Ask first, but only after core supplies an authoritative full-tree proof. A failed proof read
+  // is not a clean worktree and cannot open a destructive confirmation.
   const requestRemoveWorktree = useCallback(
     async (
       groupId: string,
@@ -4585,31 +4725,38 @@ export function Canvas() {
       // deletion of worktree B), and an unrelated confirm stacked on top of this one used to make
       // it invisible while still live (see `confirmOpenRef`). Refuse instead.
       if (confirmBusy()) return { ok: false, error: 'a confirmation is already pending — try again' }
-      const wt = nodesRef.current.find((n) => n.id === groupId)?.data.worktree
-      if (!wt) return { ok: false, error: `${groupId} is not a worktree-bound group` }
+      const projectId = useProjects.getState().activeProjectId ?? ''
+      if (!normalizeWorktreeBinding(projectId, groupId))
+        return { ok: false, error: `${groupId} is not a worktree-bound group` }
+      const disclosed = liveWorktreeRemovalTarget(projectId, groupId)
+      if (!disclosed) return { ok: false, error: 'the worktree binding is unavailable' }
       // Held across the `await` below: without it a second call slips through the gap before
       // `removeTarget` exists.
       removePendingRef.current = true
       try {
-        // The probe is a courtesy (it only enriches the warning), so a rejected IPC (WS-RPC
-        // transport error on the Server Edition) must not swallow the whole action: without this
-        // catch the dialog silently never opens and Remove looks broken. Fail open — ask without
-        // the dirty-file count.
-        const status = await api.git.status(wt.path).catch(() => null)
-        const dirtyCount = (status?.staged.length ?? 0) + (status?.changes.length ?? 0)
-        const warning = dirtyCount > 0 ? `${dirtyCount} uncommitted file(s) in the worktree.` : ''
-        // A worktree the user created outside nodeterm is not ours to delete: Unbind is the default
-        // and deleting it from disk is an opt-in checkbox. One we created may be deleted (still
-        // behind the confirm).
+        const proofResult = await api.git
+          .worktreeRemovalProof(disclosed.worktree.repoPath, disclosed.worktree.path)
+          .catch(() => null)
+        const current = liveWorktreeRemovalTarget(projectId, groupId)
+        if (!sameWorktreeRemovalTarget(disclosed, current))
+          throw new Error('the project, group, nodes, or worktree binding changed while it was being read')
+        const proof = worktreeRemovalProofForTarget(proofResult, current!)
+        if (!proof) throw new Error(proofResult?.message || 'the worktree removal proof is unavailable')
+        const canDelete = proof.ownership.directoryCreatedByApp
         setDeleteFromDisk(
-          initialWorktreeDeleteFromDisk(wt.createdByApp, useKidsMode.getState().enabled)
+          initialWorktreeDeleteFromDisk(canDelete, kidsDestructiveGateRequired())
         )
         setRemoveTarget({
+          projectId,
           groupId,
-          warning,
-          canDelete: wt.createdByApp,
-          branch: wt.branch,
-          path: wt.path,
+          groupIncarnation: current!.groupIncarnation,
+          affectedNodes: current!.affectedNodes,
+          worktree: current!.worktree,
+          proof,
+          warning: worktreeRemovalProofWarning(proof),
+          canDelete,
+          branch: current!.worktree.branch,
+          path: current!.worktree.path,
           requestedBy: opts?.requestedBy
         })
         return { ok: true }
@@ -4619,7 +4766,7 @@ export function Canvas() {
         return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }
     },
-    [confirmBusy]
+    [confirmBusy, liveWorktreeRemovalTarget, normalizeWorktreeBinding, setRemoveTarget]
   )
 
   /** Clear a group's worktree binding and re-read git's facts (the worktree, if it still exists,
@@ -4635,92 +4782,163 @@ export function Canvas() {
     [setNodes, markDirty, refreshWorktreeStore]
   )
 
-  // Confirmed removal: git FIRST, then the child terminals' tmux sessions — a git that refuses must
-  // leave the user's running processes alone (see the numbered steps below).
-  //
-  // What "remove" means depends on WHO created the worktree (`createdByApp`, made truthful in the
-  // bind path):
-  //  - we created it            → delete the directory AND the branch (today's behavior).
-  //  - the user created it      → unbind only, unless they ticked "Delete from disk too"; even
-  //                               then the BRANCH is theirs and is kept.
-  // worktreeRemove uses `git branch -d`, which refuses to delete an unmerged branch; it no longer
-  // swallows that — the result message says whether the branch actually went.
-  const confirmRemoveWorktree = useCallback(async () => {
-    const t = removeTarget
-    // The dialog is being answered → the "a removal confirm is open" guard is released (both exits,
-    // here and the dialog's onCancel, clear it; nothing else may).
-    removePendingRef.current = false
-    if (!t) return
-    const wt = nodesRef.current.find((n) => n.id === t.groupId)?.data.worktree
-    if (!wt) {
-      setRemoveTarget(null)
-      return
-    }
+  // Confirmed disk removal is proof-bound and one-shot. Git runs first; session/canvas cleanup is
+  // still acknowledgement-driven, so a refused or unreadable proof touches no running process.
+  const confirmRemoveWorktree = useCallback(() => {
+    const disclosed = removeTarget
+    const removeFromDisk = deleteFromDisk
+    if (!removePendingRef.current || !disclosed || worktreeRemovalOperationRef.current) return
+    const t: RemoveState = disclosed
+    const operation = Symbol('worktree-removal')
+    worktreeRemovalOperationRef.current = operation
+    worktreeRemovalInFlightRef.current.add(disclosed.groupId)
     setRemoveTarget(null)
-    // Unbind-only: touch no disk at all — but route it through `releaseWorktreeBinding` like every
-    // OTHER path that drops a bound group (Unbind, Ungroup, Delete). Calling `clearWorktreeBinding`
-    // directly was the one hole left in that invariant, and it is reachable: adopt an existing
-    // worktree, `rm -rf` it from a shell, hit ✕ before the chip goes stale, let the 4 s poll strike
-    // the group out WHILE the confirm is open, then confirm with the delete box unticked. The
-    // binding went, but the children kept `data.cwd = <dead path>` — persisted into project.json,
-    // invisible until the next reboot cold-starts them into a directory that is not there — and
-    // git kept the stale registration, so a later `worktree add` at the same path failed with
-    // "missing but already registered".
-    //
-    // `releaseWorktreeBinding` no-ops unless the group is actually STALE, so unbinding a healthy
-    // adopted worktree still touches nothing: its directory is right there, and its children's cwd
-    // is still valid.
-    if (!deleteFromDisk) {
-      void releaseWorktreeBinding(t.groupId).finally(() => clearWorktreeBinding(t.groupId))
-      setNotice({ kind: 'info', text: `Unbound ${wt.branch}. The worktree is still on disk.` })
+
+    const disclosedTarget: WorktreeRemovalTarget = {
+      projectId: disclosed.projectId,
+      groupId: disclosed.groupId,
+      groupIncarnation: disclosed.groupIncarnation,
+      affectedNodes: disclosed.affectedNodes,
+      worktree: disclosed.worktree
+    }
+    const readCurrent = (): WorktreeRemovalTarget | null =>
+      liveWorktreeRemovalTarget(disclosed.projectId, disclosed.groupId)
+    const finish = (): void => {
+      if (worktreeRemovalOperationRef.current !== operation) return
+      worktreeRemovalOperationRef.current = null
+      worktreeRemovalInFlightRef.current.delete(disclosed.groupId)
+      removePendingRef.current = false
+    }
+    const refuse = (message: string): void => {
+      setNotice({ kind: 'error', text: message })
+    }
+
+    // Unbind remains non-destructive and never opens the Kids gate. It still revalidates the exact
+    // target before its helper, then clears only if the same binding remains after stale pruning.
+    if (!removeFromDisk) {
+      const current = readCurrent()
+      if (!sameWorktreeRemovalTarget(disclosedTarget, current)) {
+        refuse('The worktree binding changed while confirmation was open. Nothing was unbound.')
+        finish()
+        return
+      }
+      void releaseWorktreeBinding(disclosed.groupId).finally(() => {
+        if (sameWorktreeRemovalBinding(disclosedTarget, readCurrent())) {
+          clearWorktreeBinding(disclosed.groupId)
+          setNotice({
+            kind: 'info',
+            text: `Unbound ${disclosed.worktree.branch}. The worktree is still on disk.`
+          })
+        } else {
+          refuse('The group was rebound while unbinding. Its current binding was kept.')
+        }
+        finish()
+      })
       return
     }
-    // 1) Remove the worktree FIRST; only delete the branch if the branch is ours (we created it).
-    //    The sessions are killed after, not before: `worktreeRemove` can still REFUSE (a dangerous
-    //    path, a locked worktree, EPERM), and killing every child terminal's tmux session up front
-    //    meant the user's running processes were gone for good while the worktree was still there.
-    //    Removing the directory out from under a live session is safe on POSIX (open files and
-    //    cwds are unlinked, not blocked), and the sessions are ended a moment later anyway.
-    //    A REJECTED ipc (the Server Edition's WS dropping mid-removal) is not a `worktreeGone` and
-    //    must never be read as one: `ok:false` with no `worktreeGone` is precisely "nothing was
-    //    removed, touch no sessions" — the same fail-closed answer a refusal gets. Without the catch
-    //    the rejection escaped the callback and the whole action became a silent no-op: no notice
-    //    ever appeared, so the user could not tell it from a removal that quietly worked.
-    const res = await api.git
-      .worktreeRemove(wt.repoPath, wt.path, wt.createdByApp)
-      .catch((e: unknown) => ({
-        ok: false as const,
-        worktreeGone: false,
-        message: `Could not remove the worktree: ${e instanceof Error ? e.message : String(e)}`
-      }))
-    // 2) A failure that means "the worktree is already gone" must STILL clear the binding —
-    //    returning early there is exactly what turns a deleted directory into an unrecoverable
-    //    group (Remove keeps failing, and the dead path keeps being handed to new terminals).
-    if (!res.ok && !res.worktreeGone) {
-      setNotice({ kind: 'error', text: res.message })
-      return // sessions untouched: nothing was removed.
+
+    const commits: Partial<
+      Record<DestructiveAuthorization, ReturnType<typeof createWorktreeDiskRemovalCommit<GitResult>>>
+    > = {}
+    const run = async (authorization: DestructiveAuthorization): Promise<void> => {
+      let keepPendingForUpgrade = false
+      const commit = commits[authorization] ?? createWorktreeDiskRemovalCommit({
+        disclosedTarget,
+        disclosedProof: disclosed.proof,
+        authorization,
+        readCurrent,
+        kidsGateRequired: kidsDestructiveGateRequired,
+        readProof: (target) =>
+          api.git.worktreeRemovalProof(target.worktree.repoPath, target.worktree.path),
+        remove: (target, proof) =>
+          api.git.worktreeRemove(target.worktree.repoPath, target.worktree.path, {
+            mode: 'remove',
+            proof,
+            deleteBranch: proof.ownership.branchCreatedByApp
+          }),
+        upgradeToTwoKey: openTwoKey,
+        refuse: (reason) => {
+          refuse(
+            reason === 'proof-changed'
+              ? 'The worktree contents changed after confirmation. Nothing was removed; review it and try again.'
+              : reason === 'proof-unavailable'
+                ? 'The worktree could not be proved after confirmation. Nothing was removed.'
+                : 'The project, group, nodes, policy, or worktree binding changed. Nothing was removed.'
+          )
+        }
+      })
+      commits[authorization] = commit
+      try {
+        const outcome = await commit()
+        if (outcome.kind === 'upgraded-to-two-key') {
+          // `openTwoKey` has transferred ownership to the fresh gate. Keep the exact binding and
+          // one-shot operation reserved until that gate confirms or cancels; otherwise another
+          // removal can slip into the interval before its callback spends the approval.
+          keepPendingForUpgrade = true
+          return
+        }
+        if (outcome.kind !== 'performed') {
+          finish()
+          return
+        }
+        const res = outcome.result
+        if (!res.ok && !res.worktreeGone) {
+          setNotice({ kind: 'error', text: res.message })
+          finish()
+          return
+        }
+        // Core has acknowledged that A is gone. Never clear a replacement binding B. For the same
+        // binding, preserve the existing session recycle/acknowledgement semantics before clearing.
+        if (!sameWorktreeRemovalBinding(disclosedTarget, readCurrent())) {
+          refuse(`${res.message} The group was rebound while removal ran, so its current binding was kept.`)
+          finish()
+          return
+        }
+        if (await resetDisplacedCwd(disclosed.groupId, disclosed.worktree.path, true)) {
+          if (sameWorktreeRemovalBinding(disclosedTarget, readCurrent()))
+            clearWorktreeBinding(disclosed.groupId)
+          else
+            refuse('The worktree was removed, but the group was rebound during session cleanup. Its current binding was kept.')
+        }
+        setNotice({ kind: res.ok ? 'info' : 'error', text: res.message })
+      } catch (error) {
+        refuse(`Could not remove the worktree: ${error instanceof Error ? error.message : String(error)}`)
+      } finally {
+        if (!keepPendingForUpgrade) finish()
+      }
     }
-    // 3) The directory is gone. Every node that was living in it owes a cleanup — and "every node"
-    //    means ALL DESCENDANTS, not just direct children (a terminal inside a nested group was
-    //    missed), plus editor/diff nodes anywhere on the canvas whose file was inside it:
-    //      a. terminals: end the tmux session, which is now sitting in a directory that no longer
-    //         exists;
-    //      b. terminals: reset `data.cwd` off the deleted path. Leaving it there is the
-    //         exact trap this whole task exists to remove — on the next mount the node spawns into
-    //         a path that is gone, pty-manager silently falls back to $HOME, and the dead cwd is
-    //         persisted forever — only reached through the SANCTIONED Remove path.
-    //      c. editor/diff: mark `data.fileMissing`. There is no fallback path to re-point a dead
-    //         `filePath` at — the file is genuinely gone — so unlike terminals these are
-    //         flagged, not rewritten, and the node shows a persistent notice instead of silently
-    //         opening blank or failing a `git show`.
-    //    The respawn (nonce bump) puts the terminal straight back in the fallback cwd rather than
-    //    leaving a dead pane behind; its session was destroyed a line earlier either way.
-    //    Nodes whose cwd/filePath was NOT inside the worktree are left alone: they were never
-    //    affected.
-    if (!(await resetDisplacedCwd(t.groupId, wt.path, true))) return
-    clearWorktreeBinding(t.groupId)
-    setNotice({ kind: res.ok ? 'info' : 'error', text: res.message })
-  }, [removeTarget, deleteFromDisk, clearWorktreeBinding, resetDisplacedCwd, releaseWorktreeBinding])
+
+    function openTwoKey(target: WorktreeRemovalTarget): void {
+      const accepted = openDestructiveGate({
+        title: `Delete worktree “${target.worktree.branch}” from disk`,
+        description:
+          `The directory ${target.worktree.path} is deleted. ` +
+          (t.proof.ownership.branchCreatedByApp
+            ? 'Its branch is also deleted only if Git confirms it is already merged. '
+            : 'The branch is kept. ') +
+          t.warning,
+        affected: [target.worktree.branch, target.worktree.path],
+        confirmLabel: 'Delete',
+        onConfirm: () => { void run('two-key') },
+        onCancel: finish
+      })
+      if (!accepted) {
+        refuse('Another destructive confirmation is already open. Nothing was removed.')
+        finish()
+      }
+    }
+
+    void run('ordinary')
+  }, [
+    clearWorktreeBinding,
+    deleteFromDisk,
+    liveWorktreeRemovalTarget,
+    releaseWorktreeBinding,
+    removeTarget,
+    resetDisplacedCwd,
+    setRemoveTarget,
+    setNotice
+  ])
 
   // Confirmed merge. The push is passed explicitly: `worktreeMerge` never publishes on its own, so
   // what the dialog said is exactly what runs — and the result banner names the push either way.
@@ -6560,9 +6778,22 @@ export function Canvas() {
       // project and travel to it first (lib/controlRouting); `list` changes nothing, so it is
       // answered out of that project's serialized nodes rather than yanking the user's view.
       let src = nodesRef.current.find((n) => n.id === sourceNodeId)
+      const controlState = useProjects.getState()
+      const route = routeControlSource(
+        controlState.projects,
+        controlState.activeProjectId,
+        sourceNodeId,
+        !!src
+      )
+      if (route.kind === 'ambiguous') {
+        reply({
+          ok: false,
+          error: `source node identity is ambiguous across projects: ${route.projectIds.join(', ')}`
+        })
+        return
+      }
       if (!src) {
-        const { projects, activeProjectId: activeId } = useProjects.getState()
-        const route = routeControlSource(projects, activeId, sourceNodeId)
+        const { projects } = controlState
         if (route.kind === 'switch' || route.kind === 'reopen') {
           if (!needsLiveCanvas(verb)) {
             const rows = storedNodeListing(projects.find((p) => p.id === route.projectId)?.nodes ?? [])
@@ -7482,7 +7713,14 @@ export function Canvas() {
             }
             const groupId = worktreeControlRef.current.attachWorktree(
               { groupId: bindGroupId, at: frameAt },
-              worktreeFromCreate({ repoPath: repoRoot, mode: 'new', branch, baseRef, path: wtPath })
+              worktreeFromCreate({
+                repoPath: repoRoot,
+                mode: 'new',
+                branch,
+                baseRef,
+                path: wtPath,
+                ownership: res.worktreeOwnership
+              })
             )
             reply({
               ok: true,
@@ -7789,6 +8027,23 @@ export function Canvas() {
       const scope = projectSessionScope(store.activeProjectId)
       const scopeSession = scope.session
       const scopeAgentStatus = scope.stores.agentStatus.store
+      const orphanProjectId = store.activeProjectId
+      const readOrphanTarget = (): NodeDeletionTarget[] | null => {
+        const currentStore = useProjects.getState()
+        const currentPlan = planSessionKill(nodeId, currentStore.projects, orphanProjectId)
+        if (currentPlan.ownerProjectId) return null
+        const currentSession = projectSessionScope(orphanProjectId).session
+        return [{
+          projectId: orphanProjectId,
+          id: nodeId,
+          type: 'terminal',
+          title: orphan ? `orphan session ${nodeId}` : nodeId,
+          runtimeIdentity: orphanSessionRuntimeIdentity({
+            session: currentSession.id,
+            nodeId
+          })
+        }]
+      }
       // `everySocket` on BOTH legs, and only here: the panel's rows are swept off both of the
       // machine's tmux sockets, so a row it offers to end genuinely can be on either. Every other
       // caller (project deletion, an ordinary node-×) knows its own nodes and stays narrow.
@@ -7812,6 +8067,7 @@ export function Canvas() {
         titles: [orphan ? `orphan session ${nodeId}` : nodeId],
         removesNode: false,
         targetProjectId: store.activeProjectId,
+        readCurrentTarget: readOrphanTarget,
         perform: () => {
           void destroySessionForScope(
             'session-memory',

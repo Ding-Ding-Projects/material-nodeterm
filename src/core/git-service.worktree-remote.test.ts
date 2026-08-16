@@ -95,8 +95,11 @@ describe('worktree ops on a REMOTE repo', () => {
 
   it('worktreeRemove refuses — and the refusal is NEVER dressed up as `worktreeGone`', async () => {
     claimAsRemote(repo)
-    for (const pruneOnly of [false, true]) {
-      const r = await svc.worktreeRemove(repo, path.join(repo, 'wt'), true, pruneOnly)
+    for (const request of [
+      { mode: 'prune' as const },
+      { mode: 'remove' as const, proof: null as never, deleteBranch: true }
+    ]) {
+      const r = await svc.worktreeRemove(repo, path.join(repo, 'wt'), request)
       expect(r.ok).toBe(false)
       expect(r.message).toMatch(/not supported in SSH projects/i)
       // The one field the renderer reads as proof a directory is gone (it then destroys the

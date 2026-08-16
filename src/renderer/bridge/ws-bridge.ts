@@ -40,7 +40,7 @@ import {
   type ScheduledSettingsApi,
   type SettingsApi,
   type KidsModeApi,
-  type KidsModeRecord,
+  type KidsModeSnapshot,
   type SchoolModeApi,
   type SchoolModeRecord,
   type ClaudeUsage,
@@ -79,6 +79,8 @@ import type {
   AuthenticatorExportInput,
   AuthenticatorExportResult,
   AuthenticatorRenameInput,
+  AuthenticatorRemoveInput,
+  AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from '../../shared/authenticator'
 import type { PeerIdentity } from '../../shared/presence'
@@ -421,11 +423,11 @@ export function buildRealApi(
   }
 
   const kidsMode: KidsModeApi = {
-    load: () => client.request(IPC.kidsModeLoad) as Promise<KidsModeRecord>,
-    enable: (pin?: string) => client.request(IPC.kidsModeEnable, pin) as Promise<KidsModeRecord>,
+    load: () => client.request(IPC.kidsModeLoad) as Promise<KidsModeSnapshot>,
+    enable: (pin?: string) => client.request(IPC.kidsModeEnable, pin) as Promise<KidsModeSnapshot>,
     disable: (pin: string) =>
       client.request(IPC.kidsModeDisable, pin) as ReturnType<KidsModeApi['disable']>,
-    rename: (name: string) => client.request(IPC.kidsModeRename, name) as Promise<KidsModeRecord>,
+    rename: (name: string) => client.request(IPC.kidsModeRename, name) as Promise<KidsModeSnapshot>,
     changePin: (currentPin: string, nextPin: string) =>
       client.request(IPC.kidsModeChangePin, currentPin, nextPin) as Promise<boolean>,
     hasCredential: () => client.request(IPC.kidsModeHasCredential) as Promise<boolean>,
@@ -595,13 +597,18 @@ export function buildFilesApi(
         baseRef,
         push
       ) as ReturnType<GitApi['worktreeMerge']>,
-    worktreeRemove: (repoPath, wtPath, deleteBranch, pruneOnly) =>
+    worktreeRemovalProof: (repoPath, wtPath) =>
+      client.request(
+        IPC.gitWorktreeRemovalProof,
+        repoPath,
+        wtPath
+      ) as ReturnType<GitApi['worktreeRemovalProof']>,
+    worktreeRemove: (repoPath, wtPath, request) =>
       client.request(
         IPC.gitWorktreeRemove,
         repoPath,
         wtPath,
-        deleteBranch,
-        pruneOnly
+        request
       ) as ReturnType<GitApi['worktreeRemove']>,
     setActiveRemote: (projectId) =>
       client.request(IPC.gitSetActiveRemote, projectId) as Promise<void>
@@ -954,7 +961,8 @@ export function buildAuthenticatorApi(client: RpcClient): Pick<NodeTerminalApi, 
       client.request(IPC.authenticatorAddUri, uri) as Promise<AuthenticatorAddResult>,
     rename: (input: AuthenticatorRenameInput) =>
       client.request(IPC.authenticatorRename, input) as Promise<AuthenticatorEntry | null>,
-    remove: (id: string) => client.request(IPC.authenticatorRemove, id) as Promise<void>,
+    remove: (input: AuthenticatorRemoveInput) =>
+      client.request(IPC.authenticatorRemove, input) as Promise<AuthenticatorRemoveResult>,
     code: (id: string) => client.request(IPC.authenticatorCode, id) as Promise<AuthenticatorCode | null>,
     codes: (ids: string[]) =>
       client.request(IPC.authenticatorCodes, ids) as Promise<Record<string, AuthenticatorCode>>,

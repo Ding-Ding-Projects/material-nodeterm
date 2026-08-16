@@ -322,6 +322,14 @@ local and fail closed before a raw relay frame reaches their handler or a host-g
 reaches their socket. Do not replace this with a denylist: a newly registered credential service
 must be unreachable by default.
 
+**Destructive approval expires when its target or policy changes.** Node, authenticator and
+worktree confirmations re-read their exact identity and authoritative Kids policy at the commit
+boundary; an unreadable policy takes the two-key path. Live worktree deletion additionally requires
+an opaque, one-shot core proof over canonical Git/filesystem generations and the complete ignored
+as well as untracked byte inventory. Never make that proof optional, derive branch authority from
+shared canvas JSON, collapse path I/O errors into absence, or replace the exact-tip ref CAS with a
+plain branch delete.
+
 **A File path is scoped to the machine that produced it.** File drop/paste helpers must take the
 active session API explicitly. Never use `window.nodeTerminal.getPathForFile` or global `files.*`
 from a session-bound surface: in a relay tab that turns a viewer-local path/write into text pasted

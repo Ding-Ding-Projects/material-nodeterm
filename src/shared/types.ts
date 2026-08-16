@@ -30,6 +30,8 @@ import type {
   AuthenticatorExportInput,
   AuthenticatorExportResult,
   AuthenticatorRenameInput,
+  AuthenticatorRemoveInput,
+  AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from './authenticator'
 
@@ -1452,17 +1454,27 @@ export interface KidsModeRecord {
   name: string
 }
 
+/**
+ * One observation published by the core store. `generation` is monotonic for that store lifetime,
+ * so a delayed load/mutation response cannot overwrite a newer live event in the renderer.
+ * `authoritative` requires both a strict canonical read and an acknowledged live-watch epoch.
+ */
+export interface KidsModeSnapshot extends KidsModeRecord {
+  authoritative: boolean
+  generation: number
+}
+
 export interface KidsModeApi {
-  load(): Promise<KidsModeRecord>
+  load(): Promise<KidsModeSnapshot>
   /** Turn it ON. `pin` is required only the first time, and establishes the grown-up PIN.
    *  Entering needs no proof — only leaving does. */
-  enable(pin?: string): Promise<KidsModeRecord>
+  enable(pin?: string): Promise<KidsModeSnapshot>
   /** Turn it OFF. Requires the grown-up PIN. */
-  disable(pin: string): Promise<{ ok: true; record: KidsModeRecord } | { ok: false; error: string }>
-  rename(name: string): Promise<KidsModeRecord>
+  disable(pin: string): Promise<{ ok: true; record: KidsModeSnapshot } | { ok: false; error: string }>
+  rename(name: string): Promise<KidsModeSnapshot>
   changePin(currentPin: string, nextPin: string): Promise<boolean>
   hasCredential(): Promise<boolean>
-  onChanged(cb: (r: KidsModeRecord) => void): () => void
+  onChanged(cb: (r: KidsModeSnapshot) => void): () => void
 }
 
 export interface SchoolModeApi {
@@ -1717,6 +1729,59 @@ export interface GitStatus {
   changes: GitFileChange[]
 }
 
+/** Core-owned provenance for one exact physical worktree generation. */
+export interface GitWorktreeOwnership {
+  /** Opaque machine-local ownership record id. Canvas JSON cannot mint or replace it. */
+  ownershipId?: string
+  /** The app created this directory, independently of whether the branch already existed. */
+  directoryCreatedByApp: boolean
+  /** The app created this branch (`git worktree add -b`), not merely its checkout directory. */
+  branchCreatedByApp: boolean
+}
+
+/** Complete inventory disclosed before a forced worktree-directory removal. */
+export interface GitWorktreeRemovalSummary {
+  trackedFiles: number
+  untrackedFiles: number
+  ignoredFiles: number
+  otherFiles: number
+  symlinks: number
+  directories: number
+  bytes: number
+}
+
+/**
+ * Opaque, one-shot authorization input produced by `worktreeRemovalProof`.
+ *
+ * The descriptive fields let the renderer disclose the exact target, but none of them grants
+ * authority by itself. Core consumes `token`, reloads its private snapshot, and remeasures every
+ * field before mutation. A hand-written or replayed object therefore performs no removal.
+ */
+export interface GitWorktreeRemovalProof {
+  version: 1
+  token: string
+  fingerprint: string
+  repoPath: string
+  worktreePath: string
+  commonDir: string
+  adminDir: string
+  branchRef: string
+  branchTip: string
+  summary: GitWorktreeRemovalSummary
+  ownership: GitWorktreeOwnership
+}
+
+export interface GitWorktreeRemovalProofResult {
+  ok: boolean
+  message: string
+  proof?: GitWorktreeRemovalProof
+}
+
+/** Pruning registration and deleting a live directory are deliberately different operations. */
+export type GitWorktreeRemovalRequest =
+  | { mode: 'prune' }
+  | { mode: 'remove'; proof: GitWorktreeRemovalProof; deleteBranch: boolean }
+
 export interface GitResult {
   ok: boolean
   message: string
@@ -1726,6 +1791,8 @@ export interface GitResult {
   /** Set by publish() when no usable GitHub credential was found, so the UI can
    *  fall back to an interactive `gh auth login` instead of just showing an error. */
   needsAuth?: boolean
+  /** `worktreeAdd()` only: core-verified provenance for the physical generation just created. */
+  worktreeOwnership?: GitWorktreeOwnership
 }
 
 export interface GitApi {
@@ -1799,9 +1866,10 @@ export interface GitApi {
   /** `push`: also publish `baseRef` to origin after a successful merge (only if a remote exists).
    *  Opt-in — a merge must never publish to a shared remote the user was not told about. */
   worktreeMerge(repoPath: string, branch: string, baseRef: string, push?: boolean): Promise<GitResult>
-  /** `pruneOnly`: clean up git's registration only — never delete a directory. Used to prune a
-   *  stale binding whose worktree was already deleted outside the app. */
-  worktreeRemove(repoPath: string, wtPath: string, deleteBranch: boolean, pruneOnly?: boolean): Promise<GitResult>
+  /** Measure a complete, stable physical checkout snapshot for a later one-shot removal. */
+  worktreeRemovalProof(repoPath: string, wtPath: string): Promise<GitWorktreeRemovalProofResult>
+  /** Registration-only pruning or proof-bound live-directory removal. */
+  worktreeRemove(repoPath: string, wtPath: string, request: GitWorktreeRemovalRequest): Promise<GitResult>
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>
@@ -2646,7 +2714,7 @@ export interface AuthenticatorApi {
   addManual(input: AuthenticatorAddManualInput): Promise<AuthenticatorAddResult>
   addFromUri(uri: string): Promise<AuthenticatorAddResult>
   rename(input: AuthenticatorRenameInput): Promise<AuthenticatorEntry | null>
-  remove(id: string): Promise<void>
+  remove(input: AuthenticatorRemoveInput): Promise<AuthenticatorRemoveResult>
   code(id: string): Promise<AuthenticatorCode | null>
   codes(ids: string[]): Promise<Record<string, AuthenticatorCode>>
   reveal(id: string): Promise<AuthenticatorRevealResult>

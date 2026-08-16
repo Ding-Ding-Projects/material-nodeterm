@@ -112,6 +112,7 @@ describe('the destructive gate', () => {
     'discard-changes',
     'remove-worktree',
     'remove-account',
+    'remove-authenticator',
     'revoke-device',
   ] as const
 

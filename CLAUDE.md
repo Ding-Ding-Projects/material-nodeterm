@@ -212,11 +212,12 @@ tests named there.
 **The shared School/Kids mode records must become watchable even when their directory is absent at
 boot.** Both stores use `core/shared-record-watch.ts`: one `fs.watch` handle sits on the nearest
 existing ancestor, promotes toward `~/.nodeterm/shared/` as it appears, and retries promotion after
-a successful local record write. Promotion reloads once to cover a record written before the
-narrower handle was armed; there is no poll timer, and disposal closes the one handle. Only
-`ENOENT` proves absence. A per-store lifecycle generation also makes a reload queued before
-disposal inert. Invalid JSON follows each mode's documented OFF policy, while any other read/watch
-failure preserves the last-known state instead of silently weakening a live mode.
+a successful local record write. An armed handle is only recovering: every event/error/rearm
+invalidates authority, and only a strict read acknowledged against the exact handle-generation and
+sync-epoch can make policy healthy. Only `ENOENT` proves absence. Kids record mutations run their
+strict read, one-field reducer, and compared publication inside the shared SQLite transaction, so a
+stale rename cannot replace a newer ON with cached OFF. Invalid JSON may keep an OFF display but
+policy stays unavailable; every destructive caller therefore takes the hardened path.
 
 ## Projects (tabs)
 
@@ -1647,9 +1648,14 @@ multiply-linked inode whose other name may be outside the staging tree.
   teardown, and the planner/dispatcher is what authorizes reaching it. React Flow expands a parent
   deletion to descendants before `onBeforeDelete`, so `managedDeletionRoots` must reduce the set
   back to roots — deleting a frame frees its children rather than deleting them. App-created
-  worktree removal is a separate option-bearing confirm: Kids mode starts disk deletion unticked
-  and an OFF→ON change resets an already-open dialog before paint, while still allowing a later
-  deliberate checkbox opt-in.
+  worktree removal keeps non-destructive Unbind separate. Disk removal requires an opaque one-shot
+  core proof over the canonical repo/worktree/common/admin generations, full symbolic ref and tip,
+  tracked/untracked/ignored bytes, directories, symlink targets, and machine-local ownership. The
+  renderer rechecks target and Kids policy after confirmation; core consumes the proof before its
+  first await, double-measures again under the SQLite transaction, and supplies a final callback
+  immediately before `git worktree remove`. Existing-branch checkout creation owns the directory
+  but never the branch; an app-created branch is deleted only by full-ref/expected-tip `update-ref`
+  CAS after Git proves its tip reachable. Shared `createdByApp` fields are UI provenance only.
 - **Zoom chords** (`renderer/lib/zoomShortcut.ts`): **⌘/Ctrl+0 → `zoomTo100`** (actual size — what
   the browser AND Electron's default View menu already mean by that key) and **Shift+1 → `fitAll`**
   (the Figma/tldraw/Excalidraw "zoom to fit"). Matched on `e.code`, like the project-jump chord,

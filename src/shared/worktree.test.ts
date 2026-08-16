@@ -132,21 +132,23 @@ describe('resolveBaseRef', () => {
 
 describe('worktreeFromCreate', () => {
   it('marks a worktree the app just created as createdByApp (Remove may delete the dir)', () => {
-    expect(
-      worktreeFromCreate({
+    const wt = worktreeFromCreate({
         repoPath: '/repo',
         mode: 'new',
         branch: 'feature/x',
         baseRef: 'master',
         path: '/u/worktrees/repo/feature-x'
       })
-    ).toEqual({
+    expect(wt).toMatchObject({
       repoPath: '/repo',
       branch: 'feature/x',
       baseRef: 'master',
       path: '/u/worktrees/repo/feature-x',
-      createdByApp: true
+      createdByApp: true,
+      directoryCreatedByApp: true,
+      branchCreatedByApp: true
     })
+    expect(wt.bindingId).toMatch(/^[0-9a-f-]{36}$/)
   })
   it('trims the collected fields', () => {
     const wt = worktreeFromCreate({
@@ -163,13 +165,16 @@ describe('worktreeFromCreate', () => {
 describe('worktreeFromEntry', () => {
   it('marks an ADOPTED worktree as NOT createdByApp (Remove must not delete the user\'s dir)', () => {
     const wt = worktreeFromEntry(entry('/wt/x', 'feature/x'), '/repo', 'trunk')
-    expect(wt).toEqual({
+    expect(wt).toMatchObject({
       repoPath: '/repo',
       branch: 'feature/x',
       baseRef: 'trunk',
       path: '/wt/x',
-      createdByApp: false
+      createdByApp: false,
+      directoryCreatedByApp: false,
+      branchCreatedByApp: false
     })
+    expect(wt?.bindingId).toMatch(/^[0-9a-f-]{36}$/)
   })
   it('defaults the base ref to main when the repo default is unknown', () => {
     expect(worktreeFromEntry(entry('/wt/x', 'feature/x'), '/repo', '')?.baseRef).toBe(DEFAULT_BASE_REF)
@@ -190,9 +195,9 @@ describe('parseWorktreePorcelain', () => {
     ].join('\n')
     const entries = parseWorktreePorcelain(out)
     expect(entries).toEqual([
-      { path: '/repo', head: 'abc123', branch: 'main', isBare: false, prunable: false },
-      { path: '/wt/x', head: 'def456', branch: 'feature/x', isBare: false, prunable: false },
-      { path: '/bare', head: null, branch: null, isBare: true, prunable: false }
+      { path: '/repo', head: 'abc123', branch: 'main', branchRef: 'refs/heads/main', isBare: false, prunable: false },
+      { path: '/wt/x', head: 'def456', branch: 'feature/x', branchRef: 'refs/heads/feature/x', isBare: false, prunable: false },
+      { path: '/bare', head: null, branch: null, branchRef: null, isBare: true, prunable: false }
     ])
   })
 
@@ -207,7 +212,7 @@ describe('parseWorktreePorcelain', () => {
     const entries = parseWorktreePorcelain(out)
     expect(entries[0].prunable).toBe(false)
     expect(entries[1]).toEqual({
-      path: '/wt/gone', head: 'def456', branch: 'feat', isBare: false, prunable: true
+      path: '/wt/gone', head: 'def456', branch: 'feat', branchRef: 'refs/heads/feat', isBare: false, prunable: true
     })
   })
 
@@ -231,6 +236,19 @@ describe('isDangerousWorktreeRemovalPath', () => {
   })
   it('allows a normal sibling worktree dir', () => {
     expect(isDangerousWorktreeRemovalPath('/Users/me/worktrees/r/feature-x', '/repo', home)).toBe(false)
+  })
+  it('refuses Windows roots, protected aliases, and ambiguous native path forms', () => {
+    expect(isDangerousWorktreeRemovalPath('C:\\', 'C:\\repo', 'C:\\Users\\me')).toBe(true)
+    expect(isDangerousWorktreeRemovalPath('c:/users/ME', 'C:/repo', 'C:\\Users\\me')).toBe(true)
+    expect(isDangerousWorktreeRemovalPath('C:\\Users', 'C:/repo', 'c:/users/me')).toBe(true)
+    expect(isDangerousWorktreeRemovalPath('\\\\server\\share', 'C:/repo', 'C:/Users/me')).toBe(true)
+    expect(isDangerousWorktreeRemovalPath('\\\\.\\device', 'C:/repo', 'C:/Users/me')).toBe(true)
+    expect(isDangerousWorktreeRemovalPath('C:relative', 'C:/repo', 'C:/Users/me')).toBe(true)
+  })
+  it('does not confuse a protected-path prefix sibling with an ancestor', () => {
+    expect(
+      isDangerousWorktreeRemovalPath('C:/Users/me-too/worktree', 'C:/repo', 'C:/Users/me')
+    ).toBe(false)
   })
 })
 
