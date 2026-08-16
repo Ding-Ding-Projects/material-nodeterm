@@ -34,6 +34,14 @@ import {
   MIN_TOKEN_AWARE_REVISION
 } from './hooks/managed-script'
 import { nodeAuthToken, verifyNodeToken } from './node-auth-token'
+import {
+  environmentForPosixShell,
+  pathsForPosixShellEnv,
+  posixShellScriptArgs,
+  quotePathForPosixShell,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS
+} from '../testing/posix-shell'
 
 const SECRET = Buffer.alloc(32, 7)
 
@@ -43,9 +51,13 @@ interface Received {
   body: string
 }
 
-describe('a phone-spawned session presents its per-node token', () => {
-  const sh = spawnSync('sh', ['-c', 'exit 0'])
-  const curl = spawnSync('sh', ['-c', 'command -v curl'], { encoding: 'utf8' })
+describe('a phone-spawned session presents its per-node token', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
+  const shellEnv = environmentForPosixShell()
+  const sh = spawnSync(REAL_POSIX_SHELL, ['-c', 'exit 0'], { env: shellEnv })
+  const curl = spawnSync(REAL_POSIX_SHELL, ['-c', 'command -v curl'], {
+    encoding: 'utf8',
+    env: shellEnv
+  })
   const available = sh.status === 0 && !sh.error && curl.status === 0
 
   let dir = ''
@@ -91,7 +103,7 @@ describe('a phone-spawned session presents its per-node token', () => {
   })
 
   /** Resolve when one more POST has landed (or reject after `ms` — a silent script is a failure). */
-  function nextPost(ms = 5000): Promise<Received> {
+  function nextPost(ms = REAL_SHELL_TEST_TIMEOUT_MS): Promise<Received> {
     if (received.length > 0) return Promise.resolve(received[received.length - 1])
     return new Promise<Received>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('no POST arrived')), ms)
@@ -106,15 +118,25 @@ describe('a phone-spawned session presents its per-node token', () => {
    * The phone's own spawn, minus tmux: `sh <script>` with EXACTLY HookEnv.flags' two vars. `body`
    * is what claude pipes in on stdin.
    */
-  function runPhoneHook(script: string, home: string, nodeId: string, endpoint: string): Promise<number> {
+  function runPhoneHook(
+    script: string,
+    home: string,
+    nodeId: string,
+    endpoint: string
+  ): Promise<number> {
     return new Promise((resolve) => {
-      const child = spawn('sh', [script], {
-        env: {
-          HOME: home,
-          PATH: process.env.PATH ?? '',
-          NODETERM_HOOK_ENDPOINT: endpoint,
-          NODETERM_NODE_ID: nodeId
-        },
+      const child = spawn(REAL_POSIX_SHELL, posixShellScriptArgs(script), {
+        env: environmentForPosixShell(
+          pathsForPosixShellEnv(
+            {
+              HOME: home,
+              PATH: process.env.PATH ?? '',
+              NODETERM_HOOK_ENDPOINT: endpoint,
+              NODETERM_NODE_ID: nodeId
+            },
+            ['HOME', 'NODETERM_HOOK_ENDPOINT']
+          )
+        ),
         stdio: ['pipe', 'ignore', 'ignore']
       })
       child.stdin.end('{"hook_event_name":"Stop","session_id":"s1"}')
@@ -136,7 +158,7 @@ describe('a phone-spawned session presents its per-node token', () => {
       p,
       `NODETERM_HOOK_PORT=${port}\nNODETERM_HOOK_TOKEN=bearer-xyz\n` +
         `NODETERM_HOOK_VERSION=${version}\n` +
-        (tokenDir ? `NODETERM_NODE_TOKEN_DIR=${tokenDir}\n` : ''),
+        (tokenDir ? `NODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(tokenDir)}\n` : ''),
       { encoding: 'utf8', mode: 0o600 }
     )
     return p
