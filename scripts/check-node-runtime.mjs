@@ -5,7 +5,9 @@ export const NODE_RUNTIME_RANGE = '^22.22.2 || ^24.15.0 || >=26.0.0'
 
 function parsedVersion(version) {
   // Match npm engine semantics: build metadata is acceptable, prereleases are not.
-  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:\+.*)?$/.exec(version)
+  const core = '(0|[1-9]\\d*)'
+  const build = '[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*'
+  const match = new RegExp(`^v?${core}\\.${core}\\.${core}(?:\\+${build})?$`).exec(version)
   if (!match) return undefined
   const parts = match.slice(1, 4).map(Number)
   return parts.every(Number.isSafeInteger) ? parts : undefined

@@ -31,6 +31,9 @@ describe('Node runtime support', () => {
     ['v24.19.0', true],
     ['24.19.0-rc.1', false],
     ['24.19.0+custom.1', true],
+    ['24.19.0+', false],
+    ['24.19.0+custom.', false],
+    ['024.015.000', false],
     ['25.9.0', false],
     ['26.0.0', true],
     ['not-a-version', false]

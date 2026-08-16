@@ -11,7 +11,9 @@ type BuiltinModuleLoader = (id: string) => unknown
 function parsedVersion(version: string): [major: number, minor: number, patch: number] | undefined {
   // npm's engine range excludes prereleases by default. Accept build metadata, but reject a
   // prerelease so the executable preflight cannot claim support that `npm ci` itself disallows.
-  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:\+.*)?$/.exec(version)
+  const core = '(0|[1-9]\\d*)'
+  const build = '[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*'
+  const match = new RegExp(`^v?${core}\\.${core}\\.${core}(?:\\+${build})?$`).exec(version)
   if (!match) return undefined
   const parts = match.slice(1, 4).map(Number)
   if (parts.some((part) => !Number.isSafeInteger(part))) return undefined
