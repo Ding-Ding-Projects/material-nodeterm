@@ -279,13 +279,19 @@ describes for tmux. See `docs/windows-session-host.md` for the full design; the 
 branches alongside the existing tmux CLI calls — everything below in this section still describes
 the tmux path exactly as before.
 
-Two session-host invariants are easy to lose in an innocent refactor. First,
+Several session-host invariants are easy to lose in an innocent refactor. First,
 `@xterm/headless`'s `Terminal.write()` is asynchronous: `HostSession` serializes writes through an
 output tail, and warm attach/capture/resize/exit must await it before reading or disposing the
-screen. A fire-and-forget write races a stale or duplicated relay snapshot. Second, node-pty's
-pause actuator is global but its ownership is not: `PtyManager.pausedBy` arbitrates views inside
-one app process, and the host keeps a per-socket ledger across processes; `detach`/socket close
-returns only that connection's ticket and the final owner resumes. Also keep the backend parity
+screen. The tail is byte-bounded (4 MiB high water, 1 MiB low water) and owns an independent
+node-pty pause ticket while the emulator is behind. A fire-and-forget write races a stale or
+duplicated relay snapshot and can retain unbounded output. Second, node-pty's pause actuator is
+global but its ownership is not: `PtyManager.pausedBy` arbitrates views inside one app process,
+`SessionHostClient` retains one desired ticket per `SessionHostPty`, and the host keeps separate
+per-socket explicit-flow and transport-backpressure ledgers across processes. A renderer resume,
+named-pipe `drain`, emulator drain, detach, or socket close may return only its own ticket; the
+final owner resumes. Each live view also owns a geometry claim. The client reduces same-process
+claims and the host applies the componentwise minimum across sockets before a warm snapshot;
+dropping the smallest view grows the PTY for the survivors. Also keep the backend parity
 leaves in `sessionExists`/`captureSnapshot`: relay and mobile attach use them before
 `attachDetached`, so a tmux-only implementation reports a live Windows session as fresh and blank.
 The host also keeps an exited generation in its session map until that output tail, exit broadcast
@@ -303,10 +309,20 @@ those and intentionally prevents Node's default fatal exit.
 The client has a matching hand-off boundary: remove only the handshake's named listeners, install
 the production frame listener, and only then resolve the connection. Broad data-listener cleanup
 after that hand-off deletes the production listener and leaves the first real request pending on an
-apparently live socket. A `SessionHostPty` is likewise provisional until `ready` resolves: co-attach
+apparently live socket. Correlate the hello response by its request id, treat only `ENOENT` as an
+absent token/state file, and keep request timeout/write-callback failures tied to the exact pending
+entry; a late callback must never reject a newer request that reused the connection. A reconnect is
+an awaited restoration barrier, not background best effort: reattach every still-live view with
+its effective geometry and aggregate pause first, replace the renderer's complete buffer with
+`CSI 3J` + `CSI 2J` + home plus the serialized screen, and only then allow the triggering request.
+While subscribers remain, socket loss starts bounded automatic reconnect attempts even when the
+viewer is idle. A `SessionHostPty` is likewise provisional until `ready` resolves: co-attach
 waits behind that barrier, while rejection detaches and forgets the exact generation, cancels queued
 output, preserves any deletion tombstone, and propagates the error. Capture and kill rejection stay
 unknown rather than becoming empty/gone; snapshot retry and truthful deletion depend on that fact.
+Permanent renderer deletion therefore awaits the `pty.destroy` acknowledgement before removing
+the node or its local recovery state. A refused, rate-limited, or transport-ambiguous destroy keeps
+the node available for retry.
 
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with

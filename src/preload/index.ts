@@ -88,8 +88,8 @@ const api: NodeTerminalApi = {
       ipcRenderer.send(IPC.ptyFlow, sessionId, resume, viewerId),
     kill: (sessionId, viewerId) => ipcRenderer.send(IPC.ptyKill, sessionId, viewerId),
     destroy: (persistKey, opts) =>
-      ipcRenderer.send(IPC.ptyDestroy, persistKey, opts?.everySocket === true),
-    recycle: (persistKey) => ipcRenderer.send(IPC.ptyRecycle, persistKey),
+      ipcRenderer.invoke(IPC.ptyDestroy, persistKey, opts?.everySocket === true),
+    recycle: (persistKey) => ipcRenderer.invoke(IPC.ptyRecycle, persistKey),
     generateName: (persistKey, cwd) => ipcRenderer.invoke(IPC.ptyGenerateName, persistKey, cwd),
     generateGroupName: (memberKeys, cwd) =>
       ipcRenderer.invoke(IPC.ptyGenerateGroupName, memberKeys, cwd),

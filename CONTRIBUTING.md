@@ -334,6 +334,15 @@ hover, readable-text and Material primary/container roles together for the curre
 surface. HSV/CMYK are editor formats, not browser CSS—persist their RGBA conversion, including
 alpha. Blob downloads keep their object URL alive past the click turn before revoking it.
 
+**Treat session-host state as desired ownership, not a sequence of best-effort commands.** Several
+`SessionHostPty` views share one client socket, so pause and geometry must retain the individual view
+identity and cross the wire only after aggregation. Reconnect must await attach/pause/size restoration
+before ordinary requests, and transport or emulator backpressure must own tickets independent from
+renderer flow. Only `ENOENT` proves an ownership file absent, and a permanent node deletion may update
+the canvas only after the backing session-host kill acknowledges. Focused Chuts for this subsystem
+must include co-attach, delayed response, socket-drop, and write-backpressure races; a happy-path mock
+does not exercise the contracts that keep persistent processes truthful.
+
 ## Testing
 
 `npm test` must pass, and `npm run typecheck` is the fastest gate.

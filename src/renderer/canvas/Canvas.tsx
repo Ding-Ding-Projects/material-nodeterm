@@ -210,15 +210,23 @@ import {
   type FocusableNode
 } from '../lib/nodeFocus'
 import {
+  captureProjectEndRequest,
   destroySessionForScope,
   killRemoteSessionsForScope,
   planSessionKill,
+  projectDeleteGenerationCurrent,
+  projectEndDestination,
+  recycleSessionForProject,
+  removeAcknowledgedStoredNodes,
+  settleProjectSessionDestroys,
+  settleProjectSessionRecycles,
+  settleSessionDestroys,
+  type ProjectEndRequestEpoch,
   type SessionTerminationScope
 } from '../lib/sessionKill'
 import { RemoteAccessDialog } from '../components/RemoteAccessDialog'
 import { SshProjectDialog } from '../components/SshProjectDialog'
 import { SshPassphrasePrompt } from '../components/SshPassphrasePrompt'
-import { transport } from '../terminal/local-transport'
 import { sshFs } from '../terminal/ssh-fs'
 import {
   agentHibernateFns,
@@ -303,6 +311,7 @@ import { branchClaudeSession } from '../lib/claudeBranch'
 import {
   useSession,
   SessionProvider,
+  projectSessionScope,
   sessionForProject,
   presenceForProject,
   setActiveSession,
@@ -458,12 +467,18 @@ interface RequestDeleteNodesOptions {
   removesNode?: boolean
   /** The account-removal gate already authorized its disclosed login-node closure. */
   authorizedBy?: 'remove-account'
+  /** The owning project when the request came from a cross-project surface such as the sidebar. */
+  targetProjectId?: string
   /** Override the active-canvas teardown (used by inactive sidebar sessions). */
-  perform?: () => void
+  perform?: (epoch: DeleteRequestEpoch) => void
   onCancel?: () => void
   /** A second dialog was refused; agent callers need an explicit reply rather than a hang. */
   onRejected?: () => void
 }
+type DeleteRequestEpoch = ProjectEndRequestEpoch<
+  ReturnType<typeof projectSessionScope>,
+  CanvasNode
+>
 interface RemoveState {
   groupId: string
   warning: string
@@ -3851,19 +3866,37 @@ export function Canvas() {
    * included — needs it, and a `const` further down would be in its TDZ.
    */
   const resetDisplacedCwd = useCallback(
-    (groupId: string, worktreePath: string, respawn: boolean) => {
+    async (groupId: string, worktreePath: string, respawn: boolean): Promise<boolean> => {
       const displaced = displacedByWorktree(nodesRef.current, groupId, worktreePath)
-      if (!displaced.size) return
+      if (!displaced.size) return true
+      const projectId = useProjects.getState().activeProjectId ?? ''
+      const projectSessionId = sessionForProject(projectId).id
       const fallbackCwd =
         (nodesRef.current.find((n) => n.id === groupId)?.data.cwd as string | undefined) ||
-        useProjects.getState().getProject(activeProjectId ?? '')?.cwd
+        useProjects.getState().getProject(projectId)?.cwd
       if (respawn) {
-        for (const n of nodesRef.current) {
-          if (!displaced.has(n.id)) continue
-          // RECYCLE, not DESTROY: the node is NOT deleted — it stays on the canvas (here and on
-          // every co-viewer's) and respawns into the fallback cwd. `destroy` would cast "closed
-          // by <name>" to co-viewers, permanently bricking their still-present node.
-          if (n.type === 'terminal') transport.recycle(n.id)
+        const terminalIds = nodesRef.current
+          .filter((node) => displaced.has(node.id) && node.type === 'terminal')
+          .map((node) => node.id)
+        const outcome = await settleProjectSessionRecycles(projectId, terminalIds)
+        if (outcome.failed.length > 0) {
+          const first = outcome.failed[0]
+          setNotice({
+            kind: 'error',
+            text: `Could not confirm the terminal restart for ${first.nodeId}: ${first.message}. Its cwd was kept so you can retry.`
+          })
+          return false
+        }
+        if (
+          useProjects.getState().activeProjectId !== projectId ||
+          nodesProjectIdRef.current !== projectId ||
+          sessionForProject(projectId).id !== projectSessionId
+        ) {
+          setNotice({
+            kind: 'error',
+            text: 'The project changed while its terminals were restarting. Their canvas state was kept; reopen the project and retry.'
+          })
+          return false
         }
       }
       setNodes((ns) =>
@@ -3885,8 +3918,9 @@ export function Canvas() {
         })
       )
       markDirty()
+      return true
     },
-    [setNodes, markDirty, activeProjectId]
+    [setNodes, markDirty, setNotice]
   )
 
   /**
@@ -3919,7 +3953,7 @@ export function Canvas() {
       const wt = nodesRef.current.find((n) => n.id === groupId)?.data.worktree
       if (!wt || isSshProject) return
       if (!useWorktrees.getState().staleGroupIds.includes(groupId)) return
-      resetDisplacedCwd(groupId, wt.path, false)
+      await resetDisplacedCwd(groupId, wt.path, false)
       // A failed prune must still let the binding go — dropping it is the user's ask, and a
       // registration we could not clean up is not a reason to trap them in a dead group.
       await api.git
@@ -3931,44 +3965,103 @@ export function Canvas() {
 
   // ---- multi-node actions (context menu) ----
   const deleteNodes = useCallback(
-    (ids: string[], terminationScope: SessionTerminationScope = 'node') => {
-      const set = new Set(ids)
-      nodesRef.current.forEach((n) => {
-        if (!set.has(n.id)) return
-        // Permanent delete: the upcoming unmount must dispose the xterm, not park it (the
-        // session is being destroyed right here). Also drops an already-parked entry.
+    async (
+      ids: string[],
+      captured?: DeleteRequestEpoch,
+      terminationScope: SessionTerminationScope = 'node'
+    ) => {
+      const requested = new Set(ids)
+      const projectId = captured?.projectId ?? useProjects.getState().activeProjectId ?? ''
+      const projectScope = captured?.scope ?? projectSessionScope(projectId)
+      const targets =
+        captured?.targets ?? nodesRef.current.filter((node) => requested.has(node.id))
+      const terminalIds = targets.filter((node) => node.type === 'terminal').map((node) => node.id)
+      const projectSession = projectScope.session
+      const projectSessionId = projectSession.id
+      const projectAgentStatus = projectScope.stores.agentStatus.store
+      const outcome = await settleSessionDestroys(terminalIds, (nodeId) =>
+        projectSession.api.pty.destroy(nodeId)
+      )
+      const candidates = new Set([
+        ...targets.filter((node) => node.type !== 'terminal').map((node) => node.id),
+        ...outcome.confirmed
+      ])
+      const currentStore = useProjects.getState()
+      let destination = projectEndDestination(
+        { projectId, sessionId: projectSessionId },
+        {
+          projectId,
+          sessionId: sessionForProject(projectId).id,
+          activeProjectId: currentStore.activeProjectId,
+          loadedProjectId: nodesProjectIdRef.current
+        }
+      )
+      if (destination === 'stored' && !currentStore.getProject(projectId)) destination = 'retain'
+      const applied = new Set(destination === 'retain' ? [] : candidates)
+      const sequencingFailures = [] as Array<{ nodeId: string; message: string }>
+      if (destination === 'retain') {
+        for (const nodeId of candidates)
+          sequencingFailures.push({
+            nodeId,
+            message: 'the project changed session while its close was pending'
+          })
+      } else if (destination === 'stored') {
+        // A bound group owes worktree reconciliation that is scoped to the live canvas helpers.
+        // If the user switched projects during the acknowledgement, keep that group and let a
+        // retry perform the complete binding cleanup instead of silently dropping half of it.
+        for (const target of targets) {
+          if (!applied.has(target.id) || !target.data.worktree) continue
+          applied.delete(target.id)
+          sequencingFailures.push({
+            nodeId: target.id,
+            message: 'the project switched while its worktree binding was being removed'
+          })
+        }
+      }
+
+      targets.forEach((n) => {
+        if (!applied.has(n.id)) return
+        // Permanent delete: only an ACKNOWLEDGED terminal is disposed. A rejected host request
+        // keeps its xterm/node intact because its session outcome is unknown and retryable.
         if (n.type === 'terminal')
-          disposeTerminalOnUnmount(sessionForProject(useProjects.getState().activeProjectId ?? '').id, n.id)
-        if (n.type === 'terminal')
-          destroySessionForScope(terminationScope, n.id, transport.destroy.bind(transport))
+          disposeTerminalOnUnmount(projectSessionId, n.id)
         // Permanent deletion → drop the node's persisted agent status (sessionId/session/
         // unread/loop). Node unmount no longer does this, so deletion must. The loop card's
         // UI overrides live in agentNodes and are skipped by unmount's clearForParent.
-        useAgentStatus.getState().remove(n.id)
+        projectAgentStatus.getState().remove(n.id)
         useAgentNodes.getState().clearLoop(n.id)
       })
-      setNodes((ns) => {
-        // Free children of any deleted group back to absolute positions.
-        const groupPos = new Map(
-          ns.filter((n) => set.has(n.id) && n.type === 'group').map((g) => [g.id, g.position])
-        )
-        return ns
-          .filter((n) => !set.has(n.id))
-          .map((n) =>
-            n.parentId && groupPos.has(n.parentId)
-              ? {
-                  ...n,
-                  parentId: undefined,
-                  extent: undefined,
-                  position: {
-                    x: n.position.x + groupPos.get(n.parentId)!.x,
-                    y: n.position.y + groupPos.get(n.parentId)!.y
-                  }
-                }
-              : n
+      if (destination === 'live') {
+        setNodes((ns) => {
+          // Free children of any deleted group back to absolute positions.
+          const groupPos = new Map(
+            ns.filter((n) => applied.has(n.id) && n.type === 'group').map((g) => [g.id, g.position])
           )
-      })
-      markDirty()
+          return ns
+            .filter((n) => !applied.has(n.id))
+            .map((n) =>
+              n.parentId && groupPos.has(n.parentId)
+                ? {
+                    ...n,
+                    parentId: undefined,
+                    extent: undefined,
+                    position: {
+                      x: n.position.x + groupPos.get(n.parentId)!.x,
+                      y: n.position.y + groupPos.get(n.parentId)!.y
+                    }
+                  }
+                : n
+            )
+        })
+      } else if (destination === 'stored' && applied.size > 0) {
+        const currentProject = currentStore.getProject(projectId)
+        if (currentProject)
+          currentStore.replaceProject({
+            ...currentProject,
+            nodes: removeAcknowledgedStoredNodes(currentProject.nodes, applied)
+          })
+      }
+      if (applied.size > 0) markDirty()
       // A deleted group takes its worktree BINDING with it — and the frame is the only thing that
       // goes: its children SURVIVE (freed to absolute positions above), dead `data.cwd` and all. So
       // this is a binding-dropping path like Unbind, and it owes exactly what Unbind owes:
@@ -3979,16 +4072,31 @@ export function Canvas() {
       // unofferable until a project switch. The refresh waits for the prunes (see
       // `releaseWorktreeBinding`) and is ONE call for the whole batch — one per group would race,
       // and the last one to land would re-list the others as still bound.
-      const boundGone = nodesRef.current
-        .filter((n) => set.has(n.id) && !!n.data.worktree)
+      const boundGone = targets
+        .filter((n) => destination === 'live' && applied.has(n.id) && !!n.data.worktree)
         .map((n) => n.id)
       if (boundGone.length) {
         void Promise.all(boundGone.map((id) => releaseWorktreeBinding(id))).finally(() =>
           refreshWorktreeStore({ unbound: boundGone })
         )
       }
+      const failed = [...outcome.failed, ...sequencingFailures]
+      if (failed.length > 0) {
+        const first = failed[0]
+        setNotice({
+          kind: 'error',
+          text:
+            failed.length === 1
+              ? `Could not end session ${first.nodeId}: ${first.message}. The node was kept so you can retry.`
+              : `Could not end ${failed.length} sessions (first: ${first.nodeId}: ${first.message}). Those nodes were kept so you can retry.`
+        })
+      }
+      return {
+        confirmed: [...applied],
+        failed
+      }
     },
-    [setNodes, markDirty, refreshWorktreeStore, releaseWorktreeBinding]
+    [setNodes, markDirty, refreshWorktreeStore, releaseWorktreeBinding, setNotice]
   )
 
   /**
@@ -4022,8 +4130,21 @@ export function Canvas() {
         return false
       }
 
+      // Capture before the confirmation opens. The user can switch A -> B while the dialog is up;
+      // Confirm must still address A's core and A's node snapshot, never whichever canvas is live.
+      const targetProjectId =
+        options.targetProjectId ?? useProjects.getState().activeProjectId ?? ''
+      const requestEpoch = captureProjectEndRequest(
+        targetProjectId,
+        projectSessionScope(targetProjectId),
+        nodesProjectIdRef.current,
+        nodesRef.current,
+        ids
+      )
+
       const accepted = dispatchNodeDeletion(plan, {
-        perform: options.perform ?? (() => deleteNodes(ids)),
+        perform: () =>
+          options.perform ? options.perform(requestEpoch) : void deleteNodes(ids, requestEpoch),
         cancel: options.onCancel,
         openGate: (request) =>
           openDestructiveGate({
@@ -4498,7 +4619,7 @@ export function Canvas() {
     //    leaving a dead pane behind; its session was destroyed a line earlier either way.
     //    Nodes whose cwd/filePath was NOT inside the worktree are left alone: they were never
     //    affected.
-    resetDisplacedCwd(t.groupId, wt.path, true)
+    if (!(await resetDisplacedCwd(t.groupId, wt.path, true))) return
     clearWorktreeBinding(t.groupId)
     setNotice({ kind: res.ok ? 'info' : 'error', text: res.message })
   }, [removeTarget, deleteFromDisk, clearWorktreeBinding, resetDisplacedCwd, releaseWorktreeBinding])
@@ -4709,7 +4830,28 @@ export function Canvas() {
     // co-viewer "closed by <name>", which is permanent and un-respawnable: their still-present node
     // would be bricked until they deleted and re-added it. `recycle` tells them to restart onto the
     // replacement session instead, so they follow the node into its new cwd.
-    transport.recycle(id)
+    const projectId = useProjects.getState().activeProjectId ?? ''
+    const projectSessionId = sessionForProject(projectId).id
+    try {
+      await recycleSessionForProject(projectId, id)
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text: `Could not confirm the terminal restart: ${error instanceof Error ? error.message : String(error)}. Its cwd was kept so you can retry.`
+      })
+      return
+    }
+    if (
+      useProjects.getState().activeProjectId !== projectId ||
+      nodesProjectIdRef.current !== projectId ||
+      sessionForProject(projectId).id !== projectSessionId
+    ) {
+      setNotice({
+        kind: 'error',
+        text: 'The project changed while the terminal was restarting. Its canvas state was kept; reopen the project and retry.'
+      })
+      return
+    }
     setNodes((ns) =>
       ns.map((n) =>
         n.id === id
@@ -4725,7 +4867,7 @@ export function Canvas() {
       )
     )
     markDirty()
-  }, [moveTarget, setNodes, markDirty, cwdForNewNodeIn, isSshProject, worktreeForGroupChain])
+  }, [moveTarget, setNodes, markDirty, cwdForNewNodeIn, isSshProject, worktreeForGroupChain, setNotice])
 
   // Bridge the move-into-worktree handler to TerminalNode (React Flow owns the instances).
   useEffect(() => {
@@ -7467,7 +7609,7 @@ export function Canvas() {
     (
       projectId: string,
       id: string,
-      alsoOnConfirm?: () => void,
+      alsoOnSuccess?: () => void,
       terminationScope: SessionTerminationScope = 'node'
     ) => {
       const project = useProjects.getState().getProject(projectId)
@@ -7478,24 +7620,58 @@ export function Canvas() {
       requestDeleteNodes([id], {
         surface: 'sessions-sidebar',
         titles: [String(title)],
-        perform: () => {
-          if (projectId === activeProjectId) {
-            deleteNodes([id], terminationScope)
+        targetProjectId: projectId,
+        perform: (epoch) => {
+          if (epoch.targets.some((node) => node.id === id)) {
+            void deleteNodes([id], epoch, terminationScope).then((outcome) => {
+              if (outcome.confirmed.includes(id)) alsoOnSuccess?.()
+            })
           } else {
-            disposeTerminalOnUnmount(sessionForProject(projectId).id, id) // node may be parked from the project switch
-            destroySessionForScope(terminationScope, id, transport.destroy.bind(transport))
-            useAgentStatus.getState().remove(id)
-            useProjects.getState().removeNode(projectId, id)
-            void writeDisk()
+            const projectScope = epoch.scope
+            const projectSession = projectScope.session
+            const projectAgentStatus = projectScope.stores.agentStatus.store
+            void destroySessionForScope(
+              terminationScope,
+              id,
+              projectSession.api.pty.destroy.bind(projectSession.api.pty)
+            ).then(
+              () => {
+                const store = useProjects.getState()
+                const destination = projectEndDestination(
+                  { projectId, sessionId: projectSession.id },
+                  {
+                    projectId,
+                    sessionId: sessionForProject(projectId).id,
+                    activeProjectId: store.activeProjectId,
+                    loadedProjectId: nodesProjectIdRef.current
+                  }
+                )
+                if (destination === 'retain') {
+                  setNotice({
+                    kind: 'error',
+                    text: `Session ${id} ended on its previous host, but the project changed sessions while the request was pending. The node was kept.`
+                  })
+                  return
+                }
+                disposeTerminalOnUnmount(projectSession.id, id) // node may be parked from the project switch
+                projectAgentStatus.getState().remove(id)
+                if (destination === 'live') setNodes((nodes) => nodes.filter((node) => node.id !== id))
+                else store.removeNode(projectId, id)
+                markDirty()
+                alsoOnSuccess?.()
+              },
+              (error) => {
+                setNotice({
+                  kind: 'error',
+                  text: `Could not end session ${id}: ${error instanceof Error ? error.message : String(error)}. The node was kept so you can retry.`
+                })
+              }
+            )
           }
-          // The session-memory panel's remote leg (see `killSessionById`): the local destroy above
-          // cannot reach a HOST's tmux session unless a live client carries `sshRemote`. Runs only
-          // after the user confirmed, which is why it is a callback and not done at the call site.
-          alsoOnConfirm?.()
         }
       })
     },
-    [activeProjectId, deleteNodes, requestDeleteNodes, writeDisk]
+    [activeProjectId, deleteNodes, requestDeleteNodes, setNodes, markDirty, setNotice]
   )
 
   /**
@@ -7521,6 +7697,9 @@ export function Canvas() {
     (nodeId: string, orphan: boolean) => {
       const store = useProjects.getState()
       const plan = planSessionKill(nodeId, store.projects, store.activeProjectId)
+      const scope = projectSessionScope(store.activeProjectId)
+      const scopeSession = scope.session
+      const scopeAgentStatus = scope.stores.agentStatus.store
       // `everySocket` on BOTH legs, and only here: the panel's rows are swept off both of the
       // machine's tmux sockets, so a row it offers to end genuinely can be on either. Every other
       // caller (project deletion, an ordinary node-×) knows its own nodes and stays narrow.
@@ -7543,17 +7722,30 @@ export function Canvas() {
         surface: 'sessions-sidebar',
         titles: [orphan ? `orphan session ${nodeId}` : nodeId],
         removesNode: false,
+        targetProjectId: store.activeProjectId,
         perform: () => {
-          destroySessionForScope('session-memory', nodeId, transport.destroy.bind(transport))
-          remoteKill?.()
-          // Nothing else to clean up: with no node anywhere, there is no canvas entry to remove and
-          // no parked terminal to dispose. Persisted agent status is dropped anyway, since a
-          // session id can outlive the node it belonged to.
-          useAgentStatus.getState().remove(nodeId)
+          void destroySessionForScope(
+            'session-memory',
+            nodeId,
+            scopeSession.api.pty.destroy.bind(scopeSession.api.pty)
+          ).then(
+            () => {
+              remoteKill?.()
+              // Nothing else to clean up: with no node anywhere, there is no canvas entry to remove
+              // and no parked terminal to dispose. Drop status only after the kill acknowledges.
+              scopeAgentStatus.getState().remove(nodeId)
+            },
+            (error) => {
+              setNotice({
+                kind: 'error',
+                text: `Could not end session ${nodeId}: ${error instanceof Error ? error.message : String(error)}. Its state is unknown; try again.`
+              })
+            }
+          )
         }
       })
     },
-    [closeSession, requestDeleteNodes]
+    [closeSession, requestDeleteNodes, setNotice]
   )
 
   const renameSession = useCallback(
@@ -8461,60 +8653,82 @@ export function Canvas() {
     (id: string) => {
       const store = useProjects.getState()
       if (id === store.activeProjectId) commitActiveToStore()
-      // End the tmux sessions of every terminal in the deleted project, and drop their
-      // persisted agent status (node unmount no longer removes it).
       const project = store.getProject(id)
-      project?.nodes.forEach((n) => {
-        if ((n.kind ?? 'terminal') === 'terminal') {
-          disposeTerminalOnUnmount(sessionForProject(id).id, n.id) // may be parked from a recent switch away
-          destroySessionForScope('project-deletion', n.id, transport.destroy.bind(transport))
+      if (!project) return
+      const projectScope = projectSessionScope(id)
+      const projectSession = projectScope.session
+      const projectAgentStatus = projectScope.stores.agentStatus.store
+      const terminalIds =
+        project.nodes
+          .filter((node) => (node.kind ?? 'terminal') === 'terminal')
+          .map((node) => node.id)
+      void settleProjectSessionDestroys(id, terminalIds).then(
+        (outcome) => {
+          // Project deletion is atomic at the canvas boundary. Some host kills may have landed,
+          // but if any acknowledgement is missing the project stays available and a repeat safely
+          // confirms the remaining/no-longer-present sessions before removing it.
+          if (outcome.failed.length > 0) {
+            const first = outcome.failed[0]
+            setNotice({
+              kind: 'error',
+              text: `Could not delete this project because session ${first.nodeId} was not confirmed ended: ${first.message}. The project was kept so you can retry.`
+            })
+            return
+          }
+          const currentStore = useProjects.getState()
+          // The project may be reopened or gain a node while its host requests are pending. Object
+          // identity is the generation fence: every project mutator replaces this record. Never
+          // delete a newer generation whose terminal set was not part of the confirmed batch.
+          if (!projectDeleteGenerationCurrent(
+            project,
+            currentStore.getProject(id),
+            projectSession.id,
+            sessionForProject(id).id
+          )) {
+            setNotice({
+              kind: 'error',
+              text: 'The project changed while its sessions were ending. It was kept; review it and retry deletion.'
+            })
+            return
+          }
+          // Every terminal is confirmed ended: dispose parked xterms and drop persisted status.
+          project.nodes.forEach((n) => {
+            if ((n.kind ?? 'terminal') === 'terminal')
+              disposeTerminalOnUnmount(projectSession.id, n.id)
+            projectAgentStatus.getState().remove(n.id)
+          })
+          // SSH project: the scoped destroy above reaches the core that owns the project, while
+          // this separate leg authoritatively ends remote tmux sessions with no mounted client.
+          if (project.ssh) {
+            const nodeIds = project.nodes
+              .filter((n) => (n.kind ?? 'terminal') === 'terminal')
+              .map((n) => n.id)
+            void window.nodeTerminal.sshProject
+              .killSessions(id, nodeIds)
+              .catch(() => {})
+              .finally(() => void window.nodeTerminal.sshProject.disconnect(id))
+            useSshConn.getState().clear(id)
+          }
+          // Host attachments this project owns: nothing else knows they exist (no project row), so
+          // deleting the canvas is the only chance to tear their masters down.
+          for (const scopeId of useSshConn.getState().attachmentScopesOf(id)) {
+            const nodeIds =
+              hostAttachmentsFor(id, project.nodes, project.ssh?.server).find(
+                (a) => a.scopeId === scopeId
+              )?.nodeIds ?? []
+            void window.nodeTerminal.sshProject
+              .killSessions(scopeId, nodeIds)
+              .catch(() => {})
+              .finally(() => void window.nodeTerminal.sshProject.disconnect(scopeId))
+            useSshConn.getState().clearAttachment(scopeId)
+          }
+          disposeRelayTabForProject(id)
+          currentStore.deleteProject(id)
+          void writeDisk()
         }
-        useAgentStatus.getState().remove(n.id)
-      })
-      // SSH project: the per-node `transport.destroy` above only ends the REMOTE session for
-      // the (mounted) ACTIVE project's nodes — a non-active project has no live local sessions,
-      // so its remote `nt-<id>` sessions would leak. Drive the remote teardown authoritatively
-      // from main, keyed on the project binding, and sequence it BEFORE disconnect (which kills
-      // the master): kill every terminal node's remote session over the still-alive master, then
-      // tear the master down. Drop the cached controlPath immediately.
-      if (project?.ssh) {
-        const nodeIds = project.nodes
-          .filter((n) => (n.kind ?? 'terminal') === 'terminal')
-          .map((n) => n.id)
-        void killRemoteSessionsForScope(
-          'project-deletion',
-          id,
-          nodeIds,
-          window.nodeTerminal.sshProject.killSessions
-        )
-          .catch(() => {})
-          .finally(() => void window.nodeTerminal.sshProject.disconnect(id))
-        useSshConn.getState().clear(id)
-      }
-      // Host attachments this project owns: nothing else knows they exist (no project row), so
-      // deleting the canvas is the only chance to tear their masters down. Same order as above —
-      // kill the remote sessions over the live master, then drop it.
-      for (const scopeId of useSshConn.getState().attachmentScopesOf(id)) {
-        const nodeIds = project
-          ? hostAttachmentsFor(id, project.nodes, project.ssh?.server).find(
-              (a) => a.scopeId === scopeId
-            )?.nodeIds ?? []
-          : []
-        void killRemoteSessionsForScope(
-          'project-deletion',
-          scopeId,
-          nodeIds,
-          window.nodeTerminal.sshProject.killSessions
-        )
-          .catch(() => {})
-          .finally(() => void window.nodeTerminal.sshProject.disconnect(scopeId))
-        useSshConn.getState().clearAttachment(scopeId)
-      }
-      disposeRelayTabForProject(id)
-      store.deleteProject(id)
-      void writeDisk()
+      )
     },
-    [commitActiveToStore, writeDisk, disposeRelayTabForProject]
+    [commitActiveToStore, writeDisk, disposeRelayTabForProject, setNotice]
   )
 
   // Permanent project deletion, ASKED FOR first — the "Recently closed" × used to delete on a

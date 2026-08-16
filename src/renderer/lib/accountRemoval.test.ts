@@ -89,8 +89,8 @@ describe('account-removal transaction gate', () => {
     expect(secondGate).not.toHaveBeenCalled()
   })
 
-  it('closes live login nodes through the authorized funnel before continuing removal', () => {
-    const deleteNodes = vi.fn()
+  it('closes live login nodes through the authorized funnel before continuing removal', async () => {
+    const deleteNodes = vi.fn(async () => ({ confirmed: ['login'], failed: [] }))
     const continueRemoval = vi.fn()
     let captured:
       | { ids: string[]; request: AuthorizedAccountLoginDeletion }
@@ -133,12 +133,45 @@ describe('account-removal transaction gate', () => {
     captured?.request.perform()
     expect(deleteNodes).toHaveBeenCalledOnce()
     expect(deleteNodes).toHaveBeenCalledWith(['login'])
-    expect(continueRemoval).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(continueRemoval).toHaveBeenCalledOnce())
 
     // A buggy/duplicate close acknowledgement cannot re-run an irreversible account transaction.
     captured?.request.perform()
     expect(deleteNodes).toHaveBeenCalledOnce()
     expect(continueRemoval).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the account when a login-session kill is not acknowledged', async () => {
+    const continueRemoval = vi.fn()
+    const deleteNodes = vi.fn(async () => ({
+      confirmed: [],
+      failed: [{ nodeId: 'login', message: 'connection lost' }]
+    }))
+    let perform: (() => void) | undefined
+
+    requestAccountRemovalTeardown('account-1', continueRemoval, (detail) => {
+      handleAccountRemovalTeardown(
+        detail,
+        [{ id: 'login', data: { accountId: 'account-1', accountLogin: true } }],
+        {
+          isLoginNode: () => true,
+          requestDeleteNodes(_ids, request) {
+            perform = request.perform
+            return true
+          },
+          deleteNodes
+        }
+      )
+    })
+
+    perform?.()
+    await vi.waitFor(() => expect(deleteNodes).toHaveBeenCalledOnce())
+    expect(continueRemoval).not.toHaveBeenCalled()
+
+    // A repeated callback cannot turn the same failed acknowledgement into permission.
+    perform?.()
+    expect(deleteNodes).toHaveBeenCalledOnce()
+    expect(continueRemoval).not.toHaveBeenCalled()
   })
 
   it('does not start the account transaction when no Canvas accepts the teardown', () => {

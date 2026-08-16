@@ -141,7 +141,10 @@ export interface AuthorizedAccountLoginDeletion {
 export interface AccountRemovalTeardownDeps {
   isLoginNode(node: AccountRemovalCanvasNode): boolean
   requestDeleteNodes(ids: string[], request: AuthorizedAccountLoginDeletion): boolean
-  deleteNodes(ids: string[]): void
+  deleteNodes(ids: string[]): Promise<{
+    confirmed: string[]
+    failed: Array<{ nodeId: string; message: string }>
+  }>
 }
 
 /**
@@ -164,6 +167,7 @@ export function handleAccountRemovalTeardown(
     .filter((node) => node.data.accountId === detail.accountId && deps.isLoginNode(node))
     .map((node) => node.id)
   let completed = false
+  let deletionStarted = false
   const complete = (): void => {
     if (completed) return
     completed = true
@@ -180,10 +184,24 @@ export function handleAccountRemovalTeardown(
     surface: 'account-removal',
     authorizedBy: 'remove-account',
     perform: () => {
-      if (completed) return
-      completed = true
-      deps.deleteNodes(loginIds)
-      detail.continueRemoval()
+      if (completed || deletionStarted) return
+      deletionStarted = true
+      // Account credentials may be removed only after every disclosed login session has a
+      // confirmed backing-host acknowledgement. A disconnected kill is an unknown outcome, not
+      // permission to delete the account from under a possibly still-running login process.
+      void deps
+        .deleteNodes(loginIds)
+        .then((outcome) => {
+          if (
+            outcome.failed.length > 0 ||
+            loginIds.some((id) => !outcome.confirmed.includes(id))
+          )
+            return
+          complete()
+        })
+        .catch(() => {
+          // The Canvas teardown path owns the visible error. Keep the account untouched.
+        })
     }
   })
   if (!accepted) detail.handled = false

@@ -205,6 +205,141 @@ describe('PtyManager session-host parity', () => {
     expect(backend.create).toHaveBeenCalledTimes(1)
   })
 
+  it('fences an exit-before-rejection generation until a retry confirms the destroy', async () => {
+    const proc = fakeSessionHostPty()
+    backend.create.mockReturnValue(proc)
+    let rejectKill!: (error: Error) => void
+    backend.kill.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectKill = reject
+        })
+    )
+    const m = await makeManager()
+    m.registerIpc()
+    const ended = vi.fn()
+    m.onSessionEnded(ended)
+    const create = host.handlers[IPC.ptyCreate]
+    const destroy = host.handlers[IPC.ptyDestroy]
+    const options = { cols: 80, rows: 24, persistKey: 'node-kill-ack' }
+
+    const first = (await create(7, options)) as { sessionId: string; fresh: boolean }
+    const second = (await create(8, options)) as { sessionId: string; fresh: boolean }
+    expect(second).toMatchObject({ sessionId: first.sessionId, fresh: false })
+
+    const pendingDestroy = destroy(7, 'node-kill-ack') as Promise<void>
+    const rejectedDestroy = expect(pendingDestroy).rejects.toThrow('kill acknowledgement lost')
+    await vi.waitFor(() => expect(backend.kill).toHaveBeenCalledTimes(1))
+
+    // A create arriving while the host result is unknown waits behind the end barrier. It must
+    // neither join a session that may be dying nor spawn a replacement before the outcome lands.
+    let followerSettled = false
+    const follower = (create(9, options) as Promise<unknown>).finally(() => {
+      followerSettled = true
+    })
+    const followerFailure = expect(follower).rejects.toThrow(
+      'session end outcome unknown; retry the close before reopening this node'
+    )
+    await Promise.resolve()
+    expect(followerSettled).toBe(false)
+    expect(backend.create).toHaveBeenCalledTimes(1)
+
+    // The host may have acted and emitted exit before its correlated reply is lost. Exit is not a
+    // kill acknowledgement: allowing the waiting create to spawn here resurrects an unknown delete.
+    proc.emitExit(0)
+    rejectKill(new Error('kill acknowledgement lost'))
+    await rejectedDestroy
+    await followerFailure
+
+    // Nothing local claimed a confirmed close, and no replacement generation was spawned. The
+    // exact same idempotent destroy remains available to establish absence.
+    expect(backend.create).toHaveBeenCalledTimes(1)
+    expect(proc.destroy).not.toHaveBeenCalled()
+    expect(host.sent.some((message) => message.channel === IPC.ptyClosed(first.sessionId))).toBe(false)
+    expect(ended).not.toHaveBeenCalled()
+
+    backend.kill.mockResolvedValueOnce(undefined)
+    await expect(destroy(7, 'node-kill-ack')).resolves.toBeUndefined()
+    expect(backend.kill).toHaveBeenCalledTimes(2)
+    expect(ended).toHaveBeenCalledWith('node-kill-ack')
+    await expect(create(9, options)).resolves.toEqual({
+      sessionId: '',
+      fresh: false,
+      closed: { by: 7 }
+    })
+  })
+
+  it('contains a failed legacy destroy cast without local teardown or an unhandled rejection', async () => {
+    const proc = fakeSessionHostPty()
+    backend.create.mockReturnValue(proc)
+    backend.kill.mockRejectedValueOnce(new Error('legacy reply path unavailable'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const m = await makeManager()
+    m.registerIpc()
+    const ended = vi.fn()
+    m.onSessionEnded(ended)
+    const created = (await host.handlers[IPC.ptyCreate](7, {
+      cols: 80,
+      rows: 24,
+      persistKey: 'legacy-node'
+    })) as { sessionId: string }
+
+    host.senderListeners[IPC.ptyDestroy](7, 'legacy-node')
+    await vi.waitFor(() => expect(backend.kill).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+
+    expect(proc.destroy).not.toHaveBeenCalled()
+    expect(ended).not.toHaveBeenCalled()
+    expect(host.sent.some((message) => message.channel === IPC.ptyClosed(created.sessionId))).toBe(false)
+  })
+
+  it('rejects recycle before changing local generation state when the host kill fails', async () => {
+    const proc = fakeSessionHostPty()
+    backend.create.mockReturnValue(proc)
+    backend.kill.mockRejectedValueOnce(new Error('recycle outcome unknown'))
+    const m = await makeManager()
+    m.registerIpc()
+    const ended = vi.fn()
+    m.onSessionEnded(ended)
+    const created = (await host.handlers[IPC.ptyCreate](7, {
+      cols: 80,
+      rows: 24,
+      persistKey: 'recycle-node'
+    })) as { sessionId: string }
+
+    await expect(host.handlers[IPC.ptyRecycle](7, 'recycle-node')).rejects.toThrow(
+      'recycle outcome unknown'
+    )
+    expect(proc.destroy).not.toHaveBeenCalled()
+    expect(ended).not.toHaveBeenCalled()
+    expect(host.sent.some((message) => message.channel === IPC.ptyRecycled(created.sessionId))).toBe(false)
+  })
+
+  it('kills a live host-owned session even if tmux becomes available later', async () => {
+    const proc = fakeSessionHostPty()
+    backend.create.mockReturnValue(proc)
+    const m = await makeManager()
+    m.registerIpc()
+    await host.handlers[IPC.ptyCreate](7, {
+      cols: 80,
+      rows: 24,
+      persistKey: 'host-before-tmux'
+    })
+    ;(m as unknown as { tmuxPath: string }).tmuxPath = 'missing-test-tmux'
+
+    await expect(host.handlers[IPC.ptyDestroy](7, 'host-before-tmux')).resolves.toBeUndefined()
+    expect(backend.kill).toHaveBeenCalledWith('nt-host-before-tmux')
+    expect(proc.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not route an unheld tmux-session delete through the session host', async () => {
+    const m = await makeManager()
+    ;(m as unknown as { tmuxPath: string }).tmuxPath = 'missing-test-tmux'
+
+    await expect(m.destroySession(7, 'tmux-orphan')).resolves.toBeUndefined()
+    expect(backend.kill).not.toHaveBeenCalled()
+  })
+
   it('does not publish a session that exits in the same turn its ready resolves', async () => {
     let resolveReady!: (info: { fresh: boolean }) => void
     const pendingReady = new Promise<{ fresh: boolean }>((resolve) => {

@@ -58,19 +58,19 @@ export class SessionHostPty {
   }
 
   write(data: string): void {
-    this.client.write(this.name, data)
+    this.client.write(this.name, this.sub, data)
   }
 
   resize(cols: number, rows: number): void {
-    this.client.resize(this.name, cols, rows)
+    this.client.resize(this.name, this.sub, cols, rows)
   }
 
   pause(): void {
-    this.client.pause(this.name)
+    this.client.pause(this.name, this.sub)
   }
 
   resume(): void {
-    this.client.resume(this.name)
+    this.client.resume(this.name, this.sub)
   }
 
   /**

@@ -7,10 +7,10 @@
 // scripts nothing, just the `host:build` npm script) and the Electron main process bundle
 // (electron-vite). See docs/windows-session-host.md for the architecture this implements.
 
-/** Bumped whenever a request/response/event SHAPE changes. Carried in the host's state file so a
- *  client can in principle refuse to talk to an incompatible host — not enforced yet (this is the
- *  first version), but the field exists from day one so it never has to be added under pressure. */
-export const SESSION_HOST_PROTOCOL_VERSION = 1
+/** Bumped whenever a request/response/event SHAPE changes. Carried in the host's state file and
+ * enforced by the client before hello, so a newly packaged client cannot reuse a long-lived host
+ * whose attach/flow contract predates its own. */
+export const SESSION_HOST_PROTOCOL_VERSION = 2
 
 /** Exactly what node-pty needs to spawn — passed on `attach` so the host never has to compute cwd
  *  resolution, PATH, hook env, etc. itself. The CLIENT (pty-manager.ts, which already resolves all
@@ -38,6 +38,10 @@ export type SessionHostRequest =
       /** Cap on both the emulator's live scrollback buffer and how much `capture`'s `full: true`
        *  returns — mirrors `settings.tmuxScrollback` / tmux's own `history-limit`. */
       scrollback: number
+      /** The reconnecting connection already owes an explicit flow pause. Optional so a version-1
+       * client degrades to flowing, while version-2 hosts can restore the ticket before snapshot
+       * or live subscriber activation and never leak output through the reconnect window. */
+      paused?: boolean
     }
   | { id: number; cmd: 'hasSession'; name: string }
   | { id: number; cmd: 'write'; name: string; data: string }

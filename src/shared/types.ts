@@ -627,11 +627,15 @@ export interface PtyApi {
    *  speculative kill of a row it swept off either socket. An ordinary node-× must not set it: it
    *  takes the same unheld branch after an app restart, and `nodeterm-rmt` holds sessions another
    *  machine's nodeterm SSHed in to spawn. */
-  destroy(persistKey: string, opts?: { everySocket?: boolean }): void
+  /** Resolves after core end processing; on the session-host backend this includes its kill
+   * acknowledgement. A rejection means the outcome is unknown and the caller must keep the node. */
+  destroy(persistKey: string, opts?: { everySocket?: boolean }): Promise<void>
   /** Ends a node's persistent session so the SAME node id respawns in a new cwd ("move into
    *  worktree"). Same tmux kill as `destroy`, opposite intent: the node stays on the canvas, so
    *  co-viewers get `onRecycled` (restart + re-attach), never the permanent closed state. */
-  recycle(persistKey: string): void
+  /** Resolves after core recycle processing; on the session-host backend this includes its kill
+   * acknowledgement. A rejection means the node must keep its cwd/generation for retry. */
+  recycle(persistKey: string): Promise<void>
   /** Suggest a terminal title from its recent output via the configured AI agent. */
   generateName(persistKey: string, cwd: string): Promise<GitResult>
   /** Suggest a group title from its member terminals' recent output via the configured AI agent. */

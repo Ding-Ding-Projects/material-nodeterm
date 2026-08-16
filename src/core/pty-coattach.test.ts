@@ -795,7 +795,7 @@ describe('node destroyed while co-viewed', () => {
     }>
   // pty:destroy is sender-aware: the closed event has to name WHO pressed ×.
   const destroy = (clientId: number, persistKey = 'node-1') =>
-    fake.senderListeners[IPC.ptyDestroy](clientId, persistKey) as unknown as Promise<void>
+    fake.handlers[IPC.ptyDestroy](clientId, persistKey) as Promise<void>
   const flow = (clientId: number, sessionId: string, resume: boolean) =>
     fake.senderListeners[IPC.ptyFlow](clientId, sessionId, resume)
   const closed = (sessionId: string) =>
@@ -861,7 +861,7 @@ describe('node destroyed while co-viewed', () => {
     await manager()
     await create(ALICE)
     await create(BOB)
-    await (fake.senderListeners[IPC.ptyRecycle](ALICE, 'node-1') as unknown as Promise<void>)
+    await (fake.handlers[IPC.ptyRecycle](ALICE, 'node-1') as Promise<void>)
 
     const again = await create(ALICE) // the mover respawns in the new cwd
     expect(again.closed).toBeUndefined()
@@ -943,14 +943,16 @@ describe('destroy/recycle: bounded, validated, rate-limited', () => {
       closed?: { by: number | null }
     }>
   const destroy = (clientId: number, persistKey: string) =>
-    fake.senderListeners[IPC.ptyDestroy](clientId, persistKey) as unknown as Promise<void>
+    fake.handlers[IPC.ptyDestroy](clientId, persistKey) as Promise<void>
 
   it('refuses a persistKey longer than REF_MAX_LEN (no tombstone, no subprocess)', async () => {
     const { REF_MAX_LEN } = await import('../shared/presence')
     const m = await manager()
     const huge = 'x'.repeat(REF_MAX_LEN + 1)
 
-    await destroy(ALICE, huge)
+    await expect(destroy(ALICE, huge)).rejects.toThrow(
+      'pty destroy refused: invalid node id'
+    )
     // Nothing was recorded, so this is not a node anyone can be locked out of. Read the map
     // DIRECTLY rather than probing with `create`: an over-long id is now refused at the create
     // choke point too (the node-id guard, added with the remote-injection fix), so a create's
@@ -986,16 +988,19 @@ describe('destroy/recycle: bounded, validated, rate-limited', () => {
     expect((await create(CAROL, 'node-1')).closed).toBeUndefined()
   })
 
-  it('rate-limits the destroy cast, and the burst still covers a bulk delete', async () => {
+  it('rate-limits the destroy request without falsely acknowledging the refused node', async () => {
     const { PTY_END_BUDGET } = await import('./pty-manager')
     await manager()
-    // A real bulk delete (select N nodes → Delete) fires one cast per node in a single tick: every
+    // A real bulk delete (select N nodes → Delete) fires one request per node in a single tick: every
     // one of them must land, or a solo user silently leaks tmux sessions.
     for (let i = 0; i < PTY_END_BUDGET.burst; i++) await destroy(ALICE, `node-${i}`)
     expect((await create(BOB, 'node-0')).closed).toEqual({ by: ALICE })
 
-    // Past the burst the flood is dropped: no tombstone entry, no fs.rm, no tmux subprocess.
-    await destroy(ALICE, 'flood-1')
+    // Past the burst the request rejects rather than falsely acknowledging a no-op: no tombstone
+    // entry, no fs.rm, no tmux subprocess, and the renderer keeps the node for a later retry.
+    await expect(destroy(ALICE, 'flood-1')).rejects.toThrow(
+      'pty destroy refused: rate limit exceeded; retry later'
+    )
     expect((await create(BOB, 'flood-1')).closed).toBeUndefined()
   })
 
@@ -1045,7 +1050,7 @@ describe('node recycled (worktree move) while co-viewed', () => {
   // pty:recycle is sender-aware: the client that recycled drives its OWN respawn, so it must be
   // excluded from the restart notice (it would otherwise respawn twice).
   const recycle = (clientId: number, persistKey = 'node-1') =>
-    fake.senderListeners[IPC.ptyRecycle](clientId, persistKey) as unknown as Promise<void>
+    fake.handlers[IPC.ptyRecycle](clientId, persistKey) as Promise<void>
   const closed = (sessionId: string) =>
     fake.sent.filter((s) => s.channel === IPC.ptyClosed(sessionId))
   const recycled = (sessionId: string) =>
