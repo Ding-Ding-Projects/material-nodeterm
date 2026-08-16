@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ExportTable } from '@shared/export'
 import { buildTableExport } from '@shared/export'
 import type { HistoryAction, HistoryEntry } from '@shared/local-history'
+import { restoreSettingsRevision } from '../state/settings'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ExportMenu } from './ExportMenu'
 import { BulkActionBar, type BulkAction } from './BulkActionBar'
@@ -168,7 +169,14 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
     setRestoreBusy(true)
     setRestoreError(null)
     try {
-      const result = await window.nodeTerminal.history.restore(domain, restoring.sha)
+      const requestRestore = (): ReturnType<typeof window.nodeTerminal.history.restore> =>
+        window.nodeTerminal.history.restore(domain, restoring.sha)
+      // Settings are live renderer state as well as a core-owned file. Join/cancel the renderer's
+      // coalesced save lane and rehydrate immediately, or an old 300 ms callback can overwrite the
+      // revision after this dialog reports success. Future domains can supply their own equivalent
+      // apply hook instead of being silently treated as settings.
+      const result =
+        domain === 'settings' ? await restoreSettingsRevision(requestRestore) : await requestRestore()
       if (!result.ok) {
         setRestoreError(result.error)
         return

@@ -134,6 +134,14 @@ approved-device store does this so an older approval cannot land after a revoke 
 revoked key. Only a checked `ENOENT` is an empty store — unreadable or corrupt data must stay an
 error so the next mutation cannot overwrite it as if it were absent.
 
+**A Git-backed history write owns the working file, index and commit as one transaction.** Queue
+that complete sequence per repository/domain; serializing only the file write can still attach one
+call's label to another call's staged bytes or lose a commit against a clean index. Reads that must
+show a just-triggered background revision join the same write tail. An initialized repository with
+no `HEAD` is a readable empty history, not a Git failure. And a settings restore is not complete
+when core writes the file: cancel/epoch the renderer's coalesced saves, join any dispatched save,
+then immediately rehydrate the live settings store so stale UI state cannot overwrite it.
+
 **Degrade to nothing, never to something wrong.** A probe that fails means the bare, safe command —
 never a substituted nearest match. A hand-editable value that is unrecognised must yield the safe
 default, never something more destructive than the default.

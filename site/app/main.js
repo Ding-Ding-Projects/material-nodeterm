@@ -10,7 +10,7 @@ import { createStore, makeMatcher } from './core/store.js'
 import { withFocusPreserved } from './core/dom.js'
 import { render } from './core/render.js'
 import {
-  applyTheme, toast, notify, log, save, undoEntry, toggleLock, unlockPanel,
+  applyTheme, toast, notify, log, save, undoEntry, removeHistoryEntries, toggleLock, unlockPanel,
   openMenu, closeMenu, menuDefs, openRx, closeRx, rxToggleMode, rxInsertToken, rxApply, rxPlain,
   buildPaletteTargets, askConfirm, confirmCancel, confirmRun, refreshCodes, copyToClipboard, download,
   getRoom, allSettingsCards, registerListRoom, fmtWhen,
@@ -399,14 +399,13 @@ function registerCoreRooms() {
     ],
   })
   registerListRoom('history', {
-    getRows: (s) => s.history.map((h) => ({ id: h.id, title: h.title, body: h.body, tag: h.tag, meta: fmtWhen(h.when), right: '' })),
+    getRows: (s) => s.history.map((h) => ({ id: h.id, title: h.title, body: h.body, tag: h.tag, meta: fmtWhen(h.when), right: '', canUndo: !!h.undo })),
     emptyText: 'Nothing logged yet.',
     remove: (store2, ids) => {
-      const set = new Set(ids)
-      store2.setState({ history: store2.state.history.filter((h) => !set.has(h.id)), picked: {} }, { persist: false })
+      removeHistoryEntries(store2, ids)
     },
     panelActions: (store2) => [
-      { label: '↩️ Put the newest change back', run: () => { const h = store2.state.history[0]; if (!h) { toastX('🙂', 'Nothing to undo', 'The log is empty.'); return } undoEntry(store2, h.id) } },
+      { label: '↩️ Put the newest saved change back', run: () => { const h = store2.state.history.find((entry) => entry.undo); if (!h) { toastX('🙂', 'Nothing to restore', 'There is no saved-setting change in this log that can be put back.'); return } undoEntry(store2, h.id) } },
     ],
   })
 }

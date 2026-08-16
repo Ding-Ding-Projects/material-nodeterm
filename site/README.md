@@ -48,3 +48,8 @@ browser's own `localStorage` and are never sent anywhere. See `styles.css`'s top
 for the one documented exception to "no CDN" this redesign currently carries (a webfont
 fallback, not a live request) and `app/main.js`/`app/core/engine.js` for how the rest is
 wired together.
+
+The Time machine stores the prior durable values beside each saved-setting change, so **Put back**
+really restores state and the restore itself can be reversed. Exports, conversions and old rows
+without a prior-state snapshot are honest record-only entries and show no restore action. Deleting
+history is durable too: even deleting the final row leaves an explicit empty log after reload.
