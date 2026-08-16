@@ -18,13 +18,25 @@ import type { ToyLockCreatePasswordInput, ToyLockCreateResult, ToyLockRecord } f
 
 interface TestMeta {
   id: string
+  label: string
 }
 
 let dir = ''
 let corePlatform: FakePlatform
 
-function sealed(id: string): SealedEntry<TestMeta> {
-  return { meta: { id }, secretEnc: `sealed-${id}` }
+const TEST_IDS: Record<string, string> = {
+  seed: '00000000-0000-4000-8000-000000000001',
+  first: '00000000-0000-4000-8000-000000000002',
+  second: '00000000-0000-4000-8000-000000000003',
+  published: '00000000-0000-4000-8000-000000000004',
+  recovered: '00000000-0000-4000-8000-000000000005',
+  original: '00000000-0000-4000-8000-000000000006',
+  old: '00000000-0000-4000-8000-000000000007',
+  new: '00000000-0000-4000-8000-000000000008'
+}
+
+function sealed(label: string): SealedEntry<TestMeta> {
+  return { meta: { id: TEST_IDS[label], label }, secretEnc: `sealed-${label}` }
 }
 
 async function drainMicrotasks(): Promise<void> {
@@ -112,7 +124,7 @@ describe('SecureStore transaction ordering', () => {
     const settled = await Promise.allSettled([first, second])
     if (assertionError) throw assertionError
     expect(settled.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
-    expect((await firstStore.load()).map((entry) => entry.meta.id)).toEqual([
+    expect((await firstStore.load()).map((entry) => entry.meta.label)).toEqual([
       'seed',
       'first',
       'second'
@@ -178,7 +190,7 @@ describe('SecureStore transaction ordering', () => {
 
     await expect(rejected).rejects.toThrow('deliberate mutation failure')
     await expect(recovered).resolves.toBe('done')
-    expect((await firstStore.load()).map((entry) => entry.meta.id)).toEqual(['recovered'])
+    expect((await firstStore.load()).map((entry) => entry.meta.label)).toEqual(['recovered'])
   })
 
   it('does not publish a no-change transaction', async () => {
@@ -199,9 +211,15 @@ describe('SecureStore transaction ordering', () => {
   it('hardens permissions before publish so a rejected save leaves the prior entry durable', async () => {
     const store = new SecureStore<TestMeta>('chmod-before-publish.json')
     await store.save([sealed('old')])
-    vi.spyOn(fs, 'chmod').mockRejectedValueOnce(
-      Object.assign(new Error('EACCES: cannot harden temp'), { code: 'EACCES' })
-    )
+    const realChmod = fs.chmod.bind(fs)
+    let refused = false
+    vi.spyOn(fs, 'chmod').mockImplementation(async (target, mode) => {
+      if (!refused && String(target).includes('chmod-before-publish.json.') && String(target).endsWith('.tmp')) {
+        refused = true
+        throw Object.assign(new Error('EACCES: cannot harden temp'), { code: 'EACCES' })
+      }
+      return realChmod(target, mode)
+    })
 
     await expect(store.save([sealed('new')])).rejects.toMatchObject({ code: 'EACCES' })
     await expect(store.load()).resolves.toEqual([sealed('old')])
@@ -237,6 +255,62 @@ describe('SecureStore transaction ordering', () => {
       'Secure store has an unsupported or malformed document'
     )
     expect(await fs.readFile(target, 'utf8')).toBe(malformed)
+  })
+
+  it('rejects invalid UUIDs and duplicate ids before a save can self-corrupt the store', async () => {
+    const store = new SecureStore<TestMeta>('validated-save.json')
+    const target = path.join(dir, 'validated-save.json')
+    await store.save([sealed('original')])
+    const before = await fs.readFile(target, 'utf8')
+
+    await expect(
+      store.save([{ meta: { id: 'not-a-uuid', label: 'invalid' }, secretEnc: 'secret' }])
+    ).rejects.toThrow('Secure store has an unsupported or malformed document')
+    await expect(store.save([sealed('new'), sealed('new')])).rejects.toThrow(
+      'Secure store has an unsupported or malformed document'
+    )
+
+    expect(await fs.readFile(target, 'utf8')).toBe(before)
+    await expect(store.load()).resolves.toEqual([sealed('original')])
+  })
+
+  it('rejects an invalid mutation result and preserves the exact prior bytes', async () => {
+    const store = new SecureStore<TestMeta>('validated-mutation.json')
+    const target = path.join(dir, 'validated-mutation.json')
+    await store.save([sealed('original')])
+    const before = await fs.readFile(target, 'utf8')
+
+    await expect(
+      store.mutate<void>((entries) => {
+        entries.push(structuredClone(entries[0]))
+        return { changed: true, result: undefined }
+      })
+    ).rejects.toThrow('Secure store has an unsupported or malformed document')
+
+    expect(await fs.readFile(target, 'utf8')).toBe(before)
+    await expect(store.load()).resolves.toEqual([sealed('original')])
+  })
+
+  it('treats EACCES as unreadable evidence, never as an empty store', async () => {
+    const store = new SecureStore<TestMeta>('unreadable.json')
+    const target = path.resolve(dir, 'unreadable.json')
+    await store.save([sealed('original')])
+    const before = await fs.readFile(target, 'utf8')
+    const realReadFile = fs.readFile.bind(fs)
+    vi.spyOn(fs, 'readFile').mockImplementation(async (file, options) => {
+      if (path.resolve(String(file)) === target) {
+        throw Object.assign(new Error('EACCES: credential evidence is unreadable'), { code: 'EACCES' })
+      }
+      return realReadFile(file, options)
+    })
+
+    await expect(store.load()).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(
+      store.mutate<void>(() => ({ changed: true, result: undefined }))
+    ).rejects.toMatchObject({ code: 'EACCES' })
+
+    vi.restoreAllMocks()
+    expect(await fs.readFile(target, 'utf8')).toBe(before)
   })
 })
 

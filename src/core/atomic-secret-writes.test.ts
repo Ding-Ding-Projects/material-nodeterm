@@ -79,6 +79,7 @@ async function expectDistinctSerializedTempWrites(
   const seen: string[] = []
   const realWriteFile = fs.writeFile
   const spy = vi.spyOn(fs, 'writeFile').mockImplementation((async (p: any, ...rest: any[]) => {
+    // SQLite's sidecar and journal are lock evidence rather than credential publication temps.
     if (String(p).endsWith('.tmp')) seen.push(String(p))
     return (realWriteFile as any)(p, ...rest)
   }) as any)
@@ -98,8 +99,8 @@ describe('secret stores separate same-millisecond writers', () => {
   it('SecureStore gives overlapping saves different temp files', async () => {
     const store = new SecureStore<{ id: string }>('sealed-list.json')
     await expectDistinctSerializedTempWrites(() => [
-      store.save([{ meta: { id: 'a' }, secretEnc: 'A' }]),
-      store.save([{ meta: { id: 'b' }, secretEnc: 'B' }])
+      store.save([{ meta: { id: '00000000-0000-4000-8000-000000000001' }, secretEnc: 'A' }]),
+      store.save([{ meta: { id: '00000000-0000-4000-8000-000000000002' }, secretEnc: 'B' }])
     ])
   })
 
@@ -112,7 +113,7 @@ describe('secret stores separate same-millisecond writers', () => {
 
   it('shared mode credentials give overlapping persistence calls different temp files', async () => {
     const target = path.join(dir, 'mode.credential.json')
-    await expectDistinctTempWrites(() => [
+    await expectDistinctSerializedTempWrites(() => [
       persistModeCredential(target, 'first'),
       persistModeCredential(target, 'second')
     ])

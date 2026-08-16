@@ -170,6 +170,17 @@ describe('scheduled-settings credential clear', () => {
     await expect(homeAssistantTokenStatus([RULE_ID])).rejects.toThrow(/malformed/)
   })
 
+  it('rejects a token that its strict read path would treat as malformed', async () => {
+    await expect(setHomeAssistantToken(RULE_ID, '')).rejects.toMatchObject({ code: 'invalid-token' })
+    await expect(setHomeAssistantToken(RULE_ID, ' padded ')).rejects.toMatchObject({
+      code: 'invalid-token'
+    })
+    await expect(setHomeAssistantToken(RULE_ID, 'line\nbreak')).rejects.toMatchObject({
+      code: 'invalid-token'
+    })
+    expect(existsSync(rawFile)).toBe(false)
+  })
+
   it('does not report absence when an existing token cannot be read', async () => {
     await setHomeAssistantToken(RULE_ID, 'secret')
     const realReadFile = fs.readFile

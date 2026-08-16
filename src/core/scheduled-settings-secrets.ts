@@ -12,7 +12,13 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from './platform'
-import { clearAtomicTarget, renameAtomic, sweepStaleTempFiles, tempNameFor } from './fs-atomic'
+import { clearAtomicTarget, sweepStaleTempFiles } from './fs-atomic'
+import {
+  readAtomicFileSnapshot,
+  withCrossProcessLock,
+  writeAtomicFileCompared,
+  type CrossProcessLease
+} from './fs-transaction-lock'
 
 const DIR = 'scheduled-settings-secrets'
 
@@ -42,6 +48,10 @@ function validRuleId(id: string): boolean {
   return RULE_ID_RE.test(id)
 }
 
+function validToken(token: string): boolean {
+  return token.trim() === token && token.length > 0 && token.length <= 8192 && !/[\r\n\0]/u.test(token)
+}
+
 function dir(): string {
   return path.join(platform().userDataDir, DIR)
 }
@@ -62,8 +72,12 @@ type StoredToken = { version: 1; tokenEnc: string }
 const idleMutation = Promise.resolve()
 let mutationTail: Promise<void> = idleMutation
 
-function serializeMutation<T>(mutation: () => Promise<T>): Promise<T> {
-  const run = mutationTail.then(mutation)
+function serializeMutation<T>(
+  secretDir: string,
+  mutation: (lease: CrossProcessLease) => Promise<T>
+): Promise<T> {
+  const resource = path.join(secretDir, '.transactions')
+  const run = mutationTail.then(() => withCrossProcessLock(resource, mutation))
   const recovered = run.then(
     () => undefined,
     () => undefined
@@ -93,18 +107,22 @@ export class InvalidScheduledSettingsRuleIdError extends Error {
   }
 }
 
-async function persistFile(file: string, data: string): Promise<void> {
+export class InvalidScheduledSettingsTokenError extends Error {
+  readonly code = 'invalid-token' as const
+
+  constructor() {
+    super('The Home Assistant token is empty or malformed.')
+  }
+}
+
+async function persistFile(file: string, data: string, lease: CrossProcessLease): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
   await sweepStaleTempFiles(file)
-  const tmp = tempNameFor(file)
-  try {
-    await fs.writeFile(tmp, data, { encoding: 'utf-8', mode: 0o600 })
-    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
-    await renameAtomic(tmp, file)
-  } catch (e) {
-    await fs.rm(tmp, { force: true }).catch(() => {})
-    throw e
-  }
+  const current = await readAtomicFileSnapshot(file)
+  await writeAtomicFileCompared(file, data, current.revision, lease, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
 }
 
 /** Store (or, with `token: null`, clear) the Home Assistant access token for one rule. Never
@@ -112,6 +130,7 @@ async function persistFile(file: string, data: string): Promise<void> {
  *  all the Settings UI ever needs (a status dot, not the secret itself). */
 export async function setHomeAssistantToken(ruleId: string, token: string | null): Promise<void> {
   if (!validRuleId(ruleId)) throw new InvalidScheduledSettingsRuleIdError()
+  if (token !== null && !validToken(token)) throw new InvalidScheduledSettingsTokenError()
   const sf = sealedFile(ruleId)
   const rf = rawFile(ruleId)
   // Resolve the platform-dependent representation at invocation time. A queued call must not
@@ -125,18 +144,21 @@ export async function setHomeAssistantToken(ruleId: string, token: string | null
       } satisfies StoredToken)}\n`
     : null
 
-  return serializeMutation(async () => {
+  return serializeMutation(path.dirname(sf), async (lease) => {
     if (token === null) {
+      await lease.fence()
       const [sealed, raw] = await Promise.all([clearAtomicTarget(sf), clearAtomicTarget(rf)])
       if (!sealed.cleared || !raw.cleared) throw new ScheduledSettingsSecretError()
       return
     }
     if (shouldSeal) {
-      await persistFile(sf, sealedBody!)
+      await persistFile(sf, sealedBody!, lease)
+      await lease.fence()
       const alternate = await clearAtomicTarget(rf)
       if (!alternate.cleared) throw new ScheduledSettingsSecretError()
     } else {
-      await persistFile(rf, token)
+      await persistFile(rf, token, lease)
+      await lease.fence()
       const alternate = await clearAtomicTarget(sf)
       if (!alternate.cleared) throw new ScheduledSettingsSecretError()
     }
@@ -167,14 +189,16 @@ export async function getHomeAssistantToken(ruleId: string): Promise<string | nu
     throw new Error('The stored Home Assistant token is in an unavailable format.')
   }
   if (!useSealed) {
-    if (!raw.trim()) throw new Error('The stored Home Assistant token is malformed.')
+    if (!validToken(raw)) throw new Error('The stored Home Assistant token is malformed.')
     return raw
   }
   const stored = JSON.parse(raw) as StoredToken
   if (stored?.version !== 1 || typeof stored.tokenEnc !== 'string') {
     throw new Error('The stored Home Assistant token is malformed.')
   }
-  return platform().unsealSecret!(Buffer.from(stored.tokenEnc, 'base64')).toString('utf8')
+  const token = platform().unsealSecret!(Buffer.from(stored.tokenEnc, 'base64')).toString('utf8')
+  if (!validToken(token)) throw new Error('The stored Home Assistant token is malformed.')
+  return token
 }
 
 export async function hasHomeAssistantToken(ruleId: string): Promise<boolean> {
@@ -203,7 +227,8 @@ export async function pruneOrphanedTokens(liveRuleIds: ReadonlySet<string> | rea
   // the former lossy safeId scheme collectible instead of letting an invalid rule protect it.
   const live = new Set([...liveRuleIds].filter(validRuleId))
 
-  return serializeMutation(async () => {
+  return serializeMutation(secretDir, async (lease) => {
+    await lease.fence()
     let entries: string[]
     try {
       entries = await fs.readdir(secretDir)
@@ -220,6 +245,7 @@ export async function pruneOrphanedTokens(liveRuleIds: ReadonlySet<string> | rea
     await Promise.all(
       [...orphanIds].flatMap((id) =>
         [path.join(secretDir, `${id}.json`), path.join(secretDir, `${id}.bin`)].map(async (file) => {
+          await lease.fence()
           const result = await clearAtomicTarget(file)
           if (!result.cleared) incomplete = true
         })

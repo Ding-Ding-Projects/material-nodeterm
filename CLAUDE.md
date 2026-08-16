@@ -1932,19 +1932,30 @@ still beside the canonical path.
 must also serialize publishes (or reject an out-of-date generation). `agent-status-mirror.flush`
 demonstrated the separate race: flush A captured old state and slept during `renameAtomic`'s
 transient-`EPERM` retry, flush B published new state, then A woke and atomically replaced it with
-the complete but stale document. Its disk writes are FIFO; the barrier test deliberately recreates
-that ordering and must stay red if the queue is removed. This FIFO is process-local. Two apps that
-intentionally share the same data directory still have last-publisher semantics unless the store
-adds a cross-process lock or compare-and-swap generation.
+the complete but stale document. A FIFO closes that race only inside one JavaScript process. A
+credential store intentionally shared by Desktop and Server Edition additionally holds a SQLite
+`BEGIN IMMEDIATE` transaction across strict read, mutation and publication/removal.
 
 For load→mutate→save code, serialize the **whole transaction**, starting before the strict read.
 A save-only queue still allows two callers to read the same document and publish incompatible
-derivatives in sequence. `SecureStore.mutate` applies this path-global (not instance-local) rule to
-toy-lock and authenticator credentials; a mutation read rejects corrupt/unreadable input instead of
-turning “could not read” into “empty.” Scheduled Home Assistant token set, clear, alternate-format
-cleanup and orphan pruning likewise share one process-local FIFO. Their cleanup errors propagate
+derivatives in sequence. `SecureStore.mutate` applies this physical-path-global (not instance-local)
+rule to toy-lock and authenticator credentials; a mutation read rejects corrupt/unreadable input,
+duplicate ids and non-v4 ids instead of turning “could not read” into “empty.” Scheduled Home
+Assistant token set, clear, alternate-format cleanup and orphan pruning likewise share one
+directory-wide SQLite transaction. Provider-cookie, shared-mode and GitHub credential mutations use
+the same primitive. GitHub's controller FIFO begins before network token validation; otherwise a
+later Clear can finish before the earlier Save reaches the store and then be resurrected. Separate
+processes are ordered at final SQLite transaction entry because they have no shared pre-validation
+invocation clock. Their cleanup errors propagate
 through the schedule save result and renderer: a durable schedule plus retained bearer bytes must
 never be mislabeled as either a disk-write failure or a completed credential clear.
+
+Do not replace this with a timestamp lease. SQLite keeps an OS lock while a process is suspended,
+releases it on process death, and uses a bounded monotonic busy retry without deleting foreign
+ownership evidence. The lock key realpaths the existing parent so directory aliases converge. A
+corrupt/unreadable sidecar stays untouched and fails closed. Real forked-process tests park a writer,
+prove its peer cannot read the stale snapshot, kill an owner to prove crash release, exercise a busy
+timeout and directory alias, and retain corrupt sidecar bytes.
 
 The SQLite module is loaded only after `core/node-runtime.ts` has performed the exact startup
 preflight. Keep it lazy: a static `node:sqlite` import is evaluated before either shell can print an

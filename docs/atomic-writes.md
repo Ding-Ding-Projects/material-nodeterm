@@ -5,8 +5,11 @@ would have been lost to a passing antivirus scan land instead.** A disk that is 
 that is read-only, or a file some process holds open indefinitely will still fail — loudly, which
 is the point. Nothing here protects against a machine losing power between two saves.
 
-Implementation: [`src/core/fs-atomic.ts`](../src/core/fs-atomic.ts). Tests:
-`src/core/fs-atomic.test.ts` (behaviour) and `src/core/fs-atomic.guard.test.ts` (the scan).
+Implementations: [`src/core/fs-atomic.ts`](../src/core/fs-atomic.ts) for publication and
+[`src/core/fs-transaction-lock.ts`](../src/core/fs-transaction-lock.ts) for cross-process
+read/modify/write transactions. Tests: `src/core/fs-atomic.test.ts` (behaviour),
+`src/core/fs-atomic.guard.test.ts` (the scan), and
+`src/core/fs-transaction-lock.process.test.ts` (real two-process barriers and crash recovery).
 
 ## What every store does
 
@@ -122,8 +125,9 @@ for every recognized legacy/current temp. It reports incomplete while a young, l
 or failed-to-delete temp remains (or the directory cannot be inspected), and PAT/cookie/token
 callers propagate that failure to the UI/API. A plausible foreign writer is still preserved; the
 important distinction is that retained bearer bytes can no longer be reported as a completed
-clear. This is a point-in-time result, not a cross-process lock, so a later foreign publisher keeps
-the documented last-publisher semantics.
+clear. By itself this is a point-in-time result, not a cross-process lock. Credential stores call it
+while holding their SQLite transaction, so another supported process cannot publish between removal,
+inspection, the final canonical-path recheck, and transaction completion.
 
 ## A unique temp does not order snapshots
 
@@ -137,18 +141,38 @@ in addition to unique temps. `agent-status-mirror.flush` uses FIFO. Its test blo
 records a newer state, starts the second flush, and proves the newer generation is final; removing
 the queue makes that test deterministically red.
 
-That FIFO orders one JavaScript process. It does not coordinate two desktop/server processes using
-the same data directory; a store that promises cross-process ordering needs a file lock or
-compare-and-swap generation. Without one, last physical publisher remains the honest contract.
+That FIFO orders one JavaScript process. Credential documents deliberately shared by Desktop and
+Server Edition additionally use `withCrossProcessLock`, whose `BEGIN IMMEDIATE` transaction holds
+SQLite's kernel-backed file lock across the strict read, mutation, temp publication and clear/prune
+checks. A suspended writer keeps ownership; process death releases it. There is no timestamp lease,
+PID probe, or stale-owner deletion, because none can prove a writer on another namespace or a paused
+machine is dead. Busy retries use a monotonic deadline and fail with `lock-timeout`; a corrupt or
+unreadable sidecar remains evidence and fails with `lock-evidence-unreadable`.
+
+The rendezvous path is derived from the real parent directory plus the canonical basename, so a
+directory symlink/junction cannot split one physical resource into two locks. Publication compares
+the exact SHA-256 revision read inside the transaction before rename. The SQLite lock orders every
+supported writer; the comparison also rejects an out-of-protocol edit observed before publication.
+Neither mechanism claims compatibility with an older writer that does not participate in the
+transaction, so sharing a data directory during a rolling downgrade remains unsupported.
 
 A read-modify-write store must enqueue before it reads and hold the same turn through publication.
 Serializing only `save()` faithfully writes both stale derivatives and still loses one caller's
-change. `SecureStore.mutate` therefore coordinates by resolved file path across independent store
-instances and uses a strict mutation read; its ordinary display-oriented `load()` may degrade to an
-empty view only for `ENOENT`; corruption and permission failures propagate as unavailable and are
-never permission to replace the credential document.
-Scheduled token set/clear/prune operations use the same whole-operation principle so a prune cannot
-miss a parked set or wake after a later set and delete it.
+change. `SecureStore.mutate` therefore coordinates by physical file across independent store
+instances and processes. Its read degrades to an empty list only for `ENOENT`; corruption, duplicate
+or non-v4 secret ids, and permission failures propagate as unavailable and are never permission to
+replace the credential document. `save()` validates the same schema before publication so it cannot
+report success for bytes its next strict read rejects. Scheduled token set/clear/prune operations
+use one directory-wide transaction so a prune cannot miss a parked set or wake after a later set and
+delete it. Provider cookies, shared-mode credentials, and Desktop/Server GitHub token stores preserve
+the same strict-read evidence and transaction boundary. GitHub Save begins a controller-local FIFO
+before its network validation, so a later Clear in that controller cannot finish first and be
+resurrected. Separate processes have no shared pre-validation invocation clock; their final durable
+mutations are ordered when they enter the SQLite transaction.
+
+`node:sqlite` is loaded lazily so an incompatible runtime can reach the actionable startup preflight.
+The supported floor is `^22.22.2 || ^24.15.0 || >=26.0.0`; package metadata, the installer, container
+image and both application shells enforce that same capability contract.
 
 The guard checks the PROPERTY, not the helper: an inline `randomUUID()` path is also correct.
 

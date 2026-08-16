@@ -112,9 +112,12 @@ need it too, and wire it in the same change.
   only `save()` still lets two readers derive conflicting documents. Key it by the resolved physical
   file, not by an object instance or a lossy logical id.
   An in-memory FIFO orders one JavaScript process only; a store intentionally shared by multiple
-  processes needs a file lock, compare-and-swap generation, or an explicit last-publisher contract.
-  Never implement cross-process ordering as a stealable timeout lease: a paused live writer is not
-  a dead writer. This makes the runtime floor load-bearing for SQLite-backed transactions: keep
+  processes needs a proven cross-process transaction or an explicit last-publisher contract.
+  Credential stores use SQLite `BEGIN IMMEDIATE` across strict read, mutation and publication;
+  corrupt/unreadable input and lock sidecars remain evidence instead of becoming empty state.
+  Never implement this as a stealable timeout lease: a paused live writer is not a dead writer.
+  Real two-process barriers, crash release and bounded-contention tests are required. This makes the
+  runtime floor load-bearing for SQLite-backed transactions: keep
   `package.json`, the Server installer, container image and both shell preflights on the exact
   supported range above. Do not restore a top-level `node:sqlite` import; lazy capability loading is
   what lets an incompatible runtime emit the actionable preflight error instead of dying during

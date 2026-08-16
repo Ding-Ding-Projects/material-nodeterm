@@ -1,7 +1,19 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { clearAtomicTarget, renameAtomic, sweepStaleTempFiles, tempNameFor } from '../core/fs-atomic'
+import { clearAtomicTarget, sweepStaleTempFiles } from '../core/fs-atomic'
+import {
+  readAtomicFileSnapshot,
+  withCrossProcessLock,
+  writeAtomicFileCompared,
+  type CrossProcessLease
+} from '../core/fs-transaction-lock'
 import type { GitHubSecretStore } from '../core/github/credentials'
+import {
+  GitHubTokenDocumentError,
+  parseGitHubTokenDocument,
+  validGitHubToken,
+  type GitHubTokenDocument
+} from '../core/github/token-document'
 import type { CorePlatform } from '../core/platform'
 import type { GitHubHostController } from '../core/github/host'
 import { IPC } from '../shared/ipc'
@@ -14,8 +26,18 @@ export class ServerGitHubSecretError extends Error {
   }
 }
 
-function validToken(token: string): boolean {
-  return token.trim() === token && token.length > 0 && token.length <= 4096 && !/[\r\n\0]/.test(token)
+async function atomicWrite(
+  file: string,
+  document: GitHubTokenDocument,
+  expectedRevision: string,
+  lease: CrossProcessLease
+): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true })
+  await sweepStaleTempFiles(file)
+  await writeAtomicFileCompared(file, JSON.stringify(document), expectedRevision, lease, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
 }
 
 export class ServerGitHubSecretStore implements GitHubSecretStore {
@@ -39,56 +61,66 @@ export class ServerGitHubSecretStore implements GitHubSecretStore {
   }
 
   save(token: string): Promise<void> {
-    return this.chained(() => this.saveNow(token))
+    return this.chained(() =>
+      withCrossProcessLock(this.filePath, (lease) => this.saveNow(token, lease))
+    )
   }
 
-  private async saveNow(token: string): Promise<void> {
-    if (!validToken(token)) throw new ServerGitHubSecretError('invalid-token')
-    await fs.mkdir(this.userDataDir, { recursive: true })
-    await sweepStaleTempFiles(this.filePath)
-    // The store's per-instance chain orders this write against its sibling mutations; the per-call
-    // temp name covers the writers the chain cannot see — a second `nodeterm-server --data-dir X`
-    // process on the same dir, even across a PID namespace, and a crash between tmp-write and
-    // rename. With a shared name one writer's rename publishes the other's
-    // half-written PAT, or moves the file out from under it entirely and the loser's rename fails.
-    // The rename itself now retries a transient Windows sharing-violation error — see
-    // src/core/fs-atomic.ts.
-    const temporary = tempNameFor(this.filePath)
-    try {
-      await fs.writeFile(temporary, JSON.stringify({ version: 1, token }), {
-        encoding: 'utf-8',
-        mode: 0o600
-      })
-      await fs.chmod(temporary, 0o600)
-      await renameAtomic(temporary, this.filePath)
-    } catch (error) {
-      // A failed write MUST remove its own temp, because here a leaked temp IS a leaked PAT: a
-      // unique name is never written again. A later cross-namespace-safe sweep deliberately keeps
-      // pid-bearing temps, so this writer owns the only automatic cleanup. The error propagates.
-      await fs.rm(temporary, { force: true }).catch(() => {})
-      throw error
+  private async saveNow(token: string, lease: CrossProcessLease): Promise<void> {
+    if (!validGitHubToken(token)) throw new ServerGitHubSecretError('invalid-token')
+    const current = await readAtomicFileSnapshot(this.filePath)
+    if (current.exists) {
+      let value: unknown
+      try {
+        value = JSON.parse(current.data.toString('utf8'))
+      } catch (cause) {
+        throw new GitHubTokenDocumentError('The stored GitHub credential document is corrupt.', {
+          cause
+        })
+      }
+      const existing = parseGitHubTokenDocument(value)
+      if (existing.kind === 'safe-storage') {
+        throw new GitHubTokenDocumentError(
+          'The stored GitHub credential requires Desktop keyring access and was preserved.'
+        )
+      }
     }
-    await fs.chmod(this.filePath, 0o600)
+    await atomicWrite(
+      this.filePath,
+      { version: 1, kind: 'restricted-file', token },
+      current.revision,
+      lease
+    )
   }
 
   clear(): Promise<void> {
-    return this.chained(async () => {
-      const result = await clearAtomicTarget(this.filePath)
-      if (!result.cleared) throw new ServerGitHubSecretError('clear-incomplete')
-    })
+    return this.chained(() =>
+      withCrossProcessLock(this.filePath, async (lease) => {
+        await lease.fence()
+        const result = await clearAtomicTarget(this.filePath)
+        if (!result.cleared) throw new ServerGitHubSecretError('clear-incomplete')
+      })
+    )
   }
 
   async readForHost(): Promise<string | null> {
+    const snapshot = await readAtomicFileSnapshot(this.filePath)
+    if (!snapshot.exists) return null
+    let value: unknown
     try {
-      const value: unknown = JSON.parse(await fs.readFile(this.filePath, 'utf-8'))
-      const token = value && typeof value === 'object' &&
-        (value as { version?: unknown }).version === 1
-        ? (value as { token?: unknown }).token
-        : null
-      return typeof token === 'string' && validToken(token) ? token : null
-    } catch {
-      return null
+      value = JSON.parse(snapshot.data.toString('utf8'))
+    } catch (cause) {
+      throw new GitHubTokenDocumentError('The stored GitHub credential document is corrupt.', {
+        cause
+      })
     }
+    const document = parseGitHubTokenDocument(value)
+    if (document.kind === 'safe-storage') {
+      throw new GitHubTokenDocumentError(
+        'The stored GitHub credential requires Desktop keyring access.'
+      )
+    }
+    return document.token
   }
 }
 

@@ -144,6 +144,33 @@ describe('provider cookie atomic write', () => {
     await expect(hasProviderCookie('minimax')).rejects.toMatchObject({ code: 'EACCES' })
   })
 
+  it('rejects malformed cookie evidence on read and save without overwriting it', async () => {
+    for (const malformed of ['{"cookie":', JSON.stringify({ cookie: '' })]) {
+      await fs.writeFile(cookiePath, malformed, { encoding: 'utf-8', mode: 0o600 })
+
+      await expect(readProviderCookie('minimax')).rejects.toThrow()
+      await expect(writeProviderCookie('minimax', 'replacement')).rejects.toThrow()
+      expect(await fs.readFile(cookiePath, 'utf-8')).toBe(malformed)
+    }
+  })
+
+  it('rejects a save when existing cookie bytes are unreadable and preserves them', async () => {
+    await writeProviderCookie('minimax', 'original')
+    const before = await fs.readFile(cookiePath, 'utf-8')
+    const realReadFile = fs.readFile
+    vi.spyOn(fs, 'readFile').mockImplementation((async (file: any, ...args: any[]) => {
+      if (String(file) === cookiePath) {
+        throw Object.assign(new Error('EACCES: credential is unreadable'), { code: 'EACCES' })
+      }
+      return (realReadFile as any)(file, ...args)
+    }) as typeof fs.readFile)
+
+    await expect(writeProviderCookie('minimax', 'replacement')).rejects.toMatchObject({
+      code: 'EACCES'
+    })
+    expect(await (realReadFile as any)(cookiePath, 'utf-8')).toBe(before)
+  })
+
   it('a failed rename removes its own temp and still rejects (a leaked temp here is a live cookie)', async () => {
     // EXDEV is the realistic one: the userData dir on another filesystem than the temp.
     vi.spyOn(fs, 'rename').mockRejectedValueOnce(

@@ -10,10 +10,15 @@
 // itself is written 0600 via an atomic tmp+rename, so a reader never observes a half-written file
 // and nothing but this process' own user can read it at rest.
 
-import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from './platform'
-import { renameAtomic, tempNameFor } from './fs-atomic'
+import {
+  readAtomicFileSnapshot,
+  withCrossProcessLock,
+  writeAtomicFileCompared,
+  type AtomicFileSnapshot,
+  type CrossProcessLease
+} from './fs-transaction-lock'
 
 export interface SealedEntry<TMeta> {
   meta: TMeta
@@ -26,13 +31,30 @@ interface StoreFile<TMeta> {
   entries: SealedEntry<TMeta>[]
 }
 
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
 function isSealedEntry<TMeta extends { id: string }>(value: unknown): value is SealedEntry<TMeta> {
   if (!value || typeof value !== 'object') return false
   const entry = value as { meta?: unknown; secretEnc?: unknown }
   if (typeof entry.secretEnc !== 'string' || !entry.meta || typeof entry.meta !== 'object') {
     return false
   }
-  return typeof (entry.meta as { id?: unknown }).id === 'string'
+  const id = (entry.meta as { id?: unknown }).id
+  return typeof id === 'string' && UUID_V4_RE.test(id)
+}
+
+function validEntries<TMeta extends { id: string }>(entries: unknown): entries is SealedEntry<TMeta>[] {
+  return (
+    Array.isArray(entries) &&
+    entries.every(isSealedEntry<TMeta>) &&
+    new Set(entries.map((entry) => entry.meta.id)).size === entries.length
+  )
+}
+
+function assertValidEntries<TMeta extends { id: string }>(entries: unknown): asserts entries is SealedEntry<TMeta>[] {
+  if (!validEntries<TMeta>(entries)) {
+    throw new Error('Secure store has an unsupported or malformed document')
+  }
 }
 
 export interface SecureStoreMutation<TResult> {
@@ -42,10 +64,9 @@ export interface SecureStoreMutation<TResult> {
 }
 
 // A SecureStore is cheap enough that services and tests can construct more than one for the same
-// file. The queue therefore belongs to the resolved path, not to an instance. It is intentionally
-// process-local: UUID temp names keep independent processes from sharing scratch files, while a
-// cross-process read/modify/write transaction would require a separate lock or compare-and-swap
-// protocol.
+// file. The queue therefore belongs to the resolved path, not to an instance. It avoids needless
+// local lock intents and preserves invocation order; `withCrossProcessLock` supplies the separate
+// ordering needed when Desktop and Server Edition deliberately share one physical data directory.
 const operationTails = new Map<string, Promise<void>>()
 
 function serializeForFile<TResult>(file: string, operation: () => Promise<TResult>): Promise<TResult> {
@@ -77,42 +98,32 @@ function seals(): boolean {
   return hasSeal
 }
 
-/** Write bytes atomically: unique tmp, 0600, rename into place, unlink the tmp in `finally` — a
- *  reader never sees a partial file, and two overlapping saves (renderer debounce + a shutdown
- *  flush) can never interleave their bytes. */
-async function persistFile(file: string, data: string): Promise<void> {
-  const tmp = tempNameFor(file)
-  await fs.mkdir(path.dirname(file), { recursive: true })
-  try {
-    await fs.writeFile(tmp, data, { mode: 0o600 })
-    // Tighten the owned temp before publication. A failure here leaves the prior canonical bytes
-    // intact; doing this after rename can falsely report failure after the new entry is durable.
-    await fs.chmod(tmp, 0o600)
-    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
-    await renameAtomic(tmp, file)
-  } finally {
-    await fs.unlink(tmp).catch(() => {})
-  }
+/** Write bytes atomically after both the lease fence and exact-byte revision comparison. */
+async function persistFile(
+  file: string,
+  data: string,
+  expectedRevision: string,
+  lease: CrossProcessLease
+): Promise<void> {
+  await writeAtomicFileCompared(file, data, expectedRevision, lease, { mode: 0o600 })
 }
 
-async function loadFile<TMeta extends { id: string }>(file: string): Promise<SealedEntry<TMeta>[]> {
-  try {
-    const raw = await fs.readFile(file, 'utf8')
-    const parsed = JSON.parse(raw) as StoreFile<TMeta>
-    if (
-      parsed?.version !== 1 ||
-      !Array.isArray(parsed.entries) ||
-      !parsed.entries.every(isSealedEntry<TMeta>)
-    ) {
-      throw new Error('Secure store has an unsupported or malformed document')
-    }
-    return parsed.entries
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    // A failed read is not an empty credential list. Propagate corruption/permissions so callers
-    // can show an unavailable state without hiding locks or authenticator entries as absent.
-    throw error
+interface LoadedStore<TMeta> {
+  entries: SealedEntry<TMeta>[]
+  revision: string
+}
+
+async function loadFile<TMeta extends { id: string }>(file: string): Promise<LoadedStore<TMeta>> {
+  const snapshot: AtomicFileSnapshot = await readAtomicFileSnapshot(file)
+  if (!snapshot.exists) return { entries: [], revision: snapshot.revision }
+  const parsed = JSON.parse(snapshot.data.toString('utf8')) as StoreFile<TMeta>
+  if (
+    parsed?.version !== 1 ||
+    !validEntries<TMeta>(parsed.entries)
+  ) {
+    throw new Error('Secure store has an unsupported or malformed document')
   }
+  return { entries: parsed.entries, revision: snapshot.revision }
 }
 
 export class SecureStore<TMeta extends { id: string }> {
@@ -141,16 +152,30 @@ export class SecureStore<TMeta extends { id: string }> {
    *  rejects and remains untouched; callers must render it as unavailable, never as an empty list. */
   load(): Promise<SealedEntry<TMeta>[]> {
     const file = this.file()
-    return serializeForFile(file, () => loadFile<TMeta>(file))
+    return serializeForFile(file, async () => (await loadFile<TMeta>(file)).entries)
   }
 
   save(entries: SealedEntry<TMeta>[]): Promise<void> {
     const file = this.file()
+    // Refuse before enqueueing so a caller cannot receive success for a document the strict load
+    // path would reject on its very next read.
+    try {
+      assertValidEntries<TMeta>(entries)
+    } catch (error) {
+      // Keep the method's asynchronous contract: IPC/service callers expect a rejected Promise,
+      // not a synchronous throw before they receive the operation handle.
+      return Promise.reject(error)
+    }
     const body: StoreFile<TMeta> = { version: 1, entries }
     // Snapshot at invocation time. A caller retaining and later mutating `entries` must not change
     // what an already-enqueued save eventually publishes.
     const data = JSON.stringify(body, null, 2)
-    return serializeForFile(file, () => persistFile(file, data))
+    return serializeForFile(file, () =>
+      withCrossProcessLock(file, async (lease) => {
+        const current = await readAtomicFileSnapshot(file)
+        await persistFile(file, data, current.revision, lease)
+      })
+    )
   }
 
   /**
@@ -166,14 +191,17 @@ export class SecureStore<TMeta extends { id: string }> {
     ) => SecureStoreMutation<TResult> | Promise<SecureStoreMutation<TResult>>
   ): Promise<TResult> {
     const file = this.file()
-    return serializeForFile(file, async () => {
-      const entries = await loadFile<TMeta>(file)
-      const change = await mutation(entries)
-      if (change.changed) {
-        const body: StoreFile<TMeta> = { version: 1, entries }
-        await persistFile(file, JSON.stringify(body, null, 2))
-      }
-      return change.result
-    })
+    return serializeForFile(file, () =>
+      withCrossProcessLock(file, async (lease) => {
+        const loaded = await loadFile<TMeta>(file)
+        const change = await mutation(loaded.entries)
+        if (change.changed) {
+          assertValidEntries<TMeta>(loaded.entries)
+          const body: StoreFile<TMeta> = { version: 1, entries: loaded.entries }
+          await persistFile(file, JSON.stringify(body, null, 2), loaded.revision, lease)
+        }
+        return change.result
+      })
+    )
   }
 }
