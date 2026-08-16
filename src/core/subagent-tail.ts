@@ -7,6 +7,7 @@
 // All read-only — if Claude changes the format we just stream less (no crash).
 import fs from 'fs'
 import path from 'path'
+import { basenameForPathSyntax } from './path-basename'
 
 // Per-tick read ceiling, the same discipline as context-tail's INITIAL_READ_CAP: without it the
 // first tick after track() (or any burst) allocates the entire delta in one Buffer. Unlike
@@ -46,10 +47,9 @@ function textOf(content: unknown): string {
 function toolArg(name: string | undefined, input: unknown): string {
   if (!input || typeof input !== 'object') return ''
   const i = input as Record<string, unknown>
-  // basename(), not split('/'): a tool call on Windows reports `C:\Users\me\workspace.ts`,
-  // which has no '/' in it at all — so the split returned the WHOLE absolute path and these
-  // cards showed one instead of the short filename the comment above promises.
-  const base = (p: unknown) => (typeof p === 'string' ? path.basename(p) : '')
+  // The record's syntax, not this process's OS, owns the split. A Linux Server Edition can render
+  // a Windows transcript, while a POSIX filename may legally contain a literal backslash.
+  const base = (p: unknown) => (typeof p === 'string' ? basenameForPathSyntax(p) : '')
   const p = i.file_path ?? i.path ?? i.notebook_path
   if (p) return base(p)
   if (typeof i.command === 'string') return i.command.replace(/\s+/g, ' ').slice(0, 80)

@@ -112,6 +112,13 @@ across app processes before transferring.
 The last one is the serious one: it is user-typed input, and the guard refusing `../evil` while
 accepting `..\evil` is exactly what made it look like it worked.
 
+The first repair for `subagent-tail` and `transcript-index-core` changed the split to native
+`path.basename`, which fixed a Windows process but stayed host-dependent: a Linux Server Edition
+still treated a recorded `C:\…` path as one long POSIX filename. Their shared
+`basenameForPathSyntax` now selects `path.win32` only for anchored drive/UNC syntax and
+`path.posix` otherwise. That opposite default matters because a backslash is legal filename text
+on POSIX; blindly accepting both separators would display a different file from the one recorded.
+
 **Explorer reveal** was broken the same way and is now fixed. It compared
 `revealPath.startsWith(base + '/')` — false for every backslash path — so `rel` became the whole
 absolute path, the traversal guard split it on `/`, saw one segment with no `..` and let it

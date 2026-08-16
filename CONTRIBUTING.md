@@ -82,7 +82,9 @@ need it too, and wire it in the same change.
   Edition and relay tabs, the browser's OS is NOT the filesystem's OS: obtain the dialect from the
   core that owns the files, and keep an unobserved host unknown rather than guessing. Conversely,
   on POSIX a backslash is legal filename text — do not treat both separators as interchangeable
-  unless the owning filesystem is known to be Windows.
+  unless the owning filesystem is known to be Windows. Native `path.basename` also follows the
+  current process, not a serialized path: for records that can cross hosts, select `path.win32` or
+  `path.posix` from explicit owner metadata or anchored drive/UNC syntax instead of the runner OS.
 
 - **Building on Windows has two preconditions, and the BAT bootstrap checks both after installing
   Node but before npm can replace `node_modules`** (`npm run dist:win` also checks them up front).

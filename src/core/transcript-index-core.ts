@@ -2,8 +2,8 @@
 // JSONL text, build snippets, and rank sessions by a query. No filesystem access — the
 // service layer (transcript-index.ts) reads files and calls these. Reuses the same JSONL
 // parser as the single-session reader so indexed text stays consistent with the find-bar.
-import { basename } from 'path'
 import type { TranscriptHit } from '../shared/types'
+import { basenameForPathSyntax } from './path-basename'
 import { parseTranscriptLines } from './transcript-reader'
 
 export type { TranscriptHit }
@@ -69,10 +69,9 @@ export function searchEntries(
       title: e.title || e.sessionId,
       snippet: makeSnippet(`${e.title}\n${e.text}`, q),
       cwd: e.cwd,
-      // basename(), not split('/'): a Windows cwd (`C:\Users\me\myproject`) contains no '/',
-      // so the split returned the whole path and the find bar labelled every result with an
-      // absolute path instead of the project's name.
-      projectLabel: e.cwd ? basename(e.cwd) || e.cwd : '',
+      // The stored cwd may have come from another OS. Parse its explicit drive/UNC/POSIX syntax;
+      // using this process's native basename makes Server Edition labels host-dependent.
+      projectLabel: e.cwd ? basenameForPathSyntax(e.cwd) || e.cwd : '',
       mtime: e.mtime
     }))
 }
