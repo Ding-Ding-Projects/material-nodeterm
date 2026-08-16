@@ -1,68 +1,217 @@
-// The three defects that made every persistent terminal on Windows silently non-persistent.
-//
-// They stacked, and each hid the next:
-//
-//   1. `finish(true)` in tryConnectOnce stripped ALL 'data' listeners — including the one
-//      `attachSocket` had installed one line earlier. The connection then looked perfect and was
-//      DEAF: every frame the host sent afterwards went unread.
-//   2. `request()` had no deadline, so a deaf socket meant the promise never settled. The caller
-//      awaits it inside a try/catch, and a catch cannot help a promise that never settles.
-//   3. The session-host branch asked for `bash` — on the platform selected BECAUSE it has no
-//      tmux. Covered in pty-session-shell.test.ts, where that decision lives.
-//
-// SOURCE-LEVEL, and the reason is worth stating rather than assumed. The behaviour here was
-// proved end-to-end against a real app and a real host: `pty.create` went from 10,017 ms
-// (my own timeout, i.e. never answering) to 66 ms, and the host's own `listSessions` then listed
-// the session by name — which is the only check that distinguishes "reports persistent" from "is
-// persistent", and the one that caught this reporting a success twice while the host held nothing.
-//
-// Reproducing that in-process needs a real socket server, and `net` does not behave under this
-// suite's environment the way it does in the app. A test that cannot run is worse than one that
-// admits its shape: these assertions pin the exact lines whose absence caused the outage, and
-// each was verified by reverting it and watching this file go red.
+import fs from 'fs'
+import net from 'net'
+import os from 'os'
+import path from 'path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { sessionHostPaths } from '../session-host/paths'
+import { LineFramer, encodeFrame, type SessionHostRequest } from '../session-host/protocol'
+import { SessionHostClient } from './session-host-client'
 
-import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'fs'
-import { join } from 'path'
+const openServers = new Set<net.Server>()
+const openSockets = new Set<net.Socket>()
+const tempDirs = new Set<string>()
 
-const SRC = readFileSync(join(__dirname, 'session-host-client.ts'), 'utf8')
-
-describe('the socket can still hear the host after a successful handshake', () => {
-  it('only strips data listeners on FAILURE', () => {
-    // The whole outage in one line. `finish` ran `removeAllListeners('data')` unconditionally,
-    // one statement after `attachSocket(socket)` installed the reader.
-    const finish = /const finish = \(ok: boolean\): void => \{[\s\S]*?\n      \}/.exec(SRC)?.[0] ?? ''
-    expect(finish, 'finish() not found — this guard is checking nothing').toContain('removeAllListeners')
-    const strip = finish.indexOf("removeAllListeners('data')")
-    const guard = finish.indexOf('if (!ok)')
-    expect(guard, 'the failure guard must exist').toBeGreaterThanOrEqual(0)
-    expect(strip, 'the strip must sit INSIDE the !ok branch').toBeGreaterThan(guard)
+function within<T>(promise: Promise<T>, ms = 1_000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`session-host client did not answer within ${ms}ms`)),
+      ms
+    )
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
   })
+}
 
-  it('installs the real reader before finishing', () => {
-    // Ordering matters only because the strip is now conditional; if someone reverses these the
-    // reader is installed on a socket that is about to be destroyed.
-    expect(SRC.indexOf('this.attachSocket(socket)')).toBeLessThan(SRC.indexOf('finish(true)'))
+function spawnOptions(userDataDir: string, args: string[] = []) {
+  return {
+    cwd: userDataDir,
+    shell: process.execPath,
+    args,
+    env: {},
+    cols: 80,
+    rows: 24
+  }
+}
+
+async function listen(server: net.Server, endpoint: string): Promise<void> {
+  openServers.add(server)
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(endpoint, resolve)
   })
+}
+
+afterEach(async () => {
+  for (const socket of openSockets) socket.destroy()
+  openSockets.clear()
+  await Promise.all(
+    [...openServers].map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          server.close(() => resolve())
+        })
+    )
+  )
+  openServers.clear()
+  for (const dir of tempDirs) {
+    const endpoint = sessionHostPaths(dir).endpoint
+    if (process.platform !== 'win32') fs.rmSync(endpoint, { force: true })
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+  tempDirs.clear()
 })
 
-describe('no request can wait forever', () => {
-  it('every request carries a deadline that REJECTS', () => {
-    const req = /private async request<T>[\s\S]*?\n  \}/.exec(SRC)?.[0] ?? ''
-    expect(req, 'request() not found').toContain('REQUEST_TIMEOUT_MS')
-    expect(req, 'the deadline must reject, not resolve').toMatch(/setTimeout\([\s\S]*?reject\(/)
+describe('SessionHostClient failure boundaries', () => {
+  it('keeps the production frame listener through hello and the first attach frames', async () => {
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-session-client-'))
+    tempDirs.add(userDataDir)
+    const paths = sessionHostPaths(userDataDir)
+    const token = 'test-token-kept-off-argv'
+    fs.writeFileSync(paths.tokenPath, token)
+
+    const server = net.createServer((socket) => {
+      openSockets.add(socket)
+      socket.once('close', () => openSockets.delete(socket))
+      const framer = new LineFramer()
+      socket.on('data', (chunk: Buffer) => {
+        for (const req of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
+          if (req.cmd === 'hello') {
+            expect(req.token).toBe(token)
+            socket.write(encodeFrame({ id: req.id, ok: true }))
+          } else if (req.cmd === 'attach') {
+            socket.write(
+              encodeFrame({ id: req.id, ok: true, result: { fresh: true } }) +
+                encodeFrame({ type: 'data', name: req.name, data: 'first production frame' })
+            )
+          }
+        }
+      })
+    })
+    await listen(server, paths.endpoint)
+
+    const client = new SessionHostClient({ userDataDir })
+    let deliver!: (data: string) => void
+    const firstData = new Promise<string>((resolve) => {
+      deliver = resolve
+    })
+    const attached = client.attach('nt-real-transition', spawnOptions(userDataDir), 1_000, {
+      onData: deliver,
+      onExit: () => {}
+    })
+
+    await expect(within(attached)).resolves.toEqual({ fresh: true })
+    await expect(within(firstData)).resolves.toBe('first production frame')
   })
 
-  it('the deadline is cleared on both settle paths, or it leaks a timer per request', () => {
-    const req = /private async request<T>[\s\S]*?\n  \}/.exec(SRC)?.[0] ?? ''
-    expect((req.match(/clearTimeout\(timer\)/g) || []).length).toBeGreaterThanOrEqual(3)
+  it('rolls back only a rejected co-attach and replays the neighboring attachment', async () => {
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-session-client-'))
+    tempDirs.add(userDataDir)
+    const paths = sessionHostPaths(userDataDir)
+    fs.writeFileSync(paths.tokenPath, 'test-token')
+    let connection = 0
+    let firstAttach = true
+    let firstSocket: net.Socket | undefined
+    const replayedArgs: string[][] = []
+    let closeFirst!: () => void
+    const firstClosed = new Promise<void>((resolve) => {
+      closeFirst = resolve
+    })
+
+    const server = net.createServer((socket) => {
+      const ownConnection = ++connection
+      if (ownConnection === 1) firstSocket = socket
+      openSockets.add(socket)
+      socket.once('close', () => {
+        openSockets.delete(socket)
+        if (ownConnection === 1) closeFirst()
+      })
+      const framer = new LineFramer()
+      socket.on('data', (chunk: Buffer) => {
+        for (const req of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
+          if (req.cmd === 'hello') {
+            socket.write(encodeFrame({ id: req.id, ok: true }))
+          } else if (req.cmd === 'attach' && ownConnection === 1 && firstAttach) {
+            firstAttach = false
+            socket.write(encodeFrame({ id: req.id, ok: false, error: 'one subscriber refused' }))
+          } else if (req.cmd === 'attach') {
+            if (ownConnection > 1) {
+              replayedArgs.push(req.spawn.args)
+              socket.write(
+                encodeFrame({ id: req.id, ok: true, result: { fresh: false } }) +
+                  encodeFrame({ type: 'data', name: req.name, data: 'replayed-live-data' })
+              )
+            } else {
+              socket.write(encodeFrame({ id: req.id, ok: true, result: { fresh: false } }))
+            }
+          } else if (req.cmd === 'hasSession') {
+            socket.write(encodeFrame({ id: req.id, ok: true, result: { exists: true } }))
+          }
+        }
+      })
+    })
+    await listen(server, paths.endpoint)
+
+    const refusedData = vi.fn()
+    const keptData = vi.fn()
+    const client = new SessionHostClient({ userDataDir })
+    const refused = client.attach(
+      'nt-shared',
+      spawnOptions(userDataDir, ['failed-options']),
+      1_000,
+      { onData: refusedData, onExit: () => {} }
+    )
+    const kept = client.attach(
+      'nt-shared',
+      spawnOptions(userDataDir, ['kept-options']),
+      1_000,
+      { onData: keptData, onExit: () => {} }
+    )
+
+    await expect(within(refused)).rejects.toThrow('one subscriber refused')
+    await expect(within(kept)).resolves.toEqual({ fresh: false })
+    firstSocket?.destroy()
+    await firstClosed
+    await expect(within(client.hasSession('nt-shared'))).resolves.toBe(true)
+    await expect.poll(() => replayedArgs).toEqual([['kept-options']])
+    await expect.poll(() => keptData.mock.calls).toEqual([['replayed-live-data']])
+    expect(refusedData).not.toHaveBeenCalled()
   })
 
-  it('is long enough for a cold shell spawn', () => {
-    // Killing a slow-but-working attach would turn a slow terminal into a broken one — the
-    // opposite mistake, and harder to notice because it looks like flakiness.
-    const ms = Number(/const REQUEST_TIMEOUT_MS = ([\d_]+)/.exec(SRC)?.[1]?.replace(/_/g, ''))
-    expect(ms).toBeGreaterThanOrEqual(5_000)
-    expect(ms).toBeLessThanOrEqual(30_000)
-  })
+  it.each(['capture', 'killSession'] as const)(
+    'propagates an uncertain %s failure instead of claiming success',
+    async (command) => {
+      const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-session-client-'))
+      tempDirs.add(userDataDir)
+      const paths = sessionHostPaths(userDataDir)
+      fs.writeFileSync(paths.tokenPath, 'test-token')
+
+      const server = net.createServer((socket) => {
+        openSockets.add(socket)
+        socket.once('close', () => openSockets.delete(socket))
+        const framer = new LineFramer()
+        socket.on('data', (chunk: Buffer) => {
+          for (const req of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
+            if (req.cmd === 'hello') socket.write(encodeFrame({ id: req.id, ok: true }))
+            else if (req.cmd === command) socket.destroy()
+          }
+        })
+      })
+      await listen(server, paths.endpoint)
+
+      const client = new SessionHostClient({ userDataDir })
+      const request: Promise<unknown> =
+        command === 'capture'
+          ? client.capture('nt-uncertain', true)
+          : client.killSession('nt-uncertain')
+      await expect(within(request)).rejects.toThrow('session-host connection lost')
+    }
+  )
 })

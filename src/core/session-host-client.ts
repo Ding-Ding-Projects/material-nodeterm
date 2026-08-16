@@ -137,22 +137,30 @@ export class SessionHostClient {
       const socket = net.connect(paths.endpoint)
       socket.unref?.() // never keep the app process alive on our account
       const framer = new LineFramer()
+      const onHandshakeError = (): void => finish(false)
+      const onHandshakeClose = (): void => finish(false)
+      const onHandshakeConnect = (): void => {
+        socket.write(encodeFrame({ id: this.nextId++, cmd: 'hello', token }))
+      }
+      const onHandshakeData = (chunk: Buffer): void => {
+        for (const frame of framer.push<{ id: number; ok?: boolean }>(chunk.toString('utf8'))) {
+          finish(frame.ok === true)
+          return
+        }
+      }
       const finish = (ok: boolean): void => {
         if (settled) return
         settled = true
         clearTimeout(timer)
-        if (!ok) {
-          // Only on FAILURE. This used to run unconditionally, and on success it fired straight
-          // after `attachSocket(socket)` — stripping the very data listener that had just been
-          // installed to read replies. The connection then looked perfect and was deaf: every
-          // frame the host sent afterwards, including the answer to the first `attach`, went
-          // unread, so every request hung until its deadline.
-          //
-          // That is the whole reason opening a terminal took ten seconds and came back
-          // non-persistent. The host was innocent throughout — it logged nothing for those
-          // attaches because it never had to: hand-driving the same protocol answered in about a
-          // second. The bug was on this side, one line after the handshake succeeded.
-          socket.removeAllListeners('data')
+        // Remove only the listeners owned by the handshake. On success, attachSocket installs the
+        // production listener before ensureConnected resolves and its first request can be sent.
+        socket.removeListener('connect', onHandshakeConnect)
+        socket.removeListener('data', onHandshakeData)
+        socket.removeListener('error', onHandshakeError)
+        socket.removeListener('close', onHandshakeClose)
+        if (ok) {
+          this.attachSocket(socket)
+        } else {
           try {
             socket.destroy()
           } catch {
@@ -162,21 +170,10 @@ export class SessionHostClient {
         resolve(ok)
       }
       const timer = setTimeout(() => finish(false), 2000)
-      socket.once('error', () => finish(false))
-      socket.once('connect', () => {
-        socket.write(encodeFrame({ id: this.nextId++, cmd: 'hello', token }))
-      })
-      socket.on('data', (chunk: Buffer) => {
-        for (const frame of framer.push<{ id: number; ok?: boolean }>(chunk.toString('utf8'))) {
-          if (frame.ok === true) {
-            this.attachSocket(socket)
-            finish(true)
-            return
-          }
-          finish(false)
-          return
-        }
-      })
+      socket.once('error', onHandshakeError)
+      socket.once('close', onHandshakeClose)
+      socket.once('connect', onHandshakeConnect)
+      socket.on('data', onHandshakeData)
     })
   }
 
@@ -184,7 +181,6 @@ export class SessionHostClient {
     this.socket = socket
     this.everConnected = true
     this.framer = new LineFramer()
-    socket.removeAllListeners('data')
     socket.on('data', (chunk: Buffer) => {
       for (const frame of this.framer.push<SessionHostFrame>(chunk.toString('utf8'))) {
         this.handleFrame(frame)
@@ -293,9 +289,27 @@ export class SessionHostClient {
       set = new Set()
       this.subs.set(name, set)
     }
+    const added = !set.has(sub)
     set.add(sub)
-    this.attachMemory.set(name, { spawn, scrollback })
-    return this.request<AttachResult>({ cmd: 'attach', name, spawn, scrollback })
+    // Per-attempt identity keeps a rejected attach from erasing a neighboring co-attach that has
+    // already replaced the remembered options for this same session name.
+    const previousMemory = this.attachMemory.get(name)
+    const memory = { spawn, scrollback }
+    this.attachMemory.set(name, memory)
+    try {
+      return await this.request<AttachResult>({ cmd: 'attach', name, spawn, scrollback })
+    } catch (error) {
+      const current = this.subs.get(name)
+      if (added && current) current.delete(sub)
+      if (current?.size === 0) {
+        this.subs.delete(name)
+        if (this.attachMemory.get(name) === memory) this.attachMemory.delete(name)
+      } else if (this.attachMemory.get(name) === memory) {
+        if (previousMemory) this.attachMemory.set(name, previousMemory)
+        else this.attachMemory.delete(name)
+      }
+      throw error
+    }
   }
 
   /** Stop delivering `name`'s frames to `sub`. When it was the LAST local subscriber, also tells
@@ -378,20 +392,16 @@ export class SessionHostClient {
   }
 
   async capture(name: string, full: boolean): Promise<string> {
-    try {
-      const r = await this.request<CaptureResult>({ cmd: 'capture', name, full })
-      return r.text
-    } catch {
-      return ''
-    }
+    // Empty output is a confirmed capture; a failed request is unknown and must remain a failure
+    // so the periodic snapshot keeps its dirty bit and retries.
+    const r = await this.request<CaptureResult>({ cmd: 'capture', name, full })
+    return r.text
   }
 
   async killSession(name: string): Promise<void> {
-    try {
-      await this.request({ cmd: 'killSession', name })
-    } catch {
-      /* session may already be gone / host unreachable — nothing left to kill */
-    }
+    // The host confirms an already-absent session as ordinary success. A rejection is transport
+    // uncertainty, so retain local reconnect state until deletion is actually confirmed.
+    await this.request({ cmd: 'killSession', name })
     this.subs.delete(name)
     this.attachMemory.delete(name)
   }

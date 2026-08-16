@@ -147,6 +147,10 @@ new source:
 - `spawnNew()` awaits `ready` (after `spawnSession()` returns) and folds `screen` into the
   `PtyCreateResult` it hands back — the exact field `join()` already populates for a same-process
   co-attach.
+- A rejected `ready` is a failed create, never a cold-but-working terminal. The provisional local
+  `Session` is detached and removed, queued output is cancelled, and the original error reaches the
+  renderer. Racing creates wait behind that result instead of joining the provisional index entry;
+  a detached relay receives a non-zero sink exit because its legacy API cannot return a promise.
 - **The renderer needed zero changes.** `seedPaint()` (`src/renderer/terminal/terminal-config.ts`)
   already treats *any* non-empty `screen` on a `warm-attach` replay as paintable
   (`create-screen`), regardless of whether it arrived via a co-attach join or a plain reattach —
@@ -220,6 +224,19 @@ appending after whatever was on screen before the drop). This deliberately reuse
 channel rather than wiring a dedicated `pty:resync` IPC round trip all the way up from this layer
 — a smaller, self-contained fix for what is expected to be a rare case (the host survives a client
 drop by design; only an actual host death turns into a real session loss).
+
+The `hello` hand-off owns named `connect`/`data`/`error`/`close` listeners. It removes only those
+listeners, installs the production frame listener, and then resolves the connection promise. Never
+restore broad `removeAllListeners('data')` cleanup here: the original ordering installed the
+production listener and immediately deleted it, so all real responses disappeared while the socket
+still looked connected.
+
+An initial `attach` registers its local subscriber before sending because startup output may race
+the response. If the request rejects, it rolls back only that subscriber and its own remembered
+options; a concurrent co-attach remains intact. Empty capture and already-absent kill are confirmed
+host responses, while transport rejection remains unknown and propagates. That distinction keeps a
+failed snapshot dirty for retry and prevents deletion from claiming an unconfirmed persistent
+process is gone.
 
 ## Lifetime
 
