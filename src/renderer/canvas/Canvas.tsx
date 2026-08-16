@@ -180,9 +180,9 @@ import { SessionsSidebar } from '../components/SessionsSidebar'
 import type { SessionNodeInput } from '../lib/sessionList'
 import { liveProjectJumpTarget, projectJumpDigit } from '../lib/projectJump'
 import {
-  liveZoomShortcutAction,
+  dispatchZoomActualSize,
+  dispatchZoomShortcut,
   liveZoomShortcutContext,
-  zoomShortcutAllowed,
   zoomShortcutChord
 } from '../lib/zoomShortcut'
 import { UsageIndicator } from '../components/UsageIndicator'
@@ -205,7 +205,12 @@ import {
   viewportForRect,
   type FocusableNode
 } from '../lib/nodeFocus'
-import { planSessionKill } from '../lib/sessionKill'
+import {
+  destroySessionForScope,
+  killRemoteSessionsForScope,
+  planSessionKill,
+  type SessionTerminationScope
+} from '../lib/sessionKill'
 import { RemoteAccessDialog } from '../components/RemoteAccessDialog'
 import { SshProjectDialog } from '../components/SshProjectDialog'
 import { SshPassphrasePrompt } from '../components/SshPassphrasePrompt'
@@ -288,7 +293,6 @@ import {
   type AgentId,
   type AgentPermissionMode
 } from '@shared/agents/config'
-import { withPermissionMode } from '@shared/agents/approval-mode'
 import { relativeTime } from '../lib/relativeTime'
 import { AgentIcon } from '../lib/agentIcons'
 import { branchClaudeSession } from '../lib/claudeBranch'
@@ -314,7 +318,7 @@ import { oneLine } from '@shared/one-line'
 import { parseLenses, verifyLensPrompt, verifySynthesisPrompt } from '../lib/verifyPanel'
 import { useSettings } from '../state/settings'
 import { useScheduledSettings } from '../state/scheduledSettings'
-import { activePermissionMode } from '../state/permissionMode'
+import { activeAgentLaunchPlan, commandForAgentLaunch } from '../state/permissionMode'
 import { useContextWindow } from '../state/contextWindow'
 import { useSessionNaming } from '../state/sessionNaming'
 import { useSshServers } from '../state/sshServers'
@@ -348,12 +352,9 @@ import {
 import { createCanvasOrder, createReconnectWatch, type CanvasOrder } from '@shared/canvas-order'
 import { createMutationGuard } from '@shared/canvas-mutations'
 import { chordHeld, isHoldChord, isModifierEventKey, matchesShortcut } from '@shared/shortcut'
-
-// The dispatch below is the CONSUMER of the confirm-gated set. Before this import the set named
-// write/close as "the confirm-gated pair" from inside `src/main` — which this project cannot see —
-// while the gating lived in two hand-written blocks here, so the set decided nothing.
-import { isDestructiveVerb } from '@shared/control-verbs'
+import { dispatchDestructiveControl } from '../lib/controlDestructive'
 import { canvasSyncTarget } from './collab-sync'
+import { CanvasPills } from './CanvasPills'
 import {
   applyCanvasMutation,
   applyMutationToFlow,
@@ -3441,7 +3442,7 @@ export function Canvas() {
           prompt,
           undefined,
           account,
-          activePermissionMode()
+          activeAgentLaunchPlan('source-control-explain')
         )
       ])
       markDirty()
@@ -3649,7 +3650,7 @@ export function Canvas() {
           undefined,
           project?.ssh,
           account,
-          activePermissionMode(agentId)
+          activeAgentLaunchPlan('canvas-new-agent', agentId)
         )
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
@@ -3928,7 +3929,7 @@ export function Canvas() {
 
   // ---- multi-node actions (context menu) ----
   const deleteNodes = useCallback(
-    (ids: string[]) => {
+    (ids: string[], terminationScope: SessionTerminationScope = 'node') => {
       const set = new Set(ids)
       nodesRef.current.forEach((n) => {
         if (!set.has(n.id)) return
@@ -3936,7 +3937,8 @@ export function Canvas() {
         // session is being destroyed right here). Also drops an already-parked entry.
         if (n.type === 'terminal')
           disposeTerminalOnUnmount(sessionForProject(useProjects.getState().activeProjectId ?? '').id, n.id)
-        if (n.type === 'terminal') transport.destroy(n.id)
+        if (n.type === 'terminal')
+          destroySessionForScope(terminationScope, n.id, transport.destroy.bind(transport))
         // Permanent deletion → drop the node's persisted agent status (sessionId/session/
         // unread/loop). Node unmount no longer does this, so deletion must. The loop card's
         // UI overrides live in agentNodes and are skipped by unmount's clearForParent.
@@ -4948,10 +4950,9 @@ export function Canvas() {
       copy.data = {
         ...copy.data,
         // Built fresh here (never re-wrapping a persisted command), so it is flagged exactly once.
-        initialCommand: withPermissionMode(
+        initialCommand: commandForAgentLaunch(
           `${claudeLaunchCommand()} -r ${originalId}`,
-          'claude',
-          activePermissionMode()
+          activeAgentLaunchPlan('branch-conversation')
         ),
         title: `${source.data.title} (original)`
       }
@@ -5024,7 +5025,7 @@ export function Canvas() {
         source.data.accountId,
         // The mode belongs to the node being OPENED, so it is gated on the TARGET agent — a
         // handoff into grok must not inherit claude's version gate.
-        activePermissionMode(targetAgentId)
+        activeAgentLaunchPlan('handoff-transfer', targetAgentId)
       )
       node.selected = true
       const placed = placeSpawned(node, at ?? besideNode(source))
@@ -5203,12 +5204,11 @@ export function Canvas() {
         // one, so the two paths can never disagree about when the chord is allowed to move the
         // camera. A null answer means "leave the key alone" — no `preventDefault`, which is what
         // keeps Shift+1 typing a `!` wherever the user is actually typing.
-        const action = liveZoomShortcutAction(e)
-        if (action) {
-          e.preventDefault()
-          if (action === 'zoom-100') zoomTo100()
-          else fitAll()
-        }
+        dispatchZoomShortcut(e, liveZoomShortcutContext(), {
+          preventDefault: () => e.preventDefault(),
+          zoomTo100,
+          fitAll
+        })
       } else if (projectJumpDigit(e) !== null) {
         // Cmd/Ctrl+1-9 jumps to the Nth project — but only when the app actually owns the key
         // (desktop shell, and the digit addresses an open project). `liveProjectJumpTarget`
@@ -5278,7 +5278,7 @@ export function Canvas() {
   // agree rather than fight, and the bridge stubs this subscription out).
   useEffect(() => {
     return window.nodeTerminal.onZoomActualSize(() => {
-      if (zoomShortcutAllowed(liveZoomShortcutContext())) zoomTo100()
+      dispatchZoomActualSize(liveZoomShortcutContext(), zoomTo100)
     })
   }, [zoomTo100])
 
@@ -6106,7 +6106,7 @@ export function Canvas() {
                   project,
                   useSettings.getState().settings.claudeAccounts
                 ),
-                activePermissionMode(choice.agentId)
+                activeAgentLaunchPlan('kanban-new-agent', choice.agentId)
               )
       setNodes((ns) => [...ns, node])
       const board = project?.kanban ?? seedBoard
@@ -6220,11 +6220,21 @@ export function Canvas() {
       // No live node — open a resume node in the active project, using the transcript's cwd.
       const cmd = resumeCommand('claude', hit.sessionId)
       if (!cmd) return
-      const node = createAgentNode('claude', nodesRef.current.length, hit.cwd, viewCenter())
+      const launchPlan = activeAgentLaunchPlan('transcript-resume')
+      const node = createAgentNode(
+        'claude',
+        nodesRef.current.length,
+        hit.cwd,
+        viewCenter(),
+        undefined,
+        undefined,
+        undefined,
+        launchPlan
+      )
       // The resume command replaces (never wraps) the factory's command, so it is flagged once.
       node.data = {
         ...node.data,
-        initialCommand: withPermissionMode(cmd, 'claude', activePermissionMode())
+        initialCommand: commandForAgentLaunch(cmd, launchPlan)
       }
       node.selected = true
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), node])
@@ -6538,6 +6548,78 @@ export function Canvas() {
       }
 
       try {
+        // The destructive pair is dispatched before the ordinary switch so neither verb has a
+        // second, hand-written route that can perform first and prompt afterward. The extracted
+        // dispatcher owns validation, busy refusal and reply ordering; these closures own only the
+        // Canvas effects it releases from the human-confirm callbacks.
+        if (
+          dispatchDestructiveControl(
+            { verb, args, sourceTitle: srcTitle },
+            {
+              confirmationBusy: confirmBusy,
+              openWriteConfirmation: (request) =>
+                setConfirm({
+                  message: request.message,
+                  confirmLabel: request.confirmLabel,
+                  requestedBy: request.requestedBy,
+                  onConfirm: async () => {
+                    setConfirm(null)
+                    await request.onConfirm()
+                  },
+                  onCancel: () => {
+                    setConfirm(null)
+                    request.onCancel()
+                  }
+                }),
+              openCloseConfirmation: (request) =>
+                requestDeleteNodes([request.nodeId], {
+                  surface: 'agent-control',
+                  titles: [
+                    (nodesRef.current.find((n) => n.id === request.nodeId)?.data.title as string) ??
+                      request.nodeId
+                  ],
+                  requestedBy: request.requestedBy,
+                  perform: request.onConfirm,
+                  onCancel: request.onCancel
+                }),
+              performWrite: async (nodeId, text) => {
+                // The SAME per-node lock the restart, hibernate-exit and wake-resume runs take.
+                // Without it a confirmed write can splice into their KILL_LINE + `/exit` or an
+                // echo-verified launch line; the dialog makes overlap rare, not impossible.
+                let thrown: string | null = null
+                const outcome = await guardConcurrentRestart(nodeId, async () => {
+                  try {
+                    const ok = await api.pty.sendText(nodeId, text)
+                    return ok ? ('sent' as const) : ('failed' as const)
+                  } catch (error) {
+                    thrown = String(error)
+                    return 'failed' as const
+                  }
+                })()
+                if (outcome === 'not-eligible') {
+                  return { ok: false, error: 'target is busy with a restart or wake — try again' }
+                }
+                return {
+                  ok: outcome === 'sent',
+                  message: outcome === 'sent' ? 'sent' : 'failed',
+                  error: outcome === 'sent' ? undefined : (thrown ?? 'sendText failed')
+                }
+              },
+              performClose: (nodeId) => {
+                // Canonical teardown destroys the session, drops agentStatus and reparents any
+                // group children. Removing its control ropes is part of the same confirmed action.
+                deleteNodes([nodeId])
+                setControlEdges((edges) =>
+                  edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+                )
+              },
+              reply
+            }
+          )
+        ) {
+          return
+        }
+
         switch (verb) {
           case 'list': {
             const list = nodesRef.current.map((n) => ({
@@ -6620,7 +6702,7 @@ export function Canvas() {
                   args.prompt,
                   sshFor(agentCwd),
                   account,
-                  activePermissionMode(agentId)
+                  activeAgentLaunchPlan('canvas-control-open-agent', agentId)
                 ),
                 after ?? []
               )
@@ -6932,7 +7014,7 @@ export function Canvas() {
             )
             // Every node in the panel (reviewers + judge) runs `reviewAgent`, so one resolution
             // serves them all — gated on that agent, not on the caller's.
-            const vMode = activePermissionMode(reviewAgent)
+            const vMode = activeAgentLaunchPlan('canvas-control-verify', reviewAgent)
             const reviewers = lenses.map((lens, i) => {
               const node = createAgentNode(
                 reviewAgent,
@@ -7061,7 +7143,7 @@ export function Canvas() {
                 r.prompt,
                 sshFor(srcCwd),
                 teamAccount,
-                activePermissionMode(memberAgent)
+                activeAgentLaunchPlan('canvas-control-spawn-team', memberAgent)
               )
               return r.title ? { ...node, data: { ...node.data, title: r.title, titleAuto: false } } : node
             })
@@ -7261,106 +7343,6 @@ export function Canvas() {
             reply({ ok: true, message: `renamed ${id} to "${title}"` })
             return
           }
-          case 'write': {
-            if (!args.node) {
-              reply({ ok: false, error: 'write requires --node' })
-              return
-            }
-            // One confirm dialog at a time: setConfirm would replace a pending one, orphaning its
-            // reply and hanging that earlier request to its 120s timeout — and a second dialog
-            // mounted on top of a destructive one (the worktree-removal confirm) turned an Enter
-            // aimed at THIS harmless prompt into a deletion. `confirmBusy` covers every confirm
-            // state, not just `confirm`. Reject instead.
-            //
-            // `isDestructiveVerb` is read here rather than restated: until this line the set was
-            // read by nothing but its own unit test, while TOLERANT_CONTROL_VERBS' doc comment,
-            // hook-server's buildPtyEnv note and docs/node-identity.md:65 all named it as the
-            // confirm-gated set. Reading it is what ties the two together — it does not make the
-            // dialog below conditional on the set, and adding a verb to the set would not give
-            // that verb a dialog. See `src/shared/control-verbs.ts` for what this does and does
-            // not buy.
-            if (isDestructiveVerb(verb) && confirmBusy()) {
-              reply({ ok: false, error: 'a confirmation is already pending — try again' })
-              return
-            }
-            // Destructive → confirm. Replies on confirm AND cancel.
-            setConfirm({
-              message: `Agent "${srcTitle}" wants to send to ${args.node}:\n\n${args.text ?? ''}`,
-              confirmLabel: 'Send',
-              requestedBy: srcTitle,
-              onConfirm: async () => {
-                setConfirm(null)
-                // The SAME per-node lock the restart, hibernate-exit and wake-resume runs take.
-                // Its doc comment spells out why they take it: a second write arriving while a
-                // line sits un-submitted in the pane is spliced into that line. Every other
-                // `api.pty.sendText` caller was outside the lock, this one included, so a
-                // confirmed `write` could land in the middle of a hibernate exit's blind
-                // KILL_LINE + `/exit` (agent-restart.ts) or into an echo-verified launch line
-                // still waiting on its verification (command-delivery.ts). The dialog makes that
-                // rare, not impossible — the human confirms on their own clock, not the pane's.
-                let thrown: string | null = null
-                const outcome = await guardConcurrentRestart(args.node, async () => {
-                  try {
-                    const ok = await api.pty.sendText(args.node, args.text ?? '')
-                    return ok ? ('sent' as const) : ('failed' as const)
-                  } catch (e) {
-                    thrown = String(e)
-                    return 'failed' as const
-                  }
-                })()
-                if (outcome === 'not-eligible') {
-                  // A distinct, retryable refusal rather than a corrupted pane. `not-eligible` is
-                  // the guard's own word for "that node is mid-run"; the run holding it will
-                  // finish and the agent can send again.
-                  reply({ ok: false, error: 'target is busy with a restart or wake — try again' })
-                  return
-                }
-                reply({
-                  ok: outcome === 'sent',
-                  message: outcome === 'sent' ? 'sent' : 'failed',
-                  error: outcome === 'sent' ? undefined : (thrown ?? 'sendText failed')
-                })
-              },
-              onCancel: () => reply({ ok: false, error: 'denied by user' })
-            })
-            return
-          }
-          case 'close': {
-            if (!args.node) {
-              reply({ ok: false, error: 'close requires --node' })
-              return
-            }
-            // One confirm dialog at a time (see `write`): reject rather than orphan a pending one —
-            // or stack this one over a destructive dialog the user then cannot see. Gated on the
-            // shared set for the same reason `write` is.
-            if (isDestructiveVerb(verb) && confirmBusy()) {
-              reply({ ok: false, error: 'a confirmation is already pending — try again' })
-              return
-            }
-            // All close surfaces share the same runtime funnel. In ordinary mode this remains an
-            // explicit, non-Enter agent confirm; in Kids mode the planner upgrades it to the
-            // two-key gate. Both cancellation and a refused second dialog answer the agent.
-            requestDeleteNodes([args.node], {
-              surface: 'agent-control',
-              titles: [
-                (nodesRef.current.find((n) => n.id === args.node)?.data.title as string) ?? args.node
-              ],
-              requestedBy: srcTitle,
-              perform: () => {
-                // Canonical teardown: deleteNodes() destroys the local tmux session (remote-guarded),
-                // drops persisted agentStatus, and reparents any group children. Don't hand-roll it.
-                deleteNodes([args.node])
-                setControlEdges((es) =>
-                  es.filter((e) => e.source !== args.node && e.target !== args.node)
-                )
-                reply({ ok: true, message: `closed ${args.node}` })
-              },
-              onCancel: () => reply({ ok: false, error: 'denied by user' }),
-              onRejected: () =>
-                reply({ ok: false, error: 'a confirmation is already pending — try again' })
-            })
-            return
-          }
           case 'board': {
             // Read-only snapshot of the CURRENTLY OPEN project's kanban board: columns + the
             // session cards filed in each, plus the virtual Ungrouped column. The board's cards
@@ -7480,7 +7462,12 @@ export function Canvas() {
   // Close (end) a session. tmux sessions are keyed by node id, so destroy works for an
   // inactive project's node even though it isn't mounted; then drop it from the store.
   const closeSession = useCallback(
-    (projectId: string, id: string, alsoOnConfirm?: () => void) => {
+    (
+      projectId: string,
+      id: string,
+      alsoOnConfirm?: () => void,
+      terminationScope: SessionTerminationScope = 'node'
+    ) => {
       const project = useProjects.getState().getProject(projectId)
       const title =
         (projectId === activeProjectId
@@ -7491,10 +7478,10 @@ export function Canvas() {
         titles: [String(title)],
         perform: () => {
           if (projectId === activeProjectId) {
-            deleteNodes([id])
+            deleteNodes([id], terminationScope)
           } else {
             disposeTerminalOnUnmount(sessionForProject(projectId).id, id) // node may be parked from the project switch
-            transport.destroy(id)
+            destroySessionForScope(terminationScope, id, transport.destroy.bind(transport))
             useAgentStatus.getState().remove(id)
             useProjects.getState().removeNode(projectId, id)
             void writeDisk()
@@ -7537,12 +7524,15 @@ export function Canvas() {
       // caller (project deletion, an ordinary node-×) knows its own nodes and stays narrow.
       const remoteKill = plan.remoteProjectId
         ? () =>
-            void window.nodeTerminal.sshProject
-              .killSessions(plan.remoteProjectId!, [nodeId], { everySocket: true })
-              .catch(() => {})
+            void killRemoteSessionsForScope(
+              'session-memory',
+              plan.remoteProjectId!,
+              [nodeId],
+              window.nodeTerminal.sshProject.killSessions
+            ).catch(() => {})
         : undefined
       if (plan.ownerProjectId) {
-        closeSession(plan.ownerProjectId, nodeId, remoteKill)
+        closeSession(plan.ownerProjectId, nodeId, remoteKill, 'session-memory')
         return
       }
       // An orphan still ends a real session even though there is no node to remove. Use the same
@@ -7552,7 +7542,7 @@ export function Canvas() {
         titles: [orphan ? `orphan session ${nodeId}` : nodeId],
         removesNode: false,
         perform: () => {
-          transport.destroy(nodeId, { everySocket: true })
+          destroySessionForScope('session-memory', nodeId, transport.destroy.bind(transport))
           remoteKill?.()
           // Nothing else to clean up: with no node anywhere, there is no canvas entry to remove and
           // no parked terminal to dispose. Persisted agent status is dropped anyway, since a
@@ -8485,7 +8475,7 @@ export function Canvas() {
       project?.nodes.forEach((n) => {
         if ((n.kind ?? 'terminal') === 'terminal') {
           disposeTerminalOnUnmount(sessionForProject(id).id, n.id) // may be parked from a recent switch away
-          transport.destroy(n.id)
+          destroySessionForScope('project-deletion', n.id, transport.destroy.bind(transport))
         }
         useAgentStatus.getState().remove(n.id)
       })
@@ -8499,8 +8489,12 @@ export function Canvas() {
         const nodeIds = project.nodes
           .filter((n) => (n.kind ?? 'terminal') === 'terminal')
           .map((n) => n.id)
-        void window.nodeTerminal.sshProject
-          .killSessions(id, nodeIds)
+        void killRemoteSessionsForScope(
+          'project-deletion',
+          id,
+          nodeIds,
+          window.nodeTerminal.sshProject.killSessions
+        )
           .catch(() => {})
           .finally(() => void window.nodeTerminal.sshProject.disconnect(id))
         useSshConn.getState().clear(id)
@@ -8514,8 +8508,12 @@ export function Canvas() {
               (a) => a.scopeId === scopeId
             )?.nodeIds ?? []
           : []
-        void window.nodeTerminal.sshProject
-          .killSessions(scopeId, nodeIds)
+        void killRemoteSessionsForScope(
+          'project-deletion',
+          scopeId,
+          nodeIds,
+          window.nodeTerminal.sshProject.killSessions
+        )
           .catch(() => {})
           .finally(() => void window.nodeTerminal.sshProject.disconnect(scopeId))
         useSshConn.getState().clearAttachment(scopeId)
@@ -9313,7 +9311,7 @@ export function Canvas() {
             `data-canvas-chrome` is fit-view's own documented opt-in: it makes the whole cluster ONE
             obstacle rect (instead of one per pill, overlapping after inflation), so fitView never
             parks a node underneath either pill. */}
-        <div className="canvas-pills" data-canvas-chrome>
+        <CanvasPills>
           {/* `travelToNode`, not `focusNodeById`: the panel resolves sessions in CLOSED projects
               too (their tmux sessions keep running), and reaching one means reopening its tab
               first — the same path a notification click and a peer jump take. */}
@@ -9324,7 +9322,7 @@ export function Canvas() {
           />
         
           <UsageIndicator overBoard={kanbanOpen} />
-</div>
+        </CanvasPills>
 
         <PresenceNamePrompt />
 

@@ -786,11 +786,14 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `PERMISSION_MODE_LABELS` (from which `ALL_PERMISSION_MODES` is derived — the dropdown and the
   validator can't desync). `resolvePermissionMode(project, settings)` is the resolver
   (`renderer/state/permissionMode.ts` `activePermissionMode(agentId)` binds it to the live stores **and
-  applies the version gate below — for `agentId === 'claude'` only**), and
-  **`withPermissionMode(cmd, agentId, mode)` is the single
-  funnel through which every agent-node launch site appends the flag** (new node, cold-restore
-  resume, Branch, handoff/transfer, explain-commit, add-agent, canvas-control open-agent + team
-  spawn). **WHERE the flag lands is decided at the composed layer** (`createAgentNode`), not in
+  applies the version gate below — for `agentId === 'claude'` only**). Every production launch first
+  obtains a branded `ActiveAgentLaunchPlan` from `activeAgentLaunchPlan` (or the awaited
+  `ensureActiveAgentLaunchPlan`) for one name in the closed `AGENT_LAUNCH_SURFACES` inventory;
+  command builders and `createAgentNode` consume that proof rather than a raw mode. The behavior Chut
+  runs every inventory row under Kids mode for both permissive inputs and asserts each agent's exact
+  manual CLI arguments, so a new/bypassed surface is a red case rather than a source-text count.
+  `commandForAgentLaunch` applies the branded decision through `withPermissionMode`.
+  **WHERE the flag lands is decided at the composed layer** (`createAgentNode`), not in
   `withPermissionMode`: with no `argvPromptSeparator` (claude) it goes LAST, keeping the historical
   command byte-identical; with one (grok's `--`) it must go **BEFORE** the separator, because `--` is
   end-of-options and a flag after it is a positional — silently swallowed into the prompt or a clap
@@ -833,7 +836,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   gate:** grok has accepted every mode since 1.0.0 and gemini/codex accept theirs on the versions we
   measured, so gating any of them on a `claude --version` probe would
   downgrade their sessions on a machine whose claude is old or absent — `activePermissionMode` gates
-  only `'claude'`, `ensureActivePermissionMode` awaits the probes only for `'claude'`, and
+  only `'claude'`, `ensureActiveAgentLaunchPlan` awaits the probes only for `'claude'`, and
   `sshAutoModeHint`'s copy names Claude in every sentence for the same reason. An agent needing its
   own gate adds one beside claude's.
 - **State via each agent's hooks → shared 4-state model** — detection uses the agent's own
@@ -977,8 +980,9 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `locatedTranscriptSessions` so a dead one can be dropped on an empty read (the panel's Retry
   would otherwise replay it forever) — a HOOK-fed ref is never dropped that way, since an empty
   read there is usually a transient master hiccup and forgetting it sends the next read local.
-  It is generated shell, so `remote-transcript-locate.test.ts` runs it for real under `/bin/sh`
-  against a fake host tree — keep it that way. (2) **The cwd fallback keeps `accountId`** in BOTH
+  It is generated shell, so `remote-transcript-locate.test.ts` runs it for real through
+  `core/testing/posix-shell.ts` against a fake host tree, including spaces/apostrophes and Git Bash
+  path translation on Windows — keep it that way. (2) **The cwd fallback keeps `accountId`** in BOTH
   `resolveTranscript` and `contextEnsure`; without it a managed-account node fell back to the
   system root and could adopt an unrelated session's newest transcript. (3) **Relay tabs** stay
   local-only (a transcript read over the relay would read the GUEST's disk) and reject with
@@ -1476,16 +1480,16 @@ about which machine they describe. Reading + parsing is `core/session-memory.ts`
   case, because the target is **exact** (`-t =nt-<id>`: without `=` tmux falls back to fnmatch then
   PREFIX matching on a miss, and `nt-…-1` is a prefix of `nt-…-12`, so a miss could kill a different
   session), and because the fan-out is **opt-in and asked for by exactly one caller**: it needs both
-  "we do not know the socket" AND `everySocket` from the caller (`localKillSockets(live, everySocket)`,
-  `sshProject.killSessions(…, {everySocket:true})`, `transport.destroy(id, {everySocket:true})` —
-  the wire legs demand a literal `true`). A destroy for a session we HOLD still fires exactly one
-  kill; and the unheld branch is not rare — an ordinary node-× on a node never mounted in this
-  process takes it, which is the norm after an app restart — so project deletion and every ordinary
-  × stay narrow rather than inheriting the panel's blast radius. The sweep and the reaper keep their own copies of
+  "we do not know the socket" AND `everySocket` from the caller. The renderer makes that promise in
+  the behavior-tested `destroySessionForScope` / `killRemoteSessionsForScope` dispatchers: every
+  session-memory row widens both its local and remote kill, including a row that still owns a canvas
+  node, while project deletion and ordinary node × omit the option entirely. The wire legs still
+  demand a literal `true`. The sweep and the reaper keep their own copies of
   the socket list **on purpose**: for them the ORDER decides first-wins de-duplication, for a kill
   it means nothing.
-- **The generated SSH shell is tested under a real `/bin/sh`** (`session-memory-remote.test.ts`
-  against a fake host tree, same discipline as `remote-claude-usage.test.ts` and
+- **The generated SSH shell is tested under a real POSIX shell** (`session-memory-remote.test.ts`
+  against a fake host tree, using `core/testing/posix-shell.ts` so Windows runs it through Git Bash
+  with native paths translated at the shell boundary; same discipline as `remote-claude-usage.test.ts` and
   `canvas-control-shim.test.ts`) — and it is not ceremony: the plan's own script said `echo ##MEM`,
   which prints an **EMPTY LINE** under POSIX sh (an unquoted `#` starts a word-initial comment) and
   would have made **every healthy host report `ok:false`**. The markers are quoted for that reason,

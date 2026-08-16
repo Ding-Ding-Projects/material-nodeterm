@@ -39,8 +39,8 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true })
 })
 
-async function fresh() {
-  const s = new KidsModeStore()
+async function fresh(deps: ConstructorParameters<typeof KidsModeStore>[0] = {}) {
+  const s = new KidsModeStore(deps)
   await s.init()
   return s
 }
@@ -194,6 +194,49 @@ describe('the name', () => {
     await s.rename("Ellie's mode")
     expect(s.get().name).toBe("Ellie's mode")
     expect(s.isOn()).toBe(true)
+    s.dispose()
+  })
+})
+
+describe('concurrency', () => {
+  it('keeps the exact last invocation when persistence is stalled', async () => {
+    let releaseFirst!: () => void
+    let announceFirst!: () => void
+    const firstReleased = new Promise<void>((resolve) => (releaseFirst = resolve))
+    const firstStarted = new Promise<void>((resolve) => (announceFirst = resolve))
+    const invocationNames: string[] = []
+    const persist = vi.fn(async (file: string, data: string) => {
+      const name = (JSON.parse(data) as { name: string }).name
+      invocationNames.push(name)
+      if (invocationNames.length === 1) {
+        announceFirst()
+        await firstReleased
+      }
+      await fs.mkdir(path.dirname(file), { recursive: true })
+      await fs.writeFile(file, data)
+    })
+    const s = await fresh({ persist })
+
+    const first = s.rename('one')
+    await firstStarted
+    const second = s.rename('two')
+    const third = s.rename('three')
+    await Promise.resolve()
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(invocationNames).toEqual(['one'])
+
+    releaseFirst()
+    await Promise.all([first, second, third])
+
+    expect(invocationNames).toEqual(['one', 'two', 'three'])
+    expect(persist).toHaveBeenLastCalledWith(
+      path.join(sharedDir(), 'kids-mode.json'),
+      JSON.stringify({ version: 1, enabled: false, name: 'three' }, null, 2)
+    )
+    const onDisk = JSON.parse(await fs.readFile(path.join(sharedDir(), 'kids-mode.json'), 'utf8'))
+    expect(onDisk).toEqual({ version: 1, enabled: false, name: 'three' })
+    expect(s.get()).toEqual(onDisk)
     s.dispose()
   })
 })

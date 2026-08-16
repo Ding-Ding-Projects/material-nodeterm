@@ -20,6 +20,14 @@ import {
   ungroupNodes
 } from './workspace'
 import type { CanvasNode } from './workspace'
+import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
+import type { ActiveAgentLaunchPlan } from './permissionMode'
+
+const launchPlan = (
+  agentId: AgentId,
+  mode: AgentPermissionMode
+): ActiveAgentLaunchPlan =>
+  ({ surface: 'canvas-new-agent', agentId, mode }) as ActiveAgentLaunchPlan
 
 const term = (id: string, pos: { x: number; y: number }, parentId?: string): CanvasNode =>
   ({
@@ -725,12 +733,18 @@ describe('chat node tombstone', () => {
 
 describe('createAgentNode permission mode', () => {
   it('appends the flag for claude', () => {
-    const node = createAgentNode('claude', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
+    const node = createAgentNode(
+      'claude', 0, undefined, undefined, undefined, undefined, undefined,
+      launchPlan('claude', 'auto')
+    )
     expect(node.data.initialCommand).toBe('claude --permission-mode auto')
   })
 
   it('stays bare in manual mode (legacy parity)', () => {
-    const node = createAgentNode('claude', 0, undefined, undefined, undefined, undefined, undefined, 'manual')
+    const node = createAgentNode(
+      'claude', 0, undefined, undefined, undefined, undefined, undefined,
+      launchPlan('claude', 'manual')
+    )
     expect(node.data.initialCommand).toBe('claude')
   })
 
@@ -740,7 +754,10 @@ describe('createAgentNode permission mode', () => {
   })
 
   it('keeps the flag after the initial prompt so the prompt stays claude argv', () => {
-    const node = createAgentNode('claude', 0, undefined, undefined, 'fix the bug', undefined, undefined, 'auto')
+    const node = createAgentNode(
+      'claude', 0, undefined, undefined, 'fix the bug', undefined, undefined,
+      launchPlan('claude', 'auto')
+    )
     expect(node.data.initialCommand).toBe("claude 'fix the bug' --permission-mode auto")
   })
 
@@ -748,9 +765,15 @@ describe('createAgentNode permission mode', () => {
   // gemini DO have one, each spelled its own way — those composed commands are pinned in
   // workspace.agent-prompt.test.ts, next to grok's separator rule.
   it('never flags a non-capable agent', () => {
-    const node = createAgentNode('opencode', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
+    const node = createAgentNode(
+      'opencode', 0, undefined, undefined, undefined, undefined, undefined,
+      launchPlan('opencode', 'auto')
+    )
     expect(node.data.initialCommand).toBe('opencode')
-    const custom = createAgentNode('custom:x', 0, undefined, undefined, undefined, undefined, undefined, 'auto')
+    const custom = createAgentNode(
+      'custom:x', 0, undefined, undefined, undefined, undefined, undefined,
+      launchPlan('custom:x', 'auto')
+    )
     expect(custom.data.initialCommand).toBe('custom:x')
   })
 })

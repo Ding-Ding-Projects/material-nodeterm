@@ -169,8 +169,23 @@ describe('whack-a-mole rung', () => {
     const { ladder, advance } = makeLadder()
     const c = ladder.issue('whack') as WhackChallenge
     advance(WHACK_DURATION_MS)
-    const late = c.moles.map((m) => ({ cell: m.cell, atMs: WHACK_DURATION_MS + 1_000 }))
-    expect(ladder.verify({ kind: 'whack', nonce: c.nonce, hits: late }).cleared).toBe(false)
+    // Seven honest hits leave the round one short. The last scheduled mole remains visible one
+    // millisecond after the round boundary (its 1.2 s visibility window crosses that boundary),
+    // so this final hit is valid by mole timing and invalid ONLY by the round-window guard.
+    const honest = c.moles
+      .slice(0, WHACK_REQUIRED_HITS - 1)
+      .map((m) => ({ cell: m.cell, atMs: m.showAtMs + 10 }))
+    const finalMole = c.moles[c.moles.length - 1]
+    const outsideRoundAt = WHACK_DURATION_MS + 1
+    expect(outsideRoundAt).toBeGreaterThanOrEqual(finalMole.showAtMs)
+    expect(outsideRoundAt).toBeLessThanOrEqual(finalMole.hideAtMs)
+
+    const verdict = ladder.verify({
+      kind: 'whack',
+      nonce: c.nonce,
+      hits: [...honest, { cell: finalMole.cell, atMs: outsideRoundAt }]
+    })
+    expect(verdict.cleared).toBe(false)
   })
 })
 

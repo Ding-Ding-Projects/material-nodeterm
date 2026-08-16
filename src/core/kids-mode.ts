@@ -48,6 +48,10 @@ export { DEFAULT_KIDS_MODE_NAME } from '../shared/kids-mode-name'
 
 const DEFAULT_RECORD: KidsModeRecord = { version: 1, enabled: false, name: DEFAULT_KIDS_MODE_NAME }
 
+export interface KidsModeStoreDeps {
+  persist?: (file: string, data: string) => Promise<void>
+}
+
 /** The same shared directory School mode uses — one place any app in this family can read. */
 export function sharedDir(): string {
   return path.join(os.homedir(), '.nodeterm', 'shared')
@@ -70,6 +74,7 @@ function sanitizeName(name: string): string {
 }
 
 export class KidsModeStore {
+  private readonly persist: (file: string, data: string) => Promise<void>
   private cache: KidsModeRecord = DEFAULT_RECORD
   private listeners = new Set<(r: KidsModeRecord) => void>()
   private watcher = new SharedRecordWatcher(recordFile(), () => this.queueReload())
@@ -77,6 +82,10 @@ export class KidsModeStore {
   private chain: Promise<unknown> = Promise.resolve()
   /** Invalidates watcher reloads that were queued before dispose/re-init. */
   private lifecycle = 0
+
+  constructor(deps: KidsModeStoreDeps = {}) {
+    this.persist = deps.persist ?? persistFile
+  }
 
   async init(): Promise<void> {
     const lifecycle = ++this.lifecycle
@@ -141,7 +150,7 @@ export class KidsModeStore {
 
   private async writeRecord(next: KidsModeRecord): Promise<KidsModeRecord> {
     this.cache = next
-    await persistFile(recordFile(), JSON.stringify(next, null, 2))
+    await this.persist(recordFile(), JSON.stringify(next, null, 2))
     this.watcher.recordWritten()
     this.notify()
     return this.cache

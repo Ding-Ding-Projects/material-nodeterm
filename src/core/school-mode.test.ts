@@ -54,8 +54,8 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true })
 })
 
-async function fresh() {
-  const s = new SchoolModeStore()
+async function fresh(deps: ConstructorParameters<typeof SchoolModeStore>[0] = {}) {
+  const s = new SchoolModeStore(deps)
   await s.init()
   return s
 }
@@ -234,15 +234,45 @@ describe('the name', () => {
 })
 
 describe('concurrency', () => {
-  it('serialises overlapping writes instead of losing one', async () => {
-    // Every write goes through a FIFO chain because the directory watcher's own reload can race
-    // a write just issued. Fire several at once and the last one must be what lands.
-    const s = await fresh()
-    await s.enable('1234')
-    await Promise.all([s.rename('one'), s.rename('two'), s.rename('three')])
+  it('keeps the exact last invocation when persistence is stalled', async () => {
+    let releaseFirst!: () => void
+    let announceFirst!: () => void
+    const firstReleased = new Promise<void>((resolve) => (releaseFirst = resolve))
+    const firstStarted = new Promise<void>((resolve) => (announceFirst = resolve))
+    const invocationNames: string[] = []
+    const persist = vi.fn(async (file: string, data: string) => {
+      const name = (JSON.parse(data) as { name: string }).name
+      invocationNames.push(name)
+      if (invocationNames.length === 1) {
+        announceFirst()
+        await firstReleased
+      }
+      await fs.mkdir(path.dirname(file), { recursive: true })
+      await fs.writeFile(file, data)
+    })
+    const s = await fresh({ persist })
+
+    const first = s.rename('one')
+    await firstStarted
+    const second = s.rename('two')
+    const third = s.rename('three')
+    await Promise.resolve()
+
+    // While persistence one is stalled, later writes must not even invoke persistence yet.
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(invocationNames).toEqual(['one'])
+
+    releaseFirst()
+    await Promise.all([first, second, third])
+
+    expect(invocationNames).toEqual(['one', 'two', 'three'])
+    expect(persist).toHaveBeenLastCalledWith(
+      path.join(sharedDir(), 'school-mode.json'),
+      JSON.stringify({ version: 1, enabled: false, name: 'three' }, null, 2)
+    )
     const onDisk = JSON.parse(await fs.readFile(path.join(sharedDir(), 'school-mode.json'), 'utf8'))
-    expect(onDisk.name).toBe(s.get().name)
-    expect(['one', 'two', 'three']).toContain(onDisk.name)
+    expect(onDisk).toEqual({ version: 1, enabled: false, name: 'three' })
+    expect(s.get()).toEqual(onDisk)
     s.dispose()
   })
 })

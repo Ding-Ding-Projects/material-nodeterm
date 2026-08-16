@@ -62,20 +62,11 @@ const VERBS: ControlVerb[] = [
 ]
 
 /**
- * MOVED to `src/shared/control-verbs.ts` — read that file's header before trusting this set for
- * anything. It is re-exported here so main-side callers are unchanged.
- *
- * WHERE IT IS READ: `Canvas.tsx`'s `switch (verb)` — `case 'write'` and `case 'close'` call
- * `isDestructiveVerb(verb)` before their `confirmBusy()` refusal. That is the only consumer, and
- * until it existed the set was read by nothing but its own unit test: it lived here in `src/main`,
- * which the renderer cannot import, while `TOLERANT_CONTROL_VERBS`' doc comment, `hook-server.ts`'s
- * `buildPtyEnv` note and `docs/node-identity.md:65` all named it as the confirm-gated set.
- *
- * Two things it still is NOT, both spelled out in the shared file: adding a verb here does not
- * gate it (each case hand-writes its own `setConfirm`), and it is not the complete list of
- * actions a human confirms (`close-worktree --mode remove` is confirmed and is not in it). What
- * the shared home buys is a drift alarm — `control-destructive.test.ts` fails when the set and the
- * dispatch stop agreeing.
+ * Defined in `src/shared/control-verbs.ts` so renderer's `dispatchDestructiveControl` and main's
+ * validation share one inventory. The dispatcher owns the real busy/confirm/effect ordering and
+ * fails closed on a new member until its behavior is implemented. Re-exported here so existing
+ * main-side callers remain unchanged. This still excludes separately-confirmed operations such as
+ * `close-worktree --mode remove`; see the shared file's header.
  */
 export { isDestructiveVerb, DESTRUCTIVE_VERBS } from '../shared/control-verbs'
 
