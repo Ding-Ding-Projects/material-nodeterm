@@ -169,13 +169,16 @@ approved-device store does this so an older approval cannot land after a revoke 
 revoked key. Only a checked `ENOENT` is an empty store — unreadable or corrupt data must stay an
 error so the next mutation cannot overwrite it as if it were absent.
 
-**A Git-backed history write owns the working file, index and commit as one transaction.** Queue
-that complete sequence per repository/domain; serializing only the file write can still attach one
-call's label to another call's staged bytes or lose a commit against a clean index. Reads that must
-show a just-triggered background revision join the same write tail. An initialized repository with
-no `HEAD` is a readable empty history, not a Git failure. And a settings restore is not complete
-when core writes the file: cancel/epoch the renderer's coalesced saves, join any dispatched save,
-then immediately rehydrate the live settings store so stale UI state cannot overwrite it.
+**A Git-backed history write must be fenced across processes, not only queued in one process.** This
+store never shares its working file/index transaction: it writes an owner-unique replay journal,
+builds through an owner-unique `GIT_INDEX_FILE`, and publishes with old-OID `update-ref` CAS. A loser
+rebuilds; a crash is replayed. Never steal an aged/PID lock, delete a foreign index/journal, or use
+`reset`/`clean` as recovery — a suspended live writer may still own it. Reads snapshot one exact
+head OID, and restore accepts only a full reachable commit. Strip inherited `GIT_DIR`, worktree,
+object-directory and namespace redirects; only the private index override is allowed. Git
+calls/retries are bounded and hooks disabled. An unborn repository is a readable empty history. A settings restore is not complete until
+the awaited history recorder settles, the renderer cancels/epochs coalesced saves, joins dispatched
+saves, and rehydrates live state.
 
 **Degrade to nothing, never to something wrong.** A probe that fails means the bare, safe command —
 never a substituted nearest match. A hand-editable value that is unrecognised must yield the safe

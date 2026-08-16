@@ -606,9 +606,9 @@ app.whenReady().then(async () => {
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
-  settingsStore.setHistoryRecorder((before, after, override) => {
+  settingsStore.setHistoryRecorder(async (before, after, override) => {
     if (override) {
-      void localHistoryStore.record({
+      await localHistoryStore.record({
         domain: 'settings',
         filename: 'settings.json',
         content: JSON.stringify(after, null, 2),
@@ -619,7 +619,7 @@ app.whenReady().then(async () => {
     }
     const change = describeSettingsChange(before, after)
     if (!change) return
-    void localHistoryStore.record({
+    await localHistoryStore.record({
       domain: 'settings',
       filename: 'settings.json',
       content: JSON.stringify(after, null, 2),

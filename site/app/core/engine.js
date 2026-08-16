@@ -139,13 +139,14 @@ function historyEntry(title, body, undo) {
 export function undoEntry(store, id) {
   const entry = store.state.history.find((h) => h.id === id)
   if (!entry) return false
-  if (!entry.undo || typeof entry.undo !== 'object' || Array.isArray(entry.undo)) {
+  const safeUndo = store.sanitizeUndoSnapshot(entry.undo)
+  if (!Object.keys(safeUndo).length) {
     toast(store, '📖', 'Log entry only', '“' + entry.title + '” records an event, but it did not change a saved setting this page can put back.')
     return false
   }
 
-  const redo = store.captureDurableBefore(entry.undo)
-  const restored = JSON.parse(JSON.stringify(entry.undo))
+  const redo = store.captureDurableBefore(safeUndo)
+  const restored = JSON.parse(JSON.stringify(safeUndo))
   const next = historyEntry(
     'Put back: ' + entry.title,
     'The saved values from before that change were restored. This restore can be reversed too.',
@@ -154,6 +155,9 @@ export function undoEntry(store, id) {
   store.setState(Object.assign({}, restored, {
     history: [next].concat(store.state.history.filter((h) => h.id !== id)).slice(0, 300),
   }))
+  // Theme and text size are imperative document side effects as well as persisted values. A state-
+  // only restore left the live page painted with the value it claimed to have put back.
+  applyTheme(store.state)
   toast(store, '↩️', 'Put back', '“' + entry.title + '” was restored as a brand new step.')
   return true
 }
@@ -165,11 +169,24 @@ export function save(store, patch, note) {
     return
   }
   const undo = store.captureDurableBefore(patch)
+  const sensitiveOnly =
+    !Object.keys(undo).length &&
+    Object.keys(patch).some((key) => ['auth', 'locks', 'schoolPin', 'history'].includes(key))
+  const body = sensitiveOnly
+    ? 'Record only: credential and history data is never copied into a persistent undo snapshot.'
+    : ''
   // Publish the setting and the revision that can reverse it in ONE persisted state transition.
   // Two separate setState calls can strand a changed setting without its undo row if storage
   // becomes unavailable between them.
   store.setState((s) => Object.assign({}, patch, {
-    history: [historyEntry(note, '', undo)].concat(s.history).slice(0, 300),
+    history: [historyEntry(note, body, undo)].concat(s.history).slice(0, 300),
+  }))
+}
+
+/** Apply a durable change and its honest non-reversible event in one localStorage transition. */
+export function saveRecordOnly(store, patch, title, body) {
+  store.setState((s) => Object.assign({}, patch, {
+    history: [historyEntry(title, body)].concat(s.history).slice(0, 300),
   }))
 }
 
@@ -297,11 +314,13 @@ export function menuDefs(store, deps) {
     if (s.sec === 'history' && row.canUndo) extras.push({ icon: '↩️', label: 'Put this saved change back', hint: '', run: () => { closeMenu(store); undoEntry(store, row.id) } })
     if (s.sec === 'shop') extras.push({ icon: '🧺', label: 'Put it in the basket', hint: '', run: () => { store.setState((st) => ({ cart: Object.assign({}, st.cart, { [row.id]: true }), menuOpen: false })); toast(store, '🧺', 'In the basket', 'A shopping list for your own machine — this page cannot pull models.') } })
     if (s.sec === 'auth') extras.push({ icon: '📋', label: 'Copy the six digits', hint: '', run: () => { deps.copy(s.codes[row.id] || ''); closeMenu(store) } })
+    const room = getRoom(s.sec)
+    const removeWarning = room?.removeWarning || 'This removal is permanent and cannot be put back.'
     return extras
       .concat([
         { icon: '✅', label: 'Pick or unpick this one', hint: '', run: () => { deps.togglePick(row.id); closeMenu(store) } },
         { icon: '📋', label: 'Copy it', hint: '', run: () => { deps.copy((row.title || '') + ' — ' + (row.body || '')); closeMenu(store) } },
-        { icon: '🗑', label: 'Throw this one away', hint: 'asks first', run: () => { closeMenu(store); askConfirm(store, 'Throw one away?', 'This removes “' + (row.title || '') + '” from the list. The time machine will remember that you did.', 'bye', () => deps.removeRows([row.id])) } },
+        { icon: '🗑', label: 'Throw this one away', hint: 'asks first', run: () => { closeMenu(store); askConfirm(store, 'Throw one away?', 'This removes “' + (row.title || '') + '” from the list. ' + removeWarning, 'bye', () => deps.removeRows([row.id])) } },
         { icon: '🔊', label: 'Read it out loud', hint: '', run: () => { store.setState({ menuOpen: false, narrate: true }); deps.speak((row.title || '') + '. ' + (row.body || '')) } },
         { icon: '📦', label: 'Take this list home', hint: '', run: () => deps.goRoom('export') },
       ])

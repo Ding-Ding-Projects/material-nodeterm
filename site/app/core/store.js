@@ -15,6 +15,40 @@ const PERSISTED_KEYS = [
   'schedOn', 'schedTime', 'schedTheme', 'bestMem', 'bestQuiz', 'bestWhack',
 ]
 
+// These values remain in their canonical active store where the feature needs them, but copying
+// them into a Time machine row would create a second, less-visible credential store. `history`
+// itself is excluded too: an undo row containing prior undo rows recurses without a truthful
+// restore boundary. List-history deletion is therefore explicitly permanent in the UI/docs.
+const HISTORY_SNAPSHOT_DENY = new Set(['auth', 'locks', 'schoolPin', 'history'])
+
+function jsonClone(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+export function sanitizeUndoSnapshot(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const safe = {}
+  Object.keys(value).forEach((key) => {
+    if (!PERSISTED_KEYS.includes(key) || HISTORY_SNAPSHOT_DENY.has(key)) return
+    safe[key] = jsonClone(value[key])
+  })
+  return safe
+}
+
+export function sanitizeHistoryRows(value) {
+  if (!Array.isArray(value)) return value
+  return value.map((row) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return row
+    const clean = jsonClone(row)
+    if ('undo' in clean) {
+      const undo = sanitizeUndoSnapshot(clean.undo)
+      if (Object.keys(undo).length) clean.undo = undo
+      else delete clean.undo
+    }
+    return clean
+  })
+}
+
 function nowIso() {
   return new Date().toISOString()
 }
@@ -63,10 +97,16 @@ export function createStore() {
   }
 
   let saved = {}
+  let sanitizedLegacyHistory = false
   try {
     saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
   } catch (_err) {
     saved = {}
+  }
+  if (Array.isArray(saved.history)) {
+    const clean = sanitizeHistoryRows(saved.history)
+    sanitizedLegacyHistory = JSON.stringify(clean) !== JSON.stringify(saved.history)
+    saved.history = clean
   }
   PERSISTED_KEYS.forEach((k) => {
     if (saved[k] !== undefined) state[k] = saved[k]
@@ -83,6 +123,9 @@ export function createStore() {
   function persist() {
     const blob = {}
     PERSISTED_KEYS.forEach((k) => (blob[k] = state[k]))
+    // Defense at the actual persistence boundary: even a future direct state mutation cannot
+    // smuggle an authenticator secret from a legacy/forged undo object back into localStorage.
+    blob.history = sanitizeHistoryRows(blob.history)
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(blob))
     } catch (_err) {
@@ -109,15 +152,15 @@ export function createStore() {
   function captureDurableBefore(patch) {
     const before = {}
     Object.keys(patch).forEach((key) => {
-      if (!PERSISTED_KEYS.includes(key)) return
+      if (!PERSISTED_KEYS.includes(key) || HISTORY_SNAPSHOT_DENY.has(key)) return
       // Persisted playground state is JSON data by definition. Clone it here so a later immutable
       // update cannot mutate the prior-state snapshot held by a history row.
-      before[key] = JSON.parse(JSON.stringify(state[key]))
+      before[key] = jsonClone(state[key])
     })
     return before
   }
 
-  return {
+  const api = {
     state,
     setState,
     subscribe(fn) {
@@ -125,7 +168,14 @@ export function createStore() {
     },
     persist,
     captureDurableBefore,
+    sanitizeUndoSnapshot,
   }
+
+  // Upgrade in place once: active authenticator/lock records stay where they are, while historical
+  // duplicate credential material is removed immediately instead of waiting for another setting.
+  if (sanitizedLegacyHistory) persist()
+
+  return api
 }
 
 // A generic plain-text-or-regex matcher factory, shared by every search

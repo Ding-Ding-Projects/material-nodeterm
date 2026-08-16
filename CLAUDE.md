@@ -182,19 +182,22 @@ Persistence has two layers:
 
 `settings.json` is a separate store (`main/settings-store.ts`, `state/settings.ts`).
 
-**Local settings history is one ordered transaction across core and renderer**
+**Local settings history is one fenced transaction across processes, core and renderer**
 (`core/local-history.ts`, `renderer/state/settings.ts`, full write-up in
-`docs/local-history.md`). Each domain has one Git working repository, so `record()` serializes the
-complete write/add/commit decision FIFO; unique bytes alone cannot stop one caller staging another's
-content or committing it under the wrong label. `list()`/`restoreContent()` join the existing write
-tail for read-your-own-write behavior, and an initialized repository without `HEAD` returns `[]`
-rather than laundering Git's unborn-branch exit into "could not read". Restoring settings then
-suspends and epochs the renderer's 300 ms save lane, waits for already-dispatched saves, applies the
-core revision, and immediately reloads both Zustand `base` and live override-resolved `settings`.
-A failed restore reschedules the canceled edit; a successful chosen revision supersedes edits queued
-during the restore. The public Pages playground is separate browser-only state: saved changes carry
-real prior-value patches, record-only events expose no undo, and deleting the final log row persists
-an explicit empty list.
+`docs/local-history.md`). A per-process Promise FIFO is not a cross-process lock. Every request first
+publishes an owner-unique `0600` replay journal, builds its commit with an owner-unique
+`GIT_INDEX_FILE`, and advances the history ref only through `update-ref <new> <observed>` CAS. A CAS
+loser rebuilds on the winner; a killed process's complete journal is replayed without ever deleting
+its private index/journal, and a suspended old publisher cannot overwrite the newer ref. Never
+replace this with PID/age lock stealing, a shared index, `reset`, `clean`, or foreign `.lock`
+deletion. Strip inherited Git repository-routing environment variables at the runner boundary; only
+the explicit private index may redirect plumbing. Git calls and CAS retries are bounded and hooks disabled. `list()` snapshots one exact head
+OID; restore validates a full reachable commit OID. An initialized repository without a head returns
+`[]`, while any real read failure remains unavailable. `SettingsStore` awaits the recorder, and the
+renderer still suspends/epochs its 300 ms lane, joins dispatched saves, applies the revision, and
+rehydrates Zustand `base` plus live settings. The Pages playground is separate browser state:
+appearance undo reapplies DOM side effects, authenticator/lock/PIN/history fields never enter undo
+snapshots or exports, sensitive deletions are explicitly record-only, and an empty log stays empty.
 
 `scheduled-settings.json` has a deliberately three-state startup read. `ENOENT` is a normal empty
 schedule; valid JSON is normalized; corrupt/unreadable evidence is left exactly in place while

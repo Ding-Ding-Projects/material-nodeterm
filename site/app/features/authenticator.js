@@ -6,7 +6,7 @@
 // is kept only in this browser's localStorage and is never sent anywhere.
 // See app/shared/crypto.js for the HMAC-SHA1 + base32 implementation.
 
-import { registerListRoom, totpSecondsLeft } from '../core/engine.js'
+import { registerListRoom, saveRecordOnly, totpSecondsLeft } from '../core/engine.js'
 import { b32decode } from '../shared/crypto.js'
 import { attr } from '../core/dom.js'
 
@@ -44,8 +44,14 @@ export function registerAuthenticator(store, deps, registerAction, registerBindi
     footnote: () => 'Codes are worked out in this page from the secret you typed. The secret is kept in this browser and never sent anywhere — which also means clearing storage loses it, so keep your original backup.',
     remove: (store2, ids) => {
       const set = new Set(ids)
-      store2.setState({ auth: store2.state.auth.filter((a) => !set.has(a.id)), picked: {} })
+      saveRecordOnly(
+        store2,
+        { auth: store2.state.auth.filter((a) => !set.has(a.id)), picked: {} },
+        'Removed ' + ids.length + ' authenticator code(s)',
+        'Record only: deleted TOTP secrets are never copied into Time machine snapshots, so this removal cannot be put back.',
+      )
     },
+    removeWarning: 'This cannot be put back: TOTP secrets are deliberately never copied into the Time machine. Keep the provider’s backup.',
     addRow: (store2) => {
       const s = store2.state
       return `<div class="add-row">
