@@ -9,9 +9,17 @@
 // exactly the shape that survived the whole suite once on this branch already.
 import fs from 'fs'
 import path from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { NodeTerminalApi } from '@shared/types'
 import { chromeObstacles, FIT_VIEW_GAP } from './fit-view'
 import { planNodeDeletion } from '../lib/nodeDeletion'
+import { destroySessionForProject } from '../lib/sessionKill'
+import {
+  bindProjectToSession,
+  createSession,
+  resetSessionsForTest,
+  setActiveSession
+} from '../session/session'
 
 const CANVAS_SRC = fs.readFileSync(path.join(__dirname, 'Canvas.tsx'), 'utf8')
 
@@ -24,6 +32,7 @@ function measured(el: Element, r: { left: number; top: number; right: number; bo
 
 afterEach(() => {
   document.body.innerHTML = ''
+  resetSessionsForTest()
 })
 
 describe('the canvas pill cluster is fit-view chrome', () => {
@@ -65,8 +74,26 @@ describe('the session-memory panel is the one caller that fans a kill across soc
   // of the machine's tmux sockets, so a row it offers to end can be on either. Every other caller
   // knows its own nodes and must stay narrow, which is why the flag is opt-in — and why dropping it
   // here restores the exact bug the confirm used to lie about, with the whole suite green.
-  it('asks for every socket on the local destroy and the remote kill', () => {
-    expect(CANVAS_SRC).toContain("transport.destroy(nodeId, { everySocket: true })")
+  it('asks the bound project core for every socket, never the viewer-local core', async () => {
+    const localDestroy = vi.fn(async () => {})
+    const relayDestroy = vi.fn(async () => {})
+    const local = createSession(
+      'local',
+      { pty: { destroy: localDestroy } } as unknown as NodeTerminalApi,
+      'local'
+    )
+    setActiveSession(local.id)
+    const relay = createSession(
+      'relay',
+      { pty: { destroy: relayDestroy } } as unknown as NodeTerminalApi,
+      'relay'
+    )
+    bindProjectToSession('relay-project', relay.id)
+
+    await destroySessionForProject('relay-project', 'node-1', { everySocket: true })
+
+    expect(relayDestroy).toHaveBeenCalledWith('node-1', { everySocket: true })
+    expect(localDestroy).not.toHaveBeenCalled()
     expect(CANVAS_SRC).toContain(
       ".killSessions(plan.remoteProjectId!, [nodeId], { everySocket: true })"
     )

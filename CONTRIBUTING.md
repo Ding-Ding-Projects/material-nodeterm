@@ -227,6 +227,15 @@ canonical delete frees the children, and the latter performs irreversible teardo
 reasoning. A comment that restates the code is noise; one that says "do not simplify this back,
 here is what broke" is the point.
 
+**Treat session-host state as desired ownership, not a sequence of best-effort commands.** Several
+`SessionHostPty` views share one client socket, so pause and geometry must retain the individual view
+identity and cross the wire only after aggregation. Reconnect must await attach/pause/size restoration
+before ordinary requests, and transport or emulator backpressure must own tickets independent from
+renderer flow. Only `ENOENT` proves an ownership file absent, and a permanent node deletion may update
+the canvas only after the backing session-host kill acknowledges. Focused Chuts for this subsystem
+must include co-attach, delayed response, socket-drop, and write-backpressure races; a happy-path mock
+does not exercise the contracts that keep persistent processes truthful.
+
 ## Testing
 
 `npm test` must pass, and `npm run typecheck` is the fastest gate.

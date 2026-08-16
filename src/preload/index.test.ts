@@ -36,6 +36,24 @@ import './index'
 const api = h.exposed.nodeTerminal as NodeTerminalApi
 
 describe('preload IPC wiring', () => {
+  it('awaits pty destroy through invoke and propagates a rejected backend acknowledgement', async () => {
+    h.invoke.mockRejectedValueOnce(new Error('session host outcome unknown'))
+
+    await expect(api.pty.destroy('node-1', { everySocket: true })).rejects.toThrow(
+      'session host outcome unknown'
+    )
+    expect(h.invoke).toHaveBeenCalledWith(IPC.ptyDestroy, 'node-1', true)
+    expect(h.send).not.toHaveBeenCalledWith(IPC.ptyDestroy, 'node-1', true)
+  })
+
+  it('awaits pty recycle through invoke so cwd mutation can wait for the host', async () => {
+    h.invoke.mockRejectedValueOnce(new Error('recycle outcome unknown'))
+
+    await expect(api.pty.recycle('node-2')).rejects.toThrow('recycle outcome unknown')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.ptyRecycle, 'node-2')
+    expect(h.send).not.toHaveBeenCalledWith(IPC.ptyRecycle, 'node-2')
+  })
+
   it('awaits the main-process clipboard acknowledgement on the request-response channel', async () => {
     h.invoke.mockResolvedValueOnce(false)
 

@@ -153,14 +153,18 @@ describe('wireAgentStatus', () => {
     expect(sub.calls).toEqual([])
   })
 
-  it('ptyDestroy untracks the node context tail and finishes its subagents, clearing the maps', () => {
+  it('a confirmed session end untracks the node context tail and finishes its subagents', () => {
     const fh = fakeHooks()
     const sub = recTail()
     const ctx = recTail()
+    let confirmEnded!: (nodeId: string) => void
     wireAgentStatus(platform, {
       hooks: fh.hooks as never,
       subagentTail: sub.tail as never,
-      contextTail: ctx.tail as never
+      contextTail: ctx.tail as never,
+      onSessionEnded: (listener) => {
+        confirmEnded = listener
+      }
     })
     // A safe local transcript path so contextTail.track runs and nodeContextSession is set.
     const transcriptPath = path.join(os.homedir(), '.claude', 'projects', 't.jsonl')
@@ -172,21 +176,16 @@ describe('wireAgentStatus', () => {
       session_id: 's1',
       transcript_path: transcriptPath
     })
-    // Node closes → ptyDestroy cast fires the teardown listener.
-    platform.cast(
-      platform.attach({ sendText: () => {}, sendBinary: () => {} }),
-      IPC.ptyDestroy,
-      ['n1']
-    )
+    // Merely requesting a close cannot release tails: the backing kill may still fail. PtyManager
+    // calls this subscription only after it has an acknowledgement from the session host.
+    expect(ctx.calls.some((c) => c.m === 'untrack')).toBe(false)
+    expect(sub.calls.some((c) => c.m === 'finish')).toBe(false)
+    confirmEnded('n1')
     expect(ctx.calls.some((c) => c.m === 'untrack' && c.args[0] === 's1')).toBe(true)
     expect(sub.calls.some((c) => c.m === 'finish' && c.args[0] === 'tu1')).toBe(true)
-    // Re-destroying the same node is a harmless no-op (maps already cleared).
+    // Re-confirming the same node is a harmless no-op (maps already cleared).
     const before = ctx.calls.length + sub.calls.length
-    platform.cast(
-      platform.attach({ sendText: () => {}, sendBinary: () => {} }),
-      IPC.ptyDestroy,
-      ['n1']
-    )
+    confirmEnded('n1')
     expect(ctx.calls.length + sub.calls.length).toBe(before)
   })
 })
@@ -221,10 +220,17 @@ describe('wireAgentStatus — the grok raw-listener branch', () => {
   const sessionDir = (cwd: string, id: string): string =>
     path.join(grokHome, 'sessions', encodeURIComponent(cwd), id)
 
-  it('records nodeId → sessionId (proved by ptyDestroy untracking that grok session)', () => {
+  it('records nodeId → sessionId (proved by confirmed-end untracking that grok session)', () => {
     const fh = fakeHooks()
     const ctx = recTail()
-    wireAgentStatus(platform, { hooks: fh.hooks as never, contextTail: ctx.tail as never })
+    let confirmEnded!: (nodeId: string) => void
+    wireAgentStatus(platform, {
+      hooks: fh.hooks as never,
+      contextTail: ctx.tail as never,
+      onSessionEnded: (listener) => {
+        confirmEnded = listener
+      }
+    })
     // grok's own dialect: camelCase keys, snake_case event VALUE, and no transcript_path at all.
     fh.fireRaw('grok', 'g1', {
       hookEventName: 'user_prompt_submit',
@@ -233,7 +239,7 @@ describe('wireAgentStatus — the grok raw-listener branch', () => {
     })
     // The association is private, but `releaseNodeTails` reads it — so a node teardown untracking
     // 'gs-1' can only mean the grok branch put it there.
-    platform.cast(platform.attach({ sendText: () => {}, sendBinary: () => {} }), IPC.ptyDestroy, ['g1'])
+    confirmEnded('g1')
     expect(ctx.calls.some((c) => c.m === 'untrack' && c.args[0] === 'gs-1')).toBe(true)
   })
 

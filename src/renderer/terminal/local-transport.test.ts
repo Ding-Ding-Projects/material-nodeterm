@@ -26,6 +26,30 @@ describe('LocalTransport injected api', () => {
     void t.create({ persistKey: 'k' } as never)
     expect(create).toHaveBeenCalledWith({ persistKey: 'k' })
   })
+
+  it('returns the destroy acknowledgement so a caller can retain its node on rejection', async () => {
+    const destroy = vi.fn(() => Promise.reject(new Error('session outcome unknown')))
+    const api = {
+      pty: {
+        destroy
+      }
+    } as unknown as NodeTerminalApi
+    const t = new LocalTransport(api)
+
+    await expect(t.destroy('node-1', { everySocket: true })).rejects.toThrow(
+      'session outcome unknown'
+    )
+    expect(destroy).toHaveBeenCalledWith('node-1', { everySocket: true })
+  })
+
+  it('returns the recycle acknowledgement so a caller does not mutate cwd on rejection', async () => {
+    const recycle = vi.fn(() => Promise.reject(new Error('restart outcome unknown')))
+    const api = { pty: { recycle } } as unknown as NodeTerminalApi
+    const t = new LocalTransport(api)
+
+    await expect(t.recycle('node-2')).rejects.toThrow('restart outcome unknown')
+    expect(recycle).toHaveBeenCalledWith('node-2')
+  })
 })
 
 describe('LocalTransport co-attach members', () => {

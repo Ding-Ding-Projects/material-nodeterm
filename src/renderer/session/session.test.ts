@@ -16,6 +16,7 @@ import {
   takeSessionOffline,
   activeSessionPresence,
   presenceForProject,
+  projectSessionScope,
 } from './session'
 import { defaultPresence } from '../state/presence'
 import type { NodeTerminalApi } from '@shared/types'
@@ -145,6 +146,26 @@ describe('bindProjectToSession (4c remote-tab resolution)', () => {
   it('rejects a binding to an unknown session id', () => {
     createSession('local', fakeApi, 'This Mac')
     expect(() => bindProjectToSession('p', 'relay-999')).toThrow()
+  })
+
+  it('scopes colliding node status cleanup to the project-owning core', () => {
+    const local = createSession('local', fakeApi, 'This Mac')
+    setActiveSession(local.id)
+    const relay = createSession(
+      'relay',
+      { marker: 'relay' } as unknown as NodeTerminalApi,
+      'remote'
+    )
+    bindProjectToSession('relay-project', relay.id)
+    const localStatus = projectSessionScope('local-project').stores.agentStatus.store
+    const relayStatus = projectSessionScope('relay-project').stores.agentStatus.store
+    localStatus.getState().setSessionId('same-node', 'local-session')
+    relayStatus.getState().setSessionId('same-node', 'relay-session')
+
+    relayStatus.getState().remove('same-node')
+
+    expect(relayStatus.getState().byId['same-node']).toBeUndefined()
+    expect(localStatus.getState().byId['same-node']?.sessionId).toBe('local-session')
   })
 })
 

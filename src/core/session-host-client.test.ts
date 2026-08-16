@@ -4,7 +4,12 @@ import os from 'os'
 import path from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { sessionHostPaths } from '../session-host/paths'
-import { LineFramer, encodeFrame, type SessionHostRequest } from '../session-host/protocol'
+import {
+  LineFramer,
+  SESSION_HOST_PROTOCOL_VERSION,
+  encodeFrame,
+  type SessionHostRequest
+} from '../session-host/protocol'
 import { SessionHostClient } from './session-host-client'
 
 const openServers = new Set<net.Server>()
@@ -41,6 +46,22 @@ function spawnOptions(userDataDir: string, args: string[] = []) {
   }
 }
 
+function publishHostIdentity(userDataDir: string, token = 'a'.repeat(64)): string {
+  const paths = sessionHostPaths(userDataDir)
+  fs.writeFileSync(paths.tokenPath, token)
+  fs.writeFileSync(
+    paths.statePath,
+    JSON.stringify({
+      pid: process.pid,
+      endpoint: paths.endpoint,
+      tokenPath: paths.tokenPath,
+      startedAt: Date.now(),
+      protocolVersion: SESSION_HOST_PROTOCOL_VERSION
+    })
+  )
+  return token
+}
+
 async function listen(server: net.Server, endpoint: string): Promise<void> {
   openServers.add(server)
   await new Promise<void>((resolve, reject) => {
@@ -74,8 +95,7 @@ describe('SessionHostClient failure boundaries', () => {
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-session-client-'))
     tempDirs.add(userDataDir)
     const paths = sessionHostPaths(userDataDir)
-    const token = 'test-token-kept-off-argv'
-    fs.writeFileSync(paths.tokenPath, token)
+    const token = publishHostIdentity(userDataDir)
 
     const server = net.createServer((socket) => {
       openSockets.add(socket)
@@ -103,22 +123,24 @@ describe('SessionHostClient failure boundaries', () => {
     const firstData = new Promise<string>((resolve) => {
       deliver = resolve
     })
+    const subscriber = { onData: deliver, onExit: () => {} }
     const attached = client.attach(
       'nt-real-transition',
       spawnOptions(userDataDir),
       1_000,
-      { onData: deliver, onExit: () => {} }
+      subscriber
     )
 
     await expect(within(attached)).resolves.toEqual({ fresh: true })
     await expect(within(firstData)).resolves.toBe('first production frame')
+    client.unsubscribe('nt-real-transition', subscriber)
   })
 
   it('rolls back only a rejected co-attach and replays the neighboring attachment', async () => {
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-session-client-'))
     tempDirs.add(userDataDir)
     const paths = sessionHostPaths(userDataDir)
-    fs.writeFileSync(paths.tokenPath, 'test-token')
+    publishHostIdentity(userDataDir)
     let connection = 0
     let firstAttach = true
     let firstSocket: net.Socket | undefined
@@ -165,17 +187,19 @@ describe('SessionHostClient failure boundaries', () => {
     const refusedData = vi.fn()
     const keptData = vi.fn()
     const client = new SessionHostClient({ userDataDir })
+    const refusedSubscriber = { onData: refusedData, onExit: () => {} }
+    const keptSubscriber = { onData: keptData, onExit: () => {} }
     const refused = client.attach(
       'nt-shared',
       spawnOptions(userDataDir, ['failed-options']),
       1_000,
-      { onData: refusedData, onExit: () => {} }
+      refusedSubscriber
     )
     const kept = client.attach(
       'nt-shared',
       spawnOptions(userDataDir, ['kept-options']),
       1_000,
-      { onData: keptData, onExit: () => {} }
+      keptSubscriber
     )
 
     await expect(within(refused)).rejects.toThrow('one subscriber refused')
@@ -186,6 +210,7 @@ describe('SessionHostClient failure boundaries', () => {
     await expect.poll(() => replayedArgs).toEqual([['kept-options']])
     await expect.poll(() => keptData.mock.calls).toEqual([['replayed-live-data']])
     expect(refusedData).not.toHaveBeenCalled()
+    client.unsubscribe('nt-shared', keptSubscriber)
   })
 
   it.each(['capture', 'killSession'] as const)(
@@ -194,7 +219,7 @@ describe('SessionHostClient failure boundaries', () => {
       const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-session-client-'))
       tempDirs.add(userDataDir)
       const paths = sessionHostPaths(userDataDir)
-      fs.writeFileSync(paths.tokenPath, 'test-token')
+      publishHostIdentity(userDataDir)
 
       const server = net.createServer((socket) => {
         openSockets.add(socket)
