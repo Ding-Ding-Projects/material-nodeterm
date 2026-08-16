@@ -61,6 +61,28 @@ non-canonical base64, an invalid ephemeral key, a failed MAC, or an unsealable r
 pairing failure and must not be retried as plaintext. Older clients must adopt this bootstrap wire
 contract before pairing with a current desktop build.
 
+### 0.1 Release blocker: shared `agent.json` writer lock
+
+The companion host agent and nodeterm desktop both update `~/.nodeterm/agent.json`; atomic rename
+alone cannot stop one process from publishing a stale snapshot that erases the other's fields. The
+companion must adopt the desktop's exact lock protocol before these builds ship together:
+
+1. Exclusively create `~/.nodeterm/agent.json.lock` (`O_CREAT | O_EXCL`, mode `0600`). Its JSON may
+   contain only diagnostic ownership metadata such as version, PID, nonce, and start time—never a
+   token or key.
+2. Acquire the lock **before reading** `agent.json`, then hold it across the entire
+   read-modify-write and atomic rename. Desktop pairing/revoke additionally holds it across the
+   associated `authorized_keys` mutation.
+3. Retry contention for at most 10 seconds, then fail closed without changing either credential
+   file. Never remove a lock merely because its timestamp looks old; that can split a slow but live
+   writer's critical section.
+4. Release only the lock acquired by that operation, in `finally`. A release failure is an error,
+   not success.
+
+This repository has a real two-process contention test for the desktop half. Because the companion
+host-agent source is maintained separately, its adoption and a symmetric two-process test are
+**unverified release blockers**; desktop-only locking does not make mixed writers safe.
+
 ---
 
 ## What changed and why

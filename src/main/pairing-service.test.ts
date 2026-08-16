@@ -330,6 +330,21 @@ describe('revokeDevice', () => {
     expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled'])
   })
 
+  it('serializes revokes from separate service instances through the filesystem lock', async () => {
+    gateReads([AGENT_JSON, AUTH_KEYS])
+    const firstProcessPeer = newService()
+    const secondProcessPeer = newService()
+
+    const results = await Promise.allSettled([
+      firstProcessPeer.revokeDevice('dev-a'),
+      secondProcessPeer.revokeDevice('dev-b')
+    ])
+
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
+    expect(authKeys()).toBe(`${KEY_OTHER}\n`)
+    expect(deviceIds()).toEqual([])
+  })
+
   it('a failed revoke rejects to its caller and does not block the next one', async () => {
     const service = newService()
     // First rename is agent.json's, inside the failing revoke.
@@ -720,6 +735,65 @@ describe('secure pairing listener', () => {
       expect(deviceIds()).toEqual(['dev-a', 'dev-b'])
       expect(authKeys()).not.toContain(`nodeterm-ios-${entry!.id}`)
     } finally {
+      service.stop()
+    }
+  })
+
+  it('does not grant SSH when cancellation lands after registry publication', async () => {
+    let reportPersisted!: () => void
+    const persisted = new Promise<void>((resolve) => {
+      reportPersisted = resolve
+    })
+    let releasePersist!: () => void
+    const release = new Promise<void>((resolve) => {
+      releasePersist = resolve
+    })
+    const done = vi.fn()
+    const beforeKeys = authKeys()
+    const append = vi.spyOn(fs, 'appendFile')
+    const service = newService({
+      afterDevicePersisted: async () => {
+        reportPersisted()
+        await release
+      }
+    })
+    try {
+      const started = await service.start(done)
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as {
+        token: string
+        pairPort: number
+        hostKey: string
+      }
+
+      const response = postSecure(pairPort, hostKey, {
+        token,
+        publicKey: freshEd25519Line(),
+        deviceName: 'Canceled After Registry Phone'
+      })
+      await persisted
+
+      service.stop()
+      releasePersist()
+
+      await expect(response).resolves.toMatchObject({
+        status: 409,
+        text: 'pairing window is closed'
+      })
+      expect(append).not.toHaveBeenCalled()
+      expect(authKeys()).toBe(beforeKeys)
+      const canceled = (await service.listDevices()).find(
+        (candidate) => candidate.name === 'Canceled After Registry Phone'
+      )
+      expect(canceled).toBeDefined()
+      expect(done).not.toHaveBeenCalled()
+
+      await service.revokeDevice(canceled!.id)
+      expect(await service.listDevices()).not.toContainEqual(
+        expect.objectContaining({ id: canceled!.id })
+      )
+      expect(authKeys()).toBe(beforeKeys)
+    } finally {
+      releasePersist()
       service.stop()
     }
   })

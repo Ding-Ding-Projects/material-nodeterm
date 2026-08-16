@@ -66,6 +66,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
 function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [pendingRevoke, setPendingRevoke] = useState<PairedDevice | null>(null)
+  const [revokeError, setRevokeError] = useState('')
 
   const phoneAccessEnabled = useSettings((s) => s.settings.phoneAccessEnabled)
   const updateSettings = useSettings((s) => s.update)
@@ -127,6 +128,16 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
     setPendingRevoke(null)
     try {
       await window.nodeTerminal.pairing.revokeDevice(device.id)
+      // A successful retry is the only thing that clears the persistent warning.
+      setRevokeError('')
+    } catch (error) {
+      const detail = error instanceof Error && error.message ? ` (${error.message})` : ''
+      // Never imply success when authorized_keys could not be checked or rewritten. The row stays
+      // in local state and refreshDevices preserves it on read failure, so the owner keeps a Retry.
+      setRevokeError(
+        `Couldn’t revoke “${device.name}”${detail}. Its SSH access may still be active. ` +
+          'The device remains listed; fix the file-access problem and retry Revoke.'
+      )
     } finally {
       void refreshDevices()
     }
@@ -278,6 +289,11 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
       <SearchableRow {...ROWS.devices}>
         <div className="space-y-3">
           <h4 className="text-[13px] font-medium text-text">Paired devices</h4>
+          {revokeError ? (
+            <p role="alert" className="text-sm" style={{ color: '#ff9f0a' }}>
+              {revokeError}
+            </p>
+          ) : null}
           {devices.length === 0 ? (
             <p className="text-sm text-muted">No devices paired yet</p>
           ) : (

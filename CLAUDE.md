@@ -1738,6 +1738,26 @@ failure so a partial grant is immediately reported and can be revoked rather tha
 Revocation has the same absence rule on `authorized_keys`: only `ENOENT` permits the registry entry
 to be removed without a key-file rewrite. `EACCES`, `EIO`, and unknown read failures leave both the
 key and its visible device entry unchanged, so a possibly-live SSH credential is never hidden.
+Settings keeps the device row and shows a persistent “access may still be active” retry warning
+when that revoke rejects; a bridge rejection must never become an unhandled promise or a false
+success.
+
+`agent.json` is a shared cross-process registry. Desktop pairing and revoke take the exclusive
+`~/.nodeterm/agent.json.lock` before the authoritative read and hold it through the complete
+registry/`authorized_keys` transaction. Acquisition is bounded and fails closed; the lock contains
+only owner diagnostics, and an old-looking lock is never deleted on age alone because doing so can
+split a live writer's critical section. Atomic rename prevents torn bytes but does not prevent a
+stale read-modify-write from erasing a concurrent writer. The separately shipped companion host
+agent is also an `agent.json` writer and therefore must adopt this exact lock contract, with a
+symmetric two-process test, before the combined release is considered verified; its source is not
+in this repository, so that adoption remains an external release blocker.
+
+Renderer pairing owns the main-process attempt before awaiting `pairing.start()`, invalidates every
+continuation with an epoch on stop, unmount, completion, or replacement, and serializes overlapping
+start handshakes so a stale global stop cannot cancel a replacement listener. The service rechecks
+attempt ownership after publishing the registry and before activating SSH. Cancellation in that
+window may leave a visible, revocable registry row, but performs no key append and delivers no
+bearer.
 
 - Phone relay remote access ("Reach this Mac from anywhere") is a **Core (free) feature** as of
   2026-08-01 — the iOS app is itself paid, so a desktop Pro gate double-charged the same feature.
