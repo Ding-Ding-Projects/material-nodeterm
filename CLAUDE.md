@@ -169,6 +169,16 @@ Persistence has two layers:
 
 `settings.json` is a separate store (`main/settings-store.ts`, `state/settings.ts`).
 
+`scheduled-settings.json` has a deliberately three-state startup read. `ENOENT` is a normal empty
+schedule; valid JSON is normalized; corrupt/unreadable evidence is left exactly in place while
+`ScheduledSettingsRuntime` (the ONE runtime started by both Desktop and Server) serves an empty,
+disabled in-memory schedule plus a structured `ScheduledSettingsLoadError` over IPC/WS. Saves stay
+locked until the file is repaired/moved and nodeterm restarts, so the recovery copy cannot be
+overwritten by an editor looking at safe defaults. The renderer's `ScheduledSettingsSaveQueue`
+also has one in-flight owner: edits behind it remain pending, and both rejection and success release
+the owner in `finally`. See `docs/scheduled-settings.md` and the store/runtime/real-server startup
+tests named there.
+
 **The shared School/Kids mode records must become watchable even when their directory is absent at
 boot.** Both stores use `core/shared-record-watch.ts`: one `fs.watch` handle sits on the nearest
 existing ancestor, promotes toward `~/.nodeterm/shared/` as it appears, and retries promotion after

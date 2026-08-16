@@ -37,8 +37,7 @@ import { WorkspaceWatcher } from '../core/workspace-watcher'
 import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
-import { ScheduledSettingsStore } from '../core/scheduled-settings-store'
-import { ScheduledSettingsService } from '../core/scheduled-settings-service'
+import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
 import { GitService } from '../core/git-service'
@@ -252,8 +251,7 @@ function isSafeExternalUrl(url: unknown): url is string {
 const settingsStore = new SettingsStore()
 const schoolModeStore = new SchoolModeStore()
 const kidsModeStore = new KidsModeStore()
-const scheduledSettingsStore = new ScheduledSettingsStore()
-const scheduledSettingsService = new ScheduledSettingsService(scheduledSettingsStore)
+const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
 const sshStore = new SshStore()
 const ptyManager = new PtyManager()
 // Dictation: local whisper.cpp models live under userData, one dir per install (same convention
@@ -595,9 +593,9 @@ app.whenReady().then(async () => {
   schoolModeStore.registerIpc()
   await kidsModeStore.init()
   kidsModeStore.registerIpc()
-  scheduledSettingsStore.init()
-  scheduledSettingsStore.registerIpc()
-  scheduledSettingsService.start()
+  // This one runtime is shared with the Server Edition. A corrupt/unreadable schedule file boots
+  // into a disabled recovery state rather than aborting this app-ready sequence.
+  scheduledSettingsRuntime.start()
   // Local, git-backed settings history (docs/local-history.md). One append-only revision per
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
@@ -2481,7 +2479,7 @@ let quitFlushed = false
 app.on('before-quit', (e) => {
   quitting = true // from here on, window close-events must NOT be turned into hide
   destroyNotchHud()
-  scheduledSettingsService.stop()
+  scheduledSettingsRuntime.stop()
   workspaceWatcher.dispose()
   if (quitFlushed) {
     // Second pass (the deferred app.quit() below): the flush had its chance — drop the masters.

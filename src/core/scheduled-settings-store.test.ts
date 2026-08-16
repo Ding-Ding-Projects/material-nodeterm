@@ -39,17 +39,39 @@ describe('ScheduledSettingsStore', () => {
     await fs.rm(userData, { recursive: true, force: true })
   })
 
-  it('treats only ENOENT as an empty schedule', async () => {
+  it('treats only ENOENT as a normal empty schedule and permits its first save', async () => {
     const absent = new ScheduledSettingsStore()
-    absent.init()
-    expect(absent.get().rules).toEqual([])
+    expect(absent.init()).toMatchObject({ ok: true, file: { rules: [] }, error: null })
+    expect(await absent.save(validFile())).toEqual({ ok: true })
+  })
 
-    await fs.writeFile(filePath, '{broken json', 'utf8')
-    expect(() => new ScheduledSettingsStore().init()).toThrow()
+  it('keeps corrupt JSON as recovery evidence, disables every rule, and refuses overwrite', async () => {
+    const original = '{broken json'
+    await fs.writeFile(filePath, original, 'utf8')
+    const store = new ScheduledSettingsStore()
 
-    await fs.rm(filePath)
+    expect(store.init()).toMatchObject({
+      ok: false,
+      file: { rules: [] },
+      error: { kind: 'corrupt', path: filePath }
+    })
+    expect(store.get().rules).toEqual([])
+    expect((await store.save(validFile())).ok).toBe(false)
+    expect(await fs.readFile(filePath, 'utf8')).toBe(original)
+  })
+
+  it('keeps a directory-at-path as unreadable evidence instead of aborting startup', async () => {
     await fs.mkdir(filePath)
-    expect(() => new ScheduledSettingsStore().init()).toThrow()
+    const store = new ScheduledSettingsStore()
+
+    expect(store.init()).toMatchObject({
+      ok: false,
+      file: { rules: [] },
+      error: { kind: 'unreadable', path: filePath }
+    })
+    expect((await fs.stat(filePath)).isDirectory()).toBe(true)
+    expect((await store.save(validFile())).ok).toBe(false)
+    expect((await fs.stat(filePath)).isDirectory()).toBe(true)
   })
 
   it('loads malformed external rules disabled instead of converting them into active local rules', async () => {
