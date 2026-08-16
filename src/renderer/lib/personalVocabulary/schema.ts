@@ -25,9 +25,9 @@ export const VOCAB_MAX_ENTRIES = 2000
 export const VOCAB_MAX_KEY_LENGTH = 200
 export const VOCAB_MAX_VALUE_LENGTH = 500
 
-/** `Object.prototype` pollution vectors — rejected as keys even though `entries` is a plain
- *  object literal we build ourselves (never `Object.assign`ed onto a live prototype-bearing
- *  object), because the file is untrusted input and this is a cheap, unconditional guarantee. */
+/** `Object.prototype` pollution vectors — rejected at both object levels even though the scanner
+ *  and returned dictionary have null prototypes, because the file is untrusted input and this is
+ *  a cheap, unconditional guarantee that survives future refactors. */
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 export interface PersonalVocabularyEntries {
@@ -57,19 +57,34 @@ export function validateVocabularyPayload(raw: string): VocabValidationResult {
   const scanned = scanJson(raw, { maxDepth: VOCAB_MAX_DEPTH, maxNodes: VOCAB_MAX_NODES })
   if (!scanned.ok) return { ok: false, error: `not valid JSON — ${scanned.error}` }
 
-  const root = scanned.value
+  return validateVocabularyValue(scanned.value)
+}
+
+/** Validate an already-decoded value against the same ownership and shape rules. The upload path
+ *  always arrives through `scanJson`; keeping this decision as a pure value-level function makes
+ *  the own-property boundary directly testable rather than an unobservable redundant guard. */
+export function validateVocabularyValue(root: unknown): VocabValidationResult {
   if (root === null || typeof root !== 'object' || Array.isArray(root)) {
     return { ok: false, error: 'the top level must be a JSON object' }
   }
   const rootObj = root as Record<string, unknown>
 
-  if (rootObj.version !== VOCAB_SCHEMA_VERSION) {
+  for (const key of Object.keys(rootObj)) {
+    if (UNSAFE_KEYS.has(key)) return { ok: false, error: `top-level key "${key}" is not allowed` }
+  }
+
+  // These are deliberately own-property checks. An inherited `version` or `entries` value is
+  // not part of the uploaded JSON contract and must never make a malformed payload look valid.
+  if (!Object.hasOwn(rootObj, 'version') || rootObj.version !== VOCAB_SCHEMA_VERSION) {
     return {
       ok: false,
       error: `unsupported or missing schema version (expected ${VOCAB_SCHEMA_VERSION}, a future/older format is rejected rather than guessed at)`
     }
   }
 
+  if (!Object.hasOwn(rootObj, 'entries')) {
+    return { ok: false, error: '"entries" must be an own JSON object property of string → string' }
+  }
   const entriesRaw = rootObj.entries
   if (entriesRaw === null || typeof entriesRaw !== 'object' || Array.isArray(entriesRaw)) {
     return { ok: false, error: '"entries" must be a JSON object of string → string' }
@@ -80,7 +95,10 @@ export function validateVocabularyPayload(raw: string): VocabValidationResult {
     return { ok: false, error: `more than ${VOCAB_MAX_ENTRIES} entries (${keys.length})` }
   }
 
-  const entries: PersonalVocabularyEntries = {}
+  // Keep the validated result prototype-free too. The scanner already made every input key an
+  // own property; returning an ordinary `{}` here would reintroduce the `__proto__` setter at the
+  // final copy boundary if the rejection above were ever weakened.
+  const entries = Object.create(null) as PersonalVocabularyEntries
   for (const key of keys) {
     if (UNSAFE_KEYS.has(key)) return { ok: false, error: `"${key}" is not an allowed key` }
     if (key.length === 0) return { ok: false, error: 'an entry has an empty key' }
