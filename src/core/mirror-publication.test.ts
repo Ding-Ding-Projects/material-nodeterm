@@ -68,7 +68,9 @@ describe('mirror publication generations', () => {
   it.each([
     '[]',
     JSON.stringify({ v: 2, updatedAt: 1, nodes: {} }),
-    JSON.stringify({ v: 1, updatedAt: 1 })
+    JSON.stringify({ v: 1, updatedAt: 1 }),
+    JSON.stringify({ v: 1, updatedAt: '1', nodes: {} }),
+    JSON.stringify({ v: 1, updatedAt: 1, nodes: [] })
   ])('does not reinterpret a malformed canonical mirror as legacy generation zero', async (bytes) => {
     fs.writeFileSync(file, bytes)
     await expect(reserveMirrorGeneration(file)).rejects.toThrow('Invalid mirror document')
