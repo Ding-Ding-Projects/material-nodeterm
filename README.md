@@ -15,7 +15,7 @@ ADHD and scattered workflows: a spatial layout instead of a stack of hidden tabs
 [![Built with Electron](https://img.shields.io/badge/built%20with-Electron-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/license-BUSL--1.1-blue)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Ding-Ding-Projects/material-nodeterm?style=flat)](https://github.com/Ding-Ding-Projects/material-nodeterm/stargazers)
-[![Latest release](https://img.shields.io/github/v/release/Ding-Ding-Projects/material-nodeterm?include_prereleases&sort=semver)](https://github.com/Ding-Ding-Projects/material-nodeterm/releases)
+[![Latest release](https://img.shields.io/github/v/release/Ding-Ding-Projects/material-nodeterm?sort=semver)](https://github.com/Ding-Ding-Projects/material-nodeterm/releases)
 
 **Install:** grab the latest build from **[Releases](https://github.com/Ding-Ding-Projects/material-nodeterm/releases)**
 (Windows `Setup.exe` today — see [Windows](#windows) for the unsigned-installer note), or
