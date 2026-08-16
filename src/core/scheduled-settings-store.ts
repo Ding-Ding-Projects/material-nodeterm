@@ -38,8 +38,15 @@ export class ScheduledSettingsStore {
     try {
       const raw = readFileSync(this.filePath, 'utf-8')
       this.cache = normalizeScheduledSettingsFile(JSON.parse(raw))
-    } catch {
-      this.cache = defaultScheduledSettingsFile()
+    } catch (error) {
+      // Absence is the only empty schedule. Treating corrupt JSON, EACCES, EIO, or a directory at
+      // this path as "no rules" can silently remove an active automation and lets the next save
+      // overwrite the evidence needed to recover it.
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        this.cache = defaultScheduledSettingsFile()
+        return
+      }
+      throw error
     }
   }
 
@@ -56,9 +63,12 @@ export class ScheduledSettingsStore {
    *  throws — so the renderer can always show `error` inline next to the Save button rather than
    *  treating either kind of failure as an IPC crash. */
   async save(raw: ScheduledSettingsFile): Promise<{ ok: boolean; error?: string }> {
-    const normalized = normalizeScheduledSettingsFile(raw)
-    const shapeError = validateScheduledSettingsFile(normalized)
+    // Validate the caller's bytes BEFORE tolerant disk migration. Normalizing first used to slice
+    // rule lists/labels and turn malformed external sources into local rules, then report success.
+    // A rejected save must leave both the cache and the file exactly as they were.
+    const shapeError = validateScheduledSettingsFile(raw)
     if (shapeError) return { ok: false, error: shapeError }
+    const normalized = normalizeScheduledSettingsFile(raw)
     const run = this.saveChain.then(() => this.saveNow(normalized))
     this.saveChain = run.catch(() => {})
     try {
