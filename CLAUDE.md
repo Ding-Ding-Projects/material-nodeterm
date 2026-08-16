@@ -1901,6 +1901,16 @@ The append path may treat only `ENOENT` as a new key file: `EACCES`, `EIO`, and 
 failures stop before append, because an unreadable existing file may lack its final newline and a
 blind append would splice the new key into the previous one. The already-published registry row
 stays visible as the revoke handle.
+
+The desktop's late-adoption relay advertisement (`main/remote/relay-advertise.ts`) sweeps abandoned
+publication temps before creating its own. It delegates recognition, the 24-hour grace, and the
+signal-0 owner decision to `sweepStaleTempFiles`: a foreign pid is not death, and unreadable
+metadata or an unjudgeable owner preserves the candidate. Only a recognized old temp whose owner
+is no longer visible is collected; malformed names stay untouched, temp contents are never read,
+and a failed publication still removes exactly the UUID temp minted by that call. This is desktop
+runtime hygiene only: the Server Edition does not publish `~/.nodeterm/relay.json`, and the mobile
+companion only reads the canonical advertisement through its existing SSH bootstrap.
+
 Pairing completion carries a distinct failure reason, and Settings refreshes the registry even on
 failure so a partial grant is immediately reported and can be revoked rather than called a timeout.
 Revocation has the same absence rule on `authorized_keys`: only `ENOENT` permits the registry entry

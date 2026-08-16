@@ -117,6 +117,9 @@ need it too, and wire it in the same change.
   process's namespace; an unjudgeable probe preserves the file. A credential Clear must then use
   `clearAtomicTarget` and surface `clear-incomplete` while any recognized temp remains — preserving
   a plausible live writer is correct, but telling the UI its bearer bytes are gone is not.
+  The desktop relay advertisement runs that shared sweep before creating its own temp: it may
+  collect an old, owner-dead `relay.json.<pid>.<seq>.<uuid>.tmp`, but must preserve young, live,
+  unjudgeable, unreadable, and malformed candidates. It never reads a temp's contents.
   Every temp/part staging name must also be unique per call across processes and cleaned by its
   owner —
   including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot

@@ -144,6 +144,14 @@ grace remains part of the evidence. `EPERM`/unknown results preserve the file. T
 `<file>.tmp` has no owner to probe, so only the same conservative age grace is available. Current
 writers still remove their own temp immediately when their write fails.
 
+The desktop relay advertisement applies that exact protocol to
+`~/.nodeterm/relay.json.<pid>.<seq>.<uuid>.tmp`. Before it creates a new publication temp it invokes
+`sweepStaleTempFiles` for the canonical `relay.json`; the shared recognizer leaves malformed names
+alone, and the sweep never reads a candidate's contents. Old + owner-dead is the only foreign-temp
+removal case. Young, live, unjudgeable, or metadata-unreadable candidates remain in place. A write
+or rename failure separately removes the exact UUID temp owned by that one call. The direct
+behavior proof is `src/main/remote/relay-advertise.test.ts`.
+
 A credential **Clear** has a stricter reporting contract without a more destructive cleanup
 policy. `clearAtomicTarget` removes the canonical file, runs the conservative sweep, then inspects
 for every recognized legacy/current temp. It reports incomplete while a young, live, unjudgeable,
