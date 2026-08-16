@@ -383,14 +383,18 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => {
         if (p.id !== projectId) return p
-        const bridges = applyEdgeMutation(p.bridges ?? [], 'bridge', mutation)
-        const ropes = applyEdgeMutation(p.ropes ?? [], 'rope', mutation)
+        const bridgeInput = p.bridges ?? []
+        const ropeInput = p.ropes ?? []
+        const bridges = applyEdgeMutation(bridgeInput, 'bridge', mutation)
+        const ropes = applyEdgeMutation(ropeInput, 'rope', mutation)
         // `applyEdgeMutation` returns the SAME array when the mutation is not about that list, so
         // the untouched kind keeps its identity — and a project whose stored list was `undefined`
         // stays `undefined` rather than being materialized as an empty array on every peer edge
         // (which would dirty the file with `"bridges": []` on projects that have never had one).
-        const nextBridges = bridges === (p.bridges ?? []) ? p.bridges : bridges
-        const nextRopes = ropes === (p.ropes ?? []) ? p.ropes : ropes
+        // Keep the exact inputs above: evaluating `p.bridges ?? []` again creates a different empty
+        // array, defeats the identity test, and dirties a rope-only project with `bridges: []`.
+        const nextBridges = bridges === bridgeInput ? p.bridges : bridges
+        const nextRopes = ropes === ropeInput ? p.ropes : ropes
         if (nextBridges === p.bridges && nextRopes === p.ropes) return p
         return { ...p, bridges: nextBridges, ropes: nextRopes }
       })

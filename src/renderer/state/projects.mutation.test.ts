@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useProjects } from './projects'
-import type { CanvasNodeState } from '@shared/types'
+import type { BridgeLink, CanvasNodeState } from '@shared/types'
 
 const node = (id: string, x = 0): CanvasNodeState => ({
   id,
@@ -73,5 +73,100 @@ describe('applyNodeMutation', () => {
     const applied = useProjects.getState().applyNodeMutation('nope', { op: 'remove', id: 'x' })
     expect(applied).toBe(false)
     expect(useProjects.getState().projects).toHaveLength(0)
+  })
+})
+
+const bridge = (id: string, source = 'a', target = 'b'): BridgeLink => ({ id, source, target })
+
+/** Edge mutations need the same inactive-project path as nodes. React Flow holds only the
+ * foreground project; an incoming edge for any background project must update the serialized
+ * store immediately or the next whole-workspace save deletes the peer's link again. */
+describe('applyEdgeMutation', () => {
+  it('persists a peer-created bridge in a background project without changing the foreground', () => {
+    const foreground = useProjects.getState().addProject('foreground')
+    const background = useProjects.getState().addProject('background')
+    useProjects
+      .getState()
+      .commitCanvas(
+        foreground.id,
+        [node('a'), node('b')],
+        { x: 0, y: 0, zoom: 1 },
+        [bridge('foreground-link')]
+      )
+    useProjects
+      .getState()
+      .commitCanvas(background.id, [node('a'), node('b')], { x: 0, y: 0, zoom: 1 })
+    useProjects.getState().setActive(foreground.id)
+
+    const applied = useProjects.getState().applyEdgeMutation(background.id, {
+      op: 'edge-upsert',
+      kind: 'bridge',
+      edge: bridge('peer-link')
+    })
+
+    expect(applied).toBe(true)
+    expect(useProjects.getState().activeProjectId).toBe(foreground.id)
+    expect(useProjects.getState().getProject(foreground.id)?.bridges).toEqual([
+      bridge('foreground-link')
+    ])
+    expect(useProjects.getState().getProject(background.id)?.bridges).toEqual([
+      bridge('peer-link')
+    ])
+    expect(
+      useProjects.getState().toWorkspace().projects.find((p) => p.id === background.id)?.bridges
+    ).toEqual([bridge('peer-link')])
+  })
+
+  it('persists a peer edge deletion so a later background save cannot resurrect it', () => {
+    const foreground = useProjects.getState().addProject('foreground')
+    const background = useProjects.getState().addProject('background')
+    useProjects
+      .getState()
+      .commitCanvas(
+        background.id,
+        [node('a'), node('b')],
+        { x: 0, y: 0, zoom: 1 },
+        [bridge('peer-link')]
+      )
+    useProjects.getState().setActive(foreground.id)
+
+    useProjects.getState().applyEdgeMutation(background.id, {
+      op: 'edge-remove',
+      kind: 'bridge',
+      id: 'peer-link'
+    })
+
+    expect(useProjects.getState().getProject(background.id)?.bridges).toEqual([])
+    expect(
+      useProjects.getState().toWorkspace().projects.find((p) => p.id === background.id)?.bridges
+    ).toEqual([])
+  })
+
+  it('does not materialize the untouched optional list while applying the other edge kind', () => {
+    const project = useProjects.getState().addProject('background')
+
+    useProjects.getState().applyEdgeMutation(project.id, {
+      op: 'edge-upsert',
+      kind: 'rope',
+      edge: bridge('rope-link')
+    })
+
+    const stored = useProjects.getState().getProject(project.id)
+    expect(stored?.ropes).toEqual([bridge('rope-link')])
+    expect(stored?.bridges).toBeUndefined()
+    const persisted = useProjects.getState().toWorkspace().projects[0]
+    expect(persisted.ropes).toEqual([bridge('rope-link')])
+    expect(persisted.bridges).toBeUndefined()
+  })
+
+  it('reports false for an unknown project and creates no persistence record', () => {
+    const applied = useProjects.getState().applyEdgeMutation('missing', {
+      op: 'edge-upsert',
+      kind: 'bridge',
+      edge: bridge('peer-link')
+    })
+
+    expect(applied).toBe(false)
+    expect(useProjects.getState().toWorkspace().projects).toEqual([])
   })
 })

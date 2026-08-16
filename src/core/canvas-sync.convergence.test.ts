@@ -196,7 +196,12 @@ class Client {
       this.states = applyCanvasMutation(this.states, m)
       this.bridges = applyEdgeMutation(this.bridges, 'bridge', m)
       this.ropes = applyEdgeMutation(this.ropes, 'rope', m)
-      this.pub.adopt(this.publishable()) // loop guard — never re-publish someone else's change
+      const adopted = this.publishable()
+      this.pub.adopt(adopted) // loop guard — never re-publish someone else's change
+      // React runs the publish effect after the incoming state update. Model that second half of
+      // the production sequence explicitly: without the adopt above this call counter-casts the
+      // peer mutation, so the no-echo assertion is a behavioral guard rather than a false green.
+      this.pub.publish(adopted)
     })
   }
 
