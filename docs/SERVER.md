@@ -351,12 +351,36 @@ Run the full repeatable image check after Docker/Compose/host changes:
 
 ```bash
 node scripts/test-docker-host.mjs
+# Or select an SSH-backed daemon without changing the current Docker context:
+node scripts/test-docker-host.mjs --docker-host ssh://docker@example.test
 ```
 
 It builds the real image, checks `/login`, both renderer/server bundles, `node-pty` and
 `smart-whisper`, verifies PID 1 is uid 1000, observes a clean SIGTERM exit, then proves auth and a
 data marker survive a restart and complete container recreation. It creates uniquely named test
 resources and removes only those resources when it finishes.
+
+The smoke is safe to aim at a shared SSH daemon: its recovery journal pins the daemon identity,
+and every image, volume, server, and helper has a
+cryptographic run id plus role and source-commit labels; every container is recorded by immutable
+id; and cleanup rechecks those identities and labels before removing anything. Runtime containers
+have no published host port, use `network=none`, run under bounded CPU/memory/swap/PID and capability
+limits, and probe HTTP/auth/assets from inside the server container. Passwords enter the probe over
+stdin and never appear in Docker arguments. Inherited Docker context, host, TLS, and builder
+environment controls are cleared after the selected endpoint is resolved.
+
+SSH uses the account's normal persistent host-key inventory. Configure that inventory to accept a
+new key non-interactively and to reject a changed key; the smoke never disables key comparison or
+rewrites global SSH settings. A recovery journal is written outside the repository before resources
+are created. If interruption leaves owned resources behind, run:
+
+```bash
+node scripts/test-docker-host.mjs --cleanup-run <run-uuid>
+```
+
+Recovery still requires the recorded daemon identity, immutable resource identities, and ownership
+labels to match. Cleanup
+residue is a failed smoke result, not a warning.
 
 ### CSP
 

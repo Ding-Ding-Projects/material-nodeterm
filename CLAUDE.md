@@ -2025,6 +2025,22 @@ change owes the real `node scripts/test-docker-host.mjs` smoke: build, health/au
 loads, uid of PID 1, graceful shutdown, volume persistence across restart and recreation, and the
 first-boot-only password contract.
 
+That smoke may target a local socket or an explicit `ssh://` Docker endpoint, but it must remain a
+safe guest on a shared daemon. The selected endpoint is pinned on every command after inherited
+context/TLS/builder controls are removed; `tcp://` and HTTP API endpoints are refused. Each run uses
+a cryptographic UUID and preflights every exact name as absent. Its image, volumes, server, and
+one-shot helpers all carry exact run/role/source-SHA labels, while image/container iid/cid files and
+a volume creation fingerprint supply cleanup identities. Runtime containers publish no port, use
+`network=none`, have CPU/memory/swap/PID/no-new-privilege/capability limits, and the HTTP/auth/asset
+probe executes inside the server container with its password arriving only over stdin. Cleanup
+rechecks identity and labels before removal and a zero-residue label scan is part of the green
+verdict. The predeclared recovery journal lives outside the checkout, pins the daemon identity, and
+`--cleanup-run <uuid>` is the only recovery route; it refuses a daemon, resource-identity, or label
+mismatch rather than adopting a lookalike.
+SSH host trust remains the user's persistent OpenSSH policy: the harness removes an inherited
+`DOCKER_SSH_COMMAND`, never disables host-key comparison, never creates an ephemeral trust store,
+and never mutates the user's SSH configuration.
+
 The wrappers create the first-boot password before starting the build. Root `.env` and the wrappers'
 `.env.bak` / `.nodeterm-env-*` temporary files therefore belong in **both** `.gitignore` and
 `.dockerignore`: Git exclusion alone still sends them through `COPY . .` into the BuildKit context
