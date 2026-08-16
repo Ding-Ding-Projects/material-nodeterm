@@ -13,8 +13,12 @@
 # the proxy forwards X-Forwarded-Proto: https. Do NOT publish the container port directly on a
 # public interface.
 
+# Node 24.15 is the first supported patch on this LTS line: node:sqlite is unflagged and the
+# locked dependency graph accepts it. Keep all stages exact so a floating major cannot hide drift.
+ARG NODE_VERSION=24.15.0
+
 # ---- build: renderer + server bundle (needs devDependencies, no native builds) ----
-FROM node:22-bookworm AS build
+FROM node:${NODE_VERSION}-bookworm AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 # --ignore-scripts skips electron-rebuild AND electron's own binary download (not needed to build)
@@ -23,13 +27,13 @@ COPY . .
 RUN npm run build && npm run server:build
 
 # ---- deps: production node_modules with node-pty compiled for Node (toolchain lives here) ----
-FROM node:22-bookworm AS deps
+FROM node:${NODE_VERSION}-bookworm AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm rebuild node-pty
 
 # ---- runtime: slim image, no compilers ----
-FROM node:22-bookworm-slim
+FROM node:${NODE_VERSION}-bookworm-slim
 # tmux: terminal session continuity (without it PtyManager falls back to a plain shell).
 # git: the Source Control panel. curl: the managed agent-hook scripts POST through it,
 # and the HEALTHCHECK uses it. ca-certificates: git/curl over https.

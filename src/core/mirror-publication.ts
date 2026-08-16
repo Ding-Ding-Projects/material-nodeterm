@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import { DatabaseSync } from 'node:sqlite'
 import { renameAtomic, tempNameFor, writeFileAtomic } from './fs-atomic'
+import { loadNodeSqlite } from './node-runtime'
 
 /**
  * Cross-process publication metadata for agent-status.json.
@@ -101,6 +101,7 @@ export async function readMirrorGeneration(file: string): Promise<number> {
 
 async function withPublicationLock<T>(file: string, action: () => Promise<T>): Promise<T> {
   const lockTarget = await canonicalLockTarget(file)
+  const { DatabaseSync } = loadNodeSqlite()
   const database = new DatabaseSync(publicationDatabaseFor(lockTarget))
   let transactionOpen = false
   try {
