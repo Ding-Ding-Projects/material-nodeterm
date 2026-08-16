@@ -34,6 +34,28 @@ describe('node deletion funnel', () => {
     ).toBe('immediate')
   })
 
+  it('does not ask twice for login nodes already authorized by the account-removal gate', () => {
+    expect(
+      planNodeDeletion({
+        surface: 'account-removal',
+        kidsModeOn: true,
+        titles: ['Account login'],
+        authorizedBy: 'remove-account'
+      }).confirmation
+    ).toBe('immediate')
+  })
+
+  it('does not let account-removal authorization bypass another Kids-mode surface', () => {
+    expect(
+      planNodeDeletion({
+        surface: 'canvas',
+        kidsModeOn: true,
+        titles: ['Ordinary terminal'],
+        authorizedBy: 'remove-account'
+      }).confirmation
+    ).toBe('destructive-gate')
+  })
+
   it('tells an owned-session caller that the canvas node is removed too', () => {
     const plan = planNodeDeletion({
       surface: 'sessions-sidebar',

@@ -137,7 +137,7 @@ feature is *missing* from the other shell.
 
 ## Destructive-action coverage
 
-There are **five** `GuardedAction` values, and all five have a real runtime path:
+There are **six** `GuardedAction` values, and all six have a real runtime path:
 
 | `GuardedAction` | Current behaviour |
 | --- | --- |
@@ -145,6 +145,7 @@ There are **five** `GuardedAction` values, and all five have a real runtime path
 | `delete-project` | always uses the two-key gate ✅ |
 | `remove-worktree` | no Enter-confirm in Kids mode; disk deletion starts unticked, including an already-open dialog when Kids mode turns on ✅ |
 | `discard-changes` | two-key gate in Kids mode; plain confirm when off ✅ |
+| `remove-account` | confirmation happens before credentials, transcripts, serialized bindings, or login sessions are removed; cancelling preserves all of them, and approval closes login nodes through the already-authorized node funnel without a second prompt ✅ |
 | `revoke-device` | two-key gate in Kids mode; plain confirm when off ✅ |
 
 `remove-worktree` is handled differently from `delete-node` on purpose. The two-key gate cannot
@@ -175,9 +176,11 @@ Every node/session close enters `requestDeleteNodes` in `src/renderer/canvas/Can
 uses the pure `planNodeDeletion` + `dispatchNodeDeletion` funnel in
 `src/renderer/lib/nodeDeletion.ts`. That includes the canvas Delete key and menu, React Flow node
 header × buttons, the kanban menu, Cmd/Ctrl+W, the sessions sidebar and session-memory panel, and
-agent-control `close`. React Flow expands a group deletion to its descendants before its callback;
-the funnel reduces that set back to roots so confirming "delete frame" still frees its children
-rather than deleting them.
+agent-control `close`. Removing an account first uses the separate pure account-removal planner;
+only its approved transaction asks the node funnel to close that account's login sessions, marked
+as already authorized so no second prompt can appear after credentials are gone. React Flow expands
+a group deletion to its descendants before its callback; the funnel reduces that set back to roots
+so confirming "delete frame" still frees its children rather than deleting them.
 
 With Kids mode on, every surface receives the two-key gate. With it off, the historical contracts
 remain: canvas deletion is gated, kanban/sidebar/agent-control use a plain confirmation, and
@@ -222,6 +225,7 @@ and by unwiring the gate (red).
 
 ```bash
 npx vitest run src/core/kids-mode.test.ts src/shared/kids-mode-policy.test.ts \
-  src/renderer/state/permissionMode.kids.test.ts src/renderer/lib/nodeDeletion.test.ts
+  src/renderer/state/permissionMode.kids.test.ts src/renderer/lib/nodeDeletion.test.ts \
+  src/renderer/lib/accountRemoval.test.ts
 node scripts/check-app-contract.mjs
 ```

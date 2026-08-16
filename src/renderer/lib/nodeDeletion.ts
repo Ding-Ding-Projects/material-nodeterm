@@ -11,7 +11,8 @@ export const NODE_DELETE_SURFACES = [
   'kanban',
   'window-shortcut',
   'sessions-sidebar',
-  'agent-control'
+  'agent-control',
+  'account-removal'
 ] as const
 
 export type NodeDeleteSurface = (typeof NODE_DELETE_SURFACES)[number]
@@ -33,6 +34,8 @@ export interface PlanNodeDeletionInput {
   requestedBy?: string
   /** False only for a session-memory orphan: there is no canvas node to remove. */
   removesNode?: boolean
+  /** The account-removal gate already disclosed and authorized closing its login nodes. */
+  authorizedBy?: 'remove-account'
 }
 
 /** Ordinary-mode behaviour that predates Kids mode. Kids mode overrides every row to the gate. */
@@ -41,7 +44,8 @@ const ORDINARY_CONFIRMATION: Record<NodeDeleteSurface, NodeDeletionConfirmation>
   kanban: 'plain-confirm',
   'window-shortcut': 'immediate',
   'sessions-sidebar': 'plain-confirm',
-  'agent-control': 'plain-confirm'
+  'agent-control': 'plain-confirm',
+  'account-removal': 'plain-confirm'
 }
 
 /**
@@ -56,14 +60,18 @@ export function planNodeDeletion({
   kidsModeOn,
   titles,
   requestedBy,
-  removesNode = true
+  removesNode = true,
+  authorizedBy
 }: PlanNodeDeletionInput): NodeDeletionPlan {
   const named = titles.length ? titles.map((title) => title.trim() || 'node') : ['node']
   const count = named.length
   const one = named[0]
-  const confirmation = requiresDestructiveGate('delete-node', kidsModeOn).required
-    ? 'destructive-gate'
-    : ORDINARY_CONFIRMATION[surface]
+  const confirmation =
+    surface === 'account-removal' && authorizedBy === 'remove-account'
+      ? 'immediate'
+      : requiresDestructiveGate('delete-node', kidsModeOn).required
+        ? 'destructive-gate'
+        : ORDINARY_CONFIRMATION[surface]
   const requester = requestedBy ? `Agent “${requestedBy}” requested this. ` : ''
   const consequence = removesNode
     ? count > 1

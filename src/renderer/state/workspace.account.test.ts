@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   accountChipLabel,
   accountsForProject,
+  createAccountLoginNode,
+  flowToNodeStates,
   isAccountLoginNode,
+  nodeStatesToFlow,
   sshAccountsHint,
   systemAccountDisplay
 } from './workspace'
@@ -73,15 +76,22 @@ describe('systemAccountDisplay', () => {
 })
 
 describe('isAccountLoginNode', () => {
-  it('matches the factory title (the only persisted signature)', () => {
+  it('keeps the login purpose after rename and a serialize/restore cycle', () => {
+    const login = createAccountLoginNode('a1', 0)
+    login.data.title = 'Family sign-in'
+    const restored = nodeStatesToFlow(flowToNodeStates([login]))[0]
+
+    expect(restored.data.accountLogin).toBe(true)
+    expect(isAccountLoginNode(restored.data)).toBe(true)
+  })
+
+  it('does not destroy a known ordinary terminal merely because it has the old login title', () => {
+    expect(isAccountLoginNode({ accountLogin: false, title: 'Claude login' })).toBe(false)
+  })
+
+  it('migrates legacy title/command signatures while rejecting ordinary legacy nodes', () => {
     expect(isAccountLoginNode({ title: 'Claude login' })).toBe(true)
-  })
-
-  it('matches a live node by its one-shot initialCommand', () => {
     expect(isAccountLoginNode({ title: 'renamed', initialCommand: 'claude /login' })).toBe(true)
-  })
-
-  it('does not match ordinary claude nodes', () => {
     expect(isAccountLoginNode({ title: 'My session', initialCommand: 'claude' })).toBe(false)
     expect(isAccountLoginNode({ title: 'Terminal' })).toBe(false)
     expect(isAccountLoginNode({})).toBe(false)
