@@ -65,9 +65,9 @@ On 2026-08-13, on a stock Linux host with no `hidepid`:
   arbitrary command and is **not** in the confirm-gated `DESTRUCTIVE_VERBS` set (only `write` and
   `close` are, `src/shared/control-verbs.ts`). So this was **arbitrary command execution as the
   victim user**, from any account on the machine, with no prompt. (Note what that set is and is
-  not: the dialogs are hand-written per case in `Canvas.tsx`'s dispatch, and `close-worktree
-  --mode remove` is confirmed by a human without being in the set. The set is what the two `case`
-  blocks read for their `confirmBusy()` refusal, and a drift alarm over that agreement.)
+  not: renderer `dispatchDestructiveControl` uses it as the executable write/close decision before
+  Canvas reaches its ordinary switch, while `close-worktree --mode remove` is confirmed through a
+  separate human route and is intentionally not a member.)
 - The same shape existed on SSH hosts: `RemoteHooks.verifyTunnel` passed the bearer as `-H` on a
   curl command line, i.e. argv on the host, readable by every other account there.
 

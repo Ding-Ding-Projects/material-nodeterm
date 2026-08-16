@@ -1,10 +1,14 @@
 import type { Node } from '@xyflow/react'
 import type { CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
-import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
+import type { AgentId } from '@shared/agents/config'
 import { agentConfig, agentLaunchProgram, mintsSessionId, withSessionId } from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { uuid } from '@renderer/lib/uuid'
-import { claudeCliCapsNow } from './permissionMode'
+import {
+  claudeCliCapsNow,
+  permissionModeFromLaunchPlan,
+  type ActiveAgentLaunchPlan
+} from './permissionMode'
 import { codexSharedIdentity } from './codexIdentity'
 import { sshHostKey } from '@shared/ssh'
 import { useSettings } from './settings'
@@ -361,7 +365,7 @@ export function createAgentNode(
   initialPrompt?: string,
   ssh?: Project['ssh'],
   accountId?: string,
-  permissionMode?: AgentPermissionMode
+  launchPlan?: ActiveAgentLaunchPlan
 ): CanvasNode {
   const { label, color, launchCmd } = resolveAgent(agentId)
   // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
@@ -408,10 +412,13 @@ export function createAgentNode(
   // learning its id from hooks exactly as before.
   const mintedSessionId =
     mintsSessionId(agentId) && claudeCliCapsNow().sessionIdFlag ? uuid() : undefined
-  // No mode passed (e.g. a legacy/test call site) = bare command, exactly as before this setting.
+  // No plan passed (e.g. a legacy/test call site) = bare command, exactly as before this setting.
+  // Production launch sites pass the branded plan, so a raw hand-edited settings value cannot be
+  // threaded around the live version/Kids gates.
   // Both flags ride the same helper so they land on the same side of an argv separator: for grok
   // that is BEFORE `--` (end-of-options), and getting it wrong makes a flag part of the prompt.
   const flagged = (cmd: string): string => {
+    const permissionMode = permissionModeFromLaunchPlan(launchPlan, agentId)
     const withMode = permissionMode ? withPermissionMode(cmd, agentId, permissionMode) : cmd
     return mintedSessionId ? withSessionId(withMode, agentId, mintedSessionId) : withMode
   }

@@ -2,8 +2,8 @@
 //
 // The policy had unit tests from the moment it was written, and they all passed while the policy
 // was called from nowhere. That is the shape this repo names explicitly: a thoroughly tested pure
-// half beside a half that is never invoked. These tests are about the WIRING — that
-// `activePermissionMode`, the single funnel every launch site goes through, consults it.
+// half beside a half that is never invoked. These tests pin the live resolver that branded
+// `ActiveAgentLaunchPlan`s consume; permissionMode.funnel.test.ts pins every launch surface.
 
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 

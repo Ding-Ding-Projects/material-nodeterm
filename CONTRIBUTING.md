@@ -184,9 +184,9 @@ default, never something more destructive than the default.
 **Re-validate hand-editable values at the point of use**, not by their TypeScript type. Settings
 come from git-shared JSON and can end up interpolated into a shell command line.
 
-**Test generated shell for real.** If you generate a shell command, run it under an actual
-`/bin/sh` against a fixture tree. A composed fixture will not tell you that `echo ##MEM` prints an
-empty line because `#` starts a comment.
+**Test generated shell for real.** If you generate a shell command, run it under an actual POSIX
+shell (`/bin/sh` on POSIX) against a fixture tree. A composed fixture will not tell you that
+`echo ##MEM` prints an empty line because `#` starts a comment.
 
 On Windows, keep those tests real rather than blanket-skipping them. Use
 `src/core/testing/posix-shell.ts`: it resolves Git Bash from Git's own installation, translates
@@ -272,6 +272,12 @@ accelerator is handled before the page, so your `keydown` branch simply never ru
 `main/index.ts`'s `before-input-event` and forward it, like the three already there. Browsers own a
 different set. And any chord that reaches the canvas needs the two refusals every canvas shortcut
 here has: not while the kanban board covers it, not while the user is typing.
+
+**Every agent launch carries a branded launch plan.** Add a new production surface to
+`AGENT_LAUNCH_SURFACES`, obtain its `ActiveAgentLaunchPlan` at the moment of launch, and pass that
+proof to `commandForAgentLaunch` / `createAgentNode`. Never thread a raw permission setting into a
+command builder: it skips the live CLI-version and Kids-mode gates. The funnel Chut executes every
+inventory row and must distinguish both permissive inputs from the resulting manual CLI arguments.
 
 **Every node/session close goes through `renderer/lib/nodeDeletion.ts`.** That includes node-header
 × buttons (intercepted at React Flow's `onBeforeDelete`), the canvas and kanban, Cmd/Ctrl+W, the

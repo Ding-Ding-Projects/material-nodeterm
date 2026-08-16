@@ -145,8 +145,10 @@ import { useSession, useActiveSessionPresence } from '../session/session'
 import { isBrowserRuntime } from '../bridge/runtime'
 import { accountChipLabel, COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
 import { hasHooks, canRecur, canContextLink, hasUsage, canChat, canResume, canRename, canReadTitle, createdAgentId, reportsOwnCopy, resumeCommand, agentConfig, agentLaunchProgram } from '@shared/agents/config'
-import { withPermissionMode } from '@shared/agents/approval-mode'
-import { ensureActivePermissionMode } from '../state/permissionMode'
+import {
+  commandForAgentLaunch,
+  ensureActiveAgentLaunchPlan
+} from '../state/permissionMode'
 import { buildSshArgs, sshConnectionIdForProject, sshHostKey, type SshConnection } from '@shared/ssh'
 import { hintLabel, isWindowsPlatform } from '@shared/platform-utils'
 import { ColumnPill } from '../components/kanban/ColumnPill'
@@ -2807,13 +2809,17 @@ export function TerminalNode({
           // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
           // a persisted property of the node, so the current setting wins after a reboot. `base`
           // is always freshly built here — never a command string read back from node data — so
-          // it can never end up double-flagged. Awaited (not the sync `activePermissionMode`)
+          // it can never end up double-flagged. Awaited (not the sync `activeAgentLaunchPlan`)
           // because this fires on mount: right after a machine reboot it can beat the CLI version
           // probe, and an unanswered probe would conservatively drop `auto`.
           // Gated on THIS node's agent: claude's `auto` version gate must not decide what a grok
           // (or any other permission-mode-capable agent's) relaunch is flagged with.
           const cmd =
-            base && withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
+            base &&
+            commandForAgentLaunch(
+              base,
+              await ensureActiveAgentLaunchPlan('terminal-cold-restore', agentId)
+            )
           if (cmd) writeWhenShellReady(cmd) // same shell-startup race as initialCommand
         }
       })
@@ -2870,15 +2876,18 @@ export function TerminalNode({
         const agentSessionId = st?.sessionId
         const gate = restartEligibility(agentId, st?.state, agentSessionId)
         if (!gate.ok || !agentId || !agentSessionId || !restartTarget()) return 'not-eligible'
-        // Built HERE, not inside the choreography: `withPermissionMode` is the single funnel for
-        // every CLI launch path (shared/agents/config.ts) and the mode is a renderer-side, async
-        // read — exactly as the cold-restore relaunch above does it. Without it a canvas running
+        // Built HERE, not inside the choreography: the branded launch plan owns the renderer-side,
+        // async mode read — exactly as the cold-restore relaunch above does it. Without it a canvas
+        // running
         // in acceptEdits/plan would come back from a restart in the default mode, silently.
         // Re-resolved at call time for the same reason as there: the mode is a property of how a
         // session is launched, not of the node.
         const base = resumeCommand(agentId, agentSessionId)
         const command = base
-          ? withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
+          ? commandForAgentLaunch(
+              base,
+              await ensureActiveAgentLaunchPlan('terminal-restart-resume', agentId)
+            )
           : undefined
         return performRestartResume({
           agentId,
@@ -2963,7 +2972,7 @@ export function TerminalNode({
         const agentSessionId = st?.sessionId
         if (!agentId || !agentSessionId || !restartTarget()) return 'not-eligible'
         // Command FIRST, pane check LAST. Both of these awaits can take a moment (the claude
-        // version probe behind `ensureActivePermissionMode` most of all), and whatever is asked
+        // version probe behind `ensureActiveAgentLaunchPlan` most of all), and whatever is asked
         // first is stale by the time the delivery runs — so the fact that must be freshest is the
         // one asked last: what owns the pane we are about to type into.
         // Same funnel, same await, same reasoning as the restart closure above: the permission
@@ -2980,10 +2989,9 @@ export function TerminalNode({
         // meant an unusable session id erased the pane's line (three times, once per wake trigger)
         // and then declined to resume.
         if (!base) return 'not-eligible'
-        const command = withPermissionMode(
+        const command = commandForAgentLaunch(
           base,
-          agentId,
-          await ensureActivePermissionMode(agentId)
+          await ensureActiveAgentLaunchPlan('terminal-hibernation-resume', agentId)
         )
         // THE load-bearing gate of the wake half. Hours can pass between the exit and this
         // resume, and the pane is a REPL the user can type into: by now it may belong to vim, to

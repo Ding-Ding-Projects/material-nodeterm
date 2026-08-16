@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createAgentNode } from './workspace'
-import type { AgentPermissionMode } from '@shared/agents/config'
+import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
+import type { ActiveAgentLaunchPlan } from './permissionMode'
+
+const launchPlan = (
+  agentId: AgentId,
+  mode: AgentPermissionMode
+): ActiveAgentLaunchPlan =>
+  ({ surface: 'canvas-new-agent', agentId, mode }) as ActiveAgentLaunchPlan
 
 /**
  * The separator is the whole reason `argvPromptSeparator` exists, and it is invisible in the config
@@ -42,7 +49,16 @@ describe('createAgentNode — the argv prompt separator', () => {
  */
 describe('createAgentNode — permission mode meets the argv separator', () => {
   const cmd = (agentId: string, prompt?: string, mode?: AgentPermissionMode): string =>
-    (createAgentNode(agentId, 0, undefined, undefined, prompt, undefined, undefined, mode).data
+    (createAgentNode(
+      agentId,
+      0,
+      undefined,
+      undefined,
+      prompt,
+      undefined,
+      undefined,
+      mode ? launchPlan(agentId, mode) : undefined
+    ).data
       .initialCommand as string) ?? ''
 
   it('puts the flag BEFORE grok\'s `--`, never after it', () => {

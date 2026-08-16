@@ -26,6 +26,43 @@
 
 import type { Project } from '@shared/types'
 
+export type SessionTerminationScope = 'node' | 'session-memory' | 'project-deletion'
+
+type DestroySession = (nodeId: string, options?: { everySocket?: boolean }) => void
+type KillRemoteSessions = (
+  projectId: string,
+  nodeIds: string[],
+  options?: { everySocket?: boolean }
+) => Promise<void>
+
+/**
+ * Apply the socket breadth promised by the initiating surface to one local transport kill.
+ *
+ * Session memory inventories both tmux sockets and therefore widens every row it offers, including
+ * rows that still own a canvas node. Ordinary node/project deletion knows its own socket and must
+ * omit the widening option entirely.
+ */
+export function destroySessionForScope(
+  scope: SessionTerminationScope,
+  nodeId: string,
+  destroy: DestroySession
+): void {
+  if (scope === 'session-memory') destroy(nodeId, { everySocket: true })
+  else destroy(nodeId)
+}
+
+/** The remote-host counterpart to `destroySessionForScope`, kept in the same behavior seam. */
+export function killRemoteSessionsForScope(
+  scope: SessionTerminationScope,
+  projectId: string,
+  nodeIds: string[],
+  killSessions: KillRemoteSessions
+): Promise<void> {
+  return scope === 'session-memory'
+    ? killSessions(projectId, nodeIds, { everySocket: true })
+    : killSessions(projectId, nodeIds)
+}
+
 export interface SessionKillPlan {
   /**
    * The project whose canvas node must go too, or `null` when no project owns this session (an
