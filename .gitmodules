@@ -1,0 +1,4 @@
+[submodule "upstream/nodeterm"]
+	path = upstream/nodeterm
+	url = https://github.com/eneskirca/nodeterm.git
+	branch = main

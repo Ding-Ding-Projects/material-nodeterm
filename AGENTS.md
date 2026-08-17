@@ -132,6 +132,11 @@ When you're working through a scoped, already-authorized task:
 - Follow `type(scope): subject` for commit subjects (`feat`, `fix`, `refactor`, `docs`, `test`,
   `chore`, `perf`, `security` are all used in this project's history) — it's what
   [`CHANGELOG.md`](./CHANGELOG.md) is generated from.
+- `upstream/nodeterm` is the pinned canonical-source Git submodule. Its nested `origin` points to
+  `https://github.com/eneskirca/nodeterm.git` and follows `main`; it is separate from the top-level
+  checkout's `origin` and optional `upstream` remotes. Use the intentional update-and-review
+  workflow in [`CONTRIBUTING.md`](./CONTRIBUTING.md), and commit the reviewed gitlink rather than
+  editing the nested source.
 - Explain *why* a change was made, not only what changed; if a decision had a real trade-off,
   say what was rejected and why.
 - Say plainly what you did **not** verify. That's more useful to the next person than a

@@ -48,6 +48,20 @@ microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring
 `npm test` runs the vitest suite (unit + integration; the remote e2e suites skip when the
 companion server repo isn't checked out). `npm run typecheck` is the fastest correctness gate.
 
+### Canonical upstream source
+
+`upstream/nodeterm` is a real Git submodule for the canonical
+`https://github.com/eneskirca/nodeterm.git` source. Its gitlink is a deliberately reviewed snapshot,
+not another application source tree, and `.gitmodules` records `main` so `git submodule update
+--remote` follows the canonical default branch.
+
+Do not confuse the two remote namespaces. The top-level checkout's `origin` points at this
+repository and may also have a top-level remote named `upstream`; neither one updates the gitlink.
+The nested repository has its own `origin`, which must resolve to the canonical URL above. Follow
+the exact initialize, sync, remote-update, URL/SHA inspection, staging, and submodule-diff workflow
+in `CONTRIBUTING.md`. Commit only the reviewed gitlink change (and `.gitmodules` when its metadata
+changes); never commit local edits made inside the nested repository.
+
 **Node runtime floor: `^22.22.2 || ^24.15.0 || >=26.0.0`.** Do not simplify that to a
 major-only check.
 `node:sqlite` arrived in 22.5 but required `--experimental-sqlite` through 22.12; 22.13 made it

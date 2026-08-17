@@ -16,6 +16,10 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Added
 
+- **Canonical upstream source pin.** `upstream/nodeterm` is now a real Git submodule pinned to
+  `https://github.com/eneskirca/nodeterm.git`; `.gitmodules` records `main` for intentional remote
+  updates, and the contributor guidance distinguishes the nested repository from the top-level
+  remotes before a new gitlink is committed.
 - **First-class Windows terminal profiles.** The desktop app detects PowerShell 7, Windows
   PowerShell, Command Prompt, Git Bash, every installed WSL distribution, and an advanced custom
   executable. One-click creation uses the saved default; profile-aware menus can snapshot an

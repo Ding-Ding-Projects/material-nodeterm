@@ -19,6 +19,35 @@ npm test           # vitest, unit + integration
 
 `npm run server:dev` boots the Server Edition (browser UI) if you are working on that surface.
 
+### Refreshing the canonical upstream pin
+
+`upstream/nodeterm` is a Git submodule pinned to the canonical
+[`eneskirca/nodeterm`](https://github.com/eneskirca/nodeterm) repository. Initialize the recorded
+pin after cloning with:
+
+```bash
+git submodule update --init -- upstream/nodeterm
+```
+
+The top-level checkout's `origin` and optional `upstream` remotes are separate from the nested
+repository. Inside `upstream/nodeterm`, `origin` is the canonical repository, and `.gitmodules`
+records `main` as the branch followed by `git submodule update --remote`. Refresh the pin only as
+an intentional repository change:
+
+```bash
+git submodule sync -- upstream/nodeterm
+git submodule update --init -- upstream/nodeterm
+git submodule update --remote --checkout -- upstream/nodeterm
+git -C upstream/nodeterm remote get-url origin
+git -C upstream/nodeterm rev-parse HEAD
+git add .gitmodules upstream/nodeterm
+git diff --cached --submodule=log -- .gitmodules upstream/nodeterm
+```
+
+The URL check must print `https://github.com/eneskirca/nodeterm.git`. Review the new commit before
+committing the gitlink; do not treat a fetch of either top-level remote as an upstream-pin update,
+and do not commit edits made inside the nested repository.
+
 The supported Node runtime is **`^22.22.2 || ^24.15.0 || >=26.0.0`**. This is a minor/patch
 boundary, not
 "Node 22" shorthand: the cross-process agent-status mirror uses `node:sqlite`, which was absent in
