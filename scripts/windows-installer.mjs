@@ -4,13 +4,13 @@ import { spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { createReadStream } from 'node:fs'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import unzipper from 'unzipper'
 import {
-  collectReleaseAssets,
   nuspecMetadataElement,
+  parseReleases,
   readReleaseIdentity as readAssetReleaseIdentity,
 } from './release-assets.mjs'
 
@@ -482,6 +482,72 @@ async function entryBuffer(entry, description, maxBytes = MAX_ARCHIVE_ENTRY_BYTE
   return value
 }
 
+async function regularReleaseAsset(root, entry) {
+  if (!entry.isFile()) fail(`release asset must be a regular file: ${entry.name}`)
+  const file = path.resolve(root, entry.name)
+  const details = await stat(file)
+  if (!details.isFile()) fail(`release asset must be a regular file: ${entry.name}`)
+  if (details.size <= 0) fail(`release asset is empty: ${entry.name}`)
+  return { name: entry.name, path: file, size: details.size }
+}
+
+async function collectWindowsReleaseAssets(directory, identity) {
+  const root = path.resolve(directory)
+  let entries
+  try {
+    entries = await readdir(root, { withFileTypes: true })
+  } catch (error) {
+    fail(`could not read Squirrel output directory ${root}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  const setupName = `${identity.productName}-Setup-${identity.version}.exe`
+  const setupEntries = entries.filter((entry) => entry.name === setupName)
+  if (setupEntries.length !== 1) fail(`expected exactly one ${setupName}, found ${setupEntries.length}`)
+  const releaseEntries = entries.filter((entry) => entry.name === 'RELEASES')
+  if (releaseEntries.length !== 1) fail(`expected exactly one RELEASES file, found ${releaseEntries.length}`)
+
+  const packageEntries = entries
+    .filter((entry) => /\.nupkg$/i.test(entry.name))
+    .sort((left, right) => left.name.localeCompare(right.name))
+  const fullName = `${identity.packageId}-${identity.version}-full.nupkg`
+  const deltaName = `${identity.packageId}-${identity.version}-delta.nupkg`
+  for (const entry of packageEntries) {
+    if (entry.name !== fullName && entry.name !== deltaName) {
+      fail(`unexpected Squirrel package name: expected ${fullName} and optional ${deltaName}, got ${entry.name}`)
+    }
+  }
+  const allowedNames = new Set([setupName, 'RELEASES', ...packageEntries.map((entry) => entry.name)])
+  const unexpected = entries.filter((entry) => !allowedNames.has(entry.name)).sort((left, right) => left.name.localeCompare(right.name))
+  if (unexpected.length > 0) {
+    fail(`unexpected Squirrel output entr${unexpected.length === 1 ? 'y' : 'ies'}: ${unexpected.map((entry) => entry.name).join(', ')}`)
+  }
+
+  const setup = await regularReleaseAsset(root, setupEntries[0])
+  const releases = await regularReleaseAsset(root, releaseEntries[0])
+  const packages = []
+  for (const entry of packageEntries) packages.push(await regularReleaseAsset(root, entry))
+  const fullPackages = packages.filter((asset) => /-full\.nupkg$/i.test(asset.name))
+  if (fullPackages.length !== 1 || fullPackages[0].name !== fullName) {
+    fail(`expected exactly one full Squirrel package named ${fullName}`)
+  }
+
+  const releaseRows = parseReleases(await readFile(releases.path, 'utf8'))
+  const rowsByName = new Map(releaseRows.map((row) => [row.name, row]))
+  const packagesByName = new Map(packages.map((asset) => [asset.name, asset]))
+  for (const row of releaseRows) {
+    const asset = packagesByName.get(row.name)
+    if (!asset) fail(`RELEASES references a package that is missing on disk: ${row.name}`)
+    if (asset.size !== row.size) fail(`RELEASES size mismatch for ${row.name}: recorded ${row.size}, actual ${asset.size}`)
+    const actualSha1 = (await digestFile(asset.path, 'sha1')).digest
+    if (actualSha1 !== row.sha1) fail(`RELEASES SHA1 mismatch for ${row.name}: recorded ${row.sha1}, actual ${actualSha1}`)
+  }
+  for (const asset of packages) {
+    if (!rowsByName.has(asset.name)) fail(`package is not listed in RELEASES: ${asset.name}`)
+  }
+
+  return { setup: setup.path, full: fullPackages[0].path, releases: releases.path, packages: packages.map((asset) => asset.path) }
+}
+
 async function inspectFullPackage(file, expectedUrl, expectedIconBytes, expectedIdentity) {
   const archive = await unzipper.Open.file(file)
   const unsafe = archive.files.filter((entry) => {
@@ -545,22 +611,7 @@ export async function assertPackagedIconContract(directory, metadataFile, root =
   const icon = await readFile(path.join(root, ...ICON_RELATIVE_PATH.split('/')))
   if (sha256(icon) !== metadata.sha256) fail('packaged icon metadata does not match build/icon.ico')
   inspectIco(icon)
-  const collected = await collectReleaseAssets(
-    directory,
-    releaseIdentity.version,
-    releaseIdentity.packageId,
-    releaseIdentity.productName,
-  )
-  const fullPackages = collected.packages.filter((file) => /-full\.nupkg$/i.test(file))
-  if (fullPackages.length !== 1) {
-    fail(`expected exactly one full nupkg for PE identity inspection, found ${fullPackages.length}`)
-  }
-  const assets = {
-    setup: collected.setup,
-    full: fullPackages[0],
-    releases: collected.releases,
-    packages: collected.packages,
-  }
+  const assets = await collectWindowsReleaseAssets(directory, releaseIdentity)
   const setupBytes = await readFile(assets.setup)
   inspectPeIconInventory(setupBytes, icon, 'Squirrel Setup executable', { kind: 'setup' })
   inspectPeProductIdentity(
