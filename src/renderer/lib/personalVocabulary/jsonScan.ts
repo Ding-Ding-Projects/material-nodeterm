@@ -131,7 +131,12 @@ export function scanJson(text: string, opts: { maxDepth: number; maxNodes: numbe
 
   function parseObject(depth: number): { ok: true; value: JsonValue } | { ok: false; error: string } {
     i++ // consume '{'
-    const out: Record<string, JsonValue> = {}
+    // JSON object keys are data, including the spelling `__proto__`. Assigning that spelling to
+    // an ordinary object invokes Object.prototype's legacy setter instead of creating the own
+    // property the JSON document actually contains. Apart from being a prototype-pollution
+    // primitive, that made the vocabulary validator unable to see and reject the key. A
+    // null-prototype dictionary preserves JSON's own-property semantics for every spelling.
+    const out = Object.create(null) as Record<string, JsonValue>
     const seen = new Set<string>()
     skipWs()
     if (text[i] === '}') {

@@ -30,6 +30,8 @@ import type {
   AuthenticatorExportInput,
   AuthenticatorExportResult,
   AuthenticatorRenameInput,
+  AuthenticatorRemoveInput,
+  AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from './authenticator'
 
@@ -403,11 +405,35 @@ export interface CanvasState {
  *    that echo is the ACK that tells the sender where its edit landed in the total order).
  *  - `seq` is stamped by the reflector (src/core/canvas-sync.ts) and is the TOTAL ORDER. It is
  *    server-authoritative: a client-supplied `seq` is overwritten at ingest, never trusted.
- * The relay's host↔client mirror (src/main/remote) uses the same vocabulary and simply omits both.
+ *  - `seen` is the sender's CAUSAL stamp: the highest `seq` it had applied at the moment it cast.
+ *    It answers the one question `seq` alone cannot — "did this client already know about the
+ *    delete?" — which is what lets a delete beat a concurrent drag frame instead of being
+ *    resurrected by it (canvas-order's rule 4). Client-supplied, so the reflector BOUNDS it
+ *    (it can never legitimately reach the order it is being given); a mutation without it is
+ *    judged exactly as before, so an unstamped peer degrades rather than breaks.
+ * The relay's host↔client mirror (src/main/remote) uses the same vocabulary and simply omits them.
  */
 export type CanvasMutation =
-  | { op: 'upsert'; node: CanvasNodeState; src?: string; seq?: number }
-  | { op: 'remove'; id: string; src?: string; seq?: number }
+  | { op: 'upsert'; node: CanvasNodeState; src?: string; seq?: number; seen?: number }
+  | { op: 'remove'; id: string; src?: string; seq?: number; seen?: number }
+  | {
+      op: 'edge-upsert'
+      kind: CanvasEdgeKind
+      edge: BridgeLink
+      src?: string
+      seq?: number
+      seen?: number
+    }
+  | { op: 'edge-remove'; kind: CanvasEdgeKind; id: string; src?: string; seq?: number; seen?: number }
+
+/**
+ * Which persisted edge list a mutation addresses — `bridges` (context links, which an agent can
+ * actually READ through) or `ropes` (display-only "spawned by" lineage). They are two arrays on
+ * the project with two different meanings, so the kind travels with the mutation; the ORDER,
+ * however, is keyed on the edge id alone (canvas-order's `e:<id>`), because one id is one edge and
+ * two clients must never end up holding it as both a bridge and a rope.
+ */
+export type CanvasEdgeKind = 'bridge' | 'rope'
 
 /** Canvas pan/zoom state. */
 export interface Viewport {
@@ -739,11 +765,15 @@ export interface PtyApi {
    *  speculative kill of a row it swept off either socket. An ordinary node-× must not set it: it
    *  takes the same unheld branch after an app restart, and `nodeterm-rmt` holds sessions another
    *  machine's nodeterm SSHed in to spawn. */
-  destroy(persistKey: string, opts?: { everySocket?: boolean }): void
+  /** Resolves after core end processing; on the session-host backend this includes its kill
+   * acknowledgement. A rejection means the outcome is unknown and the caller must keep the node. */
+  destroy(persistKey: string, opts?: { everySocket?: boolean }): Promise<void>
   /** Ends a node's persistent session so the SAME node id respawns in a new cwd ("move into
    *  worktree"). Same tmux kill as `destroy`, opposite intent: the node stays on the canvas, so
    *  co-viewers get `onRecycled` (restart + re-attach), never the permanent closed state. */
-  recycle(persistKey: string): void
+  /** Resolves after core recycle processing; on the session-host backend this includes its kill
+   * acknowledgement. A rejection means the node must keep its cwd/generation for retry. */
+  recycle(persistKey: string): Promise<void>
   /** Desktop-only awaited recycle after the user confirms a destructive profile switch. */
   recycleConfirmed?(persistKey: string, target?: PtyRecycleTarget): Promise<void>
   /** Suggest a terminal title from its recent output via the configured AI agent. */
@@ -1550,17 +1580,27 @@ export interface KidsModeRecord {
   name: string
 }
 
+/**
+ * One observation published by the core store. `generation` is monotonic for that store lifetime,
+ * so a delayed load/mutation response cannot overwrite a newer live event in the renderer.
+ * `authoritative` requires both a strict canonical read and an acknowledged live-watch epoch.
+ */
+export interface KidsModeSnapshot extends KidsModeRecord {
+  authoritative: boolean
+  generation: number
+}
+
 export interface KidsModeApi {
-  load(): Promise<KidsModeRecord>
+  load(): Promise<KidsModeSnapshot>
   /** Turn it ON. `pin` is required only the first time, and establishes the grown-up PIN.
    *  Entering needs no proof — only leaving does. */
-  enable(pin?: string): Promise<KidsModeRecord>
+  enable(pin?: string): Promise<KidsModeSnapshot>
   /** Turn it OFF. Requires the grown-up PIN. */
-  disable(pin: string): Promise<{ ok: true; record: KidsModeRecord } | { ok: false; error: string }>
-  rename(name: string): Promise<KidsModeRecord>
+  disable(pin: string): Promise<{ ok: true; record: KidsModeSnapshot } | { ok: false; error: string }>
+  rename(name: string): Promise<KidsModeSnapshot>
   changePin(currentPin: string, nextPin: string): Promise<boolean>
   hasCredential(): Promise<boolean>
-  onChanged(cb: (r: KidsModeRecord) => void): () => void
+  onChanged(cb: (r: KidsModeSnapshot) => void): () => void
 }
 
 export interface SchoolModeApi {
@@ -1591,12 +1631,26 @@ export interface SchoolModeApi {
  *  date+time window, gated by a local switch, an HTTPS API, or a Home Assistant boolean entity.
  *  All network access and the periodic evaluator live in the main process (or the Server
  *  Edition's equivalent boundary) — the renderer only ever reads the resolved result. */
+export type ScheduledSettingsSaveResult =
+  | { ok: true; error?: never; persisted?: true; warning?: never }
+  | { ok: false; error: string; persisted?: never; warning?: never }
+  | {
+      ok: false
+      error: string
+      persisted: true
+      warning: 'credential-cleanup-incomplete'
+    }
+
 export interface ScheduledSettingsApi {
-  load(): Promise<import('./scheduled-settings').ScheduledSettingsFile>
-  /** `{ok:false, error}` on a bounds/shape violation — never thrown. */
+  /** A successful file or a safe disabled fallback plus the exact recovery fact. A failed read is
+   * never represented as an ordinary empty schedule. */
+  load(): Promise<import('./scheduled-settings').ScheduledSettingsLoadState>
+  /** A failed publication has only `{ok:false,error}`. If the schedule was published but related
+   * credential cleanup failed, `persisted` and `warning` distinguish that truthful warning from a
+   * write failure without parsing presentation copy. */
   save(
     file: import('./scheduled-settings').ScheduledSettingsFile
-  ): Promise<{ ok: boolean; error?: string }>
+  ): Promise<ScheduledSettingsSaveResult>
   /** Store (`token`) or clear (`null`) the Home Assistant access token for one rule. The token is
    *  never read back over IPC — see `tokenStatus`. */
   setHomeAssistantToken(ruleId: string, token: string | null): Promise<void>
@@ -1775,8 +1829,22 @@ export interface GitFileChange {
   deleted: number
 }
 
+/** Core-measured exact checkout generation/content proof used only for forced worktree removal. */
+export interface GitWorktreeRemovalProof {
+  /** HEAD object id at measurement time. */
+  headOid: string
+  /** Filesystem generation of the checkout root and its per-worktree git administrative dir. */
+  generation: string
+  /** Hash of HEAD, index, tracked diffs, untracked bytes, and exact porcelain state. */
+  fingerprint: string
+}
+
 export interface GitStatus {
   hasRepo: boolean
+  /** True only when every command/read needed for a destructive content proof succeeded. */
+  authoritative?: boolean
+  /** Present only with `authoritative:true`; compare inside core immediately before forced removal. */
+  removalProof?: GitWorktreeRemovalProof
   /** "owner/repo" from the origin remote, else the folder name. */
   repoName: string
   branch: string
@@ -1801,6 +1869,59 @@ export interface GitStatus {
   changes: GitFileChange[]
 }
 
+/** Core-owned provenance for one exact physical worktree generation. */
+export interface GitWorktreeOwnership {
+  /** Opaque machine-local ownership record id. Canvas JSON cannot mint or replace it. */
+  ownershipId?: string
+  /** The app created this directory, independently of whether the branch already existed. */
+  directoryCreatedByApp: boolean
+  /** The app created this branch (`git worktree add -b`), not merely its checkout directory. */
+  branchCreatedByApp: boolean
+}
+
+/** Complete inventory disclosed before a forced worktree-directory removal. */
+export interface GitWorktreeRemovalSummary {
+  trackedFiles: number
+  untrackedFiles: number
+  ignoredFiles: number
+  otherFiles: number
+  symlinks: number
+  directories: number
+  bytes: number
+}
+
+/**
+ * Opaque, one-shot authorization input produced by `worktreeRemovalProof`.
+ *
+ * The descriptive fields let the renderer disclose the exact target, but none of them grants
+ * authority by itself. Core consumes `token`, reloads its private snapshot, and remeasures every
+ * field before mutation. A hand-written or replayed object therefore performs no removal.
+ */
+export interface GitWorktreeRemovalProof {
+  version: 1
+  token: string
+  fingerprint: string
+  repoPath: string
+  worktreePath: string
+  commonDir: string
+  adminDir: string
+  branchRef: string
+  branchTip: string
+  summary: GitWorktreeRemovalSummary
+  ownership: GitWorktreeOwnership
+}
+
+export interface GitWorktreeRemovalProofResult {
+  ok: boolean
+  message: string
+  proof?: GitWorktreeRemovalProof
+}
+
+/** Pruning registration and deleting a live directory are deliberately different operations. */
+export type GitWorktreeRemovalRequest =
+  | { mode: 'prune' }
+  | { mode: 'remove'; proof: GitWorktreeRemovalProof; deleteBranch: boolean }
+
 export interface GitResult {
   ok: boolean
   message: string
@@ -1810,6 +1931,8 @@ export interface GitResult {
   /** Set by publish() when no usable GitHub credential was found, so the UI can
    *  fall back to an interactive `gh auth login` instead of just showing an error. */
   needsAuth?: boolean
+  /** `worktreeAdd()` only: core-verified provenance for the physical generation just created. */
+  worktreeOwnership?: GitWorktreeOwnership
 }
 
 export interface GitApi {
@@ -1883,17 +2006,25 @@ export interface GitApi {
   /** `push`: also publish `baseRef` to origin after a successful merge (only if a remote exists).
    *  Opt-in — a merge must never publish to a shared remote the user was not told about. */
   worktreeMerge(repoPath: string, branch: string, baseRef: string, push?: boolean): Promise<GitResult>
-  /** `pruneOnly`: clean up git's registration only — never delete a directory. Used to prune a
-   *  stale binding whose worktree was already deleted outside the app. */
-  worktreeRemove(repoPath: string, wtPath: string, deleteBranch: boolean, pruneOnly?: boolean): Promise<GitResult>
+  /** Measure a complete, stable physical checkout snapshot for a later one-shot removal. */
+  worktreeRemovalProof(repoPath: string, wtPath: string): Promise<GitWorktreeRemovalProofResult>
+  /** Registration-only pruning or proof-bound live-directory removal. */
+  worktreeRemove(repoPath: string, wtPath: string, request: GitWorktreeRemovalRequest): Promise<GitResult>
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>
 }
 
 export interface UpdateInfo {
-  version: string
+  /** Squirrel.Windows does not reveal the target version until download completion (and some
+   *  releases expose only an opaque release name), so absence must render as "a newer version". */
+  version?: string
   notes?: string
+  /**
+   * Electron's built-in Squirrel.Windows updater does not expose byte progress. When true, the
+   * renderer shows an indeterminate download bar instead of inventing a permanent `0%` reading.
+   */
+  indeterminateProgress?: boolean
   /**
    * The update cannot self-install and must be downloaded manually (Linux .deb/.rpm: no
    * APPIMAGE env, so electron-updater's quitAndInstall would throw). The card shows a
@@ -2628,24 +2759,40 @@ export interface PairedDevice {
   lastSeenAt: number
 }
 
+/** One-shot pairing completion delivered from the desktop host to every renderer surface. */
+export type PairingDoneResult = {
+  /** Correlates this event with the renderer start that owns it. */
+  attemptId: string
+  ok: boolean
+  /** Present on ok=false so persistence/security failures are never mislabeled as timeouts. */
+  reason?: 'timeout' | 'attempts' | 'failed'
+  /** Present on ok=true: whether the phone also received a usable relay leg. */
+  relay?: 'ok' | 'off' | 'failed' | 'dev'
+}
+
 /** Phone-pairing (nodeterm iOS "scan a QR" flow) bridge. */
 export interface PairingApi {
+  /** False on Server Edition, where the browser is already attached to its host and no desktop
+   *  LAN listener / OS SSH-key store exists. UI must show a deliberate degrade, not call stubs. */
+  readonly supported: boolean
   /** Start the one-shot LAN listener; resolves with the QR payload + an SSH-reachable hint. */
-  start(): Promise<{
+  start(attemptId: string): Promise<{
+    /** Echo of the cryptographic UUID supplied by the renderer. */
+    attemptId: string
     payload: string
     sshOpen: boolean
     relayPlan?: 'ok' | 'dev' | 'off'
-    /** Six-digit code for typing in by hand — for a device with no camera, a browser with no QR
-     *  reader (Safari has none), or a camera that simply will not focus. Same listener and same
-     *  ten-minute window as the QR, but attempt-capped, because six digits is a small number. */
+    /** Compatibility credential accepted only inside the hostKey-authenticated envelope. The UI
+     *  does not advertise it as a plaintext browser fallback. Attempt-capped because six digits
+     *  is a small number. */
     shortCode?: string
-    /** The `host:port` the code is typed at. */
+    /** The LAN listener address (diagnostic/compatibility metadata). */
     manualHost?: string
   }>
-  /** Cancel an in-flight pairing (e.g. when the settings section unmounts). */
-  stop(): Promise<void>
-  /** Fires once when pairing finishes (ok=true paired, ok=false timeout). Returns unsubscribe. */
-  onDone(cb: (result: { ok: boolean; relay?: 'ok' | 'off' | 'failed' | 'dev' }) => void): () => void
+  /** Cancel only the named pairing attempt. A stale surface must not stop its replacement. */
+  stop(attemptId: string): Promise<void>
+  /** Fires once when pairing finishes. Failure reasons keep a commit error distinct from timeout. */
+  onDone(cb: (result: PairingDoneResult) => void): () => void
   /** Live re-probe of 127.0.0.1:22, so the Remote Login warning can clear the moment the user
    *  flips the toggle in System Settings (polled by the UI only while the warning is showing). */
   probeSsh(): Promise<boolean>
@@ -2707,7 +2854,7 @@ export interface AuthenticatorApi {
   addManual(input: AuthenticatorAddManualInput): Promise<AuthenticatorAddResult>
   addFromUri(uri: string): Promise<AuthenticatorAddResult>
   rename(input: AuthenticatorRenameInput): Promise<AuthenticatorEntry | null>
-  remove(id: string): Promise<void>
+  remove(input: AuthenticatorRemoveInput): Promise<AuthenticatorRemoveResult>
   code(id: string): Promise<AuthenticatorCode | null>
   codes(ids: string[]): Promise<Record<string, AuthenticatorCode>>
   reveal(id: string): Promise<AuthenticatorRevealResult>

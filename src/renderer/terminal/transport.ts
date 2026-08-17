@@ -36,7 +36,9 @@ export interface TerminalTransport {
    * tmux socket the name could be on. Opt-in for the session-memory panel's speculative kill only
    * (see `localKillSockets`); an ordinary × leaves it unset.
    */
-  destroy(persistKey: string, opts?: { everySocket?: boolean }): void
+  /** Resolves after core end processing (including a session-host kill acknowledgement). On
+   * rejection the node remains available because the transport cannot prove the outcome. */
+  destroy(persistKey: string, opts?: { everySocket?: boolean }): Promise<void>
   /**
    * Ends a node's persistent session so the SAME node id can respawn in a new cwd ("move into
    * worktree"). The tmux kill is identical to `destroy` — without it the respawn would just
@@ -44,7 +46,9 @@ export interface TerminalTransport {
    * the node is not going anywhere. Co-viewers therefore get `onRecycled` (restart, re-attach to
    * the replacement session), never the permanent, un-respawnable closed state.
    */
-  recycle(persistKey: string): void
+  /** Resolves after core recycle processing; on the session-host backend this includes its kill
+   * acknowledgement. A rejection means the node must keep its cwd/generation for retry. */
+  recycle(persistKey: string): Promise<void>
   /**
    * Recycles the persistent session and resolves only after the core has finished the destructive
    * teardown. Optional because relay/server transports may not expose the desktop-only confirmed

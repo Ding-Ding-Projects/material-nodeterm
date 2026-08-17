@@ -40,7 +40,7 @@ import {
   type ScheduledSettingsApi,
   type SettingsApi,
   type KidsModeApi,
-  type KidsModeRecord,
+  type KidsModeSnapshot,
   type SchoolModeApi,
   type SchoolModeRecord,
   type ClaudeUsage,
@@ -79,10 +79,16 @@ import type {
   AuthenticatorExportInput,
   AuthenticatorExportResult,
   AuthenticatorRenameInput,
+  AuthenticatorRemoveInput,
+  AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from '../../shared/authenticator'
 import type { PeerIdentity } from '../../shared/presence'
-import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../../shared/scheduled-settings'
+import type {
+  ScheduledSettingsActiveState,
+  ScheduledSettingsFile,
+  ScheduledSettingsLoadState
+} from '../../shared/scheduled-settings'
 import type { VsCodeInstall, VsCodeOpenResult } from '../../shared/vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from '../../shared/local-history'
 import { buildStubApi } from './stubs'
@@ -330,8 +336,8 @@ export function buildRealApi(
     kill: (sessionId, viewerId) => client.cast(IPC.ptyKill, sessionId, viewerId),
     // The trailing flag rides as a plain boolean; the core handler re-checks `=== true`.
     destroy: (persistKey, opts) =>
-      client.cast(IPC.ptyDestroy, persistKey, opts?.everySocket === true),
-    recycle: (persistKey) => client.cast(IPC.ptyRecycle, persistKey),
+      client.request(IPC.ptyDestroy, persistKey, opts?.everySocket === true) as Promise<void>,
+    recycle: (persistKey) => client.request(IPC.ptyRecycle, persistKey) as Promise<void>,
     // No server handler — degrade gracefully (never reject the boot path).
     generateName: () => Promise.resolve(AI_NAMING_UNAVAILABLE),
     generateGroupName: () => Promise.resolve(AI_NAMING_UNAVAILABLE),
@@ -417,11 +423,11 @@ export function buildRealApi(
   }
 
   const kidsMode: KidsModeApi = {
-    load: () => client.request(IPC.kidsModeLoad) as Promise<KidsModeRecord>,
-    enable: (pin?: string) => client.request(IPC.kidsModeEnable, pin) as Promise<KidsModeRecord>,
+    load: () => client.request(IPC.kidsModeLoad) as Promise<KidsModeSnapshot>,
+    enable: (pin?: string) => client.request(IPC.kidsModeEnable, pin) as Promise<KidsModeSnapshot>,
     disable: (pin: string) =>
       client.request(IPC.kidsModeDisable, pin) as ReturnType<KidsModeApi['disable']>,
-    rename: (name: string) => client.request(IPC.kidsModeRename, name) as Promise<KidsModeRecord>,
+    rename: (name: string) => client.request(IPC.kidsModeRename, name) as Promise<KidsModeSnapshot>,
     changePin: (currentPin: string, nextPin: string) =>
       client.request(IPC.kidsModeChangePin, currentPin, nextPin) as Promise<boolean>,
     hasCredential: () => client.request(IPC.kidsModeHasCredential) as Promise<boolean>,
@@ -429,9 +435,9 @@ export function buildRealApi(
   }
 
   const scheduledSettings: ScheduledSettingsApi = {
-    load: () => client.request(IPC.scheduledSettingsLoad) as Promise<ScheduledSettingsFile>,
+    load: () => client.request(IPC.scheduledSettingsLoad) as Promise<ScheduledSettingsLoadState>,
     save: (file: ScheduledSettingsFile) =>
-      client.request(IPC.scheduledSettingsSave, file) as Promise<{ ok: boolean; error?: string }>,
+      client.request(IPC.scheduledSettingsSave, file) as ReturnType<ScheduledSettingsApi['save']>,
     setHomeAssistantToken: (ruleId: string, token: string | null) =>
       client.request(IPC.scheduledSettingsSetHaToken, ruleId, token) as Promise<void>,
     tokenStatus: () => client.request(IPC.scheduledSettingsTokenStatus) as Promise<Record<string, boolean>>,
@@ -591,13 +597,18 @@ export function buildFilesApi(
         baseRef,
         push
       ) as ReturnType<GitApi['worktreeMerge']>,
-    worktreeRemove: (repoPath, wtPath, deleteBranch, pruneOnly) =>
+    worktreeRemovalProof: (repoPath, wtPath) =>
+      client.request(
+        IPC.gitWorktreeRemovalProof,
+        repoPath,
+        wtPath
+      ) as ReturnType<GitApi['worktreeRemovalProof']>,
+    worktreeRemove: (repoPath, wtPath, request) =>
       client.request(
         IPC.gitWorktreeRemove,
         repoPath,
         wtPath,
-        deleteBranch,
-        pruneOnly
+        request
       ) as ReturnType<GitApi['worktreeRemove']>,
     setActiveRemote: (projectId) =>
       client.request(IPC.gitSetActiveRemote, projectId) as Promise<void>
@@ -950,7 +961,8 @@ export function buildAuthenticatorApi(client: RpcClient): Pick<NodeTerminalApi, 
       client.request(IPC.authenticatorAddUri, uri) as Promise<AuthenticatorAddResult>,
     rename: (input: AuthenticatorRenameInput) =>
       client.request(IPC.authenticatorRename, input) as Promise<AuthenticatorEntry | null>,
-    remove: (id: string) => client.request(IPC.authenticatorRemove, id) as Promise<void>,
+    remove: (input: AuthenticatorRemoveInput) =>
+      client.request(IPC.authenticatorRemove, input) as Promise<AuthenticatorRemoveResult>,
     code: (id: string) => client.request(IPC.authenticatorCode, id) as Promise<AuthenticatorCode | null>,
     codes: (ids: string[]) =>
       client.request(IPC.authenticatorCodes, ids) as Promise<Record<string, AuthenticatorCode>>,

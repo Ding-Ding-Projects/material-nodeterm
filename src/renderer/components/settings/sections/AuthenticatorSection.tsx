@@ -7,6 +7,14 @@ import type { AuthenticatorCode, AuthenticatorEntry, OtpAlgorithm } from '@share
 import { OTP_ALGORITHMS } from '@shared/otp'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { TwoKeyExportGate } from '../../authenticator/TwoKeyExportGate'
+import { openDestructiveGate } from '../../../state/destructiveGate'
+import { kidsDestructiveGateRequired } from '../../../state/kidsMode'
+import {
+  dispatchAuthenticatorRemoval,
+  planAuthenticatorRemoval,
+  sameAuthenticatorEntry
+} from '../../../lib/authenticatorRemoval'
+import type { DestructiveAuthorization } from '../../../lib/destructiveAuthorization'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 
@@ -113,15 +121,27 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
 function EntryRow({
   entry,
   code,
+  readCurrentEntry,
   onRemoved,
-  onRenamed
+  onRenamed,
+  onRefreshed,
+  onRemovalError
 }: {
   entry: AuthenticatorEntry
   code: AuthenticatorCode | undefined
+  readCurrentEntry: (id: string) => AuthenticatorEntry | null
   onRemoved: () => void
   onRenamed: (next: AuthenticatorEntry) => void
+  onRefreshed: (entries: AuthenticatorEntry[]) => void
+  onRemovalError: (error: string | null) => void
 }): React.JSX.Element {
-  const [confirmRemove, setConfirmRemove] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState<{
+    message: string
+    onConfirm: () => void
+    onCancel?: () => void
+  } | null>(null)
+  const [removing, setRemoving] = useState(false)
+  const removalInFlight = useRef(false)
   const [renaming, setRenaming] = useState(false)
   const [issuer, setIssuer] = useState(entry.issuer)
   const [account, setAccount] = useState(entry.account)
@@ -146,6 +166,79 @@ function EntryRow({
   const reveal = async (): Promise<void> => {
     const res = await window.nodeTerminal.authenticator.reveal(entry.id)
     if (res.ok) setRevealed({ secretBase32: res.secretBase32 })
+  }
+
+  const requestRemoval = (
+    disclosed: AuthenticatorEntry,
+    gateRequired = kidsDestructiveGateRequired()
+  ): boolean => {
+    const opened = dispatchAuthenticatorRemoval(planAuthenticatorRemoval(disclosed, gateRequired), {
+      perform: (authorization) => void commitRemoval(disclosed, authorization),
+      cancel: () => setConfirmRemove(null),
+      openGate: openDestructiveGate,
+      openConfirm(request) {
+        setConfirmRemove(request)
+        return true
+      }
+    })
+    if (!opened) onRemovalError('Another destructive confirmation is already open. Try again after it closes.')
+    return opened
+  }
+
+  const commitRemoval = async (
+    disclosed: AuthenticatorEntry,
+    authorization: DestructiveAuthorization
+  ): Promise<void> => {
+    if (removalInFlight.current) return
+    removalInFlight.current = true
+    setRemoving(true)
+    setConfirmRemove(null)
+    onRemovalError(null)
+    try {
+      // Confirmation may remain open across a store write. Re-read the authoritative store rather
+      // than treating the row React rendered earlier as a capability for whichever entry owns the
+      // same id now.
+      const latest = await window.nodeTerminal.authenticator.list()
+      const current = latest.find((candidate) => candidate.id === disclosed.id)
+      if (!current) {
+        onRefreshed(latest)
+        onRemovalError('That authenticator entry no longer exists. Nothing was removed.')
+        return
+      }
+      if (!sameAuthenticatorEntry(disclosed, current)) {
+        onRefreshed(latest)
+        onRemovalError('That authenticator entry changed while confirmation was open. Review it and try again.')
+        return
+      }
+
+      // A plain confirmation cannot survive Kids policy becoming ON or unavailable. Re-open from
+      // the freshly-read entry under the stronger gate. A completed two-key approval stays strong
+      // if the policy later relaxes.
+      if (authorization === 'ordinary' && kidsDestructiveGateRequired()) {
+        requestRemoval(current, true)
+        return
+      }
+
+      // No await belongs between this last policy decision and the core mutation request. Core
+      // spends the exact revision inside SecureStore.mutate, which is the final authoritative CAS
+      // against a rename/replacement in this remaining IPC interval.
+      const result = await window.nodeTerminal.authenticator.remove({
+        id: current.id,
+        revision: current.revision
+      })
+      if (!result.ok) {
+        onRemovalError(result.message)
+        const refreshed = await window.nodeTerminal.authenticator.list()
+        onRefreshed(refreshed)
+        return
+      }
+      onRemoved()
+    } catch {
+      onRemovalError('Could not verify and remove that authenticator entry. Nothing was assumed removed.')
+    } finally {
+      removalInFlight.current = false
+      setRemoving(false)
+    }
   }
 
   return (
@@ -205,8 +298,12 @@ function EntryRow({
             <button className="toylock-btn toylock-btn--sm" onClick={() => void reveal()}>
               Reveal secret
             </button>
-            <button className="toylock-btn toylock-btn--sm" onClick={() => setConfirmRemove(true)}>
-              Remove
+            <button
+              className="toylock-btn toylock-btn--sm"
+              disabled={removing}
+              onClick={() => requestRemoval(entry)}
+            >
+              {removing ? 'Removing…' : 'Remove'}
             </button>
           </>
         )}
@@ -222,13 +319,17 @@ function EntryRow({
       )}
       {confirmRemove && (
         <ConfirmDialog
-          message={`Remove the authenticator entry for "${entry.issuer} — ${entry.account}"? This does not affect the other side's account, only this app's copy.`}
+          message={confirmRemove.message}
           confirmLabel="Remove"
           onConfirm={() => {
-            void window.nodeTerminal.authenticator.remove(entry.id).then(onRemoved)
-            setConfirmRemove(false)
+            const confirm = confirmRemove.onConfirm
+            setConfirmRemove(null)
+            confirm()
           }}
-          onCancel={() => setConfirmRemove(false)}
+          onCancel={() => {
+            confirmRemove.onCancel?.()
+            setConfirmRemove(null)
+          }}
         />
       )}
     </li>
@@ -238,6 +339,7 @@ function EntryRow({
 export function AuthenticatorSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const [entries, setEntries] = useState<AuthenticatorEntry[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
   const [codes, setCodes] = useState<Record<string, AuthenticatorCode>>({})
   const [filter, setFilter] = useState('')
   const [showExportGate, setShowExportGate] = useState(false)
@@ -318,6 +420,11 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
               {loadError} Existing entries could not be verified.
             </div>
           )}
+          {mutationError && (
+            <div role="alert" className="toylock-error">
+              {mutationError}
+            </div>
+          )}
           <AddEntryForm onAdded={(e) => setEntries((cur) => [...cur, e])} />
           <input
             type="text"
@@ -336,8 +443,11 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
                   key={e.id}
                   entry={e}
                   code={codes[e.id]}
+                  readCurrentEntry={(id) => entriesRef.current.find((entry) => entry.id === id) ?? null}
                   onRemoved={() => setEntries((cur) => cur.filter((x) => x.id !== e.id))}
                   onRenamed={(next) => setEntries((cur) => cur.map((x) => (x.id === next.id ? next : x)))}
+                  onRefreshed={setEntries}
+                  onRemovalError={setMutationError}
                 />
               ))}
             </ul>

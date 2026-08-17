@@ -50,6 +50,10 @@ export const DEFAULT_SCHOOL_MODE_NAME = 'School mode'
 
 const DEFAULT_RECORD: SchoolModeRecord = { version: 1, enabled: false, name: DEFAULT_SCHOOL_MODE_NAME }
 
+export interface SchoolModeStoreDeps {
+  persist?: (file: string, data: string) => Promise<void>
+}
+
 /** `~/.nodeterm/shared` — a location any locally installed app in this family can read, distinct
  *  from Electron's per-app `userData` dir (which `platform().userDataDir` resolves to). */
 export function sharedDir(): string {
@@ -74,6 +78,7 @@ function sanitizeName(name: string): string {
 }
 
 export class SchoolModeStore {
+  private readonly persist: (file: string, data: string) => Promise<void>
   private cache: SchoolModeRecord = DEFAULT_RECORD
   private listeners = new Set<(r: SchoolModeRecord) => void>()
   private watcher = new SharedRecordWatcher(recordFile(), () => this.queueReload())
@@ -82,6 +87,10 @@ export class SchoolModeStore {
   private chain: Promise<unknown> = Promise.resolve()
   /** Invalidates watcher reloads that were queued before dispose/re-init. */
   private lifecycle = 0
+
+  constructor(deps: SchoolModeStoreDeps = {}) {
+    this.persist = deps.persist ?? persistFile
+  }
 
   /** Load the current record from disk (or defaults) and start watching for external edits. Call
    *  once at boot, before `registerIpc()`. */
@@ -143,7 +152,7 @@ export class SchoolModeStore {
 
   private async writeRecord(next: SchoolModeRecord): Promise<SchoolModeRecord> {
     this.cache = next
-    await persistFile(recordFile(), JSON.stringify(next, null, 2))
+    await this.persist(recordFile(), JSON.stringify(next, null, 2))
     this.watcher.recordWritten()
     this.notify()
     return this.cache

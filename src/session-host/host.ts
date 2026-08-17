@@ -33,11 +33,16 @@ import { HostSession } from './session'
 import { paneCommand as readPaneCommand } from './process-tree'
 import { terminateWindowsProcessTree } from './windows-process-tree'
 import { publishSessionHostState } from './state-file'
+import { readExistingSessionHostIdentity } from './existing-host-state'
 import {
   RETRY_SESSION_GENERATION,
   SessionGenerationCoordinator,
   retireSessionGeneration
 } from './generation-barrier'
+import { drainSessionHostTransport, writeSessionHostFrame } from './socket-flow'
+import { SessionHostSocketRequestQueue } from './socket-request-queue'
+import { trySessionHostHello } from './hello-probe'
+import { killHostSession } from './kill-session'
 
 /** How long a session-less host lingers before exiting — mirrors tmux's own server lifetime rule
  *  ("the server exits when its last session dies"), plus a grace window so an app restart that
@@ -69,75 +74,39 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Try a one-shot hello against an already-running host. Resolves true only on a real `{ok:true}`
- *  reply within `timeoutMs` — anything else (refused, timed out, wrong token) is "not alive". */
-function tryHello(endpoint: string, token: string, timeoutMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false
-    const finish = (ok: boolean): void => {
-      if (settled) return
-      settled = true
-      try {
-        socket.destroy()
-      } catch {
-        /* already gone */
-      }
-      resolve(ok)
-    }
-    const socket = net.connect(endpoint)
-    const timer = setTimeout(() => finish(false), timeoutMs)
-    socket.once('error', () => {
-      clearTimeout(timer)
-      finish(false)
-    })
-    socket.once('connect', () => {
-      socket.write(
-        encodeFrame({ id: 0, cmd: 'hello', token, protocolVersion: currentProtocolVersion() })
-      )
-    })
-    const framer = new LineFramer()
-    socket.on('data', (chunk: Buffer) => {
-      for (const frame of framer.push<{
-        id: number
-        ok?: boolean
-        result?: { protocolVersion?: number }
-      }>(chunk.toString('utf8'))) {
-        clearTimeout(timer)
-        // An authenticated v1 host replies `{ok:true}` without result metadata. It may still own
-        // live terminals from the previous app version, so it is alive and must never be reclaimed
-        // merely because the new client speaks v2. Capability gating happens on the client socket.
-        finish(
-          frame.ok === true &&
-            (frame.result?.protocolVersion === undefined ||
-              frame.result.protocolVersion === currentProtocolVersion())
-        )
-      }
-    })
-  })
-}
-
 /** Poll for a WINNER of the startup race to finish writing its state file and come up — the state
  *  file can legitimately exist-but-be-incomplete for a brief window between this process losing
  *  the exclusive-create race and the winner actually binding + writing token + state. */
-async function probeExisting(statePath: string, tokenPathFallback: string): Promise<boolean> {
+async function probeExisting(
+  statePath: string,
+  expectedEndpoint: string,
+  expectedTokenPath: string
+): Promise<boolean> {
+  let lastFailure: unknown = null
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      const raw = fs.readFileSync(statePath, 'utf8').trim()
-      if (raw) {
-        const state = JSON.parse(raw) as Partial<SessionHostState>
-        if (state.endpoint && state.tokenPath) {
-          const token = fs.readFileSync(state.tokenPath, 'utf8').trim()
-          if (token && (await tryHello(state.endpoint, token, 1000))) return true
-        }
+      const identity = readExistingSessionHostIdentity(statePath, {
+        expectedEndpoint,
+        expectedTokenPath
+      })
+      // ENOENT is the only observation that can prove absence. It also supersedes an earlier
+      // partial-publication read failure: the final bounded observation is what owns reclaim.
+      lastFailure = null
+      if (
+        identity.kind === 'ready' &&
+        (await trySessionHostHello(identity.state.endpoint, identity.token, 1000))
+      ) {
+        return true
       }
-    } catch {
-      // not written yet, or the winner already died — keep polling within the bound
+    } catch (error) {
+      // A winner can be between exclusive-create and atomic publication, so retry within the
+      // existing bound. If the final observation is still unreadable/invalid, propagate it: that
+      // is evidence of possible ownership, never permission to unlink and steal the state path.
+      lastFailure = error
     }
     await sleep(150)
   }
-  // Last resort: the state file never resolved to a live host in the window above. Try the
-  // caller's own freshly-generated token path too, in case tokenPath alone survived a torn write.
-  void tokenPathFallback
+  if (lastFailure) throw lastFailure
   return false
 }
 
@@ -164,7 +133,14 @@ async function main(): Promise<void> {
     }
   }
   if (!haveLock) {
-    const alive = await probeExisting(paths.statePath, paths.tokenPath)
+    let alive: boolean
+    try {
+      alive = await probeExisting(paths.statePath, paths.endpoint, paths.tokenPath)
+    } catch (error) {
+      log(`fatal: existing host ownership state is unreadable: ${String(error)}`)
+      process.exit(1)
+      return
+    }
     if (alive) {
       log('another host is already running and answered hello — exiting quietly')
       process.exit(0)
@@ -317,64 +293,73 @@ async function main(): Promise<void> {
   function broadcast(session: HostSession, frame: SessionHostFrame): void {
     const line = encodeFrame(frame)
     for (const sub of session.subscribers) {
-      try {
-        sub.write(line)
-      } catch {
-        /* subscriber socket mid-close — it will be dropped on its own 'close' handler */
-      }
+      writeSessionHostFrame(sub, line, sessions.values())
     }
   }
 
-  /** Ends a session exactly once, however it ends (natural pty exit or an explicit kill), and
-   *  broadcasts the exit frame exactly once — see `HostSession.exited`. Output already accepted
-   *  from node-pty drains through the emulator first, so subscribers cannot observe `exit` ahead
-   *  of the final data chunk and a kill acknowledgement cannot outrun that same drain. */
+  /** Publish and remove a generation only after node-pty has authoritatively observed process
+   * exit. A successful `proc.kill()` call merely dispatched a signal and cannot enter here. */
+  async function publishSessionEnd(session: HostSession, exitCode: number): Promise<void> {
+    const kill = ending.get(session.name)
+    const ownedKill = kill?.session === session ? kill : undefined
+    const ownerToken = ownedKill?.operationIds.values().next().value as string | undefined
+    const killResult: KillSessionResult | undefined = ownedKill
+      ? { replacementToken: ownedKill.reserveReplacement ? ownerToken : undefined }
+      : undefined
+    const released = await retireSessionGeneration(
+      sessions,
+      session.name,
+      session,
+      async () => {
+        await session.settleOutput()
+        if (ownerToken && ownedKill?.reserveReplacement) {
+          // The reservation is the confirmed-replacement commit. Publish the generation exit only
+          // after it exists so a lost correlated reply can reclaim the same operation id safely.
+          // Start its bounded TTL after the output drain, not while teardown is still pending.
+          setReplacementReservation(session.name, ownerToken)
+        }
+        broadcast(session, {
+          type: 'exit',
+          name: session.name,
+          exitCode,
+          generation: session.generation
+        })
+        session.dispose()
+      }
+    )
+    if (released) scheduleGraceExitIfEmpty()
+    log(`session ended name=${session.name} exitCode=${exitCode}`)
+    if (ownedKill && killResult) {
+      if (ending.get(session.name) === ownedKill) ending.delete(session.name)
+      for (const operationId of ownedKill.operationIds) {
+        rememberCompletedKill(
+          operationId,
+          session.name,
+          ownedKill.reserveReplacement,
+          ownedKill.expectedGeneration
+        )
+        inProgressKillIds.delete(operationId)
+      }
+      ownedKill.resolve(killResult)
+    }
+  }
+
   function endSession(session: HostSession, exitCode: number): Promise<void> {
     if (session.ending) return session.ending
-    session.exited = true
+    session.retiring = true
+    session.ending = publishSessionEnd(session, exitCode)
+    return session.ending
+  }
+
+  /** Claim the name immediately after a kill signal succeeds, then wait for onExit. The generation
+   * coordinator sees `retiring` and blocks same-name attach until the real exit frame, output drain
+   * and disposal have all completed. */
+  function beginKillRetirement(session: HostSession): Promise<void> {
+    if (session.ending) return session.ending
+    session.retiring = true
     session.ending = (async () => {
-      const kill = ending.get(session.name)
-      let killResult: KillSessionResult | undefined
-      const released = await retireSessionGeneration(
-        sessions,
-        session.name,
-        session,
-        async () => {
-          await session.settleOutput()
-          if (kill?.session === session && ending.get(session.name) === kill) {
-            ending.delete(session.name)
-            const ownerToken = kill.operationIds.values().next().value as string | undefined
-            if (ownerToken && kill.reserveReplacement) {
-              setReplacementReservation(session.name, ownerToken)
-            }
-            for (const operationId of kill.operationIds) {
-              rememberCompletedKill(
-                operationId,
-                session.name,
-                kill.reserveReplacement,
-                kill.expectedGeneration
-              )
-              inProgressKillIds.delete(operationId)
-            }
-            killResult = {
-              replacementToken: kill.reserveReplacement ? ownerToken : undefined
-            }
-          }
-          // For a confirmed replacement, the reservation above is the commit. Publish the exact
-          // generation exit only after it exists so a client that loses the correlated reply can
-          // adopt the same operationId without opening an unreserved cross-app race.
-          broadcast(session, {
-            type: 'exit',
-            name: session.name,
-            exitCode,
-            generation: session.generation
-          })
-          session.dispose()
-        }
-      )
-      if (released) scheduleGraceExitIfEmpty()
-      log(`session ended name=${session.name} exitCode=${exitCode}`)
-      if (kill && killResult) kill.resolve(killResult)
+      const exitCode = await session.waitForProcessExit()
+      await publishSessionEnd(session, exitCode)
     })()
     return session.ending
   }
@@ -409,7 +394,10 @@ async function main(): Promise<void> {
         }
       )
     })
-    session.proc.onExit(({ exitCode }) => void endSession(session, exitCode))
+    session.proc.onExit(({ exitCode }) => {
+      session.observeProcessExit(exitCode)
+      void endSession(session, exitCode)
+    })
   }
 
   async function launchProcessReady(session: HostSession): Promise<boolean> {
@@ -423,9 +411,6 @@ async function main(): Promise<void> {
     req: Extract<SessionHostRequest, { cmd: 'attach' }>,
     socket: net.Socket
   ): Promise<AttachResult> {
-    if (ending.has(req.name)) {
-      throw new Error(`session '${req.name}' is ending and cannot be attached`)
-    }
     return generationCoordinator.run<AttachResult>(req.name, async (existing) => {
       if (ending.has(req.name)) {
         throw new Error(`session '${req.name}' is ending and cannot be attached`)
@@ -442,46 +427,57 @@ async function main(): Promise<void> {
               `reserved replacement '${req.name}' replay changed its trusted launch plan`
             )
           }
-          // The original cold attach may have created/launched successfully and then lost its
-          // reply. Replaying the SAME token is an idempotent attach to that exact generation.
-          const initialLaunch = await existing.executeInitialLaunch(req.spawn, () =>
-            launchProcessReady(existing)
-          )
+        }
+        // Restore this connection's flow + geometry before taking the screen. A reconnect carrying
+        // `paused` must never receive bytes in the gap before its explicit ticket is reasserted.
+        // Live delivery still starts only AFTER the barrier+snapshot, so a pending chunk cannot be
+        // delivered to this socket and then appear again in the warm screen.
+        const attachment = await existing.prepareAttachment(
+          socket,
+          req.spawn.cols,
+          req.spawn.rows,
+          req.paused === true
+        )
+        try {
           const screen = await existing.serialize()
+          if (!attachment.isCurrent()) {
+            await attachment.rollback()
+            throw new Error('attach cancelled before activation')
+          }
+          // The process can exit while the async emulator drains. Retain this name claim and cross
+          // its retirement barrier again; recursive attach would deadlock or race another waiter.
           if (existing.exited || sessions.get(req.name) !== existing) {
+            await attachment.rollback()
+            if (!attachment.isCurrent()) throw new Error('attach cancelled during retry')
             return RETRY_SESSION_GENERATION
           }
-          existing.subscribers.add(socket)
+          if (!attachment.commit()) throw new Error('attach cancelled before activation')
+          const initialLaunch = req.replacementToken
+            ? await existing.executeInitialLaunch(req.spawn, () => launchProcessReady(existing))
+            : undefined
+          log(`attach (warm) name=${req.name} subscribers=${existing.subscribers.size}`)
           return {
-            fresh: true,
+            // A replay of the same consumed replacement token replays the original cold result;
+            // this is not an ordinary warm attach even though the generation now exists.
+            fresh: Boolean(req.replacementToken),
             screen: screen || undefined,
             generation: existing.generation,
             launchDialect: existing.launchDialect,
             initialLaunchStatus: initialLaunch?.status
           }
-        }
-        // Add the new subscriber only AFTER the barrier+snapshot. Otherwise a pending chunk can be
-        // delivered live to this socket and then appear again in its warm-attach screen.
-        const screen = await existing.serialize()
-        // The process can exit while the async emulator drains. Retain this name claim and cross
-        // its retirement barrier again; recursive attach would deadlock or race another waiter.
-        if (existing.exited || sessions.get(req.name) !== existing) {
-          return RETRY_SESSION_GENERATION
-        }
-        existing.subscribers.add(socket)
-        log(`attach (warm) name=${req.name} subscribers=${existing.subscribers.size}`)
-        return {
-          fresh: false,
-          screen: screen || undefined,
-          generation: existing.generation,
-          launchDialect: existing.launchDialect
+        } catch (error) {
+          await attachment.rollback()
+          throw error
         }
       }
+
       const reservation = activeReplacementReservation(req.name)
       if (reservation && req.replacementToken !== reservation.token) {
+        scheduleGraceExitIfEmpty()
         throw new Error(`session '${req.name}' is reserved for confirmed replacement`)
       }
       if (!reservation && req.replacementToken) {
+        scheduleGraceExitIfEmpty()
         throw new Error(`replacement reservation for session '${req.name}' is no longer valid`)
       }
       // Consume before construction: a resolver/spawn failure releases the name for recovery.
@@ -491,16 +487,40 @@ async function main(): Promise<void> {
         session = new HostSession(req.name, req.spawn, req.scrollback, reservation?.token)
       } catch (error) {
         scheduleGraceExitIfEmpty()
-        void error
-        log(`spawn failed name=${req.name} category=profile-start-failed`)
+        log(`spawn failed name=${req.name} category=profile-start-failed detail=${String(error)}`)
         // Executable, argv, cwd and native process details are trusted-core/private state. The wire
         // carries only a stable actionable category; full diagnostics stay in the host-local log.
         throw new Error('session-host could not start the requested terminal profile')
       }
-      cancelGraceExit()
+      // prepareAttachment books `paused` synchronously before its first await. Do that before the
+      // process is wired for output so a reconnect cannot leak initial bytes before the ticket.
+      const preparing = session.prepareAttachment(
+        socket,
+        req.spawn.cols,
+        req.spawn.rows,
+        req.paused === true
+      )
       sessions.set(req.name, session)
-      session.subscribers.add(socket)
       wireSession(session)
+      try {
+        const attachment = await preparing
+        if (
+          session.exited ||
+          sessions.get(req.name) !== session ||
+          !attachment.isCurrent() ||
+          !attachment.commit()
+        ) {
+          await attachment.rollback()
+          throw new Error('attach cancelled before activation')
+        }
+      } catch (error) {
+        if (session.exited) {
+          await session.ending
+        } else if (sessions.get(req.name) === session) {
+          await killHostSession(session, beginKillRetirement)
+        }
+        throw error
+      }
       log(`attach (cold) name=${req.name} pid=${session.proc.pid}`)
       const initialLaunch = await session.executeInitialLaunch(req.spawn, () =>
         launchProcessReady(session)
@@ -518,9 +538,6 @@ async function main(): Promise<void> {
     req: Extract<SessionHostRequest, { cmd: 'attachExisting' }>,
     socket: net.Socket
   ): Promise<AttachResult> {
-    if (ending.has(req.name)) {
-      throw new Error(`session '${req.name}' is ending and cannot be attached`)
-    }
     return generationCoordinator.run<AttachResult>(req.name, async (existing) => {
       if (ending.has(req.name)) {
         throw new Error(`session '${req.name}' is ending and cannot be attached`)
@@ -532,17 +549,34 @@ async function main(): Promise<void> {
       if (req.expectedGeneration && req.expectedGeneration !== existing.generation) {
         throw new Error(`session '${req.name}' was replaced by a different generation`)
       }
-      const screen = await existing.serialize()
-      if (existing.exited || sessions.get(req.name) !== existing) {
-        return RETRY_SESSION_GENERATION
-      }
-      existing.subscribers.add(socket)
-      log(`attach-existing name=${req.name} subscribers=${existing.subscribers.size}`)
-      return {
-        fresh: false,
-        screen: screen || undefined,
-        generation: existing.generation,
-        launchDialect: existing.launchDialect
+      const attachment = await existing.prepareExistingAttachment(
+        socket,
+        req.paused === true,
+        req.cols,
+        req.rows
+      )
+      try {
+        const screen = await existing.serialize()
+        if (!attachment.isCurrent()) {
+          await attachment.rollback()
+          throw new Error('attachExisting cancelled before activation')
+        }
+        if (existing.exited || sessions.get(req.name) !== existing) {
+          await attachment.rollback()
+          if (!attachment.isCurrent()) throw new Error('attachExisting cancelled during retry')
+          return RETRY_SESSION_GENERATION
+        }
+        if (!attachment.commit()) throw new Error('attachExisting cancelled before activation')
+        log(`attach-existing name=${req.name} subscribers=${existing.subscribers.size}`)
+        return {
+          fresh: false,
+          screen: screen || undefined,
+          generation: existing.generation,
+          launchDialect: existing.launchDialect
+        }
+      } catch (error) {
+        await attachment.rollback()
+        throw error
       }
     })
   }
@@ -554,12 +588,6 @@ async function main(): Promise<void> {
     reserveReplacement: boolean
   ): Promise<KillSessionResult> {
     validateKillOperationId(operationId)
-    const retiring = sessions.get(name)
-    if (retiring?.exited) {
-      // An exited generation remains name-visible until its accepted output and exit frame have
-      // drained. No kill/replacement acknowledgement may pass that retirement boundary early.
-      await endSession(retiring, 0)
-    }
     pruneCompletedKills()
     const completed = completedKillIds.get(operationId)
     if (completed) {
@@ -602,7 +630,14 @@ async function main(): Promise<void> {
       throw new Error(`session '${name}' is already restarting`)
     }
 
-    const session = sessions.get(name)
+    let session = sessions.get(name)
+    if (session && (session.exited || session.retiring)) {
+      // Natural exit keeps the generation registered through its output/exit publication barrier.
+      // Absence is not authoritative until that exact generation has finished retiring.
+      if (!session.ending) throw new Error(`ending session '${name}' has no retirement barrier`)
+      await session.ending
+      session = sessions.get(name)
+    }
     if (!session || session.exited) {
       const reservation = activeReplacementReservation(name)
       if (reserveReplacement && reservation && reservation.token !== operationId) {
@@ -671,6 +706,7 @@ async function main(): Promise<void> {
             // onExit, which is the proof that shell descendants *and* host-parented conhost are
             // gone. If it never arrives, the client times out uncertain instead of receiving a
             // false destructive acknowledgement.
+            void beginKillRetirement(session).catch(failOperation)
           } catch (error) {
             log(`ConPTY release failed name=${name}: ${String(error)}`)
             failOperation(new Error('session-host could not confirm terminal process termination'))
@@ -684,6 +720,7 @@ async function main(): Promise<void> {
     } else {
       try {
         session.proc.kill()
+        void beginKillRetirement(session).catch(failOperation)
       } catch (error) {
         failOperation(error)
       }
@@ -719,29 +756,28 @@ async function main(): Promise<void> {
       case 'write': {
         const s = sessions.get(req.name)
         if (!s || s.exited) return { ok: false, error: 'no such session' }
+        if (!s.subscribers.has(socket)) return { ok: false, error: 'not attached to session' }
         s.proc.write(req.data)
         return { ok: true }
       }
       case 'resize': {
         const s = sessions.get(req.name)
         if (!s || s.exited) return { ok: false, error: 'no such session' }
-        try {
-          s.proc.resize(Math.max(1, req.cols), Math.max(1, req.rows))
-        } catch {
-          /* pty may have just exited — resize on a dead pty is a no-op, not a caller error */
-        }
-        await s.resize(req.cols, req.rows)
+        if (!s.subscribers.has(socket)) return { ok: false, error: 'not attached to session' }
+        await s.resizeFor(socket, req.cols, req.rows)
         return { ok: true }
       }
       case 'pause': {
         const s = sessions.get(req.name)
         if (!s || s.exited) return { ok: false, error: 'no such session' }
+        if (!s.subscribers.has(socket)) return { ok: false, error: 'not attached to session' }
         s.pauseFor(socket)
         return { ok: true }
       }
       case 'resume': {
         const s = sessions.get(req.name)
         if (!s || s.exited) return { ok: false, error: 'no such session' }
+        if (!s.subscribers.has(socket)) return { ok: false, error: 'not attached to session' }
         s.resumeFor(socket)
         return { ok: true }
       }
@@ -814,7 +850,7 @@ async function main(): Promise<void> {
         return { ok: true, result }
       }
       case 'detach': {
-        sessions.get(req.name)?.detach(socket)
+        await sessions.get(req.name)?.detach(socket)
         return { ok: true }
       }
       case 'listSessions':
@@ -832,6 +868,28 @@ async function main(): Promise<void> {
     let authed = false
     let clientProtocolVersion: 1 | 2 | null = null
     const framer = new LineFramer()
+    const requestQueue = new SessionHostSocketRequestQueue()
+    const dispatchAndRespond = async (req: SessionHostRequest): Promise<void> => {
+      if (socket.destroyed) return
+      try {
+        const res = await dispatch(req, socket, clientProtocolVersion ?? 1)
+        writeSessionHostFrame(
+          socket,
+          encodeFrame({ id: req.id, ...res }),
+          sessions.values()
+        )
+      } catch (e) {
+        writeSessionHostFrame(
+          socket,
+          encodeFrame({
+            id: req.id,
+            ok: false,
+            error: e instanceof Error ? e.message : String(e)
+          }),
+          sessions.values()
+        )
+      }
+    }
     socket.on('data', (chunk: Buffer) => {
       const frames = framer.push<SessionHostRequest>(chunk.toString('utf8'))
       for (const req of frames) {
@@ -850,7 +908,8 @@ async function main(): Promise<void> {
             authed = true
             clientProtocolVersion =
               requestedVersion === undefined || requestedVersion === 1 ? 1 : 2
-            socket.write(
+            writeSessionHostFrame(
+              socket,
               encodeFrame(
                 clientProtocolVersion === 1
                   ? { id: req.id, ok: true }
@@ -859,20 +918,26 @@ async function main(): Promise<void> {
                       ok: true,
                       result: { protocolVersion: currentProtocolVersion() }
                     }
-              )
+              ),
+              sessions.values()
             )
           } else {
             const error =
               req.cmd === 'hello' && req.token === token
                 ? `incompatible session-host protocol: expected ${currentProtocolVersion()}`
                 : 'unauthorized'
-            socket.write(encodeFrame({ id: req.id, ok: false, error }))
+            writeSessionHostFrame(
+              socket,
+              encodeFrame({ id: req.id, ok: false, error }),
+              sessions.values()
+            )
             socket.destroy()
           }
           continue
         }
         if (req.cmd === 'hello') {
-          socket.write(
+          writeSessionHostFrame(
+            socket,
             encodeFrame(
               clientProtocolVersion === 1
                 ? { id: req.id, ok: true }
@@ -881,30 +946,27 @@ async function main(): Promise<void> {
                     ok: true,
                     result: { protocolVersion: currentProtocolVersion() }
                   }
-            )
+            ),
+            sessions.values()
           )
           continue
         }
-        void dispatch(req, socket, clientProtocolVersion ?? 1)
-          .then((res) => socket.write(encodeFrame({ id: req.id, ...res })))
-          .catch((e) =>
-            socket.write(
-              encodeFrame({
-                id: req.id,
-                ok: false,
-                error: e instanceof Error ? e.message : String(e)
-              })
-            )
-          )
+        if ('name' in req) void requestQueue.enqueue(req.name, () => dispatchAndRespond(req))
+        else void dispatchAndRespond(req)
       }
     })
+    socket.on('drain', () => drainSessionHostTransport(socket, sessions.values()))
     socket.on('close', () => {
       liveSockets.delete(socket)
       // A connection dropping is a DETACH, never a kill — sessions belong to the host, not to
       // any one connection. Mirrors tmux: closing a client's terminal only ends that client.
       // `detach` also returns this socket's pause ticket; without that second half, a crashed
       // viewer can leave the global node-pty actuator paused forever for every healthy viewer.
-      for (const session of sessions.values()) session.detach(socket)
+      for (const session of sessions.values()) {
+        void session.detach(socket).catch((e) =>
+          log(`detach cleanup failed name=${session.name}: ${String(e)}`)
+        )
+      }
     })
     socket.on('error', () => {
       /* the 'close' handler above still runs and does the real cleanup */
@@ -938,11 +1000,18 @@ async function main(): Promise<void> {
     // this file existed, or one that crashed after binding but before this run started) is still
     // bound. Give the probe one more honest look before giving up.
     if (err.code === 'EADDRINUSE') {
-      void probeExisting(paths.statePath, paths.tokenPath).then((alive) => {
-        if (alive) process.exit(0)
-        cleanupFiles()
-        process.exit(1)
-      })
+      void probeExisting(paths.statePath, paths.endpoint, paths.tokenPath).then(
+        (alive) => {
+          if (alive) process.exit(0)
+          cleanupFiles()
+          process.exit(1)
+        },
+        (error) => {
+          log(`fatal: ownership probe after EADDRINUSE failed: ${String(error)}`)
+          cleanupFiles()
+          process.exit(1)
+        }
+      )
       return
     }
     cleanupFiles()

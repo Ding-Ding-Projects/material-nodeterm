@@ -302,15 +302,31 @@ export const CATALOG: Catalog = {
       'nodeterm v{version} is downloading.',
       'nodeterm v{version} is downloading.',
       'nodeterm v{version} is on its way in.',
-      'nodeterm v{version} is downloading — nearly there.',
-      'nodeterm v{version} is streaming in as fast as your connection allows.'
+      'nodeterm v{version} is downloading; the progress bar has no measured percentage.',
+      'nodeterm v{version} is downloading; the updater is keeping the finish line to itself.'
     ],
     yue: [
       'nodeterm v{version} 下載緊。',
       'nodeterm v{version} 下載緊。',
       'nodeterm v{version} 落緊嚟緊。',
-      'nodeterm v{version} 下載緊，就嚟得喇。',
-      'nodeterm v{version} 用盡你網速咁樣落緊嚟。'
+      'nodeterm v{version} 下載緊；個進度條冇實測百分比。',
+      'nodeterm v{version} 下載緊；更新器唔會扮知仲有幾遠。'
+    ]
+  },
+  'update.body.downloadingUnknown': {
+    en: [
+      'A newer nodeterm version is downloading.',
+      'A newer nodeterm version is downloading.',
+      'A newer nodeterm version is on its way in.',
+      'A newer nodeterm version is downloading; the progress bar has no measured percentage.',
+      'A newer nodeterm version is downloading; the updater is keeping the finish line to itself.'
+    ],
+    yue: [
+      '新版本 nodeterm 下載緊。',
+      '新版本 nodeterm 下載緊。',
+      '新版本 nodeterm 落緊嚟。',
+      '新版本 nodeterm 下載緊；個進度條冇實測百分比。',
+      '新版本 nodeterm 下載緊；更新器唔會扮知仲有幾遠。'
     ]
   },
   'update.downloadingPct': {
@@ -337,6 +353,22 @@ export const CATALOG: Catalog = {
       'nodeterm v{version} 已經降落，但佢唔會自己裝落去架，快啲落嚟啦。'
     ]
   },
+  'update.body.manualUnknown': {
+    en: [
+      'A newer nodeterm version is available. Download it to update.',
+      'A newer nodeterm version is available. Download it to update.',
+      'A newer nodeterm version is out — grab it to update.',
+      'A newer nodeterm version is waiting for you. Download it to update.',
+      'A newer nodeterm version has landed and it will not install itself — go download it.'
+    ],
+    yue: [
+      'nodeterm 有新版本，下載嚟更新。',
+      'nodeterm 有新版本，下載嚟更新。',
+      'nodeterm 新版本出咗喇，下載嚟更新啦。',
+      'nodeterm 新版本喺度等緊你，去下載嚟更新啦。',
+      'nodeterm 新版本已經降落，但佢唔會自己裝落去架，快啲下載啦。'
+    ]
+  },
   'update.download': {
     en: flat('Download'),
     yue: flat('下載')
@@ -355,6 +387,22 @@ export const CATALOG: Catalog = {
       'nodeterm v{version} 已經下載好，可以安裝喇。',
       'nodeterm v{version} 已經執拾好行李，隨時可以安裝。',
       'nodeterm v{version} 已經全套下載完，企喺度等緊安裝。'
+    ]
+  },
+  'update.body.readyUnknown': {
+    en: [
+      'A nodeterm update is ready to install.',
+      'A nodeterm update is ready to install.',
+      'A nodeterm update is downloaded and ready to install.',
+      'A nodeterm update is sitting here, all packed and ready to install.',
+      'A nodeterm update is fully downloaded and standing by, itching to install.'
+    ],
+    yue: [
+      'nodeterm 更新已經準備好安裝。',
+      'nodeterm 更新已經準備好安裝。',
+      'nodeterm 更新已經下載好，可以安裝喇。',
+      'nodeterm 更新已經執拾好行李，隨時可以安裝。',
+      'nodeterm 更新已經全套下載完，企喺度等緊安裝。'
     ]
   },
   'update.restart': {

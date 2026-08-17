@@ -25,6 +25,9 @@ vi.mock('./platform', () => ({
 
 const { KidsModeStore, DEFAULT_KIDS_MODE_NAME, sharedDir } = await import('./kids-mode')
 const { SchoolModeStore } = await import('./school-mode')
+const { readAtomicFileSnapshot, withCrossProcessLock, writeAtomicFileCompared } = await import('./fs-transaction-lock')
+type SharedRecordWatch = import('./shared-record-watch').SharedRecordWatch
+type SharedRecordWatchToken = import('./shared-record-watch').SharedRecordWatchToken
 
 let home: string
 let homeSpy: ReturnType<typeof vi.spyOn>
@@ -39,8 +42,8 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true })
 })
 
-async function fresh() {
-  const s = new KidsModeStore()
+async function fresh(deps: ConstructorParameters<typeof KidsModeStore>[0] = {}) {
+  const s = new KidsModeStore(deps)
   await s.init()
   return s
 }
@@ -50,6 +53,31 @@ async function waitUntil(check: () => boolean, timeoutMs = 3_000): Promise<void>
   while (!check()) {
     if (Date.now() >= deadline) throw new Error('timed out waiting for the shared record watcher')
     await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
+
+/** A deliberately silent but acknowledged watcher: useful for proving writes never rely on cache
+ * freshness or eventual fs.watch delivery. */
+function silentWatcherFactory(
+  _file: string,
+  _onSync: (token: SharedRecordWatchToken) => void,
+  onHealth: (healthy: boolean) => void
+): SharedRecordWatch {
+  const token = { handleGeneration: 1, syncEpoch: 1 }
+  let disposed = false
+  return {
+    start: () => token,
+    recordWritten: () => {},
+    isCurrent: (candidate) => !disposed && candidate.handleGeneration === 1 && candidate.syncEpoch === 1,
+    acknowledge: (candidate) => {
+      const current = !disposed && candidate.handleGeneration === 1 && candidate.syncEpoch === 1
+      if (current) onHealth(true)
+      return current
+    },
+    dispose: () => {
+      disposed = true
+      onHealth(false)
+    }
   }
 }
 
@@ -93,13 +121,33 @@ describe('the lock', () => {
     }
   })
 
-  it('fails OFF on a corrupt record, never into an unverifiable locked state', async () => {
-    // Which way this fails matters. A corrupt shared file must not leave a child in a mode
-    // nobody can confirm the state of, and must not lock an adult out of their own app.
+  it('displays OFF but reports unavailable on a corrupt record', async () => {
+    // Display and authorization are deliberately different facts. The UI may render the safe
+    // default, but destructive callers must not spend corrupt bytes as proof that Kids mode is OFF.
     await fs.mkdir(sharedDir(), { recursive: true })
     await fs.writeFile(path.join(sharedDir(), 'kids-mode.json'), 'not json')
     const s = await fresh()
     expect(s.isOn()).toBe(false)
+    expect(s.snapshot().authoritative).toBe(false)
+    s.dispose()
+  })
+
+  it('does not flip the authoritative cache when a durable disable write fails', async () => {
+    const s = new KidsModeStore(async (file, data) => {
+      if ((JSON.parse(data) as { enabled: boolean }).enabled === false) {
+        throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+      }
+      await persistFile(file, data)
+    })
+    await s.init()
+    await s.enable('1234')
+    expect(s.snapshot()).toMatchObject({ enabled: true, authoritative: true })
+
+    await expect(s.disable('1234')).rejects.toThrow(/disk full/i)
+    expect(s.snapshot()).toMatchObject({ enabled: true, authoritative: true })
+    expect(JSON.parse(await fs.readFile(path.join(sharedDir(), 'kids-mode.json'), 'utf8'))).toMatchObject({
+      enabled: true
+    })
     s.dispose()
   })
 })
@@ -198,7 +246,220 @@ describe('the name', () => {
   })
 })
 
+describe('concurrency', () => {
+  it('keeps the exact last invocation when persistence is stalled', async () => {
+    let releaseFirst!: () => void
+    let announceFirst!: () => void
+    const firstReleased = new Promise<void>((resolve) => (releaseFirst = resolve))
+    const firstStarted = new Promise<void>((resolve) => (announceFirst = resolve))
+    const invocationNames: string[] = []
+    const writeCompared = vi.fn(async (...args: Parameters<typeof writeAtomicFileCompared>) => {
+      const [file, data] = args
+      const name = (JSON.parse(data.toString()) as { name: string }).name
+      invocationNames.push(name)
+      if (invocationNames.length === 1) {
+        announceFirst()
+        await firstReleased
+      }
+      await writeAtomicFileCompared(...args)
+    })
+    const s = await fresh({ writeCompared })
+
+    const first = s.rename('one')
+    await firstStarted
+    const second = s.rename('two')
+    const third = s.rename('three')
+    await Promise.resolve()
+
+    expect(writeCompared).toHaveBeenCalledTimes(1)
+    expect(invocationNames).toEqual(['one'])
+
+    releaseFirst()
+    await Promise.all([first, second, third])
+
+    expect(invocationNames).toEqual(['one', 'two', 'three'])
+    expect(writeCompared).toHaveBeenCalledTimes(3)
+    const onDisk = JSON.parse(await fs.readFile(path.join(sharedDir(), 'kids-mode.json'), 'utf8'))
+    expect(onDisk).toEqual({ version: 1, enabled: false, name: 'three' })
+    expect(s.get()).toEqual(onDisk)
+    s.dispose()
+  })
+
+  it('re-reads inside the transaction so a stale rename preserves another store\'s ON', async () => {
+    const stale = await fresh({ createWatcher: silentWatcherFactory })
+    const writer = await fresh({ createWatcher: silentWatcherFactory })
+
+    expect(stale.get()).toMatchObject({ enabled: false, name: DEFAULT_KIDS_MODE_NAME })
+    await writer.enable('1234')
+    // The silent watcher proves `stale` still holds OFF when rename begins.
+    expect(stale.get().enabled).toBe(false)
+    await stale.rename('Renamed from stale cache')
+
+    const canonical = JSON.parse(
+      await fs.readFile(path.join(sharedDir(), 'kids-mode.json'), 'utf8')
+    )
+    expect(canonical).toEqual({
+      version: 1,
+      enabled: true,
+      name: 'Renamed from stale cache'
+    })
+    stale.dispose()
+    writer.dispose()
+  })
+
+  it('rejects a manual write between strict read and compared publication', async () => {
+    let interfered = false
+    const writeCompared = vi.fn(async (...args: Parameters<typeof writeAtomicFileCompared>) => {
+      const [file] = args
+      if (!interfered) {
+        interfered = true
+        await fs.writeFile(
+          file,
+          JSON.stringify({ version: 1, enabled: true, name: 'External ON' }),
+          'utf8'
+        )
+      }
+      await writeAtomicFileCompared(...args)
+    })
+    const s = await fresh({ createWatcher: silentWatcherFactory, writeCompared })
+
+    await expect(s.rename('Must not land')).rejects.toMatchObject({
+      code: 'atomic-revision-conflict'
+    })
+    expect(JSON.parse(await fs.readFile(path.join(sharedDir(), 'kids-mode.json'), 'utf8'))).toEqual({
+      version: 1,
+      enabled: true,
+      name: 'External ON'
+    })
+    expect(s.get()).toMatchObject({ enabled: false, name: DEFAULT_KIDS_MODE_NAME })
+    s.dispose()
+  })
+
+  it('returns unavailable and rereads when another process writes after its lease is released', async () => {
+    const writer = await fresh({ createWatcher: silentWatcherFactory })
+    let interposed = false
+    const withLock: typeof withCrossProcessLock = async (file, action, options) => {
+      const result = await withCrossProcessLock(file, action, options)
+      if (!interposed) {
+        interposed = true
+        await writer.enable('1234')
+      }
+      return result
+    }
+    const stale = await fresh({ withLock })
+
+    const response = await stale.rename('Written before external ON')
+    expect(response).toMatchObject({
+      enabled: false,
+      authoritative: false
+    })
+    expect(JSON.parse(await fs.readFile(path.join(sharedDir(), 'kids-mode.json'), 'utf8'))).toMatchObject({
+      enabled: true,
+      name: 'Written before external ON'
+    })
+
+    await waitUntil(() => stale.snapshot().enabled && stale.snapshot().authoritative)
+    expect(stale.snapshot()).toMatchObject({
+      enabled: true,
+      name: 'Written before external ON',
+      authoritative: true
+    })
+    stale.dispose()
+    writer.dispose()
+  })
+
+  it('preserves corrupt and unreadable canonical bytes instead of treating them as OFF', async () => {
+    await fs.mkdir(sharedDir(), { recursive: true })
+    const file = path.join(sharedDir(), 'kids-mode.json')
+    await fs.writeFile(file, 'not json', 'utf8')
+    const corrupt = await fresh({ createWatcher: silentWatcherFactory })
+    await expect(corrupt.rename('Must not replace corruption')).rejects.toMatchObject({
+      code: 'kids-mode-record-unavailable',
+      reason: 'invalid'
+    })
+    expect(await fs.readFile(file, 'utf8')).toBe('not json')
+    corrupt.dispose()
+
+    await fs.writeFile(file, JSON.stringify({ version: 1, enabled: true, name: 'Keep me' }), 'utf8')
+    let denied = false
+    const unreadable = await fresh({
+      createWatcher: silentWatcherFactory,
+      readSnapshot: async (target) => {
+        if (denied) throw Object.assign(new Error('denied'), { code: 'EACCES' })
+        return readAtomicFileSnapshot(target)
+      }
+    })
+    denied = true
+    await expect(unreadable.rename('Must not replace unreadable')).rejects.toMatchObject({
+      code: 'kids-mode-record-unavailable',
+      reason: 'unreadable'
+    })
+    expect(JSON.parse(await fs.readFile(file, 'utf8'))).toMatchObject({
+      enabled: true,
+      name: 'Keep me'
+    })
+    unreadable.dispose()
+  })
+})
+
 describe('live shared-record watching', () => {
+  it('marks policy unavailable while a watcher-triggered reload is still pending', async () => {
+    const s = await fresh()
+    expect(s.snapshot()).toMatchObject({ enabled: false, authoritative: true })
+    const realReadFile = fs.readFile.bind(fs)
+    let releaseRead!: (value: string) => void
+    let intercepted = false
+    const readSpy = vi.spyOn(fs, 'readFile').mockImplementation(async (...args: Parameters<typeof fs.readFile>) => {
+      const file = String(args[0])
+      if (!intercepted && file.endsWith('kids-mode.json')) {
+        intercepted = true
+        return new Promise<string>((resolve) => {
+          releaseRead = resolve
+        })
+      }
+      return realReadFile(...args)
+    })
+
+    const next = JSON.stringify({ version: 1, enabled: true, name: 'External ON' })
+    await fs.mkdir(sharedDir(), { recursive: true })
+    await fs.writeFile(path.join(sharedDir(), 'kids-mode.json'), next)
+    await waitUntil(() => intercepted && s.snapshot().authoritative === false)
+    expect(s.snapshot()).toMatchObject({ enabled: false, authoritative: false })
+
+    releaseRead(next)
+    await waitUntil(() => s.snapshot().enabled && s.snapshot().authoritative)
+    readSpy.mockRestore()
+    s.dispose()
+  })
+
+  it('does not miss an ON record created while the initial absent read is in flight', async () => {
+    const realReadFile = fs.readFile.bind(fs)
+    let intercepted = false
+    const readSpy = vi.spyOn(fs, 'readFile').mockImplementation(async (...args: Parameters<typeof fs.readFile>) => {
+      const file = String(args[0])
+      if (!intercepted && file.endsWith('kids-mode.json')) {
+        intercepted = true
+        await fs.mkdir(sharedDir(), { recursive: true })
+        await fs.writeFile(
+          path.join(sharedDir(), 'kids-mode.json'),
+          JSON.stringify({ version: 1, enabled: true, name: 'Created during read' })
+        )
+        throw Object.assign(new Error('the read began before creation'), { code: 'ENOENT' })
+      }
+      return realReadFile(...args)
+    })
+    const s = await fresh()
+
+    await waitUntil(() => s.isOn())
+    expect(s.snapshot()).toMatchObject({
+      enabled: true,
+      name: 'Created during read',
+      authoritative: true
+    })
+    readSpy.mockRestore()
+    s.dispose()
+  })
+
   it('observes an external edit after its first write creates a directory absent at boot', async () => {
     const s = await fresh()
 

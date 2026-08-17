@@ -65,9 +65,9 @@ On 2026-08-13, on a stock Linux host with no `hidepid`:
   arbitrary command and is **not** in the confirm-gated `DESTRUCTIVE_VERBS` set (only `write` and
   `close` are, `src/shared/control-verbs.ts`). So this was **arbitrary command execution as the
   victim user**, from any account on the machine, with no prompt. (Note what that set is and is
-  not: the dialogs are hand-written per case in `Canvas.tsx`'s dispatch, and `close-worktree
-  --mode remove` is confirmed by a human without being in the set. The set is what the two `case`
-  blocks read for their `confirmBusy()` refusal, and a drift alarm over that agreement.)
+  not: renderer `dispatchDestructiveControl` uses it as the executable write/close decision before
+  Canvas reaches its ordinary switch, while `close-worktree --mode remove` is confirmed through a
+  separate human route and is intentionally not a member.)
 - The same shape existed on SSH hosts: `RemoteHooks.verifyTunnel` passed the bearer as `-H` on a
   curl command line, i.e. argv on the host, readable by every other account there.
 
@@ -169,8 +169,20 @@ including nodes on other projects, or on other people's canvases. Minting happen
 secret is. The case-fold collision refusal is applied on the *minting* side for the same reason: an
 APFS host must not be a way around the local guard.
 
-**The phone needs nothing.** It posts hook events with no node token (`legacy`, accepted) and drives
-canvas control over the relay → IPC, not over `/control/*` at all.
+**The phone needs nothing, and holds nothing — but the sessions it spawns are `verified`.** The
+phone *device* posts no hook events at all: it drives canvas control over the relay → IPC, not over
+`/control/*` at all. The sessions it SPAWNS run **on the host**, source the host's 0600 endpoint
+file, and therefore read and present the host's per-node token exactly as a desktop-spawned session
+does — a phone-spawned session is `verified`.
+
+The chain is worth stating, because it has been mis-derived twice: the phone injects only
+`NODETERM_HOOK_ENDPOINT` and `NODETERM_NODE_ID` (it types `tmux new-session -A` over its own SSH
+transport, so no `ptyManager` and no `ensureNodeToken` is involved anywhere); the endpoint file
+advertises `NODETERM_NODE_TOKEN_DIR`; the managed script reads `$DIR/$NODETERM_NODE_ID` and sends it
+on stdin. The token file is there because `refreshNodeTokens` runs on **every canvas persist**, not
+because the spawn path minted it. Narrowing that materialisation to the spawn path would silently
+drop every phone-spawned session to `legacy` — `src/core/agents/phone-spawned-identity.test.ts`
+exists to make that a red build.
 
 ## Per-route policy
 
@@ -187,8 +199,10 @@ The bearer is required everywhere; this table is about the *node* token on top o
 | `/codex-thread/fallback` | **Always accepted** | 403 | It reports a DEGRADE and grants nothing; refusing it would silence it in exactly the tokenless case it exists for. |
 
 **Why `/hook/*` never 403s a missing token.** It is the fail-open contract, and it is load-bearing
-rather than timid. The legitimate tokenless callers are real and permanent: the **phone** (it injects
-its own env and cannot mint), the **cross-instance failover** (a second instance's token is
+rather than timid. The legitimate tokenless callers are real and permanent: a **phone-spawned session
+whose host had no endpoint file yet** (its `NODETERM_HOOK_ENDPOINT` resolved empty, so there was no
+token dir to read — note that a phone-spawned session on a host that *does* have one is `verified`,
+see above), the **cross-instance failover** (a second instance's token is
 unjudgeable, not hostile), every session that predates the feature, and any future spawner. A 403
 there does not degrade a feature — it silently stops an agent's status, context meter and approvals,
 and the managed script's `curl -sS` has no `--fail`, so a 403 exits 0 and the node goes dark with no
@@ -295,6 +309,12 @@ around. Anyone who can set the header can present an unjudgeable one, and the ap
 it takes to set the header. So: the latch is a good bug-catcher and worth keeping; it is not a
 boundary, and neither is the dated cutoff (the same probe walks past both).
 
+**The one place the probe stops.** A verb in `STRICT_CONTROL_VERBS` admits `verified` and nothing
+else, so a foreign kid — `legacy` by invariant 3 — is refused there with a flat sentence and no
+diagnosis. That is the only route in this document where the invented-kid escape does not apply, and
+it is affordable exactly because those verbs are new: there is no legacy population to strand, so
+nothing has to fail open. It buys nothing for the routes above, which keep the posture they have.
+
 **The real hardening, if it is ever wanted.** Scope the remote token dir as
 `node-tokens/<kid>/<nodeId>` (already sketched in `writeNodeTokens`' own doc comment). The *only*
 scenario the foreign-kid escape exists for is two instances sharing one host account overwriting
@@ -330,7 +350,13 @@ because it is a tri-state:
 | `false` | Not required | Keep the warning window open past the date **and** release the latch. |
 
 `false` is for a user whose upgrade strands a live session: it gets the canvas back without
-downgrading the app. Neither value ever admits a `forged` token. Both shells wire it as a **live
+downgrading the app. Neither value ever admits a `forged` token, and neither releases a verb in
+**`STRICT_CONTROL_VERBS`** (today: `browser`) — that bucket is decided one line below the `forged`
+check, above every branch the hatch or the dated window can reach, and it admits `verified` only.
+The hatch exists to rescue a session that cannot present an identity; it must not double as a grant
+of the one capability where identity *is* the admission control. The cost is named rather than
+hidden: cross-instance failover loses those verbs, because another instance's token is a foreign
+kid and therefore `legacy`. Both shells wire it as a **live
 getter** (`setIdentityStrictOverride`), so a change takes effect on the next request, not the next
 launch — a stranded user must not have to restart the thing that is already broken.
 

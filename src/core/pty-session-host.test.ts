@@ -79,7 +79,7 @@ function fakeSessionHostPty(ready = Promise.resolve({ fresh: true })) {
   }
 }
 
-describe('PtyManager session-host attach boundary', () => {
+describe('PtyManager session-host contracts', () => {
   let manager: import('./pty-manager').PtyManager | undefined
   let host: FakePlatform
 
@@ -109,6 +109,47 @@ describe('PtyManager session-host attach boundary', () => {
     return manager
   }
 
+  it('asks the session host whether a no-tmux persisted session exists', async () => {
+    const m = await makeManager()
+    backend.hasSession.mockResolvedValue(true)
+
+    await expect(m.sessionExists('node-a')).resolves.toBe(true)
+    expect(backend.hasSession).toHaveBeenCalledWith('nt-node-a')
+  })
+
+  it('treats an unprobeable session host as possibly warm instead of cold-restoring on a guess', async () => {
+    const m = await makeManager()
+    backend.hasSession.mockRejectedValue(new Error('host connection unavailable'))
+
+    await expect(m.sessionExists('node-a')).resolves.toBe(true)
+  })
+
+  it('captures a relay snapshot from the session host when tmux is absent', async () => {
+    const m = await makeManager()
+    backend.capture.mockResolvedValue('painted screen')
+
+    await expect(m.captureSnapshot('node-a')).resolves.toBe('painted screen')
+    expect(backend.capture).toHaveBeenCalledWith('nt-node-a', false)
+  })
+
+  it('passes the platform-resolved local shell into a session-host spawn', async () => {
+    const m = await makeManager()
+    m.createDetached({ cols: 80, rows: 24, persistKey: 'node-shell' }, { onData: () => {}, onExit: () => {} })
+
+    expect(backend.create).toHaveBeenCalledTimes(1)
+    const spawn = backend.create.mock.calls[0][1] as {
+      shell: string
+      args: string[]
+    }
+    if (process.platform === 'win32') {
+      expect(spawn.shell).not.toBe('bash')
+      expect(spawn.shell.toLowerCase()).toMatch(/(?:pwsh|powershell|cmd)(?:\.exe)?$/)
+    } else {
+      expect(spawn.shell).toBe(process.env.SHELL || 'bash')
+    }
+    expect(spawn.args).toEqual([])
+  })
+
   it('fails a create closed, parks racing followers, and publishes only the recovered generation', async () => {
     let rejectReady!: (error: Error) => void
     const pendingReady = new Promise<{ fresh: boolean }>((_, reject) => {
@@ -125,7 +166,6 @@ describe('PtyManager session-host attach boundary', () => {
     const first = create(7, options) as Promise<unknown>
     const firstFailure = expect(first).rejects.toThrow('attach refused after connect')
     await vi.waitFor(() => expect(backend.create).toHaveBeenCalledTimes(1))
-
     // Both followers arrive while the failed shim is indexed. They must wait for `ready`, not join
     // the provisional generation and receive a plausible session id whose writes disappear.
     const followerA = create(8, options) as Promise<unknown>
@@ -187,6 +227,195 @@ describe('PtyManager session-host attach boundary', () => {
       persistent: true,
       screen: 'still alive'
     })
+  })
+
+  it('keeps a deletion tombstone when its owner recovery attach fails', async () => {
+    let rejectReady!: (error: Error) => void
+    const pendingReady = new Promise<{ fresh: boolean }>((_, reject) => {
+      rejectReady = reject
+    })
+    const failed = fakeSessionHostPty(pendingReady)
+    backend.create.mockReturnValue(failed)
+    const m = await makeManager()
+    m.registerIpc()
+    const create = host.handlers[IPC.ptyCreate]
+    const options = { cols: 80, rows: 24, persistKey: 'node-protected' }
+
+    // A confirmed delete leaves the owner able to recover, while other clients remain refused.
+    await m.destroySession(7, 'node-protected')
+    const ownerRecovery = create(7, options) as Promise<unknown>
+    const recoveryFailure = expect(ownerRecovery).rejects.toThrow('recovery attach refused')
+    await vi.waitFor(() => expect(backend.create).toHaveBeenCalledTimes(1))
+    rejectReady(new Error('recovery attach refused'))
+    await recoveryFailure
+
+    await expect(create(8, options)).resolves.toEqual({
+      sessionId: '',
+      fresh: false,
+      closed: { by: 7 }
+    })
+    expect(backend.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('fences an exit-before-rejection generation until a retry confirms the destroy', async () => {
+    const proc = fakeSessionHostPty()
+    backend.create.mockReturnValue(proc)
+    let rejectKill!: (error: Error) => void
+    backend.kill.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectKill = reject
+        })
+    )
+    const m = await makeManager()
+    m.registerIpc()
+    const ended = vi.fn()
+    m.onSessionEnded(ended)
+    const create = host.handlers[IPC.ptyCreate]
+    const destroy = host.handlers[IPC.ptyDestroy]
+    const options = { cols: 80, rows: 24, persistKey: 'node-kill-ack' }
+
+    const first = (await create(7, options)) as { sessionId: string; fresh: boolean }
+    const second = (await create(8, options)) as { sessionId: string; fresh: boolean }
+    expect(second).toMatchObject({ sessionId: first.sessionId, fresh: false })
+
+    const pendingDestroy = destroy(7, 'node-kill-ack') as Promise<void>
+    const rejectedDestroy = expect(pendingDestroy).rejects.toThrow('kill acknowledgement lost')
+    await vi.waitFor(() => expect(backend.kill).toHaveBeenCalledTimes(1))
+
+    // A create arriving while the host result is unknown waits behind the end barrier. It must
+    // neither join a session that may be dying nor spawn a replacement before the outcome lands.
+    let followerSettled = false
+    const follower = (create(9, options) as Promise<unknown>).finally(() => {
+      followerSettled = true
+    })
+    const followerFailure = expect(follower).rejects.toThrow(
+      'session end outcome unknown; retry the close before reopening this node'
+    )
+    await Promise.resolve()
+    expect(followerSettled).toBe(false)
+    expect(backend.create).toHaveBeenCalledTimes(1)
+
+    // The host may have acted and emitted exit before its correlated reply is lost. Exit is not a
+    // kill acknowledgement: allowing the waiting create to spawn here resurrects an unknown delete.
+    proc.emitExit(0)
+    rejectKill(new Error('kill acknowledgement lost'))
+    await rejectedDestroy
+    await followerFailure
+
+    // Nothing local claimed a confirmed close, and no replacement generation was spawned. The
+    // exact same idempotent destroy remains available to establish absence.
+    expect(backend.create).toHaveBeenCalledTimes(1)
+    expect(proc.destroy).not.toHaveBeenCalled()
+    expect(host.sent.some((message) => message.channel === IPC.ptyClosed(first.sessionId))).toBe(false)
+    expect(ended).not.toHaveBeenCalled()
+
+    backend.kill.mockResolvedValueOnce(undefined)
+    await expect(destroy(7, 'node-kill-ack')).resolves.toBeUndefined()
+    expect(backend.kill).toHaveBeenCalledTimes(2)
+    expect(ended).toHaveBeenCalledWith('node-kill-ack')
+    await expect(create(9, options)).resolves.toEqual({
+      sessionId: '',
+      fresh: false,
+      closed: { by: 7 }
+    })
+  })
+
+  it('contains a failed legacy destroy cast without local teardown or an unhandled rejection', async () => {
+    const proc = fakeSessionHostPty()
+    backend.create.mockReturnValue(proc)
+    backend.kill.mockRejectedValueOnce(new Error('legacy reply path unavailable'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const m = await makeManager()
+    m.registerIpc()
+    const ended = vi.fn()
+    m.onSessionEnded(ended)
+    const created = (await host.handlers[IPC.ptyCreate](7, {
+      cols: 80,
+      rows: 24,
+      persistKey: 'legacy-node'
+    })) as { sessionId: string }
+
+    host.senderListeners[IPC.ptyDestroy](7, 'legacy-node')
+    await vi.waitFor(() => expect(backend.kill).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+
+    expect(proc.destroy).not.toHaveBeenCalled()
+    expect(ended).not.toHaveBeenCalled()
+    expect(host.sent.some((message) => message.channel === IPC.ptyClosed(created.sessionId))).toBe(false)
+  })
+
+  it('rejects recycle before changing local generation state when the host kill fails', async () => {
+    const proc = fakeSessionHostPty()
+    backend.create.mockReturnValue(proc)
+    backend.kill.mockRejectedValueOnce(new Error('recycle outcome unknown'))
+    const m = await makeManager()
+    m.registerIpc()
+    const ended = vi.fn()
+    m.onSessionEnded(ended)
+    const created = (await host.handlers[IPC.ptyCreate](7, {
+      cols: 80,
+      rows: 24,
+      persistKey: 'recycle-node'
+    })) as { sessionId: string }
+
+    await expect(host.handlers[IPC.ptyRecycle](7, 'recycle-node')).rejects.toThrow(
+      'recycle outcome unknown'
+    )
+    expect(proc.destroy).not.toHaveBeenCalled()
+    expect(ended).not.toHaveBeenCalled()
+    expect(host.sent.some((message) => message.channel === IPC.ptyRecycled(created.sessionId))).toBe(false)
+  })
+
+  it('kills a live host-owned session even if tmux becomes available later', async () => {
+    const proc = fakeSessionHostPty()
+    backend.create.mockReturnValue(proc)
+    const m = await makeManager()
+    m.registerIpc()
+    await host.handlers[IPC.ptyCreate](7, {
+      cols: 80,
+      rows: 24,
+      persistKey: 'host-before-tmux'
+    })
+    ;(m as unknown as { tmuxPath: string }).tmuxPath = 'missing-test-tmux'
+
+    await expect(host.handlers[IPC.ptyDestroy](7, 'host-before-tmux')).resolves.toBeUndefined()
+    expect(backend.kill).toHaveBeenCalledWith('nt-host-before-tmux')
+    expect(proc.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not route an unheld tmux-session delete through the session host', async () => {
+    const m = await makeManager()
+    ;(m as unknown as { tmuxPath: string }).tmuxPath = 'missing-test-tmux'
+
+    await expect(m.destroySession(7, 'tmux-orphan')).resolves.toBeUndefined()
+    expect(backend.kill).not.toHaveBeenCalled()
+  })
+
+  it('does not publish a session that exits in the same turn its ready resolves', async () => {
+    let resolveReady!: (info: { fresh: boolean }) => void
+    const pendingReady = new Promise<{ fresh: boolean }>((resolve) => {
+      resolveReady = resolve
+    })
+    const exited = fakeSessionHostPty(pendingReady)
+    backend.create.mockReturnValue(exited)
+    const m = await makeManager()
+    m.registerIpc()
+    const create = host.handlers[IPC.ptyCreate]
+
+    const result = create(7, {
+      cols: 80,
+      rows: 24,
+      persistKey: 'node-exited-during-attach'
+    }) as Promise<unknown>
+    const failure = expect(result).rejects.toThrow(
+      'session-host session exited before its attach completed'
+    )
+    await vi.waitFor(() => expect(backend.create).toHaveBeenCalledTimes(1))
+    resolveReady({ fresh: true })
+    exited.emitExit(0)
+
+    await failure
   })
 
   it('retires a detached session-host shim and signals its sink when ready rejects', async () => {
@@ -648,73 +877,6 @@ describe('PtyManager session-host attach boundary', () => {
   })
 })
 
-describe('PtyManager session-host parity', () => {
-  let manager: import('./pty-manager').PtyManager | undefined
-
-  beforeEach(() => {
-    initPlatform(fakePlatform())
-    backend.supported.mockReturnValue(true)
-    backend.create.mockReset().mockImplementation(() => fakeSessionHostPty())
-    backend.capture.mockReset().mockResolvedValue('')
-    backend.hasSession.mockReset().mockResolvedValue(false)
-    backend.kill.mockReset().mockResolvedValue(undefined)
-  })
-
-  afterEach(async () => {
-    await manager?.killAll()
-    manager = undefined
-    resetPlatformForTests()
-    vi.restoreAllMocks()
-  })
-
-  async function makeManager() {
-    const { PtyManager } = await import('./pty-manager')
-    manager = new PtyManager()
-    return manager
-  }
-
-  it('asks the session host whether a no-tmux persisted session exists', async () => {
-    const m = await makeManager()
-    backend.hasSession.mockResolvedValue(true)
-
-    await expect(m.sessionExists('node-a')).resolves.toBe(true)
-    expect(backend.hasSession).toHaveBeenCalledWith('nt-node-a')
-  })
-
-  it('treats an unprobeable session host as possibly warm instead of cold-restoring on a guess', async () => {
-    const m = await makeManager()
-    backend.hasSession.mockRejectedValue(new Error('host connection unavailable'))
-
-    await expect(m.sessionExists('node-a')).resolves.toBe(true)
-  })
-
-  it('captures a relay snapshot from the session host when tmux is absent', async () => {
-    const m = await makeManager()
-    backend.capture.mockResolvedValue('painted screen')
-
-    await expect(m.captureSnapshot('node-a')).resolves.toBe('painted screen')
-    expect(backend.capture).toHaveBeenCalledWith('nt-node-a', false)
-  })
-
-  it('passes the platform-resolved local shell into a session-host spawn', async () => {
-    const m = await makeManager()
-    m.createDetached(
-      { cols: 80, rows: 24, persistKey: 'node-shell' },
-      { onData: () => {}, onExit: () => {} }
-    )
-
-    expect(backend.create).toHaveBeenCalledTimes(1)
-    const spawn = backend.create.mock.calls[0][1] as { shell: string; args: string[] }
-    if (process.platform === 'win32') {
-      expect(spawn.shell).not.toBe('bash')
-      expect(spawn.shell.toLowerCase()).toMatch(/(?:pwsh|powershell|cmd)(?:\.exe)?$/)
-    } else {
-      expect(spawn.shell).toBe(process.env.SHELL || 'bash')
-    }
-    expect(spawn.args).toEqual([])
-  })
-})
-
 describe('resolveLocalSessionShell', () => {
   it('uses the Windows resolver when both explicit and configured shells are empty', async () => {
     const { resolveLocalSessionShell } = await import('./pty-manager')
@@ -741,5 +903,29 @@ describe('resolveLocalSessionShell', () => {
       })
     ).toBe('/opt/custom-shell')
     expect(windowsShell).not.toHaveBeenCalled()
+  })
+
+  it('keeps a configured compatibility shell above platform fallback', async () => {
+    const { resolveLocalSessionShell } = await import('./pty-manager')
+    const windowsShell = vi.fn(() => 'cmd.exe')
+
+    expect(
+      resolveLocalSessionShell(undefined, String.raw`C:\Tools\My Shell\shell.exe`, {
+        platform: 'win32',
+        windowsShell
+      })
+    ).toBe(String.raw`C:\Tools\My Shell\shell.exe`)
+    expect(windowsShell).not.toHaveBeenCalled()
+  })
+
+  it('uses the POSIX shell, then bash, outside Windows', async () => {
+    const { resolveLocalSessionShell } = await import('./pty-manager')
+
+    expect(
+      resolveLocalSessionShell(undefined, '', { platform: 'linux', posixShell: '/bin/zsh' })
+    ).toBe('/bin/zsh')
+    expect(resolveLocalSessionShell(undefined, '', { platform: 'linux', posixShell: '' })).toBe(
+      'bash'
+    )
   })
 })

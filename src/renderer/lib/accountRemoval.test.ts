@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   ACCOUNT_REMOVAL_COMMITTED_EVENT,
+  accountRemovalTargetIdentity,
   dispatchAccountRemoval,
   handleAccountRemovalCommitted,
   handleAccountRemovalTeardown,
@@ -10,9 +11,32 @@ import {
   type AccountRemovalTeardownDetail,
   type AuthorizedAccountLoginDeletion
 } from './accountRemoval'
-import { dispatchNodeDeletion, planNodeDeletion } from './nodeDeletion'
+import {
+  createNodeDeletionCommitBarrier,
+  dispatchNodeDeletion,
+  planNodeDeletion,
+  type NodeDeletionTarget
+} from './nodeDeletion'
 
 describe('account-removal transaction gate', () => {
+  it('binds account metadata and the exact serialized affected-node set', () => {
+    const account = {
+      id: 'account-1',
+      label: 'Family',
+      email: 'family@example.test',
+      host: 'example.test',
+      pending: true,
+      createdAt: 1
+    }
+    const original = accountRemovalTargetIdentity(account, ['project-a/node-1'])
+    const variants = [
+      accountRemovalTargetIdentity({ ...account, label: 'Replacement' }, ['project-a/node-1']),
+      accountRemovalTargetIdentity(account, ['project-a/node-2']),
+      accountRemovalTargetIdentity(account, ['project-a/node-1', 'project-b/node-3'])
+    ]
+    for (const variant of variants) expect(variant).not.toBe(original)
+  })
+
   it('keeps the account transaction untouched when the Kids-mode gate is cancelled', () => {
     let accountPresent = true
     let loginSessionOpen = true
@@ -47,18 +71,27 @@ describe('account-removal transaction gate', () => {
     let accountPresent = true
     let loginSessionOpen = true
     const secondGate = vi.fn(() => true)
-    const perform = vi.fn(() => {
+    const perform = vi.fn((authorization: 'ordinary' | 'two-key') => {
       accountPresent = false
       dispatchNodeDeletion(
         planNodeDeletion({
           surface: 'account-removal',
           kidsModeOn: true,
           titles: ['Account login'],
-          authorizedBy: 'remove-account'
+          authorizedBy: { action: 'remove-account', authorization }
         }),
         {
-          perform: () => {
-            loginSessionOpen = false
+          perform: (nodeAuthorization) => {
+            createNodeDeletionCommitBarrier({
+              disclosedTargets: loginTarget,
+              authorization: nodeAuthorization,
+              readCurrent: () => loginTarget,
+              kidsGateRequired: () => true,
+              perform: () => {
+                loginSessionOpen = false
+              },
+              upgradeToTwoKey: secondGate
+            })()
           },
           openGate: secondGate,
           openConfirm: vi.fn(() => true)
@@ -89,14 +122,14 @@ describe('account-removal transaction gate', () => {
     expect(secondGate).not.toHaveBeenCalled()
   })
 
-  it('closes live login nodes through the authorized funnel before continuing removal', () => {
-    const deleteNodes = vi.fn()
+  it('closes live login nodes through the authorized funnel before continuing removal', async () => {
+    const deleteNodes = vi.fn(async () => ({ confirmed: ['login'], failed: [] }))
     const continueRemoval = vi.fn()
     let captured:
       | { ids: string[]; request: AuthorizedAccountLoginDeletion }
       | undefined
 
-    const handled = requestAccountRemovalTeardown('account-1', continueRemoval, (detail) => {
+    const handled = requestAccountRemovalTeardown('account-1', 'two-key', continueRemoval, (detail) => {
       handleAccountRemovalTeardown(
         detail,
         [
@@ -125,7 +158,7 @@ describe('account-removal transaction gate', () => {
     expect(captured?.ids).toEqual(['login'])
     expect(captured?.request).toMatchObject({
       surface: 'account-removal',
-      authorizedBy: 'remove-account'
+      authorizedBy: { action: 'remove-account', authorization: 'two-key' }
     })
     expect(deleteNodes).not.toHaveBeenCalled()
     expect(continueRemoval).not.toHaveBeenCalled()
@@ -133,7 +166,7 @@ describe('account-removal transaction gate', () => {
     captured?.request.perform()
     expect(deleteNodes).toHaveBeenCalledOnce()
     expect(deleteNodes).toHaveBeenCalledWith(['login'])
-    expect(continueRemoval).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(continueRemoval).toHaveBeenCalledOnce())
 
     // A buggy/duplicate close acknowledgement cannot re-run an irreversible account transaction.
     captured?.request.perform()
@@ -141,10 +174,43 @@ describe('account-removal transaction gate', () => {
     expect(continueRemoval).toHaveBeenCalledOnce()
   })
 
+  it('keeps the account when a login-session kill is not acknowledged', async () => {
+    const continueRemoval = vi.fn()
+    const deleteNodes = vi.fn(async () => ({
+      confirmed: [],
+      failed: [{ nodeId: 'login', message: 'connection lost' }]
+    }))
+    let perform: (() => void) | undefined
+
+    requestAccountRemovalTeardown('account-1', 'two-key', continueRemoval, (detail) => {
+      handleAccountRemovalTeardown(
+        detail,
+        [{ id: 'login', data: { accountId: 'account-1', accountLogin: true } }],
+        {
+          isLoginNode: () => true,
+          requestDeleteNodes(_ids, request) {
+            perform = request.perform
+            return true
+          },
+          deleteNodes
+        }
+      )
+    })
+
+    perform?.()
+    await vi.waitFor(() => expect(deleteNodes).toHaveBeenCalledOnce())
+    expect(continueRemoval).not.toHaveBeenCalled()
+
+    // A repeated callback cannot turn the same failed acknowledgement into permission.
+    perform?.()
+    expect(deleteNodes).toHaveBeenCalledOnce()
+    expect(continueRemoval).not.toHaveBeenCalled()
+  })
+
   it('does not start the account transaction when no Canvas accepts the teardown', () => {
     const continueRemoval = vi.fn()
 
-    expect(requestAccountRemovalTeardown('account-1', continueRemoval, () => {})).toBe(false)
+    expect(requestAccountRemovalTeardown('account-1', 'ordinary', continueRemoval, () => {})).toBe(false)
     expect(continueRemoval).not.toHaveBeenCalled()
   })
 
@@ -152,6 +218,7 @@ describe('account-removal transaction gate', () => {
     const order: string[] = []
     const detail: AccountRemovalTeardownDetail = {
       accountId: 'account-1',
+      authorization: 'ordinary',
       handled: false,
       continueRemoval: () => order.push('continue')
     }

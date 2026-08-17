@@ -36,6 +36,7 @@ export function crc32(data: Uint8Array): number {
 export function sanitizeZipPath(path: string): string {
   const parts = path
     .replace(/\\/g, '/')
+    .replace(/^[A-Za-z]:/, '')
     .split('/')
     .filter((p) => p.length > 0 && p !== '.')
   const out: string[] = []
@@ -48,6 +49,11 @@ export function sanitizeZipPath(path: string): string {
   }
   return out.join('/') || 'file'
 }
+
+// General-purpose bit 11 tells ZIP readers that entry names are UTF-8 rather than the legacy
+// CP437 default. TextEncoder always writes UTF-8, so omitting this bit corrupts Cantonese/emoji
+// filenames in conforming readers even though permissive readers may happen to guess correctly.
+const ZIP_UTF8_FLAG = 0x0800
 
 function dosDateTime(d: Date): { time: number; date: number } {
   const time =
@@ -98,7 +104,7 @@ export function buildZip(entries: ZipEntry[]): Uint8Array {
     const localHeader = concatBytes([
       u32(0x04034b50),
       u16(20), // version needed
-      u16(0), // flags
+      u16(ZIP_UTF8_FLAG), // flags: UTF-8 filename
       u16(0), // method: STORE
       u16(now.time),
       u16(now.date),
@@ -115,7 +121,7 @@ export function buildZip(entries: ZipEntry[]): Uint8Array {
       u32(0x02014b50),
       u16(20), // version made by
       u16(20), // version needed
-      u16(0),
+      u16(ZIP_UTF8_FLAG),
       u16(0),
       u16(now.time),
       u16(now.date),

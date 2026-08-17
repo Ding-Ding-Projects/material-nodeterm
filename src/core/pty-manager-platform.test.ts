@@ -21,10 +21,11 @@ describe('PtyManager platform registration', () => {
       IPC.ptyFlow,
       IPC.ptyKill,
       IPC.ptyDestroy,
+      IPC.ptyRecycle,
       IPC.ptySendText,
       IPC.ptyReadScrollback
     ]) {
-      // ptyKill is sender-aware (co-attach: unsubscribe ONE client) → senderListeners.
+      // Session ends have acknowledged handlers plus legacy cast compatibility; ptyKill is cast-only.
       expect(fake.handlers[ch] ?? fake.listeners[ch] ?? fake.senderListeners[ch], ch).toBeDefined()
     }
   })
@@ -43,10 +44,15 @@ describe('PtyManager platform registration', () => {
   // Hence this: the four migrated channels must have NO plain listener at all. If you are here
   // because this went red, you added a second registration for a channel that already has a
   // sender-aware one — delete it, don't relax the assertion.
-  it('registers the sender-aware pty channels EXACTLY ONCE (no composed plain listener)', async () => {
+  it('registers end requests with contained legacy cast compatibility and no plain listener', async () => {
     const { PtyManager } = await import('./pty-manager')
     new PtyManager().registerIpc()
-    for (const ch of [IPC.ptyWrite, IPC.ptyResize, IPC.ptyFlow, IPC.ptyKill, IPC.ptyDestroy]) {
+    for (const ch of [IPC.ptyWrite, IPC.ptyResize, IPC.ptyFlow, IPC.ptyKill]) {
+      expect(fake.senderListeners[ch], ch).toBeDefined()
+      expect(fake.listeners[ch], ch).toBeUndefined()
+    }
+    for (const ch of [IPC.ptyDestroy, IPC.ptyRecycle]) {
+      expect(fake.handlers[ch], ch).toBeDefined()
       expect(fake.senderListeners[ch], ch).toBeDefined()
       expect(fake.listeners[ch], ch).toBeUndefined()
     }

@@ -75,7 +75,6 @@ export type TrustedNodeLaunchLookup =
   | { status: 'missing' }
   | { status: 'unavailable'; reason: TrustedNodeLaunchUnavailableReason }
 
-let tmpSeq = 0
 async function writeAtomic(filePath: string, content: string): Promise<void> {
   // Unique per write: writers that bypass each other's queue (a second app instance, the SSH
   // poll's index write) must never share a tmp file — interleaved writes into one shared tmp

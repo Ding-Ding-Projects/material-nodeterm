@@ -76,6 +76,11 @@ preferences.
   connection — a process's argument list is commonly readable by other accounts on the same
   machine, and a remote command line is exactly as exposed on the far end. Pass secrets through
   a locked-down file or over standard input instead.
+- **Server login admission is ordered and bounded per TCP peer.** Keep password proofs in the
+  async `Auth.attemptPassword` FIFO, and derive lockout identity only from the kernel-observed peer
+  address—not forwarding headers, cookies, user-agent or source port. Per-peer ladders share one
+  account-wide clear budget and bounded nonce ledger; passkey challenges are bounded and
+  peer/purpose-bound; logout revokes the persisted presented bearer before it clears the cookie.
 - **Keep parallel implementations in sync deliberately.** Where the same event or behavior has
   to be handled in more than one shell (for instance, once for the desktop process and once for
   the browser-edition process), a change to one and not the other is a silent regression on

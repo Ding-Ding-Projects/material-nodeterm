@@ -89,6 +89,8 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
   // A raw `ipcMain.handle` remains invisible to a peer — a peer has no webContents, so its request
   // never travels through ipcMain at all. When adding an intended relay method, update BOTH the
   // relay API builder and the exact allowlist; a newly registered service otherwise fails closed.
+  // Core-bound handlers act on this machine's project/session state through platform().handle/on;
+  // user-machine or host-security-sensitive operations remain raw ipcMain in src/main/index.ts.
   // Relay pty:create has a second boundary below: even after the method is allowed, the host
   // reconstructs its launch options from host-owned authority before the handler can see them.
   // handle/handleWithSender are ONE handler per channel (last wins, like ipcMain.handle);

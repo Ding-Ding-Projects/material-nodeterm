@@ -336,7 +336,7 @@ describe('scheduled-settings credential clear', () => {
       expect(store.get().rules).toEqual([])
       expect(await fs.readFile(rawFile, 'utf8')).toBe('orphaned bearer')
     } finally {
-      service.stop()
+      await service.stop()
     }
   })
 
@@ -349,7 +349,7 @@ describe('scheduled-settings credential clear', () => {
     try {
       await vi.waitFor(() => expect(existsSync(rawFile)).toBe(false))
     } finally {
-      service.stop()
+      await service.stop()
     }
   })
 

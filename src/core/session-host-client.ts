@@ -1,18 +1,14 @@
 // The Electron-main-side client for the session host: one long-lived connection per app process,
-// auto-spawning the host on first use (session-host-launcher.ts) and reconnecting transparently
-// if the connection drops while the host itself keeps running (a client disconnect is NEVER a
-// reason to think a session died — see docs/windows-session-host.md).
-//
-// src/core is Electron-free (see no-electron.test.ts); this file imports only `net`/`fs`/`crypto`
-// and the pure protocol/paths modules under src/session-host — no `electron`, no `../main/*`.
+// auto-spawning the host on first use and restoring every live local attachment before allowing
+// ordinary traffic through a replacement connection.
 
-import fs from 'fs'
 import net from 'net'
 import { randomUUID } from 'crypto'
 import { sessionHostPaths } from '../session-host/paths'
+import { readExistingSessionHostIdentity } from '../session-host/existing-host-state'
 import {
-  LineFramer,
   SESSION_HOST_PROTOCOL_VERSION,
+  LineFramer,
   encodeFrame,
   type SessionHostRequest,
   type SessionHostRequestBody,
@@ -31,43 +27,77 @@ import { resolveSessionHostScript, spawnSessionHost } from './session-host-launc
 export interface SessionSubscriber {
   onData(data: string): void
   onExit(exitCode: number): void
-  /** A previously-confirmed attachment failed to re-establish after reconnect. Unlike an exit,
-   * this preserves the host's exact rejection reason so the owning manager can retire the local
-   * generation and surface an actionable error without guessing that the process ended. */
+  /** A previously confirmed attachment failed to restore. This is not an exit: the host's
+   * rejection is retained so the owning manager can retire only the affected generation. */
   onAttachError?(error: Error): void
 }
 
+export const SESSION_HOST_REQUEST_TIMEOUT_MS = 10_000
+
+const RECONNECT_DELAYS_MS = [50, 100, 250, 500, 1_000, 2_000] as const
+const RECONNECT_REPAINT_PREFIX = '\x1b[3J\x1b[2J\x1b[H'
+const HANDSHAKE_TIMEOUT_MS = 2_000
+const KILL_CONFIRMATION_ATTEMPTS = 2
+
 type PendingEntry = {
-  resolve: (v: { ok: true; result?: unknown }) => void
-  reject: (e: Error) => void
+  socket: net.Socket
+  timer: ReturnType<typeof setTimeout> | null
+  resolve: (result: unknown) => void
+  reject: (error: Error) => void
 }
 
-type AttachMemory =
-  | {
-      kind: 'attach'
-      spawn: SessionHostSpawnOptions
-      scrollback: number
-      confirmed: boolean
-      generation?: string
-      protocolVersion?: 1 | 2
-    }
-  | {
-      kind: 'existing'
-      confirmed: boolean
-      generation?: string
-      protocolVersion?: 1 | 2
-    }
+type SubscriberEntry = {
+  sub: SessionSubscriber
+  /** Present only on a cold create request. Warm reconnect and attachExisting deliberately carry
+   * no spawn plan, so a stale profile can never recreate an exited generation. */
+  spawn?: SessionHostSpawnOptions
+  scrollback: number
+  phase: 'attaching' | 'attached'
+}
+
+type BufferedFrame = {
+  data: string
+  /** Entry identity, not merely the callback object: an unsubscribe/re-attach using the same
+   * object must not inherit bytes that belonged to its retired registration. */
+  recipients: Set<SubscriberEntry>
+}
+
+type TerminalSize = { cols: number; rows: number }
+
+type ClientSessionState = {
+  name: string
+  generation?: string
+  protocolVersion?: 1 | 2
+  entries: Map<SessionSubscriber, SubscriberEntry>
+  pauseOwners: Set<SessionSubscriber>
+  sizeClaims: Map<SessionSubscriber, TerminalSize>
+  bufferedData: BufferedFrame[]
+  /** Attaches that have actually reached their request phase. Only these may own data arriving
+   * before the correlated attach response; a merely queued replacement must not absorb bytes
+   * from the generation whose detach/kill still precedes it in the name lane. */
+  preAckEntries: Set<SubscriberEntry>
+  /** An exit can race the correlated attach response in the same socket turn. Remember it so the
+   * response cannot promote a process generation the host has already retired. */
+  preAckExit: boolean
+  /** True after the last local pause owner leaves, until a host acknowledgement makes flowing
+   *  certain again. Data that raced the acknowledgement is retained behind this gate. */
+  releasePending: boolean
+  appliedSocket: net.Socket | null
+  appliedAttached: boolean
+  appliedPaused: boolean
+  appliedSize: TerminalSize | null
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function toError(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value))
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
 }
 
 function isTransportUncertainty(value: unknown): boolean {
-  const error = toError(value) as NodeJS.ErrnoException
+  const error = asError(value) as NodeJS.ErrnoException
   if (
     error.code === 'ECONNRESET' ||
     error.code === 'EPIPE' ||
@@ -78,14 +108,13 @@ function isTransportUncertainty(value: unknown): boolean {
   }
   return (
     error.message.includes('session-host connection lost') ||
-    error.message.includes('session-host: no reply') ||
+    error.message.includes('session-host request timed out') ||
     error.message.includes('socket')
   )
 }
 
-/** A live authenticated legacy host is intentionally kept alive so its existing terminals remain
- * attachable. Operations that require protocol-v2 atomicity fail with this typed, renderer-safe
- * error instead of replacing that host or leaking a private spawn plan onto the legacy wire. */
+/** Protocol-v1 hosts stay alive for warm terminal continuity. Operations that need atomic
+ * generation or replacement semantics fail closed without replacing that live host. */
 export class SessionHostProtocolCompatibilityError extends Error {
   readonly code = 'SESSION_HOST_PROTOCOL_INCOMPATIBLE'
 
@@ -132,40 +161,29 @@ function legacyWarmOnlySentinel(userDataDir: string): SessionHostSpawnOptions {
   }
 }
 
-/**
- * Everything a live client needs to know about ONE connection attempt. Recreated on every
- * (re)connect; `SessionHostClient` itself outlives any single socket.
- */
-/** How long a single request may go unanswered before it is treated as a dead host.
- *
- *  Generous on purpose: the slowest legitimate request is an attach that has to SPAWN a shell on
- *  a cold, contended Windows machine, and killing that early would turn a slow terminal into a
- *  broken one. Ten seconds is far past that and far short of "the user thinks it is frozen". */
-const REQUEST_TIMEOUT_MS = 10_000
-const HANDSHAKE_TIMEOUT_MS = 2_000
-const KILL_CONFIRMATION_ATTEMPTS = 2
+function sameSize(left: TerminalSize | null, right: TerminalSize): boolean {
+  return left?.cols === right.cols && left.rows === right.rows
+}
+
+function normalizeDimension(value: number, fallback: number): number {
+  return Number.isFinite(value) ? Math.max(1, Math.floor(value)) : fallback
+}
 
 export class SessionHostClient {
   private socket: net.Socket | null = null
   private negotiatedProtocolVersion: 1 | 2 | null = null
   private nextId = 1
-  private pending = new Map<number, PendingEntry>()
-  /** Local (in-process) subscribers per session name — the client-side half of co-attach. Several
-   *  `SessionHostPty` instances (e.g. the canvas node AND the relay host's detached pty for the
-   *  same node) may each hold one entry here; the LAST one leaving is what tells the host `detach`. */
-  private subs = new Map<string, Set<SessionSubscriber>>()
-  /** What to replay if the connection drops and comes back — spawn options are cheap to keep and
-   *  this is the only way a reconnect can re-attach without the caller doing anything. */
-  private attachMemory = new Map<string, AttachMemory>()
-  private sessionGenerations = new Map<string, string>()
-  /** A destructive request must become a replay barrier before its first write. If the host
-   * kills the process and its reply is lost, reconnect must not use stale attach options to
-   * recreate that same process before the idempotent kill retry can be confirmed. */
-  private killReplayBarriers = new Set<string>()
-  private killsInFlight = new Map<string, Promise<void>>()
-  /** Retained after a bounded uncertain result so a later explicit retry asks about the same
-   * destructive operation rather than targeting a newer same-name generation. */
-  private killOperations = new Map<
+  private readonly pending = new Map<number, PendingEntry>()
+  private readonly sessions = new Map<string, ClientSessionState>()
+  /** Survives state replacement. Cleanup invoked for an old generation always stays ahead of a
+   * later same-name attach, even after the old state has left `sessions`. */
+  private readonly nameTails = new Map<string, Promise<void>>()
+  private readonly sessionGenerations = new Map<string, string>()
+  /** Installed before the first destructive write so reconnect restoration cannot resurrect an
+   * old generation whose kill reply may have been lost. */
+  private readonly killReplayBarriers = new Set<string>()
+  private readonly killsInFlight = new Map<string, Promise<void>>()
+  private readonly killOperations = new Map<
     string,
     {
       operationId: string
@@ -176,9 +194,11 @@ export class SessionHostClient {
       prepared?: boolean
     }
   >()
-  private replacementTokens = new Map<string, string>()
+  private readonly replacementTokens = new Map<string, string>()
   private connecting: Promise<void> | null = null
   private everConnected = false
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectAttempt = 0
 
   constructor(
     private readonly deps: {
@@ -188,9 +208,6 @@ export class SessionHostClient {
     }
   ) {}
 
-  /** Is a real, tested backend selectable on this machine at all? Session-host has no external
-   *  binary dependency (unlike tmux), so this is really "was the bundle built" — false only in a
-   *  dev checkout that never ran `npm run host:build` / `npm run build`. */
   bundleAvailable(): boolean {
     return (
       resolveSessionHostScript({
@@ -200,21 +217,98 @@ export class SessionHostClient {
     )
   }
 
-  private async ensureConnected(): Promise<void> {
-    if (this.socket && !this.socket.destroyed) return
-    if (this.connecting) return this.connecting
-    this.connecting = this.doConnect().finally(() => {
-      this.connecting = null
+  private newState(name: string): ClientSessionState {
+    return {
+      name,
+      entries: new Map(),
+      pauseOwners: new Set(),
+      sizeClaims: new Map(),
+      bufferedData: [],
+      preAckEntries: new Set(),
+      preAckExit: false,
+      releasePending: false,
+      appliedSocket: null,
+      appliedAttached: false,
+      appliedPaused: false,
+      appliedSize: null
+    }
+  }
+
+  private enqueueState<T>(state: ClientSessionState, task: () => Promise<T>): Promise<T> {
+    return this.enqueueName(state.name, task)
+  }
+
+  private enqueueName<T>(name: string, task: () => Promise<T>): Promise<T> {
+    const previous = this.nameTails.get(name) ?? Promise.resolve()
+    const run = previous.then(task, task)
+    const settled = run.then(
+      () => undefined,
+      () => undefined
+    )
+    this.nameTails.set(name, settled)
+    void settled.then(() => {
+      if (this.nameTails.get(name) === settled) this.nameTails.delete(name)
     })
-    return this.connecting
+    return run
+  }
+
+  private hasAttachedEntry(state: ClientSessionState): boolean {
+    for (const entry of state.entries.values()) {
+      if (entry.phase === 'attached') return true
+    }
+    return false
+  }
+
+  private hasDesiredAttachments(): boolean {
+    for (const state of this.sessions.values()) {
+      if (this.hasAttachedEntry(state)) return true
+    }
+    return false
+  }
+
+  private effectiveSize(state: ClientSessionState): TerminalSize {
+    let cols = Number.POSITIVE_INFINITY
+    let rows = Number.POSITIVE_INFINITY
+    for (const claim of state.sizeClaims.values()) {
+      cols = Math.min(cols, claim.cols)
+      rows = Math.min(rows, claim.rows)
+    }
+    // Every entry receives a claim before it enters the map. This fallback only protects a
+    // teardown race from ever putting non-finite geometry on the wire.
+    return {
+      cols: Number.isFinite(cols) ? cols : 80,
+      rows: Number.isFinite(rows) ? rows : 24
+    }
+  }
+
+  private async ensureConnected(): Promise<void> {
+    // A newly authenticated socket is visible while its reconnect restoration is still running.
+    // The barrier wins over the raw socket check so no later request can overtake replay.
+    if (this.connecting) return this.connecting
+    if (this.socket && !this.socket.destroyed) return
+    const attempt = this.doConnect()
+    this.connecting = attempt
+    void attempt.then(
+      () => {
+        if (this.connecting === attempt) this.connecting = null
+        this.reconnectAttempt = 0
+      },
+      () => {
+        if (this.connecting === attempt) this.connecting = null
+        this.scheduleAutoReconnect()
+      }
+    )
+    return attempt
   }
 
   private async doConnect(): Promise<void> {
     const wasConnectedBefore = this.everConnected
-    if (await this.tryConnectOnce()) {
-      if (wasConnectedBefore) void this.replayAttachesAfterReconnect()
+    if (await this.tryConnectBeforeLaunch()) {
+      const socket = this.socket
+      if (wasConnectedBefore && socket) await this.restoreSocket(socket)
       return
     }
+
     const script = resolveSessionHostScript({
       resourcesPath: this.deps.resourcesPath,
       repoRoot: this.deps.repoRoot
@@ -226,132 +320,92 @@ export class SessionHostClient {
       )
     }
     spawnSessionHost(script, this.deps.userDataDir)
-    // Bounded poll for the freshly-spawned host to bind and write its token — startup is a
-    // `net.createServer().listen()` plus two small file writes, so this is generous, not tuned.
+    let lastPublicationError: Error | null = null
     for (let attempt = 0; attempt < 30; attempt++) {
       await sleep(150)
-      if (await this.tryConnectOnce()) {
-        if (wasConnectedBefore) void this.replayAttachesAfterReconnect()
-        return
+      try {
+        if (await this.tryConnectOnce()) {
+          const socket = this.socket
+          if (wasConnectedBefore && socket) await this.restoreSocket(socket)
+          return
+        }
+        lastPublicationError = null
+      } catch (error) {
+        const typed = asError(error)
+        if (!this.isTransientPublicationLock(typed)) throw typed
+        lastPublicationError = typed
       }
     }
+    if (lastPublicationError) throw lastPublicationError
     throw new Error('session-host did not come up in time')
   }
 
-  private tryConnectOnce(): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      const paths = sessionHostPaths(this.deps.userDataDir)
-      let token: string
+  private isTransientPublicationLock(error: Error): boolean {
+    return error.message === 'invalid session-host state: file is empty'
+  }
+
+  /** An exclusive-create startup lock is briefly empty before atomic state publication. Retry
+   * only that exact state within a small bound; every other unreadable or malformed observation
+   * remains an immediate integrity failure and never reaches the launcher. */
+  private async tryConnectBeforeLaunch(): Promise<boolean> {
+    let lastError: Error | null = null
+    for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        token = fs.readFileSync(paths.tokenPath, 'utf8').trim()
+        return await this.tryConnectOnce()
       } catch (error) {
-        // Absence means "no host to connect to yet". A failed read is not absence: treating an
-        // unreadable/corrupt token as a missing host would spawn a competitor and hide the fault.
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') resolve(false)
-        else reject(error)
-        return
+        const typed = asError(error)
+        if (!this.isTransientPublicationLock(typed)) throw typed
+        lastError = typed
+        await sleep(50)
       }
-      if (!token) {
-        reject(new Error(`session-host token is empty or whitespace-only: ${paths.tokenPath}`))
-        return
-      }
+    }
+    throw lastError ?? new Error('session-host state publication did not complete')
+  }
+
+  private async tryConnectOnce(): Promise<boolean> {
+    const paths = sessionHostPaths(this.deps.userDataDir)
+    const identity = readExistingSessionHostIdentity(paths.statePath, {
+      expectedEndpoint: paths.endpoint,
+      expectedTokenPath: paths.tokenPath
+    })
+    if (identity.kind === 'absent') return false
+    if (
+      identity.state.protocolVersion !== 1 &&
+      identity.state.protocolVersion !== SESSION_HOST_PROTOCOL_VERSION
+    ) {
+      throw new Error(
+        `incompatible session-host protocol: host=${identity.state.protocolVersion}, ` +
+          `client=${SESSION_HOST_PROTOCOL_VERSION}`
+      )
+    }
+    const token = identity.token
+    if (!/^[a-f0-9]{64}$/.test(token)) {
+      throw new Error('invalid session-host token: expected 64 hexadecimal characters')
+    }
+    const endpoint = identity.state.endpoint
+    return new Promise((resolve, reject) => {
       let settled = false
       let connected = false
-      const socket = net.connect(paths.endpoint)
-      socket.unref?.() // never keep the app process alive on our account
+      const socket = net.connect(endpoint)
+      socket.unref?.()
       const framer = new LineFramer()
-      let helloId: number | null = null
+      const helloId = this.nextId++
       let protocolVersion: 1 | 2 | null = null
-      const thisClient = this
-
-      function onHandshakeError(error: Error): void {
-        const code = (error as NodeJS.ErrnoException).code
-        // Only a refusal before connect proves that there is no host to authenticate. Once a
-        // socket connected, any error is protocol/transport uncertainty and must keep its cause.
-        if (!connected && (code === 'ENOENT' || code === 'ECONNREFUSED')) finish(false)
-        else finish(false, error)
-      }
-
-      function onHandshakeClose(): void {
-        if (!connected) finish(false)
-        else finish(false, new Error('session-host connection closed before hello completed'))
-      }
-
-      function onHandshakeConnect(): void {
-        connected = true
-        helloId = thisClient.nextId++
-        socket.write(
-          encodeFrame({
-            id: helloId,
-            cmd: 'hello',
-            token,
-            protocolVersion: SESSION_HOST_PROTOCOL_VERSION
-          }),
-          (error) => {
-            if (error) finish(false, error)
-          }
-        )
-      }
-
-      function onHandshakeData(chunk: Buffer): void {
-        for (const frame of framer.push<{
-          id: number
-          ok?: boolean
-          error?: unknown
-          result?: unknown
-        }>(chunk.toString('utf8'))) {
-          // Authentication is a correlated request, not the first optimistic frame on the socket.
-          if (frame.id !== helloId) continue
-          if (frame.ok === true) {
-            const version = (frame.result as { protocolVersion?: unknown } | undefined)
-              ?.protocolVersion
-            if (version === undefined) {
-              // Authenticated protocol-v1 hosts predate the result metadata. Keep them alive for
-              // warm continuity; v2-only destructive/replacement operations fail closed later.
-              protocolVersion = 1
-              finish(true)
-            } else if (version === SESSION_HOST_PROTOCOL_VERSION) {
-              protocolVersion = 2
-              finish(true)
-            } else {
-              finish(
-                false,
-                new Error(
-                  `session-host protocol is incompatible: expected version ` +
-                    `${SESSION_HOST_PROTOCOL_VERSION}, received ${String(version ?? 'none')}`
-                  )
-              )
-            }
-          }
-          else if (frame.ok === false) {
-            finish(
-              false,
-              new Error(
-                typeof frame.error === 'string' && frame.error
-                  ? frame.error
-                  : 'session-host rejected hello without a reason'
-              )
-            )
-          } else {
-            finish(false, new Error('session-host returned an invalid correlated hello response'))
-          }
-          return
-        }
-      }
-
-      const finish = (ok: boolean, error?: Error): void => {
+      const finish = (ok: boolean, trailing: SessionHostFrame[] = []): void => {
         if (settled) return
         settled = true
         clearTimeout(timer)
-        // Remove only listeners installed by this handshake. Broad data-listener cleanup can
-        // delete the production listener installed during the ownership hand-off below.
         socket.removeListener('connect', onHandshakeConnect)
         socket.removeListener('data', onHandshakeData)
         socket.removeListener('error', onHandshakeError)
         socket.removeListener('close', onHandshakeClose)
         if (ok) {
-          // Hand the socket over before resolving: the continuation may issue `attach` immediately.
-          this.attachSocket(socket, protocolVersion ?? 1)
+          if (!protocolVersion) {
+            failHandshake(new Error('session-host hello did not negotiate a protocol version'))
+            return
+          }
+          this.attachSocket(socket, protocolVersion)
+          for (const frame of trailing) this.handleFrame(socket, frame)
         } else {
           try {
             socket.destroy()
@@ -359,18 +413,94 @@ export class SessionHostClient {
             /* already gone */
           }
         }
-        if (error) reject(error)
-        else resolve(ok)
+        resolve(ok)
+      }
+      const failHandshake = (error: Error): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        socket.removeListener('connect', onHandshakeConnect)
+        socket.removeListener('data', onHandshakeData)
+        socket.removeListener('error', onHandshakeError)
+        socket.removeListener('close', onHandshakeClose)
+        try {
+          socket.destroy()
+        } catch {
+          /* already gone */
+        }
+        reject(error)
+      }
+      const onHandshakeError = (error: Error): void => {
+        if (connected) failHandshake(error)
+        else finish(false)
+      }
+      const onHandshakeClose = (): void => {
+        if (connected) failHandshake(new Error('session-host closed during hello'))
+        else finish(false)
+      }
+      const onHandshakeConnect = (): void => {
+        connected = true
+        try {
+          socket.write(
+            encodeFrame({
+              id: helloId,
+              cmd: 'hello',
+              token,
+              protocolVersion: SESSION_HOST_PROTOCOL_VERSION
+            }),
+            (error) => {
+              if (error) failHandshake(asError(error))
+            }
+          )
+        } catch (error) {
+          failHandshake(asError(error))
+        }
+      }
+      const onHandshakeData = (chunk: Buffer): void => {
+        const frames = framer.push<SessionHostFrame>(chunk.toString('utf8'))
+        for (let index = 0; index < frames.length; index++) {
+          const frame = frames[index]
+          if ('type' in frame || frame.id !== helloId) continue
+          if (frame.ok) {
+            const advertised = (frame.result as { protocolVersion?: unknown } | undefined)
+              ?.protocolVersion
+            const negotiated =
+              advertised === undefined
+                ? 1
+                : advertised === SESSION_HOST_PROTOCOL_VERSION
+                  ? 2
+                  : null
+            if (!negotiated) {
+              failHandshake(
+                new Error(
+                  `session-host protocol is incompatible: expected version ` +
+                    `${SESSION_HOST_PROTOCOL_VERSION}, received ${String(advertised ?? 'none')}`
+                )
+              )
+              return
+            }
+            if (identity.state.protocolVersion !== negotiated) {
+              failHandshake(
+                new Error(
+                  `session-host protocol publication disagrees with hello: state=` +
+                    `${identity.state.protocolVersion}, hello=${negotiated}`
+                )
+              )
+              return
+            }
+            protocolVersion = negotiated
+            finish(true, frames.slice(index + 1))
+          } else {
+            failHandshake(new Error(`session-host hello rejected: ${frame.error}`))
+          }
+          return
+        }
       }
       const timer = setTimeout(() => {
-        if (!connected) finish(false)
-        else {
-          finish(
-            false,
-            new Error(`session-host hello timed out after ${HANDSHAKE_TIMEOUT_MS}ms`)
-          )
-        }
+        if (connected) failHandshake(new Error('session-host hello timed out'))
+        else finish(false)
       }, HANDSHAKE_TIMEOUT_MS)
+      timer.unref?.()
       socket.once('error', onHandshakeError)
       socket.once('close', onHandshakeClose)
       socket.once('connect', onHandshakeConnect)
@@ -384,39 +514,74 @@ export class SessionHostClient {
     this.everConnected = true
     const framer = new LineFramer()
     socket.on('data', (chunk: Buffer) => {
-      // A retired socket can still deliver a buffered final chunk. Never parse it through mutable
-      // current-connection state or let its name-only v1 events affect the replacement socket.
-      if (this.socket !== socket) return
       for (const frame of framer.push<SessionHostFrame>(chunk.toString('utf8'))) {
-        this.handleFrame(frame, protocolVersion)
+        this.handleFrame(socket, frame)
       }
     })
-    const onDrop = (): void => {
-      this.retireSocket(socket, new Error('session-host connection lost'))
-    }
-    socket.once('close', onDrop)
-    socket.once('error', onDrop)
+    const onError = (error: Error): void => this.dropSocket(socket, error)
+    const onClose = (): void => this.dropSocket(socket, new Error('session-host connection lost'))
+    socket.on('error', onError)
+    socket.once('close', onClose)
   }
 
-  private retireSocket(socket: net.Socket, error: Error): void {
+  private dropSocket(socket: net.Socket, error: Error, destroy = false): void {
+    const wasCurrent = this.socket === socket
+    if (wasCurrent) {
+      this.socket = null
+      this.negotiatedProtocolVersion = null
+      for (const state of this.sessions.values()) {
+        if (state.appliedSocket !== socket) continue
+        state.appliedSocket = null
+        state.appliedAttached = false
+        state.appliedPaused = false
+        state.appliedSize = null
+      }
+    }
+    for (const [id, entry] of this.pending) {
+      if (entry.socket !== socket) continue
+      this.pending.delete(id)
+      if (entry.timer) clearTimeout(entry.timer)
+      entry.reject(error)
+    }
+    if (destroy && !socket.destroyed) {
+      try {
+        socket.destroy()
+      } catch {
+        /* already gone */
+      }
+    }
+    if (wasCurrent) this.scheduleAutoReconnect()
+  }
+
+  private scheduleAutoReconnect(): void {
+    if (this.socket || this.connecting || this.reconnectTimer || !this.hasDesiredAttachments()) {
+      return
+    }
+    const delay = RECONNECT_DELAYS_MS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)]
+    this.reconnectAttempt++
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (!this.hasDesiredAttachments()) return
+      void this.ensureConnected().catch(() => {
+        // ensureConnected's rejection handler schedules the next bounded-backoff attempt.
+      })
+    }, delay)
+    this.reconnectTimer.unref?.()
+  }
+
+  private stopReconnectIfIdle(): void {
+    if (this.hasDesiredAttachments()) return
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+    this.reconnectAttempt = 0
+  }
+
+  private handleFrame(socket: net.Socket, frame: SessionHostFrame): void {
     if (this.socket !== socket) return
-    this.socket = null
-    this.negotiatedProtocolVersion = null
-    try {
-      socket.destroy()
-    } catch {
-      /* already gone */
-    }
-    for (const [, entry] of this.pending) entry.reject(error)
-    this.pending.clear()
-    // Sessions live in the HOST, not here — a dropped connection does NOT mean a session died.
-    // The next request reconnects lazily. Kill confirmation installs its replay barrier before
-    // reaching this path, so reconnect can restore unrelated sessions without resurrecting it.
-  }
-
-  private handleFrame(frame: SessionHostFrame, protocolVersion: 1 | 2): void {
     if ('type' in frame) {
-      const memory = this.attachMemory.get(frame.name)
+      const state = this.sessions.get(frame.name)
+      if (!state) return
+      const protocolVersion = this.negotiatedProtocolVersion
       if (protocolVersion === 2) {
         if (
           typeof frame.generation !== 'string' ||
@@ -424,108 +589,397 @@ export class SessionHostClient {
         ) {
           return
         }
-        const expectedGeneration =
-          memory?.generation ??
-          this.sessionGenerations.get(frame.name) ??
-          this.killOperations.get(frame.name)?.expectedGeneration
-        if (expectedGeneration && expectedGeneration !== frame.generation) return
-        if (!expectedGeneration && memory && !memory.confirmed) {
-          memory.generation = frame.generation
+        const expected = state.generation ?? this.sessionGenerations.get(frame.name)
+        if (expected && expected !== frame.generation) return
+        if (!expected && state.preAckEntries.size > 0) {
+          state.generation = frame.generation
           this.sessionGenerations.set(frame.name, frame.generation)
-        } else if (!expectedGeneration) {
+        } else if (!expected) {
           return
         }
-      } else {
-        if (memory?.protocolVersion === 2) return
-        // Buffer/drop legacy events until attach proves it was warm. If the hasSession→attach
-        // race lost, only the harmless short-lived sentinel exists and none of its output leaks.
-        if (memory && !memory.confirmed) return
+      } else if (state.protocolVersion === 2) {
+        return
       }
-      const set = this.subs.get(frame.name)
-      if (!set) return
       if (frame.type === 'data') {
-        for (const sub of set) sub.onData(frame.data)
+        this.deliverData(state, frame.data)
       } else {
-        for (const sub of set) sub.onExit(frame.exitCode)
-        this.subs.delete(frame.name)
-        this.attachMemory.delete(frame.name)
-        this.sessionGenerations.delete(frame.name)
+        this.handleExit(state, frame.exitCode)
       }
       return
     }
+
     const entry = this.pending.get(frame.id)
-    if (!entry) return
+    if (!entry || entry.socket !== socket) return
     this.pending.delete(frame.id)
-    if (frame.ok) entry.resolve({ ok: true, result: frame.result })
+    if (entry.timer) clearTimeout(entry.timer)
+    if (frame.ok) entry.resolve(frame.result)
     else entry.reject(new Error(frame.error))
   }
 
-  /** Send one request and await its correlated response. Reconnects (spawning the host if needed)
-   *  before every call — cheap once warm (`ensureConnected` is a no-op on a live socket). */
-  private async request<T>(req: SessionHostRequestBody): Promise<T> {
+  private deliverData(state: ClientSessionState, data: string): void {
+    if (state.preAckExit) return
+    const attached = [...state.entries.values()].filter((entry) => entry.phase === 'attached')
+    if (attached.length === 0) {
+      // A cold process can write between host-side subscriber activation and the attach response.
+      // Retain those bytes for the attaching owner; the correlated response promotes it before
+      // this queue is flushed. An old-generation exit clears the queue instead.
+      if (state.preAckEntries.size > 0) {
+        state.bufferedData.push({ data, recipients: new Set(state.preAckEntries) })
+      }
+      return
+    }
+    if (state.pauseOwners.size > 0 || state.releasePending) {
+      state.bufferedData.push({ data, recipients: new Set(attached) })
+      return
+    }
+    this.deliverToEntries(attached, data)
+  }
+
+  private deliverToEntries(entries: Iterable<SubscriberEntry>, data: string): void {
+    for (const entry of entries) {
+      try {
+        entry.sub.onData(data)
+      } catch {
+        // One renderer subscriber must not starve its co-attached neighbors.
+      }
+    }
+  }
+
+  private flushData(state: ClientSessionState): void {
+    if (state.pauseOwners.size > 0 || state.releasePending || state.bufferedData.length === 0) return
+    const queued = state.bufferedData
+    state.bufferedData = []
+    for (const frame of queued) {
+      const liveRecipients = [...frame.recipients].filter(
+        (entry) =>
+          entry.phase === 'attached' && state.entries.get(entry.sub) === entry
+      )
+      this.deliverToEntries(liveRecipients, frame.data)
+    }
+  }
+
+  private handleExit(state: ClientSessionState, exitCode: number): void {
+    const retired = [...state.entries.values()].filter((entry) => entry.phase === 'attached')
+    if (retired.length === 0 && state.preAckEntries.size > 0) state.preAckExit = true
+    // Retire the old generation before callbacks. An onExit callback may synchronously attach the
+    // same name; post-callback deletion would otherwise erase that replacement generation.
+    for (const entry of retired) {
+      state.entries.delete(entry.sub)
+      state.preAckEntries.delete(entry)
+      state.pauseOwners.delete(entry.sub)
+      state.sizeClaims.delete(entry.sub)
+    }
+    state.bufferedData = []
+    state.releasePending = false
+    state.appliedSocket = null
+    state.appliedAttached = false
+    state.appliedPaused = false
+    state.appliedSize = null
+    if (state.entries.size === 0 && this.sessions.get(state.name) === state) {
+      this.sessions.delete(state.name)
+    }
+    if (retired.length > 0) {
+      this.sessionGenerations.delete(state.name)
+      state.generation = undefined
+    }
+    this.stopReconnectIfIdle()
+    for (const entry of retired) {
+      try {
+        entry.sub.onExit(exitCode)
+      } catch {
+        // Exit delivery is isolated for the same reason as data delivery.
+      }
+    }
+  }
+
+  private async request<T>(
+    request: SessionHostRequestBody,
+    onSuccess?: (result: T, socket: net.Socket) => void
+  ): Promise<T> {
     await this.ensureConnected()
     const socket = this.socket
     if (!socket) throw new Error('session-host: not connected')
+    return this.requestOnSocket(socket, request, onSuccess)
+  }
+
+  /** Request on an already-authenticated socket. Reconnect restoration uses this directly because
+   * calling ensureConnected from inside the connection barrier would recursively await itself. */
+  private requestOnSocket<T>(
+    socket: net.Socket,
+    request: SessionHostRequestBody,
+    onSuccess?: (result: T, socket: net.Socket) => void
+  ): Promise<T> {
+    if (this.socket !== socket || socket.destroyed) {
+      return Promise.reject(new Error('session-host connection lost'))
+    }
     const id = this.nextId++
-    const full = { id, ...req } as SessionHostRequest
+    const full = { id, ...request } as SessionHostRequest
     return new Promise<T>((resolve, reject) => {
-      // A DEADLINE, because "never answers" was a real state and it was the worst possible one.
-      //
-      // This promise used to settle only on a reply or a failed write. Every other path left it
-      // pending forever: a host that accepted the frame and went quiet, a reply lost to a framing
-      // bug, a session-host wedged mid-spawn. `PtyManager.create` awaits this to learn a session's
-      // real `fresh`, inside a try/catch — and a catch cannot help a promise that never settles.
-      // So opening a terminal hung indefinitely, with no error anywhere, and the caller had no way
-      // to tell that from a slow machine. Measured on Windows: 45 s and still pending, silent.
-      //
-      // Rejecting gives the caller the real failure boundary. A session-host create must fail
-      // closed rather than return a plausible id whose writes can never reach a live process.
-      const timer = setTimeout(() => {
-        if (!this.pending.has(id)) return
-        this.pending.delete(id)
-        reject(
-          new Error(
-            `session-host: no reply to '${req.cmd}' within ${REQUEST_TIMEOUT_MS}ms — the host is ` +
-              'running but not answering'
-          )
-        )
-      }, REQUEST_TIMEOUT_MS)
-      timer.unref?.() // never hold the app process open on a pending request's account
-      this.pending.set(id, {
-        resolve: (v) => {
-          clearTimeout(timer)
-          resolve((v.result ?? undefined) as T)
+      const pending: PendingEntry = {
+        socket,
+        timer: null,
+        resolve: (result) => {
+          try {
+            const typed = result as T
+            onSuccess?.(typed, socket)
+            resolve(typed)
+          } catch (error) {
+            reject(asError(error))
+          }
         },
-        reject: (e) => {
-          clearTimeout(timer)
-          reject(e)
-        }
-      })
+        reject
+      }
+      pending.timer = setTimeout(() => {
+        if (this.pending.get(id) !== pending) return
+        this.dropSocket(
+          socket,
+          new Error(`session-host request timed out: ${request.cmd}`),
+          true
+        )
+      }, SESSION_HOST_REQUEST_TIMEOUT_MS)
+      pending.timer.unref?.()
+      this.pending.set(id, pending)
       try {
         socket.write(encodeFrame(full), (error) => {
-          if (!error) return
-          const current = this.pending.get(id)
-          if (!current) return
-          this.pending.delete(id)
-          current.reject(error)
+          // A response may beat a late write callback. Identity-check this exact pending entry so
+          // that callback can neither settle nor delete a newer request that reused surrounding state.
+          if (!error || this.pending.get(id) !== pending) return
+          this.dropSocket(socket, asError(error), true)
         })
-      } catch (e) {
-        clearTimeout(timer)
-        this.pending.delete(id)
-        reject(e instanceof Error ? e : new Error(String(e)))
+      } catch (error) {
+        if (this.pending.get(id) === pending) this.dropSocket(socket, asError(error), true)
       }
     })
   }
 
-  /**
-   * Attach-or-create `name`, registering `sub` as a local subscriber of its `data`/`exit` push
-   * frames. Remembers the spawn options so a later reconnect can replay this call transparently.
-   */
+  private applyAttachment(
+    state: ClientSessionState,
+    socket: net.Socket,
+    paused: boolean,
+    size: TerminalSize
+  ): void {
+    if (this.sessions.get(state.name) !== state || !this.hasAttachedEntry(state)) return
+    state.appliedSocket = socket
+    state.appliedAttached = true
+    state.appliedPaused = paused
+    state.appliedSize = size
+    if (!paused && state.pauseOwners.size === 0) {
+      state.releasePending = false
+      this.flushData(state)
+    }
+  }
+
+  private async restoreSocket(socket: net.Socket): Promise<void> {
+    try {
+      for (const state of [...this.sessions.values()]) {
+        if (this.sessions.get(state.name) !== state) continue
+        if (this.killReplayBarriers.has(state.name)) continue
+        const anchor = [...state.entries.values()].find((entry) => entry.phase === 'attached')
+        if (!anchor) continue
+        const size = this.effectiveSize(state)
+        const paused = state.pauseOwners.size > 0
+        const protocolVersion = this.negotiatedProtocolVersion
+        if (!protocolVersion) throw new Error('session-host: not connected')
+        try {
+          if (state.protocolVersion && state.protocolVersion !== protocolVersion) {
+            throw new Error(
+              `session-host protocol changed while '${state.name}' was detached; warm replay is unsafe`
+            )
+          }
+          const expectedGeneration = state.generation ?? this.sessionGenerations.get(state.name)
+          const response =
+            protocolVersion === 1
+              ? await this.requestOnSocket<AttachResult>(socket, {
+                  cmd: 'attach',
+                  name: state.name,
+                  spawn: legacyWarmOnlySentinel(this.deps.userDataDir),
+                  scrollback: 1,
+                  paused
+                })
+              : await this.requestOnSocket<AttachResult>(socket, {
+                  cmd: 'attachExisting',
+                  name: state.name,
+                  expectedGeneration,
+                  cols: size.cols,
+                  rows: size.rows,
+                  paused
+                })
+          const result = requireAttachResult(response, state.name, protocolVersion)
+          if (result.fresh) {
+            throw new Error(
+              protocolVersion === 1
+                ? `legacy session-host lost '${state.name}' before warm replay; no requested shell was spawned`
+                : `session-host protocol violation: attachExisting '${state.name}' reported a fresh session`
+            )
+          }
+          if (
+            protocolVersion === 2 &&
+            expectedGeneration &&
+            result.generation !== expectedGeneration
+          ) {
+            throw new Error(
+              `session-host generation changed while '${state.name}' was detached; warm replay is unsafe`
+            )
+          }
+          if (this.sessions.get(state.name) !== state || !this.hasAttachedEntry(state)) {
+            await this.requestOnSocket(socket, { cmd: 'detach', name: state.name })
+            continue
+          }
+          state.protocolVersion = protocolVersion
+          state.generation = result.generation ?? expectedGeneration
+          if (state.generation) this.sessionGenerations.set(state.name, state.generation)
+          this.applyAttachment(state, socket, paused, size)
+          if (result.screen && state.appliedSocket === socket) {
+            this.deliverData(state, RECONNECT_REPAINT_PREFIX + result.screen)
+          }
+          await this.reconcileOnSocket(state, socket)
+        } catch (error) {
+          if (this.socket !== socket || socket.destroyed || isTransportUncertainty(error)) throw error
+          // A correlated warm-attach rejection retires exactly this generation. It must not keep
+          // retrying forever or be translated into a process exit that the host never reported.
+          if (this.sessions.get(state.name) === state) this.sessions.delete(state.name)
+          this.sessionGenerations.delete(state.name)
+          state.generation = undefined
+          state.bufferedData = []
+          state.preAckEntries.clear()
+          state.appliedSocket = null
+          state.appliedAttached = false
+          state.appliedPaused = false
+          state.appliedSize = null
+          const failure = asError(error)
+          for (const entry of state.entries.values()) {
+            try {
+              entry.sub.onAttachError?.(failure)
+            } catch {
+              /* one owner callback must not hide the same failure from its co-attached neighbors */
+            }
+          }
+          state.entries.clear()
+          this.stopReconnectIfIdle()
+        }
+      }
+    } catch (error) {
+      this.dropSocket(socket, asError(error), true)
+      throw error
+    }
+  }
+
+  private async reconcileOnSocket(state: ClientSessionState, socket: net.Socket): Promise<void> {
+    if (
+      this.sessions.get(state.name) !== state ||
+      !this.hasAttachedEntry(state) ||
+      state.appliedSocket !== socket ||
+      !state.appliedAttached
+    ) {
+      return
+    }
+    const desiredPaused = state.pauseOwners.size > 0
+    if (desiredPaused && !state.appliedPaused) {
+      await this.requestOnSocket(socket, { cmd: 'pause', name: state.name })
+      if (this.socket !== socket) return
+      // Record a confirmed host ticket even if the final local owner retired while the request
+      // was in flight. Its teardown lane then knows it owes the matching resume before detach.
+      state.appliedPaused = true
+      if (this.sessions.get(state.name) !== state) return
+    }
+
+    const desiredSize = this.effectiveSize(state)
+    if (!sameSize(state.appliedSize, desiredSize)) {
+      await this.requestOnSocket(socket, {
+        cmd: 'resize',
+        name: state.name,
+        cols: desiredSize.cols,
+        rows: desiredSize.rows
+      })
+      if (this.socket !== socket) return
+      state.appliedSize = desiredSize
+      if (this.sessions.get(state.name) !== state) return
+    }
+
+    if (!desiredPaused && state.appliedPaused) {
+      await this.requestOnSocket(socket, { cmd: 'resume', name: state.name })
+      if (this.socket !== socket) return
+      state.appliedPaused = false
+      if (this.sessions.get(state.name) !== state) return
+    }
+    if (state.pauseOwners.size === 0 && !state.appliedPaused) {
+      state.releasePending = false
+      this.flushData(state)
+    }
+  }
+
+  private async reconcileState(state: ClientSessionState): Promise<void> {
+    if (this.sessions.get(state.name) !== state || !this.hasAttachedEntry(state)) return
+    await this.ensureConnected()
+    const socket = this.socket
+    if (!socket) throw new Error('session-host: not connected')
+    await this.reconcileOnSocket(state, socket)
+  }
+
+  private queueReconcile(state: ClientSessionState): void {
+    void this.enqueueState(state, () => this.reconcileState(state)).catch((error) => {
+      const socket = this.socket
+      if (socket) this.dropSocket(socket, asError(error), true)
+    })
+  }
+
+  private async teardownRetiredState(state: ClientSessionState): Promise<void> {
+    const socket = state.appliedSocket
+    if (!socket || this.socket !== socket || socket.destroyed || !state.appliedAttached) return
+    try {
+      // `releasePending` covers the conservative edge where the last owner retired while its
+      // pause acknowledgement was still crossing the wire. Resume is idempotent on the host.
+      if (state.appliedPaused || state.releasePending) {
+        await this.requestOnSocket(socket, { cmd: 'resume', name: state.name })
+        state.appliedPaused = false
+        state.releasePending = false
+      }
+      await this.requestOnSocket(socket, { cmd: 'detach', name: state.name })
+      state.appliedAttached = false
+    } catch (error) {
+      // A failed detach is unknown membership. Closing the socket makes the host release every
+      // ticket and subscriber deterministically, with no ghost to replay.
+      this.dropSocket(socket, asError(error), true)
+    }
+  }
+
   async attach(
     name: string,
     spawn: SessionHostSpawnOptions,
     scrollback: number,
     sub: SessionSubscriber
+  ): Promise<AttachResult> {
+    const normalizedSpawn = {
+      ...spawn,
+      cols: normalizeDimension(spawn.cols, 80),
+      rows: normalizeDimension(spawn.rows, 24)
+    }
+    return this.attachSubscriber(
+      name,
+      sub,
+      { kind: 'create', spawn: normalizedSpawn, scrollback },
+      { cols: normalizedSpawn.cols, rows: normalizedSpawn.rows }
+    )
+  }
+
+  /** Warm-only attach. The request carries the generation confirmed by hasSession/attach and no
+   * spawn plan, so an exit racing the attach cannot recreate a shell with stale options. */
+  async attachExisting(name: string, sub: SessionSubscriber): Promise<AttachResult> {
+    return this.attachSubscriber(
+      name,
+      sub,
+      { kind: 'existing', scrollback: 1 },
+      { cols: 80, rows: 24 }
+    )
+  }
+
+  private async attachSubscriber(
+    name: string,
+    sub: SessionSubscriber,
+    requestKind:
+      | { kind: 'create'; spawn: SessionHostSpawnOptions; scrollback: number }
+      | { kind: 'existing'; scrollback: number },
+    initialSize: TerminalSize
   ): Promise<AttachResult> {
     if (this.killReplayBarriers.has(name)) {
       throw new Error(
@@ -533,318 +987,249 @@ export class SessionHostClient {
           'retry the kill before creating or attaching a replacement'
       )
     }
-    let set = this.subs.get(name)
-    if (!set) {
-      set = new Set()
-      this.subs.set(name, set)
+    let state = this.sessions.get(name)
+    if (!state) {
+      state = this.newState(name)
+      this.sessions.set(name, state)
     }
-    const added = !set.has(sub)
-    set.add(sub)
-    // Object identity lets this attempt roll itself back without overwriting the state of a
-    // concurrent co-attach that installed newer options for the same session name.
-    const previousMemory = this.attachMemory.get(name)
-    const memory: AttachMemory = { kind: 'attach', spawn, scrollback, confirmed: false }
-    this.attachMemory.set(name, memory)
-    const replacementToken = this.replacementTokens.get(name)
-    try {
-      await this.ensureConnected()
-      const protocolVersion = this.negotiatedProtocolVersion
-      if (!protocolVersion) throw new Error('session-host: not connected')
-      if (protocolVersion === 1) {
-        throw new SessionHostProtocolCompatibilityError(`create terminal '${name}'`)
-      }
-      let response: AttachResult | undefined
-      const attempts = replacementToken ? 2 : 1
-      for (let attempt = 0; attempt < attempts; attempt++) {
-        try {
-          response = await this.request<AttachResult>({
-            cmd: 'attach',
-            name,
-            spawn,
-            scrollback,
-            replacementToken
-          })
-          break
-        } catch (error) {
-          if (!replacementToken || attempt + 1 >= attempts || !isTransportUncertainty(error)) {
-            throw error
-          }
-          const socket = this.socket
-          if (socket) {
-            this.retireSocket(socket, new Error(`session-host connection reset to retry '${name}'`))
-          }
-        }
-      }
-      const result = requireAttachResult(response, name, protocolVersion)
-      if (replacementToken && !result.fresh) {
-        throw new Error(
-          `session-host protocol violation: reserved replacement '${name}' was not fresh`
-        )
-      }
-      if (replacementToken && result.fresh) {
-        if (this.replacementTokens.get(name) === replacementToken) {
-          this.replacementTokens.delete(name)
-        }
-        if (this.killOperations.get(name)?.operationId === replacementToken) {
-          this.killOperations.delete(name)
-        }
-      }
-      // Once any attach-or-create succeeds, reconnect is attach-only forever. Keeping spawn data
-      // replayable would recreate a naturally-ended session using stale profile/cwd settings.
-      memory.confirmed = true
-      memory.generation = result.generation
-      memory.protocolVersion = protocolVersion
-      if (result.generation) this.sessionGenerations.set(name, result.generation)
-      if (this.attachMemory.get(name) === memory) {
-        this.attachMemory.set(name, {
-          kind: 'existing',
-          confirmed: true,
-          generation: result.generation,
-          protocolVersion
-        })
-      }
-      return result
-    } catch (error) {
-      const current = this.subs.get(name)
-      if (added && current) current.delete(sub)
-      if (current?.size === 0) {
-        this.subs.delete(name)
-        if (this.attachMemory.get(name) === memory) this.attachMemory.delete(name)
-      } else if (this.attachMemory.get(name) === memory && previousMemory) {
-        // Restore the options belonging to the pre-existing attachment. A later concurrent
-        // attempt wins when it has already replaced `memory`, so its state is never rolled back.
-        this.attachMemory.set(name, previousMemory)
-      }
-      throw error
+    const previous = state.entries.get(sub)
+    if (previous) throw new Error(`session-host subscriber is already attached: ${name}`)
+    const entry: SubscriberEntry = {
+      sub,
+      ...(requestKind.kind === 'create' ? { spawn: requestKind.spawn } : {}),
+      scrollback: requestKind.scrollback,
+      phase: 'attaching'
     }
-  }
+    state.entries.set(sub, entry)
+    state.sizeClaims.set(sub, initialSize)
 
-  /** Atomically attach to a session that the host has already confirmed exists. Unlike `attach`,
-   * this request carries no spawn plan, so an exit between the manager's probe and this operation
-   * rejects instead of recreating a shell with stale profile/cwd settings. */
-  async attachExisting(name: string, sub: SessionSubscriber): Promise<AttachResult> {
-    if (this.killReplayBarriers.has(name)) {
-      throw new Error(
-        `session-host: cannot attach '${name}' while its kill result is unconfirmed; ` +
-          'retry the kill before creating or attaching a replacement'
-      )
-    }
-    let set = this.subs.get(name)
-    if (!set) {
-      set = new Set()
-      this.subs.set(name, set)
-    }
-    const added = !set.has(sub)
-    set.add(sub)
-    const previousMemory = this.attachMemory.get(name)
-    const expectedGeneration = this.sessionGenerations.get(name)
-    const memory: AttachMemory = {
-      kind: 'existing',
-      confirmed: false,
-      generation: expectedGeneration
-    }
-    this.attachMemory.set(name, memory)
-    try {
-      await this.ensureConnected()
-      const protocolVersion = this.negotiatedProtocolVersion
-      if (!protocolVersion) throw new Error('session-host: not connected')
-      memory.protocolVersion = protocolVersion
-      const response =
-        protocolVersion === 1
-          ? await this.request<AttachResult>({
-              cmd: 'attach',
-              name,
-              spawn: legacyWarmOnlySentinel(this.deps.userDataDir),
-              scrollback: 1
-            })
-          : await this.request<AttachResult>({
-              cmd: 'attachExisting',
-              name,
-              expectedGeneration
-            })
-      const result = requireAttachResult(
-        response,
-        name,
-        protocolVersion
-      )
-      if (result.fresh) {
-        throw new Error(
-          protocolVersion === 1
-            ? `legacy session-host lost '${name}' before warm attach; no requested shell was spawned`
-            : `session-host protocol violation: attachExisting '${name}' reported a fresh session`
-        )
+    return this.enqueueState(state, async () => {
+      if (this.sessions.get(name) !== state || state.entries.get(sub) !== entry) {
+        throw new Error(`session-host attachment was canceled: ${name}`)
       }
-      memory.confirmed = true
-      memory.generation = result.generation ?? expectedGeneration
-      if (memory.generation) this.sessionGenerations.set(name, memory.generation)
-      return result
-    } catch (error) {
-      const current = this.subs.get(name)
-      if (added && current) current.delete(sub)
-      if (current?.size === 0) {
-        this.subs.delete(name)
-        if (this.attachMemory.get(name) === memory) this.attachMemory.delete(name)
-      } else if (this.attachMemory.get(name) === memory && previousMemory) {
-        this.attachMemory.set(name, previousMemory)
-      }
-      throw error
-    }
-  }
-
-  /** Stop delivering `name`'s frames to `sub`. When it was the LAST local subscriber, also tells
-   *  the host so it stops writing to this (now uninterested) connection. Never kills the session. */
-  unsubscribe(name: string, sub: SessionSubscriber): void {
-    const set = this.subs.get(name)
-    if (!set) return
-    set.delete(sub)
-    if (set.size === 0) {
-      this.subs.delete(name)
-      this.attachMemory.delete(name)
-      // A detached generation is no longer authoritative. If another app later replaces this
-      // name, a new user-initiated delete must probe and target the new generation rather than
-      // treating this stale identity as proof that the delete succeeded.
-      if (!this.killOperations.has(name)) this.sessionGenerations.delete(name)
-      void this.request({ cmd: 'detach', name }).catch(() => {})
-    }
-  }
-
-  /** After a reconnect, re-attach every name we still have local subscribers for (the new socket
-   *  starts with an empty subscriber set at the host — see host.ts), and hand any returned screen
-   *  to those subscribers as a synthetic repaint so their terminals catch up with whatever ran
-   *  while the connection was down. A deliberately simpler cousin of the app's own `pty:resync`:
-   *  it reuses the ordinary `onData` path rather than a dedicated resync channel, so it needs no
-   *  changes anywhere above this file. */
-  private async replayAttachesAfterReconnect(): Promise<void> {
-    for (const [name, memory] of [...this.attachMemory]) {
-      // A lost kill reply is maximally dangerous here: attach-or-create could resurrect the exact
-      // old process that the host already killed. The kill path owns this name until confirmation.
-      if (this.killReplayBarriers.has(name)) continue
-      // The socket may drop while an initial attach is still awaiting its response. Only a
-      // completed attachment is eligible for reconnect; an unconfirmed spawn plan is never.
-      if (!memory.confirmed) continue
-      const set = this.subs.get(name)
-      if (!set || set.size === 0) continue
+      const size = this.effectiveSize(state)
+      const paused = state.pauseOwners.size > 0
       try {
+        await this.ensureConnected()
         const protocolVersion = this.negotiatedProtocolVersion
         if (!protocolVersion) throw new Error('session-host: not connected')
-        if (memory.protocolVersion && memory.protocolVersion !== protocolVersion) {
+        const alreadyAttached = this.hasAttachedEntry(state)
+        const useWarmOnly = requestKind.kind === 'existing' || alreadyAttached
+        if (!useWarmOnly && protocolVersion === 1) {
+          throw new SessionHostProtocolCompatibilityError(`create terminal '${name}'`)
+        }
+        if (state.protocolVersion && state.protocolVersion !== protocolVersion) {
           throw new Error(
-            `session-host protocol changed while '${name}' was detached; warm replay is unsafe`
+            `session-host protocol changed while '${name}' was attached; co-attach is unsafe`
           )
         }
-        const response =
-          protocolVersion === 1
-            ? await this.request<AttachResult>({
-                cmd: 'attach',
-                name,
-                spawn: legacyWarmOnlySentinel(this.deps.userDataDir),
-                scrollback: 1
-              })
-            : await this.request<AttachResult>({
-                cmd: 'attachExisting',
-                name,
-                expectedGeneration: memory.generation
-              })
-        const result = requireAttachResult(
-          response,
-          name,
-          protocolVersion
-        )
-        if (result.fresh) {
+        const expectedGeneration = state.generation ?? this.sessionGenerations.get(name)
+        const replacementToken = useWarmOnly ? undefined : this.replacementTokens.get(name)
+        state.preAckEntries.add(entry)
+        let response: AttachResult | undefined
+        const attempts = replacementToken ? 2 : 1
+        for (let attempt = 0; attempt < attempts; attempt++) {
+          try {
+            response = useWarmOnly
+              ? protocolVersion === 1
+                ? await this.request<AttachResult>({
+                    cmd: 'attach',
+                    name,
+                    spawn: legacyWarmOnlySentinel(this.deps.userDataDir),
+                    scrollback: 1,
+                    paused
+                  })
+                : await this.request<AttachResult>({
+                    cmd: 'attachExisting',
+                    name,
+                    expectedGeneration,
+                    cols: size.cols,
+                    rows: size.rows,
+                    paused
+                  })
+              : await this.request<AttachResult>({
+                  cmd: 'attach',
+                  name,
+                  spawn: {
+                    ...(requestKind.kind === 'create'
+                      ? requestKind.spawn
+                      : legacyWarmOnlySentinel(this.deps.userDataDir)),
+                    cols: size.cols,
+                    rows: size.rows
+                  },
+                  scrollback: requestKind.scrollback,
+                  replacementToken,
+                  paused
+                })
+            break
+          } catch (error) {
+            if (!replacementToken || attempt + 1 >= attempts || !isTransportUncertainty(error)) {
+              throw error
+            }
+          }
+        }
+        const result = requireAttachResult(response, name, protocolVersion)
+        if (state.preAckExit) {
+          throw new Error(`session-host session exited before its attach completed: ${name}`)
+        }
+        if (useWarmOnly && result.fresh) {
           throw new Error(
             protocolVersion === 1
-              ? `legacy session-host lost '${name}' before warm replay; no requested shell was spawned`
+              ? `legacy session-host lost '${name}' before warm attach; no requested shell was spawned`
               : `session-host protocol violation: attachExisting '${name}' reported a fresh session`
           )
         }
-        // A newer attach attempt replaced this remembered object while the request was pending;
-        // its state and subscribers own all later delivery/rollback decisions.
-        if (this.attachMemory.get(name) !== memory || this.killReplayBarriers.has(name)) continue
-        if (result.generation) {
-          memory.generation = result.generation
-          this.sessionGenerations.set(name, result.generation)
-        }
-        memory.protocolVersion = protocolVersion
-        if (result.screen) {
-          const repaint = '\x1b[2J\x1b[H' + result.screen
-          for (const sub of this.subs.get(name) ?? []) sub.onData(repaint)
-        }
-      } catch (error) {
         if (
-          this.attachMemory.get(name) !== memory ||
-          this.killReplayBarriers.has(name)
+          useWarmOnly &&
+          protocolVersion === 2 &&
+          expectedGeneration &&
+          result.generation !== expectedGeneration
         ) {
-          continue
+          throw new Error(
+            `session-host generation changed before warm attach '${name}' completed`
+          )
         }
-        // Retire exactly the attachment whose replay failed. Keeping its local subscriber/memory
-        // would claim persistence and repeatedly attempt attach-or-create despite a real host
-        // rejection. The explicit callback retains the rejection reason without inventing exit.
-        this.attachMemory.delete(name)
-        if (
-          !memory.generation ||
-          this.sessionGenerations.get(name) === memory.generation
-        ) {
-          this.sessionGenerations.delete(name)
+        if (replacementToken && !result.fresh) {
+          throw new Error(`session-host protocol violation: reserved replacement '${name}' was not fresh`)
         }
-        const failed = this.subs.get(name)
-        this.subs.delete(name)
-        const failure = toError(error)
-        for (const sub of failed ?? []) {
-          try {
-            sub.onAttachError?.(failure)
-          } catch {
-            /* one owner callback must not hide the same failure from the remaining owners */
+        state.preAckEntries.delete(entry)
+        state.protocolVersion = protocolVersion
+        state.generation = result.generation ?? expectedGeneration
+        if (state.generation) this.sessionGenerations.set(name, state.generation)
+        if (replacementToken && result.fresh) {
+          if (this.replacementTokens.get(name) === replacementToken) {
+            this.replacementTokens.delete(name)
+          }
+          if (this.killOperations.get(name)?.operationId === replacementToken) {
+            this.killOperations.delete(name)
           }
         }
+        const socket = this.socket
+        if (!socket) throw new Error('session-host: not connected')
+        if (this.sessions.get(name) === state && state.entries.get(sub) === entry) {
+          entry.phase = 'attached'
+          this.applyAttachment(state, socket, paused, size)
+        } else {
+          // The attach reached the host before its owner retired. Remember the confirmed
+          // membership on the retired state so its ordered teardown can return pause + detach.
+          state.appliedSocket = socket
+          state.appliedAttached = true
+          state.appliedPaused = paused
+          state.appliedSize = size
+        }
+        if (this.sessions.get(name) !== state || state.entries.get(sub) !== entry) {
+          // If another local subscriber remains, this attach also restored its socket membership;
+          // detaching here would evict that neighbor. Only compensate when nobody still owns it.
+          if (this.sessions.get(name) !== state || !this.hasAttachedEntry(state)) {
+            await this.teardownRetiredState(state)
+          } else {
+            await this.reconcileState(state)
+          }
+          throw new Error(`session-host attachment was canceled: ${name}`)
+        }
+        await this.reconcileState(state)
+        return result
+      } catch (error) {
+        state.preAckEntries.delete(entry)
+        if (state.entries.get(sub) === entry) {
+          state.entries.delete(sub)
+          const releasedPause = state.pauseOwners.delete(sub)
+          state.sizeClaims.delete(sub)
+          if (releasedPause && state.pauseOwners.size === 0) state.releasePending = true
+        }
+        if (state.entries.size === 0 && this.sessions.get(name) === state) {
+          this.sessions.delete(name)
+          if (!state.generation || this.sessionGenerations.get(name) === state.generation) {
+            this.sessionGenerations.delete(name)
+          }
+          state.bufferedData = []
+          this.stopReconnectIfIdle()
+          await this.teardownRetiredState(state)
+        } else if (this.sessions.get(name) === state && this.hasAttachedEntry(state)) {
+          if (
+            state.pauseOwners.size === 0 &&
+            state.appliedSocket === this.socket &&
+            !state.appliedPaused
+          ) {
+            state.releasePending = false
+            this.flushData(state)
+          }
+          this.queueReconcile(state)
+        }
+        throw error
       }
+    })
+  }
+
+  unsubscribe(name: string, sub: SessionSubscriber): void {
+    const state = this.sessions.get(name)
+    const entry = state?.entries.get(sub)
+    if (!state || !entry) return
+    state.entries.delete(sub)
+    state.preAckEntries.delete(entry)
+    const releasedPause = state.pauseOwners.delete(sub)
+    state.sizeClaims.delete(sub)
+    if (!this.hasAttachedEntry(state)) state.bufferedData = []
+    if (releasedPause && state.pauseOwners.size === 0) state.releasePending = true
+
+    if (state.entries.size > 0) {
+      this.queueReconcile(state)
+      return
     }
+    if (this.sessions.get(name) === state) this.sessions.delete(name)
+    state.bufferedData = []
+    this.stopReconnectIfIdle()
+    void this.enqueueState(state, () => this.teardownRetiredState(state))
   }
 
   async hasSession(name: string): Promise<boolean> {
-    await this.ensureConnected()
-    const protocolVersion = this.negotiatedProtocolVersion
-    if (!protocolVersion) throw new Error('session-host: not connected')
-    const r = await this.request<HasSessionResult>({ cmd: 'hasSession', name })
-    if (!r || typeof r.exists !== 'boolean') {
-      throw new Error(`session-host returned an invalid existence result for '${name}'`)
-    }
-    if (r.exists) {
-      if (protocolVersion === 2) {
-        const generation = r.generation
-        if (
-          typeof generation !== 'string' ||
-          !/^[A-Za-z0-9_-]{8,128}$/.test(generation)
-        ) {
-          throw new Error(`session-host returned no generation for existing session '${name}'`)
-        }
-        this.sessionGenerations.set(name, generation)
-      } else {
-        this.sessionGenerations.delete(name)
+    const result = await this.request<HasSessionResult>({ cmd: 'hasSession', name })
+    return result.exists
+  }
+
+  write(name: string, sub: SessionSubscriber, data: string): void {
+    const state = this.sessions.get(name)
+    const entry = state?.entries.get(sub)
+    if (!state || !entry) return
+    void this.enqueueState(state, async () => {
+      if (this.sessions.get(name) !== state || state.entries.get(sub) !== entry) return
+      try {
+        await this.request({ cmd: 'write', name, data })
+      } catch (error) {
+        const socket = this.socket
+        if (socket) this.dropSocket(socket, asError(error), true)
       }
-    } else {
-      this.sessionGenerations.delete(name)
+    })
+  }
+
+  resize(name: string, sub: SessionSubscriber, cols: number, rows: number): void {
+    const state = this.sessions.get(name)
+    if (!state || !state.entries.has(sub)) return
+    const previous = state.sizeClaims.get(sub) ?? { cols: 80, rows: 24 }
+    state.sizeClaims.set(sub, {
+      cols: normalizeDimension(cols, previous.cols),
+      rows: normalizeDimension(rows, previous.rows)
+    })
+    this.queueReconcile(state)
+  }
+
+  pause(name: string, sub: SessionSubscriber): void {
+    const state = this.sessions.get(name)
+    if (!state || !state.entries.has(sub) || state.pauseOwners.has(sub)) return
+    const wasFlowing = state.pauseOwners.size === 0
+    state.pauseOwners.add(sub)
+    if (wasFlowing) this.queueReconcile(state)
+  }
+
+  resume(name: string, sub: SessionSubscriber): void {
+    const state = this.sessions.get(name)
+    if (!state || !state.entries.has(sub) || !state.pauseOwners.delete(sub)) return
+    if (state.pauseOwners.size === 0) {
+      state.releasePending = true
+      this.queueReconcile(state)
     }
-    return r.exists
   }
 
-  write(name: string, data: string): void {
-    void this.request({ cmd: 'write', name, data }).catch(() => {})
-  }
-
-  resize(name: string, cols: number, rows: number): void {
-    void this.request({ cmd: 'resize', name, cols, rows }).catch(() => {})
-  }
-
-  pause(name: string): void {
-    void this.request({ cmd: 'pause', name }).catch(() => {})
-  }
-
-  resume(name: string): void {
-    void this.request({ cmd: 'resume', name }).catch(() => {})
-  }
-
-  /** Background write — does not require an attached subscriber; the host looks the session up by
-   *  name regardless (mirrors `sendText`'s tmux `send-keys -t <name>`, which needs no client). */
   async sendKeys(name: string, text: string, enter: boolean): Promise<boolean> {
     try {
       await this.request({ cmd: 'sendKeys', name, text, enter })
@@ -856,245 +1241,52 @@ export class SessionHostClient {
 
   async paneCommand(name: string): Promise<string | null> {
     try {
-      const r = await this.request<PaneCommandResult>({ cmd: 'paneCommand', name })
-      return r.command
+      const result = await this.request<PaneCommandResult>({ cmd: 'paneCommand', name })
+      return result.command
     } catch {
       return null
     }
   }
 
   async capture(name: string, full: boolean): Promise<string> {
-    // Empty output is a confirmed capture result. A rejected request is unknown and must remain a
-    // failure so the snapshot loop retains its dirty bit and retries.
-    const r = await this.request<CaptureResult>({ cmd: 'capture', name, full })
-    return r.text
+    const result = await this.request<CaptureResult>({ cmd: 'capture', name, full })
+    return result.text
   }
 
-  async executeLaunch(
-    name: string,
-    launchId: string,
-    plan: { command: string; stdinAfterStart?: string }
-  ): Promise<ExecuteLaunchResult> {
-    await this.ensureConnected()
-    const protocolVersion = this.negotiatedProtocolVersion
-    if (protocolVersion !== 2) {
-      throw new SessionHostProtocolCompatibilityError(`launch an agent in terminal '${name}'`)
+  async killSession(name: string): Promise<void> {
+    const state = this.sessions.get(name)
+    if (!state) {
+      await this.enqueueName(name, () => this.request({ cmd: 'killSession', name }))
+      return
     }
-    const generation = this.sessionGenerations.get(name)
-    if (!generation) throw new Error(`session-host has no confirmed generation for '${name}'`)
-    const result = await this.request<ExecuteLaunchResult>({
-      cmd: 'executeLaunch',
-      name,
-      generation,
-      launchId,
-      command: plan.command,
-      ...(plan.stdinAfterStart !== undefined ? { stdinAfterStart: plan.stdinAfterStart } : {})
+    // New attaches queued after this call are a new desired generation and must survive the kill.
+    const cutoff = new Set(state.entries.values())
+    await this.enqueueState(state, async () => {
+      // Always send the idempotent kill at this exact lane position. A natural old exit may have
+      // replaced the local state already, but every post-invocation attach is still queued behind
+      // this operation and therefore cannot be mistaken for the generation being killed.
+      await this.request({ cmd: 'killSession', name })
+      if (this.sessions.get(name) !== state) return
+      for (const entry of cutoff) {
+        if (state.entries.get(entry.sub) !== entry) continue
+        state.entries.delete(entry.sub)
+        state.preAckEntries.delete(entry)
+        state.pauseOwners.delete(entry.sub)
+        state.sizeClaims.delete(entry.sub)
+      }
+      state.bufferedData = []
+      state.releasePending = false
+      state.appliedSocket = null
+      state.appliedAttached = false
+      state.appliedPaused = false
+      state.appliedSize = null
+      if (state.entries.size === 0) this.sessions.delete(name)
+      this.stopReconnectIfIdle()
     })
-    if (
-      !result ||
-      (result.status !== 'executed' && result.status !== 'already-executed')
-    ) {
-      throw new Error(`session-host returned an invalid launch result for '${name}'`)
-    }
-    return result
-  }
-
-  async killSession(
-    name: string,
-    options: {
-      reserveReplacement?: boolean
-      requireV2?: boolean
-      expectedAbsent?: boolean
-    } = {}
-  ): Promise<void> {
-    const reserveReplacement = options.reserveReplacement === true
-    const requireV2 = options.requireV2 === true
-    const expectedAbsent = options.expectedAbsent === true
-    if (expectedAbsent && !reserveReplacement) {
-      throw new Error('session-host expected-absent mode requires a replacement reservation')
-    }
-    const knownIdentity = this.killOperations.get(name)
-    if (
-      knownIdentity &&
-      (knownIdentity.reserveReplacement !== reserveReplacement ||
-        knownIdentity.requireV2 !== requireV2 ||
-        knownIdentity.expectedAbsent !== expectedAbsent)
-    ) {
-      throw new Error(
-        `session-host: kill retry mode changed for '${name}'; retry with ` +
-          `reserveReplacement=${String(knownIdentity.reserveReplacement)} and ` +
-          `requireV2=${String(knownIdentity.requireV2)} and ` +
-          `expectedAbsent=${String(knownIdentity.expectedAbsent)}`
-      )
-    }
-    const active = this.killsInFlight.get(name)
-    if (active) return active
-
-    // Install the barrier before the first write. The host may complete the kill and lose its
-    // reply; without this ordering, reconnect's attach-or-create replay resurrects the old shell.
-    this.killReplayBarriers.add(name)
-    const memory = this.attachMemory.get(name)
-    const identity = knownIdentity ?? {
-      operationId: randomUUID(),
-      expectedGeneration: this.sessionGenerations.get(name) ?? memory?.generation,
-      reserveReplacement,
-      requireV2,
-      expectedAbsent
-    }
-    this.killOperations.set(name, identity)
-    let operation!: Promise<void>
-    operation = this.prepareAndConfirmKillSession(name, identity)
-      .catch((error) => {
-        // Compatibility/probe failures happen before a destructive frame exists. Roll the local
-        // barrier back so a live attachment is not stranded behind an operation the host never
-        // saw. Once confirmKillSession starts, it deliberately retains identity/barrier on doubt.
-        if (this.killOperations.get(name) === identity && identity.prepared !== true) {
-          this.killOperations.delete(name)
-          this.killReplayBarriers.delete(name)
-        }
-        throw error
-      })
-      .finally(() => {
-        if (this.killsInFlight.get(name) === operation) this.killsInFlight.delete(name)
-      })
-    this.killsInFlight.set(name, operation)
-    return operation
-  }
-
-  private async prepareAndConfirmKillSession(
-    name: string,
-    identity: {
-      operationId: string
-      expectedGeneration?: string
-      reserveReplacement: boolean
-      requireV2: boolean
-      expectedAbsent: boolean
-      prepared?: boolean
-    }
-  ): Promise<void> {
-    await this.ensureConnected()
-    const protocolVersion = this.negotiatedProtocolVersion
-    if (!protocolVersion) throw new Error('session-host: not connected')
-    if (protocolVersion === 1 && (identity.reserveReplacement || identity.requireV2)) {
-      throw new SessionHostProtocolCompatibilityError(`restart terminal '${name}'`)
-    }
-
-    // With no live authoritative attachment, determine the exact current generation immediately
-    // before creating this destructive operation. An uncertain prior operation skips this probe
-    // because its original operationId/generation is precisely what makes retry ABA-safe.
-    if (protocolVersion === 2 && !identity.expectedGeneration && !identity.expectedAbsent) {
-      const result = await this.request<HasSessionResult>({ cmd: 'hasSession', name })
-      if (!result || typeof result.exists !== 'boolean') {
-        throw new Error(`session-host returned an invalid existence result for '${name}'`)
-      }
-      if (result.exists) {
-        const generation = result.generation
-        if (
-          typeof generation !== 'string' ||
-          !/^[A-Za-z0-9_-]{8,128}$/.test(generation)
-        ) {
-          throw new Error(`session-host returned no generation for existing session '${name}'`)
-        }
-        identity.expectedGeneration = generation
-        this.sessionGenerations.set(name, generation)
-      }
-    }
-
-    identity.prepared = true
-    await this.confirmKillSession(
-      name,
-      identity.operationId,
-        identity.expectedGeneration,
-      identity.reserveReplacement,
-      identity.requireV2
-    )
-  }
-
-  private async confirmKillSession(
-    name: string,
-    operationId: string,
-    expectedGeneration: string | undefined,
-    reserveReplacement: boolean,
-    requireV2: boolean
-  ): Promise<void> {
-    let lastError = new Error('session-host kill did not run')
-    for (let attempt = 0; attempt < KILL_CONFIRMATION_ATTEMPTS; attempt++) {
-      try {
-        await this.ensureConnected()
-        const protocolVersion = this.negotiatedProtocolVersion
-        if (!protocolVersion) throw new Error('session-host: not connected')
-        if (protocolVersion === 1 && (reserveReplacement || requireV2)) {
-          throw new SessionHostProtocolCompatibilityError(`restart terminal '${name}'`)
-        }
-        // The host defines missing as success and coalesces an in-progress kill by name. Resending
-        // after reconnect is therefore the confirmation operation for both "reply lost after
-        // kill" and "first write never reached the host".
-        const result = await this.request<KillSessionResult>({
-          cmd: 'killSession',
-          name,
-          operationId,
-          expectedGeneration,
-          reserveReplacement
-        })
-        if (protocolVersion === 2 && (!result || typeof result !== 'object')) {
-          throw new Error(`session-host returned an invalid kill result for '${name}'`)
-        }
-        if (reserveReplacement) {
-          if (result?.replacementToken !== operationId) {
-            throw new Error(
-              `session-host did not confirm the replacement reservation for '${name}'`
-            )
-          }
-          this.replacementTokens.set(name, result.replacementToken)
-        } else {
-          if (result?.replacementToken) {
-            throw new Error(
-              `session-host returned an unexpected replacement reservation for '${name}'`
-            )
-          }
-          this.replacementTokens.delete(name)
-        }
-        this.subs.delete(name)
-        this.attachMemory.delete(name)
-        this.sessionGenerations.delete(name)
-        this.killReplayBarriers.delete(name)
-        if (!reserveReplacement && this.killOperations.get(name)?.operationId === operationId) {
-          this.killOperations.delete(name)
-        }
-        return
-      } catch (error) {
-        lastError = toError(error)
-        if (attempt + 1 < KILL_CONFIRMATION_ATTEMPTS) {
-          // A timeout or explicit error can leave an apparently-live socket behind. Force the
-          // retry through a fresh authenticated connection; target replay remains barred while
-          // unrelated attachments are eligible for ordinary reconnect replay.
-          const socket = this.socket
-          if (socket) {
-            this.retireSocket(
-              socket,
-              new Error(`session-host connection reset to retry kill '${name}'`)
-            )
-          }
-        }
-      }
-    }
-
-    // Preserve subscribers/memory as evidence of the uncertain generation, but never replay it.
-    // A later explicit killSession(name) starts a fresh bounded confirmation pass and can clear
-    // this barrier once the idempotent host operation answers.
-    throw new Error(
-      `session-host: kill of '${name}' remains unconfirmed after ` +
-        `${KILL_CONFIRMATION_ATTEMPTS} attempts; attach replay is suspended to prevent recreating ` +
-        `the old process. Retry the kill before starting a replacement. Last error: ${lastError.message}`
-    )
   }
 
   async listSessions(): Promise<string[]> {
-    try {
-      const r = await this.request<ListSessionsResult>({ cmd: 'listSessions' })
-      return r.names
-    } catch {
-      return []
-    }
+    const result = await this.request<ListSessionsResult>({ cmd: 'listSessions' })
+    return result.names
   }
 }

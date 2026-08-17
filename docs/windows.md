@@ -143,20 +143,46 @@ means:
 - Some antivirus/EDR products flag unsigned installers more aggressively than signed ones. If
   yours quarantines the download, that's a false positive from the same root cause, not a real
   detection.
-- Automatic updates (via `electron-updater`) also install unsigned builds; there is no additional
-  warning for updates beyond the one at first install, since Squirrel's updater does not re-run
+- Automatic updates use Electron's built-in Squirrel updater and also install unsigned builds;
+  there is no additional warning beyond the one at first install, since Squirrel does not re-run
   SmartScreen's Mark-of-the-Web check the way a fresh browser download does.
 
 If your organization requires signed installers, you'll need to sign the artifacts yourself as a
 post-build step outside this project's build scripts — this repository will never add signing
 itself (a durable, explicit project policy, not a missing feature).
 
+## Automatic updates
+
+A packaged Windows install checks the project's stable GitHub Release on launch and every six
+hours. If a newer Squirrel package is available, nodeterm downloads it without blocking the
+terminal and shows a minimizable card. The card's moving bar is intentionally indeterminate:
+Squirrel does not provide byte-level progress, so a numeric percentage would be misleading.
+**Restart to update** is the explicit way to restart immediately, and repeated clicks cannot start
+a second installation. If a successfully downloaded update is left ready, Squirrel may apply it
+on your next normal app launch even when you did not use that button.
+
+If the update service is offline or returns 404, the current version keeps running. Scheduled
+checks quietly retry later; a check you start reports the problem without turning it into a false
+“no update exists” result. Stable updates come only from a manually dispatched `main` release;
+automatic publication is disabled. Version `0.4.0` is a candidate, and manual publication remains
+pending the real packaged transition checks.
+
+**If you have Windows `0.3.0`, its update check cannot find `0.4.0`.** That version expected NSIS
+metadata from the old generic feed, while Windows releases contain Squirrel packages, so a manual
+`0.4.0` Setup is required. Closing the old app first is the provisional recommendation, not yet a
+verified sequence: the final real-Windows proof must try Setup with `0.3.0` both closed and running
+and the release instructions must publish the supported state. Once migrated, the new Squirrel
+updater can discover later releases.
+
 ## Installing
 
 1. Download `nodeterm-Setup-<version>.exe` from the release you want.
 2. Run it. Click through the SmartScreen prompt described above.
-3. Squirrel installs per-user (no admin elevation needed) under
-   `%LOCALAPPDATA%\node-terminal\` (the package id) and creates Start Menu / desktop shortcuts.
+3. Squirrel installs per-user (no admin elevation needed) in its package-specific directory under
+   your local application-data folder and creates Start Menu / desktop shortcuts. Resolve that
+   location from the installed shortcut or uninstall registration rather than relying on a
+   hard-coded implementation path. The `node-terminal` package identity itself stays unchanged
+   across `0.3.0` → `0.4.0` so Squirrel can update it in place.
 4. Launch **nodeterm** from the Start Menu.
 
 The packaged desktop handles Squirrel's install, update, uninstall, and obsolete-version lifecycle
@@ -175,11 +201,13 @@ npm install
 npm run dist:win
 ```
 
-`dist:win` preflights the native build, then runs `make-icon` (generates `build/icon.ico` — see
-below) → `electron-vite build` → `electron-builder --win squirrel --x64 --publish never`. The
-output lands in `dist/squirrel-windows/`: a Squirrel `Setup.exe`, `RELEASES`, and the full `.nupkg`
-(plus a delta package when one is generated). This command deliberately does not build the zip
-target configured for broader packaging.
+`dist:win` runs the Windows preflight, regenerates `build/icon.ico`, verifies that exact ICO is
+committed and downloadable at the current source SHA, builds with electron-vite, then invokes
+electron-builder's x64 Squirrel target with that immutable URL. The supported command is
+Windows-only, and the source commit must already be available from the public GitHub repository so
+the exact-SHA HTTP proof can succeed. The output lands in `dist/squirrel-windows/`: a Squirrel
+`Setup.exe`, `RELEASES`, and the full `.nupkg` (plus a delta only when Squirrel deliberately emits
+one). This command does not build the zip target configured for broader packaging.
 
 - **Target**: `squirrel` (per project policy — never NSIS, never portable-only). Requires the
   `electron-builder-squirrel-windows` package, declared as a devDependency alongside
@@ -187,25 +215,41 @@ target configured for broader packaging.
 - **Icon**: `scripts/make-icon.mjs` renders the same nodeterm mark SVG used for `build/icon.png`
   into a real multi-resolution `build/icon.ico` (16/24/32/48/64/128/256px PNG-compressed frames
   packed into a hand-written ICO container — no extra npm dependency, and no PNG-renamed-to-.ico
-  shortcut). electron-builder reads it via `build.win.icon`.
+  shortcut). The ICO is committed so Squirrel's Apps & Features URL can name a full immutable
+  source SHA. Packaging verifies the URL download, semantic nuspec ID/version/title, and
+  Setup/app/execution-stub PE icon and version metadata byte-for-byte before success. Squirrel's
+  vendor `Update.exe` remains vendor-branded and outside this gate because the pinned builder
+  plugin exposes no supported project hook for rewriting it.
 - **Signing**: `build.win.signExecutable` and root `build.forceCodeSigning` are explicitly `false`
-  in `package.json`. Resource editing stays enabled so icons and version metadata are still
-  applied. Nothing in this build path requests, discovers, or invokes a signer, per the permanent
-  no-signing policy. Do not add a certificate or a signing script.
+  in `package.json`; the produced installer is intentionally unsigned. `build-installer.bat` and
+  the publication workflow accept only exact Authenticode `NotSigned`.
+  `build.win.signAndEditExecutable` stays enabled at its default so icon and version resources are
+  still written; signing and resource editing are separate controls. Do not add a certificate or
+  signing script.
 - **`npm run rebuild`** still matters on Windows exactly as it does on macOS/Linux: it rebuilds
   `node-pty` (and `smart-whisper`) against Electron's ABI via `electron-rebuild`. The
   `patch-node-pty.mjs` step it runs first patches a **darwin-only** `pty_posix_spawn` fd leak
   (see `CLAUDE.md`) and is a documented no-op on Windows — `src/main/node-pty-patch.test.ts` only
   asserts the marker on the darwin source path.
 
-### Local/CI environments without a Windows machine
+### Windows host requirement
 
-`dist:win` (and `electron-builder --win`) can cross-build a Windows Squirrel installer from
-macOS/Linux using Wine for the resource-editing step — see electron-builder's own docs for the
-Wine prerequisite if you're building off-Windows. Building **on** Windows needs no such setup.
+The supported `npm run dist:win` wrapper refuses non-Windows hosts. Invoking electron-builder
+directly to cross-build would bypass the source, inventory, PE-resource, and identity gates above
+and is not a supported release path.
 
 ## Known gaps / follow-ups
 
+- **The one-time production migration is pending.** A real Windows `0.3.0` install still needs to
+  be upgraded by manually running `0.4.0` Setup in separate closed-app and running-app trials, then
+  checked for settings, shortcuts, executable metadata, and uninstall registration continuity.
+  Those trials must establish which sequence the release instructions support.
+- **The new updater interaction is separately pending.** The controller and loopback fixture are
+  covered by deterministic checks, but the isolated `0.4.0-fixture.1` → `.2` pair has not yet
+  been installed, downloaded, restarted, and checked through Settings → Updates / installed
+  metadata in a Windows Sandbox/VM. Automatic publication is disabled; the committed workflow is
+  manual-only, the hosted workflow is recorded as manually disabled, and publication awaits both
+  proofs and the final release audit.
 - **`env(titlebar-area-*)`** — the tab bar currently reserves a fixed 146px on the right for
   Windows' native caption buttons (`titleBarOverlay`) rather than reading Chromium's own
   `titlebar-area-width` CSS environment variable, which would stay exactly correct across DPI

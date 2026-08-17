@@ -1,6 +1,6 @@
 {
   "name": "node-terminal",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "node-based terminal manager — multiple draggable, zoomable terminals on a single canvas.",
   "author": {
     "name": "enes",
@@ -162,13 +162,18 @@
     "dompurify": "^3.4.13",
     "electron-updater": "^6.8.9",
     "marked": "^12.0.2",
-    "monaco-editor": "^0.52.2",
+    "monaco-editor": "^0.56.0",
     "node-pty": "^1.0.0",
     "qrcode": "^1.5.4",
     "smart-whisper": "^0.8.1",
     "tweetnacl": "^1.0.3",
-    "ws": "^8.21.0",
+    "ws": "^8.21.3",
     "zustand": "^4.5.7"
+  },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "$dompurify"
+    }
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
@@ -189,11 +194,12 @@
     "electron-builder-squirrel-windows": "^26.15.3",
     "electron-vite": "^5.0.0",
     "esbuild": "^0.28.2",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.3.1",
     "jsdom": "^30.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "resedit": "^1.7.2",
+    "sax": "^1.6.0",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.1",
     "typescript": "^7.0.2",

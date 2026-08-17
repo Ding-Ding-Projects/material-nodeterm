@@ -28,10 +28,9 @@ export interface PairingPayloadInput {
   name: string
   /**
    * The host's NaCl box public key (standard base64), authenticated by being shown on the host's
-   * own screen. When present, the phone encrypts the whole /pair exchange to it (E2EE). Omitted →
-   * the phone POSTs plaintext, exactly as before.
+   * own screen. Mandatory because every /pair exchange is sealed to this identity.
    */
-  hostKey?: string
+  hostKey: string
   /** Optional relay reachability block (standing host). Omitted from the payload when absent. */
   relay?: RelayPairingBlock
 }
@@ -39,12 +38,16 @@ export interface PairingPayloadInput {
 /**
  * Build the single-line JSON the QR encodes. The key order + compact separators match the
  * contract the phone parses:
- *   {"v":1,"host":"…","port":22,"user":"…","token":"…","pairPort":N,"nodeterm":true,"name":"…"}
- * When a host key is supplied it is appended as `"hostKey":"…"` after `name`; when a relay block is
- * supplied it is appended as `"relay":{…}` after that. With neither, the payload is byte-for-byte
- * the legacy LAN-only shape.
+ *   {"v":1,"host":"…","port":22,"user":"…","token":"…","pairPort":N,"nodeterm":true,
+ *    "name":"…","hostKey":"…"}
+ * The mandatory host key follows `name`; an optional relay block follows the key.
  */
 export function buildPairingPayload(input: PairingPayloadInput): string {
+  // This is a wire/security boundary, so keep the runtime check even though TypeScript callers also
+  // owe the field. Hand-written JS and stale compiled callers must not manufacture an unsealed QR.
+  if (typeof input.hostKey !== 'string' || input.hostKey.trim() === '') {
+    throw new Error('Secure pairing payload requires a hostKey.')
+  }
   const base = {
     v: 1,
     host: input.host,
@@ -55,7 +58,7 @@ export function buildPairingPayload(input: PairingPayloadInput): string {
     nodeterm: true,
     name: input.name
   }
-  const withKey = input.hostKey ? { ...base, hostKey: input.hostKey } : base
+  const withKey = { ...base, hostKey: input.hostKey }
   return JSON.stringify(input.relay ? { ...withKey, relay: input.relay } : withKey)
 }
 

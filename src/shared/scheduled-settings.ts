@@ -365,6 +365,23 @@ export interface ScheduledSettingsFile {
   rules: ScheduleRule[]
 }
 
+/** A failed startup read is not an empty schedule. The runtime serves `file` as a deliberately
+ * disabled in-memory fallback so no automation can run, while `error` preserves the distinct
+ * recovery fact for every renderer attached to either shell. The file named by `path` is never
+ * renamed or overwritten while this state is active. */
+export interface ScheduledSettingsLoadError {
+  kind: 'corrupt' | 'unreadable'
+  /** A bounded filesystem code such as EACCES/EIO/EISDIR when one exists. Raw exception text is
+   * intentionally not sent over IPC because it can contain attacker-controlled path content. */
+  code?: string
+  path: string
+  message: string
+}
+
+export type ScheduledSettingsLoadState =
+  | { ok: true; file: ScheduledSettingsFile; error: null }
+  | { ok: false; file: ScheduledSettingsFile; error: ScheduledSettingsLoadError }
+
 export const SCHEDULE_LIMITS = {
   maxRules: 50,
   maxLabelLength: 120,
@@ -419,34 +436,56 @@ function normalizeWindow(raw: unknown): ScheduleWindow {
   return { startDate, endDate, startTime, endTime, days }
 }
 
-function normalizeSource(raw: unknown): ScheduleSource {
-  const s = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
-  if (
-    s.kind === 'api' &&
-    typeof s.url === 'string' &&
-    s.url.length > 0 &&
-    s.url.length <= SCHEDULE_LIMITS.maxUrlLength
-  ) {
+interface NormalizedSource {
+  source: ScheduleSource
+  /** Whether an enabled rule may safely remain enabled after tolerant disk migration. A broken
+   *  external source must never degrade into an unconditional local source: that turns "could not
+   *  check" into "yes" and can apply an override the operator explicitly gated on another system. */
+  safeToEnable: boolean
+}
+
+function normalizeSource(raw: unknown): NormalizedSource {
+  // Missing source predates external sources and therefore means the original local behavior.
+  if (raw === undefined) return { source: { kind: 'local' }, safeToEnable: true }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { source: { kind: 'local' }, safeToEnable: false }
+  }
+  const s = raw as Record<string, unknown>
+  if (s.kind === 'local') return { source: { kind: 'local' }, safeToEnable: true }
+  if (s.kind === 'api') {
+    const url = typeof s.url === 'string' ? s.url.slice(0, SCHEDULE_LIMITS.maxUrlLength) : ''
+    const timeoutValid =
+      s.timeoutMs === undefined ||
+      (typeof s.timeoutMs === 'number' && Number.isFinite(s.timeoutMs) && s.timeoutMs > 0)
     return {
-      kind: 'api',
-      url: s.url,
-      timeoutMs:
-        typeof s.timeoutMs === 'number' && Number.isFinite(s.timeoutMs) && s.timeoutMs > 0
-          ? s.timeoutMs
-          : undefined
+      source: {
+        kind: 'api',
+        url,
+        timeoutMs: timeoutValid ? (s.timeoutMs as number | undefined) : undefined
+      },
+      safeToEnable:
+        typeof s.url === 'string' &&
+        s.url.length > 0 &&
+        s.url.length <= SCHEDULE_LIMITS.maxUrlLength &&
+        timeoutValid
     }
   }
-  if (
-    s.kind === 'home-assistant' &&
-    typeof s.baseUrl === 'string' &&
-    s.baseUrl.length > 0 &&
-    s.baseUrl.length <= SCHEDULE_LIMITS.maxUrlLength &&
-    typeof s.entityId === 'string' &&
-    s.entityId.length <= SCHEDULE_LIMITS.maxEntityIdLength
-  ) {
-    return { kind: 'home-assistant', baseUrl: s.baseUrl, entityId: s.entityId }
+  if (s.kind === 'home-assistant') {
+    const baseUrl = typeof s.baseUrl === 'string' ? s.baseUrl.slice(0, SCHEDULE_LIMITS.maxUrlLength) : ''
+    const entityId =
+      typeof s.entityId === 'string' ? s.entityId.slice(0, SCHEDULE_LIMITS.maxEntityIdLength) : ''
+    return {
+      source: { kind: 'home-assistant', baseUrl, entityId },
+      safeToEnable:
+        typeof s.baseUrl === 'string' &&
+        s.baseUrl.length > 0 &&
+        s.baseUrl.length <= SCHEDULE_LIMITS.maxUrlLength &&
+        typeof s.entityId === 'string' &&
+        s.entityId.length <= SCHEDULE_LIMITS.maxEntityIdLength &&
+        isValidHomeAssistantEntityId(s.entityId)
+    }
   }
-  return { kind: 'local' }
+  return { source: { kind: 'local' }, safeToEnable: false }
 }
 
 function normalizeRule(raw: unknown): ScheduleRule | null {
@@ -455,12 +494,17 @@ function normalizeRule(raw: unknown): ScheduleRule | null {
   // An id-less rule cannot be addressed by the editor, the HA token store, or the "which rule is
   // active" push — rather than mint one and silently change what the file means, it is dropped.
   if (typeof r.id !== 'string' || !r.id) return null
+  const normalizedSource = normalizeSource(r.source)
+  const enabled = r.enabled === undefined ? true : r.enabled === true
   return {
     id: r.id,
     label: typeof r.label === 'string' ? r.label.slice(0, SCHEDULE_LIMITS.maxLabelLength) : '',
-    enabled: r.enabled !== false,
+    // A malformed enabled value is not consent to turn a rule on. Likewise, keep a broken
+    // external source visible/editable but disabled instead of silently converting its gate into
+    // an always-satisfied local source.
+    enabled: enabled && normalizedSource.safeToEnable,
     window: normalizeWindow(r.window),
-    source: normalizeSource(r.source),
+    source: normalizedSource.source,
     values: normalizeSchedulableValues(r.values)
   }
 }
@@ -484,29 +528,71 @@ export function normalizeScheduledSettingsFile(raw: unknown): ScheduledSettingsF
 /** Bounds a SAVE must satisfy (the UI should never let you get here, but the store re-checks
  *  before writing — the same "never trust the caller" discipline as everywhere else this app
  *  writes hand-editable JSON). Returns a human-readable reason, or null when the file is fine. */
-export function validateScheduledSettingsFile(file: ScheduledSettingsFile): string | null {
+export function validateScheduledSettingsFile(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'Malformed schedule file.'
+  const file = raw as Record<string, unknown>
+  if (file.version !== SCHEDULED_SETTINGS_SCHEMA_VERSION) return 'Unsupported schedule file version.'
+  if (typeof file.timezone !== 'string' || !file.timezone.trim()) return 'The timezone is required.'
   if (!Array.isArray(file.rules)) return 'Malformed schedule file.'
   if (file.rules.length > SCHEDULE_LIMITS.maxRules) {
     return `A schedule can hold at most ${SCHEDULE_LIMITS.maxRules} rules.`
   }
   const seen = new Set<string>()
-  for (const rule of file.rules) {
-    if (!rule.id) return 'Every rule needs an id.'
+  for (const entry of file.rules) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return 'Malformed schedule rule.'
+    const rule = entry as Record<string, unknown>
+    if (typeof rule.id !== 'string' || !rule.id) return 'Every rule needs an id.'
     if (seen.has(rule.id)) return 'Two rules share the same id.'
     seen.add(rule.id)
+    if (typeof rule.label !== 'string') return 'Every rule needs a label.'
     if (rule.label.length > SCHEDULE_LIMITS.maxLabelLength) {
       return `A rule's label is limited to ${SCHEDULE_LIMITS.maxLabelLength} characters.`
     }
-    if (!isScheduleWindowValid(rule.window)) {
+    if (typeof rule.enabled !== 'boolean') return `"${rule.label || 'Untitled rule'}" has an invalid enabled value.`
+    if (!rule.window || typeof rule.window !== 'object' || Array.isArray(rule.window)) {
       return `"${rule.label || 'Untitled rule'}" has an invalid date or time.`
     }
-    if (rule.source.kind === 'api' && rule.source.url.length > SCHEDULE_LIMITS.maxUrlLength) {
-      return 'The API URL is too long.'
+    const window = rule.window as Record<string, unknown>
+    if (
+      window.days !== 'every-day' &&
+      (!Array.isArray(window.days) ||
+        window.days.length > 7 ||
+        window.days.some((day) => typeof day !== 'number' || !Number.isInteger(day) || day < 0 || day > 6))
+    ) {
+      return `"${rule.label || 'Untitled rule'}" has an invalid weekday selection.`
     }
-    if (rule.source.kind === 'home-assistant') {
-      if (rule.source.baseUrl.length > SCHEDULE_LIMITS.maxUrlLength) return 'The Home Assistant URL is too long.'
-      if (rule.source.entityId && !isValidHomeAssistantEntityId(rule.source.entityId)) {
+    if (!isScheduleWindowValid(window as unknown as ScheduleWindow)) {
+      return `"${rule.label || 'Untitled rule'}" has an invalid date or time.`
+    }
+    if (!rule.source || typeof rule.source !== 'object' || Array.isArray(rule.source)) {
+      return `"${rule.label || 'Untitled rule'}" has an invalid source.`
+    }
+    const source = rule.source as Record<string, unknown>
+    if (source.kind === 'api') {
+      if (typeof source.url !== 'string' || !source.url) return 'The API URL is required.'
+      if (source.url.length > SCHEDULE_LIMITS.maxUrlLength) return 'The API URL is too long.'
+      if (
+        source.timeoutMs !== undefined &&
+        (typeof source.timeoutMs !== 'number' || !Number.isFinite(source.timeoutMs) || source.timeoutMs <= 0)
+      ) {
+        return 'The API timeout must be a positive number.'
+      }
+    } else if (source.kind === 'home-assistant') {
+      if (typeof source.baseUrl !== 'string' || !source.baseUrl) return 'The Home Assistant URL is required.'
+      if (source.baseUrl.length > SCHEDULE_LIMITS.maxUrlLength) return 'The Home Assistant URL is too long.'
+      if (typeof source.entityId !== 'string' || !isValidHomeAssistantEntityId(source.entityId)) {
         return `"${rule.label || 'Untitled rule'}"'s entity id must be a binary_sensor.* or input_boolean.* entity.`
+      }
+    } else if (source.kind !== 'local') {
+      return `"${rule.label || 'Untitled rule'}" has an invalid source.`
+    }
+    if (!rule.values || typeof rule.values !== 'object' || Array.isArray(rule.values)) {
+      return `"${rule.label || 'Untitled rule'}" has invalid settings values.`
+    }
+    const values = rule.values as Record<string, unknown>
+    for (const key of SCHEDULABLE_SETTING_KEYS) {
+      if (key in values && !FIELD_VALIDATORS[key](values[key])) {
+        return `"${rule.label || 'Untitled rule'}" has an invalid ${key} value.`
       }
     }
   }

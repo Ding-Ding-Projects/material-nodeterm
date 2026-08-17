@@ -13,6 +13,14 @@ function indent(n: number): string {
   return '  '.repeat(n)
 }
 
+/** A mapping key is always emitted as a JSON double-quoted string. JSON string syntax is valid
+ *  YAML 1.2, and quoting every key avoids the surprisingly broad plain-key grammar (`: ` starts
+ *  a value, ` #` starts a comment, leading `?`/`-` have structure, and quotes need escaping).
+ *  This is a data codec, so preserving the exact key beats shaving two quote characters. */
+function renderKey(key: string): string {
+  return JSON.stringify(key)
+}
+
 /** Renders `value` as it would appear AFTER `key:` at `depth` — i.e. either inline on the same
  *  line (scalars, empty collections) or as an indented block starting on the next line. */
 function renderValue(value: unknown, depth: number): string {
@@ -26,7 +34,7 @@ function renderValue(value: unknown, depth: number): string {
         out += `${indent(depth)}- `
         entries.forEach(([k, v], i) => {
           const prefix = i === 0 ? '' : indent(depth + 1)
-          out += `${prefix}${k}:${renderValue(v, depth + 2)}`
+          out += `${prefix}${renderKey(k)}:${renderValue(v, depth + 2)}`
         })
       } else if (Array.isArray(item) && item.length > 0) {
         out += `${indent(depth)}-${renderValue(item, depth + 1)}`
@@ -40,7 +48,7 @@ function renderValue(value: unknown, depth: number): string {
     const entries = Object.entries(value)
     if (entries.length === 0) return ' {}\n'
     let out = '\n'
-    for (const [k, v] of entries) out += `${indent(depth)}${k}:${renderValue(v, depth + 1)}`
+    for (const [k, v] of entries) out += `${indent(depth)}${renderKey(k)}:${renderValue(v, depth + 1)}`
     return out
   }
   return ` ${yamlFlow(value)}\n`
@@ -52,6 +60,6 @@ export function toYamlDocument(obj: Record<string, unknown>): string {
   const entries = Object.entries(obj)
   if (entries.length === 0) return '{}\n'
   let out = ''
-  for (const [k, v] of entries) out += `${k}:${renderValue(v, 1)}`
+  for (const [k, v] of entries) out += `${renderKey(k)}:${renderValue(v, 1)}`
   return out
 }

@@ -7,28 +7,39 @@ platform-difference defects were found, what now guards against them, and what i
 Keep the split — a user reading "what degrades" should not have to wade through regex archaeology,
 and a contributor about to touch a path needs the archaeology.
 
-**The Windows installer workflow builds and publishes each branch push whose ref contains the
-corrected workflow, on `windows-latest`** — a real Squirrel.Windows set (`Setup.exe`, full
-`.nupkg`, `RELEASES`), unsigned by policy. CI
-stages it as a draft, verifies the complete remote inventory, and only then makes it non-draft and
-downloadable; an upload failure exposes no empty release. That is the shipping path.
+**The Windows installer workflow is manual-only and accepts only `main`, on `windows-latest`.** It
+is designed to build a real Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), unsigned
+by policy, then stage it as a draft, verify the complete hosted inventory, and only then make it
+non-draft and downloadable. Automatic publication is disabled because there is no push trigger.
+The committed definition is manually dispatchable, while the hosted workflow is recorded as
+manually disabled. This change does not publish `0.4.0`, and publication remains pending the two
+packaged interactions below.
 
-**It also builds locally now**, which it did not for most of this work. `build.bat /s` completes in
-about 107 s and `build-installer.bat /s` in about 199 s, producing the same three-artifact Squirrel
-set (a 205.8 MB `nodeterm-Setup-0.3.0.exe`, the full `.nupkg`, `RELEASES`), unsigned per policy.
-That needed one elevated install of the Spectre-mitigated MSVC libraries — see
-[Building](#building).
+**A prior revision also built locally**, which it did not for most of this work. At
+`19e8296b9f355e0e11e5ee7ab25856f9d3351cef`, `build.bat /s` completed in about 107 s and
+`build-installer.bat /s` in about 199 s, producing a three-artifact `0.3.0` Squirrel set, unsigned
+per policy. That run predates the current source-provenance, immutable-icon, identity, and
+PE-resource wrapper gates; it is not package evidence for the final `0.4.0` tree.
 
 What has NOT happened for the profile work described below is a completed packaged-app interaction
 and evidence pass. The resolver, spawn boundary, persistence, and attach failure paths are covered
 by behavioural tests; the real installed artifact remains explicitly unverified until the required
 headless Windows route records it.
 
+What has NOT happened is either required **packaged transition interaction**. First, installed
+production `0.3.0` cannot discover `0.4.0`: its updater expected NSIS metadata from the old generic
+feed, which does not serve the Squirrel set. Its missing `--squirrel-obsolete` handling means the
+one-time manual Setup proof must exercise separate installs with `0.3.0` closed and running before
+publishing the supported sequence; close-first is only the provisional recommendation. Second,
+prove the updater code first shipped in `0.4.0` with the collision-safe
+`0.4.0-fixture.1` → `.2` loopback pair under an isolated identity in a disposable Windows
+Sandbox/VM. The latter does not prove the former.
+
 > An earlier version of this page said no packaged build had ever been produced. That was wrong:
 > it confused "I could not build one on this machine" with "the project does not build one". The
 > distinction matters, because the first is a local toolchain gap and the second would be a
-> release-pipeline failure. Both are now false anyway — CI builds one on every push, and so does
-> this machine.
+> release-pipeline failure. A prior hosted run and prior local build prove their older packaging
+> paths; neither proves the current wrapper or an installed `0.4.0` artifact.
 
 Windows is the active delivery target, but most of this codebase was written on macOS. That
 asymmetry is the theme of this page: **almost every defect here was code that is genuinely correct
@@ -83,28 +94,34 @@ saves collided in the sealed-secret, scheduled-settings-secret,
 shared-mode credential, generic atomic-JSON and Ollama chat stores; the node-token writer had the
 same weak suffix. The old guard also saw only templates ending in `.tmp`, so the two `tmp-…` forms
 were invisible until its matcher was widened. Cross-run cleanup now has one rule too: a foreign pid
-may be a live second instance in another namespace, so `sweepStaleTempFiles` never removes a
-pid-bearing temp automatically. Signal-zero/`ESRCH` is namespace-local and PID reuse is ambiguous.
-Only the exact historical ownerless `<target>.tmp` shape is collected after 24 hours; current temps
-are recognized only by their canonical lowercase v4 UUID shape.
+may be a live second instance or a writer in another PID namespace, so `sweepStaleTempFiles` never
+auto-deletes a PID-bearing temp. Signal-0/`ESRCH` is not global proof of death. Only the exact
+ownerless legacy `<target>.tmp` shape is collectible after the 24-hour grace; current writers clean
+their own UUID temp on failure.
 
 Credential Clear paths use `clearAtomicTarget`: they remove the canonical file but return an
 explicit `clear-incomplete` failure while any recognized temp remains or the directory could not be
-inspected. That keeps a plausible cross-namespace live writer safe without telling the UI that a
-PAT, cookie, or Home Assistant token is completely gone while bearer bytes remain on disk.
+inspected, then recheck the canonical path so a concurrent republish is not falsely reported as
+cleared. That keeps a plausible cross-namespace live writer safe without telling the UI that a PAT,
+cookie, or Home Assistant token is completely gone while bearer bytes remain on disk. Credential
+stores perform this under their SQLite transaction so another supported process cannot publish
+during removal and inspection.
 
 One more race is orthogonal to the temp name. A whole-document flush that snapshots old state can
 stall in the retry loop, let a newer flush publish, then wake and replace it with an intact but stale
-document. `agent-status-mirror` now publishes flush generations FIFO, with a barrier-controlled test
-that recreates the old ordering. The FIFO is process-local; multiple apps sharing a data directory
-retain last-publisher semantics until a cross-process lock or compare-and-swap generation is added.
+document. A FIFO fixed this only inside one process. `agent-status-mirror` now reserves a durable
+cross-process generation before snapshotting and performs a locked generation comparison before
+the final retrying rename. Its real two-process barrier test lets generation 2 publish while
+generation 1 is parked, then proves the released older temp cannot replace it; a separate abrupt-
+process-exit test proves an OS-backed SQLite transaction blocks a live peer and is released without
+application cleanup when its owner crashes. No stale timeout can steal from a merely suspended
+Windows process.
 
-The same rule covers SSH and scp staging outside direct `fs` calls: remote shell writes use a
-bounded per-call UUID sibling, scp downloads and media-cache fetches use hidden UUID `.part` paths,
-and upload directories use UUID names rather than a timestamp plus a per-manager counter. Failed
-operations clean only their own stage, while ordinary downloads reserve user-visible names across
-app processes before transferring. The guard checks the collision-resistant property rather than
-requiring one helper because several stores build names inline.
+A later SSH audit found the same race outside direct `fs` calls: remote shell writes
+shared `<target>.tmp`, scp downloads and media-cache fetches shared `<target>.part`, and upload
+directories used a timestamp plus a per-manager counter. Those now use per-call UUID staging,
+clean only their own failed stage, and reserve user-visible download names
+across app processes before transferring.
 
 ### Paths
 
@@ -117,6 +134,13 @@ requiring one helper because several stores build names inline.
 
 The last one is the serious one: it is user-typed input, and the guard refusing `../evil` while
 accepting `..\evil` is exactly what made it look like it worked.
+
+The first repair for `subagent-tail` and `transcript-index-core` changed the split to native
+`path.basename`, which fixed a Windows process but stayed host-dependent: a Linux Server Edition
+still treated a recorded `C:\…` path as one long POSIX filename. Their shared
+`basenameForPathSyntax` now selects `path.win32` only for anchored drive/UNC syntax and
+`path.posix` otherwise. That opposite default matters because a backslash is legal filename text
+on POSIX; blindly accepting both separators would display a different file from the one recorded.
 
 **Explorer reveal** was broken the same way and is now fixed. It compared
 `revealPath.startsWith(base + '/')` — false for every backslash path — so `rel` became the whole
@@ -199,6 +223,12 @@ arguments, settings migration, creation snapshots, and machine-local stripping. 
 must turn them red when a hostile profile is accepted, missing WSL falls back, or stripping is
 removed. Do not replace these with another source-text scan.
 
+The same host-dialect rule applies to media URLs. `mediaUrlFor` splits only on `path.sep`: splitting
+on both slash styles is required-looking on Windows but corrupts a legal POSIX filename containing
+a literal backslash (`/tmp/a\b.png`) into a different path (`/tmp/a/b.png`). The allowlist then
+correctly rejects the app's own file. The separator is injectable in the pure URL builder only so
+both host dialects are exercised on every test machine.
+
 ### The session host: every persistent terminal was quietly disposable
 
 Three defects stacked so each hid the next, and two more that made the whole stack invisible. The
@@ -250,11 +280,31 @@ gone.
 
 ## Building
 
-`npm run dist:win` and `npm run rebuild` preflight through
-[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs), which reports **every**
-failed precondition in one run — discovering them one at a time cost three separate multi-minute
-builds, and the first blocker hid the second entirely because the rebuild never reached the
-compile.
+After making Node available, `download-dependencies.bat` first runs
+[`scripts/ensure-windows-build-toolchain.mjs`](../scripts/ensure-windows-build-toolchain.mjs). It
+accepts a PATH or winget Node only when it runs and satisfies
+`^22.22.2 || ^24.15.0 || >=26.0.0`; otherwise it falls back to the exact manifest-pinned portable
+runtime and verifies that version before persisting the selection. The BAT then
+adds the channel-current x64/x86 Spectre runtime component to an existing Visual Studio instance,
+or verifies and runs the exact Microsoft bootstrapper pinned in the dependency manifest to install
+Build Tools + the C++ workload on a fresh machine. The privileged helper stages that file below
+protected Program Files and never resolves a package manager through a user-controlled `PATH`. On
+ARM64 it also adds the rolling ARM64 Spectre component and verifies ARM64 libraries without dropping
+x86/x64. It then ensures a supported per-user Python through
+[`scripts/ensure-windows-python.mjs`](../scripts/ensure-windows-python.mjs), and preflights through
+[`scripts/check-build-preflight.mjs`](../scripts/check-build-preflight.mjs)
+before npm replaces `node_modules`; `npm run dist:win` and `npm run rebuild` also invoke the same
+check. The installer result is independently checked on disk, and the preflight reports **every**
+remaining failed precondition in one run — discovering them one at a time cost three separate
+multi-minute builds, and the first blocker hid the second entirely because the rebuild never
+reached the compile. Running both after Node bootstrap matters: the old root-BAT placement skipped
+the check on a machine with no initial Node and went straight into npm.
+
+The supported `npm run dist:win` path additionally requires a clean public commit, derives an
+immutable full-SHA URL for the committed seven-frame ICO, verifies the download, and fails closed
+on stale output or any disagreement among Squirrel identity/version metadata, `RELEASES`, the full
+nupkg nuspec, and Setup/app/execution-stub icon resources. Squirrel's vendor `Update.exe` remains
+outside that branding gate because the pinned builder has no supported resource-edit hook.
 
 1. **A running instance holds `conpty.node`.** Windows will not delete a DLL mapped into a live
    process, so a forgotten `npm start` window makes electron-rebuild die with an `EPERM` about a
@@ -264,8 +314,29 @@ compile.
 2. **The Spectre-mitigated MSVC libraries are missing.** node-pty's own `binding.gyp` sets
    `SpectreMitigation`, and that component is not part of a default C++ workload. Deliberately not
    worked around with `/p:SpectreMitigation=false`: node-pty asks for the mitigation on purpose,
-   and disabling it would ship an unmitigated native module.
-3. **`NoDefaultCurrentDirectoryInExePath=1`** makes `cmd /c GetCommitHash.bat` fail with "is not
+   and disabling it would ship an unmitigated native module. The bootstrap adds
+   `Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre`; ARM64 hosts also add
+   `Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre`. Both the helper and preflight
+   independently check that the effective VS 2022 toolset contains real `.lib` files for every
+   required architecture below `VC\Tools\MSVC\*\lib\spectre`.
+
+   Visual Studio has no per-user Build Tools install, and Microsoft forbids programmatic
+   `--quiet`/`--passive` use by an unelevated user. The script checks elevation before starting the
+   installer and exits access-denied with an absolute **helper-only** Administrator Command Prompt
+   remedy. Run only the printed `ensure-windows-build-toolchain.mjs ...
+   --elevated-toolchain-only` command elevated, close that prompt, and rerun the root BAT normally.
+   The root BAT refuses to continue toward Python/npm under an Administrator token. It does not
+   trigger UAC, because `/s` is prompt-free and ordinary dependency installs are automatic too.
+   An observed non-elevated `setup.exe modify ... --quiet --norestart` parsed the command but exited
+   5007 with “run elevated from the beginning,” matching the documented boundary.
+3. **Python is missing or unsupported.** npm lifecycle scripts compile `smart-whisper`/`node-pty`
+   through node-gyp, and the Visual Studio C++ workload does not include an interpreter. The BAT
+   reuses an explicitly selected supported 64-bit Python 3.10-3.14 or installs pinned Python 3.13
+   per-user. Bare Store/Python Manager aliases are never launched as a probe. Winget is tried
+   first; the python.org fallback runs only after its manifest SHA-256 matches. The verified exact
+   interpreter is passed process-locally in `PYTHON`, `NODE_GYP_FORCE_PYTHON`, and
+   `npm_config_python`; no launcher or persistent `PATH` is changed.
+4. **`NoDefaultCurrentDirectoryInExePath=1`** makes `cmd /c GetCommitHash.bat` fail with "is not
    recognized" inside node-pty's vendored winpty build, even though the file is right there. This
    one is **not** a user-facing problem — it was set in an agent harness's process environment, not
    in the User or Machine registry — so it is recorded here only so the next person who meets it
@@ -287,24 +358,33 @@ credential and shell-syntax cases continue to run under real Git Bash.
 
 ## Known gaps
 
-- **No packaged build has been INSTALLED and launched.** CI is configured to build and publish the
-  installer on each update of a branch carrying the corrected workflow (verified historically:
-  `v0.3.0-ci.165` carries a 206.8 MB `nodeterm-Setup-0.3.0.exe`, non-draft, HTTP 206 on a range
-  request), but nobody has run one. So the runtime behaviour of a real install — tmux absence and
-  the session-host fallback above all (see [windows-session-host.md](windows-session-host.md)) —
-  is unverified. Downloading one and clicking through it is the single highest-value Windows check
-  still outstanding.
+- **The `0.3.0` → `0.4.0` manual migration has not been proved.** The old app-side updater's
+  NSIS/dead-feed contract cannot discover the Squirrel candidate. On a real production-identity
+  Windows install, exercise the downloaded `0.4.0` Setup with `0.3.0` closed and, separately, with
+  it running. Verify the app, settings, shortcuts, executable metadata, and uninstall registration
+  survived, then document the supported state. Closing first remains provisional until this proof.
+- **The new updater's packaged interaction has not been proved.** Install the isolated
+  `0.4.0-fixture.1` package, wait out `--squirrel-firstrun`, launch its dynamically resolved
+  installed executable again, serve `.2` from loopback, and verify the indeterminate card plus
+  one-shot immediate restart. After relaunch, confirm Settings → Updates / `app.getVersion()`, the
+  installed executable/package version metadata, and settings persistence. Uninstall only the
+  unique fixture identity. This proof belongs in a disposable Windows Sandbox/VM and does not
+  substitute for the production migration above.
+- **A prior hosted workflow run produced and validated unsigned Squirrel assets**, and a prior
+  local run completed the then-current root BAT path after its toolchain prerequisites were met.
+  Both predate the final wrapper. A production-BAT package from the reconciled commit, followed by
+  real install/launch/update/uninstall checks, is still required; older artifacts do not prove the
+  final tree or installed runtime.
 - **The profile/session-host change specifically has no packaged interaction evidence yet.**
   Resolver and protocol tests cover a separate automated gate, but the Windows x64 installer still
   needs the required cheap headless run across every available profile, WSL cwd, destructive
   switching, and post-relaunch process/screen continuity. See
   [windows-session-host.md](windows-session-host.md); no capture or installed-build claim should be
   added until that run exists.
-- **Building the installer locally needs one elevated install, once.** The Spectre-mitigated MSVC
-  libraries are a separate Visual Studio component and their installer refuses `--quiet` without
-  elevation. With them present, `build-installer.bat /s` produces the real Squirrel set locally
-  (measured: 199 s, a 205.8 MB `nodeterm-Setup-0.3.0.exe` plus the full `.nupkg` and `RELEASES`,
-  unsigned per policy). CI never needed this — `windows-latest` ships the component.
+- **A local native build may require one elevated toolchain repair.** The Spectre-mitigated MSVC
+  libraries are a separate Visual Studio component, and its quiet installer requires elevation.
+  Once installed, later packaging runs recheck the libraries without elevation; disabling Spectre
+  mitigation is not an accepted substitute.
 
 ## If you are adding code that touches a path
 

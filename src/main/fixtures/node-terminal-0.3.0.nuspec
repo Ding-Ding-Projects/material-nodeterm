@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>node-terminal</id>
+    <version>0.3.0</version>
+    <title>nodeterm</title>
+    <authors>enes</authors>
+    <owners>enes</owners>
+    <projectUrl>https://github.com/Ding-Ding-Projects/material-nodeterm</projectUrl>
+    <iconUrl>https://github.com/Ding-Ding-Projects/material-nodeterm/blob/master/build/icon.ico?raw=true</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>node-based terminal manager — multiple draggable, zoomable terminals on a single canvas.</description>
+    <copyright>Copyright © 2026 enes</copyright>
+  </metadata>
+</package>

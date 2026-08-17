@@ -1,6 +1,23 @@
-import { describe, expect, it } from 'vitest'
-import type { Project } from '@shared/types'
-import { planSessionKill } from './sessionKill'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CanvasNodeState, NodeTerminalApi, Project } from '@shared/types'
+import {
+  captureProjectEndRequest,
+  planSessionKill,
+  projectDeleteGenerationCurrent,
+  projectEndDestination,
+  removeAcknowledgedStoredNodes,
+  settleProjectSessionDestroys,
+  settleSessionDestroys
+} from './sessionKill'
+import {
+  bindProjectToSession,
+  createSession,
+  projectSessionScope,
+  resetSessionsForTest,
+  setActiveSession
+} from '../session/session'
+
+beforeEach(() => resetSessionsForTest())
 
 const project = (id: string, nodeIds: string[], over: Partial<Project> = {}): Project =>
   ({
@@ -61,5 +78,223 @@ describe('planSessionKill', () => {
 
   it('survives an unknown active project', () => {
     expect(planSessionKill('a', [project('p1', ['a'])], '').remoteProjectId).toBeNull()
+  })
+})
+
+describe('settleSessionDestroys', () => {
+  it('publishes no removable ids until every destroy acknowledgement has settled', async () => {
+    let resolveEnded!: () => void
+    let rejectUnknown!: (error: Error) => void
+    const destroy = vi.fn((nodeId: string) =>
+      nodeId === 'ended'
+        ? new Promise<void>((resolve) => {
+            resolveEnded = resolve
+          })
+        : new Promise<void>((_resolve, reject) => {
+            rejectUnknown = reject
+          })
+    )
+    let outcome: Awaited<ReturnType<typeof settleSessionDestroys>> | undefined
+    const pending = settleSessionDestroys(['ended', 'unknown'], destroy).then((value) => {
+      outcome = value
+      return value
+    })
+
+    await Promise.resolve()
+    expect(outcome).toBeUndefined()
+    resolveEnded()
+    rejectUnknown(new Error('reply lost'))
+
+    await expect(pending).resolves.toEqual({
+      confirmed: ['ended'],
+      failed: [{ nodeId: 'unknown', message: 'reply lost' }]
+    })
+  })
+
+  it('removes only acknowledged sessions and keeps rejected outcomes retryable', async () => {
+    const destroy = vi.fn(async (nodeId: string) => {
+      if (nodeId === 'unknown') throw new Error('session-host connection closed before reply')
+    })
+
+    await expect(settleSessionDestroys(['ended', 'unknown', 'also-ended'], destroy)).resolves.toEqual({
+      confirmed: ['ended', 'also-ended'],
+      failed: [
+        { nodeId: 'unknown', message: 'session-host connection closed before reply' }
+      ]
+    })
+    expect(destroy.mock.calls.map(([nodeId]) => nodeId)).toEqual([
+      'ended',
+      'unknown',
+      'also-ended'
+    ])
+
+    // A rejected result did not tombstone the renderer-side action; a later acknowledgement can
+    // confirm the same id and make it eligible for removal.
+    await expect(settleSessionDestroys(['unknown'], async () => {})).resolves.toEqual({
+      confirmed: ['unknown'],
+      failed: []
+    })
+  })
+
+  it.each([
+    'pty destroy refused: invalid node id',
+    'pty destroy refused: rate limit exceeded; retry later'
+  ])('keeps a core-refused node out of the Canvas removal set: %s', async (message) => {
+    await expect(
+      settleSessionDestroys(['kept-node'], async () => {
+        throw new Error(message)
+      })
+    ).resolves.toEqual({
+      confirmed: [],
+      failed: [{ nodeId: 'kept-node', message }]
+    })
+  })
+})
+
+describe('settleProjectSessionDestroys', () => {
+  it('uses the bound relay API, retaining rejection and never acknowledging through local', async () => {
+    const localDestroy = vi.fn(async () => {})
+    const relayDestroy = vi
+      .fn<(nodeId: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('relay host outcome unknown'))
+      .mockResolvedValueOnce(undefined)
+    const local = createSession(
+      'local',
+      { pty: { destroy: localDestroy } } as unknown as NodeTerminalApi,
+      'This PC'
+    )
+    setActiveSession(local.id)
+    const relay = createSession(
+      'relay',
+      { pty: { destroy: relayDestroy } } as unknown as NodeTerminalApi,
+      'Relay host'
+    )
+    bindProjectToSession('relay-project', relay.id)
+
+    await expect(
+      settleProjectSessionDestroys('relay-project', ['relay-node'])
+    ).resolves.toEqual({
+      confirmed: [],
+      failed: [{ nodeId: 'relay-node', message: 'relay host outcome unknown' }]
+    })
+    expect(relayDestroy).toHaveBeenCalledWith('relay-node')
+    expect(localDestroy).not.toHaveBeenCalled()
+
+    await expect(
+      settleProjectSessionDestroys('relay-project', ['relay-node'])
+    ).resolves.toEqual({ confirmed: ['relay-node'], failed: [] })
+    expect(relayDestroy).toHaveBeenCalledTimes(2)
+    expect(localDestroy).not.toHaveBeenCalled()
+  })
+})
+
+describe('acknowledged project-node reconciliation', () => {
+  const terminal = (id: string): CanvasNodeState => ({
+    id,
+    kind: 'terminal',
+    title: id,
+    position: { x: 0, y: 0 },
+    size: { width: 640, height: 420 },
+    color: '#fff',
+    group: null
+  })
+
+  it('keeps the confirmation-open A project, session and targets after the canvas switches to B', async () => {
+    const destroyA = vi.fn(async () => {})
+    const destroyB = vi.fn(async () => {})
+    const sessionA = createSession(
+      'relay',
+      { pty: { destroy: destroyA } } as unknown as NodeTerminalApi,
+      'Relay A'
+    )
+    const sessionB = createSession(
+      'relay',
+      { pty: { destroy: destroyB } } as unknown as NodeTerminalApi,
+      'Relay B'
+    )
+    bindProjectToSession('A', sessionA.id)
+    bindProjectToSession('B', sessionB.id)
+    setActiveSession(sessionA.id)
+    const request = captureProjectEndRequest(
+      'A',
+      projectSessionScope('A'),
+      'A',
+      [{ id: 'a-terminal' }],
+      ['a-terminal']
+    )
+
+    // This is the time between opening the confirm and clicking Confirm.
+    setActiveSession(sessionB.id)
+    await settleSessionDestroys(request.targets.map((node) => node.id), (nodeId) =>
+      request.scope.session.api.pty.destroy(nodeId)
+    )
+
+    expect(request.projectId).toBe('A')
+    expect(request.scope.session.id).toBe(sessionA.id)
+    expect(request.targets).toEqual([{ id: 'a-terminal' }])
+    expect(destroyA).toHaveBeenCalledWith('a-terminal')
+    expect(destroyB).not.toHaveBeenCalled()
+  })
+
+  it('applies a delayed A acknowledgement to stored A after A → B, never to live B', () => {
+    const destination = projectEndDestination(
+      { projectId: 'A', sessionId: 'relay-A' },
+      {
+        projectId: 'A',
+        sessionId: 'relay-A',
+        activeProjectId: 'B',
+        loadedProjectId: 'B'
+      }
+    )
+    const storedA = [terminal('a-ended'), terminal('a-kept')]
+    const liveB = [terminal('b-live')]
+
+    expect(destination).toBe('stored')
+    expect(removeAcknowledgedStoredNodes(storedA, new Set(['a-ended']))).toEqual([
+      terminal('a-kept')
+    ])
+    expect(liveB).toEqual([terminal('b-live')])
+  })
+
+  it('routes an inactive → active acknowledgement to the live canvas', () => {
+    expect(
+      projectEndDestination(
+        { projectId: 'A', sessionId: 'relay-A' },
+        {
+          projectId: 'A',
+          sessionId: 'relay-A',
+          activeProjectId: 'A',
+          loadedProjectId: 'A'
+        }
+      )
+    ).toBe('live')
+  })
+
+  it('retains the node when the project was rebound to a different core', () => {
+    expect(
+      projectEndDestination(
+        { projectId: 'A', sessionId: 'relay-old' },
+        {
+          projectId: 'A',
+          sessionId: 'relay-new',
+          activeProjectId: 'A',
+          loadedProjectId: 'A'
+        }
+      )
+    ).toBe('retain')
+  })
+
+  it('refuses to delete a reopened project generation that gained a terminal while kills waited', () => {
+    const captured = project('A', ['old-node'], { closed: true })
+    const reopenedWithNewNode = {
+      ...captured,
+      closed: false,
+      nodes: [...captured.nodes, terminal('new-node')]
+    }
+
+    expect(
+      projectDeleteGenerationCurrent(captured, reopenedWithNewNode, 'relay-A', 'relay-A')
+    ).toBe(false)
+    expect(reopenedWithNewNode.nodes.map((node) => node.id)).toEqual(['old-node', 'new-node'])
   })
 })

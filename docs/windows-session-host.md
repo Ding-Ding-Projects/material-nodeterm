@@ -120,7 +120,7 @@ long-lived connection (no positional-FIFO fragility, unlike this app's tmux cont
 | `attach`                         | `new-session -A` / `attach-session`     | full, plus a screen the tmux path never needed (see below) |
 | `hasSession`                     | `has-session -t <name>`                 | full (implemented; not on the hot create path — see below) |
 | `write`                          | raw bytes on an attached client's stdin | full |
-| `resize`                         | ConPTY/pty resize + `refresh-client -C` | full |
+| `resize`                         | ConPTY/pty resize + `refresh-client -C` | full; each view claims a size and the effective grid is the componentwise minimum |
 | `pause` / `resume`               | node-pty `pause()`/`resume()`           | full; per-viewer in core and per-connection in the host (first pause / last resume) |
 | `sendKeys`                       | `send-keys -l -- <text>` (+ `Enter`)    | full — works with no attached client, exactly like tmux |
 | `paneCommand`                    | `display-message -p '#{pane_current_command}'` | approximated — see `process-tree.ts` |
@@ -133,7 +133,7 @@ long-lived connection (no positional-FIFO fragility, unlike this app's tmux cont
 **Not implemented — deliberately out of scope for this pass:**
 
 - `paneOwner` / bracketed-paste detection (`bracket_paste_flag`) / `#{cursor_x} #{cursor_y}
-  #{cursor_flag}` as a *separate* query. These are real tmux features this app also uses
+#{cursor_flag}` as a _separate_ query. These are real tmux features this app also uses
   (`pty-manager.ts`'s `paneOwner`, `bracketPasteRequested`, `paneCursor`), but none of them are in
   the task's minimum verb list, and cursor position is already carried for free inside `capture`'s
   output (`SerializeAddon` repositions the cursor as part of its own serialization — see below), so
@@ -175,8 +175,12 @@ new source:
 - `spawnNew()` awaits `ready` (after `spawnSession()` returns) and folds `screen` into the
   `PtyCreateResult` it hands back — the exact field `join()` already populates for a same-process
   co-attach.
+- A rejected `ready` is a failed create, never a cold-but-working terminal. The provisional local
+  `Session` is detached and removed, queued output is cancelled, and the original error reaches the
+  renderer. Racing creates wait behind that result instead of joining the provisional index entry;
+  a detached relay receives a non-zero sink exit because its legacy API cannot return a promise.
 - **The renderer needed zero changes.** `seedPaint()` (`src/renderer/terminal/terminal-config.ts`)
-  already treats *any* non-empty `screen` on a `warm-attach` replay as paintable
+  already treats _any_ non-empty `screen` on a `warm-attach` replay as paintable
   (`create-screen`), regardless of whether it arrived via a co-attach join or a plain reattach —
   that generality already existed, unused by anything but `join()`, before this task. Verified by
   reading `seedPaint`'s body rather than assumed.
@@ -206,8 +210,8 @@ mode state:
   ANSI escape sequences.
 - **The one known gap:** `SerializeAddon` does not emit `CSI ?1006h` (SGR extended mouse
   coordinates) even when mouse tracking is active — there is no separate field on the public
-  `IModes` API for it to read (`mouseTrackingMode` only says which tracking *protocol* is on:
-  none/x10/vt200/drag/any, not the coordinate *encoding*). Filled in explicitly by
+  `IModes` API for it to read (`mouseTrackingMode` only says which tracking _protocol_ is on:
+  none/x10/vt200/drag/any, not the coordinate _encoding_). Filled in explicitly by
   `TerminalEmulator.serialize()` in `src/session-host/terminal-emulator.ts`: whenever
   `mouseTrackingMode !== 'none'`, `\x1b[?1006h` is appended by hand.
 
@@ -215,7 +219,7 @@ Because all of this rides inside the `screen` string itself (as real escape sequ
 renderer writes verbatim), **`PtyCreateResult.coAttachMouse` is never set for a session-host
 session** — there is nothing left for that separate flag to carry.
 
-### Output ordering — a screen is a write barrier
+### Output ordering, flow ownership, and geometry
 
 `@xterm/headless` applies `Terminal.write()` asynchronously. A PTY data callback therefore does
 not mean the emulator is ready to serialize that byte yet. `HostSession.recordOutput()` chains
@@ -223,8 +227,23 @@ those promises in arrival order, and every warm attach, capture, resize and fina
 same tail before it reads or disposes the emulator. Do not replace that with a fire-and-forget
 `void term.write(data)`: a relay/phone can then receive a warm snapshot missing output the host has
 already observed, and an attach racing a pending write can get the same chunk once live and once in
-its seed. The new socket joins the subscriber set only *after* the barrier and snapshot, which is
+its seed. The new socket joins the subscriber set only _after_ the barrier and snapshot, which is
 the other half of avoiding that duplicate.
+
+That promise tail is also a memory boundary. Bytes accepted but not yet applied to xterm are
+counted as UTF-8; at 4 MiB the host takes an emulator-flow ticket and pauses node-pty, then returns
+only that ticket after the queue drains to 1 MiB. This ticket is independent from both explicit
+renderer flow control and named-pipe backpressure. Likewise, a `socket.write()` returning `false`
+takes one transport ticket for every session subscribed on that socket, and only that socket's
+`drain` returns it. A drain must never cancel a renderer pause or an emulator backlog.
+
+Ownership is preserved at both aggregation layers. Every in-process `SessionHostPty` is a distinct
+pause and geometry owner even though all of them share one `SessionHostClient` socket. The client
+sends a pause only on the local 0→1 edge and a resume only on 1→0; the host then combines that one
+connection-level ticket with other process sockets. Geometry follows the same shape: the client
+reduces its live view claims, the host reduces all socket claims componentwise, and it resizes the
+PTY and headless terminal before serializing a warm screen. Detaching a smaller viewer recomputes
+the grid so remaining viewers can grow.
 
 The same name is also a generation boundary. Data and exit events contain a session name but no
 generation id, so an exiting `HostSession` remains registered until its queued output, final exit
@@ -240,14 +259,43 @@ scheduled before the replacement was created.
 ### Reconnect (a dropped client connection is not a dead session)
 
 Sessions live in the host process, not in the client. If the Electron-main-side connection drops
-(a transient IPC hiccup — not the host dying), `SessionHostClient` reconnects lazily on the next
-call and replays `attach` for every session it still has local subscribers for
-(`replayAttachesAfterReconnect`), delivering any returned `screen` as a synthetic repaint through
-the ordinary `onData` path (prefixed with a clear+home so it reads as a clean redraw rather than
-appending after whatever was on screen before the drop). This deliberately reuses the plain data
-channel rather than wiring a dedicated `pty:resync` IPC round trip all the way up from this layer
-— a smaller, self-contained fix for what is expected to be a rare case (the host survives a client
-drop by design; only an actual host death turns into a real session loss).
+(a transient IPC hiccup — not the host dying), `SessionHostClient` begins bounded automatic
+reconnect attempts while any desired subscriber remains; an idle viewer does not stay frozen until
+some later keypress. Establishing the socket includes an awaited restoration barrier. It replays
+every still-live attachment with the local effective geometry and aggregate `paused` flag before
+the request that triggered the reconnect is allowed onto the wire. The host applies that pause
+before snapshot or live subscriber activation, so output cannot leak through the reattach window.
+
+Any returned `screen` is delivered through the ordinary `onData` path as a full-buffer replacement:
+`CSI 3J` clears scrollback, `CSI 2J` clears the viewport, home resets the cursor, and the serialized
+screen restores the authoritative cells and DEC modes. Omitting `CSI 3J` merely clears the visible
+page and duplicates xterm scrollback after every reconnect. Reusing the ordinary data channel keeps
+this recovery local to the session-host client instead of adding a separate renderer resync IPC.
+
+Restoration is never fire-and-forget. A delayed replay attach cannot overtake `hasSession`, `write`,
+or a confirmed `killSession` and resurrect the deleted name afterward. If a desired resume, detach,
+or replay acknowledgement is transport-ambiguous, the client destroys that socket so the host's
+close handler releases all connection-owned tickets, then reconnects and replays only the still-live
+desired state. A final unsubscribe racing an in-flight attach schedules a compensating detach after
+the attach settles, preventing a ghost subscription.
+
+The `hello` hand-off owns named `connect`/`data`/`error`/`close` listeners. It removes only those
+listeners, installs the production frame listener, and then resolves the connection promise. Never
+restore broad `removeAllListeners('data')` cleanup here: the original ordering installed the
+production listener and immediately deleted it, so all real responses disappeared while the socket
+still looked connected.
+
+An initial `attach` registers its local subscriber before sending because startup output may race
+the response. If the request rejects, it rolls back only that subscriber and its own remembered
+options; a concurrent co-attach remains intact. Empty capture and already-absent kill are confirmed
+host responses, while transport rejection remains unknown and propagates. That distinction keeps a
+failed snapshot dirty for retry and prevents deletion from claiming an unconfirmed persistent
+process is gone.
+
+The same truth boundary reaches the renderer. `pty.destroy` is an acknowledged request on both the
+Electron preload bridge and the Server Edition WebSocket bridge. Canvas, sidebar, project, and
+agent-control deletion paths remove local nodes and recovery state only after the backing kill is
+confirmed; validation, rate-limit, and transport failures keep the node present and retryable.
 
 ### A provisional attach is not a session
 
@@ -267,6 +315,36 @@ If the attach is rejected, times out, or the transport fails:
 This is deliberately fail-closed. A non-persistent fallback carrying the same node identity would
 look healthy while losing the one property this backend promises, and could run a local command in
 the wrong shell or directory.
+
+The `hello` hand-off has an equally strict ownership boundary. The handshake installs named
+`connect`/`data`/`error`/`close` listeners, accepts only the response carrying its captured hello
+request id, removes only those listeners, and then installs the production frame listener before
+resolving the connection promise. Never restore broad `removeAllListeners('data')` cleanup here:
+the original order installed the production listener and immediately deleted it, so the first
+`attach` response and every later frame disappeared while the socket still looked connected.
+
+An initial `attach` registers its local subscriber before sending because startup output may race
+the response. If the request rejects, it rolls back only that subscriber and its own remembered
+attach options; a concurrent co-attach's state is left intact. Capture and kill preserve the same
+failure distinction across reconnects: an empty capture and an idempotently absent kill are both
+confirmed `{ok:true}` host responses, while a transport/request rejection remains unknown and is
+propagated. That propagation is what lets the periodic snapshot keep its dirty bit for a retry and
+what prevents a delete from claiming a persistent process is gone when the host never confirmed it.
+
+The `hello` hand-off has an equally strict ownership boundary. The handshake installs named
+`connect`/`data`/`error`/`close` listeners, accepts only the response carrying its captured hello
+request id, removes only those listeners, and then installs the production frame listener before
+resolving the connection promise. Never restore broad `removeAllListeners('data')` cleanup here:
+the original order installed the production listener and immediately deleted it, so the first
+`attach` response and every later frame disappeared while the socket still looked connected.
+
+An initial `attach` registers its local subscriber before sending because startup output may race
+the response. If the request rejects, it rolls back only that subscriber and its own remembered
+attach options; a concurrent co-attach's state is left intact. Capture and kill preserve the same
+failure distinction across reconnects: an empty capture and an idempotently absent kill are both
+confirmed `{ok:true}` host responses, while a transport/request rejection remains unknown and is
+propagated. That propagation is what lets the periodic snapshot keep its dirty bit for a retry and
+what prevents a delete from claiming a persistent process is gone when the host never confirmed it.
 
 ## Lifetime
 
@@ -298,7 +376,7 @@ Mirrors tmux's server lifetime rule as closely as a different OS allows:
   quietly. A state file that resolves to nothing alive within that window is treated as stale
   (a previous host crashed mid-startup) and reclaimed. The same "connect first, only spawn if that
   fails" shape is what `SessionHostClient.doConnect()` does from the app side, so a host from a
-  *previous* app run is found and reused rather than duplicated.
+  _previous_ app run is found and reused rather than duplicated.
   The winning state publication uses a PID+counter temp path and a bounded retrying atomic rename
   (`session-host/state-file.ts`, kept local so the standalone bundle does not import `src/core`). A
   fixed `<state>.tmp` lets a stale-lock reclaim collide with another publisher, and a bare rename
@@ -307,7 +385,12 @@ Mirrors tmux's server lifetime rule as closely as a different OS allows:
   must both finish. If either fails, the host closes its listener, destroys any socket from that
   pre-publication window, removes its owned token/state/endpoint, and exits nonzero. This catch is
   explicit because the daemon's `uncaughtException` hook is diagnostic and suppresses Node's
-default fatal exit; letting publication throw into it creates an undiscoverable orphan host.
+  default fatal exit; letting publication throw into it creates an undiscoverable orphan host.
+  Only `ENOENT` means an ownership file is absent. Unreadable, directory, malformed, and empty-token
+  observations fail closed without reclaiming or launching a competing host. The client also
+  requires the state file's exact protocol version before hello; because the host outlives app
+  upgrades, silently connecting a version-2 client to a version-1 host would lose atomic pause and
+  geometry restoration.
 
 The spawned program follows the same resolver as a direct local PTY. With no explicit program and
 an empty `settings.defaultShell`, Windows selects PowerShell 7, then built-in Windows PowerShell,
@@ -411,13 +494,18 @@ The guards were mutation-checked by temporarily accepting a hostile profile, all
 WSL distribution to fall back, and removing machine-local stripping; each corresponding focused
 test must turn red. The former source-text shell regression test is intentionally gone.
 
+The original session-host implementation was also verified by hand against a real ConPTY session.
+The ordering, connection-owned pause ledger, no-tmux relay probe/capture, platform shell selection,
+and atomic state publication are now additionally behaviour-tested with adversarial scheduling and
+injected sharing violations. That source/runtime evidence does not replace the packaged check.
+
 ## Packaged verification still owed
 
 The real Windows x64 installer must still be exercised through the required cheap headless route:
 create every available profile, verify input/output/resize/Unicode/copy/cwd and labels, relaunch
 around a long-running process, switch a node through the destructive profile warning, and record
 the picker, profile terminal, unavailable state, and post-relaunch reattachment. Until that built
-artifact evidence exists, this document makes no claim that packaged/manual verification has
+artifact evidence exists, this document makes no claim that the full packaged verification has
 completed.
 
 `paneOwner`, `bracketPasteRequested`, the standalone `paneCursor` query, and independently audited

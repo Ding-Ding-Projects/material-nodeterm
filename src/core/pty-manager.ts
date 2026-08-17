@@ -38,22 +38,10 @@ import { parsePaneCursor } from './pane-cursor'
 import { PANE_OWNER_FMT, foregroundArgvArgs, paneOwnerFrom, parsePaneOwner } from './agents/pane-owner'
 import type { PaneOwner } from '../shared/agents/pane-owner-predicate'
 import { readSpawnResources, spawnResourceNote } from './spawn-resources'
-import {
-  primePtyCeiling,
-  ptyDevicesExhausted,
-  readPtyDevices,
-  spawnFailureHint,
-  type PtyDevices
-} from './pty-devices'
+import { primePtyCeiling, ptyDevicesExhausted, readPtyDevices, spawnFailureHint, type PtyDevices } from './pty-devices'
 import { REAP_SWEEP_MS, shouldReap } from './pty-reap'
 import { ControlModeClient, type ControlSpawn } from './tmux-control-client'
-import {
-  TMUX_SOCKET,
-  sessionName,
-  isSessionName,
-  localTmuxSendKeysArgs,
-  localTmuxEnterArgs
-} from './tmux-naming'
+import { TMUX_SOCKET, sessionName, isSessionName, localTmuxSendKeysArgs, localTmuxEnterArgs } from './tmux-naming'
 import { encodeSendKeysHex } from './tmux-control'
 import { bracketedInjection, sanitizePasteText } from './paste-injection'
 import { releasePty, type ReleasablePty } from './pty-release'
@@ -62,21 +50,11 @@ import { effectiveSize, type PtySize } from './pty-size'
 import { machOArch, archMismatch } from './macho-arch'
 import { writeScrollback, readScrollback, deleteScrollback } from './scrollback-store'
 import { claudeConfigDirFor } from './claude-config-dir'
-import {
-  findExecutableSync,
-  findInPathString,
-  opensshFallbacks,
-  resolveShellPath,
-  shellPathNow
-} from './exec-path'
+import { findExecutableSync, findInPathString, opensshFallbacks, resolveShellPath, shellPathNow } from './exec-path'
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { NODE_ID_MAX, isSafeNodeId } from './remote-safety'
 import { presenceHub } from './presence/hub'
-import {
-  codexLauncherDir,
-  forgetCodexThreadIdentitiesForNode,
-  installCodexLauncher
-} from './codex-identity-proxy'
+import { codexLauncherDir, forgetCodexThreadIdentitiesForNode, installCodexLauncher } from './codex-identity-proxy'
 import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents/node-token-service'
 import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
 // Third persistence backend, selected when no local tmux was found (primarily Windows, where
@@ -147,10 +125,14 @@ const PROBE_TIMEOUT_MS = 6_000
  * just as invisible. Callers may still pass their own `timeout` for the rare op that needs longer.
  */
 const runAsync = ((file: string, args: readonly string[], opts?: object) =>
-  execFileAsync(file, args as string[], {
-    timeout: PROC_TIMEOUT_MS,
-    ...(opts ?? {})
-  } as never)) as unknown as typeof execFileAsync
+  execFileAsync(
+    file,
+    args as string[],
+    {
+      timeout: PROC_TIMEOUT_MS,
+      ...(opts ?? {})
+    } as never
+  )) as unknown as typeof execFileAsync
 
 /** Narrow child-process seam for strict tmux probes/confirmed teardown. Production delegates to
  * the same bounded runner above; focused tests inject a stateful fake so hidden dual-backend
@@ -287,12 +269,7 @@ let cachedSsh: string | null | undefined
 function spawnHelperArchMismatch(): string | null {
   if (os.platform() !== 'darwin') return null
   try {
-    const helper = path.join(
-      path.dirname(require.resolve('node-pty/package.json')),
-      'build',
-      'Release',
-      'spawn-helper'
-    )
+    const helper = path.join(path.dirname(require.resolve('node-pty/package.json')), 'build', 'Release', 'spawn-helper')
     const fd = fs.openSync(helper, 'r')
     const buf = Buffer.alloc(8)
     fs.readSync(fd, buf, 0, 8, 0)
@@ -347,8 +324,7 @@ function resolveWindowsShell(): string {
   const pwsh = findInPathString('pwsh', pathStr) ?? (fs.existsSync(WIN_PWSH_FALLBACK) ? WIN_PWSH_FALLBACK : null)
   if (pwsh) return pwsh
   const winPsFallback = WIN_POWERSHELL_FALLBACK()
-  const powershell =
-    findInPathString('powershell', pathStr) ?? (fs.existsSync(winPsFallback) ? winPsFallback : null)
+  const powershell = findInPathString('powershell', pathStr) ?? (fs.existsSync(winPsFallback) ? winPsFallback : null)
   if (powershell) return powershell
   return process.env.COMSPEC || 'cmd.exe'
 }
@@ -710,6 +686,23 @@ export class PtyManager {
    * install an exit barrier for the same generation and the second can report success after the
    * first already removed the backend. */
   private confirmedRecycles = new Map<string, Promise<void>>()
+  /** One in-flight end per node. Creates wait behind this barrier so a session-host exit that
+   *  arrives before its kill response cannot be mistaken for permission to respawn the node. */
+  private ending = new Map<
+    string,
+    {
+      intent: EndIntent
+      everySocket: boolean
+      backendAlreadyEnded: boolean
+      replacementTarget: PtyRecycleTarget | undefined
+      promise: Promise<void>
+    }
+  >()
+  /** A session-host kill request failed after dispatch, so absence is not proven. Keep creates
+   * fenced until an idempotent retry acknowledges the end; an exit event alone is not that proof. */
+  private unknownEnds = new Set<string>()
+  /** Shell-owned cleanup runs after end processing and, for session host, its kill acknowledgement. */
+  private sessionEndedListeners = new Set<(persistKey: string) => void>()
   /** persistKey (node id) → the co-viewers of a session that was RECYCLED (moved into a worktree),
    *  waiting to be told to restart onto the replacement session. Held — not sent — until that
    *  session is registered (`spawnSession`), so a co-viewer's restart can never win the race and
@@ -904,12 +897,15 @@ export class PtyManager {
     for (const [sessionId, session] of [...this.sessions]) {
       // A relay sink is a watcher (somebody's phone is mirroring this session); a parked terminal
       // is still a subscriber, and its client is still attached.
-      const watched =
-        !!session.onData || [...session.subscribers].some((sub) => live.has(subClient(sub)))
+      const watched = !!session.onData || [...session.subscribers].some((sub) => live.has(subClient(sub)))
       if (watched) session.unwatchedSince = null
       else session.unwatchedSince ??= now
       const reap = shouldReap(
-        { tmuxBacked: session.tmuxBacked, watched, unwatchedSince: session.unwatchedSince },
+        {
+          tmuxBacked: session.tmuxBacked,
+          watched,
+          unwatchedSince: session.unwatchedSince
+        },
         now
       )
       if (reap) this.releaseClient(sessionId, session)
@@ -1076,8 +1072,7 @@ export class PtyManager {
   shadowedTmuxSessions(socket: string): string[] {
     if (socket !== TMUX_SOCKET) return []
     const names: string[] = []
-    for (const [persistKey, client] of this.shadows)
-      if (client.alive) names.push(sessionName(persistKey))
+    for (const [persistKey, client] of this.shadows) if (client.alive) names.push(sessionName(persistKey))
     // The shared background-write client is a tmux client of the session it attached to, exactly
     // like a shadow, and is subtracted the same way. It can never DOUBLE with a shadow of that same
     // session — `shadowAttach` retires it first — which is what keeps the budget's "minus one
@@ -1108,10 +1103,7 @@ export class PtyManager {
    * `client.command()` would be issuing an unbounded command, which is the one thing this whole
    * mechanism cannot survive.
    */
-  async shadowCommand(
-    persistKey: string,
-    line: string
-  ): Promise<{ ok: boolean; body: string[] } | null> {
+  async shadowCommand(persistKey: string, line: string): Promise<{ ok: boolean; body: string[] } | null> {
     const client = this.shadows.get(persistKey)
     if (!client) return null
     return this.controlCommand(client, line, () => {
@@ -1382,10 +1374,8 @@ export class PtyManager {
   }
 
   registerIpc(): void {
-    platform().handleWithSender(
-      IPC.ptyCreate,
-      (senderId, options: PtyCreateOptions): Promise<PtyCreateResult> =>
-        this.create(senderId, options)
+    platform().handleWithSender(IPC.ptyCreate, (senderId, options: PtyCreateOptions): Promise<PtyCreateResult> =>
+      this.create(senderId, options)
     )
     // Sender-aware: with co-attach, a keystroke arriving here is no longer self-evidently "the one
     // user's" — WHO typed it is what lights the "X is typing" ring on everyone else's canvas (see
@@ -1445,16 +1435,47 @@ export class PtyManager {
     // Optional TRAILING `everySocket`: only the session-memory panel's SPECULATIVE kill sets it,
     // and only for a row it holds no session for (see `localKillSockets`). `=== true` because the
     // value arrives verbatim off the wire; absent ⇒ the narrow, historical single-socket kill.
-    platform().onWithSender(
+    platform().handleWithSender(
       IPC.ptyDestroy,
       (senderId: number, persistKey: string, everySocket?: unknown) =>
         this.endFromClient(senderId, IPC.ptyDestroy, persistKey, 'delete', everySocket === true)
     )
+    // Version skew: older desktop/mobile/relay clients still cast this channel. Keep that path
+    // functional, but contain its Promise — a failed host kill must neither tear down local state
+    // nor become an unhandled rejection in the shell that cannot receive an acknowledgement.
+    platform().onWithSender(
+      IPC.ptyDestroy,
+      (senderId: number, persistKey: string, everySocket?: unknown) => {
+        void this.endFromClient(
+          senderId,
+          IPC.ptyDestroy,
+          persistKey,
+          'delete',
+          everySocket === true,
+          false
+        ).catch((error) =>
+          console.warn(
+            `[pty] legacy destroy for ${persistKey} was not confirmed`,
+            error instanceof Error ? error.message : String(error)
+          )
+        )
+      }
+    )
     // Sender-aware for the opposite reason: the client that RECYCLED the node drives its own
     // respawn, so it is the one client that must NOT be sent the restart notice.
-    platform().onWithSender(IPC.ptyRecycle, (senderId: number, persistKey: string) =>
+    platform().handleWithSender(IPC.ptyRecycle, (senderId: number, persistKey: string) =>
       this.endFromClient(senderId, IPC.ptyRecycle, persistKey, 'recycle')
     )
+    // Same compatibility bridge as destroy above. New clients await the handler; old casts keep
+    // working, with rejection contained because their protocol has nowhere to return it.
+    platform().onWithSender(IPC.ptyRecycle, (senderId: number, persistKey: string) => {
+      void this.endFromClient(senderId, IPC.ptyRecycle, persistKey, 'recycle', false, false).catch((error) =>
+        console.warn(
+          `[pty] legacy recycle for ${persistKey} was not confirmed`,
+          error instanceof Error ? error.message : String(error)
+        )
+      )
+    })
     platform().handle(IPC.ptyReadScrollback, (persistKey: string) =>
       readScrollback(persistKey)
     )
@@ -1474,9 +1495,7 @@ export class PtyManager {
     // successful probe here is what makes new sessions tmux-backed without a restart.
     if (!this.tmuxPath) this.ensureTmux()
     const available = !!this.tmuxPath
-    const hint = available
-      ? null
-      : tmuxInstall(process.platform, (cmd) => findCommand(cmd, process.env, fs.existsSync))
+    const hint = available ? null : tmuxInstall(process.platform, (cmd) => findCommand(cmd, process.env, fs.existsSync))
     return {
       available,
       installCommand: hint?.command ?? null,
@@ -1539,26 +1558,33 @@ export class PtyManager {
     channel: string,
     persistKey: string,
     intent: EndIntent,
-    everySocket = false
+    everySocket = false,
+    acknowledged = true
   ): Promise<void> {
     if (typeof persistKey !== 'string' || !persistKey || persistKey.length > REF_MAX_LEN)
-      return Promise.resolve()
-    if (!this.allowEnd(clientId, channel)) return Promise.resolve()
+      return this.refuseClientEnd(channel, acknowledged, 'invalid node id')
+    if (!this.allowEnd(clientId, channel))
+      return this.refuseClientEnd(channel, acknowledged, 'rate limit exceeded; retry later')
     return this.endSession(clientId, persistKey, intent, everySocket)
   }
 
+  /** New end requests must reject on refusal or their renderer will treat a no-op as success.
+   * Legacy casts have no response carrier, so they keep their historical silent drop. */
+  private refuseClientEnd(channel: string, acknowledged: boolean, reason: string): Promise<void> {
+    if (!acknowledged) return Promise.resolve()
+    const operation = channel === IPC.ptyRecycle ? 'recycle' : 'destroy'
+    return Promise.reject(new Error(`pty ${operation} refused: ${reason}`))
+  }
+
   /** Take one token from this client's bucket for a session-ending channel (see PTY_END_BUDGET).
-   *  Excess casts are dropped silently — never an error, never a disconnect. */
+   *  A request rejects on exhaustion; a legacy cast is dropped silently. */
   private allowEnd(clientId: ClientId, channel: string): boolean {
     const key = `${clientId}:${channel}`
     const now = Date.now()
     const prev = this.endBuckets.get(key)
     // A client starts with a full bucket and refills at `perSec`, capped at `burst`.
     const tokens = prev
-      ? Math.min(
-          PTY_END_BUDGET.burst,
-          prev.tokens + ((now - prev.at) / 1000) * PTY_END_BUDGET.perSec
-        )
+      ? Math.min(PTY_END_BUDGET.burst, prev.tokens + ((now - prev.at) / 1000) * PTY_END_BUDGET.perSec)
       : PTY_END_BUDGET.burst
     if (tokens < 1) {
       this.endBuckets.set(key, { tokens, at: now })
@@ -1614,6 +1640,22 @@ export class PtyManager {
           `dot, dash, underscore; max ${NODE_ID_MAX}). A project file with an id like this cannot be ` +
           `trusted — it is how a shared or cloned repo would smuggle a command onto a remote host.`
       )
+    // A generic end and an awaited profile recycle are separate transactions, but both reserve this
+    // node name while their backend outcome is pending. Wait before consulting either the live index
+    // or a replacement reservation so an early host exit cannot authorize a competing generation.
+    const ending = this.ending.get(key)
+    if (ending) {
+      await ending.promise.catch(() => undefined)
+      return this.create(clientId, options)
+    }
+    const confirmedRecycle = this.confirmedRecycles.get(key)
+    if (confirmedRecycle) {
+      await confirmedRecycle.catch(() => undefined)
+      return this.create(clientId, options)
+    }
+    if (this.unknownEnds.has(key))
+      throw new Error('session end outcome unknown; retry the close before reopening this node')
+
     // A recycle reserves the replacement generation for the client that chose its new profile/cwd.
     // A co-viewer's create still carries stale machine-local options; let it wait for the owner's
     // exact replacement and then join, never race to become the new backend creator itself.
@@ -1733,8 +1775,7 @@ export class PtyManager {
     existing.shown.set(sub, size)
     const before = existing.appliedSize
     this.applySize(existingId, existing)
-    const resized =
-      before?.cols !== existing.appliedSize?.cols || before?.rows !== existing.appliedSize?.rows
+    const resized = before?.cols !== existing.appliedSize?.cols || before?.rows !== existing.appliedSize?.rows
     // A (re)joining client's backlog is empty by definition, so its fresh page will never issue a
     // resume its PREVIOUS page owed us — a renderer reload keeps the same ClientId, so without this
     // the reloaded terminal would stay frozen forever with no data arriving to unstick it. Return
@@ -1755,7 +1796,13 @@ export class PtyManager {
     // session it landed on survives losing a client, because its own unmount may park it.
     const persistent = !!existing.persistKey
     const base: PtyCreateResult = existing.accountFallback
-      ? { sessionId: existingId, fresh: false, accountFallback: true, coAttachMouse, persistent }
+      ? {
+          sessionId: existingId,
+          fresh: false,
+          accountFallback: true,
+          coAttachMouse,
+          persistent
+        }
       : { sessionId: existingId, fresh: false, coAttachMouse, persistent }
     if (resized) return Promise.resolve(base) // tmux is redrawing this client — do not paint twice
     // An empty capture (plain shell — no tmux to capture; a tmux/ssh blip) is OMITTED, never sent
@@ -1770,9 +1817,7 @@ export class PtyManager {
     return Promise.all([
       this.captureForResync(existingId).catch(() => ''),
       this.paneCursor(existingId).catch(() => undefined)
-    ]).then(([screen, cursor]) =>
-      screen ? { ...base, screen, ...(cursor ? { cursor } : {}) } : base
-    )
+    ]).then(([screen, cursor]) => (screen ? { ...base, screen, ...(cursor ? { cursor } : {}) } : base))
   }
 
   /** Spawn a brand-new session for this client (the non-co-attach path). */
@@ -1938,7 +1983,13 @@ export class PtyManager {
     // which is what the renderer's cache-dispose levers must not assume. See PtyCreateResult.
     const persistent = !!spawned?.persistKey
     return accountFallback
-      ? { sessionId, fresh, accountFallback, persistent, ...(screen ? { screen } : {}) }
+      ? {
+          sessionId,
+          fresh,
+          accountFallback,
+          persistent,
+          ...(screen ? { screen } : {})
+        }
       : { sessionId, fresh, persistent, ...(screen ? { screen } : {}) }
   }
 
@@ -2020,9 +2071,7 @@ export class PtyManager {
    * Used by the remote context/subagent tails to read the node's transcript over the same
    * ControlMaster. Returns undefined for local sessions or unknown nodes.
    */
-  sshRemoteForNode(
-    nodeId: string
-  ): { controlPath: string; conn: import('../shared/ssh').SshConnection } | undefined {
+  sshRemoteForNode(nodeId: string): { controlPath: string; conn: import('../shared/ssh').SshConnection } | undefined {
     const s = this.sessionByPersistKey(nodeId)
     if (!s?.sshRemote) return undefined
     return { controlPath: s.sshRemote.controlPath, conn: s.sshRemote.conn }
@@ -2333,9 +2382,7 @@ export class PtyManager {
     // wait-branch for claude sessions when the setting is on. `permWaitSecs > 0` injects
     // NODETERM_PERM_WAIT_SECS; off / non-claude ⇒ 0 ⇒ absent ⇒ legacy behavior.
     const permWaitSecs =
-      this.getSettings().hookReplyApprovals && (options.agentId ?? 'claude') === 'claude'
-        ? PERM_WAIT_SECS_DEFAULT
-        : 0
+      this.getSettings().hookReplyApprovals && (options.agentId ?? 'claude') === 'claude' ? PERM_WAIT_SECS_DEFAULT : 0
     // Materialise this node's token BEFORE the session exists, so the very first hook event the
     // agent fires can already read it. Local sessions only: a remote node's token is written on the
     // HOST (see remote-hooks), because the host is where its hook script runs.
@@ -2360,8 +2407,7 @@ export class PtyManager {
     // ANTHROPIC_API_KEY wins over CLAUDE_CONFIG_DIR credentials). System-default nodes
     // (no accountId) are untouched. Remote (ssh) sessions get their account env via the
     // remote tmux `-e` list instead (the local ssh client process doesn't need it).
-    let accountDir =
-      options.accountId && !options.sshRemote ? claudeConfigDirFor(options.accountId) : null
+    let accountDir = options.accountId && !options.sshRemote ? claudeConfigDirFor(options.accountId) : null
     // Missing/deleted account dir (spec: error handling) → fall back to system default
     // instead of pointing claude at a dead dir; the node then behaves like an unbound one.
     // `accountFallback` is surfaced to the renderer (warning chip) via the create() result.
@@ -2659,10 +2705,7 @@ export class PtyManager {
         spawnSub === null
           ? new Map<SubKey | null, PtySize>()
           : new Map<SubKey | null, PtySize>([[spawnSub, spawnSize]]),
-      shown:
-        spawnSub === null
-          ? new Map<SubKey, PtySize>()
-          : new Map<SubKey, PtySize>([[spawnSub, spawnSize]]),
+      shown: spawnSub === null ? new Map<SubKey, PtySize>() : new Map<SubKey, PtySize>([[spawnSub, spawnSize]]),
       // node-pty was just spawned with these cols/rows, so the pty ALREADY has this size — record
       // it so a co-attach (or a fit that reports the same numbers) doesn't ioctl it needlessly.
       // A detached (relay-served) pty is left unseeded: its first `resize` must reach the pty,
@@ -2704,6 +2747,8 @@ export class PtyManager {
     // destroyer can even reach a spawn for a tombstoned node (create() refuses everyone else), so
     // this is exactly "the owner brought the node back" (⌘Z) — and its co-viewers must be able to
     // join the new session rather than stay refused.
+    // A session-host record is provisional until its async attach succeeds. spawnNew() clears the
+    // tombstone after ready so a failed resurrection cannot silently remove deletion protection.
     if (session.indexKey && !session.sessionHost) this.tombstones.delete(session.indexKey)
     // The replacement session for a RECYCLED node (worktree move) is now live and indexed, so its
     // co-viewers can safely be told to restart: their create() will `join` THIS session instead of
@@ -2874,17 +2919,14 @@ export class PtyManager {
     const hostPty = session.proc as unknown as SessionHostPty
     hostPty.destroy()
     this.forget(sessionId, session)
-    // The failed provisional session may have armed both process-lifetime intervals. Do not leave
-    // a timer claiming work exists when this manager has no sessions at all.
-    if (this.sessions.size === 0) {
-      if (this.snapshotTimer) {
-        clearInterval(this.snapshotTimer)
-        this.snapshotTimer = null
-      }
-      if (this.reapTimer) {
-        clearInterval(this.reapTimer)
-        this.reapTimer = null
-      }
+    const remaining = [...this.sessions.values()]
+    if (!remaining.some((candidate) => candidate.persistKey) && this.snapshotTimer) {
+      clearInterval(this.snapshotTimer)
+      this.snapshotTimer = null
+    }
+    if (!remaining.some((candidate) => candidate.tmuxBacked) && this.reapTimer) {
+      clearInterval(this.reapTimer)
+      this.reapTimer = null
     }
   }
 
@@ -3208,8 +3250,7 @@ export class PtyManager {
     // A pause owed by a DIFFERENT client that is still here is untouched either way (the pty stays
     // paused until IT drains — its renderer cannot re-pause; see `Session.pausedBy`).
     if (clientId === null) this.releaseFlow(session, sub)
-    else if ([...session.subscribers].some((s) => subClient(s) === clientId))
-      this.releaseFlow(session, sub, 'renderer')
+    else if ([...session.subscribers].some((s) => subClient(s) === clientId)) this.releaseFlow(session, sub, 'renderer')
     else this.releaseFlowForClient(session, clientId)
     if (session.subscribers.size > 0 || session.onData) {
       // Somebody is still watching: the departing client's size no longer constrains the pty.
@@ -3254,8 +3295,7 @@ export class PtyManager {
       let changed = false
       for (const key of [...session.sizes.keys()])
         if (key !== null && subClient(key) === clientId && session.sizes.delete(key)) changed = true
-      for (const key of [...session.shown.keys()])
-        if (subClient(key) === clientId) session.shown.delete(key)
+      for (const key of [...session.shown.keys()]) if (subClient(key) === clientId) session.shown.delete(key)
       // Every owner's ticket, not just the renderer's: a vanished client's SOCKET pause is as
       // unreturnable as its renderer's (invariant (a) — the pty would freeze for every co-viewer).
       if (this.releaseFlowForClient(session, clientId)) changed = true
@@ -3474,10 +3514,7 @@ export class PtyManager {
         // Paste-aware target (agent TUIs, multiplexers like herdr): one atomic write — the
         // text framed in paste markers plus the Enter — so the composer sees a definitive
         // paste boundary and the Enter can never be re-chunked into the paste (issue #47).
-        await runAsync(
-          this.tmuxPath,
-          localTmuxSendKeysArgs(TMUX_SOCKET, target, bracketedInjection(text, enter))
-        )
+        await runAsync(this.tmuxPath, localTmuxSendKeysArgs(TMUX_SOCKET, target, bracketedInjection(text, enter)))
         return true
       }
       // The literal text and the Enter (when sent) must go in order, so await sequentially.
@@ -3518,10 +3555,7 @@ export class PtyManager {
       const ssh = findSsh()
       if (!ssh) return null
       try {
-        const { stdout } = await runAsync(
-          ssh,
-          remotePaneCommandArgs(sshRemote.conn, sshRemote.controlPath, target)
-        )
+        const { stdout } = await runAsync(ssh, remotePaneCommandArgs(sshRemote.conn, sshRemote.controlPath, target))
         return stdout.trim() || null
       } catch {
         return null
@@ -3582,10 +3616,7 @@ export class PtyManager {
       if (sshRemote) {
         const ssh = findSsh()
         if (!ssh) return null
-        const first = await runAsync(
-          ssh,
-          remotePaneOwnerArgs(sshRemote.conn, sshRemote.controlPath, target)
-        )
+        const first = await runAsync(ssh, remotePaneOwnerArgs(sshRemote.conn, sshRemote.controlPath, target))
         const identity = parsePaneOwner(first.stdout)
         if (!identity) return null
         const psArgs = remoteForegroundArgvArgs(sshRemote.conn, sshRemote.controlPath, identity.tty)
@@ -3694,12 +3725,16 @@ export class PtyManager {
    *
    * `clientId` is null when nothing/no-one attributable did it (an internal caller).
    */
-  destroySession(
-    clientId: ClientId | null,
-    persistKey: string,
-    opts?: { everySocket?: boolean }
-  ): Promise<void> {
+  destroySession(clientId: ClientId | null, persistKey: string, opts?: { everySocket?: boolean }): Promise<void> {
     return this.endSession(clientId, persistKey, 'delete', opts?.everySocket === true)
+  }
+
+  /** Register shell cleanup after end processing (and the session-host acknowledgement). Failures are
+   *  isolated from the acknowledgement: a dead transcript tail must not turn a successful kill
+   *  into an outcome the renderer is told is unknown. */
+  onSessionEnded(listener: (persistKey: string) => void): () => void {
+    this.sessionEndedListeners.add(listener)
+    return () => this.sessionEndedListeners.delete(listener)
   }
 
   /**
@@ -3991,7 +4026,62 @@ export class PtyManager {
    * cold-restore snapshot, and `tmux kill-session`. Everything the two intents disagree about is
    * the ONE branch below — what the other subscribers are told (see `EndIntent`).
    */
-  private async endSession(
+  private endSession(
+    clientId: ClientId | null,
+    persistKey: string,
+    intent: EndIntent,
+    everySocket = false,
+    /** The awaited confirmed-recycle path already received every backend acknowledgement. */
+    backendAlreadyEnded = false,
+    /** Trusted replacement identity; present only after confirmed profile preflight. */
+    replacementTarget?: PtyRecycleTarget
+  ): Promise<void> {
+    const current = this.ending.get(persistKey)
+    if (current) {
+      // Identical repeats share one acknowledgement only when the in-flight target scope covers
+      // this caller. An every-socket request, a pre-confirmed backend outcome, and an exact profile
+      // reservation are each stronger than their generic counterpart, so a stronger request waits
+      // for the narrow pass and then performs its own cleanup/reservation before it may resolve.
+      const targetCovered =
+        !replacementTarget ||
+        (current.replacementTarget?.profileId === replacementTarget.profileId &&
+          current.replacementTarget.cwd === replacementTarget.cwd)
+      const covered =
+        current.intent === intent &&
+        (!everySocket || current.everySocket) &&
+        (!backendAlreadyEnded || current.backendAlreadyEnded) &&
+        targetCovered
+      return covered
+        ? current.promise
+        : current.promise.then(() =>
+            this.endSession(
+              clientId,
+              persistKey,
+              intent,
+              everySocket,
+              backendAlreadyEnded,
+              replacementTarget
+            )
+          )
+    }
+    const promise = this.runEndSession(
+      clientId,
+      persistKey,
+      intent,
+      everySocket,
+      backendAlreadyEnded,
+      replacementTarget
+    )
+    const entry = { intent, everySocket, backendAlreadyEnded, replacementTarget, promise }
+    this.ending.set(persistKey, entry)
+    const clear = (): void => {
+      if (this.ending.get(persistKey) === entry) this.ending.delete(persistKey)
+    }
+    promise.then(clear, clear)
+    return promise
+  }
+
+  private async runEndSession(
     clientId: ClientId | null,
     persistKey: string,
     intent: EndIntent,
@@ -4014,6 +4104,33 @@ export class PtyManager {
         : undefined)
     const dying = fallback
     const sshRemote = dying?.sshRemote
+    // SessionHostClient has a real request/response acknowledgement. Await it BEFORE any local
+    // deletion claim: on transport failure the node, tombstone, subscribers and transcript tails
+    // remain available, because the host outcome is unknown and the user must be able to retry.
+    // A live session records its backend directly; the second branch preserves the old unheld-row
+    // behavior, where the enabled host may own a session this manager is not attached to.
+    if (backendAlreadyEnded) {
+      // The confirmed profile-switch transaction proved every applicable backend ended (or was
+      // strictly absent), so it also resolves any older generic request whose response was lost.
+      this.unknownEnds.delete(persistKey)
+    } else {
+      const sessionHostKill =
+        dying?.sessionHost === true ||
+        this.unknownEnds.has(persistKey) ||
+        (!dying &&
+          !this.tmuxPath &&
+          this.getSettings().tmuxEnabled &&
+          sessionHostSupported())
+      if (sessionHostKill) {
+        try {
+          await sessionHostKillSession(sessionName(persistKey))
+          this.unknownEnds.delete(persistKey)
+        } catch (error) {
+          this.unknownEnds.add(persistKey)
+          throw error
+        }
+      }
+    }
     // Un-index NOW (synchronously): this session is finished either way, so a create() that races
     // the kill-session below — the worktree-move respawn does exactly that — must spawn a fresh
     // session instead of co-attaching to the one we are about to end.
@@ -4039,9 +4156,7 @@ export class PtyManager {
       // are per-ClientId events (a client's two views share one channel and hear it once), and
       // viewer granularity is invisible to peers. The destroyer is excluded whether it watched via
       // the canvas node, the modal, or both.
-      const others = [...new Set([...dying.subscribers].map(subClient))].filter(
-        (c) => c !== clientId
-      )
+      const others = [...new Set([...dying.subscribers].map(subClient))].filter((c) => c !== clientId)
       if (intent === 'delete') {
         const channel = IPC.ptyClosed(dyingId)
         for (const client of others) this.send(client, channel, { by: clientId })
@@ -4094,52 +4209,52 @@ export class PtyManager {
     // after the sweep would close most of it, but it depends on respawn ordering and still leaves a
     // gap; not sweeping leaves none, and there is nothing stale to clean up.
     if (intent === 'delete') sweepNodeToken(persistKey)
-    if (backendAlreadyEnded) return
-    if (sshRemote) {
-      // Remote (ssh-project) node: end the REMOTE session.
-      const ssh = findSsh()
-      if (ssh) {
-        try {
-          await runAsync(ssh, remoteTmuxKillArgs(sshRemote.conn, sshRemote.controlPath, sessionName(persistKey)))
-        } catch {
-          // remote session may not exist / master down; ignore
+    if (!backendAlreadyEnded) {
+      if (sshRemote) {
+        // Remote (ssh-project) node: end the REMOTE session.
+        const ssh = findSsh()
+        if (ssh) {
+          try {
+            await runAsync(ssh, remoteTmuxKillArgs(sshRemote.conn, sshRemote.controlPath, sessionName(persistKey)))
+          } catch {
+            // remote session may not exist / master down; ignore
+          }
+        }
+        // ...and then fall through to the LOCAL kill below rather than returning. A remote node
+        // normally has no local session — but it may have one from before `requireRemote`, when a
+        // create issued with the master down spawned a local shell under this exact name. That
+        // orphan outlived everything (this branch used to return here, so the delete never reached
+        // it) with whatever the node had launched still running in it. The node is being deleted:
+        // anything wearing its name goes with it. Costs one `kill-session` that usually says "no
+        // such session", which is already the ignored case below.
+      }
+      if (this.tmuxPath) {
+        // Which socket(s) to aim at. Holding the session ourselves means we KNOW: it is the local one,
+        // one kill, unchanged. Holding nothing means the name is all we have — and then the fan-out
+        // is the CALLER's to ask for, because on this machine a `nt-<id>` we hold nothing for can
+        // also be living on the `nodeterm-rmt` socket, where ANOTHER machine's nodeterm puts the
+        // sessions it SSHes in to spawn. Only the session-memory panel's speculative kill sets
+        // `everySocket`: it sweeps both sockets and offers to end what it found, so a kill that only
+        // tried `node-terminal` showed a confirm saying "this stops its tmux session" and did
+        // nothing. An ordinary node-× on a node never mounted in this process takes the same unheld
+        // branch and must NOT inherit that blast radius.
+        for (const socket of localKillSockets(dying ? TMUX_SOCKET : null, everySocket)) {
+          try {
+            await runAsync(this.tmuxPath, localTmuxKillArgs(socket, sessionName(persistKey)))
+          } catch {
+            // session may not exist on this socket; ignore
+          }
         }
       }
-      // ...and then fall through to the LOCAL kill below rather than returning. A remote node
-      // normally has no local session — but it may have one from before `requireRemote`, when a
-      // create issued with the master down spawned a local shell under this exact name. That
-      // orphan outlived everything (this branch used to return here, so the delete never reached
-      // it) with whatever the node had launched still running in it. The node is being deleted:
-      // anything wearing its name goes with it. Costs one `kill-session` that usually says "no
-      // such session", which is already the ignored case below.
     }
-    if (dying?.sessionHost) {
-      await sessionHostKillSession(sessionName(persistKey))
-      return
-    }
-    if (!this.tmuxPath) {
-      // No local tmux: same "attempt unconditionally, ignore a miss" shape as the tmux kill
-      // below — a node that was never session-host-backed on this machine (a plain shell) just
-      // gets a harmless "no such session" from the host and nothing happens.
-      if (this.getSettings().tmuxEnabled && sessionHostSupported()) {
-        await sessionHostKillSession(sessionName(persistKey))
-      }
-      return
-    }
-    // Which socket(s) to aim at. Holding the session ourselves means we KNOW: it is the local one,
-    // one kill, unchanged. Holding nothing means the name is all we have — and then the fan-out is
-    // the CALLER's to ask for, because on this machine a `nt-<id>` we hold nothing for can also be
-    // living on the `nodeterm-rmt` socket, where ANOTHER machine's nodeterm puts the sessions it
-    // SSHes in to spawn. Only the session-memory panel's speculative kill sets `everySocket`: it
-    // sweeps both sockets and offers to end what it found, so a kill that only tried
-    // `node-terminal` showed a confirm saying "this stops its tmux session" and did nothing. An
-    // ordinary node-× on a node never mounted in this process takes the same unheld branch and
-    // must NOT inherit that blast radius.
-    for (const socket of localKillSockets(dying ? TMUX_SOCKET : null, everySocket)) {
+    for (const listener of this.sessionEndedListeners) {
       try {
-        await runAsync(this.tmuxPath, localTmuxKillArgs(socket, sessionName(persistKey)))
-      } catch {
-        // session may not exist on this socket; ignore
+        listener(persistKey)
+      } catch (error) {
+        console.warn(
+          `[pty] confirmed ${intent} cleanup for ${persistKey} failed`,
+          error instanceof Error ? error.message : String(error)
+        )
       }
     }
   }
@@ -4193,6 +4308,8 @@ export class PtyManager {
     this.inflight.clear()
     this.confirmedBackendEnds.clear()
     this.confirmedRecycles.clear()
+    this.ending.clear()
+    this.unknownEnds.clear()
     return Promise.all(finals).then(() => undefined)
   }
 

@@ -1,4 +1,5 @@
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
+import type { DestructiveAuthorization } from './destructiveAuthorization'
 
 export type AccountRemovalConfirmation = 'destructive-gate' | 'plain-confirm'
 
@@ -47,7 +48,7 @@ export function planAccountRemoval({
 }
 
 export interface AccountRemovalDispatchDeps {
-  perform(): void
+  perform(authorization: DestructiveAuthorization): void
   cancel?(): void
   openGate(request: {
     title: string
@@ -75,16 +76,32 @@ export function dispatchAccountRemoval(
       description: plan.description,
       affected: plan.affected,
       confirmLabel: 'Remove',
-      onConfirm: deps.perform,
+      onConfirm: () => deps.perform('two-key'),
       onCancel: deps.cancel
     })
   }
 
   return deps.openConfirm({
     message: plan.message,
-    onConfirm: deps.perform,
+    onConfirm: () => deps.perform('ordinary'),
     onCancel: deps.cancel
   })
+}
+
+/** Exact non-secret account metadata disclosed by the removal dialog. */
+export function accountRemovalTargetIdentity(
+  account: ClaudeAccount,
+  affectedNodeIdentities: readonly string[] = []
+): string {
+  return destructiveTargetIdentity([
+    account.id,
+    account.label,
+    account.email,
+    account.host,
+    account.pending,
+    account.createdAt,
+    ...[...affectedNodeIdentities].sort()
+  ])
 }
 
 /**
@@ -96,21 +113,62 @@ export function dispatchAccountRemoval(
  */
 export interface AccountRemovalTeardownDetail {
   accountId: string
+  /** Exact strength of the account confirmation already spent by Settings. */
+  authorization: DestructiveAuthorization
   handled: boolean
   continueRemoval(): void
 }
 
 export const ACCOUNT_REMOVAL_TEARDOWN_EVENT = 'nodeterm:account-removal-approved'
 export const ACCOUNT_REMOVAL_COMMITTED_EVENT = 'nodeterm:account-removal-committed'
+export const ACCOUNT_REMOVAL_SCOPE_EVENT = 'nodeterm:account-removal-scope'
+
+export interface AccountRemovalScopeDetail {
+  accountId: string
+  handled: boolean
+  identities: string[]
+}
+
+/** Synchronously read the active Canvas facts which are newer than its serialized project copy. */
+export function requestAccountRemovalScope(
+  accountId: string,
+  dispatch: (detail: AccountRemovalScopeDetail) => void
+): string[] | null {
+  const detail: AccountRemovalScopeDetail = { accountId, handled: false, identities: [] }
+  dispatch(detail)
+  return detail.handled ? [...detail.identities].sort() : null
+}
+
+export function accountRemovalNodeTargetIdentity(input: {
+  projectId: string
+  id: string
+  type?: string
+  title?: string
+  accountId?: string
+  accountLogin?: boolean
+  incarnation?: number
+}): string {
+  return destructiveTargetIdentity([
+    input.projectId,
+    input.id,
+    input.type,
+    input.title,
+    input.accountId,
+    input.accountLogin,
+    input.incarnation
+  ])
+}
 
 export function requestAccountRemovalTeardown(
   accountId: string,
+  authorization: DestructiveAuthorization,
   continueRemoval: () => void,
   dispatch: (detail: AccountRemovalTeardownDetail) => void
 ): boolean {
   let continued = false
   const detail: AccountRemovalTeardownDetail = {
     accountId,
+    authorization,
     handled: false,
     continueRemoval() {
       if (continued) return
@@ -134,14 +192,17 @@ export interface AccountRemovalCanvasNode {
 
 export interface AuthorizedAccountLoginDeletion {
   surface: 'account-removal'
-  authorizedBy: 'remove-account'
+  authorizedBy: { action: 'remove-account'; authorization: DestructiveAuthorization }
   perform(): void
 }
 
 export interface AccountRemovalTeardownDeps {
   isLoginNode(node: AccountRemovalCanvasNode): boolean
   requestDeleteNodes(ids: string[], request: AuthorizedAccountLoginDeletion): boolean
-  deleteNodes(ids: string[]): void
+  deleteNodes(ids: string[]): Promise<{
+    confirmed: string[]
+    failed: Array<{ nodeId: string; message: string }>
+  }>
 }
 
 /**
@@ -164,6 +225,7 @@ export function handleAccountRemovalTeardown(
     .filter((node) => node.data.accountId === detail.accountId && deps.isLoginNode(node))
     .map((node) => node.id)
   let completed = false
+  let deletionStarted = false
   const complete = (): void => {
     if (completed) return
     completed = true
@@ -178,12 +240,26 @@ export function handleAccountRemovalTeardown(
 
   const accepted = deps.requestDeleteNodes(loginIds, {
     surface: 'account-removal',
-    authorizedBy: 'remove-account',
+    authorizedBy: { action: 'remove-account', authorization: detail.authorization },
     perform: () => {
-      if (completed) return
-      completed = true
-      deps.deleteNodes(loginIds)
-      detail.continueRemoval()
+      if (completed || deletionStarted) return
+      deletionStarted = true
+      // Account credentials may be removed only after every disclosed login session has a
+      // confirmed backing-host acknowledgement. A disconnected kill is an unknown outcome, not
+      // permission to delete the account from under a possibly still-running login process.
+      void deps
+        .deleteNodes(loginIds)
+        .then((outcome) => {
+          if (
+            outcome.failed.length > 0 ||
+            loginIds.some((id) => !outcome.confirmed.includes(id))
+          )
+            return
+          complete()
+        })
+        .catch(() => {
+          // The Canvas teardown path owns the visible error. Keep the account untouched.
+        })
     }
   })
   if (!accepted) detail.handled = false

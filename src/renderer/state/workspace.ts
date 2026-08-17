@@ -1,10 +1,14 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
-import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
+import type { AgentId } from '@shared/agents/config'
 import { agentConfig, agentLaunchProgram, mintsSessionId, withSessionId } from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { uuid } from '@renderer/lib/uuid'
-import { claudeCliCapsNow } from './permissionMode'
+import {
+  claudeCliCapsNow,
+  permissionModeFromLaunchPlan,
+  type ActiveAgentLaunchPlan
+} from './permissionMode'
 import { codexSharedIdentity } from './codexIdentity'
 import { sshHostKey } from '@shared/ssh'
 import { useSettings } from './settings'
@@ -402,7 +406,7 @@ export function createAgentNode(
   initialPrompt?: string,
   ssh?: Project['ssh'],
   accountId?: string,
-  permissionMode?: AgentPermissionMode,
+  launchPlan?: ActiveAgentLaunchPlan,
   options?: TerminalNodeCreationOptions
 ): CanvasNode {
   const { label, color, launchCmd } = resolveAgent(agentId)
@@ -449,7 +453,10 @@ export function createAgentNode(
   // learning its id from hooks exactly as before.
   const mintedSessionId =
     mintsSessionId(agentId) && claudeCliCapsNow().sessionIdFlag ? uuid() : undefined
-  // No mode passed (e.g. a legacy/test call site) = bare command, exactly as before this setting.
+  const permissionMode = permissionModeFromLaunchPlan(launchPlan, agentId)
+  // No plan passed (e.g. a legacy/test call site) = bare command, exactly as before this setting.
+  // Production launch sites pass the branded plan, so a raw hand-edited settings value cannot be
+  // threaded around the live version/Kids gates.
   // Both flags ride the same helper so they land on the same side of an argv separator: for grok
   // that is BEFORE `--` (end-of-options), and getting it wrong makes a flag part of the prompt.
   const flagged = (cmd: string): string => {
@@ -1469,6 +1476,10 @@ export function applyMutationToFlow(
   m: CanvasMutation,
   defaultTerminalProfileId?: string
 ): CanvasNode[] {
+  // An edge mutation addresses neither of these nodes — Canvas routes those to the edge state.
+  // Returned by REFERENCE so the caller's `next === prev` short-circuit still fires (same contract
+  // as `applyCanvasMutation`), rather than trusting every call site to have pre-filtered.
+  if (m.op === 'edge-upsert' || m.op === 'edge-remove') return nodes
   if (m.op === 'remove') {
     if (!nodes.some((n) => n.id === m.id)) return nodes // already gone — keep identity, skip render
     return nodes.filter((n) => n.id !== m.id)

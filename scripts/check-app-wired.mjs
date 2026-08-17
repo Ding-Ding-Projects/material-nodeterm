@@ -342,28 +342,72 @@ const CHECKS = [
   },
   {
     id: 'theme-token',
-    title: 'Appearance tokens are live CSS variables, not baked colours',
+    title: 'A real app control consumes the live accent token',
     async run() {
+      await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
+      if (!(await until(`!!document.querySelector('[class*="settings" i]')`))) {
+        return { ok: false, why: 'settings did not open for the accent-consumer check' }
+      }
       const accent = await evaluate(
         `getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()`,
       )
       if (!accent) return { ok: false, why: '--accent is not defined on :root' }
-      // Change it and confirm something actually reads it. A baked stylesheet would not move.
-      const probe = await evaluate(`(function(){
-        var d = document.createElement('div');
-        d.style.color = 'var(--accent)';
-        document.body.appendChild(d);
-        var before = getComputedStyle(d).color;
-        document.documentElement.style.setProperty('--accent', 'rgb(1, 2, 3)');
-        var after = getComputedStyle(d).color;
-        document.documentElement.style.removeProperty('--accent');
-        d.remove();
-        return { before: before, after: after };
+
+      // Use the production Switch component as the consumer. Creating our own div with
+      // `color:var(--accent)` proves only that Chromium implements CSS variables — it stays green
+      // if every app rule stops consuming the token. Ensure one real, visible switch is ON, move
+      // the token, then restore both the exact prior inline declaration and the switch state.
+      const target = await evaluate(`(function(){
+        var switches = Array.prototype.slice.call(document.querySelectorAll('[role="switch"]'))
+          .filter(function(x){ return !x.disabled && x.offsetParent !== null; });
+        var control = switches[0];
+        if (!control) return null;
+        window.__wiredAccentSwitch = control;
+        var wasOn = control.getAttribute('aria-checked') === 'true';
+        if (!wasOn) control.click();
+        return { wasOn: wasOn };
       })()`)
-      if (probe.before === probe.after) {
-        return { ok: false, why: 'changing --accent moved nothing — the token is not live' }
+      if (!target) return { ok: false, why: 'no enabled app switch was visible in settings' }
+      if (!(await until(`window.__wiredAccentSwitch?.getAttribute('aria-checked') === 'true'`))) {
+        return { ok: false, why: 'the real switch did not enter its accent-backed ON state' }
       }
-      return { ok: true, detail: `--accent = ${accent}, and consumers follow it` }
+      const before = await evaluate(`(function(){
+        var control = window.__wiredAccentSwitch;
+        var root = document.documentElement;
+        window.__wiredAccentPrior = root.style.getPropertyValue('--accent');
+        window.__wiredAccentPriority = root.style.getPropertyPriority('--accent');
+        var colour = getComputedStyle(control).backgroundColor;
+        root.style.setProperty('--accent', 'rgb(1, 2, 3)');
+        return colour;
+      })()`)
+      // Switch has a deliberate 200 ms colour transition. Reading in the same JS turn measures its
+      // starting colour and falsely calls the live token baked; cross the authored transition.
+      await sleep(300)
+      const after = await evaluate(`(function(){
+        var control = window.__wiredAccentSwitch;
+        var root = document.documentElement;
+        var colour = getComputedStyle(control).backgroundColor;
+        if (window.__wiredAccentPrior) {
+          root.style.setProperty('--accent', window.__wiredAccentPrior, window.__wiredAccentPriority);
+        } else {
+          root.style.removeProperty('--accent');
+        }
+        return colour;
+      })()`)
+      if (!target.wasOn) {
+        await evaluate(`window.__wiredAccentSwitch.click()`)
+        if (!(await until(`window.__wiredAccentSwitch?.getAttribute('aria-checked') === 'false'`))) {
+          return { ok: false, why: 'the accent probe did not restore the switch' }
+        }
+      }
+      await chord({ key: 'Escape', code: 'Escape', vk: 27 })
+      if (before === after || !/rgb\(1, 2, 3\)/.test(after)) {
+        return {
+          ok: false,
+          why: `the real switch ignored --accent (${before} → ${after})`,
+        }
+      }
+      return { ok: true, detail: `Switch background followed --accent (${accent} → ${after})` }
     },
   },
   {
@@ -431,6 +475,8 @@ const CHECKS = [
 ]
 
 selected = only ? CHECKS.filter((c) => only.includes(c.id)) : CHECKS
+const unknown = only ? only.filter((id) => !CHECKS.some((c) => c.id === id)) : []
+if (unknown.length) throw new Error(`unknown --only check(s): ${unknown.join(', ')}`)
 console.log('')
 for (const c of selected) {
   let r

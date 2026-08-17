@@ -10,7 +10,7 @@ import { createStore, makeMatcher } from './core/store.js'
 import { withFocusPreserved } from './core/dom.js'
 import { render } from './core/render.js'
 import {
-  applyTheme, toast, notify, log, save, undoEntry, toggleLock, unlockPanel,
+  applyTheme, toast, notify, log, save, undoEntry, removeHistoryEntries, toggleLock, unlockPanel,
   openMenu, closeMenu, menuDefs, openRx, closeRx, rxToggleMode, rxInsertToken, rxApply, rxPlain,
   buildPaletteTargets, askConfirm, confirmCancel, confirmRun, refreshCodes, copyToClipboard, download,
   getRoom, allSettingsCards, registerListRoom, fmtWhen,
@@ -211,7 +211,9 @@ root.addEventListener('click', (e) => {
         toastX('👆', 'Pick something first', 'Click the rows you mean, then press this.')
         return
       }
-      askConfirm(store, 'Throw ' + pickedIds.length + ' thing(s) away?', 'Here is exactly what will go. Nothing happens until you type the word.', 'bye', () => removeRows(pickedIds))
+      const room = getRoom(store.state.sec)
+      const removeWarning = room?.removeWarning || 'This removal is permanent and cannot be put back.'
+      askConfirm(store, 'Throw ' + pickedIds.length + ' thing(s) away?', 'Here is exactly what will go. Nothing happens until you type the word. ' + removeWarning, 'bye', () => removeRows(pickedIds))
       return
     }
     case 'panel-action': {
@@ -334,6 +336,8 @@ root.addEventListener('input', (e) => {
 root.addEventListener('change', (e) => {
   const t = e.target
   if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
+  else if (t.dataset && t.dataset.bindTextChange) runFeatureBind(t.dataset.bindTextChange, t.dataset.id, t.value)
+  else if (t.dataset && t.dataset.bindRangeChange) runFeatureBind(t.dataset.bindRangeChange, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bind) store.setState({ [t.dataset.bind]: t.value }, { persist: t.dataset.bind === 'vocab' || t.dataset.bind === 'nick' })
 })
 root.addEventListener('keydown', (e) => {
@@ -392,21 +396,22 @@ function registerCoreRooms() {
     emptyText: 'No messages. Lovely and quiet. 🌤',
     remove: (store2, ids) => {
       const set = new Set(ids)
-      store2.setState({ notes: store2.state.notes.filter((n) => !set.has(n.id)), picked: {} })
+      save(store2, { notes: store2.state.notes.filter((n) => !set.has(n.id)), picked: {} }, 'Removed ' + ids.length + ' message(s)')
     },
+    removeWarning: 'The Time machine records the prior messages, so this deletion can be put back.',
     panelActions: (store2) => [
       { label: '➕ Add a test message', run: () => { notify(store2, 'Test message', 'You made this one yourself from the Messages room.', 'test'); toastX('🔔', 'Added', 'A new message is at the top.') } },
     ],
   })
   registerListRoom('history', {
-    getRows: (s) => s.history.map((h) => ({ id: h.id, title: h.title, body: h.body, tag: h.tag, meta: fmtWhen(h.when), right: '' })),
+    getRows: (s) => s.history.map((h) => ({ id: h.id, title: h.title, body: h.body, tag: h.tag, meta: fmtWhen(h.when), right: '', canUndo: !!h.undo })),
     emptyText: 'Nothing logged yet.',
     remove: (store2, ids) => {
-      const set = new Set(ids)
-      store2.setState({ history: store2.state.history.filter((h) => !set.has(h.id)), picked: {} }, { persist: false })
+      removeHistoryEntries(store2, ids)
     },
+    removeWarning: 'Deleting Time machine rows is permanent: the log cannot safely contain an undo copy of itself.',
     panelActions: (store2) => [
-      { label: '↩️ Put the newest change back', run: () => { const h = store2.state.history[0]; if (!h) { toastX('🙂', 'Nothing to undo', 'The log is empty.'); return } undoEntry(store2, h.id) } },
+      { label: '↩️ Put the newest saved change back', run: () => { const h = store2.state.history.find((entry) => entry.undo); if (!h) { toastX('🙂', 'Nothing to restore', 'There is no saved-setting change in this log that can be put back.'); return } undoEntry(store2, h.id) } },
     ],
   })
 }

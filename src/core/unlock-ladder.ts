@@ -71,6 +71,64 @@ export const LADDER_TTL_MS = 5 * 60 * 1000
 /** Waits the ladder may skip per rolling hour. See rule 3 above — this is the real safety cap. */
 export const LADDER_BUDGET = 3
 export const LADDER_BUDGET_WINDOW_MS = 60 * 60 * 1000
+/** A peer may refresh or retry a ceremony, but it cannot turn the playful route into an
+ *  unbounded nonce store. */
+export const MAX_LADDER_CHALLENGES_PER_PEER = 8
+/** All peer ladders for one account share this second ceiling. */
+export const MAX_LADDER_CHALLENGES_GLOBAL = 256
+
+/** One account can have several independently locked network peers, but distributing failures
+ *  must not multiply the number of waits the ladder may skip. Each peer owns a climb while every
+ *  climb records against this one rolling account budget. */
+export class UnlockLadderBudget {
+  private clears: number[] = []
+
+  left(now: number): number {
+    const cutoff = now - LADDER_BUDGET_WINDOW_MS
+    this.clears = this.clears.filter((t) => t > cutoff)
+    return Math.max(0, LADDER_BUDGET - this.clears.length)
+  }
+
+  tryRecord(now: number): boolean {
+    if (this.left(now) <= 0) return false
+    this.clears.push(now)
+    return true
+  }
+}
+
+/** Shared live-nonce accounting. UnlockLadder owns the records; this object owns only the exact
+ *  process-wide reservation count so independent peer ladders cannot multiply the memory cap. */
+export class UnlockLadderChallengeBudget {
+  private reservations = new Map<symbol, number>()
+
+  available(now: number): boolean {
+    this.sweep(now)
+    return this.reservations.size < MAX_LADDER_CHALLENGES_GLOBAL
+  }
+
+  tryReserve(expiresAt: number, now: number): symbol | null {
+    if (!this.available(now)) return null
+    const token = Symbol()
+    this.reservations.set(token, expiresAt)
+    return token
+  }
+
+  release(token: symbol): void {
+    this.reservations.delete(token)
+  }
+
+  has(token: symbol): boolean {
+    return this.reservations.has(token)
+  }
+
+  private sweep(now: number): void {
+    // The global ledger is capped at 256, so this remains one bounded O(n) pass and lets a new
+    // peer reclaim expired reservations even if the peer that minted them never returns.
+    for (const [token, expiresAt] of this.reservations) {
+      if (expiresAt <= now) this.reservations.delete(token)
+    }
+  }
+}
 
 // ---- Question shapes (what a surface renders) --------------------------------------------
 
@@ -142,6 +200,7 @@ interface Issued {
   mathAnswers?: number[]
   moles?: WhackMole[]
   gridSize?: number
+  challengeReservation: symbol
 }
 
 export interface LadderDeps {
@@ -150,6 +209,10 @@ export interface LadderDeps {
   rand?: (max: number) => number
   /** True while School mode is on, which removes the dim-sum rung entirely. */
   schoolMode?: () => boolean
+  /** Shared by every independently locked peer of one account. Omit for a standalone ladder. */
+  budget?: UnlockLadderBudget
+  /** Shared live-challenge ceiling for those peer ladders. Omit for a standalone ladder. */
+  challengeBudget?: UnlockLadderChallengeBudget
 }
 
 /**
@@ -168,14 +231,14 @@ export class UnlockLadder {
   private readonly now: () => number
   private readonly rand: (max: number) => number
   private readonly schoolMode: () => boolean
+  private readonly budget: UnlockLadderBudget
+  private readonly challengeBudget: UnlockLadderChallengeBudget
 
   /** Live challenges by nonce. In memory only: a challenge that does not survive a restart is a
    *  challenge that cannot be replayed after one, which is a feature. */
   private issued = new Map<string, Issued>()
   /** Dim-sum wrong answers so far in this climb. */
   private dimsumFails = 0
-  /** Timestamps of ladder clears, for the rolling budget. */
-  private clears: number[] = []
   /** True once this lockout's ladder has been failed to the bottom; no second climb. */
   private exhausted = false
 
@@ -183,12 +246,14 @@ export class UnlockLadder {
     this.now = deps.now ?? (() => Date.now())
     this.rand = deps.rand ?? ((max) => randomInt(0, max))
     this.schoolMode = deps.schoolMode ?? (() => false)
+    this.budget = deps.budget ?? new UnlockLadderBudget()
+    this.challengeBudget = deps.challengeBudget ?? new UnlockLadderChallengeBudget()
   }
 
   /** Reset per-lockout climb state. Called when a NEW lockout begins. The rolling clear budget
    *  deliberately survives — it is a cap across lockouts, not within one. */
   reset(): void {
-    this.issued.clear()
+    this.clearIssued()
     this.dimsumFails = 0
     this.exhausted = false
   }
@@ -200,9 +265,7 @@ export class UnlockLadder {
 
   /** Ladder clears still available in the rolling window. */
   budgetLeft(): number {
-    const cutoff = this.now() - LADDER_BUDGET_WINDOW_MS
-    this.clears = this.clears.filter((t) => t > cutoff)
-    return Math.max(0, LADDER_BUDGET - this.clears.length)
+    return this.budget.left(this.now())
   }
 
   /** Whether a ladder may be offered at all right now. */
@@ -216,6 +279,14 @@ export class UnlockLadder {
     // School mode must not produce a dim-sum question even if a caller asks for one by name.
     const r: LadderRung = rung === 'dimsum' && this.schoolMode() ? 'math' : rung
     this.sweep()
+    // Refuse while the shared ledger is full before rotating this peer's oldest nonce. Otherwise
+    // existing holders could extend their leases before TTL instead of competing afresh afterward.
+    if (!this.challengeBudget.available(this.now())) return null
+    while (this.issued.size >= MAX_LADDER_CHALLENGES_PER_PEER) {
+      const oldest = this.issued.keys().next().value as string | undefined
+      if (!oldest) break
+      this.deleteIssued(oldest)
+    }
     const nonce = this.nonce()
     const at = this.now()
     const base = { expiresAt: at + LADDER_TTL_MS, issuedAt: at }
@@ -231,7 +302,7 @@ export class UnlockLadder {
         distractors.push(pool.splice(this.rand(pool.length), 1)[0].en)
       }
       const choices = this.shuffle([pick.en, ...distractors])
-      this.issued.set(nonce, { ...base, rung: 'dimsum', dimsumAnswer: pick.en })
+      if (!this.storeIssued(nonce, { ...base, rung: 'dimsum', dimsumAnswer: pick.en })) return null
       return {
         kind: 'dimsum',
         nonce,
@@ -249,7 +320,7 @@ export class UnlockLadder {
         questions.push(q.text)
         answers.push(q.answer)
       }
-      this.issued.set(nonce, { ...base, rung: 'math', mathAnswers: answers })
+      if (!this.storeIssued(nonce, { ...base, rung: 'math', mathAnswers: answers })) return null
       return { kind: 'math', nonce, questions }
     }
 
@@ -262,7 +333,7 @@ export class UnlockLadder {
       const showAtMs = i * slot + this.rand(Math.max(1, Math.floor(slot / 2)))
       moles.push({ cell: this.rand(gridSize * gridSize), showAtMs, hideAtMs: showAtMs + 1200 })
     }
-    this.issued.set(nonce, { ...base, rung: 'whack', moles, gridSize })
+    if (!this.storeIssued(nonce, { ...base, rung: 'whack', moles, gridSize })) return null
     return {
       kind: 'whack',
       nonce,
@@ -276,6 +347,15 @@ export class UnlockLadder {
   /** Grade an answer. The ONLY way the ladder can be cleared. */
   verify(answer: LadderAnswer): LadderVerdict {
     this.sweep()
+    if (this.exhausted) {
+      this.clearIssued()
+      return {
+        cleared: false,
+        next: null,
+        exhausted: true,
+        message: 'That climb is over — the clock is the way through.'
+      }
+    }
     const rec = this.issued.get(answer.nonce)
     if (!rec) {
       return {
@@ -284,9 +364,10 @@ export class UnlockLadder {
         message: 'That challenge has expired — take a fresh one.'
       }
     }
-    // Single use, always: consumed before grading so a wrong answer cannot be retried against the
-    // same question, and a right one cannot be replayed.
-    this.issued.delete(answer.nonce)
+    // One answer advances this one climb, so consume every outstanding nonce before grading. If
+    // two tabs requested different rungs, an older correct answer must not clear after the newer
+    // answer moved the state machine on or exhausted it.
+    this.clearIssued()
     if (rec.rung !== answer.kind) {
       return { cleared: false, next: rec.rung, message: 'That answer does not match the challenge.' }
     }
@@ -348,6 +429,7 @@ export class UnlockLadder {
     }
     if (good >= WHACK_REQUIRED_HITS) return this.clear(`${good} moles. Unlocked.`)
     this.exhausted = true
+    this.clearIssued()
     return {
       cleared: false,
       next: null,
@@ -357,7 +439,19 @@ export class UnlockLadder {
   }
 
   private clear(message: string): LadderVerdict {
-    this.clears.push(this.now())
+    // Several independently locked peers may have challenges outstanding while one global slot
+    // remains. Claim it again at grading time; issue-time availability alone lets every already-
+    // issued correct answer overspend the account-wide budget.
+    if (!this.budget.tryRecord(this.now())) {
+      this.exhausted = true
+      this.clearIssued()
+      return {
+        cleared: false,
+        next: null,
+        exhausted: true,
+        message: 'No shortcuts left — the clock is the way through.'
+      }
+    }
     this.reset()
     return { cleared: true, next: null, message }
   }
@@ -395,8 +489,35 @@ export class UnlockLadder {
     return s
   }
 
+  private storeIssued(nonce: string, record: Omit<Issued, 'challengeReservation'>): boolean {
+    // A cryptographic collision is fantastically unlikely, but deterministic Chuts inject dice
+    // and accounting must remain exact even then.
+    if (this.issued.has(nonce)) this.deleteIssued(nonce)
+    const reservation = this.challengeBudget.tryReserve(record.expiresAt, this.now())
+    if (!reservation) return false
+    this.issued.set(nonce, { ...record, challengeReservation: reservation })
+    return true
+  }
+
+  private deleteIssued(nonce: string): void {
+    const record = this.issued.get(nonce)
+    if (!record || !this.issued.delete(nonce)) return
+    this.challengeBudget.release(record.challengeReservation)
+  }
+
+  private clearIssued(): void {
+    for (const nonce of this.issued.keys()) this.deleteIssued(nonce)
+  }
+
   private sweep(): void {
     const now = this.now()
-    for (const [k, v] of this.issued) if (v.expiresAt <= now) this.issued.delete(k)
+    // This is a single bounded pass: both non-monotonic clocks and an attacker refreshing one
+    // rung are safe because a peer can retain at most MAX_LADDER_CHALLENGES_PER_PEER entries.
+    for (const [nonce, record] of this.issued) {
+      if (
+        record.expiresAt <= now ||
+        !this.challengeBudget.has(record.challengeReservation)
+      ) this.deleteIssued(nonce)
+    }
   }
 }

@@ -4,7 +4,7 @@ This is the deep-reference for working in this repo: the invariants, why each ex
 measurements behind them. It is loaded automatically by Claude Code.
 
 **Contributors: start with `CONTRIBUTING.md`** — the short version (setup, boundaries, house rules,
-testing habits). This file is what you reach for when you need to know *why* a rule is the way it
+testing habits). This file is what you reach for when you need to know _why_ a rule is the way it
 is, or you are changing a subsystem it describes. A change that other developers must know about
 belongs in BOTH (see Conventions).
 
@@ -40,7 +40,9 @@ upgrade that silently drops the patch fails loudly. **If that test is red, your 
 unpatched, not your code** — run `npm run rebuild`. It deliberately does not measure descriptors
 (that is environment-dependent); it checks the source the native module is built from. Upstream:
 microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring and that test.
+
 ```
+
 ```
 
 `npm test` runs the vitest suite (unit + integration; the remote e2e suites skip when the
@@ -112,7 +114,7 @@ The codebase is split by Electron process boundary — keep code on the correct 
 - **`src/preload/`** — the only bridge. `index.ts` uses `contextBridge` to expose a
   narrow API on `window.nodeTerminal` (typed in `index.d.ts`). `contextIsolation` is on,
   `nodeIntegration` off.
-- **`src/renderer/`** — React UI. Talks to main *only* through `window.nodeTerminal`.
+- **`src/renderer/`** — React UI. Talks to main _only_ through `window.nodeTerminal`.
 - **`src/shared/`** — types and IPC channel names imported by all three sides. `ipc.ts`
   is the single source of truth for channel strings; never hardcode a channel elsewhere.
 
@@ -192,20 +194,54 @@ Persistence has two layers:
 
 `settings.json` is a separate store (`main/settings-store.ts`, `state/settings.ts`).
 
+**Local settings history is one fenced transaction across processes, core and renderer**
+(`core/local-history.ts`, `renderer/state/settings.ts`, full write-up in
+`docs/local-history.md`). A per-process Promise FIFO is not a cross-process lock. Every request first
+publishes an owner-unique `0600` replay journal, builds its commit with an owner-unique
+`GIT_INDEX_FILE`, and advances the history ref only through `update-ref <new> <observed>` CAS. A CAS
+loser rebuilds on the winner; a killed process's complete journal is replayed without ever deleting
+its private index/journal, and a suspended old publisher cannot overwrite the newer ref. Never
+replace this with PID/age lock stealing, a shared index, `reset`, `clean`, or foreign `.lock`
+deletion. Strip inherited Git repository-routing environment variables at the runner boundary; only
+the explicit private index may redirect plumbing. Git calls and CAS retries are bounded and hooks
+disabled. `list()` snapshots one exact head OID; restore validates a full reachable commit OID. An
+initialized repository without a head returns
+`[]`, while any real read failure remains unavailable. `SettingsStore` awaits the recorder, and the
+renderer still suspends/epochs its 300 ms lane, joins dispatched saves, applies the revision, and
+rehydrates Zustand `base` plus live settings. The Pages playground is separate browser state:
+appearance undo reapplies DOM side effects, authenticator/lock/PIN/history fields never enter undo
+snapshots or exports, sensitive deletions are explicitly record-only, and an empty log stays empty.
+
+`scheduled-settings.json` has a deliberately three-state startup read. `ENOENT` is a normal empty
+schedule; valid JSON is normalized; corrupt/unreadable evidence is left exactly in place while
+`ScheduledSettingsRuntime` (the ONE runtime started by both Desktop and Server) serves an empty,
+disabled in-memory schedule plus a structured `ScheduledSettingsLoadError` over IPC/WS. Saves stay
+locked until the file is repaired/moved and nodeterm restarts, so the recovery copy cannot be
+overwritten by an editor looking at safe defaults. The renderer's `ScheduledSettingsSaveQueue`
+also has one in-flight owner: edits behind it remain pending, and both rejection and success release
+the owner in `finally`. See `docs/scheduled-settings.md` and the store/runtime/real-server startup
+tests named there.
+
 **The shared School/Kids mode records must become watchable even when their directory is absent at
 boot.** Both stores use `core/shared-record-watch.ts`: one `fs.watch` handle sits on the nearest
 existing ancestor, promotes toward `~/.nodeterm/shared/` as it appears, and retries promotion after
 a successful local record write. Promotion reloads once to cover a record written before the
-narrower handle was armed; there is no poll timer, and disposal closes the one handle. Only
-`ENOENT` proves absence. A per-store lifecycle generation also makes a reload queued before
-disposal inert. Invalid JSON follows each mode's documented OFF policy, while any other read/watch
-failure preserves the last-known state instead of silently weakening a live mode.
+narrower handle was armed; there is no poll timer, disposal closes the one handle, and a per-store
+lifecycle generation makes a reload queued before disposal inert. An armed handle is only
+recovering: every event/error/rearm invalidates authority, and only a strict read acknowledged
+against the exact handle-generation and sync-epoch can make policy healthy. Only `ENOENT` proves
+absence. Kids record mutations run their strict read, one-field reducer, and compared publication
+inside the shared SQLite transaction, so a stale rename cannot replace a newer ON with cached OFF.
+Invalid JSON may keep an OFF display but policy stays unavailable; every destructive caller
+therefore takes the hardened path. Any other read/watch failure preserves the last-known display
+state rather than silently weakening a live mode, while policy remains unavailable until a strict
+canonical read succeeds.
 
 ## Projects (tabs)
 
 Each project is one canvas/page; terminals and notes belong to a project. The `projects`
-zustand store (`renderer/state/projects.ts`) holds project metadata + the *serialized* nodes
-of all projects. **React Flow remains the single live source of truth for the *active*
+zustand store (`renderer/state/projects.ts`) holds project metadata + the _serialized_ nodes
+of all projects. **React Flow remains the single live source of truth for the _active_
 project's nodes only.** The contract:
 
 - The active-project effect in `Canvas.tsx` (keyed on `activeProjectId`) loads that project's
@@ -279,13 +315,19 @@ and rejects every coalesced creator with the real reason. Reconnect may replay o
 subscriptions. Capture/kill transport uncertainty is an error, not evidence the host or session is
 absent, and attach failure never falls through to another shell.
 
-Two session-host invariants are easy to lose in an innocent refactor. First,
-`@xterm/headless`'s `Terminal.write()` is asynchronous: `HostSession` serializes writes through an
-output tail, and warm attach/capture/resize/exit must await it before reading or disposing the
-screen. A fire-and-forget write races a stale or duplicated relay snapshot. Second, node-pty's
-pause actuator is global but its ownership is not: `PtyManager.pausedBy` arbitrates views inside
-one app process, and the host keeps a per-socket ledger across processes; `detach`/socket close
-returns only that connection's ticket and the final owner resumes. Also keep the backend parity
+ Several session-host invariants are easy to lose in an innocent refactor. First,
+ `@xterm/headless`'s `Terminal.write()` is asynchronous: `HostSession` serializes writes through an
+ output tail, and warm attach/capture/resize/exit must await it before reading or disposing the
+screen. The tail is byte-bounded (4 MiB high water, 1 MiB low water) and owns an independent
+node-pty pause ticket while the emulator is behind. A fire-and-forget write races a stale or
+duplicated relay snapshot and can retain unbounded output. Second, node-pty's pause actuator is
+global but its ownership is not: `PtyManager.pausedBy` arbitrates views inside one app process,
+`SessionHostClient` retains one desired ticket per `SessionHostPty`, and the host keeps separate
+per-socket explicit-flow and transport-backpressure ledgers across processes. A renderer resume,
+named-pipe `drain`, emulator drain, detach, or socket close may return only its own ticket; the
+final owner resumes. Each live view also owns a geometry claim. The client reduces same-process
+claims and the host applies the componentwise minimum across sockets before a warm snapshot;
+ dropping the smallest view grows the PTY for the survivors. Also keep the backend parity
 leaves in `sessionExists`/`captureSnapshot`: relay and mobile attach use them before
 `attachDetached`, so a tmux-only implementation reports a live Windows session as fresh and blank.
 The host also keeps an exited generation in its session map until that output tail, exit broadcast
@@ -300,24 +342,42 @@ sockets are destroyed, the listener and owned token/state/endpoint are closed or
 host exits nonzero. Do not rely on an uncaught exception here; the daemon's diagnostic handler logs
 those and intentionally prevents Node's default fatal exit.
 
+ The client has a matching hand-off boundary: remove only the handshake's named listeners, install
+the production frame listener, and only then resolve the connection. Broad data-listener cleanup
+after that hand-off deletes the production listener and leaves the first real request pending on an
+apparently live socket. Correlate the hello response by its request id, treat only `ENOENT` as an
+absent token/state file, and keep request timeout/write-callback failures tied to the exact pending
+entry; a late callback must never reject a newer request that reused the connection. A reconnect is
+an awaited restoration barrier, not background best effort: reattach every still-live view with
+its effective geometry and aggregate pause first, replace the renderer's complete buffer with
+`CSI 3J` + `CSI 2J` + home plus the serialized screen, and only then allow the triggering request.
+While subscribers remain, socket loss starts bounded automatic reconnect attempts even when the
+viewer is idle. A `SessionHostPty` is likewise provisional until `ready` resolves: co-attach
+waits behind that barrier, while rejection detaches and forgets the exact generation, cancels queued
+output, preserves any deletion tombstone, and propagates the error. Capture and kill rejection stay
+unknown rather than becoming empty/gone; snapshot retry and truthful deletion depend on that fact.
+ Permanent renderer deletion therefore awaits the `pty.destroy` acknowledgement before removing
+ the node or its local recovery state. A refused, rate-limited, or transport-ambiguous destroy keeps
+ the node available for retry.
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
 a generated config (`-f <userData>/tmux.conf`, so the user's `~/.tmux.conf` never
 interferes; status bar off, **mouse on**, 50k history, `set-clipboard on` + `terminal-features
-",*:clipboard"`, and the copy-mode mouse bindings). Because the tmux *server* outlives the app,
+",*:clipboard"`, and the copy-mode mouse bindings). Because the tmux _server_ outlives the app,
 sessions survive when no client is attached. `src/shared/ssh.ts`'s `remoteTmuxConf` is the same
 config for an SSH project's remote tmux.
 
 **tmux owns the mouse — scrolling, selection, and the alternate screen are all its job.** This is
 the native behavior, and it is deliberate:
+
 - **The wheel scrolls tmux's own history** (`history-limit`), not the emulator's buffer.
 - **The pane is on the alternate screen** (`\e[?1049h`) — capabilities are NOT blanked — which is
-  what keeps a full-screen TUI's input box *put* instead of scrolling away with the text.
+  what keeps a full-screen TUI's input box _put_ instead of scrolling away with the text.
 - **Selection is tmux copy-mode.** A drag copies; apps that request mouse tracking themselves
   (vim, htop) still get their own mouse events — tmux forwards those regardless.
 
 **Do not take scrolling away from tmux again.** A previous design did exactly that (`mouse off` +
-`terminal-overrides ',*:smcup@:rmcup@:indn@'` to keep tmux on the *normal* screen, so its output
+`terminal-overrides ',*:smcup@:rmcup@:indn@'` to keep tmux on the _normal_ screen, so its output
 flowed into xterm's scrollback, which was then hydrated from `tmux capture-pane` on reattach). It
 failed structurally: **tmux is a screen PAINTER, not a stream.** Every redraw (attach, resize,
 refresh) erases and repaints, so blank and duplicated rows leaked into the emulator's scrollback —
@@ -328,11 +388,12 @@ natively. The hydration that design needed is gone (see the reattach seeding bel
 ",*:clipboard"`: on copy, tmux emits OSC 52 to the attached client, and the renderer's OSC 52
 handler (`TerminalNode.tsx`, `parseOsc52`) writes the system clipboard. Two traps, both measured on
 tmux 3.4:
+
 - **The `terminal-overrides ',xterm*:Ms=…'` entry does NOT work on tmux 3.2+** — with it, a copy
   emitted **zero** OSC 52 to the client. `terminal-features` is what actually enables the sequence.
   Do not "fix" the `Ms=` override back; it is why copying from SSH sessions never worked.
 - **No `pbcopy` pipe.** The copy-mode bindings are bare `copy-pipe-and-cancel` (no command): piping
-  to `pbcopy` was macOS-only, and over SSH it would have copied on the *remote* host anyway. OSC 52
+  to `pbcopy` was macOS-only, and over SSH it would have copied on the _remote_ host anyway. OSC 52
   is cross-platform and works over SSH.
 
 **A tmux client is not necessarily a watcher.** `SessionInfo.clients` is a COUNT
@@ -349,6 +410,7 @@ client belongs to. **Any future reader of `list-clients` / `session_attached` ow
 subtraction.**
 
 Lifecycle, by intent:
+
 - **Offscreen release (in place, 2026-08-11)** → a mounted node fully offscreen past
   `settings.offscreenTerminalMinutes` detaches its PTY client and disposes its xterm without
   unmounting (plate shown; tmux keeps running; reattach-redraw on approach, measured <500 ms).
@@ -441,7 +503,7 @@ Lifecycle, by intent:
   still correct. An offline node reports itself to `SshReconnector`, so the canvas heals itself;
   `retryNow` (banner Reconnect / node Reconnect) skips the backoff and clears the refuse window.
 - **"Restart agent (resume)"** → deliberately NOT a session lifecycle event: `terminal/
-  agent-restart.ts` restarts the agent CLI *inside* the pane and leaves the PTY, the tmux session
+agent-restart.ts` restarts the agent CLI _inside_ the pane and leaves the PTY, the tmux session
   and its scrollback untouched. It exists for **new-model pickup** — a freshly released model only
   shows up in a CLI's model list on a fresh launch, and doing that by hand means closing and
   re-resuming every agent node on the canvas. Choreography: write the CLI's own exit line (`/exit`
@@ -505,6 +567,7 @@ cases `fresh=false` means a warm reattach and `fresh=true` means a cold start (f
 post-reboot). On a
 cold start the renderer (`TerminalNode.tsx`) reconstructs state instead of relying on the dead
 session (you can't keep a live OS process across a reboot):
+
 - **Scrollback replay** — `main/scrollback-store.ts` keeps a byte-capped (`256 KB`) snapshot of
   each tmux session's recent output under `<userData>/terminal-scrollback/`, refreshed on a
   timer (`SCROLLBACK_SNAPSHOT_MS`) + on detach/quit (`tmux capture-pane -e`). On a cold start the
@@ -514,13 +577,14 @@ session (you can't keep a live OS process across a reboot):
 - **Agent resume** — on a cold start of a node whose `agentId` is in `RESUMABLE_AGENTS`, the
   renderer re-launches the agent CLI: `resumeCommand(agentId, sessionId)` (from the session id
   persisted in `agentStatus` localStorage — `claude --resume`, `codex resume`, `gemini
-  --resume`) when known, else the bare `launchCmd`. The one-shot `data.initialCommand` still wins
+--resume`) when known, else the bare `launchCmd`. The one-shot `data.initialCommand` still wins
   on the very first open, so the agent is never double-launched.
 
 ### Seeding a fresh xterm (`attachReplay` / `seedPaint` in `terminal/terminal-config.ts`)
 
 A newly mounted xterm is empty. Since tmux paints its own client, there is usually **nothing to
 seed** — the cases are:
+
 - **`none`** — the terminal was **parked** (its buffer is still live and correct), or it is a
   brand-new node with an `initialCommand`. Seeding either would duplicate content.
 - **`cold-snapshot`** (`fresh` — reboot/first open) — the tmux session is genuinely gone, so replay
@@ -543,7 +607,7 @@ seed** — the cases are:
   "can't scroll the kanban card-modal terminal until you press a key" bug.
 
 xterm's own `scrollback` (`xtermScrollback(settings.tmuxScrollback)`, floored at 1000, capped at
-`XTERM_SCROLLBACK_MAX` = 10000) is kept for the sessions tmux does *not* back (a plain shell when
+`XTERM_SCROLLBACK_MAX` = 10000) is kept for the sessions tmux does _not_ back (a plain shell when
 tmux is unavailable) and for the cold-snapshot replay — it is not what the user scrolls in a tmux
 session.
 
@@ -552,7 +616,7 @@ session.
 `src/renderer/nodes/TerminalNode.tsx` is the trickiest file:
 
 - The xterm instance + PTY session are created once in a `useEffect(…, [data.respawnNonce,
-  offscreenEpoch])` and torn down on unmount. The component persists across re-renders because
+offscreenEpoch])` and torn down on unmount. The component persists across re-renders because
   React Flow keys nodes by `id` — never change a node's id, or you'll respawn its terminal.
   **Third in-place state — "released" (2026-08-11, offscreen dispose):** a node fully offscreen
   in the canvas viewport for `settings.offscreenTerminalMinutes` (default 10, `0` = never;
@@ -575,7 +639,7 @@ session.
   until you dwell `settings.panHoverDelay` (so quick drag = move node, scroll = pan). After
   the dwell the guard is removed and xterm takes input. The header stays draggable.
 - A `ResizeObserver` drives `FitAddon.fit()` + `transport.resize`. Canvas zoom is a CSS
-  transform, so it does *not* change `clientWidth` — cols/rows stay stable across zoom.
+  transform, so it does _not_ change `clientWidth` — cols/rows stay stable across zoom.
   `scale-fix.ts` patches xterm's mouse coords so text selection stays aligned when zoomed.
 
 ## Node kinds (all rendered by React Flow custom nodes)
@@ -587,11 +651,11 @@ session.
   render of the captured output. Tag chips via `NodeTags`.
   **Selection + copy is tmux's** (its mouse is on — see the tmux section): drag to select, wheel to
   scroll tmux's history. A drag copies via copy-mode, and tmux emits **OSC 52** to the client, whose
-  handler writes the **system clipboard** — the one copy path on every platform *and* over SSH (no
+  handler writes the **system clipboard** — the one copy path on every platform _and_ over SSH (no
   `pbcopy`). OSC 52 writes an app emits itself (vim `"+y`, gh, yazi) reach the clipboard through the
   same handler (write-only — a read query is refused). The emulator's own copy chords stay for a
-  selection xterm *does* own (`copyKeyAction`/`isCopyShortcut`): **Cmd+C** (mac), **Ctrl+Shift+C**
-  and **Ctrl+Insert** (Linux/Windows) — matched on `e.key` *or* the physical `KeyC`, so non-Latin
+  selection xterm _does_ own (`copyKeyAction`/`isCopyShortcut`): **Cmd+C** (mac), **Ctrl+Shift+C**
+  and **Ctrl+Insert** (Linux/Windows) — matched on `e.key` _or_ the physical `KeyC`, so non-Latin
   layouts still copy. A copy chord is **always swallowed**, selection or not: letting Ctrl+Shift+C
   fall through would reach the pty as `\x03` (SIGINT). Ctrl+Insert exists because Chromium reserves
   Ctrl+Shift+C for the inspector and a page cannot `preventDefault()` it — which is where Server
@@ -688,7 +752,7 @@ session.
   node is migrated by `nodeStatesToFlow` into a **sticky tombstone** in place, carrying a
   `claude --resume <chatSessionId>` hint so the conversation continues in any terminal (a chat was an
   ordinary resumable Claude session). `CHAT_CAPABLE` / `canChat` survive but now gate **only** the
-  ⌘M **ChatPanel** transcript view on a Claude *terminal* node (see the terminal bullet's Cmd/Ctrl+M),
+  ⌘M **ChatPanel** transcript view on a Claude _terminal_ node (see the terminal bullet's Cmd/Ctrl+M),
   not any SDK chat node.
 
 Monaco is wired in `renderer/editor/monaco-setup.ts` (language workers bundled via Vite
@@ -720,7 +784,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `config.ts`, 2026-08-09): the per-node **context meter** is `USAGE_CAPABLE = claude/codex/gemini`;
   the **permission mode** is `PERMISSION_MODE_CAPABLE = claude/grok/gemini/codex`; the session-name
   sync is **split in two** — `TITLE_READ_CAPABLE = claude/grok/gemini` (read) ⊇ `RENAME_CAPABLE =
-  claude/grok` (write), because gemini names its own sessions but has no rename command;
+claude/grok` (write), because gemini names its own sessions but has no rename command;
   **Context Link** spans four builtins
   (`CONTEXT_LINK_CAPABLE = claude/codex/gemini/opencode`, NOT grok). UI gates
   on these helpers — no hardcoded `=== 'claude'`. **Custom agents** (user-defined in Settings, `customAgents`) are in
@@ -734,7 +798,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   logged-in grok session — the context meter, context links and subagent cards are **not implemented**
   for grok). Its hook config is a **directory** (`$GROK_HOME/hooks/*.json`, all merged), so nodeterm
   **owns one file outright** (`nodeterm-status.json`) instead of merging into a shared settings file —
-  which is also why a malformed copy of it is *healed* rather than preserved, locally and on an SSH
+  which is also why a malformed copy of it is _healed_ rather than preserved, locally and on an SSH
   host (`RemoteHooks.installGrokRemote`, under the host's own `$GROK_HOME`). Its dialect is
   **camelCase keys with snake_case event VALUES** (`{"hookEventName":"pre_tool_use"}`) — the SDK path
   flips the keys to snake_case, so `normalizeGrok` canonicalizes the event name and reads every field
@@ -749,7 +813,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   cross-fire (`normalizeClaude` finds neither grok's camelCase keys nor, in the SDK dialect, its
   lowercase event values), pinned by tests; canonicalizing claude's event-name compare would make it
   harmful. The `auto` permission-mode **version gate is claude's alone** (it is fed by a `claude
-  --version` probe), and grok's mode flag must go **BEFORE** its `--` separator, which is
+--version` probe), and grok's mode flag must go **BEFORE** its `--` separator, which is
   end-of-options. Full picture, dialect traps and the device checklist: **`docs/grok-agent.md`**.
 - **Gemini + codex parity** (2026-08-09) — brought both up to grok's level in the lists above. Unlike
   grok, **both CLIs are installed** and gemini **ships its own hook reference**
@@ -774,13 +838,13 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
     answer instead of a confident wrong denominator. Codex: `last_token_usage.input_tokens` and its own
     stated `model_context_window`. Two traps: `total_token_usage` is **CUMULATIVE** (would render a
     13%-full session at 79%), and `cached` is **INSIDE** `input` for both — while claude's input
-    *excludes* cache reads, which is why claude sums them. **The formulas must not be unified.**
+    _excludes_ cache reads, which is why claude sums them. **The formulas must not be unified.**
     The transcript jail is widened **per root** (`~/.gemini/tmp`, `<codexHome>/sessions`), never to
     `$HOME` — that predicate exists so a forged hook POST cannot aim a read at `~/.ssh/id_rsa`.
   - **`hasUsage` gated THREE features, not one.** Joining `USAGE_CAPABLE` also switched on
     `context.ensure` and the find bar's transcript index, both of which go through claude's
-    `resolveTranscript` — whose **cwd fallback** then handed a codex node *the newest claude transcript
-    for that cwd*: a stranger's session as its meter and its search hits. Now gated by the pure
+    `resolveTranscript` — whose **cwd fallback** then handed a codex node _the newest claude transcript
+    for that cwd_: a stranger's session as its meter and its search hits. Now gated by the pure
     `readsClaudeTranscript` (`renderer/lib/transcriptGates.ts`), which reuses `CHAT_CAPABLE` rather than
     adding a fourth list. Non-claude agents lose only the mount-time head start.
   - **`TITLE_READ_CAPABLE` was created here**: gemini names its own sessions through its `update_topic`
@@ -789,16 +853,16 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
     (injected as `AgentSessionNameDeps.geminiPathFor`, held in a `let` in `src/main/index.ts` to avoid a
     TDZ throw that would kill a node's whole poll chain).
   - **In-place restart** works for gemini: `EXIT_SEQUENCES.gemini = '/quit'` — and it must stay **bare**,
-    because `/quit --delete` exits *and permanently deletes* the session history, i.e. exactly what the
+    because `/quit --delete` exits _and permanently deletes_ the session history, i.e. exactly what the
     restart exists to resume (pinned by its own test).
-  Full picture, measurements, gaps and a device checklist: **`docs/gemini-agent.md`**.
+    Full picture, measurements, gaps and a device checklist: **`docs/gemini-agent.md`**.
 - **Permission mode** (agents in `PERMISSION_MODE_CAPABLE` — claude, grok, **gemini**, **codex**) —
   the mode a session **starts** in (`claude --permission-mode <mode>`; Shift+Tab still cycles it at
   runtime). Membership no longer implies claude's flag spelling: **the per-agent translation lives in
   `src/shared/agents/approval-mode.ts`** (`approvalFlags` / `modeSupported`), which is also where
   `withPermissionMode` now lives — it moved one layer up out of `config.ts` to break a cycle.
   gemini = `--approval-mode default|auto_edit|yolo|plan`, codex = `--ask-for-approval
-  untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the CLI **cannot
+untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the CLI **cannot
   express emits NO flag**, never a substituted nearest match (codex has no `plan` and no
   edit-specific mode; **gemini has no `auto`** — nothing in its vocabulary means "approve most things
   but not edits", and since `auto` is the DEFAULT mode, mapping it to `auto_edit` would have switched
@@ -810,7 +874,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   UI copy is DERIVED from the mapping (`permissionModeAgentIds` / `permissionModeAgentsLabel` /
   `unsupportedModesNote` / `bypassSandboxCaveat`) so a sentence cannot drift from what the table
   does — so the note now reads "Auto has no Gemini equivalent…" beside codex's two gaps, and the
-  residual wart is only that `auto` and `manual` land on the same gemini policy (the *prompting* one).
+  residual wart is only that `auto` and `manual` land on the same gemini policy (the _prompting_ one).
   `--sandbox` is a separate axis and deliberately untouched (`--ask-for-approval never`
   still sandboxes).
   `settings.claudePermissionMode` (global, default **`auto`** — a behavior change for existing
@@ -821,11 +885,14 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `PERMISSION_MODE_LABELS` (from which `ALL_PERMISSION_MODES` is derived — the dropdown and the
   validator can't desync). `resolvePermissionMode(project, settings)` is the resolver
   (`renderer/state/permissionMode.ts` `activePermissionMode(agentId)` binds it to the live stores **and
-  applies the version gate below — for `agentId === 'claude'` only**), and
-  **`withPermissionMode(cmd, agentId, mode)` is the single
-  funnel through which every agent-node launch site appends the flag** (new node, cold-restore
-  resume, Branch, handoff/transfer, explain-commit, add-agent, canvas-control open-agent + team
-  spawn). **WHERE the flag lands is decided at the composed layer** (`createAgentNode`), not in
+  applies the version gate below — for `agentId === 'claude'` only**). Every production launch first
+  obtains a branded `ActiveAgentLaunchPlan` from `activeAgentLaunchPlan` (or the awaited
+  `ensureActiveAgentLaunchPlan`) for one name in the closed `AGENT_LAUNCH_SURFACES` inventory;
+  command builders and `createAgentNode` consume that proof rather than a raw mode. The behavior Chut
+  runs every inventory row under Kids mode for both permissive inputs and asserts each agent's exact
+  manual CLI arguments, so a new/bypassed surface is a red case rather than a source-text count.
+  `commandForAgentLaunch` applies the branded decision through `withPermissionMode`.
+  **WHERE the flag lands is decided at the composed layer** (`createAgentNode`), not in
   `withPermissionMode`: with no `argvPromptSeparator` (claude) it goes LAST, keeping the historical
   command byte-identical; with one (grok's `--`) it must go **BEFORE** the separator, because `--` is
   end-of-options and a flag after it is a positional — silently swallowed into the prompt or a clap
@@ -842,7 +909,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `auto`**, and only to `manual` = **no flag** = the bare pre-feature command. Everything **fails
   open**: unknown/unreadable version, a probe that failed or hasn't answered yet ⇒ bare command,
   never a blocked launch; the other four modes are never touched by the gate, and the user's
-  *setting* stays `auto` (only the emitted command line changes). **SSH projects** are gated on the
+  _setting_ stays `auto` (only the emitted command line changes). **SSH projects** are gated on the
   **remote** host's CLI, never the local one: `SshProjectManager.connect` probes `claude --version`
   on the host (through a login shell — an ssh exec channel's rc file usually bails out early — with
   `$HOME/.local/bin` + `$HOME/.claude/local` prepended to PATH: the official installer targets
@@ -868,14 +935,14 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   gate:** grok has accepted every mode since 1.0.0 and gemini/codex accept theirs on the versions we
   measured, so gating any of them on a `claude --version` probe would
   downgrade their sessions on a machine whose claude is old or absent — `activePermissionMode` gates
-  only `'claude'`, `ensureActivePermissionMode` awaits the probes only for `'claude'`, and
+  only `'claude'`, `ensureActiveAgentLaunchPlan` awaits the probes only for `'claude'`, and
   `sshAutoModeHint`'s copy names Claude in every sentence for the same reason. An agent needing its
   own gate adds one beside claude's.
 - **State via each agent's hooks → shared 4-state model** — detection uses the agent's own
   hooks, **not** output parsing. `src/shared/agents/normalize.ts` has per-agent normalizers
   (`normalizeClaude`/`normalizeCodex`/`normalizeGemini`/`normalizeOpencode`/`normalizeGrok`) that map each agent's native hook
   events to a `NormalizedAgentEvent` over the shared `AgentState` (`working | waiting | blocked
-  | done`) plus subagent/recurring/session kinds. Canvas's listener consumes
+| done`) plus subagent/recurring/session kinds. Canvas's listener consumes
   `NormalizedAgentEvent` from `agent:status`, drives the `agentStatus` store, fires throttled
   (5s/node) background notifications, and records the session id. Header shows a pulsing
   **RUNNING** (working) / **NEEDS YOU** (waiting/blocked) badge.
@@ -903,7 +970,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   (`codex-trust.ts` — the hash gates whether codex runs the hook); **grok → our OWN file
   `$GROK_HOME/hooks/nodeterm-status.json`** (its hook config is a directory whose files are all
   merged, so there is nothing of the user's inside ours — which is also why a malformed copy is
-  *healed*, not preserved, on both the local and the SSH path). The per-event **`matcher`** the grok
+  _healed_, not preserved, on both the local and the SSH path). The per-event **`matcher`** the grok
   installer needs is why events are typed `ManagedHookEvent` (`string | {event, matcher}`): grok's
   tool matcher is a REGEX and must be `.*` — a bare `*` is invalid and silently stops tool events
   firing. Plain-string events keep their byte-identical output for every other agent.
@@ -916,7 +983,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   syntax in a cleanup command.
 - **Per-node hook identity** (`src/core/agents/node-auth-*.ts`, `node-token-*.ts`,
   `node-identity-policy.ts` — full write-up in **`docs/node-identity.md`**) — the shared bearer proves
-  "a session on this machine", never *which* session, so every node also gets a capability derived
+  "a session on this machine", never _which_ session, so every node also gets a capability derived
   from one restart-stable secret (`kid.mac`, domain-separated HMAC over the node id), handed to the
   client as a 0600 file and verified three ways: `verified` / `legacy` / `forged`. `legacy` is "we
   cannot judge this", not a failure. Two invariants come out of this series and both cost real
@@ -932,7 +999,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   - **Both raw listeners change together** — `src/main/index.ts` and `src/server/agent-status.ts`.
     A new field on the hook event (the `verified` flag was one) that reaches only the desktop leaves
     the Server Edition silently without the feature; the boundary tests cannot tell you a field is
-    *missing*. `hook-verified-parity.test.ts` asserts it at source level because this repo has
+    _missing_. `hook-verified-parity.test.ts` asserts it at source level because this repo has
     shipped a one-shell hook-server change three times.
 
   Enforcement is dated (`NODE_IDENTITY_STRICT_AFTER`, 2026-10-13, read through `isStrictInstant` so a
@@ -941,6 +1008,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   refuses TODAY, not on the cutoff** — which is why every token sweep must also call
   `hookServer.forgetProvenNode`. `/hook/*` never 403s a missing token: the phone, the cross-instance
   failover and every pre-token session legitimately have none.
+
 - **Fullscreen TUI (Claude)** — through the SAME `settings.json` seam the hook installer uses,
   nodeterm ensures Claude's `"tui": "fullscreen"` so a session takes the alternate screen + mouse
   and behaves natively in tmux (else a drag falls into copy-mode). Two guardrails: **write-if-absent**
@@ -971,7 +1039,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   Grok's read leg is `core/grok-session.ts` over `summary.json` in the session dir a hook told us
   about; gemini's is `pickGeminiTitle` (`core/gemini-session.ts`) over the transcript path its context
   tail already tracks — including the `$set` history a **resume** replays, which is exactly the case the
-  read leg exists for. Routing is not cosmetic — claude's resolver *scans* `~/.claude/projects` on a
+  read leg exists for. Routing is not cosmetic — claude's resolver _scans_ `~/.claude/projects` on a
   cache miss, so an unrouted grok/gemini node paid that scan every 60 s for a guaranteed null.
   **The sweep's gate lives in core, not in the shells:** `startSessionNameSweep` defaults `supports` to
   `supportsTitleRead` (`core/session-name-sweep.ts`) and neither shell passes it — the duplicated copies
@@ -999,7 +1067,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   on palette open, cached ~3s); content matches show "found in output".
 - **⌘M transcript view (`ChatPanel`) — resolution is three-legged, and each leg fails differently.**
   `chat.readTranscript(sessionId, cwd, accountId, nodeId)` returns `ChatTranscriptResult
-  {messages, found}`, NOT a bare array: an empty thread and an unresolvable transcript are
+{messages, found}`, NOT a bare array: an empty thread and an unresolvable transcript are
   different facts, and rendering both as "No conversation yet." is what made every failure below
   look like an empty session. (1) **Remote (SSH) nodes** — `remoteTranscriptBySession` is fed
   ONLY by hook POSTs, and a tmux session outlives the app, so after a restart an idle remote node
@@ -1012,8 +1080,9 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `locatedTranscriptSessions` so a dead one can be dropped on an empty read (the panel's Retry
   would otherwise replay it forever) — a HOOK-fed ref is never dropped that way, since an empty
   read there is usually a transient master hiccup and forgetting it sends the next read local.
-  It is generated shell, so `remote-transcript-locate.test.ts` runs it for real under `/bin/sh`
-  against a fake host tree — keep it that way. (2) **The cwd fallback keeps `accountId`** in BOTH
+  It is generated shell, so `remote-transcript-locate.test.ts` runs it for real through
+  `core/testing/posix-shell.ts` against a fake host tree, including spaces/apostrophes and Git Bash
+  path translation on Windows — keep it that way. (2) **The cwd fallback keeps `accountId`** in BOTH
   `resolveTranscript` and `contextEnsure`; without it a managed-account node fell back to the
   system root and could adopt an unrelated session's newest transcript. (3) **Relay tabs** stay
   local-only (a transcript read over the relay would read the GUEST's disk) and reject with
@@ -1087,7 +1156,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `canvas-control-shim.test.ts` runs it for real (/bin/sh against a real hook server, port AND
   unix-socket transports) — keep it that way.
   **Flag syntax**: `--flag value`, `--flag=value`, or a valueless flag anywhere on the line. The
-  shim used to consume the next token after any `--flag` *unconditionally*, so `--read --node b1`
+  shim used to consume the next token after any `--flag` _unconditionally_, so `--read --node b1`
   became `arg.read=--node` with `b1` silently dropped and the server answering about the wrong
   flag; it now peeks. The trade: a value that itself starts with `--` must use the `=` form
   (`--cmd=--version`), which was previously unexpressible in either direction. Two parsers are in
@@ -1100,7 +1169,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   objects — nodes or frames — into a new frame in their shared container (a mixed-container set, or
   an ancestor plus its descendant, is refused with that reason); `ungroup --group <id>` dissolves a
   frame, promoting its direct children into the frame's own parent (nodes kept); `move
-  --nodes <id,id> [--group <id>]` reparents nodes OR whole frame subtrees INTO a frame (or
+--nodes <id,id> [--group <id>]` reparents nodes OR whole frame subtrees INTO a frame (or
   `top`/`none`/omit → out to top level) via `reparentNode` — the ONE way to move a node between
   frames, which `group` won't do; a cycle (a frame into itself or its own descendant) is refused.
   `arrange`/`align` now run in ONE coordinate space: all top-level, OR all children of one frame
@@ -1110,8 +1179,8 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   wide". `move` also re-fits the source + destination frames. All pure + tested in
   `state/workspace.test.ts` + `workspace.layout.test.ts`.
   **Fan-in (`link`, 2026-07):** a spawned fan-out was previously write-only — nodes an agent
-  opened were joined to it by a **rope** (`project.ropes`, explicitly *"Display-only — never
-  context links"*), so an orchestrator could not read back what its own team produced and the
+  opened were joined to it by a **rope** (`project.ropes`, explicitly _"Display-only — never
+  context links"_), so an orchestrator could not read back what its own team produced and the
   skill told it to have the USER relay results. Now `open-claude`/`open-agent`/`spawn-team` also
   draw a real **context bridge** (`project.bridges`) to each agent session they open, and the
   `link --to <id,id> [--from <id>]` verb links nodes the agent did not open (or two other nodes).
@@ -1146,7 +1215,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   edges are **derived, never persisted** (a pending dependency is a state that ends when the launch
   fires — the durable relation is the context bridge `--after` also draws).
   **Review panel (`verify`, 2026-07):** `verify --node <id> [--lenses …] [--focus …] [--agent …]
-  [--synthesis off]` opens one reviewer per LENS, each armed behind the target (`--after`) and
+[--synthesis off]` opens one reviewer per LENS, each armed behind the target (`--after`) and
   bridged to it, wrapped in a `Verify: <title>` group, plus a judge armed behind the whole panel.
   It is **composition, not new machinery** — the two primitives above are the whole implementation.
   Prompt/lens logic is the pure, unit-tested `renderer/lib/verifyPanel.ts`; two wordings there are
@@ -1158,7 +1227,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   only accepts what it already knows would be useless for the review nobody anticipated. Reviewers
   inherit the TARGET's `accountId` (its transcript resolves inside that account dir), not the
   caller's. The judge is armed on ids that exist only in that tick, which is why `armAfter` takes
-  `extraLive` — without it the reviewers would look *deleted*, deletion counts as satisfied, and
+  `extraLive` — without it the reviewers would look _deleted_, deletion counts as satisfied, and
   the judge would fire before a single review existed.
 - **Context Link** — a node action gated by `CONTEXT_LINK_CAPABLE` (claude/codex/gemini/opencode;
   **grok**, custom agents + plain terminals excluded — grok's `updates.jsonl` parser is unbuilt): drawing an edge between two builtin-agent nodes lets each
@@ -1198,7 +1267,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   edge/push/map logic in `renderer/lib/noteLink.ts`.
 - **Managed Claude accounts** (Claude-only) — run several logged-in Claude identities side by
   side by giving each its own config dir. `settings.claudeAccounts` is a list of `ClaudeAccount
-  {id, label, email?, host?, pending?, createdAt}` (in `settings.json`; the account **list** is
+{id, label, email?, host?, pending?, createdAt}` (in `settings.json`; the account **list** is
   config, not credentials). Isolation is **config-dir**, not token storage: a local account's dir
   is `{userData}/claude-accounts/<id>` (`claudeConfigDirFor` / pure `localAccountConfigDir`),
   a **remote** account's is `~/.nodeterm/claude-accounts/<id>` on its `host` (keyed by
@@ -1208,7 +1277,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   credentials. On macOS this works because Claude Code **≥ 2.1** scopes its Keychain service per
   config dir (`Claude Code-credentials-<sha256(configDir)[:8]>`, `claudeKeychainService`); on
   < 2.1 one unscoped service is shared → accounts collide, so add-account **warns** (`claude
-  --version`, `isSupportedClaudeVersion`).
+--version`, `isSupportedClaudeVersion`).
   - **`data.accountId` (terminal nodes)** — resolved **once at node creation**
     (`resolveNewNodeAccount`: explicit submenu pick → `project.defaultAccountId` → system default
     `~/.claude`), then **immutable** and **persisted** (serializers). `undefined` = system default
@@ -1284,19 +1353,19 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
      `$HOME` + fake `curl`, the same discipline as the canvas-control shim.
   3. **A read that could not run is `error`, never `unavailable`** — a dead master says nothing
      about whether the account has a subscription, and 'unavailable' silently drops the row.
-  Shape: `remoteUsageTargets` (pure) elects ONE connected project per host (several projects share
-  a host's `$HOME`) and offers its system `~/.claude` plus every managed account pinned to that
-  host. The service (`usage:remote`) caches per target under the usual debounce, evicts targets
-  whose host disconnected, and coalesces concurrent reads. **On demand, never polled** — each row
-  is an ssh exec plus an HTTPS request on someone else's machine; the renderer asks on mount, on
-  popover open, on ⟳, and when the active project's connection comes up (an SSH project is opened
-  before its master is ready). Deps are injected exactly like
-  Context Link's (`src/main` supplies the ControlMaster; **Server Edition passes none** ⇒ `[]`, so
-  the UI needs no capability check). Own Settings switch (`claude-remote`), because hiding local
-  Claude usage must not silently take the hosts down with it. **Mobile: N/A** — the
-  slice pushed to a host still drops `usage` (a host reading its own numbers back off us is
-  pointless), and no keychain leg exists remotely (a headless macOS host would hang on the prompt,
-  so a mac host reports nothing).
+     Shape: `remoteUsageTargets` (pure) elects ONE connected project per host (several projects share
+     a host's `$HOME`) and offers its system `~/.claude` plus every managed account pinned to that
+     host. The service (`usage:remote`) caches per target under the usual debounce, evicts targets
+     whose host disconnected, and coalesces concurrent reads. **On demand, never polled** — each row
+     is an ssh exec plus an HTTPS request on someone else's machine; the renderer asks on mount, on
+     popover open, on ⟳, and when the active project's connection comes up (an SSH project is opened
+     before its master is ready). Deps are injected exactly like
+     Context Link's (`src/main` supplies the ControlMaster; **Server Edition passes none** ⇒ `[]`, so
+     the UI needs no capability check). Own Settings switch (`claude-remote`), because hiding local
+     Claude usage must not silently take the hosts down with it. **Mobile: N/A** — the
+     slice pushed to a host still drops `usage` (a host reading its own numbers back off us is
+     pointless), and no keychain leg exists remotely (a headless macOS host would hang on the prompt,
+     so a mac host reports nothing).
 
 ### Adding a new agent (or a new model) — what to watch out for
 
@@ -1312,9 +1381,9 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
    never do is fork behavior at a call site with `=== 'claude'`; ask through the helper.
 2. **Ask what ELSE the list gates before joining it.** `hasUsage` gated **three** features, not one.
    Joining `USAGE_CAPABLE` for the context meter also switched on `context.ensure` and the find bar's
-   transcript index, both of which resolve through *claude's* `resolveTranscript` — whose **cwd
+   transcript index, both of which resolve through _claude's_ `resolveTranscript` — whose **cwd
    fallback** then handed a codex node **the newest claude transcript for that cwd**: a stranger's
-   session as its meter (wrong numerator *and* denominator, flapping against the correct tail) and that
+   session as its meter (wrong numerator _and_ denominator, flapping against the correct tail) and that
    session's messages as its search hits. Preconditions were default-true, so it would have shipped.
    The fix was a new pure predicate (`readsClaudeTranscript`) reusing an existing list, not a fourth
    list meaning the same thing. **Grep every consumer of the helper before you add an id to its list.**
@@ -1333,7 +1402,7 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
 **Measuring the CLI**
 
 5. **Measure the CLI; do not assume claude's shape.** Three real bugs, all from assuming:
-   - grok's `--` is **end-of-options**, so a flag appended *after* the prompt separator is a
+   - grok's `--` is **end-of-options**, so a flag appended _after_ the prompt separator is a
      positional — silently swallowed into the prompt, or a clap usage error that kills the launch.
      Where the flag lands is decided at the **composed** layer (`createAgentNode`); a
      `withPermissionMode` unit test passes while the composed line is wrong.
@@ -1346,12 +1415,12 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
 6. **Prefer the agent's own stated number over one you infer.** Codex prints
    `model_context_window` right beside its usage — use it. When there is none, mirror the CLI's own
    resolver rather than building a per-model allowlist: gemini's `tokenLimit()` is a family rule with
-   a **1M catch-all default**, so an unreleased model gets the *right* answer where an allowlist would
+   a **1M catch-all default**, so an unreleased model gets the _right_ answer where an allowlist would
    be confidently wrong, silently. **And if you cannot establish a trustworthy denominator, ship no
    meter** — a percentage over a guessed window is a wrong number presented as a fact (this is exactly
    why grok has no meter).
 7. **A closed set beats a substring, for notification/event types.** Grok's
-   `type.includes('permission')` matched a notification grok fires before *every* tool call, so a
+   `type.includes('permission')` matched a notification grok fires before _every_ tool call, so a
    working node strobed NEEDS YOU: unread dot + chime + OS notification + phone inbox card, per tool
    call. Gemini is matched `=== 'ToolPermission'` and stays quiet on an unknown type. A badge stuck on
    a finished node has no later hook to clear it, so widening "to be safe" is the unsafe direction.
@@ -1359,7 +1428,7 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
    while emitting **no flag** — but its built-in default is `OnRequest` ("the model decides when to
    ask"), so two dropdown entries collapsed onto one behavior under a label that promised otherwise.
    Rule: a mode the CLI cannot express emits **no flag** (never a substituted nearest match), and a
-   mode it *can* express must actually emit it. Derive the UI copy from the mapping
+   mode it _can_ express must actually emit it. Derive the UI copy from the mapping
    (`unsupportedModesNote`, `permissionModeAgentIds`) so a sentence cannot drift from the table.
    **The nearest match is most dangerous on the DEFAULT mode:** gemini has no value for `auto`, and
    `auto` is `DEFAULT_PERMISSION_MODE`, so translating it to `auto_edit` ("auto-approve edit tools")
@@ -1368,14 +1437,14 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
    you accept any mapping.
 9. **A capability gate that is fed by a version probe belongs to the agent it probes.** Claude's
    `auto` gate is fed by `claude --version`; applying it to any other agent downgrades that agent's
-   sessions on a machine whose *claude* is old or absent. `activePermissionMode` gates only
+   sessions on a machine whose _claude_ is old or absent. `activePermissionMode` gates only
    `'claude'`, and every hint string names Claude for the same reason. An agent needing its own gate
    adds one beside claude's.
 
 **Not writing the same rule twice**
 
 10. **A duplicated rule drifts, and this branch was bitten three times.** The remote installer's hook
-    event lists (it subscribed gemini to *claude's* event names, so remote gemini reported nothing at
+    event lists (it subscribed gemini to _claude's_ event names, so remote gemini reported nothing at
     all), grok's raw-listener field decoding, and the two shells' session-name sweep gates (reverting
     both to `canRename` left the entire suite **green** while silently skipping every gemini node).
     The fix each time was **one definition in `src/core`** consumed by both shells — a default inside
@@ -1399,11 +1468,11 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
 
 14. **A guess must degrade to nothing, never to something wrong.** A title reader that cannot resolve
     returns `null` (the node keeps its own name); an unknown notification type is a no-op; a failed
-    probe means the bare command, never a blocked launch. Say in the code which facts are *composed*
+    probe means the bare command, never a blocked launch. Say in the code which facts are _composed_
     rather than captured (gemini's resumed-transcript shape is) and what the wrong-guess cost is.
 15. **Kill the "in place" actions carefully.** An exit sequence must be the CLI's documented primary
-    and **bare**: gemini's `/quit` also takes `--delete`, which exits *and permanently deletes the
-    session history* — the very conversation the restart exists to resume. It has its own test.
+    and **bare**: gemini's `/quit` also takes `--delete`, which exits _and permanently deletes the
+    session history_ — the very conversation the restart exists to resume. It has its own test.
     Refuse the restart while the node is `working` **or** `blocked`: an exit line typed into a
     permission prompt **answers** it.
 16. **Write the device checklist for what you could not run.** Every unverified claim becomes a
@@ -1440,12 +1509,12 @@ about which machine they describe. Reading + parsing is `core/session-memory.ts`
 - **`ok:false` is not `ok:true` with no rows** — the rule the whole feature exists to honour, and
   every layer preserves it. A sweep fails (no tmux, unreadable process table, **no socket answered**,
   a missing or out-of-order marker in the SSH reply, a rejected call) ⇒ `ok:false` and no rows; the
-  panel then says "Could not measure sessions on this machine", and the grand total and the "*n*
+  panel then says "Could not measure sessions on this machine", and the grand total and the "_n_
   sessions" count are gated on a `measured` flag so a failure can never render as `0 B / 0 sessions`.
   "We looked and there is nothing" is its own sentence. A socket with **no tmux server** is an
   ANSWER, not a failure (`isNoServerError`), and that classifier is **anchored to tmux's own connect
   message**: `promisify(execFile)` folds stderr into `err.message`, and a bare `no such file or
-  directory` also matches a tmux client missing a shared library (exit 127 on *every* socket) and a
+directory` also matches a tmux client missing a shared library (exit 127 on _every_ socket) and a
   dead ssh ControlMaster — laundering either into "no sessions here" prints an empty panel over 20
   live ones. **The SSH leg applies the SAME classifier to the same rule**: each socket is fenced in
   the reply with its tmux exit status and its stderr (`##SOCK <name>` … `##SOCKRC <n>`, `2>&1`), and
@@ -1511,16 +1580,16 @@ about which machine they describe. Reading + parsing is `core/session-memory.ts`
   case, because the target is **exact** (`-t =nt-<id>`: without `=` tmux falls back to fnmatch then
   PREFIX matching on a miss, and `nt-…-1` is a prefix of `nt-…-12`, so a miss could kill a different
   session), and because the fan-out is **opt-in and asked for by exactly one caller**: it needs both
-  "we do not know the socket" AND `everySocket` from the caller (`localKillSockets(live, everySocket)`,
-  `sshProject.killSessions(…, {everySocket:true})`, `transport.destroy(id, {everySocket:true})` —
-  the wire legs demand a literal `true`). A destroy for a session we HOLD still fires exactly one
-  kill; and the unheld branch is not rare — an ordinary node-× on a node never mounted in this
-  process takes it, which is the norm after an app restart — so project deletion and every ordinary
-  × stay narrow rather than inheriting the panel's blast radius. The sweep and the reaper keep their own copies of
+  "we do not know the socket" AND `everySocket` from the caller. The renderer makes that promise in
+  the behavior-tested `destroySessionForScope` / `killRemoteSessionsForScope` dispatchers: every
+  session-memory row widens both its local and remote kill, including a row that still owns a canvas
+  node, while project deletion and ordinary node × omit the option entirely. The wire legs still
+  demand a literal `true`. The sweep and the reaper keep their own copies of
   the socket list **on purpose**: for them the ORDER decides first-wins de-duplication, for a kill
   it means nothing.
-- **The generated SSH shell is tested under a real `/bin/sh`** (`session-memory-remote.test.ts`
-  against a fake host tree, same discipline as `remote-claude-usage.test.ts` and
+- **The generated SSH shell is tested under a real POSIX shell** (`session-memory-remote.test.ts`
+  against a fake host tree, using `core/testing/posix-shell.ts` so Windows runs it through Git Bash
+  with native paths translated at the shell boundary; same discipline as `remote-claude-usage.test.ts` and
   `canvas-control-shim.test.ts`) — and it is not ceremony: the plan's own script said `echo ##MEM`,
   which prints an **EMPTY LINE** under POSIX sh (an unquoted `#` starts a word-initial comment) and
   would have made **every healthy host report `ok:false`**. The markers are quoted for that reason,
@@ -1546,8 +1615,8 @@ about which machine they describe. Reading + parsing is `core/session-memory.ts`
   still has to clear the sessions sidebar (z 12), which is the separate
   `.sysres-indicator:has(.sessmem-panel) { z-index: 13 }` — both `:has()` rules work only because
   the pill cluster is mounted OUTSIDE `<ReactFlow>`, whose wrapper's inline `z-index: 0` would trap
-  any value inside it. **Mobile**: **N/A for v1** — *nodeterm
-  mobile* attaches to tmux sessions over the transport protocol and has no per-session host-memory
+  any value inside it. **Mobile**: **N/A for v1** — _nodeterm
+  mobile_ attaches to tmux sessions over the transport protocol and has no per-session host-memory
   concept; adding one means extending that protocol (follow-up in the iOS repo).
 
 **Offscreen release makes the macOS reaper bug far more visible, and the two shipped days apart.**
@@ -1557,7 +1626,6 @@ watermark was permanently tripped, so those sessions were culled on the next swe
 detaching + an always-true pressure signal is why the symptom read as "my sessions keep
 disappearing" rather than as an occasional cull. The `vm_stat` reader is what makes the pool safe
 again; the grace window was never the thing that was wrong.
-
 
 ## Canvas interaction & panels (`Canvas.tsx` is the hub)
 
@@ -1628,9 +1696,16 @@ multiply-linked inode whose other name may be outside the staging tree.
   teardown, and the planner/dispatcher is what authorizes reaching it. React Flow expands a parent
   deletion to descendants before `onBeforeDelete`, so `managedDeletionRoots` must reduce the set
   back to roots — deleting a frame frees its children rather than deleting them. App-created
-  worktree removal is a separate option-bearing confirm: Kids mode starts disk deletion unticked
-  and an OFF→ON change resets an already-open dialog before paint, while still allowing a later
-  deliberate checkbox opt-in.
+  worktree removal keeps non-destructive Unbind separate in an option-bearing confirmation. Kids
+  mode starts disk deletion unticked, and an OFF→ON change resets an already-open dialog before
+  paint while still allowing a later deliberate checkbox opt-in. Disk removal requires an opaque
+  one-shot core proof over the canonical repo/worktree/common/admin generations, full symbolic ref and tip,
+  tracked/untracked/ignored bytes, directories, symlink targets, and machine-local ownership. The
+  renderer rechecks target and Kids policy after confirmation; core consumes the proof before its
+  first await, double-measures again under the SQLite transaction, and supplies a final callback
+  immediately before `git worktree remove`. Existing-branch checkout creation owns the directory
+  but never the branch; an app-created branch is deleted only by full-ref/expected-tip `update-ref`
+  CAS after Git proves its tip reachable. Shared `createdByApp` fields are UI provenance only.
 - **Zoom chords** (`renderer/lib/zoomShortcut.ts`): **⌘/Ctrl+0 → `zoomTo100`** (actual size — what
   the browser AND Electron's default View menu already mean by that key) and **Shift+1 → `fitAll`**
   (the Figma/tldraw/Excalidraw "zoom to fit"). Matched on `e.code`, like the project-jump chord,
@@ -1684,19 +1759,19 @@ multiply-linked inode whose other name may be outside the staging tree.
 - **Worktrees** (bound to **group frames**) — a git worktree binds to a group node
   (`data.worktree: GroupWorktree {repoPath, branch, baseRef, path, createdByApp}`, persisted), and
   every node created inside that frame inherits the worktree path as its `cwd`
-  (`cwdForNewNodeIn`) — the frame *is* the binding, so an agent per branch is just a group per
+  (`cwdForNewNodeIn`) — the frame _is_ the binding, so an agent per branch is just a group per
   branch. Creation is **one step** — **"New worktree…"** from the pane menu / command palette /
   Source Control — with the repo resolved from the project cwd via `git.repoRoot()` and existing
   worktrees listed for adoption. (Both git IPCs existed before this feature and had **zero**
   renderer callers, which is why it was unusable: the dialog's repo field was always empty and had
   to be typed by hand. Don't re-strand them.)
   - **One store, one poller** — `renderer/state/worktrees.ts` is the **only** caller of the worktree
-    /status *read* IPCs (`git.repoRoot`, `git.worktreeList`, `git.status`); the group chip, the
+    /status _read_ IPCs (`git.repoRoot`, `git.worktreeList`, `git.status`); the group chip, the
     creation dialog and the Source Control panel all read that store. Three independent pollers would
     triple the `git` subprocess load and drift out of sync. It is **epoch-guarded** (a project switch
     bumps the epoch, so a stale in-flight refresh can never overwrite the newer project's
-    `repoRoot`/orphans — worktrees are *created* under `repoRoot` and orphans are offered for
-    *deletion*) and **fails open**. Exactly **two** direct `git.status` reads live outside it, both in
+    `repoRoot`/orphans — worktrees are _created_ under `repoRoot` and orphans are offered for
+    _deletion_) and **fails open**. Exactly **two** direct `git.status` reads live outside it, both in
     `Canvas.tsx` and both deliberate: the one-shot probes on the **Remove** confirm (the dirty-file
     count in the warning) and on **↪ Move into worktree** (staleness only arrives by poll, so the
     directory is re-checked immediately before an irreversible session kill). Anything recurring
@@ -1709,7 +1784,7 @@ multiply-linked inode whose other name may be outside the staging tree.
     `onOpenCommitDiff`, `onExplainCommit`, `onRunInTerminal`) must take the **scope's** cwd, never
     the project's.
   - **Reconciliation** (`shared/worktree-reconcile.ts`) — bindings are reconciled against `git
-    worktree list`: a worktree deleted outside the app makes its group **stale** (chip reads
+worktree list`: a worktree deleted outside the app makes its group **stale** (chip reads
     "· missing", Merge/Remove hide, ↪ hides, and nothing spawns into the dead path — Unbind is the
     only action, and it takes the dead cwd off the children with it); a worktree bound to no group
     is an **orphan**, recoverable from the creation dialog.
@@ -1729,9 +1804,17 @@ multiply-linked inode whose other name may be outside the staging tree.
   - **Destructive safety** — `createdByApp` gates removal: nodeterm deletes only worktrees it
     created; one the user merely **adopted** unbinds by default, and deleting its directory is an
     explicit opt-in that **defaults to off** (its branch is kept either way).
+    Under Kids mode, or while the renderer cannot establish a loaded + subscribed Kids record,
+    every disk-removal choice defaults off and then requires the two-key gate. Both the status-probe
+    await and final confirmation re-read the owning project, binding generation, group incarnation,
+    repo/path/branch/base/creator fields, and affected-node identities. Core also re-measures the
+    checkout registration, HEAD, index, tracked differences, and untracked-content fingerprint and
+    compares that proof immediately before forced removal; a rebound or content-changed worktree
+    cannot spend the earlier dialog on its replacement, and an in-flight Git result cannot clear a
+    newer binding.
     `isDangerousWorktreeRemovalPath` refuses a path that is the repo, `$HOME`, `/`, or an ancestor
     of any of them, on **every** removal path. **Merge** always confirms — it merges into the base's
-    *working tree* (`decideMergeStrategy`: merge in the base's checkout when it is clean, else a
+    _working tree_ (`decideMergeStrategy`: merge in the base's checkout when it is clean, else a
     `fetch . branch:base` when the base is checked out nowhere, else blocked) — and its push to
     `origin/<base>` is disclosed in that dialog and **opt-in, default off**: a push to origin cannot
     be politely undone.
@@ -1739,23 +1822,23 @@ multiply-linked inode whose other name may be outside the staging tree.
     **Delete** all route through `releaseWorktreeBinding`, the one place that knows what a dropped
     binding owes: `displacedByWorktree`'s descendants (terminals whose cwd sits inside the
     worktree) get that cwd taken off them, and git's registration gets a `pruneOnly` prune. Ungroup
-    and group-delete *keep* the children, so skipping this left a **dead cwd persisted in
+    and group-delete _keep_ the children, so skipping this left a **dead cwd persisted in
     `project.json`** — invisible until a reboot cold-starts the terminal into a directory that is not
     there — and left a stale registration that makes a later `worktree add` at the same path fail.
   - **SSH projects: not supported in v1** — every affordance is shown **disabled with that reason**
     (a silently-missing row teaches nothing). The gate asks whether the node is a **remote session**
     (`data.ssh` / `data.sshRemoteTmux`) or the project is an SSH project — **not** `data.remote`,
-    which only *relay* nodes carry: guarding the wrong field let a live remote tmux session be
+    which only _relay_ nodes carry: guarding the wrong field let a live remote tmux session be
     killed into a local path that does not exist on the host (`isRemoteSessionNode` asks about all
     three). The ops themselves **refuse** a remote repo (`git-service.isRemoteRepo`, via
     `resolveGitRemote`) rather than guess: the `git` executor routes over the project's ControlMaster
     while `pathExists` is a **local** `fs.existsSync`, so answering would stat the wrong machine and
-    report *everything is gone* — a refusal is a plain failed op and, crucially, never `worktreeGone`,
+    report _everything is gone_ — a refusal is a plain failed op and, crucially, never `worktreeGone`,
     so nothing is destroyed on a bad guess. Real support needs the worktree path to derive from the
     connection's cached `remoteHome` and `pathExists` to stat the **remote** fs (a `test -e` over the
     ControlMaster).
   - **Mobile companion: not applicable in v1** (the three-surfaces call, made deliberately). A
-    worktree binds to a **group frame** on the canvas, and *nodeterm mobile* (separate repo, `nodeterm-ios`)
+    worktree binds to a **group frame** on the canvas, and _nodeterm mobile_ (separate repo, `nodeterm-ios`)
     has no canvas — it attaches to tmux sessions over the `TerminalTransport` protocol, which carries
     no group/binding concept at all. So there is nothing to degrade gracefully: a worktree's terminals
     are ordinary tmux sessions and mobile already reaches them, it simply cannot see that they belong
@@ -1861,9 +1944,85 @@ multiply-linked inode whose other name may be outside the staging tree.
   a chord that collides with one never reaches the renderer at all
   (`main/menu-accelerator-intercepts.test.ts` pins the three we steal).
 - **Theme**: macOS dark palette as CSS tokens in `styles.css` `:root` (`--accent` = systemBlue,
-  label/separator opacities, SF font stack). Canvas background is black with dot grid.
+  label/separator opacities, SF font stack). Canvas background is black with dot grid. A runtime
+  accent is expanded by `lib/accentTokens.ts`, not assigned as one isolated property: hover,
+  readable text, RGB tint and every Material primary/container foreground move with it and are
+  re-derived against the resolved light/dark panel. HSV and CMYK remain picker/copy formats, while
+  the value crossing into stored/live CSS is RGBA so Chromium accepts it and alpha survives.
+  Custom-logo processing is generation-owned: an older decode/crop/fit may not overwrite a newer
+  adjustment or synchronous preset choice, and shallow `appLogo` patches retain `customImage`
+  unless the explicit Remove action is used. Preset Blob exports share the 30-second delayed URL
+  revocation path; same-turn revocation can cancel Chromium before the download starts.
 
 ## Remote access (phone relay) — free, not Pro
+
+**LAN pairing is encrypted or it does not start.** `pairing-service.ts` loads the host's persistent
+NaCl key before binding the one-shot HTTP listener and advertises that public key as `hostKey` in
+the QR. `/pair` accepts only `{epk,box}`: the request (one-time token + SSH public key) and the
+success response (including `agentToken` and an optional `relayDeviceToken`) are authenticated and
+encrypted under the ephemeral-client/host shared key. There is no plaintext-success compatibility
+path; a missing/locked host key, malformed envelope, bad MAC, or response-encryption failure must
+produce no credential write. `PairingPayloadInput.hostKey` is mandatory and the pure payload builder
+also rejects a missing/blank value at runtime, so stale compiled or hand-written callers cannot
+construct an unsealed QR. The attempt's synchronous `settled` latch is separate from
+`server.close()` because Node keeps already-accepted sockets alive: the fifth wrong short code and
+the first valid request latch before any persistence await, so a parked request cannot wake later
+and write. **Server Edition deliberately does not host this desktop LAN listener** —
+`PairingApi.supported` is false in the browser bridge, the quick action is absent, and Settings
+shows an explicit desktop-only explanation.
+
+The pairing registry is also the revocation authority, so its read and write ordering is
+security-sensitive. Only `ENOENT` means `agent.json` is absent; invalid JSON, a wrong root/devices
+shape, `EACCES`, `EIO`, and every other read failure propagate without rewriting the file. A new
+pairing publishes its device entry before appending `authorized_keys`. Thus a registry failure
+grants no SSH access, while a later append/chmod failure leaves any possibly-live key represented
+by a visible, revocable device entry. The encrypted bearer response is not sent on either failure.
+The append path may treat only `ENOENT` as a new key file: `EACCES`, `EIO`, and unknown read
+failures stop before append, because an unreadable existing file may lack its final newline and a
+blind append would splice the new key into the previous one. The already-published registry row
+stays visible as the revoke handle.
+
+The desktop's late-adoption relay advertisement (`main/remote/relay-advertise.ts`) sweeps abandoned
+publication temps before creating its own. It delegates recognition, the 24-hour grace, and the
+signal-0 owner decision to `sweepStaleTempFiles`: a foreign pid is not death, and unreadable
+metadata or an unjudgeable owner preserves the candidate. Only a recognized old temp whose owner
+is no longer visible is collected; malformed names stay untouched, temp contents are never read,
+and a failed publication still removes exactly the UUID temp minted by that call. This is desktop
+runtime hygiene only: the Server Edition does not publish `~/.nodeterm/relay.json`, and the mobile
+companion only reads the canonical advertisement through its existing SSH bootstrap.
+
+Pairing completion carries a distinct failure reason, and Settings refreshes the registry even on
+failure so a partial grant is immediately reported and can be revoked rather than called a timeout.
+Revocation has the same absence rule on `authorized_keys`: only `ENOENT` permits the registry entry
+to be removed without a key-file rewrite. `EACCES`, `EIO`, and unknown read failures leave both the
+key and its visible device entry unchanged, so a possibly-live SSH credential is never hidden.
+Settings keeps the device row and shows a persistent “access may still be active” retry warning
+when that revoke rejects; a bridge rejection must never become an unhandled promise or a false
+success.
+
+`agent.json` is a shared cross-process registry. Desktop pairing and revoke take the exclusive
+`~/.nodeterm/agent.json.lock` before the authoritative read and hold it through the complete
+registry/`authorized_keys` transaction. Acquisition is bounded and fails closed; the lock contains
+only owner diagnostics, and an old-looking lock is never deleted on age alone because doing so can
+split a live writer's critical section. Atomic rename prevents torn bytes but does not prevent a
+stale read-modify-write from erasing a concurrent writer. The separately shipped companion host
+agent is also an `agent.json` writer and therefore must adopt this exact lock contract, with a
+symmetric two-process test, before the combined release is considered verified; its source is not
+in this repository, so that adoption remains an external release blocker. Clearing it requires an
+exact companion commit and artifact hash, an inventory proving every writer takes the lock before
+its authoritative read, both real-process contention orderings, a timeout/no-mutation proof, and a
+mixed-artifact run. A host-shaped worker in the desktop Chut proves only this helper—not companion
+adoption; the evidence checklist lives in `docs/ios-protocol-migration.md` §0.1.
+
+Renderer pairing assigns a cryptographic UUID before awaiting `pairing.start(attemptId)`. Main echoes
+that UUID in the start result and every completion event, and `pairing.stop(attemptId)` cancels only
+the matching active attempt. The renderer also invalidates every continuation with an epoch on stop,
+unmount, completion, or replacement. Both checks are required: epochs stop stale state writes inside
+one mounted hook, while the cross-process ID prevents a late unmounted hook or delayed completion
+event from owning a newly mounted replacement. The service rechecks attempt ownership after
+publishing the registry, before activating SSH, and after the key append returns. Cancellation before
+append leaves a visible, revocable registry row without a key; cancellation during append removes
+the attributable key before rejecting the response. Neither path delivers a bearer.
 
 - Phone relay remote access ("Reach this Mac from anywhere") is a **Core (free) feature** as of
   2026-08-01 — the iOS app is itself paid, so a desktop Pro gate double-charged the same feature.
@@ -1944,20 +2103,43 @@ inherit this host-side allowlist without a protocol change (call out any newly r
 
 ## The unlock ladder (Server Edition lockout)
 
-Five wrong passwords locks the account, and instead of a bare countdown the lockout screen offers a
+Five wrong credentials from one network peer lock that peer's login path, and instead of a bare
+countdown the lockout screen offers a
 way to play out of it: **dim sum** (one dish, four choices) → after 5 wrong dishes **ten easy sums**
 → after one wrong sum **whack-a-mole**. Clear any rung and the wait ends; lose the lot and you are
 where you started, waiting, with the ladder not re-offered for that lockout. State machine is the
 Electron-free `src/core/unlock-ladder.ts`; served at `/auth/unlock/{challenge,verify}` and drawn by
 `lockedPage()` in `src/server/http.ts`. Full write-up: **`docs/unlock-ladder.md`**.
 
+**Lockout decisions are scoped to the kernel-observed TCP peer, never a forwarding header.**
+`authClientKey()` uses `req.socket.remoteAddress` alone; `X-Forwarded-For`, `Forwarded`,
+`X-Real-IP`, source port, cookie and user-agent are spoofable or unstable and cannot select a
+bucket. One peer's five failures therefore cannot impose its exponential wait on another peer.
+Password proofs enter a same-peer FIFO before asynchronous scrypt and share a bounded process-wide
+pool (2 active, 32 pending, 5 pending per peer); lockout is re-checked after the request body, after
+the pool wait, and after the proof, while a generation boundary prevents a pre-lockout proof from
+waking after expiry/ladder clear and charging or clearing the next cycle. The 1024-entry peer table
+never evicts a locked or pending-password-proof peer; at capacity it may replace the oldest unlocked source so a
+one-shot distributed flood cannot manufacture a permanent global lockout. A reverse proxy's
+password callers share its TCP peer bucket; configured proxy-SSO callers do not use password auth.
+
+Each locked peer owns an independent `UnlockLadder`, but every ladder receives one shared
+`UnlockLadderBudget`. The final rolling-hour slot is claimed atomically at grading time, not merely
+when a challenge is issued, so correct answers already outstanding on several peers cannot all
+clear one remaining slot. Ladder nonces are separately capped at 8 per peer / 256 account-wide;
+grading consumes every sibling nonce so an old answer cannot cross a rung or exhaustion boundary.
+WebAuthn freshness state is also bounded (8 per peer, 256 global), peer- and purpose-bound, and swept
+in one bounded O(n) pass that remains correct after clock rollback. Logout revokes the presented
+persisted session before clearing its cookie; a captured old bearer stays revoked across restart
+without signing out other browsers.
+
 **Five rules are the entire safety of it. Keep the games and drop any one and you have shipped a
 second, much weaker password:**
 
 1. **It clears the WAITING, never the CREDENTIAL.** No session, no cookie — the user lands back on
-   the password form. `clearLockoutByLadder()` moves `lockedUntil` and *nothing else*, deliberately;
-   widening that method is precisely how this stops being true. Pinned by a route test asserting no
-   `Set-Cookie`.
+   the password form. `clearLockoutByLadder()` never changes the failure count, escalation streak,
+   credentials, or sessions; it only ends the wait and advances stale-proof bookkeeping. Pinned by
+   a route test asserting no `Set-Cookie`.
 2. **No attempt refund.** Waiting returns five attempts, so the ladder returns five. The moment
    solving beats waiting, brute force gets cheaper — the one thing a lockout exists to prevent.
 3. **`LADDER_BUDGET` (3 clears/rolling hour) is the real defence, not the difficulty.** Every rung
@@ -1982,11 +2164,33 @@ running app must pick up without a restart.
 
 **Surfaces:** Server Edition only, and that is a decision rather than a gap — the desktop app has no
 password gate, and the Pages site's toy locks (`site/app/shared/locks-state.js`) have no lockout at
-all (a wrong password returns `false`, unlimited retries), so there is no wait to skip. *If a
-lockout is ever added to either, it owes the ladder.* Guarded by an `unlock-ladder` row in
+all (a wrong password returns `false`, unlimited retries), so there is no wait to skip. _If a
+lockout is ever added to either, it owes the ladder._ Guarded by an `unlock-ladder` row in
 `scripts/check-app-contract.mjs` whose needles all carry a delimiter — a bare `clearLockoutByLadder`
 matches inside `clearLockoutByLadderRENAMED` and `LADDER_BUDGET` matches inside
 `LADDER_BUDGET_WINDOW_MS`, and both stayed green through a deliberate rename before that was fixed.
+
+## School Mode presentation boundary
+
+`useSchoolMode` starts with `{ enabled: false, hydrated: false }`. The `false` is a placeholder,
+not evidence that the shared mode is off. Every language/funny-level, narrator-language,
+personal-vocabulary, and dim-sum boundary must call `schoolModeAllowsOptionalFeatures` and allow
+the optional behavior only for `{ hydrated: true, enabled: false }`. A failed load stays
+unhydrated and retries; a live record that arrives during the initial load wins over its stale
+snapshot.
+
+Re-check at the point of use, not only when rendering a control. A shared update can land after an
+event or input is queued. In particular, both Canvas narrator paths go through
+`canvas/narration-policy.ts`: School Mode enabled or unknown preserves an enabled English narrator
+but strips the Cantonese track and voice. Passing `settings.narratorLanguage` directly to
+`narrate()` recreates the startup/reconnect leak this boundary exists to prevent. Persisted
+preferences remain unchanged and resume only after a confirmed-off record hydrates. Canvas also
+binds an allowed→suppressed live transition to `suppressNarratorTrack('yue')`; queue entries carry
+the track-policy generation captured before debounce and re-check the live policy immediately
+before synthesis. That invalidates old Cantonese work and cancels only an active Cantonese
+utterance, preserving queued/active English and the narrator's important-error guarantee. A
+Cantonese-only event carries a dormant English copy so the same transition degrades it to English
+instead of turning an enabled narrator silent.
 
 ## Speech / dictation (desktop + server)
 
@@ -2005,33 +2209,107 @@ Built with **electron-builder** (config in the `package.json` `build` block: app
 node-pty, output `dist/`). The app icon is generated from the nodeterm mark by
 `scripts/make-icon.mjs` (sharp → `build/icon.png`, 1024², gitignored — regenerated by
 `make-icon`); electron-builder derives the `.icns`. Scripts: `npm run make-icon`, `npm run dist`
-(local **unsigned** arm64 `.dmg` smoke test). Production release signing/notarization and the
-update-feed hosting are handled outside this repo.
+(local **unsigned** arm64 `.dmg` smoke test). Production release signing/notarization remains
+outside this repo. The macOS/Linux update feed is hosted separately; Windows consumes Squirrel
+assets attached to the project's stable GitHub Release.
 
 **Windows** (the active delivery target for CI): `build.win` targets Squirrel.Windows
 (`build.squirrelWindows`), signing permanently disabled — no `CSC_LINK`/`CSC_KEY_PASSWORD` is
 ever set, `CSC_IDENTITY_AUTO_DISCOVERY=false` in CI, Windows `signExecutable: false`, and root
 `build.forceCodeSigning: false`. Resource editing remains enabled so the unsigned executable
-still receives its icon and version metadata.
-`npm run dist:win` is the local smoke test. `.github/workflows/release.yml` builds + packages an
-unsigned Windows installer on every **branch** push whose ref contains this workflow, and on
-`workflow_dispatch`. Publication is a
+still receives its icon and version metadata. The Squirrel package id must remain
+`node-terminal`, matching the published `0.3.0` `.nupkg`; do not enable `useAppIdAsId`, which
+would rename that update identity. Runtime and installed shortcuts instead share the exact
+AppUserModelID `com.squirrel.node-terminal.nodeterm`, derived from the effective package id and
+`nodeterm.exe` rather than from `build.appId`.
+`npm run dist:win` routes every supported Windows package through
+`scripts/windows-installer.mjs`. The wrapper requires a clean checkout, regenerates the committed
+seven-frame ICO, proves it equals the current commit's blob, derives a public immutable raw URL
+from the full source SHA, and verifies the downloaded bytes before invoking electron-builder. It
+then rejects stale or unexpected output, requires semantic nupkg ID/version/title plus exact
+`RELEASES` name/size/SHA-1 agreement, and compares the nuspec URL and the icon/version resources in
+Setup, the installed app, and its execution stub. The current commit must already be reachable in
+the public GitHub repository; local-only commits fail before packaging. Squirrel's vendor
+`Update.exe` remains vendor-branded and outside the PE-resource gate because the pinned builder
+exposes no supported project hook for editing it.
+
+`.github/workflows/release.yml` is a manual-only
+`workflow_dispatch` pipeline and its first step refuses every ref except the `main` branch.
+Feature-branch and prerelease artifacts must never become the authority behind
+`releases/latest/download`. The stable tag is exactly `v<package.json version>`; consequently the
+package/app version must advance before every release (`0.4.0` is the next candidate after
+`0.3.0`). Publication is a
 transaction: validate Setup + `RELEASES` + full `.nupkg` locally, stage/upload only on a draft,
 compare the remote names and sizes, then make that one complete release public. Reruns verify the
 tag still targets the run's commit and reuse it without clobbering an already-public asset. The
 runner executes no tests, type-check or
 lint; `scripts/check-release-workflow.mjs` guards those semantics locally. See
 `docs/ci-and-releases.md` for the full policy and `scripts/release-notes.mjs` /
-`scripts/count-lines.mjs` for what the release notes carry.
+`scripts/count-lines.mjs` for what the release notes carry. Automatic publication is disabled
+because the workflow has no push trigger. The committed definition is manually dispatchable from
+`main`, while the hosted workflow is recorded as manually disabled pending final packaged
+install/update interactions. This updater change does not dispatch it, and no `0.4.0` release is
+claimed until those interactions are complete.
 
-Auto-update uses **electron-updater** (`src/main/updater.ts`, `initUpdater(win)` from `index.ts`):
-runs **only when `app.isPackaged`** (dev = no-op), checks on launch + every 6h, auto-downloads,
-forwards the lifecycle (`update-available` / `download-progress` / `update-downloaded` / errors)
-to the renderer over IPC. `components/UpdateCard.tsx` shows the strip + **Restart to update** →
-`updates.restart()` → `autoUpdater.quitAndInstall()`; on `update-downloaded` an OS notification
-also fires when the window is unfocused. Exposed via `window.nodeTerminal.updates` (`UpdateApi`).
-macOS *silent* self-install requires a signed+notarized build; unsigned builds still surface
-the card for a manual download.
+Auto-update runs **only when `app.isPackaged`** (dev = no-op), checks on launch + every 6h, and
+forwards its lifecycle to the renderer over IPC. **Windows uses Electron's built-in
+`autoUpdater`**, because the project packages Squirrel.Windows rather than NSIS. Its stable feed
+is `https://github.com/Ding-Ding-Projects/material-nodeterm/releases/latest/download`, whose
+release must contain a matching `RELEASES` and full `.nupkg`. Do not put an app-side release-list
+parser in front of Squirrel: the final, manually dispatched `main` release is the channel
+authority and avoiding a second fetch also avoids a time-of-check/time-of-use split. Built-in
+Squirrel exposes no byte-level progress, so `UpdateCard` shows an honest indeterminate download;
+it must not display a fabricated `0%`. Duplicate checks are coalesced and **Restart to update**
+can call `quitAndInstall()` only once, after `update-downloaded` made the install ready. That gate
+controls the immediate-restart action, not Squirrel's whole lifecycle: a successfully downloaded
+update can apply on the next normal app launch even when the button was never used. A parseable
+post-download version/channel mismatch is therefore diagnostic UI and immediate-restart refusal,
+not an installation barrier. The manual `main`-only stable publisher is the channel authority.
+
+`src/main/bootstrap.ts` handles `--squirrel-install`, `--squirrel-updated`,
+`--squirrel-uninstall`, and `--squirrel-obsolete` before importing the application graph. A
+`--squirrel-firstrun` launch delays the first automatic check so Update.exe can release its
+package lock. An unreachable or 404 feed never implies that no update exists: automatic checks
+stay out of the way and retry normally, while an explicit user check reports the error without
+blocking the installed app. **macOS/Linux deliberately retain `electron-updater`** and their
+existing determinate/manual-download behavior; macOS silent self-install still requires a
+signed+notarized build. Server Edition and the mobile companion have no Squirrel install and are
+explicitly not applicable to this desktop-only updater.
+
+The installed Windows `0.3.0` build cannot discover `0.4.0`: its app-side updater expected NSIS
+metadata at the old generic feed, while the published Windows artifacts are Squirrel
+`RELEASES`/`.nupkg`. The transition therefore requires a one-time manual production Setup download.
+Because `0.3.0` lacks the new `--squirrel-obsolete` startup handling, neither running Setup with
+the old app closed nor leaving it running is proved safe yet. Closing it first is only the
+provisional pre-proof recommendation. The final production-identity proof must exercise both
+states and publish the supported sequence. Keep that `0.3.0` → `0.4.0` manual migration distinct
+from the isolated fixture pair below, which proves that the updater code first shipped in `0.4.0`
+can discover and apply a later Squirrel package.
+
+The collision-safe Windows update fixture uses temporary test-only identity `name`
+`node-terminal-squirrel-fixture`, `productName` `nodeterm Squirrel Fixture`, and `appId`
+`com.nodeterm.squirrel-fixture`, plus versions `0.4.0-fixture.1` → `0.4.0-fixture.2`. Apply those
+values only in a disposable checkout/copy and never commit them or reuse the production identity.
+The app/runtime keeps those dotted versions; `electron-winstaller` normalizes the NuGet package
+versions in `.nupkg` filenames and `RELEASES` to `0.4.0-fixture1` / `0.4.0-fixture2`. Only a
+fixture-version build accepts
+`NODETERM_SQUIRREL_FIXTURE_URL`, and only for loopback HTTP(S); a stable or unrelated prerelease
+must refuse that override. The production `dist:win` wrapper deliberately cannot create this pair:
+the fixture manifest edits make the checkout dirty, while production provenance requires a clean,
+publicly reachable exact commit. A dedicated fixture-only provenance route is still pending; do not
+weaken the production clean-tree guard to manufacture the pair. Once that bounded route exists,
+serve the second package with
+`scripts/serve-squirrel-update-fixture.mjs`, install only in a disposable Windows Sandbox/VM,
+wait at least 10 seconds after the normal `--squirrel-firstrun` app opens, quit it explicitly, then
+launch the installed `.1` executable again with the feed environment. Resolve its install path
+dynamically rather than assuming `%LOCALAPPDATA%`, verify
+Settings → Updates / `app.getVersion()`, executable/package version metadata, and settings
+persistence after `.2` applies. Quit the fixture and prove every process running from its exact
+install root has exited before invoking that registration's Update.exe to uninstall. Building the
+pair or exercising controller Chuts does not substitute for that packaged interaction, and the
+fixture does not substitute for the separate production-identity `0.3.0` → `0.4.0` migration
+proof. Until the fixture-only packaging route exists, that packaged interaction remains blocked
+rather than partially verified.
 
 ### Server Edition container image
 
@@ -2051,6 +2329,65 @@ handler. It must never follow `NODETERM_DATA_DIR`: that value is operator-contro
 change owes the real `node scripts/test-docker-host.mjs` smoke: build, health/auth page, both native
 loads, uid of PID 1, graceful shutdown, volume persistence across restart and recreation, and the
 first-boot-only password contract.
+
+That smoke may target a local socket or an explicit `ssh://` Docker endpoint, but it must remain a
+safe guest on a shared daemon. The selected endpoint is pinned on every command after inherited
+context/TLS/builder controls are removed; `tcp://` and HTTP API endpoints are refused. Each run uses
+a cryptographic UUID and preflights every exact name as absent. Its image, volumes, server, and
+one-shot helpers all carry exact run/role/source-SHA labels, while image/container iid/cid files and
+a volume creation fingerprint supply cleanup identities. Runtime containers publish no port, use
+`network=none`, have CPU/memory/swap/PID/no-new-privilege/capability limits, and the HTTP/auth/asset
+probe executes inside the server container with its password arriving only over stdin. Cleanup
+rechecks identity and labels before removal and a zero-residue label scan is part of the green
+verdict. The predeclared recovery journal lives outside the checkout, pins the daemon identity, and
+`--cleanup-run <uuid>` is the only recovery route; it refuses a daemon, resource-identity, or label
+mismatch rather than adopting a lookalike.
+SSH host trust remains the user's persistent OpenSSH policy: the harness removes an inherited
+`DOCKER_SSH_COMMAND`, never disables host-key comparison, never creates an ephemeral trust store,
+and never mutates the user's SSH configuration.
+
+The wrappers create the first-boot password before starting the build. Root `.env` and the wrappers'
+`.env.bak` / `.nodeterm-env-*` temporary files therefore belong in **both** `.gitignore` and
+`.dockerignore`: Git exclusion alone still sends them through `COPY . .` into the BuildKit context
+and cache. Wrapper starts pin the Compose file/project/profiles and export the exact password,
+loopback bind and port they validated. Do not replace that with a partial dotenv parser: Compose
+accepts whitespace, quotes, colon delimiters and predefined control variables that can otherwise
+redirect the stack or bypass the loopback decision.
+
+### Server Edition container image
+
+The root `Dockerfile` is a separate Node-runtime packaging path. `npm postinstall` is unusable in
+that path because it rebuilds native addons for Electron's ABI; the deps stage uses
+`--ignore-scripts` and explicitly rebuilds **both** `node-pty` and `smart-whisper` against the same
+Node major the runtime stage uses. Rebuilding only node-pty produces a healthy terminal server whose
+browser dictation fails later with a missing `smart-whisper/build/Release/smart-whisper` binding —
+the health check cannot see that feature-specific native load.
+
+The legacy image ran as root and therefore left existing `/data` volumes root-owned. The container
+entrypoint exists solely to bridge that upgrade: while uid 0, it scans the literal `/data` filesystem
+and changes only uid/gid-0 entries, without dereferencing symlinks, then `exec`s through `gosu` as the
+image's `node` user (uid 1000), leaving Node as PID 1 so `docker stop` reaches the server's SIGTERM
+handler. It must never follow `NODETERM_DATA_DIR`: that value is operator-controlled, and a hand-edited
+`/` would turn a compatibility migration into filesystem-wide damage. A new image/compose/host-wrapper
+change owes the real `node scripts/test-docker-host.mjs` smoke: build, health/auth page, both native
+loads, uid of PID 1, graceful shutdown, volume persistence across restart and recreation, and the
+first-boot-only password contract.
+
+That smoke may target a local socket or an explicit `ssh://` Docker endpoint, but it must remain a
+safe guest on a shared daemon. The selected endpoint is pinned on every command after inherited
+context/TLS/builder controls are removed; `tcp://` and HTTP API endpoints are refused. Each run uses
+a cryptographic UUID and preflights every exact name as absent. Its image, volumes, server, and
+one-shot helpers all carry exact run/role/source-SHA labels, while image/container iid/cid files and
+a volume creation fingerprint supply cleanup identities. Runtime containers publish no port, use
+`network=none`, have CPU/memory/swap/PID/no-new-privilege/capability limits, and the HTTP/auth/asset
+probe executes inside the server container with its password arriving only over stdin. Cleanup
+rechecks identity and labels before removal and a zero-residue label scan is part of the green
+verdict. The predeclared recovery journal lives outside the checkout, pins the daemon identity, and
+`--cleanup-run <uuid>` is the only recovery route; it refuses a daemon, resource-identity, or label
+mismatch rather than adopting a lookalike.
+SSH host trust remains the user's persistent OpenSSH policy: the harness removes an inherited
+`DOCKER_SSH_COMMAND`, never disables host-key comparison, never creates an ephemeral trust store,
+and never mutates the user's SSH configuration.
 
 The wrappers create the first-boot password before starting the build. Root `.env` and the wrappers'
 `.env.bak` / `.nodeterm-env-*` temporary files therefore belong in **both** `.gitignore` and
@@ -2086,6 +2423,14 @@ checker, or a suite whose fixtures are POSIX paths. Twice now, one file in the t
 documented the trap and none of the twenty others doing the same thing knew — which is why these
 are enforced by scanning guards rather than by comments.
 
+Native `path.basename` is not a cross-dialect parser: it follows the process that is reading the
+string. A transcript written on Windows can later be indexed by a Linux Server Edition, and a
+POSIX filename may legally contain a backslash while a Windows desktop reads it. Recorded paths
+without owner metadata use `core/path-basename.ts`: anchored drive/UNC syntax selects
+`path.win32`; everything else selects `path.posix`, preserving ambiguous backslashes as text.
+Every consumer test carries both dialects so replacing the helper with native basename is red on
+either host.
+
 ## Building on Windows: close the app first
 
 `npm run dist:win` and `npm run rebuild` both run electron-rebuild, which deletes and recompiles
@@ -2104,8 +2449,43 @@ Nothing in that says "close the app", and the usual reactions (admin terminal, r
 macOS/Linux, where unlinking an open file is ordinary — so it only bites on the platform this
 project ships.
 
-`scripts/check-build-preflight.mjs` preflights both scripts and names the exact file and the PID
-holding it. It also checks for the **Spectre-mitigated MSVC libraries**: node-pty's own
+After Node bootstrap, `download-dependencies.bat` runs
+`scripts/ensure-windows-build-toolchain.mjs`, `scripts/ensure-windows-python.mjs`, and then
+`scripts/check-build-preflight.mjs`, all before `npm ci`/`npm install`. The toolchain phase installs
+Build Tools + the C++ workload on a fresh machine, or modifies an existing instance, and always
+selects the separate rolling component
+`Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre`; ARM64 hosts also add
+`Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre` while retaining x86/x64. The installed `setup.exe` receives
+`modify --installPath ... --add ... --quiet/--passive --norestart` without `--wait` (unsupported
+there); only the fresh-machine bootstrapper receives `--wait`. Both routes independently recheck
+the workload plus real `.lib` files for every required architecture below
+`VC\Tools\MSVC\*\lib\spectre` instead of trusting exit zero. A fresh machine uses the exact Microsoft
+bootstrapper URL in `dependencies.manifest.json`, hashes it in Node, stages it beneath protected
+Program Files, and runs it only on a match; privileged executable lookup never trusts inherited PATH.
+
+Visual Studio has no user-scoped Build Tools installation, and Microsoft requires programmatic
+quiet/passive changes to start elevated. The script prechecks the token: unelevated callers exit
+with ERROR_ACCESS_DENIED before starting an installer or UAC and print an absolute command ending
+in `--silent --elevated-toolchain-only`. Only that helper command may run elevated. The helper then
+exits; the root BAT must be rerun normally, and explicitly refuses to continue into per-user Python
+or npm under an Administrator token. Do not “helpfully” add `Start-Process -Verb RunAs`: `/s`
+promises no prompts, and ordinary dependency installation is automatic too. This is measured, not
+inferred: an unelevated quiet modify parsed every option, then exited 5007 saying it must be run
+elevated from the beginning.
+
+Python is a separate prerequisite, not part of `Microsoft.VisualStudio.Workload.VCTools`:
+`smart-whisper` runs node-gyp in its install lifecycle, and the root postinstall rebuilds it and
+`node-pty`. The helper accepts a proven 64-bit Python 3.10-3.14; otherwise it installs pinned Python
+3.13 per-user with no launcher or persistent `PATH` mutation. Bare `py.exe`/`python.exe` aliases are
+not probed because current Windows aliases can install or open UI. Canonical winget is tried first, then
+the exact python.org URL/SHA fallback. Exit zero is followed by an isolated exact patch/architecture
+probe, and the absolute executable crosses `setlocal` in process-local `PYTHON`,
+`NODE_GYP_FORCE_PYTHON`, and `npm_config_python` so stale inherited node-gyp settings cannot win.
+
+The preflight placement means both root BAT entry points name the exact locked file and PID even on
+a machine that started with no Node on `PATH`. The old pre-dependency placement skipped the check
+on exactly that fresh-machine path and never retried it before npm removed `node_modules`. The
+preflight independently checks the **Spectre-mitigated MSVC libraries** too: node-pty's own
 `binding.gyp` sets `SpectreMitigation`, that component is not part of a default C++ workload, and
 without it the build dies minutes in with four copies of `MSB8040`. Deliberately not worked around
 with `/p:SpectreMitigation=false` — node-pty asks for the mitigation on purpose, and disabling it
@@ -2116,7 +2496,7 @@ against a genuinely locked `conpty.node`: **rename succeeded, open-for-read succ
 open-for-write returned `EBUSY`.** The tempting proxy (can I rename it?) does not work, because
 Windows blocks DELETE on a mapped image and a same-directory rename does not need it.
 
-Wired into `dist:win` and `rebuild`, deliberately **not** into `postinstall` — that runs
+Also wired into `dist:win` and `rebuild`, deliberately **not** into `postinstall` — that runs
 automatically in contexts a hard stop would be more disruptive than the underlying failure.
 
 ## Real POSIX-shell tests on Windows
@@ -2157,45 +2537,59 @@ be PID 1, worker isolates share a PID with separate module counters, and the OS 
 crashes. `tempNameFor` owns UUID uniqueness while retaining pid/sequence for ownership and
 diagnostics. The cleanup is equally strict:
 `sweepStaleTempFiles` never reads “foreign pid” as “dead process”; desktop multi-instance mode and
-two Server Edition processes can deliberately share a directory. It never removes a pid-bearing
-temp automatically: signal-zero/`ESRCH` is namespace-local and PID reuse makes the inverse equally
-unreliable. Only the exact historical ownerless `<target>.tmp` shape is collected after the
-24-hour grace. Current names are recognized only with the canonical lowercase v4 UUID shape; broad
-dot-free tokens are not cleanup authority. A pid-bearing temp may be an in-flight credential write.
-Credential clear paths use `clearAtomicTarget`: it
-removes the canonical file without sabotaging that possible writer, inspects for every recognized
-temp, and returns an incomplete result while any remain or inspection fails. The PAT/cookie/token
-callers propagate that as `clear-incomplete`; they must never report success while bearer bytes are
-still beside the canonical path.
+two Server Edition processes can deliberately share a directory. It never auto-deletes a
+PID-bearing temp: signal-0/`ESRCH` is namespace-local and cannot prove a writer on a shared volume
+is dead. Only the exact historical ownerless `<target>.tmp` shape is collectible after the 24-hour
+grace. Credential clear paths use `clearAtomicTarget`: it removes the canonical file without
+sabotaging that possible writer, inspects for every canonical-lowercase-v4 or legacy temp, and
+rechecks the canonical path last. The PAT/cookie/token callers propagate `clear-incomplete` while
+bearer bytes remain, inspection fails, or a concurrent publisher recreates the destination.
 
 **Unique paths prevent splicing, not stale generations.** A writer that snapshots a whole document
 must also serialize publishes (or reject an out-of-date generation). `agent-status-mirror.flush`
-demonstrated the separate race: flush A captured old state and slept during `renameAtomic`'s
-transient-`EPERM` retry, flush B published new state, then A woke and atomically replaced it with
-the complete but stale document. A FIFO closes that race only inside one JavaScript process. A
-credential store intentionally shared by Desktop and Server Edition additionally holds a SQLite
-`BEGIN IMMEDIATE` transaction across strict read, mutation and publication/removal.
+demonstrated the separate race: flush A captured old state and slept while publishing, flush B
+published new state, then A woke and atomically replaced it with the complete but stale document.
+A FIFO fixed that only inside one process; desktop multi-instance mode and two Server Edition
+processes aimed at one data directory have independent queues. The mirror now uses a two-phase
+cross-process protocol (`core/mirror-publication.ts`): reserve the next durable generation under a
+SQLite `BEGIN IMMEDIATE` transaction **before snapshotting**, write the UUID temp without holding
+the transaction, then lock again, re-read the canonical generation, and rename only if it is still
+older. Gaps are valid (a process may crash after reservation); an absent generation on an old v1
+mirror is generation zero. The sidecar and canonical reads fail closed on malformed/unreadable data
+rather than resetting the counter. Contention retries are bounded, but timeout only abandons this
+best-effort flush: it never steals from a live owner. SQLite's OS file lock is released when a
+process crashes, with no heartbeat window or successor lock that a resumed old owner could remove.
+The lock realpaths the parent before the mirror exists, so symlink aliases of one data directory
+cannot split it. The reservation is the linearization point: this prevents a lower, already-
+reserved generation from publishing after a higher one, but deliberately does not merge two
+independently disagreeing in-memory stores or infer semantic freshness from wall-clock call order.
+The real two-process barrier test parks generation 1 after its temp write, lets generation 2
+publish, releases generation 1, and must stay red if the final generation comparison is removed.
+The crash test holds the real transaction in one live process (proving the peer stays blocked),
+aborts the owner without JS cleanup, and proves that same peer immediately acquires and publishes.
+This orders peers running the generation-aware build; an already-running older binary does not know
+the lock or field and must not share the directory during a rolling upgrade.
 
-For load→mutate→save code, serialize the **whole transaction**, starting before the strict read.
-A save-only queue still allows two callers to read the same document and publish incompatible
-derivatives in sequence. `SecureStore.mutate` applies this physical-path-global (not instance-local)
-rule to toy-lock and authenticator credentials; a mutation read rejects corrupt/unreadable input,
-duplicate ids and non-v4 ids instead of turning “could not read” into “empty.” Scheduled Home
-Assistant token set, clear, alternate-format cleanup and orphan pruning likewise share one
-directory-wide SQLite transaction. Provider-cookie, shared-mode and GitHub credential mutations use
-the same primitive. GitHub's controller FIFO begins before network token validation; otherwise a
-later Clear can finish before the earlier Save reaches the store and then be resurrected. Separate
-processes are ordered at final SQLite transaction entry because they have no shared pre-validation
-invocation clock. Their cleanup errors propagate
-through the schedule save result and renderer: a durable schedule plus retained bearer bytes must
-never be mislabeled as either a disk-write failure or a completed credential clear.
+**Credential documents hold a separate cross-process transaction across the strict read.** A
+save-only queue cannot close load → mutate → save lost updates, and a process-local FIFO does not
+coordinate Desktop and Server Edition processes sharing one data directory.
+`core/fs-transaction-lock.ts` uses SQLite `BEGIN IMMEDIATE` across strict read, mutation, exact-
+revision publication, clear, and prune. Enqueue begins before the read; only `ENOENT` is empty.
+Corrupt/unreadable canonical bytes and sidecars remain evidence and fail closed. The lock rendezvous
+realpaths the existing parent so symlink/junction aliases converge, and publication compares the
+SHA-256 revision read inside the transaction immediately before rename.
 
-Do not replace this with a timestamp lease. SQLite keeps an OS lock while a process is suspended,
-releases it on process death, and uses a bounded monotonic busy retry without deleting foreign
-ownership evidence. The lock key realpaths the existing parent so directory aliases converge. A
-corrupt/unreadable sidecar stays untouched and fails closed. Real forked-process tests park a writer,
-prove its peer cannot read the stale snapshot, kill an owner to prove crash release, exercise a busy
-timeout and directory alias, and retain corrupt sidecar bytes.
+Do not replace this with a PID/timestamp lease. A suspended process keeps SQLite's OS lock, process
+death releases it, and bounded busy retry uses a monotonic deadline ending in `lock-timeout` without
+deleting foreign ownership evidence. `SecureStore.mutate` applies this physical-file-global rule
+to toy-lock and authenticator credentials, rejecting duplicate/non-v4 IDs and malformed documents.
+Scheduled Home Assistant set/clear/alternate-format cleanup/prune uses one directory transaction;
+provider-cookie, shared-mode, and Desktop/Server GitHub credentials use the same primitive. GitHub's
+controller FIFO begins before network validation so a later Clear cannot be resurrected by an
+earlier Save. Separate processes have no shared pre-validation clock and are ordered at their final
+SQLite transaction entry. The real process Chut proves blocked stale reads, crash release, bounded
+busy timeout, alias convergence, queue recovery, and exact corrupt-evidence preservation; replacing
+`BEGIN IMMEDIATE` with `BEGIN` must turn the barrier red.
 
 The SQLite module is loaded only after `core/node-runtime.ts` has performed the exact startup
 preflight. Keep it lazy: a static `node:sqlite` import is evaluated before either shell can print an
@@ -2239,9 +2633,8 @@ the overlap tests exercise the resulting race.
   costs an hour to diagnose, a habit that catches a class of bug — **add it to `CONTRIBUTING.md`
   too, not only here.** An invariant that lives only in this file (or worse, only in a commit
   message) is one refactor away from being violated by a contributor who never opened it. Keep the
-  split by audience, not by topic: the *why it must be this way* stays here, the *what you need to
-  know before your first PR* goes there.
-
+  split by audience, not by topic: the _why it must be this way_ stays here, the _what you need to
+  know before your first PR_ goes there.
 
 - Code comments, UI strings, and identifiers are all in **English**. Match this when editing.
 - Path aliases: `@shared/*`, `@renderer/*` (see the tsconfig files / vite config).
@@ -2255,7 +2648,7 @@ the overlap tests exercise the resulting race.
   1. **Desktop** (Electron) — the primary app (`src/main` + `src/renderer` via the preload).
   2. **Server Edition** (Linux, browser) — `src/server` + the `src/renderer/bridge` shim (see
      the `src/server/` bullet above and docs/SERVER.md).
-  3. **Mobile companion** — *nodeterm mobile*, a **separate PRIVATE repo** (`nodeterm-ios`)
+  3. **Mobile companion** — _nodeterm mobile_, a **separate PRIVATE repo** (`nodeterm-ios`)
      — outside contributors cannot see or PR it, so a mobile implication is raised in the
      desktop PR and **@eneskirca** is mentioned to carry it over
      (SwiftUI + SwiftTerm/Citadel, tmux-integrated, talks the `TerminalTransport`/RemoteTransport
@@ -2278,14 +2671,14 @@ the overlap tests exercise the resulting race.
   - **Put new service/main-process logic in `src/core` behind `CorePlatform`, never inline in
     `src/main`.** That is the seam the Server Edition boots from — logic left in `src/main`
     silently doesn't exist on the server (the `no-electron` tests enforce the boundary, but
-    they can't tell you a feature is *missing* server-side).
+    they can't tell you a feature is _missing_ server-side).
   - **A feature that touches `window.nodeTerminal` needs a real `src/renderer/bridge`
     implementation, not just a stub** — or a deliberate, documented graceful degrade
     (`E_UNSUPPORTED` + the affordance hidden, like the Electron-only `shell.reveal`). The
-    bridge's `satisfies NodeTerminalApi` gate forces you to *declare* every member, but a
+    bridge's `satisfies NodeTerminalApi` gate forces you to _declare_ every member, but a
     `noopUnsub`/`unsupported` stub compiles fine while doing nothing — decide per member.
   - **Consider whether the mobile companion should surface the feature** over its
     transport/protocol. It's a different repo and stack (Swift), so this is usually a
     follow-up note rather than same-PR work — but flag it so it isn't forgotten.
-  When a change is genuinely desktop-only (native menus, auto-update, Keychain), say so; the
-  point is to make the call consciously, not to leave the other surfaces to rot.
+    When a change is genuinely desktop-only (native menus, auto-update, Keychain), say so; the
+    point is to make the call consciously, not to leave the other surfaces to rot.

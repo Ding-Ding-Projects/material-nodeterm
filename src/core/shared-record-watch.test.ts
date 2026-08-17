@@ -81,7 +81,9 @@ describe('SharedRecordWatcher', () => {
     const changed = vi.fn()
     const watcher = new SharedRecordWatcher(recordFile, changed, fake.createWatcher)
 
-    watcher.start()
+    const initial = watcher.start()
+    expect(initial).not.toBeNull()
+    expect(watcher.acknowledge(initial!)).toBe(true)
     expect(fake.opened).toHaveLength(1)
     expect(fake.opened[0].directory).toBe(fake.home)
 
@@ -93,9 +95,11 @@ describe('SharedRecordWatcher', () => {
     expect(fake.opened[0].closed).toBe(true)
     expect(fake.opened[1].directory).toBe(fake.target)
     expect(changed, 'the record may have landed before the target watcher was armed').toHaveBeenCalledTimes(1)
+    expect(watcher.acknowledge(changed.mock.calls[0][0])).toBe(true)
 
     fake.opened[1].emit('change', path.basename(recordFile))
     expect(changed).toHaveBeenCalledTimes(2)
+    expect(watcher.acknowledge(changed.mock.calls[1][0])).toBe(true)
 
     watcher.dispose()
     expect(fake.opened[1].closed).toBe(true)
@@ -115,7 +119,7 @@ describe('SharedRecordWatcher', () => {
     }
     const watcher = new SharedRecordWatcher(recordFile, vi.fn(), createWatcher)
 
-    watcher.start()
+    expect(watcher.start()).toBeNull()
     expect(opened, 'EACCES must not fall back to an ancestor as if the target were absent').toHaveLength(0)
 
     denied = false
@@ -125,17 +129,57 @@ describe('SharedRecordWatcher', () => {
     watcher.dispose()
   })
 
-  it('promotes immediately after a local write without waiting for an ancestor event', () => {
+  it('marks an ancestor watch unhealthy when promotion becomes inaccessible', () => {
     const fake = fakeFs(recordFile)
-    const watcher = new SharedRecordWatcher(recordFile, vi.fn(), fake.createWatcher)
+    const changed = vi.fn()
+    const health = vi.fn()
+    let targetExists = false
+    let denied = false
+    const createWatcher: WatchDirectory = (directory, listener) => {
+      if (directory === fake.target && targetExists && denied) throw fsError('EACCES')
+      return fake.createWatcher(directory, listener)
+    }
+    const watcher = new SharedRecordWatcher(recordFile, changed, createWatcher, health)
 
     watcher.start()
+    expect(fake.opened.at(-1)?.directory).toBe(fake.home)
+    expect(health).toHaveBeenLastCalledWith(true)
+
+    // The directory can have appeared with an ON record while becoming unreadable. Retaining the
+    // ancestor handle is useful for recovery, but it must no longer make OFF authoritative.
+    targetExists = true
+    denied = true
+    fake.opened.at(-1)!.emit('rename', '.nodeterm')
+    expect(health).toHaveBeenLastCalledWith(false)
+    expect(changed).toHaveBeenCalledOnce()
+
+    denied = false
+    fake.available.add(fake.target)
+    watcher.recordWritten()
+    expect(fake.opened.at(-1)?.directory).toBe(fake.target)
+    expect(health).toHaveBeenLastCalledWith(true)
+    watcher.dispose()
+  })
+
+  it('promotes immediately after a local write without waiting for an ancestor event', () => {
+    const fake = fakeFs(recordFile)
+    const changed = vi.fn()
+    const health = vi.fn()
+    const watcher = new SharedRecordWatcher(recordFile, changed, fake.createWatcher, health)
+
+    const initial = watcher.start()
+    expect(initial).not.toBeNull()
+    expect(watcher.acknowledge(initial!)).toBe(true)
     const ancestorWatcher = fake.opened[0]
     fake.available.add(fake.target)
     watcher.recordWritten()
 
     expect(ancestorWatcher.closed).toBe(true)
     expect(fake.opened.at(-1)?.directory).toBe(fake.target)
+    expect(health).toHaveBeenLastCalledWith(false)
+    expect(changed, 'a local write must start a strict canonical reread').toHaveBeenCalledOnce()
+    expect(watcher.acknowledge(changed.mock.calls[0][0])).toBe(true)
+    expect(health).toHaveBeenLastCalledWith(true)
     watcher.dispose()
   })
 
@@ -145,7 +189,9 @@ describe('SharedRecordWatcher', () => {
     const changed = vi.fn()
     const watcher = new SharedRecordWatcher(recordFile, changed, fake.createWatcher)
 
-    watcher.start()
+    const initial = watcher.start()
+    expect(initial).not.toBeNull()
+    expect(watcher.acknowledge(initial!)).toBe(true)
     const targetWatcher = fake.opened[0]
     expect(targetWatcher.directory).toBe(fake.target)
 
@@ -153,15 +199,68 @@ describe('SharedRecordWatcher', () => {
     targetWatcher.emitError(fsError('ENOENT'))
     expect(targetWatcher.closed).toBe(true)
     expect(fake.opened.at(-1)?.directory).toBe(fake.home)
+    expect(changed, 'fallback is recovering until its exact read is acknowledged').toHaveBeenCalledTimes(1)
+    expect(watcher.acknowledge(changed.mock.calls[0][0])).toBe(true)
 
     fake.available.add(fake.target)
     const ancestorWatcher = fake.opened.at(-1)!
     ancestorWatcher.emit('rename', '.nodeterm')
     expect(ancestorWatcher.closed).toBe(true)
     expect(fake.opened.at(-1)?.directory).toBe(fake.target)
-    expect(changed).toHaveBeenCalledTimes(1)
+    expect(changed).toHaveBeenCalledTimes(2)
+    expect(watcher.acknowledge(changed.mock.calls[1][0])).toBe(true)
 
     watcher.dispose()
     expect(fake.opened.filter((handle) => !handle.closed)).toHaveLength(0)
+  })
+
+  it('stays unavailable after rearm until the exact recovery read is acknowledged', () => {
+    const fake = fakeFs(recordFile)
+    fake.available.add(fake.target)
+    const changed = vi.fn()
+    const health = vi.fn()
+    const watcher = new SharedRecordWatcher(recordFile, changed, fake.createWatcher, health)
+
+    const initial = watcher.start()
+    expect(initial).not.toBeNull()
+    expect(health, 'opening a handle alone is not canonical-record evidence').not.toHaveBeenCalledWith(true)
+    expect(watcher.acknowledge(initial!)).toBe(true)
+    expect(health).toHaveBeenLastCalledWith(true)
+
+    const target = fake.opened.at(-1)!
+    fake.available.delete(fake.target)
+    target.emitError(fsError('ENOENT'))
+
+    expect(health).toHaveBeenLastCalledWith(false)
+    expect(changed).toHaveBeenCalledOnce()
+    expect(health, 'fallback must remain recovering before its read completes').toHaveBeenCalledTimes(2)
+
+    const recovery = changed.mock.calls[0][0]
+    expect(watcher.acknowledge(recovery)).toBe(true)
+    expect(health).toHaveBeenLastCalledWith(true)
+    watcher.dispose()
+  })
+
+  it('rejects a late read acknowledgement after a newer record event', () => {
+    const fake = fakeFs(recordFile)
+    fake.available.add(fake.target)
+    const changed = vi.fn()
+    const health = vi.fn()
+    const watcher = new SharedRecordWatcher(recordFile, changed, fake.createWatcher, health)
+
+    const initial = watcher.start()!
+    expect(watcher.acknowledge(initial)).toBe(true)
+    const target = fake.opened.at(-1)!
+
+    target.emit('change', path.basename(recordFile))
+    const firstRead = changed.mock.calls[0][0]
+    target.emit('change', path.basename(recordFile))
+    const secondRead = changed.mock.calls[1][0]
+
+    expect(watcher.acknowledge(firstRead), 'an old read cannot heal the newer gap').toBe(false)
+    expect(health).toHaveBeenLastCalledWith(false)
+    expect(watcher.acknowledge(secondRead)).toBe(true)
+    expect(health).toHaveBeenLastCalledWith(true)
+    watcher.dispose()
   })
 })

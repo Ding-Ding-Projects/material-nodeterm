@@ -19,6 +19,8 @@ import { IPC } from '../shared/ipc'
 const RELAY_REQUEST_METHODS = new Set<string>([
   // Terminal/session operations on the joined host.
   IPC.ptyCreate,
+  IPC.ptyDestroy,
+  IPC.ptyRecycle,
   IPC.ptyCapture,
   IPC.ptyReadScrollback,
   IPC.ptySendText,
@@ -77,6 +79,7 @@ const RELAY_REQUEST_METHODS = new Set<string>([
   IPC.gitWorktreeList,
   IPC.gitWorktreeAdd,
   IPC.gitWorktreeMerge,
+  IPC.gitWorktreeRemovalProof,
   IPC.gitWorktreeRemove,
   IPC.commitGenerate,
 

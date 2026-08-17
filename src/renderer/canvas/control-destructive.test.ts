@@ -1,69 +1,150 @@
-import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { isDestructiveVerb, DESTRUCTIVE_VERBS } from '@shared/control-verbs'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-/**
- * A STRUCTURAL test on purpose.
- *
- * `DESTRUCTIVE` / `isDestructiveVerb` named `write` and `close` as "the confirm-gated set" and was
- * read by nothing but its own unit test — it could not be anything else, because it lived in
- * `src/main` and the dispatch is in the renderer, which cannot import from there. The refusal was
- * a hand-written `if (confirmBusy())` inside each of the two `switch (verb)` cases, so the SET
- * decided nothing, while `TOLERANT_CONTROL_VERBS`' doc comment, `hook-server.ts`'s `buildPtyEnv`
- * note and `docs/node-identity.md:65` all name it as what decides.
- *
- * WHAT THIS FILE IS: a drift alarm, not proof of a gate. The dialog is still hand-written in each
- * case, so these assertions cannot show that a verb IS confirmed — only that the set and the cases
- * that read it still agree, in both directions. That is the thing that had already broken once.
- * `close-worktree --mode remove` is confirmed by a human through `requestRemoveWorktree` and is
- * deliberately outside the set, so it is invisible here by design.
- *
- * Structural because there is no unit seam — the switch lives inside a 7000-line React component's
- * IPC listener — and because the failure mode being pinned is exactly "a reader trusts the
- * constant", which is a property of the SOURCE. So the source is the subject.
- */
-const src = readFileSync(new URL('./Canvas.tsx', import.meta.url), 'utf8')
+import { DESTRUCTIVE_VERBS } from '@shared/control-verbs'
+import {
+  dispatchDestructiveControl,
+  type ControlActionReply
+} from '../lib/controlDestructive'
+import { __resetAgentRestartForTests, guardConcurrentRestart } from '../terminal/agent-restart'
 
-/** The body of one `case '<verb>': {` in the control dispatch, up to the next case label. */
-function caseBody(verb: string): string {
-  const start = src.indexOf(`case '${verb}': {`)
-  if (start === -1) return ''
-  const rest = src.slice(start + verb.length + 10)
-  const end = rest.search(/\n {10}case '/)
-  return end === -1 ? rest : rest.slice(0, end)
+function harness(verb: string, confirmationBusy = false) {
+  let writeConfirm: (() => void | Promise<void>) | undefined
+  let writeCancel: (() => void) | undefined
+  let closeConfirm: (() => void) | undefined
+  let closeCancel: (() => void) | undefined
+  const replies: ControlActionReply[] = []
+  const performWrite = vi.fn(async () => ({ ok: true, message: 'sent' }))
+  const performClose = vi.fn()
+
+  const handled = dispatchDestructiveControl(
+    {
+      verb,
+      args: { node: 'node-1', text: 'hello' },
+      sourceTitle: 'Agent one'
+    },
+    {
+      confirmationBusy: () => confirmationBusy,
+      openWriteConfirmation: (request) => {
+        writeConfirm = request.onConfirm
+        writeCancel = request.onCancel
+      },
+      openCloseConfirmation: (request) => {
+        closeConfirm = request.onConfirm
+        closeCancel = request.onCancel
+        return true
+      },
+      performWrite,
+      performClose,
+      reply: (result) => replies.push(result)
+    }
+  )
+
+  return {
+    handled,
+    performWrite,
+    performClose,
+    replies,
+    confirm: verb === 'write' ? writeConfirm : closeConfirm,
+    cancel: verb === 'write' ? writeCancel : closeCancel
+  }
 }
 
-describe('the confirm-gated set and the dispatch that reads it stay in agreement', () => {
-  it('the dispatch imports the set rather than restating it', () => {
-    expect(src).toMatch(/import \{[^}]*isDestructiveVerb[^}]*\} from '@shared\/control-verbs'/)
+describe('destructive canvas-control behavior', () => {
+  beforeEach(() => __resetAgentRestartForTests())
+
+  it('has an exact, behavior-implemented destructive inventory', () => {
+    expect([...DESTRUCTIVE_VERBS].sort()).toEqual(['close', 'write'])
+    for (const verb of DESTRUCTIVE_VERBS) {
+      const run = harness(verb)
+      expect(run.handled, verb).toBe(true)
+      expect(run.confirm, `${verb} must expose a confirmation callback`).toBeTypeOf('function')
+    }
   })
 
   for (const verb of ['write', 'close'] as const) {
-    it(`${verb} reaches its confirm through isDestructiveVerb`, () => {
-      expect(isDestructiveVerb(verb)).toBe(true)
-      const body = caseBody(verb)
-      expect(body).not.toBe('')
-      // The guard CALL, not a hardcoded truth: adding a verb to the set must change behaviour.
-      expect(body).toMatch(/isDestructiveVerb\(verb\) && confirmBusy\(\)/)
-      // …and no leftover bare gate beside it, which would make the set decorative again.
-      expect(body).not.toMatch(/\bif \(confirmBusy\(\)\)/)
-      if (verb === 'write') expect(body).toContain('setConfirm({')
-      // `close` delegates the confirmation decision to the behaviour-tested node-deletion
-      // dispatcher; keeping a second setConfirm branch here would recreate the Kids-mode bypass.
-      else expect(body).toContain("surface: 'agent-control'")
+    it(`${verb} cannot perform before confirm and performs exactly once after confirm`, async () => {
+      const run = harness(verb)
+      expect(run.performWrite).not.toHaveBeenCalled()
+      expect(run.performClose).not.toHaveBeenCalled()
+      expect(run.replies).toEqual([])
+
+      await run.confirm?.()
+
+      const effect = verb === 'write' ? run.performWrite : run.performClose
+      expect(effect).toHaveBeenCalledTimes(1)
+      expect(effect).toHaveBeenLastCalledWith('node-1', ...(verb === 'write' ? ['hello'] : []))
+      expect(run.replies).toEqual(
+        verb === 'write'
+          ? [{ ok: true, message: 'sent' }]
+          : [{ ok: true, message: 'closed node-1' }]
+      )
+    })
+
+    it(`${verb} cancellation never performs`, () => {
+      const run = harness(verb)
+      run.cancel?.()
+      expect(run.performWrite).not.toHaveBeenCalled()
+      expect(run.performClose).not.toHaveBeenCalled()
+      expect(run.replies).toEqual([{ ok: false, error: 'denied by user' }])
+    })
+
+    it(`${verb} refuses while another confirmation is pending`, () => {
+      const run = harness(verb, true)
+      expect(run.confirm).toBeUndefined()
+      expect(run.performWrite).not.toHaveBeenCalled()
+      expect(run.performClose).not.toHaveBeenCalled()
+      expect(run.replies).toEqual([
+        { ok: false, error: 'a confirmation is already pending — try again' }
+      ])
     })
   }
 
-  it('no other case reads isDestructiveVerb', () => {
-    // Every `isDestructiveVerb(verb)` in the dispatch must sit in a case the set actually holds.
-    // If a third case ever grows one, either the set or the dispatch is wrong — say so here rather
-    // than let the two drift apart the way the constant and the switch already did once.
-    //
-    // This scans for the CALL, so a hand-written confirm that never reads the set is invisible to
-    // it — `close-worktree --mode remove` is exactly that, on purpose. This is not "no other verb
-    // is confirm-gated"; it is "no other case claims to be gated by this set".
-    const labels = [...src.matchAll(/\n {10}case '([a-z-]+)': \{/g)].map((m) => m[1])
-    const gated = labels.filter((v) => /isDestructiveVerb\(verb\)/.test(caseBody(v)))
-    expect(new Set(gated)).toEqual(new Set(DESTRUCTIVE_VERBS))
+  it('does not claim ordinary verbs', () => {
+    const run = harness('list')
+    expect(run.handled).toBe(false)
+    expect(run.confirm).toBeUndefined()
+    expect(run.replies).toEqual([])
+  })
+
+  it('a confirmed write cannot perform while the target is owned by a restart', async () => {
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const restart = guardConcurrentRestart('node-1', async () => {
+      await held
+      return 'restarted' as const
+    })()
+
+    const run = harness('write')
+    await run.confirm?.()
+
+    expect(run.performWrite).not.toHaveBeenCalled()
+    expect(run.replies).toEqual([
+      { ok: false, error: 'target is busy with a restart or wake — try again' }
+    ])
+
+    release()
+    await restart
+  })
+
+  it('answers a malformed destructive request without opening or performing', () => {
+    const replies: ControlActionReply[] = []
+    const open = vi.fn()
+    const perform = vi.fn()
+    expect(
+      dispatchDestructiveControl(
+        { verb: 'write', args: {}, sourceTitle: 'Agent' },
+        {
+          confirmationBusy: () => false,
+          openWriteConfirmation: open,
+          openCloseConfirmation: open,
+          performWrite: perform,
+          performClose: perform,
+          reply: (result) => replies.push(result)
+        }
+      )
+    ).toBe(true)
+    expect(open).not.toHaveBeenCalled()
+    expect(perform).not.toHaveBeenCalled()
+    expect(replies).toEqual([{ ok: false, error: 'write requires --node' }])
   })
 })

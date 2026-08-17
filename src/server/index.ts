@@ -15,8 +15,7 @@ import { initPlatform } from '../core/platform'
 import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
-import { ScheduledSettingsStore } from '../core/scheduled-settings-store'
-import { ScheduledSettingsService } from '../core/scheduled-settings-service'
+import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
 import { WorkspaceStore } from '../core/workspace-store'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
@@ -27,6 +26,7 @@ import { DownloadTickets } from '../core/download-tickets'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import os from 'os'
 import { hookServer } from '../core/agents/hook-server'
+import { installServerEditionControlHandler } from './control-unsupported'
 import { loadOrCreateNodeAuthSecret } from '../core/agents/node-auth-secret'
 import { initNodeTokens, refreshNodeTokens } from '../core/agents/node-token-service'
 import {
@@ -165,8 +165,7 @@ export async function startServer(
   const settingsStore = new SettingsStore()
   const schoolModeStore = new SchoolModeStore()
   const kidsModeStore = new KidsModeStore()
-  const scheduledSettingsStore = new ScheduledSettingsStore()
-  const scheduledSettingsService = new ScheduledSettingsService(scheduledSettingsStore)
+  const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
   const ptyManager = new PtyManager()
   const workspaceStore = new WorkspaceStore()
 
@@ -183,9 +182,9 @@ export async function startServer(
   // exist. The ladder then starts at maths instead — absent, not disabled-with-an-explanation,
   // because naming the hidden thing is exactly what School mode forbids.
   auth.setSchoolModeSource(() => schoolModeStore.get().enabled)
-  scheduledSettingsStore.init()
-  scheduledSettingsStore.registerIpc()
-  scheduledSettingsService.start()
+  // Same runtime as Desktop: failed reads are surfaced over RPC while the shell keeps running with
+  // an empty schedule. The on-disk evidence is left untouched and saves remain locked.
+  scheduledSettingsRuntime.start()
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
@@ -333,7 +332,11 @@ export async function startServer(
   // missing/corrupt file simply yields no block.
   const installMeta = readInstallMeta(config.dataDir)
   setMirrorServerProvider(() => installMeta)
-  const { contextTail, geminiContextTail } = wireAgentStatus(platform)
+  const { contextTail, geminiContextTail } = wireAgentStatus(platform, {
+    onSessionEnded: (listener) => {
+      ptyManager.onSessionEnded(listener)
+    }
+  })
   // The ⌘M chat view + the find-bar's transcript index. Registered HERE rather than with the rest
   // of the handlers because the hook-fed path authority is the tail created just above. No remote
   // leg: the Server Edition runs ON the host whose transcripts it reads, so local resolution is
@@ -446,6 +449,10 @@ export async function startServer(
     }
   }
   await hookServer.start()
+  // Canvas control does not exist on this edition, and saying so BY NAME is the whole point: the
+  // null handler answered `control unavailable`, which reads to an agent like a transient outage,
+  // and an agent retries an outage. See `control-unsupported.ts`.
+  installServerEditionControlHandler(hookServer)
 
   // ---- Node identity (src/core/agents/node-auth-secret.ts) ------------------------------------
   // First time the Server Edition arms node identity. Headless Linux has no OS keychain, so the
@@ -594,7 +601,7 @@ export async function startServer(
         // The headless return happens before the serving branch below, so it must stop the same
         // scheduled-settings poller here. Missing this one line leaves its 30s interval and store
         // listener live after SIGTERM-driven teardown (including NODETERM_HEADLESS containers).
-        scheduledSettingsService.stop()
+        await scheduledSettingsRuntime.stop()
         sessionReaper.stop()
         pressure.stop()
         ptyPressure.stop()
@@ -648,7 +655,7 @@ export async function startServer(
     port,
     async close() {
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
-      scheduledSettingsService.stop()
+      await scheduledSettingsRuntime.stop()
       sessionReaper.stop()
       pressure.stop()
       ptyPressure.stop()

@@ -3,6 +3,8 @@
  *  has final frames to publish makes those frames indistinguishable from the replacement's. */
 export interface RetiringSessionGeneration {
   exited: boolean
+  /** Explicit kill has successfully dispatched but process exit is not observed yet. */
+  retiring?: boolean
   ending: Promise<void> | null
 }
 
@@ -31,7 +33,7 @@ export async function currentSessionAfterRetirement<T extends RetiringSessionGen
 ): Promise<T | undefined> {
   for (;;) {
     const current = sessions.get(name)
-    if (!current || !current.exited) return current
+    if (!current || (!current.exited && !current.retiring)) return current
     if (!current.ending) {
       throw new Error(`exited session ${name} has no retirement barrier`)
     }

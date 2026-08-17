@@ -2,6 +2,8 @@
 // timers; the RULES live here so they are unit-testable without React Flow, and so the reasoning
 // behind them survives the next edit of an 8k-line component.
 
+import type { BridgeLink, CanvasNodeState, Viewport } from '@shared/types'
+
 /**
  * May the live React Flow canvas be committed into the store under `activeProjectId`?
  *
@@ -21,6 +23,41 @@
 export function canCommitCanvas(nodesProjectId: string | null, activeProjectId: string): boolean {
   if (!activeProjectId) return false
   return nodesProjectId === activeProjectId
+}
+
+export interface ActiveCanvasCommit {
+  nodesProjectId: string | null
+  activeProjectId: string
+  nodes: CanvasNodeState[]
+  viewport: Viewport
+  bridges: BridgeLink[]
+  ropes: BridgeLink[]
+}
+
+/**
+ * Commit the exact foreground snapshot only while its React Flow epoch still belongs to the active
+ * project. Keeping all six values in this tested seam prevents a later Canvas refactor from
+ * preserving nodes while silently dropping the two edge lists from the whole-file save.
+ */
+export function commitActiveCanvas(
+  snapshot: ActiveCanvasCommit,
+  commit: (
+    projectId: string,
+    nodes: CanvasNodeState[],
+    viewport: Viewport,
+    bridges: BridgeLink[],
+    ropes: BridgeLink[]
+  ) => void
+): boolean {
+  if (!canCommitCanvas(snapshot.nodesProjectId, snapshot.activeProjectId)) return false
+  commit(
+    snapshot.activeProjectId,
+    snapshot.nodes,
+    snapshot.viewport,
+    snapshot.bridges,
+    snapshot.ropes
+  )
+  return true
 }
 
 /**

@@ -18,7 +18,12 @@ export function esc(value) {
 }
 
 export function attr(value) {
-  return esc(value)
+  // Most attributes in the renderer use double quotes, but structured context-menu payloads use
+  // single quotes so their JSON stays readable. Escape BOTH delimiters here: otherwise a title
+  // such as "O'Brien' data-pwned='yes" closes data-menu-extra early and turns user-controlled
+  // text into a sibling HTML attribute. Browsers decode &#39; back to the original apostrophe when
+  // exposing dataset.menuExtra, so the delegated context-menu JSON round-trips unchanged.
+  return esc(value).replace(/'/g, '&#39;')
 }
 
 export function withFocusPreserved(root, rebuild) {

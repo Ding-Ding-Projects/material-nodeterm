@@ -1,7 +1,7 @@
 # The unlock ladder
 
-Too many wrong passwords locks the account. Rather than leave someone watching a countdown, the
-lockout screen offers a way to play out of it:
+Too many wrong credentials from one TCP peer lock that peer's login path. Rather than leave someone
+watching a countdown, the lockout screen offers a way to play out of it:
 
 | Rung | What it asks | Fail |
 | --- | --- | --- |
@@ -15,8 +15,8 @@ and the ladder is not offered again for that lockout. It can only improve a lock
 **Where it lives.** `src/core/unlock-ladder.ts` is the whole state machine, Electron-free, so both
 shells can drive it. The Server Edition serves it at `/auth/unlock/challenge` and
 `/auth/unlock/verify`, and `lockedPage()` in `src/server/http.ts` draws it. Tests:
-`src/core/unlock-ladder.test.ts` (the machine) and `src/server/unlock-ladder-routes.test.ts` (the
-boundary, over real HTTP).
+`src/core/unlock-ladder.test.ts` (the machine), `src/server/auth.test.ts` (shared account budgets and
+lease deletion), and `src/server/unlock-ladder-routes.test.ts` (the boundary, over real HTTP).
 
 ## What it must never do
 
@@ -25,8 +25,9 @@ one of them has built a second, much weaker password.
 
 1. **It clears the WAITING, never the CREDENTIAL.** Winning signs nobody in, mints no session and
    sets no cookie — the user lands back on the ordinary password form and still has to know the
-   password. `clearLockoutByLadder()` moves `lockedUntil` and touches nothing else, deliberately;
-   widening that method is how this stops being true. The route test asserts no `Set-Cookie`.
+   password. `clearLockoutByLadder()` never changes the failure count, escalation streak,
+   credentials, or sessions; it only ends the wait and advances stale-proof bookkeeping. The route
+   test asserts no `Set-Cookie`.
 2. **It never refunds the attempt budget.** Serving the clock returns five attempts, so the ladder
    returns five. The moment solving beats waiting, brute force gets cheaper — the one thing a
    lockout exists to prevent.
@@ -38,9 +39,21 @@ one of them has built a second, much weaker password.
    lockout (60 s → 2 m → 4 m …, capped at an hour — `nextLockoutMs`), and clearing the ladder
    leaves that streak untouched. Spend the whole budget and you still meet an exponential wall.
 5. **Every answer is generated and graded server-side against a single-use nonce.** A ladder graded
-   in the browser is a ladder skipped with one `fetch`. The nonce is consumed *before* grading, so
-   a wrong answer cannot be retried against the same question and a right one cannot be replayed.
+   in the browser is a ladder skipped with one `fetch`. All sibling nonces are consumed *before*
+   grading, so an old answer cannot cross a rung transition and no right answer can be replayed.
    Challenges expire after `LADDER_TTL_MS`.
+
+Each locked TCP peer owns an independent climb: a reset, failure or correct answer on one peer cannot
+consume another peer's nonce or change its rung. Those climbs share one `UnlockLadderBudget`, so
+distributing failures does not multiply the three-clear rolling budget. The budget slot is claimed
+again atomically when an answer is graded; challenges issued concurrently while one slot remained
+cannot all clear it.
+
+Live ladder nonces are capped at eight per peer and 256 for the account. A globally full ledger
+refuses refreshes even from an existing holder until a nonce is consumed or expires, so no holder
+can extend its lease before TTL; after expiry every peer competes afresh for capacity. Grading one
+answer consumes every sibling nonce for that climb: an answer saved before a later rung or an
+exhausted whack round can never clear afterward.
 
 Two rules that are easy to miss and cost the whole rung when they are:
 

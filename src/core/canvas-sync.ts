@@ -61,14 +61,27 @@ export function reflectTargets(all: ClientId[], _sender: ClientId): ClientId[] {
 }
 
 /**
- * Stamp a client's mutation with its place in the total order, and BOUND the client-supplied `src`
- * tag (it is echoed to every peer, and a client could otherwise plant a megabyte there — or forge
+ * Stamp a client's mutation with its place in the total order, and BOUND the two client-supplied
+ * fields it carries. Pure — exported for the test.
+ *
+ * `src` is echoed to every peer, and a client could otherwise plant a megabyte there — or forge
  * another client's tag, which would only ever make that client ignore an edit meant for it, but is
- * still not something to reflect unchecked). Pure — exported for the test.
+ * still not something to reflect unchecked.
+ *
+ * `seen` is the sender's causal position (canvas-order rule 4), and it is the one client-supplied
+ * value that DECIDES something: an upsert claiming to have seen a node's delete is applied over it.
+ * A forged one is therefore a way to resurrect a node a teammate deleted. It cannot legitimately
+ * reach the order this mutation is being GIVEN (the sender can only have seen `seq`s already
+ * assigned), so clamp it there — an honest client is never touched, and a liar buys itself nothing
+ * beyond the moment it actually cast. A non-integer / negative value is dropped, which degrades to
+ * "unstamped" (judged exactly as before rule 4 existed), never to a value that outranks a delete.
  */
 export function stampMutation(m: CanvasMutation, seq: number): CanvasMutation {
   const stamped: CanvasMutation = { ...m, seq }
   if (!isRefId(stamped.src)) delete stamped.src
+  const seen = stamped.seen
+  if (typeof seen !== 'number' || !Number.isInteger(seen) || seen < 0) delete stamped.seen
+  else if (seen >= seq) stamped.seen = seq - 1
   return stamped
 }
 

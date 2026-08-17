@@ -95,10 +95,12 @@ temp out from under it so the loser fails with a confusing `ENOENT`.
 
 `writeFileAtomic` and `tempNameFor` generate a per-call unique name
 (`<target>.<pid>.<seq>.<uuid>.tmp`). The UUID is the uniqueness guarantee. PID and sequence remain
-because they make ownership metadata and diagnostics useful, but they are not globally unique:
-containers can both be PID 1, worker isolates share a PID with independent module counters, and an
-OS can reuse a PID while crash litter remains. Remote-shell writes use the equivalent property with
-a locally minted random UUID; the remote host never has to interpolate a nonce.
+because they make ownership/liveness cleanup and diagnostics possible, but they are not globally
+unique: containers can both be PID 1, worker isolates share a PID with independent module counters,
+and an OS can reuse a PID while crash litter remains.
+
+Remote-shell writes use the equivalent property with a locally minted random UUID; the remote host
+never has to interpolate a nonce.
 
 The same rule applies to SSH and scp staging even though those writes do not call `fs.writeFile`.
 `remoteAtomicWrite` mints a bounded `.nodeterm-<uuid>.tmp` sibling before quoting both complete
@@ -137,24 +139,31 @@ pid-plus-clock and pid-plus-counter names, including the historical
 
 Cleanup must not reverse the fix. A different pid only means “another process,” not “a dead
 process”: desktop multi-instance mode and two `nodeterm-server --data-dir X` processes can share a
-directory intentionally. All cross-run collection goes through `sweepStaleTempFiles`, which keeps
-fresh files and every pid-bearing file. Signal-zero/`ESRCH` is namespace-local, so it cannot prove
-that a writer on a mounted Docker/Server volume died; PID reuse also makes a locally visible pid
-unreliable evidence of life. The only cross-run shape collected automatically is the exact legacy
-fixed `<file>.tmp`, after a 24-hour age grace. Current pid-bearing names are recognized only with a
-canonical lowercase v4 UUID (plus the historical pid-and-sequence form); an arbitrary dot-free
-token is not cleanup authority. Current writers still remove their own temp immediately when their
-write fails.
+directory intentionally, including across PID namespaces. `sweepStaleTempFiles` therefore never
+auto-deletes any PID-bearing temp. Signal-0/`ESRCH` is namespace-local evidence and cannot prove a
+foreign writer is dead. Only the exact historical ownerless `<file>.tmp` shape can be swept after
+the conservative 24-hour grace. Current writers remove their own UUID temp immediately when their
+write fails; an arbitrary dot-free suffix is not recognized as a current UUID temp. Current
+pid-bearing names are recognized only with the canonical lowercase v4 UUID (plus the historical
+pid-and-sequence form); an arbitrary dot-free token is not cleanup authority.
+
+The desktop relay advertisement applies that exact protocol to
+`~/.nodeterm/relay.json.<pid>.<seq>.<uuid>.tmp`. Before it creates a new publication temp it invokes
+`sweepStaleTempFiles` for the canonical `relay.json`; the shared recognizer leaves malformed names
+alone, and the sweep never reads a candidate's contents. Old + owner-dead is the only foreign-temp
+removal case. Young, live, unjudgeable, or metadata-unreadable candidates remain in place. A write
+or rename failure separately removes the exact UUID temp owned by that one call. The direct
+behavior proof is `src/main/remote/relay-advertise.test.ts`.
 
 A credential **Clear** has a stricter reporting contract without a more destructive cleanup
-policy. `clearAtomicTarget` removes the canonical file, runs the conservative sweep, then inspects
-for every recognized legacy/current temp. It reports incomplete while a young, live, unjudgeable,
-or failed-to-delete temp remains (or the directory cannot be inspected), and PAT/cookie/token
-callers propagate that failure to the UI/API. A plausible foreign writer is still preserved; the
-important distinction is that retained bearer bytes can no longer be reported as a completed
-clear. By itself this is a point-in-time result, not a cross-process lock. Credential stores call it
-while holding their SQLite transaction, so another supported process cannot publish between removal,
-inspection, the final canonical-path recheck, and transaction completion.
+policy. `clearAtomicTarget` removes the canonical file, runs the conservative sweep, inspects for
+every recognized legacy/current temp, and finally rechecks the canonical path. It reports
+incomplete while a live or failed-to-delete temp remains, the directory cannot be inspected, or a
+writer republishes during inspection. PAT/cookie/token callers propagate that failure to the
+UI/API. A plausible foreign writer is still preserved; retained bearer bytes can no longer be
+reported as a completed clear. Credential stores call this while holding their SQLite transaction,
+so another supported process cannot publish between removal, inspection, the final recheck, and
+transaction completion.
 
 ## A unique temp does not order snapshots
 
@@ -164,44 +173,97 @@ writer B can publish newer state, and then A can wake and atomically overwrite i
 the final document is simply stale.
 
 Whole-document writers that can overlap therefore need a FIFO publish chain (or a generation check)
-in addition to unique temps. `agent-status-mirror.flush` uses FIFO. Its test blocks the first rename,
-records a newer state, starts the second flush, and proves the newer generation is final; removing
-the queue makes that test deterministically red.
+in addition to unique temps. A FIFO is sufficient only when every writer lives in one process.
+`agent-status-mirror` is intentionally shared by desktop multi-instance mode and by Server Edition
+processes pointed at the same data directory, so two writers also have two independent queues.
 
-That FIFO orders one JavaScript process. Credential documents deliberately shared by Desktop and
-Server Edition additionally use `withCrossProcessLock`, whose `BEGIN IMMEDIATE` transaction holds
-SQLite's kernel-backed file lock across the strict read, mutation, temp publication and clear/prune
-checks. A suspended writer keeps ownership; process death releases it. There is no timestamp lease,
-PID probe, or stale-owner deletion, because none can prove a writer on another namespace or a paused
-machine is dead. Busy retries use a monotonic deadline and fail with `lock-timeout`; a corrupt or
-unreadable sidecar remains evidence and fails with `lock-evidence-unreadable`.
+The mirror uses a durable two-phase generation protocol in `src/core/mirror-publication.ts`:
 
-The rendezvous path is derived from the real parent directory plus the canonical basename, so a
-directory symlink/junction cannot split one physical resource into two locks. Publication compares
-the exact SHA-256 revision read inside the transaction before rename. The SQLite lock orders every
-supported writer; the comparison also rejects an out-of-protocol edit observed before publication.
-Neither mechanism claims compatibility with an older writer that does not participate in the
-transaction, so sharing a data directory during a rolling downgrade remains unsupported.
+This protocol requires the unflagged `node:sqlite` capability. The supported runtime is
+`^22.22.2 || ^24.15.0 || >=26.0.0`; Desktop and Server Edition check the version and real `DatabaseSync`
+capability before starting services, while the installer and pinned container image enforce the
+same boundary. The production module loads SQLite lazily so an incompatible runtime reaches that
+diagnostic instead of failing during static dependency evaluation.
 
-A read-modify-write store must enqueue before it reads and hold the same turn through publication.
-Serializing only `save()` faithfully writes both stale derivatives and still loses one caller's
-change. `SecureStore.mutate` therefore coordinates by physical file across independent store
-instances and processes. Its read degrades to an empty list only for `ENOENT`; corruption, duplicate
-or non-v4 secret ids, and permission failures propagate as unavailable and are never permission to
-replace the credential document. `save()` validates the same schema before publication so it cannot
-report success for bytes its next strict read rejects. Scheduled token set/clear/prune operations
-use one directory-wide transaction so a prune cannot miss a parked set or wake after a later set and
-delete it. Provider cookies, shared-mode credentials, and Desktop/Server GitHub token stores preserve
-the same strict-read evidence and transaction boundary. GitHub Save begins a controller-local FIFO
-before its network validation, so a later Clear in that controller cannot finish first and be
-resurrected. Separate processes have no shared pre-validation invocation clock; their final durable
+1. Briefly acquire an OS-backed SQLite `BEGIN IMMEDIATE` transaction on
+   `agent-status.json.publication.sqlite3` and atomically advance
+   `agent-status.json.generation`. The number is reserved **before** the process snapshots its
+   in-memory mirror. Gaps are valid when a process crashes after reservation.
+2. Write that generation's complete document to its own UUID temp without holding the transaction.
+3. Reacquire the transaction, read the canonical document's generation, and publish only when it is
+   still lower. The bounded Windows rename retry runs inside this final critical section.
+
+The optional `generation` field is additive to the existing v1 document; an older v1 file has
+generation zero and older readers ignore the new key. The sidecar write, sidecar read and canonical
+read are all part of the ordering proof: malformed or unreadable data fails the local disk flush
+instead of being treated as zero, while the live `onMirrorFlush` side-channel still fires. The next
+successful flush reserves a later number and retries from current memory.
+
+Only SQLite's `SQLITE_BUSY` contention result is retried, with a bounded wait. Exhausting that wait
+abandons this best-effort flush instead of stealing the lock: a live process paused for an arbitrary
+time still owns its transaction. An abrupt process exit closes its database handle in the OS and
+therefore releases the lock immediately; there is no stale threshold, heartbeat, or lock-directory
+cleanup that can fence incorrectly. A missing/inaccessible parent or corrupt lock database keeps
+the established immediate best-effort failure. The lock target resolves the parent directory even
+before `agent-status.json` exists, so symlink aliases of one data directory do not create separate
+locks. Generation-aware peers are the supported sharing contract during a release; a pre-generation
+binary does not know the transaction or field and must not be left running against the same
+directory during an upgrade.
+
+The generation reservation is the protocol's linearization point, not the JavaScript call's
+wall-clock start. It orders complete publication attempts and rejects a lower generation that wakes
+after a higher one; it intentionally does not merge independently disagreeing in-memory stores or
+guess which one is semantically fresher. A process that reserves later is a later writer under this
+contract, so every caller remains responsible for flushing its current authoritative state.
+
+The behavior test bundles and runs two real Node processes. Generation 1 is parked after writing its
+complete temp, generation 2 publishes, and only then is generation 1 released; the canonical file
+must remain generation 2. Removing the final generation comparison makes that test deterministically
+red. A second process test starts a peer while a live owner holds the real SQLite transaction,
+proves it cannot publish, aborts the owner without JS cleanup, and proves the waiting peer
+immediately acquires and publishes.
+
+## Credential transactions hold the lock across the strict read
+
+The mirror deliberately writes its complete temp outside the short generation transaction.
+Credential documents have a different contract: Desktop and Server Edition may share one data
+directory, and their read → mutation → publish/clear/prune decision must be indivisible.
+`withCrossProcessLock` holds SQLite's kernel-backed `BEGIN IMMEDIATE` transaction across that whole
+decision. A process-local FIFO still preserves invocation order and queue recovery in one process,
+but it is not the cross-process proof.
+
+A suspended writer keeps the OS lock and process death releases it. There is no timestamp lease,
+PID probe, stale-owner deletion, or successor fence that a resumed old writer can bypass. Only
+SQLite busy contention is retried, using a monotonic bounded deadline; exhaustion fails with
+`lock-timeout`. The lock rendezvous realpaths the existing parent and canonicalizes the basename so
+directory symlink/junction aliases converge on one physical resource. A corrupt, unreadable, or
+unsupported sidecar remains untouched evidence and fails closed with `lock-evidence-unreadable`.
+
+Every supported writer enqueues before its strict read and retains the same turn through mutation
+and publication. `readAtomicFileSnapshot` treats only `ENOENT` as absent. Publication compares the
+exact SHA-256 revision read inside the transaction before rename, rejecting an out-of-protocol edit
+already visible at publication time. This is not rolling-downgrade compatibility: an older binary
+that ignores the transaction must not share the directory.
+
+`SecureStore.mutate` applies the physical-file-global rule across independent instances and
+processes. Corrupt/unreadable input, duplicate IDs, and non-v4 IDs reject instead of becoming an
+empty credential list; `save()` validates the same schema before publishing. Scheduled Home
+Assistant set, clear, alternate-format cleanup, and orphan prune operations share one
+directory-wide transaction. Provider cookies, shared-mode credentials, and Desktop/Server GitHub
+token stores preserve the same strict-read evidence. GitHub Save also enters a controller-local
+FIFO before network validation so a later Clear in that controller cannot finish first and be
+resurrected. Separate processes have no shared pre-validation invocation clock; their durable
 mutations are ordered when they enter the SQLite transaction.
 
-`node:sqlite` is loaded lazily so an incompatible runtime can reach the actionable startup preflight.
-The supported floor is `^22.22.2 || ^24.15.0 || >=26.0.0`; package metadata, the installer, container
-image and both application shells enforce that same capability contract.
+The process Chut runs real bundled peers and proves a second writer cannot read a stale snapshot,
+crash-released ownership, bounded busy timeout, local queue recovery, physical-directory alias
+convergence, and exact preservation of corrupt sidecar bytes. Temporarily replacing
+`BEGIN IMMEDIATE` with `BEGIN` makes the two-process barrier red.
 
-The guard checks the PROPERTY, not the helper: an inline `randomUUID()` path is also correct.
+The guard checks the temp-name PROPERTY, not the helper: an inline `randomUUID()` path is also
+correct. Publication ordering is behavior-tested separately because a source-text scan cannot prove
+which snapshot wins.
+
 
 ## The rule, and how it is enforced
 
@@ -219,7 +281,8 @@ is unverifiable by reading: a store added next year gets the retry because the t
 alternative, not because its author read this page.
 
 The temp-name half inventories local Node filesystem `.tmp` templates assigned directly or through
-`path.join`. It does not parse generated remote-shell paths or transfer `.part` conventions; those
+typed/multiline `path.join` calls, plus fixed string-concatenated temp paths. It does not parse
+generated remote-shell paths or transfer `.part` conventions; those
 need behavior gates at their own shell/transport boundary rather than pretending a TypeScript regex
 understands the remote program.
 

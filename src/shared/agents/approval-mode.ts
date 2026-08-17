@@ -124,8 +124,8 @@ export function approvalFlags(agentId: AgentId, mode: AgentPermissionMode): stri
 }
 
 /**
- * Appends the agent's approval flag to a launch command, if it has one. The single funnel for every
- * CLI launch path (new node, cold-restore resume, branch, handoff, canvas control).
+ * Appends the agent's approval flag to a launch command, if it has one. Production launch paths
+ * reach this translation through a branded `ActiveAgentLaunchPlan` in renderer/permissionMode.
  *
  * WHERE the flag lands is decided one layer up, by `createAgentNode`: with no `argvPromptSeparator`
  * (claude, gemini, codex) it goes LAST, keeping those command lines byte-identical; with one

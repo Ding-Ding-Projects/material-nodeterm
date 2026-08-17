@@ -3,8 +3,8 @@ const CORE = [
   'Unlimited SSH projects',
   'Groups, worktrees, git & diff',
   'Agent nodes (Claude / Codex / Gemini)',
-  'QR phone pairing on your LAN',
-  'Remote access from your phone (relay, E2E encrypted)'
+  'Desktop app: QR phone pairing on your LAN',
+  'Desktop app: remote access from your phone (relay, E2E encrypted)'
 ]
 const PRO = [
   'nodeterm mobile Pro included',

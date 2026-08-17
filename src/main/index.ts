@@ -16,7 +16,8 @@ import {
   powerMonitor,
   safeStorage,
   shell,
-  systemPreferences
+  systemPreferences,
+  webContents
 } from 'electron'
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
@@ -28,6 +29,10 @@ import { LocalHistoryStore } from '../core/local-history'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
 import type { Settings } from '../shared/types'
+import {
+  registerBrowserGuestRequest,
+  type BrowserGuest
+} from './browser-guest-registry'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
@@ -38,8 +43,7 @@ import { WorkspaceWatcher } from '../core/workspace-watcher'
 import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
-import { ScheduledSettingsStore } from '../core/scheduled-settings-store'
-import { ScheduledSettingsService } from '../core/scheduled-settings-service'
+import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
 import { GitService } from '../core/git-service'
@@ -49,6 +53,7 @@ import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './gith
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
 import { desktopBuildPaths } from './desktop-build-paths'
+import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
 import { hookServer } from '../core/agents/hook-server'
 import { askpassServer, ensureAskpassScript } from './remote-ssh/ssh-askpass'
@@ -207,7 +212,6 @@ import { wirePeerRegistry } from './peer-registry'
 import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
-import { applyWindowsAppUserModelId } from './windows-app-identity'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
 
 // Fail before Electron initializes any persistent service. mirror-publication loads node:sqlite
@@ -236,11 +240,13 @@ app.commandLine.appendSwitch('max-active-webgl-contexts', String(WEBGL_CONTEXT_C
 // at-rest encryption of that key.
 if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain')
 
-// Windows identifies apps by this id, not by exe path or window title. A Squirrel shortcut's
-// identity is derived from its package id + executable name, which is deliberately separate from
-// electron-builder's build.appId; using build.appId here split taskbar grouping/notifications from
-// the installed shortcut. Keep the pure decision pressed by windows-app-identity.test.ts.
-applyWindowsAppUserModelId(process.platform, (id) => app.setAppUserModelId(id))
+// Windows identifies apps by this id, not by exe path or window title — it decides whether a
+// desktop `Notification` actually shows (an unset AppUserModelID renders under a generic
+// "Electron" identity, or silently not at all on some builds) and whether the taskbar groups this
+// app's windows together instead of treating each launch as unrelated. Squirrel prefixes the
+// configured package id and executable name, so derive the runtime value from the same build
+// metadata instead of maintaining a second literal that can drift from installed shortcuts.
+applyWindowsSquirrelAppUserModelId(process.platform, app)
 
 // First thing in bootstrap: install the Electron CorePlatform so anything in src/core
 // (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI
@@ -272,8 +278,7 @@ function isSafeExternalUrl(url: unknown): url is string {
 const settingsStore = new SettingsStore()
 const schoolModeStore = new SchoolModeStore()
 const kidsModeStore = new KidsModeStore()
-const scheduledSettingsStore = new ScheduledSettingsStore()
-const scheduledSettingsService = new ScheduledSettingsService(scheduledSettingsStore)
+const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
 const sshStore = new SshStore()
 // One trusted catalog/resolver instance owns both public detection and private launch resolution.
 // The getter is evaluated at use time so a Settings save updates Custom availability immediately;
@@ -416,8 +421,10 @@ let activeRemote: { cwd: string; ref: GitRemoteRef } | null = null
 // True from the first before-quit on: lets window close-events through (see hide-on-close).
 let quitting = false
 
-// Browser <webview> guest webContents id → its browser node id (for new-window capture).
-const browserGuests = new Map<number, string>()
+// Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
+// belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
+// lands here — see `registerBrowserGuestRequest`.
+const browserGuests = new Map<number, BrowserGuest>()
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
 // Without this, a node closed mid-run never emits SessionEnd/PostToolUse, so context-tail (1s
@@ -638,7 +645,7 @@ app.whenReady().then(async () => {
     // (never a real popup). Only http(s); other schemes are dropped. The map is consulted
     // live at call time, so a guest registered later (on dom-ready) is seen when a popup fires.
     contents.setWindowOpenHandler(({ url }) => {
-      const sourceNodeId = browserGuests.get(contents.id)
+      const sourceNodeId = browserGuests.get(contents.id)?.nodeId
       if (sourceNodeId && /^https?:\/\//i.test(url)) {
         sendToMain(IPC.browserNewWindow, { url, sourceNodeId })
       }
@@ -662,16 +669,16 @@ app.whenReady().then(async () => {
   schoolModeStore.registerIpc()
   await kidsModeStore.init()
   kidsModeStore.registerIpc()
-  scheduledSettingsStore.init()
-  scheduledSettingsStore.registerIpc()
-  scheduledSettingsService.start()
+  // This one runtime is shared with the Server Edition. A corrupt/unreadable schedule file boots
+  // into a disabled recovery state rather than aborting this app-ready sequence.
+  scheduledSettingsRuntime.start()
   // Local, git-backed settings history (docs/local-history.md). One append-only revision per
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
-  settingsStore.setHistoryRecorder((before, after, override) => {
+  settingsStore.setHistoryRecorder(async (before, after, override) => {
     if (override) {
-      void localHistoryStore.record({
+      await localHistoryStore.record({
         domain: 'settings',
         filename: 'settings.json',
         content: JSON.stringify(after, null, 2),
@@ -682,7 +689,7 @@ app.whenReady().then(async () => {
     }
     const change = describeSettingsChange(before, after)
     if (!change) return
-    void localHistoryStore.record({
+    await localHistoryStore.record({
       domain: 'settings',
       filename: 'settings.json',
       content: JSON.stringify(after, null, 2),
@@ -762,9 +769,21 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.mediaAllow, (_e, absPath: string) => allowMediaPath(absPath))
   ipcMain.handle(IPC.mediaWriteHtml, (_e, html: string) => writeAgentHtml(html))
 
-  ipcMain.on(IPC.browserRegister, (_e, webContentsId: number, nodeId: string) => {
-    browserGuests.set(webContentsId, nodeId)
-  })
+  ipcMain.on(
+    IPC.browserRegister,
+    (_e, webContentsId: unknown, nodeId: unknown, surface?: unknown) => {
+      registerBrowserGuestRequest(
+        browserGuests,
+        webContentsId,
+        nodeId,
+        surface,
+        (id) => webContents.fromId(id) ?? null,
+        // Loud, because the symptom otherwise is "popups from this node stopped opening" with
+        // nothing anywhere to explain it.
+        (details) => console.warn('[browser] refused guest registration', details)
+      )
+    }
+  )
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
     browserGuests.delete(webContentsId)
   })
@@ -934,13 +953,13 @@ app.whenReady().then(async () => {
     apiBase: RELAY_API_BASE,
     relayAllowed
   })
-  ipcMain.handle(IPC.pairingStart, () =>
+  ipcMain.handle(IPC.pairingStart, (_event, attemptId: string) =>
     pairingService.start((result) => {
       const w = getMainWindow()
       if (w && !w.isDestroyed()) w.webContents.send(IPC.pairingDone, result)
-    })
+    }, attemptId)
   )
-  ipcMain.handle(IPC.pairingStop, () => pairingService.stop())
+  ipcMain.handle(IPC.pairingStop, (_event, attemptId: string) => pairingService.stop(attemptId))
   ipcMain.handle(IPC.pairingProbeSsh, () => pairingService.probeSsh())
   // Same pattern as appOpenNotificationSettings: a main-side constant deep link, NOT routed
   // through shellOpenExternal's http(s)-only allowlist (which silently drops x-apple.* URLs —
@@ -2167,9 +2186,9 @@ app.whenReady().then(async () => {
     }
   })
 
-  // Releasing tails when a node's session ENDS — whichever way it ends. pty-manager handles the
-  // same two channels to kill the tmux session; this extra listener tears down the per-node file
-  // tailers so they stop polling a now-dead session:
+  // Releasing tails when a node's session ENDS — whichever way it ends. This runs from
+  // PtyManager's end hook, after session-host kill acknowledgement when that backend owns it; an attempted destroy
+  // whose session-host connection drops must keep its tails because its outcome is unknown.
   //  - pty:destroy — the user clicked × (the node is gone);
   //  - pty:recycle — "move into worktree" (the node stays, but its session is replaced, so the
   //    tails of the OLD session's transcript are just as dead; the respawned agent re-registers
@@ -2202,14 +2221,13 @@ app.whenReady().then(async () => {
       nodeSubagents.delete(nodeId)
     }
   }
-  // A SECOND listener on these channels (PtyManager registers its own): both fire, in registration
-  // order, on ipcMain AND in the platform's listener table — so a peer closing a node releases the
-  // host's tails too, instead of leaking them.
-  corePlatform.on(IPC.ptyDestroy, (nodeId: string) => releaseNodeTails(nodeId))
-  corePlatform.on(IPC.ptyRecycle, (nodeId: string) => releaseNodeTails(nodeId))
+  // Registered on the manager rather than a second IPC listener: pty:destroy is request/response,
+  // so cleanup cannot race ahead of its acknowledgement on either the local window or a peer.
+  ptyManager.onSessionEnded((nodeId) => releaseNodeTails(nodeId))
   // Profile switching needs an awaited destroy-before-respawn barrier. Keep this native to the
-  // desktop: unlike the legacy cast above, a relay peer must not be able to invoke a machine-local
-  // Windows profile action. Tails are released only after PtyManager confirms teardown succeeded.
+  // desktop: a relay peer must not be able to invoke a machine-local Windows profile action.
+  // The callback is intentionally idempotent with the manager hook above and preserves the
+  // confirmed-recycle contract for a teardown completed through this native handler.
   const disposeConfirmedRecycleIpc = registerConfirmedRecycleIpc(
     ipcMain,
     ptyManager,
@@ -2569,7 +2587,7 @@ let quitFlushed = false
 app.on('before-quit', (e) => {
   quitting = true // from here on, window close-events must NOT be turned into hide
   destroyNotchHud()
-  scheduledSettingsService.stop()
+  const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   workspaceWatcher.dispose()
   if (quitFlushed) {
     // Second pass (the deferred app.quit() below): the flush had its chance — drop the masters.
@@ -2596,7 +2614,11 @@ app.on('before-quit', (e) => {
   // Pending throttled .nodeterm mirror writes must land BEFORE the ControlMasters die — killing
   // a master mid-write used to leave a truncated project.json on the server. The masters are
   // therefore kept up through the raced flush and dropped on the second before-quit pass.
-  const flush = Promise.allSettled([remoteWorkspaceIO.flush(), ptyManager.killAll()])
+  const flush = Promise.allSettled([
+    remoteWorkspaceIO.flush(),
+    ptyManager.killAll(),
+    scheduledSettingsStop
+  ])
   void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
     // Then let whisper go. A dictation still transcribing when Electron tears down the main
     // process's node env aborts the WHOLE app from inside the native addon (SIGABRT in

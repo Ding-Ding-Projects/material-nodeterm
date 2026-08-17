@@ -10,7 +10,12 @@ import {
   minimaxRejected,
   fetchMinimaxUsage
 } from './minimax-usage'
-import { readProviderCookie, writeProviderCookie, hasProviderCookie } from './provider-cookie'
+import {
+  ProviderCookieInvalidError,
+  readProviderCookie,
+  writeProviderCookie,
+  hasProviderCookie
+} from './provider-cookie'
 import { initPlatform, resetPlatformForTests, type CorePlatform } from '../platform'
 import { primaryLimit, limitLabel } from '../../shared/usage-limits'
 
@@ -190,11 +195,13 @@ describe('minimax cookie storage', () => {
 
   it('does not mistake a corrupt credential file for an absent cookie', async () => {
     fs.writeFileSync(path.join(dir, 'minimax-cookie.json'), '{{{')
-    await expect(readProviderCookie('minimax')).rejects.toBeInstanceOf(SyntaxError)
+    await expect(readProviderCookie('minimax')).rejects.toBeInstanceOf(ProviderCookieInvalidError)
   })
 
   it('leaves no temp file behind after a write', async () => {
     await writeProviderCookie('minimax', '_token=abc')
-    expect(fs.readdirSync(dir)).toEqual(['minimax-cookie.json'])
+    const entries = fs.readdirSync(dir)
+    expect(entries).toContain('minimax-cookie.json')
+    expect(entries.filter((entry) => entry.endsWith('.tmp'))).toEqual([])
   })
 })

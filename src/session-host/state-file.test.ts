@@ -34,7 +34,6 @@ describe('session-host state publication', () => {
     expect(a.endsWith('.tmp')).toBe(true)
     expect(b.endsWith('.tmp')).toBe(true)
   })
-
   it('gives colliding PID namespaces and module counters different temp paths', () => {
     const target = path.join(dir, 'session-host.json')
     const sameNamespace = { pid: 1, sequence: 1 }

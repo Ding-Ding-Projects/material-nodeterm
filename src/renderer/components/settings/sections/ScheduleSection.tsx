@@ -354,7 +354,8 @@ function SourceEditor({
                 onClick={() => {
                   const submitted = tokenDraft
                   void onSetToken(submitted).then((saved) => {
-                    // Do not erase a replacement pasted while this request was in flight.
+                    // Keep a failed draft available for retry, and never erase a replacement the
+                    // user pasted while this request was in flight.
                     if (saved) setTokenDraft((current) => (current === submitted ? '' : current))
                   })
                 }}
@@ -719,6 +720,7 @@ function RuleCard({
 export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const file = useScheduledSettings((s) => s.file)
   const hydrated = useScheduledSettings((s) => s.hydrated)
+  const loadError = useScheduledSettings((s) => s.loadError)
   const saveError = useScheduledSettings((s) => s.saveError)
   const active = useScheduledSettings((s) => s.active)
   const tokenStatus = useScheduledSettings((s) => s.tokenStatus)
@@ -757,6 +759,34 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
     return (
       <SettingsSection id="schedule" title="Schedule" isActive={isActive} searchEntries={ENTRIES}>
         <p className="text-[13px] text-muted">Loading…</p>
+      </SettingsSection>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <SettingsSection
+        id="schedule"
+        title="Schedule"
+        description="Scheduled appearance overrides are disabled until the saved schedule can be read safely."
+        isActive={isActive}
+        searchEntries={ENTRIES}
+      >
+        <div
+          role="alert"
+          className="space-y-2 rounded-md border border-[color:var(--warn)] bg-[color:var(--warn)]/10 px-3 py-3 text-[13px] text-[color:var(--warn)]"
+        >
+          <p>
+            Scheduled settings are off because the saved file is {loadError.kind === 'corrupt'
+              ? 'not valid JSON'
+              : 'unreadable'}{loadError.code ? ` (${loadError.code})` : ''}.
+          </p>
+          <p>
+            The original evidence was left untouched at <code>{loadError.path}</code>. Repair or
+            move that file, then restart nodeterm. Editing stays locked so this recovery copy
+            cannot be overwritten.
+          </p>
+        </div>
       </SettingsSection>
     )
   }

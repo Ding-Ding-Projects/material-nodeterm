@@ -6,7 +6,12 @@
 
 import type { BuiltExport } from '@shared/export'
 
-function triggerDownload(blob: Blob, filename: string): void {
+export const DOWNLOAD_URL_REVOKE_DELAY_MS = 30_000
+
+/** Browser/Electron-renderer download primitive shared by every Blob export. The object URL must
+ *  remain alive long enough for Chromium to consume the synthetic click; synchronous revocation
+ *  intermittently cancels the save before it starts. */
+export function saveBlobDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -16,11 +21,11 @@ function triggerDownload(blob: Blob, filename: string): void {
   // skipping the attach/detach avoids a visible layout flash for something the user never sees.
   a.click()
   // Revoke on a delay: revoking synchronously has raced the download start in some builds.
-  setTimeout(() => URL.revokeObjectURL(url), 30_000)
+  setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_REVOKE_DELAY_MS)
 }
 
 export function saveBuiltExport(built: BuiltExport): void {
-  triggerDownload(new Blob([built.content], { type: `${built.mimeType};charset=utf-8` }), built.filename)
+  saveBlobDownload(new Blob([built.content], { type: `${built.mimeType};charset=utf-8` }), built.filename)
 }
 
 export function saveArchive(archive: { filename: string; mimeType: string; bytes: Uint8Array }): void {
@@ -29,7 +34,7 @@ export function saveArchive(archive: { filename: string; mimeType: string; bytes
   // the WHOLE backing buffer into the download — and `SharedArrayBuffer` is not a valid BlobPart
   // at all, which is what the compiler is objecting to. `slice()` yields a right-sized copy.
   const bytes = archive.bytes.slice()
-  triggerDownload(
+  saveBlobDownload(
     new Blob([bytes.buffer as ArrayBuffer], { type: archive.mimeType }),
     archive.filename
   )

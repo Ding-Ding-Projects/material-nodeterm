@@ -72,7 +72,7 @@ ensure_node() {
   fi
 
   # 2. Provision the pinned Node LTS under the app dir. Map uname → nodejs.org dist naming.
-  local os arch runtime_dir node_bin
+  local os arch runtime_dir node_bin actual_node_version
   case "$(uname -s)" in
     Linux)  os="linux" ;;
     Darwin) os="darwin" ;;
@@ -125,9 +125,13 @@ ensure_node() {
   fi
 
   # 3. Verify the binary runs before we depend on it, then put it first on PATH so npm/npx/build use it.
-  if ! "$node_bin" --version >/dev/null 2>&1; then
+  if ! actual_node_version="$("$node_bin" --version 2>/dev/null)"; then
     rm -rf "$runtime_dir"
     fail "The provisioned Node.js binary at $node_bin does not run on this host. Install Node.js ^22.22.2, ^24.15.0, or >=26.0.0 manually and re-run."
+  fi
+  if [ "$actual_node_version" != "$NODE_LTS_VERSION" ]; then
+    rm -rf "$runtime_dir"
+    fail "The provisioned runtime reported ${actual_node_version}, but the requested and downloaded pin was ${NODE_LTS_VERSION}; refusing mismatched archive contents."
   fi
   if ! "$node_bin" "$APP_DIR/scripts/check-node-runtime.mjs" --quiet; then
     rm -rf "$runtime_dir"

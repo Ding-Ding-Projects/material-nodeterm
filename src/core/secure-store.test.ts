@@ -12,7 +12,9 @@ import { IPC } from '../shared/ipc'
 import type {
   AuthenticatorAddManualInput,
   AuthenticatorAddResult,
-  AuthenticatorEntry
+  AuthenticatorEntry,
+  AuthenticatorRemoveInput,
+  AuthenticatorRemoveResult
 } from '../shared/authenticator'
 import type { ToyLockCreatePasswordInput, ToyLockCreateResult, ToyLockRecord } from '../shared/toylock'
 
@@ -315,6 +317,48 @@ describe('SecureStore transaction ordering', () => {
 })
 
 describe('SecureStore caller transactions', () => {
+  it('refuses to remove an authenticator entry whose sealed revision changed after disclosure', async () => {
+    startAuthenticatorService()
+    const add = corePlatform.handlers[IPC.authenticatorAddManual] as (
+      input: AuthenticatorAddManualInput
+    ) => Promise<AuthenticatorAddResult>
+    const rename = corePlatform.handlers[IPC.authenticatorRename] as (
+      input: { id: string; issuer?: string; account?: string }
+    ) => Promise<AuthenticatorEntry | null>
+    const remove = corePlatform.handlers[IPC.authenticatorRemove] as (
+      input: AuthenticatorRemoveInput
+    ) => Promise<AuthenticatorRemoveResult>
+    const list = corePlatform.handlers[IPC.authenticatorList] as () => Promise<AuthenticatorEntry[]>
+
+    const added = await add({
+      issuer: 'Original',
+      account: 'child@example.test',
+      secretBase32: 'JBSWY3DPEHPK3PXP',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30
+    })
+    expect(added.ok).toBe(true)
+    if (!added.ok) throw new Error(added.error)
+
+    const disclosed = added.entry
+    const current = await rename({ id: disclosed.id, issuer: 'Renamed' })
+    expect(current).not.toBeNull()
+    expect(current?.revision).not.toBe(disclosed.revision)
+
+    await expect(remove({ id: disclosed.id, revision: disclosed.revision })).resolves.toMatchObject({
+      ok: false,
+      error: 'changed'
+    })
+    expect(await list()).toEqual([current])
+
+    await expect(remove({ id: current!.id, revision: current!.revision })).resolves.toMatchObject({
+      ok: true,
+      removed: current
+    })
+    expect(await list()).toEqual([])
+  })
+
   it('keeps both authenticator additions when the first read is parked', async () => {
     startAuthenticatorService()
     const add = corePlatform.handlers[IPC.authenticatorAddManual] as (

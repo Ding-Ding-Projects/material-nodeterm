@@ -47,9 +47,9 @@ export const VOCAB_MAX_ENTRIES = 2000
 export const VOCAB_MAX_KEY_LENGTH = 200
 export const VOCAB_MAX_VALUE_LENGTH = 500
 
-/** `Object.prototype` pollution vectors — rejected as keys even though `entries` is a plain
- *  object literal we build ourselves (never `Object.assign`ed onto a live prototype-bearing
- *  object), because the file is untrusted input and this is a cheap, unconditional guarantee. */
+/** `Object.prototype` pollution vectors — rejected at both object levels even though the scanner
+ *  and returned dictionary have null prototypes, because the file is untrusted input and this is
+ *  a cheap, unconditional guarantee that survives future refactors. */
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 export interface PersonalVocabularyEntries {
@@ -78,11 +78,13 @@ function entriesFromTerms(terms: unknown[]): VocabValidationResult {
   if (terms.length > VOCAB_MAX_ENTRIES) {
     return { ok: false, error: `more than ${VOCAB_MAX_ENTRIES} terms (${terms.length})` }
   }
-  const entries: PersonalVocabularyEntries = {}
+  const entries = Object.create(null) as PersonalVocabularyEntries
   let count = 0
   for (const row of terms) {
     if (row === null || typeof row !== 'object' || Array.isArray(row)) continue
-    const { replaces, alias } = row as { replaces?: unknown; alias?: unknown }
+    const rowObj = row as Record<string, unknown>
+    const replaces = Object.hasOwn(rowObj, 'replaces') ? rowObj.replaces : undefined
+    const alias = Object.hasOwn(rowObj, 'alias') ? rowObj.alias : undefined
     if (typeof replaces !== 'string' || typeof alias !== 'string') continue
     if (replaces.length === 0 || alias.length === 0) continue
     if (UNSAFE_KEYS.has(replaces)) {
@@ -113,25 +115,43 @@ export function validateVocabularyPayload(raw: string): VocabValidationResult {
   const scanned = scanJson(raw, { maxDepth: VOCAB_MAX_DEPTH, maxNodes: VOCAB_MAX_NODES })
   if (!scanned.ok) return { ok: false, error: `not valid JSON — ${scanned.error}` }
 
-  const root = scanned.value
+  return validateVocabularyValue(scanned.value)
+}
+
+/** Validate an already-decoded value against the same ownership and shape rules. The upload path
+ *  always arrives through `scanJson`; keeping this decision as a pure value-level function makes
+ *  the own-property boundary directly testable rather than an unobservable redundant guard. */
+export function validateVocabularyValue(root: unknown): VocabValidationResult {
   if (root === null || typeof root !== 'object' || Array.isArray(root)) {
     return { ok: false, error: 'the top level must be a JSON object' }
   }
   const rootObj = root as Record<string, unknown>
 
+  for (const key of Object.keys(rootObj)) {
+    if (UNSAFE_KEYS.has(key)) return { ok: false, error: `top-level key "${key}" is not allowed` }
+  }
+
   // Accept either spelling of the version field. Present ⇒ must match; absent ⇒ identified by
-  // shape below (see the header note on why missing is no longer fatal).
-  const declared = rootObj.version ?? rootObj.schemaVersion
-  if (declared !== undefined && declared !== VOCAB_SCHEMA_VERSION) {
+  // shape below (see the header note on why missing is no longer fatal). These are deliberately
+  // own-property reads: inherited values are not part of the uploaded JSON contract.
+  const declaredVersions = [
+    ...(Object.hasOwn(rootObj, 'version') ? [rootObj.version] : []),
+    ...(Object.hasOwn(rootObj, 'schemaVersion') ? [rootObj.schemaVersion] : [])
+  ]
+  const unsupportedVersion = declaredVersions.find(
+    (value) => value !== undefined && value !== VOCAB_SCHEMA_VERSION
+  )
+  if (unsupportedVersion !== undefined) {
     return {
       ok: false,
-      error: `unsupported schema version ${JSON.stringify(declared)} (expected ${VOCAB_SCHEMA_VERSION}; a future/older format is rejected rather than guessed at)`
+      error: `unsupported schema version ${JSON.stringify(unsupportedVersion)} (expected ${VOCAB_SCHEMA_VERSION}; a future/older format is rejected rather than guessed at)`
     }
   }
 
+  const hasEntries = Object.hasOwn(rootObj, 'entries')
   // `terms` list form: [{ replaces, alias }] → { replaces: alias }. A row missing either string
   // is skipped rather than failing the file: these exports carry documentation-only rows too.
-  if (rootObj.entries === undefined && Array.isArray(rootObj.terms)) {
+  if (!hasEntries && Object.hasOwn(rootObj, 'terms') && Array.isArray(rootObj.terms)) {
     return entriesFromTerms(rootObj.terms)
   }
 
@@ -140,12 +160,25 @@ export function validateVocabularyPayload(raw: string): VocabValidationResult {
   // Schema. Both are valid files with nothing to substitute, so accepting them with zero
   // entries is the honest answer — reporting an error would say the file is broken when it is
   // simply not a substitution table.
-  const hasPhrases = rootObj.requiredPhrases !== null && rootObj.requiredPhrases !== undefined
-  const isJsonSchemaDoc = typeof rootObj.$schema === 'string' && rootObj.properties !== undefined
-  if (rootObj.entries === undefined && (hasPhrases || isJsonSchemaDoc)) {
+  const hasPhrases =
+    Object.hasOwn(rootObj, 'requiredPhrases') &&
+    rootObj.requiredPhrases !== null &&
+    rootObj.requiredPhrases !== undefined
+  const isJsonSchemaDoc =
+    Object.hasOwn(rootObj, '$schema') &&
+    typeof rootObj.$schema === 'string' &&
+    Object.hasOwn(rootObj, 'properties') &&
+    rootObj.properties !== undefined
+  if (!hasEntries && (hasPhrases || isJsonSchemaDoc)) {
     return { ok: true, entries: {}, entryCount: 0 }
   }
 
+  if (!hasEntries) {
+    return {
+      ok: false,
+      error: 'no usable vocabulary found — expected "entries" (term → replacement), a "terms" list, or "requiredPhrases"'
+    }
+  }
   const entriesRaw = rootObj.entries
   if (entriesRaw === null || typeof entriesRaw !== 'object' || Array.isArray(entriesRaw)) {
     return {
@@ -159,7 +192,10 @@ export function validateVocabularyPayload(raw: string): VocabValidationResult {
     return { ok: false, error: `more than ${VOCAB_MAX_ENTRIES} entries (${keys.length})` }
   }
 
-  const entries: PersonalVocabularyEntries = {}
+  // Keep the validated result prototype-free too. The scanner already made every input key an
+  // own property; returning an ordinary `{}` here would reintroduce the `__proto__` setter at the
+  // final copy boundary if the rejection above were ever weakened.
+  const entries = Object.create(null) as PersonalVocabularyEntries
   for (const key of keys) {
     if (UNSAFE_KEYS.has(key)) return { ok: false, error: `"${key}" is not an allowed key` }
     if (key.length === 0) return { ok: false, error: 'an entry has an empty key' }

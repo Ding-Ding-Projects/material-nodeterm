@@ -193,6 +193,17 @@ export function sessionForProject(projectId: string): WorkspaceSession {
   return localOrActiveSession()
 }
 
+/** Resolve the API and per-core stores under one project-binding epoch. Imperative async actions
+ * capture this object before dispatch so a later tab switch cannot mix a relay API with local
+ * agent-status cleanup (or the reverse). */
+export function projectSessionScope(projectId: string): {
+  session: WorkspaceSession
+  stores: SessionStores
+} {
+  const session = sessionForProject(projectId)
+  return { session, stores: getSessionStores(session.id) }
+}
+
 /** Re-broadcast the local human's identity on EVERY live session (obligation 2). Renaming yourself
  *  must re-hello every connected core, not just the one the rename UI happened to read — otherwise a
  *  remote peer keeps drawing your old name until reload. `setMe` saves + says hello per session. */

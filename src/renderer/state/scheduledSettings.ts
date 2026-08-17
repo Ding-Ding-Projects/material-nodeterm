@@ -2,12 +2,18 @@ import { create } from 'zustand'
 import {
   defaultScheduledSettingsFile,
   type ScheduledSettingsActiveState,
-  type ScheduledSettingsFile
+  type ScheduledSettingsFile,
+  type ScheduledSettingsLoadError
 } from '@shared/scheduled-settings'
+import { ScheduledSettingsSaveQueue } from './scheduled-settings-save'
 
 interface ScheduledSettingsState {
   file: ScheduledSettingsFile
   hydrated: boolean
+  /** Present when the shell could not read scheduled-settings.json. `file` is then the safe empty
+   * fallback, not proof that no rules existed; the Settings panel shows the preserved recovery
+   * path and exposes no editing controls until restart after repair. */
+  loadError: ScheduledSettingsLoadError | null
   /** The last save attempt's rejection reason (the bounded-schema validator in main), or `null`
    *  while nothing has failed. Shown inline in the Schedule section rather than thrown — a save
    *  failure here is a user-correctable mistake (too many rules, a malformed window), not a bug. */
@@ -18,67 +24,34 @@ interface ScheduledSettingsState {
    *  see its comment for why. */
   active: ScheduledSettingsActiveState | null
   tokenStatus: Record<string, boolean>
-  /** Missing status is not `false`: this tracks rules whose credential file could not be read. */
+  /** Missing status is not `false`: these rules had credential evidence the shell could not read. */
   tokenStatusUnknown: Record<string, boolean>
-  /** Per-rule credential mutation failures. Token calls are fired from button handlers, so the
-   *  store consumes their rejection and gives the owning rule an inline, non-secret error. */
+  /** Per-rule credential/status failures. Button handlers consume their promise rejections here so
+   * the owning rule keeps a visible, current error instead of producing an unhandled rejection. */
   tokenErrors: Record<string, string>
   hydrate(): Promise<void>
   /** Replace the whole file and persist it (debounced, mirroring `useSettings.update`). */
   update(next: ScheduledSettingsFile): void
-  /** True only after both the mutation and the write-only status refresh succeed. */
+  /** True only after the mutation and its authoritative status refresh both succeed. */
   setHomeAssistantToken(ruleId: string, token: string | null): Promise<boolean>
   /** The "Retry" action next to a failed external source. */
   refreshRule(ruleId: string): Promise<void>
 }
 
 const SAVE_COALESCE_MS = 500
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-let pendingSave: ScheduledSettingsFile | null = null
-let pendingSaveCallback: ((error: string | null) => void) | null = null
-let saveInFlight: Promise<string | null> | null = null
+const saveQueue = new ScheduledSettingsSaveQueue(
+  (file) => window.nodeTerminal.scheduledSettings.save(file),
+  SAVE_COALESCE_MS
+)
+let tokenActionTail: Promise<void> = Promise.resolve()
 
-async function persistPendingSave(): Promise<string | null> {
-  if (saveInFlight) {
-    const prior = saveInFlight
-    const priorError = await prior
-    if (saveInFlight === prior) saveInFlight = null
-    if (priorError) return priorError
-    return persistPendingSave()
-  }
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = null
-  const toSave = pendingSave
-  const onSaved = pendingSaveCallback
-  pendingSave = null
-  pendingSaveCallback = null
-  if (!toSave) return null
-  const run = (async (): Promise<string | null> => {
-    let error: string | null
-    try {
-      const result = await window.nodeTerminal.scheduledSettings.save(toSave)
-      error = result.ok ? null : (result.error ?? 'Could not save the schedule.')
-    } catch {
-      error = 'Could not reach the app to save the schedule.'
-    }
-    onSaved?.(error)
-    return error
-  })()
-  saveInFlight = run
-  try {
-    return await run
-  } finally {
-    if (saveInFlight === run) saveInFlight = null
-  }
-}
-
-function scheduleSave(next: ScheduledSettingsFile, onSaved: (error: string | null) => void): void {
-  pendingSave = next
-  pendingSaveCallback = onSaved
-  if (saveTimer) return
-  saveTimer = setTimeout(() => {
-    void persistPendingSave()
-  }, SAVE_COALESCE_MS)
+function serializeTokenAction<T>(action: () => Promise<T>): Promise<T> {
+  const result = tokenActionTail.catch(() => {}).then(action)
+  tokenActionTail = result.then(
+    () => {},
+    () => {}
+  )
+  return result
 }
 
 function withoutRuleError<T>(errors: Record<string, T>, ruleId: string): Record<string, T> {
@@ -87,8 +60,12 @@ function withoutRuleError<T>(errors: Record<string, T>, ruleId: string): Record<
   return next
 }
 
+function errorDetail(reason: unknown): string {
+  return reason instanceof Error && reason.message.trim() ? ` ${reason.message}` : ''
+}
+
 function tokenMutationError(token: string | null, reason: unknown): string {
-  const detail = reason instanceof Error && reason.message.trim() ? ` ${reason.message}` : ''
+  const detail = errorDetail(reason)
   return token === null
     ? `Could not clear the Home Assistant token. It may still be stored.${detail}`
     : `Could not save the Home Assistant token.${detail}`
@@ -98,14 +75,14 @@ function tokenMutationError(token: string | null, reason: unknown): string {
 // state/settings.ts. Guarded: this module is transitively importable from a node-environment test.
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    if (pendingSave) void window.nodeTerminal.scheduledSettings.save(pendingSave)
-    pendingSave = null
+    saveQueue.flushPendingForUnload()
   })
 }
 
-export const useScheduledSettings = create<ScheduledSettingsState>((set) => ({
+export const useScheduledSettings = create<ScheduledSettingsState>((set, get) => ({
   file: defaultScheduledSettingsFile(),
   hydrated: false,
+  loadError: null,
   saveError: null,
   active: null,
   tokenStatus: {},
@@ -113,87 +90,143 @@ export const useScheduledSettings = create<ScheduledSettingsState>((set) => ({
   tokenErrors: {},
 
   async hydrate() {
-    const [file, active] = await Promise.all([
-      window.nodeTerminal.scheduledSettings.load(),
-      window.nodeTerminal.scheduledSettings.activeState()
-    ])
-    let tokenStatus: Record<string, boolean> = {}
-    let tokenStatusUnknown: Record<string, boolean> = {}
-    let tokenErrors: Record<string, string> = {}
-    try {
-      tokenStatus = await window.nodeTerminal.scheduledSettings.tokenStatus()
-    } catch {
-      const ids = file.rules
-        .filter((rule) => rule.source.kind === 'home-assistant')
-        .map((rule) => rule.id)
-      tokenStatusUnknown = Object.fromEntries(ids.map((id) => [id, true]))
-      tokenErrors = Object.fromEntries(
-        ids.map((id) => [id, 'Could not check whether a Home Assistant token is stored.'])
-      )
+    const activePromise = window.nodeTerminal.scheduledSettings.activeState().catch(() => get().active)
+    const loaded = await window.nodeTerminal.scheduledSettings.load()
+    if (loaded.error) saveQueue.cancelPending()
+    const active = await activePromise
+    const prior = get()
+    let tokenStatus: Record<string, boolean> = { ...prior.tokenStatus }
+    let tokenStatusUnknown: Record<string, boolean> = { ...prior.tokenStatusUnknown }
+    let tokenErrors: Record<string, string> = { ...prior.tokenErrors }
+    if (!loaded.error) {
+      try {
+        tokenStatus = await window.nodeTerminal.scheduledSettings.tokenStatus()
+        for (const id of Object.keys(tokenStatusUnknown)) delete tokenErrors[id]
+        tokenStatusUnknown = {}
+      } catch {
+        const ids = loaded.file.rules
+          .filter((rule) => rule.source.kind === 'home-assistant')
+          .map((rule) => rule.id)
+        for (const id of ids) {
+          tokenStatusUnknown[id] = true
+          tokenErrors[id] = 'Could not check whether a Home Assistant token is stored.'
+        }
+      }
     }
-    set({ file, active, tokenStatus, tokenStatusUnknown, tokenErrors, hydrated: true })
+    set({
+      file: loaded.file,
+      loadError: loaded.error,
+      active,
+      tokenStatus,
+      tokenStatusUnknown,
+      tokenErrors,
+      hydrated: true
+    })
   },
 
   update(next) {
+    if (get().loadError) return
     set({ file: next, saveError: null })
-    scheduleSave(next, (error) => set({ saveError: error }))
+    saveQueue.enqueue(next, (error) => set({ saveError: error }))
   },
 
-  async setHomeAssistantToken(ruleId, token) {
-    set((state) => ({ tokenErrors: withoutRuleError(state.tokenErrors, ruleId) }))
-    // Token mutation is immediate while schedule edits are coalesced. Publish the owning rule
-    // first, otherwise startup/background orphan pruning can authoritatively delete the new token
-    // while the core store still contains the previous rule set.
-    const pendingError = await persistPendingSave()
-    if (pendingError) {
-      set((state) => ({
-        tokenErrors: {
-          ...state.tokenErrors,
-          [ruleId]: `Could not save the owning schedule rule before changing its token. ${pendingError}`
-        }
-      }))
-      return false
-    }
-    try {
-      await window.nodeTerminal.scheduledSettings.setHomeAssistantToken(ruleId, token)
-    } catch (reason) {
-      set((state) => ({
-        tokenErrors: { ...state.tokenErrors, [ruleId]: tokenMutationError(token, reason) }
-      }))
-      return false
-    }
+  setHomeAssistantToken(ruleId, token) {
+    return serializeTokenAction(async () => {
+      set((state) => ({ tokenErrors: withoutRuleError(state.tokenErrors, ruleId) }))
 
-    try {
-      const tokenStatus = await window.nodeTerminal.scheduledSettings.tokenStatus()
-      set((state) => {
-        const tokenErrors = { ...state.tokenErrors }
-        for (const id of Object.keys(state.tokenStatusUnknown)) delete tokenErrors[id]
-        delete tokenErrors[ruleId]
-        return { tokenStatus, tokenStatusUnknown: {}, tokenErrors }
-      })
-      return true
-    } catch (reason) {
-      const detail = reason instanceof Error && reason.message.trim() ? ` ${reason.message}` : ''
-      // Do not guess whether a clear succeeded. Keeping the old status is the conservative state;
-      // a false "cleared" is especially dangerous for a bearer credential. The status call is
-      // aggregate, so its rejection cannot identify which rule failed: mark every HA rule unknown.
-      set((state) => {
-        const ids = state.file.rules
-          .filter((rule) => rule.source.kind === 'home-assistant')
-          .map((rule) => rule.id)
-        const tokenStatusUnknown = { ...state.tokenStatusUnknown }
-        const tokenErrors = { ...state.tokenErrors }
-        for (const id of ids) {
-          tokenStatusUnknown[id] = true
-          tokenErrors[id] =
-            id === ruleId
-              ? `The Home Assistant token change may have succeeded, but its stored status could not be verified.${detail}`
-              : 'Could not check whether a Home Assistant token is stored.'
+      if (token !== null && get().loadError) {
+        set((state) => ({
+          tokenErrors: {
+            ...state.tokenErrors,
+            [ruleId]: 'Could not save the Home Assistant token while scheduled settings are locked for recovery.'
+          }
+        }))
+        return false
+      }
+
+      // Save needs a durable owning rule before credential publication. Clear is deliberately
+      // independent: a failed/unreadable schedule must never prevent removing possible bearer
+      // evidence, and no owning rule is needed to make absence safe.
+      if (token !== null) {
+        const pendingError = await saveQueue.flushPending()
+        if (pendingError) {
+          set((state) => ({
+            tokenErrors: {
+              ...state.tokenErrors,
+              [ruleId]: `Could not save the owning schedule rule before changing its token. ${pendingError}`
+            }
+          }))
+          return false
         }
-        return { tokenStatusUnknown, tokenErrors }
-      })
-      return false
-    }
+      }
+
+      try {
+        await window.nodeTerminal.scheduledSettings.setHomeAssistantToken(ruleId, token)
+      } catch (reason) {
+        set((state) => ({
+          tokenStatusUnknown: { ...state.tokenStatusUnknown, [ruleId]: true },
+          tokenErrors: { ...state.tokenErrors, [ruleId]: tokenMutationError(token, reason) }
+        }))
+        return false
+      }
+
+      try {
+        const tokenStatus = await window.nodeTerminal.scheduledSettings.tokenStatus()
+        const expected = token !== null
+        const verified =
+          Object.prototype.hasOwnProperty.call(tokenStatus, ruleId) &&
+          tokenStatus[ruleId] === expected
+        if (!verified) {
+          set((state) => {
+            const nextStatus = { ...tokenStatus }
+            if (Object.prototype.hasOwnProperty.call(state.tokenStatus, ruleId)) {
+              nextStatus[ruleId] = state.tokenStatus[ruleId]
+            } else {
+              delete nextStatus[ruleId]
+            }
+            const tokenErrors = { ...state.tokenErrors }
+            for (const id of Object.keys(state.tokenStatusUnknown)) delete tokenErrors[id]
+            tokenErrors[ruleId] =
+              'The Home Assistant token change may have succeeded, but its stored status did not verify the requested result.'
+            return {
+              tokenStatus: nextStatus,
+              tokenStatusUnknown: { [ruleId]: true },
+              tokenErrors
+            }
+          })
+          return false
+        }
+
+        set((state) => {
+          const tokenErrors = { ...state.tokenErrors }
+          for (const id of Object.keys(state.tokenStatusUnknown)) delete tokenErrors[id]
+          delete tokenErrors[ruleId]
+          return { tokenStatus, tokenStatusUnknown: {}, tokenErrors }
+        })
+        return true
+      } catch (reason) {
+        const detail = errorDetail(reason)
+        // The aggregate status call cannot identify one failed rule. Keep every prior boolean and
+        // mark every current Home Assistant rule unknown; especially after Clear, `false` would be
+        // a fabricated claim that bearer evidence is gone.
+        set((state) => {
+          const ids = state.file.rules
+            .filter((rule) => rule.source.kind === 'home-assistant')
+            .map((rule) => rule.id)
+          const tokenStatusUnknown = { ...state.tokenStatusUnknown }
+          const tokenErrors = { ...state.tokenErrors }
+          for (const id of ids) {
+            tokenStatusUnknown[id] = true
+            tokenErrors[id] =
+              id === ruleId
+                ? `The Home Assistant token change may have succeeded, but its stored status could not be verified.${detail}`
+                : 'Could not check whether a Home Assistant token is stored.'
+          }
+          return { tokenStatusUnknown, tokenErrors }
+        })
+        return false
+      }
+    })
   },
 
   async refreshRule(ruleId) {

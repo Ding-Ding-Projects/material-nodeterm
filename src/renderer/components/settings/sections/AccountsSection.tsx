@@ -6,17 +6,26 @@ import { useSystemAccount } from '../../../state/systemAccount'
 import { isAccountLoginNode } from '../../../state/workspace'
 import { useProjects } from '../../../state/projects'
 import { useSshConn } from '../../../state/sshConn'
-import { useKidsMode } from '../../../state/kidsMode'
+import { kidsDestructiveGateRequired } from '../../../state/kidsMode'
 import { openDestructiveGate } from '../../../state/destructiveGate'
 import {
   ACCOUNT_REMOVAL_COMMITTED_EVENT,
+  ACCOUNT_REMOVAL_SCOPE_EVENT,
   ACCOUNT_REMOVAL_TEARDOWN_EVENT,
+  accountRemovalNodeTargetIdentity,
+  accountRemovalTargetIdentity,
   dispatchAccountRemoval,
   planAccountRemoval,
   requestAccountRemovalTeardown,
+  requestAccountRemovalScope,
   type AccountRemovalTeardownDetail,
   type AccountRemovalDispatchDeps
 } from '../../../lib/accountRemoval'
+import { nodeDeletionTargetIncarnation } from '../../../lib/nodeDeletion'
+import {
+  createDestructiveCommitBarrier,
+  type DestructiveAuthorization
+} from '../../../lib/destructiveAuthorization'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
@@ -36,7 +45,6 @@ const LOCAL_TARGET = ''
 
 type PlainAccountRemovalRequest = Parameters<AccountRemovalDispatchDeps['openConfirm']>[0]
 interface PendingAccountRemoval {
-  account: ClaudeAccount
   request: PlainAccountRemovalRequest
 }
 
@@ -57,16 +65,33 @@ function applyAccounts(fn: (accs: ClaudeAccount[]) => ClaudeAccount[]): void {
   s.update({ claudeAccounts: fn(s.settings.claudeAccounts) })
 }
 
-/** Counts nodes bound to an account across every project's SERIALIZED nodes. The active
- *  project's live React Flow edits since the last commit aren't reflected here, so the count
- *  can be slightly stale for the active canvas — acceptable for a confirmation warning. */
-function countNodesUsing(accountId: string): number {
-  return useProjects
-    .getState()
-    .projects.reduce(
-      (sum, p) => sum + p.nodes.filter((n) => n.accountId === accountId).length,
-      0
-    )
+/** Exact serialized bindings disclosed with an account removal, sorted for stable comparison. */
+function affectedNodesUsing(accountId: string): string[] | null {
+  const state = useProjects.getState()
+  const live = requestAccountRemovalScope(accountId, (detail) =>
+    window.dispatchEvent(new CustomEvent(ACCOUNT_REMOVAL_SCOPE_EVENT, { detail }))
+  )
+  if (!live) return null
+  return [
+    ...state.projects
+      .filter((project) => project.id !== state.activeProjectId)
+      .flatMap((project) =>
+      project.nodes
+        .filter((node) => node.accountId === accountId)
+        .map((node) =>
+          accountRemovalNodeTargetIdentity({
+            projectId: project.id,
+            id: node.id,
+            type: node.kind,
+            title: node.title,
+            accountId: node.accountId,
+            accountLogin: node.accountLogin === true,
+            incarnation: nodeDeletionTargetIncarnation(node)
+          })
+        )
+      ),
+    ...live
+  ].sort()
 }
 
 export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
@@ -188,13 +213,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   }
 
   const performRemove = async (account: ClaudeAccount): Promise<void> => {
-    setPendingRemove(null)
-    setRemovingAccountId(account.id)
-    setRemoveError(null)
     try {
-      // The active login terminal was synchronously closed before this function began. Now stop a
-      // pending poll before removing the directory it is reading.
-      if (account.pending) await window.nodeTerminal.claudeAccounts.cancelWaitLogin(account.id)
       const projectId = projectIdForHost(account.host)
       await window.nodeTerminal.claudeAccounts.remove(
         account.id,
@@ -230,12 +249,16 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     }
   }
 
-  const beginApprovedRemove = (account: ClaudeAccount): void => {
+  const beginApprovedRemove = (
+    account: ClaudeAccount,
+    authorization: import('../../../lib/destructiveAuthorization').DestructiveAuthorization
+  ): void => {
     // This dispatch is synchronous. Canvas must accept the already-authorized live-node teardown
     // and close/reconcile the account's active login terminals BEFORE it calls continueRemoval.
     // If Canvas is not mounted (or refuses), credentials and account state remain untouched.
     const handled = requestAccountRemovalTeardown(
       account.id,
+      authorization,
       () => void performRemove(account),
       (detail: AccountRemovalTeardownDetail) =>
         window.dispatchEvent(new CustomEvent(ACCOUNT_REMOVAL_TEARDOWN_EVENT, { detail }))
@@ -247,21 +270,88 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
             kind: 'error',
             message: `Could not close the active login session for “${account.label}”. The account was not removed.`
           }
-        })
-      )
-    }
+        },
+        upgradeToTwoKey: (current) => {
+          setRemovingAccountId((value) => (value === current.id ? null : value))
+          requestRemove(current, null)
+        },
+        refuse: () => {
+          setRemovingAccountId((current) => (current === account.id ? null : current))
+          setRemoveError(
+            'That account or its affected nodes changed before removal could commit. Nothing was removed; review it and try again.'
+          )
+        }
+      })
+      finalCommit()
+    })()
   }
 
   const requestRemove = (account: ClaudeAccount, anchorEl: HTMLElement | null): boolean => {
     if (removingAccountId === account.id) return false
+    const disclosedAccount = useSettings
+      .getState()
+      .settings.claudeAccounts.find((candidate) => candidate.id === account.id)
+    if (
+      !disclosedAccount ||
+      accountRemovalTargetIdentity(disclosedAccount) !== accountRemovalTargetIdentity(account)
+    ) {
+      setRemoveError(
+        'That account changed before its removal confirmation could open. Review it and try again.'
+      )
+      return false
+    }
+    const disclosedAffectedNodes = affectedNodesUsing(disclosedAccount.id)
+    if (!disclosedAffectedNodes) {
+      setRemoveError(
+        'The active canvas could not be re-read, so account removal was not opened. Try again.'
+      )
+      return false
+    }
+    const disclosedIdentity = accountRemovalTargetIdentity(
+      disclosedAccount,
+      disclosedAffectedNodes
+    )
     const plan = planAccountRemoval({
-      label: account.label,
-      affectedNodeCount: countNodesUsing(account.id),
-      kidsModeOn: useKidsMode.getState().enabled
+      label: disclosedAccount.label,
+      affectedNodeCount: disclosedAffectedNodes.length,
+      kidsModeOn: kidsDestructiveGateRequired()
     })
     const rect = anchorEl?.getBoundingClientRect()
+    const barriers: Partial<Record<DestructiveAuthorization, () => unknown>> = {}
+    const commit = (authorization: DestructiveAuthorization): void => {
+      const barrier =
+        barriers[authorization] ??
+        createDestructiveCommitBarrier({
+          disclosedIdentity,
+          authorization,
+          readCurrent: () => {
+            const current = useSettings
+              .getState()
+              .settings.claudeAccounts.find((candidate) => candidate.id === disclosedAccount.id)
+            const affected = current ? affectedNodesUsing(current.id) : null
+            return current && affected
+              ? {
+                  identity: accountRemovalTargetIdentity(current, affected),
+                  target: current,
+                  kidsGateRequired: kidsDestructiveGateRequired()
+                }
+              : null
+          },
+          perform: (current) => beginApprovedRemove(current, authorization, disclosedIdentity),
+          upgradeToTwoKey: (current) => {
+            requestRemove(current, null)
+          },
+          refuse: () => {
+            setRemoveError(
+              'That account changed while the confirmation was open. Nothing was removed; review it and try again.'
+            )
+          }
+        })
+      barriers[authorization] = barrier
+      barrier()
+    }
     return dispatchAccountRemoval(plan, {
-      perform: () => beginApprovedRemove(account),
+      perform: (authorization) => beginApprovedRemove(account, authorization),
       openGate: (request) =>
         openDestructiveGate({
           ...request,
@@ -269,7 +359,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
           restoreFocusEl: anchorEl
         }),
       openConfirm: (request) => {
-        setPendingRemove({ account, request })
+        setPendingRemove({ request })
         return true
       }
     })
@@ -468,10 +558,10 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
           onConfirm={() => {
             const pending = pendingRemove
             setPendingRemove(null)
-            // Kids mode can turn on while this ordinary dialog is open. Re-plan at the click
-            // boundary so a stale one-key confirmation can never authorize the transaction.
-            if (useKidsMode.getState().enabled) requestRemove(pending.account, null)
-            else pending.request.onConfirm()
+            // The request callback owns the live target + policy barrier. Keeping that decision
+            // out of the component means a renamed/replaced account and a Kids transition are
+            // tested as behavior rather than pinned by source text.
+            pending.request.onConfirm()
           }}
           onCancel={() => {
             const cancel = pendingRemove.request.onCancel

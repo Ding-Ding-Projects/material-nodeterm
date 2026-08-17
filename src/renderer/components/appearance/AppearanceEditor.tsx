@@ -32,6 +32,7 @@ import {
 } from '@renderer/lib/fontDetect'
 import { UI_FONT_CATALOG } from '@renderer/lib/appearance/uiFontDetect'
 import type { AppearancePreset, AppearanceTextStyle, ElementAppearanceEntry } from '@shared/types'
+import { saveBlobDownload } from '@renderer/lib/exportSave'
 
 type Tab = 'font' | 'color' | 'layout' | 'presets'
 
@@ -554,12 +555,7 @@ function PresetsTab({
   function exportPresets(): void {
     const file = buildExportFile(presets)
     const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'nodeterm-appearance-presets.json'
-    a.click()
-    URL.revokeObjectURL(url)
+    saveBlobDownload(blob, 'nodeterm-appearance-presets.json')
   }
 
   function onImportFile(e: React.ChangeEvent<HTMLInputElement>): void {

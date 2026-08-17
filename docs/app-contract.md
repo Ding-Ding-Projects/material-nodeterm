@@ -180,9 +180,9 @@ convincing mock-up and a working app photograph identically.
 | check | what it proves |
 |---|---|
 | Command palette | a nonsense query **narrows** the result list |
-| Settings toggle | a switch flips **and flips back** |
+| Settings toggle | a switch flips, **survives a renderer reload**, flips back, and survives again |
 | Canvas | a live viewport transform, which a static image cannot have |
-| Appearance | changing `--accent` moves a **consumer's computed colour** |
+| Appearance | changing `--accent` moves a **real app Switch's** computed colour |
 | Preload bridge | `settings.load()` **round-trips to the main process** |
 
 Three rules it is built on, each of which it would be worthless without:
@@ -202,13 +202,43 @@ Three rules it is built on, each of which it would be worthless without:
 takes the run to 4/5 with the settings case red; restoring gives 5/5 back. That is the whole claim
 of this harness — that it can tell a wired control from a painted one — tested rather than asserted.
 
+The launched app never uses the operator's real profile. The harness creates a disposable
+`NT_USER_DATA` directory and sets `NT_MULTI=1`, so the settings round-trip can persist and reload a
+real value without touching the user's settings, workspace, identity, or sessions. Attach mode is
+the explicit exception: the caller selected that already-running target and owns its state.
+
 **It cleans up after itself, and that mattered.** On Windows the app spawns a session host that
 outlives its parent *by design*. So a harness that only kills the app leaves one behind holding
 `node_modules\electron\dist\electron.exe` — and because `npm ci` deletes `node_modules` BEFORE
 installing, the next install failed and left the checkout gutted: no vitest, no react, no ws. The
 harness now snapshots this repo's Electron PIDs before launching and stops only the ones that
 appeared. Not "all Electron for this repo", which would take the developer's own running app with
-it.
+it. Launch, CDP setup, and every interaction run inside one `try`/`finally`; a failed CDP connection
+therefore cleans up too, and an unprovable cleanup makes the gate fail rather than reporting green.
+
+Cleanup is literal, not wildcard-shaped. The repo directory is passed to PowerShell as environment
+data with a trailing path separator and compared with case-insensitive `String.IndexOf`; it is
+never interpolated into a `-like` expression. A checkout named `oak[prod]?*` otherwise makes `[]`,
+`?`, and `*` pattern syntax: the harness can miss its own process and select an unrelated one for
+`Stop-Process`. Failure to inventory processes aborts the launch instead of becoming an empty
+snapshot, and candidates are revalidated immediately before termination to reduce PID-reuse risk.
+
+**Launching the gate must not launch against the developer's home.** `NT_USER_DATA` moves only
+Electron's profile. App boot also installs managed hooks, skills, and instruction blocks through
+`os.homedir()`, `XDG_CONFIG_HOME`, and `GROK_HOME`; on Windows, Node resolves `os.homedir()` from
+`USERPROFILE`, not `HOME`. An owned launch therefore creates one disposable root and redirects
+HOME/USERPROFILE/HOMEDRIVE/HOMEPATH, AppData, temp, XDG, Claude, Codex, Grok, and Kimi roots into it.
+Before interactions it asks the running main process for `userDataDir()` and verifies that the real
+boot created every managed hook/config artefact inside the sandbox. Exact real-home targets are
+fingerprinted before and after the run; an unreadable sentinel aborts rather than being treated as
+absent, and any changed path makes the run fail. The sandbox is removed only after this run's
+literal-matched Electron processes are stopped. `--attach` deliberately does not claim this
+isolation because the harness does not own the attached app.
+
+The helper gates execute both boundaries rather than scan their source: a real child Node process
+must resolve and write only inside the disposable home, the sentinel must turn red on both a changed
+and a newly-created config file, and real Windows PowerShell must distinguish literal `[?*`
+checkout names from wildcard lookalikes and sibling prefixes.
 
 Cleanup is literal, not wildcard-shaped. The repo directory is passed to PowerShell as environment
 data with a trailing path separator and compared with case-insensitive `String.IndexOf`; it is

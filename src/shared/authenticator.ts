@@ -18,11 +18,27 @@ export interface AuthenticatorEntry {
   period: number
   createdAt: number
   updatedAt: number
+  /** Opaque core-computed generation of metadata + sealed seed bytes. Destructive compare/remove
+   *  sends this value back so another window cannot replace a seed behind an unchanged id. */
+  revision?: string
   /** True for a secret that a toy-lock TOTP enrollment ALSO saved here on request — purely
    *  informational, so the list can say "this one also unlocks <target>" instead of the user
    *  discovering the overlap by surprise. */
   linkedToyLockId?: string
+  /** Non-secret identity for the exact stored entry revision that produced this row. Destructive
+   *  callers must return it so a rename or replacement that happened while confirmation was open
+   *  cannot be mistaken for the entry the user approved. */
+  revision: string
 }
+
+export interface AuthenticatorRemoveInput {
+  id: string
+  revision: string
+}
+
+export type AuthenticatorRemoveResult =
+  | { ok: true; removed: AuthenticatorEntry }
+  | { ok: false; error: 'not-found' | 'changed'; message: string }
 
 export interface AuthenticatorAddManualInput {
   issuer: string

@@ -1,5 +1,11 @@
-// EVERY agent launch must resolve its permission mode through `activePermissionMode`.
+// Every production agent launch obtains a branded launch plan from the live permission funnel.
 //
+// This exercises the decision that command builders actually consume. The closed surface inventory
+// makes a new launch path a test case by construction, and the command assertions discriminate the
+// raw permissive value from Kids mode's manual result in each agent's own CLI dialect.
+
+import { beforeEach, describe, expect, it } from 'vitest'
+// Source-level coverage also ensures no renderer launch path reads around the funnel.
 // This is the assumption the whole kids-mode permission gate rests on. The gate lives inside that
 // one function, so a launch site that reads `settings.claudePermissionMode` directly — or a
 // project's `defaultPermissionMode` — would build its command from the ungated value and silently
@@ -10,10 +16,15 @@
 // large mount surface) once per launch site, which costs far more than it proves — and would
 // still only cover the sites a test author thought to exercise, whereas this covers every one
 // that exists.
+//
+// This is NOT control-flow analysis. A raw read in dead code is still refused (fail closed), while
+// a resolver call hidden in dead code could still contribute to the Canvas call-count floor. The
+// behavioral tests in permissionMode.kids.test.ts prove that the resolver itself narrows a live
+// bypass/accept-edits setting; this scan's narrower promise is that no source file can read around
+// that resolver without appearing as a new, reviewable exception.
 
-import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'fs'
-import { join } from 'path'
+import { join, relative } from 'path'
 
 const RENDERER = join(__dirname, '..')
 
@@ -32,39 +43,186 @@ function sources(dir: string, out: string[] = []): string[] {
 
 const FILES = sources(RENDERER)
 
-/** Files allowed to mention the raw setting, with the reason each is not a launch. */
+import type { AgentPermissionMode } from '@shared/agents/config'
+import {
+  AGENT_LAUNCH_SURFACES,
+  activeAgentLaunchPlan,
+  commandForAgentLaunch
+} from './permissionMode'
+import { useKidsMode } from './kidsMode'
+import { useProjects } from './projects'
+import { useSettings } from './settings'
+
+type PermissionCapableAgent = 'claude' | 'grok' | 'gemini' | 'codex'
+
+const AGENT_COMMANDS = {
+  claude: { base: 'claude', manual: 'claude' },
+  grok: { base: 'grok', manual: 'grok' },
+  gemini: { base: 'gemini', manual: 'gemini' },
+  codex: { base: 'codex', manual: 'codex --ask-for-approval untrusted' }
+} as const satisfies Record<PermissionCapableAgent, { base: string; manual: string }>
+
+function setMode(mode: AgentPermissionMode): void {
+  useSettings.setState((state) => ({
+    settings: { ...state.settings, claudePermissionMode: mode },
+    base: { ...state.base, claudePermissionMode: mode }
+  }))
+}
+
+beforeEach(() => {
+  useKidsMode.setState({ enabled: false })
+  // No active project: the global setting is the input under test. Project overrides are covered
+  // by the resolver's focused tests and flow through this same launch-plan decision.
+  useProjects.setState({ activeProjectId: '' } as never)
+})
+
+describe('the branded launch-plan funnel', () => {
+  for (const rawMode of ['bypassPermissions', 'acceptEdits'] as const) {
+    it(`narrows ${rawMode} to manual CLI arguments on every launch surface`, () => {
+      setMode(rawMode)
+      useKidsMode.setState({ enabled: true })
+
+      for (const surface of AGENT_LAUNCH_SURFACES) {
+        for (const [agentId, commands] of Object.entries(AGENT_COMMANDS) as Array<
+          [PermissionCapableAgent, { base: string; manual: string }]
+        >) {
+          const plan = activeAgentLaunchPlan(surface, agentId)
+          expect(plan, `${surface}/${agentId} must carry the gated decision`).toMatchObject({
+            surface,
+            agentId,
+            mode: 'manual'
+          })
+          expect(
+            commandForAgentLaunch(commands.base, plan),
+            `${surface}/${agentId} must emit that agent's manual arguments`
+          ).toBe(commands.manual)
+        }
+      }
+    })
+  }
+
+  it('has a discriminating fixture: the same surfaces emit the permissive arguments without Kids', () => {
+    const expectedByMode = {
+      bypassPermissions: {
+        claude: 'claude --permission-mode bypassPermissions',
+        grok: 'grok --permission-mode bypassPermissions',
+        gemini: 'gemini --approval-mode yolo',
+        codex: 'codex --ask-for-approval never'
+      },
+      acceptEdits: {
+        claude: 'claude --permission-mode acceptEdits',
+        grok: 'grok --permission-mode acceptEdits',
+        gemini: 'gemini --approval-mode auto_edit',
+        codex: 'codex'
+      }
+    } as const
+
+    for (const rawMode of ['bypassPermissions', 'acceptEdits'] as const) {
+      setMode(rawMode)
+      for (const surface of AGENT_LAUNCH_SURFACES) {
+        for (const [agentId, commands] of Object.entries(AGENT_COMMANDS) as Array<
+          [keyof typeof AGENT_COMMANDS, { base: string }]
+        >) {
+          const plan = activeAgentLaunchPlan(surface, agentId)
+          expect(plan.mode, `${surface}/${agentId}`).toBe(rawMode)
+          expect(commandForAgentLaunch(commands.base, plan), `${surface}/${agentId}`).toBe(
+            expectedByMode[rawMode][agentId]
+          )
+        }
+      }
+    }
+  })
+
+  it('freezes the proof so a caller cannot replace the resolved mode after launch planning', () => {
+    setMode('bypassPermissions')
+    useKidsMode.setState({ enabled: true })
+    const plan = activeAgentLaunchPlan('canvas-new-agent', 'claude')
+
+    expect(Object.isFrozen(plan)).toBe(true)
+    expect(() => Object.assign(plan, { mode: 'bypassPermissions' })).toThrow()
+    expect(commandForAgentLaunch('claude', plan)).toBe('claude')
+  })
+})
+
+/**
+ * Files allowed to mention the raw setting, with the reason each is not a launch.
+ *
+ * Keys are renderer-relative POSIX paths even on Windows. Keeping one canonical spelling makes
+ * the comparison portable; exact membership prevents `nested/components/TabBar.tsx` from
+ * inheriting TabBar's exception merely because its path has the same suffix.
+ */
 const ALLOWED = new Map<string, string>([
-  // The resolver itself — this is where the raw value is legitimately read and then gated.
-  ['state\\permissionMode.ts', 'the resolver; it reads the raw value in order to gate it'],
   // Settings UI: edits the value rather than launching anything with it.
-  ['components\\settings\\sections\\AgentsSection.tsx', 'the settings control that edits the value'],
+  ['components/settings/sections/AgentsSection.tsx', 'the settings control that edits the value'],
   // The tab menu shows the current global default beside the per-project override.
-  ['components\\TabBar.tsx', 'displays the global default in the override menu; launches nothing'],
-  // The workspace factory receives an ALREADY-resolved mode as a parameter.
-  ['state\\workspace.ts', 'takes an already-resolved mode as an argument']
+  ['components/TabBar.tsx', 'displays the global default in the override menu; launches nothing']
 ])
+
+function normalizeRelativePath(path: string): string {
+  return path.replace(/\\/g, '/')
+}
+
+function rendererRelativePath(file: string): string {
+  return normalizeRelativePath(relative(RENDERER, file))
+}
+
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
+function readsRawPermissionMode(source: string): boolean {
+  return /\bclaudePermissionMode\b/.test(withoutComments(source))
+}
+
+function isAllowedRawConsumer(path: string): boolean {
+  return ALLOWED.has(normalizeRelativePath(path))
+}
+
+function rawConsumers(files: string[]): string[] {
+  return files
+    .filter((file) => readsRawPermissionMode(readFileSync(file, 'utf8')))
+    .map(rendererRelativePath)
+}
 
 describe('every launch resolves its permission mode through the one funnel', () => {
   it('no file outside the allow-list reads settings.claudePermissionMode', () => {
-    const offenders: string[] = []
-    for (const f of FILES) {
-      const text = readFileSync(f, 'utf8')
-      if (!/\bclaudePermissionMode\b/.test(text)) continue
-      // A comment mentioning the token is not a read.
-      const stripped = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
-      if (!/\bclaudePermissionMode\b/.test(stripped)) continue
-      const rel = f.slice(f.indexOf('renderer') + 'renderer'.length + 1)
-      if ([...ALLOWED.keys()].some((k) => rel.endsWith(k))) continue
-      offenders.push(rel)
-    }
+    const offenders = rawConsumers(FILES).filter((path) => !isAllowedRawConsumer(path))
     expect(
       offenders,
       'these read the raw setting instead of activePermissionMode(), which bypasses the kids-mode gate'
     ).toEqual([])
   })
 
+  it('keeps every allow-list entry live and justified', () => {
+    const consumers = new Set(rawConsumers(FILES))
+    expect(
+      [...ALLOWED.keys()].filter((path) => !consumers.has(path)),
+      'a stale exception can silently excuse a future unrelated file at that path'
+    ).toEqual([])
+  })
+
+  it('normalizes slash dialects but does not suffix-match a lookalike path', () => {
+    expect(isAllowedRawConsumer('components/TabBar.tsx')).toBe(true)
+    expect(isAllowedRawConsumer('components\\TabBar.tsx')).toBe(true)
+    expect(isAllowedRawConsumer('nested/components/TabBar.tsx')).toBe(false)
+    expect(isAllowedRawConsumer('components/TabBar.tsx.backup')).toBe(false)
+  })
+
+  it('ignores comments but fails closed on a raw read even in obvious dead code', () => {
+    expect(readsRawPermissionMode('// settings.claudePermissionMode')).toBe(false)
+    expect(readsRawPermissionMode('/* settings.claudePermissionMode */')).toBe(false)
+    expect(
+      readsRawPermissionMode(
+        'const endpoint = "https://example.invalid" // settings.claudePermissionMode'
+      )
+    ).toBe(false)
+    expect(readsRawPermissionMode('if (false) settings.claudePermissionMode')).toBe(true)
+  })
+
   it('the resolver is the only place the kids gate is applied, and it IS applied', () => {
-    const resolver = readFileSync(join(RENDERER, 'state', 'permissionMode.ts'), 'utf8')
+    const resolver = withoutComments(
+      readFileSync(join(RENDERER, 'state', 'permissionMode.ts'), 'utf8')
+    )
     expect(resolver).toMatch(/gateKidsPermissionMode\(/)
     // Last, so it can only narrow what the earlier gates produced — never re-widen.
     const body = /export function activePermissionMode[\s\S]*?\n}/.exec(resolver)?.[0] ?? ''
@@ -74,13 +232,16 @@ describe('every launch resolves its permission mode through the one funnel', () 
   })
 
   it('Canvas builds agent commands from the resolver, at every site', () => {
-    const canvas = readFileSync(join(RENDERER, 'canvas', 'Canvas.tsx'), 'utf8')
+    const canvas = withoutComments(readFileSync(join(RENDERER, 'canvas', 'Canvas.tsx'), 'utf8'))
     const calls = (canvas.match(/activePermissionMode\(/g) || []).length
     // Nine at the time of writing. A floor rather than an exact count: adding a launch site is
     // normal, removing them all silently is what this guards.
     expect(calls, 'Canvas should resolve the mode at each launch site').toBeGreaterThanOrEqual(5)
     // And every withPermissionMode call must take a resolved mode, never a literal.
-    const literalMode = /withPermissionMode\([^)]*,\s*'(bypassPermissions|acceptEdits|auto|plan|manual)'\s*\)/.exec(canvas)
+    const literalMode =
+      /withPermissionMode\([^)]*,\s*'(bypassPermissions|acceptEdits|auto|plan|manual)'\s*\)/.exec(
+        canvas
+      )
     expect(literalMode?.[0], 'a hardcoded mode would skip both gates').toBeUndefined()
   })
 })

@@ -300,7 +300,7 @@ function renderHomeRoom(store) {
 function rowItem(state, row) {
   const picked = !!state.picked[row.id]
   const name = row.title + (picked ? ', picked' : '') + (row.tag ? ', ' + row.tag : '') + (row.body ? '. ' + row.body : '')
-  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${attr(name)}" data-action="toggle-pick" data-id="${attr(row.id)}" data-menu-kind="row" data-menu-label="${attr(row.title)}" data-menu-extra='${attr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '' }))}'>
+  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${attr(name)}" data-action="toggle-pick" data-id="${attr(row.id)}" data-menu-kind="row" data-menu-label="${attr(row.title)}" data-menu-extra='${attr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '', canUndo: !!row.canUndo }))}'>
     <span class="row-item__check ${picked ? 'is-picked' : ''}" aria-hidden="true">${picked ? '✔' : ''}</span>
     ${row.img ? `<img src="${attr(row.img)}" alt="" width="44" height="44" aria-hidden="true" style="flex:0 0 auto;border:3px solid var(--line);border-radius:12px;background:var(--paper2)" />` : ''}
     <span class="row-item__body" aria-hidden="true">
@@ -381,13 +381,15 @@ function ctlHtml(cardId, ctl) {
     return `<div class="ctl-row">${label}<select data-bind-select="${attr(ctl.action)}" data-id="${attr(cardId)}" aria-label="${attr(ctl.label)}">${(ctl.options || []).map((o) => `<option value="${attr(o.id)}" ${o.id === ctl.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></div>`
   }
   if (ctl.isRange) {
-    return `<div class="ctl-row">${label}<div class="ctl-range"><input type="range" min="${ctl.min}" max="${ctl.max}" step="1" value="${ctl.value}" data-bind-range="${attr(ctl.action)}" data-id="${attr(cardId)}" data-focus-id="ctl-${attr(cardId)}-${attr(ctl.action)}" aria-label="${attr(ctl.label)}" aria-valuetext="${ctl.value}" /><span class="ctl-range__val" aria-hidden="true">${ctl.value}</span></div></div>`
+    const bind = ctl.commitOnChange ? 'data-bind-range-change' : 'data-bind-range'
+    return `<div class="ctl-row">${label}<div class="ctl-range"><input type="range" min="${ctl.min}" max="${ctl.max}" step="1" value="${ctl.value}" ${bind}="${attr(ctl.action)}" data-id="${attr(cardId)}" data-focus-id="ctl-${attr(cardId)}-${attr(ctl.action)}" aria-label="${attr(ctl.label)}" aria-valuetext="${ctl.value}" /><span class="ctl-range__val" aria-hidden="true">${ctl.value}</span></div></div>`
   }
   if (ctl.isToggle) {
     return `<div class="ctl-row">${label}<button type="button" class="toggle ${ctl.on ? 'is-on' : ''}" role="switch" aria-checked="${ctl.on}" data-action="${attr(ctl.action)}" data-id="${attr(cardId)}">${esc(ctl.toggleLabel)}</button></div>`
   }
   if (ctl.isText) {
-    return `<div class="ctl-row">${label}<input data-bind-text="${attr(ctl.action)}" data-id="${attr(cardId)}" data-focus-id="ctl-${attr(cardId)}-${attr(ctl.action)}" type="${ctl.type || 'text'}" value="${attr(ctl.value)}" placeholder="${attr(ctl.placeholder || '')}" aria-label="${attr(ctl.label)}" /></div>`
+    const bind = ctl.commitOnChange ? 'data-bind-text-change' : 'data-bind-text'
+    return `<div class="ctl-row">${label}<input ${bind}="${attr(ctl.action)}" data-id="${attr(cardId)}" data-focus-id="ctl-${attr(cardId)}-${attr(ctl.action)}" type="${ctl.type || 'text'}" value="${attr(ctl.value)}" placeholder="${attr(ctl.placeholder || '')}" aria-label="${attr(ctl.label)}" /></div>`
   }
   if (ctl.isColor) {
     return `<div class="ctl-row">${label}<div class="swatch-row">${(ctl.swatches || []).map((sw) => `<button type="button" class="swatch ${sw.picked ? 'is-picked' : ''}" style="background:${sw.hex}" title="${attr(sw.name)}" aria-label="${attr(sw.name)}" data-action="pick-accent" data-id="${attr(sw.hex)}"></button>`).join('')}</div></div>`

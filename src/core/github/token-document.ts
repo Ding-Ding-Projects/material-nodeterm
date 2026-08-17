@@ -19,7 +19,11 @@ export function validGitHubToken(token: string): boolean {
 }
 
 function validCanonicalBase64(value: string): boolean {
-  if (!value || value.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) {
+  if (
+    !value ||
+    value.length % 4 !== 0 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)
+  ) {
     return false
   }
   return Buffer.from(value, 'base64').toString('base64') === value

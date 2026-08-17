@@ -14,15 +14,18 @@ irreversible.
 |---|---|---|
 | Delete selected node(s) | `Delete`/`Backspace` | none — centered modal (no single obvious anchor point for a keyboard shortcut) |
 | Delete selected node(s) | Right-click → **Delete** | the click point |
+| End/delete a node or session (Kids/unknown policy) | Kanban, window shortcut, sessions sidebar, session-memory panel, or agent-control **close** | caller-specific or centered |
 | Permanently delete a closed project | Welcome screen → "Recently closed" → **×** | the **×** button |
 | Permanently delete notification(s) | Notification centre → **Delete** (single row or bulk) | the **Delete** button |
+| Remove a stored authenticator seed (Kids mode or unknown policy) | Settings → Authenticator → **Remove** | centered |
+| Delete a worktree directory (Kids mode or unknown policy) | Worktree remove dialog → opt into **Delete from disk** | centered |
+| Remove a managed account (Kids mode or unknown policy) | Settings → Accounts → **×** | the **×** button |
+| Discard uncommitted file changes (Kids mode or unknown policy) | Source Control → **Discard** | centered |
+| Revoke a paired device (Kids mode or unknown policy) | Settings → Phone → **Revoke** | the **Revoke** button |
 
-`requestDeleteNodes` and `requestDeleteProject` in `Canvas.tsx` are the two call sites for the
-first three rows; both funnel through the same `openDestructiveGate(request)` helper and the one
-`<DestructiveConfirmGate>` mounted once in `Canvas.tsx`'s JSX (only one gate is ever open at a
-time — a second destructive request while one is showing would be confusing about which action is
-actually about to fire, so the state is a single `destructiveGate | null`, same pattern as the
-existing `confirm` dialog state it sits beside).
+Every caller reaches the shared `openDestructiveGate(request)` store. `DestructiveGateHost` is
+mounted once at the app root, so a project/view switch cannot tear an authorization down midway;
+only one request can exist at a time, and a second open is refused instead of stacked or substituted.
 
 Right-click **Delete** previously deleted a whole selection with **no confirmation at all** — the
 `Delete`/`Backspace` keyboard path already asked (via a plain `ConfirmDialog`), but the
@@ -51,7 +54,13 @@ they can no longer disagree about how carefully deletion is asked for.
    app uses — see `components/dialog-stack.ts` — so only the topmost dialog answers a key, exactly
    as `ConfirmDialog` already guarantees). Neither works anymore once the completion animation has
    started: authorization is already in flight at that point.
-6. **Focus returns** to the control that opened the gate (`restoreFocusEl`), on cancel or
+6. **Revalidate the authorization** at commit. The dialog approves the exact non-secret target
+   identity it displayed, not whichever object later occupies that id. Node, account,
+   authenticator-seed, and worktree removal re-read their authoritative current source immediately before the
+   irreversible call; a changed/missing/unreadable target performs nothing. A plain dialog that
+   outlives a Kids OFF→ON or ready→unavailable transition performs nothing and reopens as a fresh
+   two-key request.
+7. **Focus returns** to the control that opened the gate (`restoreFocusEl`), on cancel or
    confirm alike.
 
 The action itself never fires from anywhere except step 4 completing. There is no code path that

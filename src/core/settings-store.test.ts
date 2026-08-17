@@ -91,6 +91,19 @@ describe('SettingsStore nested-default merge', () => {
     expect(store.get()).toEqual(DEFAULT_SETTINGS)
   })
 
+  it('normalizes a hand-edited invalid languageMode to English on load', () => {
+    writeFileSync(
+      path.join(dir, 'settings.json'),
+      JSON.stringify({ languageMode: 'pirate', fontSize: 17 }),
+      'utf-8'
+    )
+    const store = new SettingsStore()
+    store.init()
+    expect(store.get().languageMode).toBe('en')
+    // Discriminate normalization from throwing the entire file away.
+    expect(store.get().fontSize).toBe(17)
+  })
+
   describe('legacy terminalGpuRendering boolean migration', () => {
     const load = (value: unknown): SettingsStore => {
       writeFileSync(
@@ -183,6 +196,55 @@ describe('settings:save atomic write', () => {
 
   const tmpsLeft = async (): Promise<string[]> =>
     (await fs.readdir(dir)).filter((f) => f.endsWith('.tmp'))
+
+  it('does not report a save complete before its durable history recorder settles', async () => {
+    const store = new SettingsStore()
+    let release!: () => void
+    let entered!: () => void
+    const recorderEntered = new Promise<void>((resolve) => { entered = resolve })
+    const recorderReleased = new Promise<void>((resolve) => { release = resolve })
+    store.setHistoryRecorder(async () => {
+      entered()
+      await recorderReleased
+    })
+    store.registerIpc()
+
+    let settled = false
+    const save = (fake.handlers[IPC.settingsSave]({ ...DEFAULT_SETTINGS, fontSize: 23 }) as Promise<void>)
+      .then(() => { settled = true })
+    await recorderEntered
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+
+    release()
+    await save
+    expect(settled).toBe(true)
+  })
+
+  it('does not report a restore complete before its restored revision settles', async () => {
+    const store = new SettingsStore()
+    let release!: () => void
+    let entered!: () => void
+    const recorderEntered = new Promise<void>((resolve) => { entered = resolve })
+    const recorderReleased = new Promise<void>((resolve) => { release = resolve })
+    store.setHistoryRecorder(async (_before, _after, override) => {
+      expect(override).toMatchObject({ action: 'restored', label: 'Restored settings to abc1234' })
+      entered()
+      await recorderReleased
+    })
+
+    let settled = false
+    const restore = store
+      .applyRestoredSettings({ ...DEFAULT_SETTINGS, fontSize: 31 }, 'Restored settings to abc1234')
+      .then(() => { settled = true })
+    await recorderEntered
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+
+    release()
+    await restore
+    expect(settled).toBe(true)
+  })
 
   // Nothing serializes the settings:save handler, and it has overlapping callers in both builds:
   // on the desktop the renderer's coalesced timer save, the `beforeunload` flush that fires

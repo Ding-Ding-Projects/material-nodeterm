@@ -4,7 +4,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
 import { openDestructiveGate } from '../../../state/destructiveGate'
-import { useKidsMode } from '../../../state/kidsMode'
+import { kidsDestructiveGateRequired, useKidsMode } from '../../../state/kidsMode'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { Button } from '@renderer/ui/Button'
 import { Switch } from '@renderer/ui/Switch'
@@ -18,7 +18,7 @@ const ROWS = {
   },
   pair: {
     title: 'Pair a device',
-    keywords: ['phone', 'pair', 'qr', 'code', 'mobile', 'browser', 'ssh', 'scan', 'nodeterm']
+    keywords: ['phone', 'pair', 'qr', 'code', 'mobile', 'ios', 'ssh', 'scan', 'nodeterm']
   },
   devices: {
     title: 'Paired devices',
@@ -41,8 +41,32 @@ function formatPairedAt(ms: number): string {
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  if (!window.nodeTerminal.pairing.supported) {
+    return (
+      <SettingsSection
+        id="phone"
+        title="Phone"
+        description="Phone pairing is a desktop-host capability."
+        isActive={isActive}
+        searchEntries={ENTRIES}
+      >
+        <div className="space-y-2" role="status">
+          <h4 className="text-[13px] font-medium text-text">Not available in Server Edition</h4>
+          <p className="text-sm text-muted">
+            This browser is already connected to the Server Edition host. Pair nodeterm mobile
+            from the desktop app running on the machine whose terminals you want to reach.
+          </p>
+        </div>
+      </SettingsSection>
+    )
+  }
+  return <SupportedPhoneSection isActive={isActive} />
+}
+
+function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [pendingRevoke, setPendingRevoke] = useState<PairedDevice | null>(null)
+  const [revokeError, setRevokeError] = useState('')
 
   const phoneAccessEnabled = useSettings((s) => s.settings.phoneAccessEnabled)
   const updateSettings = useSettings((s) => s.update)
@@ -57,7 +81,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
 
   // The shared pairing machine (also behind the top-right quick-pair popover); a completed
   // pairing refreshes the device list below.
-  const { phase, qr, shortCode, manualHost, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset } = usePhonePairing(
+  const { phase, qr, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset } = usePhonePairing(
     () => void refreshDevices()
   )
 
@@ -79,8 +103,10 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
 
   // Read at RENDER: the mode is a shared record another process can flip, so a Settings page left
   // open across that change must honour the new state rather than one captured at mount.
-  const kidsGateRequired = requiresDestructiveGate('revoke-device', useKidsMode((s) => s.enabled))
-    .required
+  const kidsGateRequired = requiresDestructiveGate(
+    'revoke-device',
+    useKidsMode(kidsDestructiveGateRequired)
+  ).required
 
   const requestRevoke = (device: PairedDevice, anchorEl: HTMLElement | null): void => {
     if (!kidsGateRequired) {
@@ -104,6 +130,16 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
     setPendingRevoke(null)
     try {
       await window.nodeTerminal.pairing.revokeDevice(device.id)
+      // A successful retry is the only thing that clears the persistent warning.
+      setRevokeError('')
+    } catch (error) {
+      const detail = error instanceof Error && error.message ? ` (${error.message})` : ''
+      // Never imply success when authorized_keys could not be checked or rewritten. The row stays
+      // in local state and refreshDevices preserves it on read failure, so the owner keeps a Retry.
+      setRevokeError(
+        `Couldn’t revoke “${device.name}”${detail}. Its SSH access may still be active. ` +
+          'The device remains listed; fix the file-access problem and retry Revoke.'
+      )
     } finally {
       void refreshDevices()
     }
@@ -113,7 +149,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
     <SettingsSection
       id="phone"
       title="Phone"
-      description="Pair a phone or browser so it can reach this machine over your local network — no terminal commands needed."
+      description="Pair nodeterm mobile so it can reach this machine — no terminal commands needed."
       isActive={isActive}
       searchEntries={ENTRIES}
     >
@@ -141,17 +177,12 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
         <div className="space-y-4">
           <h4 className="text-[13px] font-medium text-text">Pair a device</h4>
           <p className="text-sm text-muted">
-            Open nodeterm in your phone&apos;s browser and scan this QR from its{' '}
-            <strong>Pair a device</strong> page. The device generates its own key there — nothing
-            secret leaves this machine except a single-use pairing token.
-          </p>
-          <p className="text-sm text-muted">
-            No nodeterm on your network yet? Run the Server Edition with{' '}
-            <code className="rounded bg-white/5 px-1 py-0.5">./host.sh</code> and open it from any
-            browser on the same network.
+            Open <strong>nodeterm mobile</strong> on your iPhone and scan this QR. The phone
+            generates and keeps its own key; the pairing request and returned credentials are
+            encrypted to the host key inside this QR.
           </p>
 
-          {phase === 'idle' || phase === 'timeout' ? (
+          {phase === 'idle' || phase === 'timeout' || phase === 'failed' ? (
             <div className="space-y-3">
               {phase === 'timeout' ? (
                 <p className="text-sm text-muted">
@@ -160,7 +191,7 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
                 </p>
               ) : null}
               <Button variant="primary" disabled={busy} onClick={() => void start()}>
-                {busy ? 'Starting…' : 'Start pairing'}
+                {busy ? 'Starting…' : phase === 'idle' ? 'Start pairing' : 'Try pairing again'}
               </Button>
             </div>
           ) : null}
@@ -195,25 +226,6 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
                     className="rounded-lg bg-white p-2"
                   />
                   <p className="text-sm text-muted">Waiting for your phone… (10 min)</p>
-                  {shortCode ? (
-                    // The typed alternative. A QR is useless to a browser with no reader (Safari
-                    // has none), to a camera that will not focus, and to anyone pairing from the
-                    // very screen showing the code — so the same listener also accepts six
-                    // digits. It is capped at five wrong tries and dies with the window, because
-                    // six digits is only a million and a LAN is fast.
-                    <div className="space-y-1 rounded-md border border-border px-3 py-2">
-                      <p className="text-sm text-muted">
-                        Can&apos;t scan? On the device, open{' '}
-                        <code className="rounded bg-white/5 px-1 py-0.5">{manualHost}</code> and
-                        type this code:
-                      </p>
-                      <p className="font-mono text-2xl tracking-[0.3em] text-text">{shortCode}</p>
-                      <p className="text-[12px] text-muted">
-                        Five wrong entries and pairing stops — press Cancel and start again for a
-                        fresh code.
-                      </p>
-                    </div>
-                  ) : null}
                   {relayPlan === 'dev' ? (
                     <p className="text-sm" style={{ color: '#ff9f0a' }}>
                       Dev build: the relay is off regardless of the toggle, so this code pairs
@@ -279,6 +291,11 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
       <SearchableRow {...ROWS.devices}>
         <div className="space-y-3">
           <h4 className="text-[13px] font-medium text-text">Paired devices</h4>
+          {revokeError ? (
+            <p role="alert" className="text-sm" style={{ color: '#ff9f0a' }}>
+              {revokeError}
+            </p>
+          ) : null}
           {devices.length === 0 ? (
             <p className="text-sm text-muted">No devices paired yet</p>
           ) : (

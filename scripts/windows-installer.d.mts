@@ -13,11 +13,25 @@ export interface PeResourceIdentity extends WindowsReleaseIdentity {
   internalName: string
 }
 
+export interface WindowsSourceIdentity {
+  sourceSha: string
+  repository: string
+}
+
 export interface IconFrameInventory {
   width: number
   height: number
   bitCount: number
   sha256: string
+}
+
+export interface WindowsIconFrame extends IconFrameInventory {}
+
+export interface WindowsIconMetadata extends WindowsSourceIdentity {
+  schemaVersion: 1
+  iconUrl: string
+  sha256: string
+  frames: number[]
 }
 
 export const WINDOWS_RELEASE_IDENTITY: Readonly<WindowsReleaseIdentity>
@@ -27,7 +41,7 @@ export const SQUIRREL_SETUP_VENDOR_ICON_POLICY: ReadonlyArray<Readonly<{
   frames: ReadonlyArray<Readonly<IconFrameInventory & { resourceId: number }>>
 }>>
 
-export function inspectIco(iconBytes: Uint8Array): IconFrameInventory[]
+export function inspectIco(iconBytes: Uint8Array): WindowsIconFrame[]
 export function inspectPeIconInventory(
   executableBytes: Uint8Array,
   expectedIconBytes: Uint8Array,
@@ -50,16 +64,29 @@ export function parseGitHubRepository(value: unknown): string
 export function immutableIconUrl(repository: string, sourceSha: string): string
 export function validateImmutableIconUrl(value: string, repository: string, sourceSha: string): string
 export function requireCleanSourceStatus(status: string): void
+export function resolveSourceIdentity(root?: string, env?: NodeJS.ProcessEnv): WindowsSourceIdentity
 export function downloadMatchingIcon(
   iconUrl: string,
   expected: Uint8Array,
   fetchImpl?: (input: string, init: RequestInit) => Promise<Response>,
 ): Promise<Buffer>
+export function verifySourceIcon(
+  root?: string,
+  options?: { fetchImpl?: (input: string, init: RequestInit) => Promise<Response>; env?: NodeJS.ProcessEnv },
+): Promise<WindowsIconMetadata>
+export function validateIconMetadata(value: unknown): WindowsIconMetadata
 export function readReleaseIdentity(packageJsonFile: string): Promise<WindowsReleaseIdentity & { version: string }>
 export function cleanWindowsPackageOutputs(root?: string): Promise<string[]>
 export function assertPackagedIconContract(
   directory: string,
   metadataFile: string,
   root?: string,
-  options?: { sourceIdentity?: { sourceSha: string; repository: string } },
-): Promise<Record<string, unknown>>
+  options?: { sourceIdentity?: WindowsSourceIdentity },
+): Promise<{
+  setup: string
+  full: string
+  releases: string
+  packages: string[]
+  iconUrl: string
+  identity: WindowsReleaseIdentity & { version: string }
+}>

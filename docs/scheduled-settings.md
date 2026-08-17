@@ -134,6 +134,28 @@ file — against explicit bounds (`SCHEDULE_LIMITS` in `shared/scheduled-setting
 A validation failure returns `{ok:false, error}` — never a thrown exception — so the renderer can
 show the reason inline next to the Save button.
 
+### Startup read recovery is a third state
+
+`ENOENT` is the only normal "no schedule yet" result. A corrupt JSON document, a directory at
+`scheduled-settings.json`, or a filesystem failure such as `EACCES`/`EIO` is neither an empty
+schedule nor a reason to take down the app. `ScheduledSettingsRuntime` is the single boot boundary
+used by both Desktop and Server. On one of those failed reads it:
+
+1. leaves the original file or directory untouched;
+2. installs an empty in-memory file, so every scheduled override is disabled;
+3. returns `ScheduledSettingsLoadState { ok:false, file, error }` over Desktop IPC and Server
+   WS-RPC, including the recovery path and a bounded error code when one exists; and
+4. refuses every save until the operator repairs or moves the evidence and restarts nodeterm.
+
+Settings → Schedule renders that state as a recovery alert and exposes no editing controls. It
+never presents the disabled fallback's empty `rules` array as proof that the original schedule had
+no rules. Raw exception text is not sent to the renderer; the error message is static-shaped.
+
+Renderer writes have their own one-owner barrier (`ScheduledSettingsSaveQueue`). A new edit made
+while an IPC/WS save is in flight remains pending. Success **or failure** releases the owner in a
+`finally` path and arms the newest pending edit; a rejected bridge promise therefore shows its
+inline error without wedging all later saves.
+
 **Migration**: `normalizeScheduledSettingsFile()` merges a possibly-partial, legacy, or
 hand-edited file over a fresh default, field by field and rule by rule — one bad rule never sinks
 the whole schedule, and one malformed field within a rule never sinks the whole rule (it just
@@ -244,12 +266,14 @@ main process (or the Server Edition's equivalent process):
   every 5 minutes (`SCHEDULED_SETTINGS_REFRESH_INTERVAL_MS`) while it stays enabled.
 - **On demand**: the editor's "Retry" button next to a failing source (`IPC.scheduledSettingsRefreshRule`).
 
-**Generation guards.** Each fetch for a rule is tagged with a per-rule monotonic generation number.
-A response that completes after a *newer* fetch for the same rule has started — or after the rule
-was deleted, or retargeted to a different source kind — is discarded rather than applied. This is
-what "an older response cannot overwrite a newer setting" means concretely: `refreshRule()` checks
-its own generation number is still current, and separately re-reads the live rule from the store,
-before writing anything into `states`.
+**Generation + ownership guards.** Each fetch for a rule is tagged with a per-rule monotonic
+generation and the complete source identity (kind, URL/entity and timeout). Exactly one check owns
+one rule/source generation: a later 30-second tick joins that promise instead of launching an
+overlap. Deleting or retargeting a rule — including changing a URL/entity without changing the
+source kind — invalidates its cached value and owner. Clearing/replacing a Home Assistant token is
+also a generation change and removes a cached `on` synchronously before the IPC reply resolves.
+A stale completion checks the generation, owner identity and current live source before publishing;
+its `finally` may release only its own slot, never a newer source's slot.
 
 **"Retain the last valid state."** A network failure, malformed response, offline machine, `401`
 from a bad token, or a rate limit is **never** treated as "the rule is now off" or "apply nothing
@@ -301,6 +325,23 @@ process (`src/server/index.ts`) — never the renderer/browser — via the shell
   Set, clear, format-switch cleanup and prune are one ordered transaction stream. If a plausible
   live writer or an I/O error prevents complete cleanup, the schedule remains saved but the save
   result and the editor say that related credentials could not be fully cleared.
+  `'home-assistant'`) deletes its token file. Rule ids at this filesystem boundary must be exact
+  lowercase RFC 4122 v4 UUIDs; lossy filename replacement is forbidden because two hand-edited ids
+  could otherwise alias one credential.
+- **Token mutation is one directory transaction.** Set, Clear, sealed/raw format cleanup, and
+  orphan prune enter one ordered FIFO and one SQLite `BEGIN IMMEDIATE` transaction for the secret
+  directory. This prevents a prune from missing a parked Set or waking after a newer Set and
+  deleting it. A Clear/prune awaits removal of both canonical formats plus every recognized temp;
+  a PID-bearing temp is preserved as potentially live and produces a truthful incomplete-cleanup
+  result. Only `ENOENT` is absence. Malformed, wrong-format, or unreadable token evidence makes its
+  status unknown and keeps Clear available rather than reporting “not stored.”
+- **Schedule publication and credential cleanup have separate truth.** The schedule file is already
+  durable when post-save orphan cleanup runs. The store awaits every change listener, continues
+  sibling listeners, and returns “The schedule was saved, but related credentials could not be
+  fully cleared.” if cleanup fails; it does not roll back or mislabel the disk write. Startup and
+  periodic retries collect crash-gap orphan residue only when `scheduled-settings.json` loaded
+  successfully. During corrupt/unreadable recovery, the safe empty in-memory schedule is not
+  evidence that every credential is orphaned, so token bytes remain untouched.
 - **Never logged.** No fetch in `scheduled-settings-network.ts` ever logs a response body or an
   access token; every failure reported to the caller (and, from there, to the renderer) is a short,
   static-shaped reason string, never the raw text a server sent back — a broken or hostile server
@@ -333,8 +374,26 @@ Recorded here as an honest, known gap rather than a silent omission.
 
 ## Verification
 
-This feature shipped in an ultra-speed pass with no automated tests written and none run — see the
-delivery notes for that pass. What to verify by hand, in priority order:
+Automated coverage now lives in:
+
+- `src/shared/scheduled-settings.test.ts` — strict raw-save validation, normalization and pure
+  resolution boundaries;
+- `src/core/scheduled-settings-service.test.ts` — source identity generations, one-owner in-flight
+  fencing, retarget/removal/token invalidation, stale-completion mutation guards, and recovery-gated
+  startup/periodic orphan cleanup;
+- `src/core/scheduled-settings-secrets.test.ts` and `fs-transaction-lock.process.test.ts` — strict
+  rule/token reads, set/Clear/prune ordering, retained-evidence errors, and real process barriers;
+- `src/core/scheduled-settings-store.test.ts` and `scheduled-settings-runtime.test.ts` — ENOENT,
+  corrupt JSON, directory-at-path, EACCES/EIO, disabled fallback and evidence-preserving save lock;
+- `src/renderer/state/scheduled-settings-save.test.ts`, `scheduledSettings.test.ts`, and the
+  Schedule section Chuts — the rejected-save barrier, visible error/later-save recovery, owning-rule
+  flush before token mutation, unknown token status, draft retention, and truthful Clear errors; and
+- `test/server/scheduled-settings-startup.test.ts` — a real Server boot plus authenticated WS-RPC
+  traversal for every startup read state and the recovery overwrite refusal.
+
+Run those focused suites plus `npm run typecheck`; release verification still owes the built
+Desktop interaction and the real external integrations below. What to verify by hand, in priority
+order:
 
 1. **Precedence and windows**: two overlapping rules, confirm array order wins; a cross-midnight
    window (e.g. 22:00–06:00) straddling a day boundary; equal start/end time (should be "all day");

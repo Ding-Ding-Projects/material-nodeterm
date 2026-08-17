@@ -4,6 +4,7 @@ import { IPC } from '../shared/ipc'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
 import { DEFAULT_SETTINGS, type Settings } from '../shared/types'
+import { normalizeLanguageMode } from '../shared/i18n'
 import type { HistoryAction } from '../shared/local-history'
 
 /**
@@ -39,6 +40,11 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   if (gpu === false) merged.terminalGpuRendering = 'off'
   else if (gpu !== 'on' && gpu !== 'off' && gpu !== 'auto' && gpu !== 'shared')
     merged.terminalGpuRendering = 'auto'
+  // The JSON is hand-editable. A TypeScript `LanguageMode` annotation cannot stop a garbage
+  // runtime string from reaching the renderer, where the previously-exhaustive switch then
+  // returned `undefined` and took whole localized surfaces down. Normalize both load and save
+  // through this merge so Desktop and Server Edition persist the same safe English fallback.
+  merged.languageMode = normalizeLanguageMode(saved?.languageMode)
   return merged
 }
 
@@ -63,7 +69,7 @@ export class SettingsStore {
     before: Settings,
     after: Settings,
     override?: { action: HistoryAction; label: string }
-  ) => void
+  ) => void | Promise<void>
 
   private get filePath(): string {
     return path.join(platform().userDataDir, 'settings.json')
@@ -82,7 +88,11 @@ export class SettingsStore {
    *  `applyRestoredSettings`, which reaches `saveNow` with an explicit override so the new
    *  revision is labelled "Restored…" instead of running back through the generic diff. */
   setHistoryRecorder(
-    fn: (before: Settings, after: Settings, override?: { action: HistoryAction; label: string }) => void
+    fn: (
+      before: Settings,
+      after: Settings,
+      override?: { action: HistoryAction; label: string }
+    ) => void | Promise<void>
   ): void {
     this.historyRecorder = fn
   }
@@ -166,7 +176,7 @@ export class SettingsStore {
       // but this catch covers a bad recorder implementation too — belt and braces around the one
       // guarantee this feature is not allowed to break.
       try {
-        this.historyRecorder?.(before, this.cache, historyOverride)
+        await this.historyRecorder?.(before, this.cache, historyOverride)
       } catch {
         // See above.
       }

@@ -19,12 +19,27 @@ export type { NarratorLanguage }
 /** The two tracks the narrator can speak. 'yue' = Cantonese. */
 export type NarratorTrack = 'en' | 'yue'
 
-const LANG_PREFIX: Record<NarratorTrack, string> = { en: 'en', yue: 'zh' }
 /** Preferred `lang` tags when picking a Cantonese voice automatically — Hong Kong Cantonese
  *  specifically, never just "any Chinese voice": most `zh-*` voices on a stock OS are Mandarin
  *  (zh-CN/zh-TW), and reading Cantonese narration copy in a Mandarin voice reads every character
  *  with the wrong tones — worse than falling back to English. */
 const YUE_PREFERRED_LANGS = ['zh-hk', 'zh-yue', 'yue', 'yue-hk']
+
+function normalizedLang(lang: string): string {
+  return lang.trim().toLowerCase().replaceAll('_', '-')
+}
+
+/**
+ * BCP-47-ish track check used by the picker, saved-choice resolver and automatic selection.
+ * `zh` means the Chinese macrolanguage, not Cantonese: accepting every `zh-*` voice offered
+ * Mandarin (`zh-CN`/`zh-TW`) for Cantonese copy. Chromium/OS voice inventories commonly expose
+ * Cantonese as `yue-*`, `zh-yue-*`, `zh-HK`, or `zh-Hant-HK`, so accept those shapes only.
+ */
+export function voiceMatchesTrack(voice: Pick<SpeechSynthesisVoice, 'lang'>, track: NarratorTrack): boolean {
+  const parts = normalizedLang(voice.lang).split('-').filter(Boolean)
+  if (track === 'en') return parts[0] === 'en'
+  return parts[0] === 'yue' || parts.includes('yue') || (parts[0] === 'zh' && parts.includes('hk'))
+}
 
 function synth(): SpeechSynthesis | null {
   return typeof window !== 'undefined' && 'speechSynthesis' in window
@@ -66,9 +81,14 @@ function refreshVoiceCache(): void {
   const s = synth()
   if (!s) return
   const next = s.getVoices()
-  // Voice objects are stable per engine call in every browser/Electron build we've seen; a length
-  // compare is enough to detect "the list changed" without a per-voice deep-equal on a timer.
-  if (next.length === voiceCache.length && next.length > 0) return
+  // A provider can replace one voice with another (or change which voice is default) without
+  // changing the list length. Compare the fields that affect filtering/resolution/status so the
+  // picker never stays pinned to a stale same-length snapshot.
+  const signature = (voices: SpeechSynthesisVoice[]): string =>
+    voices
+      .map((v) => `${v.voiceURI}\u0000${v.name}\u0000${v.lang}\u0000${v.default}\u0000${v.localService}`)
+      .join('\u0001')
+  if (signature(next) === signature(voiceCache)) return
   voiceCache = next
   notifyVoiceListeners()
 }
@@ -121,11 +141,9 @@ export function currentVoices(): SpeechSynthesisVoice[] {
   return voiceCache
 }
 
-/** Voices whose `lang` matches the narrated track ('en' or 'yue', where 'yue' means any `zh-*`
- *  voice — narrowed further by `pickAutomaticVoice` when picking automatically). */
+/** Voices whose runtime language tag genuinely matches the narrated track. */
 export function voicesForTrack(track: NarratorTrack): SpeechSynthesisVoice[] {
-  const prefix = LANG_PREFIX[track]
-  return currentVoices().filter((v) => v.lang.toLowerCase().startsWith(prefix))
+  return currentVoices().filter((v) => voiceMatchesTrack(v, track))
 }
 
 /** Best-guess voice when the user has chosen "Choose automatically" — the shipped default for
@@ -135,12 +153,11 @@ export function pickAutomaticVoice(track: NarratorTrack): SpeechSynthesisVoice |
   const pool = voicesForTrack(track)
   if (pool.length === 0) return null
   if (track === 'yue') {
-    const hk = pool.find((v) =>
-      YUE_PREFERRED_LANGS.some((p) => {
-        const lang = v.lang.toLowerCase()
-        return lang === p || lang.startsWith(`${p}-`)
-      })
-    )
+    const hk = pool.find((v) => {
+      const lang = normalizedLang(v.lang)
+      const parts = lang.split('-')
+      return parts.includes('hk') || YUE_PREFERRED_LANGS.includes(lang)
+    })
     if (hk) return hk
   }
   return pool.find((v) => v.default) ?? pool[0]
@@ -151,7 +168,10 @@ export function pickAutomaticVoice(track: NarratorTrack): SpeechSynthesisVoice |
  *  the saved setting — see `voiceStatus` below and docs/narrator.md "kept, not reset". */
 export function resolveVoice(voiceURI: string | null, track: NarratorTrack): SpeechSynthesisVoice | null {
   if (voiceURI) {
-    const match = currentVoices().find((v) => v.voiceURI === voiceURI)
+    // A synced/hand-edited URI can name a real voice for the WRONG track. Treat that exactly like
+    // an unavailable choice and fall back within the requested track; never read Cantonese copy
+    // with a saved Mandarin or English voice merely because its URI exists.
+    const match = voicesForTrack(track).find((v) => v.voiceURI === voiceURI)
     if (match) return match
   }
   return pickAutomaticVoice(track)
@@ -174,7 +194,9 @@ export interface NarratorVoiceStatus {
  *  contract from docs/narrator.md. */
 export function voiceStatus(voiceURI: string | null, track: NarratorTrack): NarratorVoiceStatus {
   const resolved = resolveVoice(voiceURI, track)
-  const chosenInstalled = voiceURI ? currentVoices().some((v) => v.voiceURI === voiceURI) : true
+  const chosenInstalled = voiceURI
+    ? currentVoices().some((v) => v.voiceURI === voiceURI && voiceMatchesTrack(v, track))
+    : true
   return {
     voice: resolved,
     missingChosen: Boolean(voiceURI) && !chosenInstalled,
@@ -203,6 +225,10 @@ interface QueueEntry {
   rate: number
   pitch: number
   voiceURI: string | null
+  policyGeneration: number
+  canSpeakTrack?: (track: NarratorTrack) => boolean
+  fallbackForTrack?: NarratorTrack
+  fallbackForPolicyGeneration?: number
 }
 
 export interface NarrateRequest {
@@ -226,6 +252,15 @@ export interface NarrateRequest {
   pitch: number
   voiceEn: string | null
   voiceYue: string | null
+  /** Re-check a live presentation policy when a track is about to enter speech synthesis. A
+   *  request may spend time in debounce or behind another utterance, so its event-time language
+   *  decision alone cannot enforce a mode that changes live while it waits. Throwing fails closed
+   *  for that track. */
+  canSpeakTrack?: (track: NarratorTrack) => boolean
+  /** Keep an English copy of a Cantonese-only request dormant in the queue. It becomes eligible
+   *  only when live policy invalidates or refuses the Cantonese track, so a mode transition can
+   *  reduce speech to English without making the event disappear. */
+  englishFallbackWhenYueSuppressed?: boolean
   /** Minimum ms between two narrations of this category actually starting to speak. */
   cooldownMs?: number
   /** If another narrate() for this category arrives within this window, only the latest survives. */
@@ -239,6 +274,8 @@ export interface NarrateRequest {
 
 let queue: QueueEntry[] = []
 let speaking = false
+let activeTrack: NarratorTrack | null = null
+const trackPolicyGeneration: Record<NarratorTrack, number> = { en: 0, yue: 0 }
 // Bumped every time we deliberately interrupt whatever's currently speaking (stopNarrator /
 // previewVoice) or start a new utterance. An in-flight utterance's onend/onerror captures the
 // generation it was started under; if that no longer matches by the time the callback fires, the
@@ -271,13 +308,55 @@ export function planUtterances(
   return out.filter((e) => e.text.trim() !== '')
 }
 
+interface PlannedUtterance {
+  track: NarratorTrack
+  text: string
+  policyGeneration: number
+  fallbackForTrack?: NarratorTrack
+  fallbackForPolicyGeneration?: number
+}
+
+function policyAllowsTrack(
+  canSpeakTrack: ((track: NarratorTrack) => boolean) | undefined,
+  track: NarratorTrack
+): boolean {
+  if (!canSpeakTrack) return true
+  try {
+    return canSpeakTrack(track) === true
+  } catch {
+    return false
+  }
+}
+
+function trackAllowed(
+  utterance: Pick<
+    QueueEntry,
+    | 'track'
+    | 'policyGeneration'
+    | 'canSpeakTrack'
+    | 'fallbackForTrack'
+    | 'fallbackForPolicyGeneration'
+  >
+): boolean {
+  if (utterance.policyGeneration !== trackPolicyGeneration[utterance.track]) return false
+  if (utterance.fallbackForTrack) {
+    const primaryGenerationStillValid =
+      utterance.fallbackForPolicyGeneration ===
+      trackPolicyGeneration[utterance.fallbackForTrack]
+    const primaryStillAllowed = primaryGenerationStillValid &&
+      policyAllowsTrack(utterance.canSpeakTrack, utterance.fallbackForTrack)
+    return !primaryStillAllowed && policyAllowsTrack(utterance.canSpeakTrack, utterance.track)
+  }
+  return policyAllowsTrack(utterance.canSpeakTrack, utterance.track)
+}
+
 function removeQueued(category: string): void {
   if (queue.some((e) => e.category === category)) queue = queue.filter((e) => e.category !== category)
 }
 
 function doEnqueue(
   category: string,
-  utterances: { track: NarratorTrack; text: string }[],
+  utterances: PlannedUtterance[],
   req: NarrateRequest
 ): void {
   for (const u of utterances) {
@@ -287,7 +366,11 @@ function doEnqueue(
       text: u.text,
       rate: req.rate,
       pitch: req.pitch,
-      voiceURI: u.track === 'en' ? req.voiceEn : req.voiceYue
+      voiceURI: u.track === 'en' ? req.voiceEn : req.voiceYue,
+      policyGeneration: u.policyGeneration,
+      canSpeakTrack: req.canSpeakTrack,
+      fallbackForTrack: u.fallbackForTrack,
+      fallbackForPolicyGeneration: u.fallbackForPolicyGeneration
     })
   }
   pump()
@@ -298,24 +381,55 @@ function doEnqueue(
 export function narrate(req: NarrateRequest): void {
   try {
     if (!isSynthesisAvailable()) return
-    const utterances = planUtterances(req)
+    // Capture the track generation at EVENT time, before an ordinary request spends time in
+    // debounce. A live policy transition invalidates that generation so an old Cantonese request
+    // cannot reappear if the mode turns on and then off again before the timer fires.
+    const utterances: PlannedUtterance[] = planUtterances(req).map((utterance) => ({
+      ...utterance,
+      policyGeneration: trackPolicyGeneration[utterance.track]
+    }))
+    if (
+      req.englishFallbackWhenYueSuppressed === true &&
+      req.language === 'yue' &&
+      typeof req.yue === 'string' &&
+      req.yue.trim() !== '' &&
+      req.en.trim() !== ''
+    ) {
+      utterances.push({
+        track: 'en',
+        text: req.en,
+        policyGeneration: trackPolicyGeneration.en,
+        fallbackForTrack: 'yue',
+        fallbackForPolicyGeneration: trackPolicyGeneration.yue
+      })
+    }
     if (utterances.length === 0) return
+
+    if (req.important) {
+      // Important events bypass replacement as well as debounce/cooldown. Two different app
+      // errors currently share the `app-error` category; deleting an already-queued one here
+      // meant the latest toast silently erased an earlier failure whenever speechSynthesis was
+      // busy. Cancel only a pending ordinary debounce for this category and preserve every
+      // concrete important entry already serialized in the queue.
+      const existingTimer = debounceTimers.get(req.category)
+      if (existingTimer) clearTimeout(existingTimer)
+      debounceTimers.delete(req.category)
+      doEnqueue(req.category, utterances, req)
+      return
+    }
 
     const existingTimer = debounceTimers.get(req.category)
     if (existingTimer) clearTimeout(existingTimer)
     removeQueued(req.category)
 
-    if (req.important) {
-      debounceTimers.delete(req.category)
-      lastSpokenAt.set(req.category, Date.now())
-      doEnqueue(req.category, utterances, req)
-      return
-    }
-
     const debounceMs = req.debounceMs ?? DEFAULT_DEBOUNCE_MS
     const cooldownMs = req.cooldownMs ?? DEFAULT_COOLDOWN_MS
     const timer = setTimeout(() => {
       debounceTimers.delete(req.category)
+      if (!utterances.some((utterance) => trackAllowed({
+        ...utterance,
+        canSpeakTrack: req.canSpeakTrack
+      }))) return
       const now = Date.now()
       const last = lastSpokenAt.get(req.category) ?? 0
       if (now - last < cooldownMs) return // still cooling down for this category — drop it
@@ -337,6 +451,10 @@ function pump(): void {
   }
   const next = queue.shift()
   if (!next) return
+  if (!trackAllowed(next)) {
+    queueMicrotask(pump)
+    return
+  }
   // Yield to anything already speaking through the SHARED speechSynthesis engine — this is the
   // one real signal a web page has for "something else wants this channel" (see docs/narrator.md
   // for the honest limits: it does NOT detect a native OS screen reader, which speaks outside the
@@ -347,17 +465,32 @@ function pump(): void {
     setTimeout(pump, 250)
     return
   }
-  speaking = true
-  const myGen = ++gen
   const voice = resolveVoice(next.voiceURI, next.track)
-  const utter = new SpeechSynthesisUtterance(next.text)
+  if (!voice) {
+    // The contract says a track with no matching installed voice is silent. Letting the browser
+    // choose its default here often read Cantonese in Mandarin, and returning without pumping
+    // would strand every later queue entry behind the skipped one.
+    queueMicrotask(pump)
+    return
+  }
+  let utter: SpeechSynthesisUtterance
+  try {
+    utter = new SpeechSynthesisUtterance(next.text)
+  } catch {
+    queueMicrotask(pump)
+    return
+  }
+  speaking = true
+  activeTrack = next.track
+  const myGen = ++gen
   utter.rate = clampRate(next.rate)
   utter.pitch = clampPitch(next.pitch)
-  if (voice) utter.voice = voice
-  utter.lang = voice?.lang ?? (next.track === 'yue' ? 'zh-HK' : 'en-US')
+  utter.voice = voice
+  utter.lang = voice.lang
   const done = (): void => {
     if (myGen !== gen) return // superseded (stopNarrator/previewVoice) — not our turn to react
     speaking = false
+    activeTrack = null
     pump()
   }
   utter.onend = done
@@ -365,7 +498,14 @@ function pump(): void {
   try {
     s.speak(utter)
   } catch {
-    speaking = false
+    if (myGen === gen) {
+      speaking = false
+      activeTrack = null
+      // `speak()` can reject one provider synchronously. Continue with the next serialized line;
+      // waiting for onerror cannot work because an utterance that never entered the engine has no
+      // asynchronous completion event.
+      queueMicrotask(pump)
+    }
   }
 }
 
@@ -386,6 +526,31 @@ export function stopNarrator(): void {
     }
   }
   speaking = false
+  activeTrack = null
+}
+
+/**
+ * Invalidate one track without sacrificing speech on the other. Existing queued and debounced
+ * entries carry the old generation and can never reappear; an active utterance is cancelled only
+ * when it is on the suppressed track. This is how a live School Mode transition removes
+ * Cantonese while preserving English and important app-error narration.
+ */
+export function suppressNarratorTrack(track: NarratorTrack): void {
+  trackPolicyGeneration[track] += 1
+  queue = queue.filter((entry) => entry.track !== track)
+  if (!speaking || activeTrack !== track) return
+  gen++
+  const s = synth()
+  if (s) {
+    try {
+      s.cancel()
+    } catch {
+      // The track is still invalidated even when the provider cannot cancel its current line.
+    }
+  }
+  speaking = false
+  activeTrack = null
+  queueMicrotask(pump)
 }
 
 const PREVIEW_TEXT: Record<NarratorTrack, string> = {
@@ -406,18 +571,21 @@ export function previewVoice(
 ): void {
   const s = synth()
   if (!s) return
-  stopNarrator()
   const voice = resolveVoice(voiceURI, track)
+  if (!voice) return
+  stopNarrator()
   const utter = new SpeechSynthesisUtterance(PREVIEW_TEXT[track])
   utter.rate = clampRate(rate)
   utter.pitch = clampPitch(pitch)
-  if (voice) utter.voice = voice
-  utter.lang = voice?.lang ?? (track === 'yue' ? 'zh-HK' : 'en-US')
+  utter.voice = voice
+  utter.lang = voice.lang
   speaking = true
+  activeTrack = track
   const myGen = ++gen
   const done = (): void => {
     if (myGen !== gen) return
     speaking = false
+    activeTrack = null
   }
   utter.onend = done
   utter.onerror = done
@@ -425,5 +593,6 @@ export function previewVoice(
     s.speak(utter)
   } catch {
     speaking = false
+    activeTrack = null
   }
 }
