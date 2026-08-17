@@ -342,6 +342,13 @@ export interface CanvasNodeState {
    */
   accountId?: string
   /**
+   * True only for a managed-account login terminal; false for a known ordinary terminal.
+   * Persisted because titles are user-editable and `initialCommand` is one-shot, so neither is a
+   * safe lifetime identity for deciding which session must close with a removed account.
+   * Undefined is accepted only for legacy workspaces and is migrated on load.
+   */
+  accountLogin?: boolean
+  /**
    * Agents in `SESSION_ID_CAPABLE` (claude): the session id nodeterm minted and launched this
    * node's CLI with (`--session-id`). Persisted so a cold restore can resume even when no hook
    * ever delivered an id — the SSH reverse tunnel is the only path that carries one, and a node

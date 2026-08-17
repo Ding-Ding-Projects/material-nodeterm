@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { playSfx, primeSfx } from '@renderer/lib/sfx'
 import { narrate } from '@renderer/lib/narrator'
@@ -19,6 +19,7 @@ import {
   useReactFlow,
   type Connection,
   type EdgeChange,
+  type OnBeforeDelete,
   type Viewport
 } from '@xyflow/react'
 import type { Edge, Node } from '@xyflow/react'
@@ -149,9 +150,25 @@ import { TmuxBanner } from '../components/TmuxBanner'
 import { PtyPressureBanner } from '../components/PtyPressureBanner'
 import { ConflictBar } from '../components/ConflictBar'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { openDestructiveGate } from '../state/destructiveGate'
+import { openDestructiveGate, useDestructiveGate } from '../state/destructiveGate'
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
 import { useKidsMode } from '../state/kidsMode'
+import {
+  dispatchNodeDeletion,
+  initialWorktreeDeleteFromDisk,
+  managedDeletionRoots,
+  planNodeDeletion,
+  worktreeDeleteFromDiskAfterModeChange,
+  type NodeDeleteSurface
+} from '../lib/nodeDeletion'
+import {
+  ACCOUNT_REMOVAL_COMMITTED_EVENT,
+  ACCOUNT_REMOVAL_TEARDOWN_EVENT,
+  handleAccountRemovalCommitted,
+  handleAccountRemovalTeardown,
+  type AccountRemovalCommittedDetail,
+  type AccountRemovalTeardownDetail
+} from '../lib/accountRemoval'
 import { NotificationCenter } from '../components/NotificationCenter'
 import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
 import { ConsentNotice } from '../remote/ConsentNotice'
@@ -454,6 +471,23 @@ interface ConfirmState {
   /** Set when an AGENT asked for this dialog: it is answered by an explicit click, never by an
    *  Enter the user aimed at their terminal (see components/confirm-key). */
   requestedBy?: string
+}
+interface RequestDeleteNodesOptions {
+  surface?: NodeDeleteSurface
+  /** Titles can come from an inactive project's serialized nodes, which are not in nodesRef. */
+  titles?: string[]
+  anchor?: { x: number; y: number }
+  restoreFocusEl?: HTMLElement | null
+  requestedBy?: string
+  /** False only for a session-memory orphan, which has no canvas node behind it. */
+  removesNode?: boolean
+  /** The account-removal gate already authorized its disclosed login-node closure. */
+  authorizedBy?: 'remove-account'
+  /** Override the active-canvas teardown (used by inactive sidebar sessions). */
+  perform?: () => void
+  onCancel?: () => void
+  /** A second dialog was refused; agent callers need an explicit reply rather than a hang. */
+  onRejected?: () => void
 }
 interface RemoveState {
   groupId: string
@@ -1141,6 +1175,20 @@ export function Canvas() {
   // process can flip, and a dialog left open across that change must honour the new state.
   const kidsModeOn = useKidsMode((s) => s.enabled)
   const kidsGateRequired = requiresDestructiveGate('remove-worktree', kidsModeOn).required
+  const previousKidsModeOnRef = useRef(kidsModeOn)
+  useLayoutEffect(() => {
+    // Reset before paint on the OFF→ON edge. An already-open dialog must never flash or retain an
+    // implicit disk deletion after another window/process enables Kids mode. Repeated ON renders
+    // leave a deliberate checkbox opt-in alone.
+    setDeleteFromDisk((current) =>
+      worktreeDeleteFromDiskAfterModeChange(
+        current,
+        previousKidsModeOnRef.current,
+        kidsModeOn
+      )
+    )
+    previousKidsModeOnRef.current = kidsModeOn
+  }, [kidsModeOn])
   // Group awaiting confirmation to merge its worktree into the base branch. `hasOrigin` decides
   // whether the dialog offers (and warns about) the push to origin — a repo with no `origin` must
   // never be threatened with a publish that cannot happen.
@@ -1341,7 +1389,15 @@ export function Canvas() {
   /** Is any confirm open — or being opened (the async gap in `requestRemoveWorktree`)? */
   const confirmBusy = useCallback(() => {
     const f = confirmFlags.current
-    return f.confirm || f.remove || f.move || f.merge || f.peer || removePendingRef.current
+    return (
+      f.confirm ||
+      f.remove ||
+      f.move ||
+      f.merge ||
+      f.peer ||
+      removePendingRef.current ||
+      !!useDestructiveGate.getState().request
+    )
   }, [])
 
   const nodeTypes = useMemo(
@@ -4193,64 +4249,124 @@ export function Canvas() {
   )
 
   /**
-   * Node deletion goes through the destructive-action super-confirmation gate — one node or a
-   * whole bulk selection, from the keyboard (Delete/Backspace) or the right-click "Delete" item
-   * alike, so the two paths can never disagree about how carefully this is asked. `anchor`
-   * places the gate beside the control that asked for it (a right-click point); omitted for the
-   * keyboard path, which has no single obvious anchor, and falls back to a centered modal.
+   * The one request funnel for every user-reachable node/session close surface.
+   *
+   * `planNodeDeletion` preserves each surface's ordinary-mode behaviour but overrides every one
+   * with the two-key gate in Kids mode. `dispatchNodeDeletion` is the only place that may call the
+   * irreversible closure, so a new caller cannot remember the policy yet accidentally bypass it.
    */
   const requestDeleteNodes = useCallback(
-    (ids: string[], anchor?: { x: number; y: number }, restoreFocusEl?: HTMLElement | null) => {
-      if (!ids.length) return
-      const titles = ids
-        .map((id) => nodesRef.current.find((n) => n.id === id)?.data.title)
-        .filter((t): t is string => !!t)
-      openDestructiveGate({
-        title: ids.length > 1 ? `Delete ${ids.length} nodes` : `Delete “${titles[0] ?? 'node'}”`,
-        description:
-          'Every open terminal session in the selection ends immediately (including anything still running inside it). This cannot be undone.',
-        affected: titles.length ? titles : undefined,
-        anchor,
-        restoreFocusEl,
-        onConfirm: () => deleteNodes(ids)
+    (ids: string[], options: RequestDeleteNodesOptions = {}): boolean => {
+      if (!ids.length) return false
+      const titles =
+        options.titles ??
+        ids.map(
+          (id) => (nodesRef.current.find((n) => n.id === id)?.data.title as string | undefined) ?? id
+        )
+      const plan = planNodeDeletion({
+        surface: options.surface ?? 'canvas',
+        kidsModeOn: useKidsMode.getState().enabled,
+        titles,
+        requestedBy: options.requestedBy,
+        removesNode: options.removesNode,
+        authorizedBy: options.authorizedBy
       })
+
+      // Refuse before opening a second modal of either kind. The synchronous mirrors in
+      // `confirmBusy` and the destructive-gate store close the two event-in-one-render race.
+      if (plan.confirmation !== 'immediate' && confirmBusy()) {
+        options.onRejected?.()
+        return false
+      }
+
+      const accepted = dispatchNodeDeletion(plan, {
+        perform: options.perform ?? (() => deleteNodes(ids)),
+        cancel: options.onCancel,
+        openGate: (request) =>
+          openDestructiveGate({
+            ...request,
+            anchor: options.anchor,
+            restoreFocusEl: options.restoreFocusEl
+          }),
+        openConfirm: (request) => {
+          setConfirm({
+            message: request.message,
+            requestedBy: options.requestedBy,
+            danger: true,
+            onConfirm: () => {
+              setConfirm(null)
+              request.onConfirm()
+            },
+            onCancel: () => {
+              setConfirm(null)
+              request.onCancel?.()
+            }
+          })
+          return true
+        }
+      })
+      if (!accepted) options.onRejected?.()
+      return accepted
     },
-    [deleteNodes]
+    [confirmBusy, deleteNodes, setConfirm]
   )
 
-  // When an account is removed in Settings, patch the ACTIVE project's live nodes (the projects
-  // store only holds the other projects' serialized copies). The account's login node is
-  // permanently DELETED — left alive with its accountId cleared, a cold restart would respawn
-  // its `claude /login` under the SYSTEM env, where completing the OAuth silently overwrites the
-  // user's ~/.claude identity (observed in the wild). Ordinary nodes just drop the accountId and
-  // fall back to the system account (the missing-dir spawn fallback is safe either way).
-  // Declared after deleteNodes: the dep array would hit the const's TDZ above it.
+  // Node header × buttons call React Flow's `deleteElements` directly. Intercept that one API at
+  // the canvas boundary so every node kind (including future ones) enters the same request funnel.
+  // React Flow expands a parent request to all descendants before this callback; keep only roots,
+  // because `deleteNodes` deliberately frees a deleted group's children instead of deleting them.
+  const handleBeforeDelete = useCallback<OnBeforeDelete<CanvasNode, Edge>>(async ({ nodes: pending }) => {
+    const liveIds = new Set(nodesRef.current.map((n) => n.id))
+    const roots = managedDeletionRoots(pending, liveIds)
+    if (!roots.length) return true // edge-only / ephemeral deletion keeps React Flow semantics
+    requestDeleteNodes(roots, { surface: 'canvas' })
+    return false // the confirmed path calls canonical `deleteNodes`; React Flow must not race it
+  }, [requestDeleteNodes])
+
+  // Settings emits this synchronously AFTER the account-level confirmation but BEFORE it touches
+  // credentials or persisted state. The helper accepts the handshake only after routing login
+  // nodes through requestDeleteNodes; its perform callback closes/reconciles the live canvas and
+  // only then lets Settings continue the account transaction. That ordering prevents a slow rm or
+  // a project switch from leaving `claude /login` alive against a directory being deleted.
   useEffect(() => {
-    const onAccountRemoved = (ev: Event): void => {
-      const accountId = (ev as CustomEvent<{ accountId: string }>).detail?.accountId
-      if (!accountId) return
-      const loginIds = nodesRef.current
-        .filter((n) => n.data.accountId === accountId && isAccountLoginNode(n.data))
-        .map((n) => n.id)
-      if (loginIds.length) deleteNodes(loginIds)
-      setNodes((ns) =>
-        ns.some((n) => n.data.accountId === accountId)
-          ? ns.map((n) =>
-              n.data.accountId === accountId
-                ? { ...n, data: { ...n.data, accountId: undefined } }
-                : n
-            )
-          : ns
-      )
-      // Schedule a workspace write: persist() re-serializes the cleared live nodes and writes
-      // the whole projects store to disk, also covering AccountsSection's setState on the other
-      // projects' serialized nodes + defaultAccountId. Without this, quitting right after a
-      // removal would leave the dead accountId in workspace.json.
-      markDirty()
+    const onAccountRemovalApproved = (ev: Event): void => {
+      const detail = (ev as CustomEvent<AccountRemovalTeardownDetail>).detail
+      if (!detail) return
+      handleAccountRemovalTeardown(detail, nodesRef.current, {
+        isLoginNode: (node) => isAccountLoginNode(node.data),
+        requestDeleteNodes,
+        deleteNodes
+      })
     }
-    window.addEventListener('nodeterm:account-removed', onAccountRemoved)
-    return () => window.removeEventListener('nodeterm:account-removed', onAccountRemoved)
-  }, [setNodes, markDirty, deleteNodes])
+    window.addEventListener(ACCOUNT_REMOVAL_TEARDOWN_EVENT, onAccountRemovalApproved)
+    return () => window.removeEventListener(ACCOUNT_REMOVAL_TEARDOWN_EVENT, onAccountRemovalApproved)
+  }, [deleteNodes, requestDeleteNodes])
+
+  // The account transaction can await a remote/filesystem operation after login teardown. Apply
+  // its successful binding clear to whichever project is live when it commits; inactive projects
+  // were transformed in the projects store by Settings.
+  useEffect(() => {
+    const onAccountRemovalCommitted = (ev: Event): void => {
+      const detail = (ev as CustomEvent<AccountRemovalCommittedDetail>).detail
+      if (!detail) return
+      handleAccountRemovalCommitted(detail, {
+        clearLiveBindings: (accountId) => {
+          setNodes((ns) =>
+            ns.some((n) => n.data.accountId === accountId)
+              ? ns.map((n) =>
+                  n.data.accountId === accountId
+                    ? { ...n, data: { ...n.data, accountId: undefined } }
+                    : n
+                )
+              : ns
+          )
+        },
+        markDirty
+      })
+    }
+    window.addEventListener(ACCOUNT_REMOVAL_COMMITTED_EVENT, onAccountRemovalCommitted)
+    return () => window.removeEventListener(ACCOUNT_REMOVAL_COMMITTED_EVENT, onAccountRemovalCommitted)
+  }, [setNodes, markDirty])
 
   // Delete / Backspace asks for confirmation, then deletes the selected nodes.
   useEffect(() => {
@@ -4287,21 +4403,25 @@ export function Canvas() {
       // No single obvious anchor for a keyboard-triggered delete — falls back to a centered
       // modal. `document.activeElement` (whatever had focus before Delete was pressed) gets the
       // keyboard back once the gate closes.
-      requestDeleteNodes(ids, undefined, document.activeElement as HTMLElement | null)
+      requestDeleteNodes(ids, {
+        surface: 'canvas',
+        restoreFocusEl: document.activeElement as HTMLElement | null
+      })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [requestDeleteNodes, setLinkEdges, markDirty])
 
-  // Cmd/Ctrl+W (forwarded from main) closes the selected node(s) immediately, like the
-  // node's × button. With nothing selected it falls back to closing the window.
+  // Cmd/Ctrl+W (forwarded from main) keeps its immediate ordinary-mode behaviour, but Kids mode
+  // routes it through the same two-key gate as every other node/session close surface. With
+  // nothing selected it still falls back to closing the window (no node is deleted).
   useEffect(() => {
     return window.nodeTerminal.onCloseNode(() => {
       const ids = nodesRef.current.filter((n) => n.selected).map((n) => n.id)
-      if (ids.length) deleteNodes(ids)
+      if (ids.length) requestDeleteNodes(ids, { surface: 'window-shortcut' })
       else window.nodeTerminal.closeWindow()
     })
-  }, [deleteNodes])
+  }, [requestDeleteNodes])
 
   const groupSelection = useCallback(
     (ids: string[]) => {
@@ -4519,7 +4639,9 @@ export function Canvas() {
         // A worktree the user created outside nodeterm is not ours to delete: Unbind is the default
         // and deleting it from disk is an opt-in checkbox. One we created may be deleted (still
         // behind the confirm).
-        setDeleteFromDisk(wt.createdByApp)
+        setDeleteFromDisk(
+          initialWorktreeDeleteFromDisk(wt.createdByApp, useKidsMode.getState().enabled)
+        )
         setRemoveTarget({
           groupId,
           warning,
@@ -6012,7 +6134,11 @@ export function Canvas() {
         // Goes through the same destructive-confirmation gate as the Delete/Backspace shortcut
         // (previously this row deleted with NO confirmation at all — a right-click could nuke a
         // whole selection in one click, unlike the keyboard path a few lines up).
-        onClick: () => requestDeleteNodes(ids, lastNodeMenuPosRef.current ?? undefined)
+        onClick: () =>
+          requestDeleteNodes(ids, {
+            surface: 'canvas',
+            anchor: lastNodeMenuPosRef.current ?? undefined
+          })
       }
     ])
   }, [
@@ -6650,41 +6776,13 @@ export function Canvas() {
     [activeProjectId, emptyNodePos, setNodes, markDirty, seedBoard, api, profileText]
   )
 
-  // Delete a session from the board.
-  //
-  // The comment here used to claim "same confirm as the canvas Delete key" and it was not true:
-  // the canvas key opens the two-key super gate (see `openDestructiveGate` above) while this
-  // opened a one-button confirm, for the identical action on the identical node. Kids mode is what
-  // surfaced it — routing the board through the gate meant reading what the board actually did.
-  //
-  // With kids mode OFF this is byte-identical to before, deliberately: silently tightening a
-  // confirmation for every existing user is a product decision, not a wiring fix. The mismatch is
-  // recorded rather than quietly resolved.
+  // Delete a session from the board through the shared node-deletion funnel. The planner keeps the
+  // board's ordinary one-button confirm, but Kids mode replaces it with the two-key gate.
   const deleteNodeFromKanban = useCallback(
     (nodeId: string) => {
-      const node = nodesRef.current.find((n) => n.id === nodeId)
-      const label = (node?.data.title as string) || 'this session'
-
-      if (requiresDestructiveGate('delete-node', useKidsMode.getState().enabled).required) {
-        openDestructiveGate({
-          title: `Delete “${label}”`,
-          description:
-            'Its terminal session ends immediately, including anything still running inside it. This cannot be undone.',
-          affected: [label],
-          onConfirm: () => deleteNodes([nodeId])
-        })
-        return
-      }
-
-      setConfirm({
-        message: `Delete ${label}? Its terminal session will end.`,
-        onConfirm: () => {
-          deleteNodes([nodeId])
-          setConfirm(null)
-        }
-      })
+      requestDeleteNodes([nodeId], { surface: 'kanban' })
     },
-    [deleteNodes]
+    [requestDeleteNodes]
   )
 
   // Persist a browser card's navigation (url/title) from the modal webview back to the node.
@@ -7910,14 +8008,16 @@ export function Canvas() {
               reply({ ok: false, error: 'a confirmation is already pending — try again' })
               return
             }
-            // Destructive → confirm. Replies on confirm AND cancel.
-            setConfirm({
-              message: `Agent "${srcTitle}" wants to close node ${args.node}. Close it?`,
+            // All close surfaces share the same runtime funnel. In ordinary mode this remains an
+            // explicit, non-Enter agent confirm; in Kids mode the planner upgrades it to the
+            // two-key gate. Both cancellation and a refused second dialog answer the agent.
+            requestDeleteNodes([args.node], {
+              surface: 'agent-control',
+              titles: [
+                (nodesRef.current.find((n) => n.id === args.node)?.data.title as string) ?? args.node
+              ],
               requestedBy: srcTitle,
-              confirmLabel: 'Close',
-              danger: true,
-              onConfirm: () => {
-                setConfirm(null)
+              perform: () => {
                 // Canonical teardown: deleteNodes() destroys the local tmux session (remote-guarded),
                 // drops persisted agentStatus, and reparents any group children. Don't hand-roll it.
                 deleteNodes([args.node])
@@ -7926,7 +8026,9 @@ export function Canvas() {
                 )
                 reply({ ok: true, message: `closed ${args.node}` })
               },
-              onCancel: () => reply({ ok: false, error: 'denied by user' })
+              onCancel: () => reply({ ok: false, error: 'denied by user' }),
+              onRejected: () =>
+                reply({ ok: false, error: 'a confirmation is already pending — try again' })
             })
             return
           }
@@ -8050,17 +8152,15 @@ export function Canvas() {
   // inactive project's node even though it isn't mounted; then drop it from the store.
   const closeSession = useCallback(
     (projectId: string, id: string, alsoOnConfirm?: () => void) => {
-      setConfirm({
-        // Both halves, because this does both: the tmux session ends AND the node is removed from
-        // its canvas (either branch below). The wording came from the sessions sidebar, where the
-        // node going too is the obvious intent — but the session-memory panel reuses this path, and
-        // there the user's intent is reclaiming RAM, for which killing the node is a side effect
-        // they have to be told about. (Keeping the node would need a second destroy path, which is
-        // deliberately NOT what this is.)
-        message: 'End this session? This stops its tmux session and removes the node from its canvas.',
-        confirmLabel: 'End session',
-        danger: true,
-        onConfirm: () => {
+      const project = useProjects.getState().getProject(projectId)
+      const title =
+        (projectId === activeProjectId
+          ? nodesRef.current.find((n) => n.id === id)?.data.title
+          : project?.nodes.find((n) => n.id === id)?.title) ?? 'this session'
+      requestDeleteNodes([id], {
+        surface: 'sessions-sidebar',
+        titles: [String(title)],
+        perform: () => {
           if (projectId === activeProjectId) {
             deleteNodes([id])
           } else {
@@ -8074,11 +8174,10 @@ export function Canvas() {
           // cannot reach a HOST's tmux session unless a live client carries `sshRemote`. Runs only
           // after the user confirmed, which is why it is a callback and not done at the call site.
           alsoOnConfirm?.()
-          setConfirm(null)
         }
       })
     },
-    [activeProjectId, deleteNodes, writeDisk]
+    [activeProjectId, deleteNodes, requestDeleteNodes, writeDisk]
   )
 
   /**
@@ -8117,27 +8216,23 @@ export function Canvas() {
         closeSession(plan.ownerProjectId, nodeId, remoteKill)
         return
       }
-      setConfirm({
-        // The orphan wording stays as it is: there is no node to remove, which is the whole point
-        // of the row. The other branch is a node the sweep saw but this click could not resolve an
-        // owner for, so it says what the owner path says.
-        message: orphan
-          ? 'End this session? It has no node on any canvas — this stops its tmux session.'
-          : 'End this session? This stops its tmux session and removes the node from its canvas.',
-        confirmLabel: 'End session',
-        danger: true,
-        onConfirm: () => {
+      // An orphan still ends a real session even though there is no node to remove. Use the same
+      // sidebar surface in the deletion planner so Kids mode cannot be bypassed by the orphan row.
+      requestDeleteNodes([nodeId], {
+        surface: 'sessions-sidebar',
+        titles: [orphan ? `orphan session ${nodeId}` : nodeId],
+        removesNode: false,
+        perform: () => {
           transport.destroy(nodeId, { everySocket: true })
           remoteKill?.()
           // Nothing else to clean up: with no node anywhere, there is no canvas entry to remove and
           // no parked terminal to dispose. Persisted agent status is dropped anyway, since a
           // session id can outlive the node it belonged to.
           useAgentStatus.getState().remove(nodeId)
-          setConfirm(null)
         }
       })
     },
-    [closeSession, setConfirm]
+    [closeSession, requestDeleteNodes]
   )
 
   const renameSession = useCallback(
@@ -9820,6 +9915,7 @@ export function Canvas() {
           nodeTypes={nodeTypes}
           onNodesChange={handleNodesChange}
           onEdgesChange={handleEdgesChange}
+          onBeforeDelete={handleBeforeDelete}
           onConnect={onConnect}
           onEdgeDoubleClick={onEdgeDoubleClick}
           onMove={onMove}

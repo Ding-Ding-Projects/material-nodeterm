@@ -167,6 +167,13 @@ accelerator is handled before the page, so your `keydown` branch simply never ru
 different set. And any chord that reaches the canvas needs the two refusals every canvas shortcut
 here has: not while the kanban board covers it, not while the user is typing.
 
+**Every node/session close goes through `renderer/lib/nodeDeletion.ts`.** That includes node-header
+× buttons (intercepted at React Flow's `onBeforeDelete`), the canvas and kanban, Cmd/Ctrl+W, the
+sessions sidebar/session-memory panel, and agent-control `close`. The funnel preserves ordinary
+behaviour but makes the Kids-mode two-key gate unavoidable. Do not add a direct `deleteElements`
+or `deleteNodes` path: the former expands group deletion to every descendant, while nodeterm's
+canonical delete frees the children, and the latter performs irreversible teardown with no ask.
+
 **Comments explain WHY, and name the failure they prevent.** The codebase is deliberately dense with
 reasoning. A comment that restates the code is noise; one that says "do not simplify this back,
 here is what broke" is the point.

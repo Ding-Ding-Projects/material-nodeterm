@@ -4731,10 +4731,9 @@ export function TerminalNode({
           <button
             className="term-node__close"
             title="Close (ends the session)"
-            onClick={() => {
-              transport.destroy(id)
-              deleteElements({ nodes: [{ id }] })
-            }}
+            // React Flow's onBeforeDelete boundary asks first; Canvas.deleteNodes ends the session
+            // only after authorization. Destroying here would make the confirmation cosmetic.
+            onClick={() => deleteElements({ nodes: [{ id }] })}
           >
             ×
           </button>

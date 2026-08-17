@@ -82,12 +82,12 @@ describe('the gate is reachable from anywhere', () => {
 })
 
 describe('every GuardedAction is actually wired to something', () => {
-  it('the policy names at least the five actions this was written against', () => {
-    // If this shrinks, the coverage test below silently checks less. Five, not six: the union
-    // once carried `clear-history` and nothing in the app clears history — see the comment on
-    // GuardedAction. A safety list naming a protection for a feature that does not exist reads
-    // as coverage to anyone checking.
-    expect(guardedActions().length).toBeGreaterThanOrEqual(5)
+  it('the policy names at least the six actions with real destructive surfaces', () => {
+    // If this shrinks, the coverage test below silently checks less. The union once carried
+    // `clear-history` and nothing in the app clears history — see the comment on GuardedAction.
+    // `remove-account` is the sixth only because its credential/session transaction is now real
+    // and gated. A safety list naming a nonexistent protection reads as coverage to a reviewer.
+    expect(guardedActions().length).toBeGreaterThanOrEqual(6)
   })
 
   // An action can be satisfied two ways, and the second is STRONGER than the policy asks for:

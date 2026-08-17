@@ -32,7 +32,11 @@ export function DestructiveGateHost(): React.JSX.Element | null {
         close()
         request.onConfirm()
       }}
-      onCancel={close}
+      onCancel={() => {
+        // Close first for the same reason as confirmation: a callback must never strand the gate.
+        close()
+        request.onCancel?.()
+      }}
     />
   )
 }
