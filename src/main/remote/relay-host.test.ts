@@ -75,6 +75,7 @@ import { initPlatform, resetPlatformForTests } from '../../core/platform'
 import { IPC } from '../../shared/ipc'
 import { decodePtyData, E_UNAUTHORIZED } from '../../shared/rpc'
 import type { CanvasNodeState, Workspace } from '../../shared/types'
+import { startAuthenticatorService } from '../../core/toylocks/authenticator-service'
 
 const decoder = new TextDecoder()
 
@@ -636,6 +637,53 @@ describe('relay host — presence, canvas and RPC reach a bridged peer', () => {
 
     s.peerSendsTunnelText(JSON.stringify({ t: 'cast', method: 'pty:write', args: ['ls\r'] }))
     await vi.waitFor(() => expect(casts).toEqual([[id, 'ls\r']]))
+  })
+})
+
+describe('relay host — raw RPC cannot cross machine-global credential boundaries', () => {
+  it('forbids every authenticator method before its handler can touch the sealed store', async () => {
+    const store = {
+      load: vi.fn(async () => []),
+      save: vi.fn(async () => {}),
+      seal: vi.fn(() => 'sealed'),
+      unseal: vi.fn(() => ({ v: 1, secretBase32: 'NEVER-READ' }))
+    }
+    startAuthenticatorService(store as never)
+    const s = openHostAgainstFakeRelay()
+    await s.openMutually()
+
+    const calls: Array<{ method: string; args: unknown[] }> = [
+      { method: IPC.authenticatorList, args: [] },
+      { method: IPC.authenticatorAddManual, args: [{ secretBase32: 'ATTACKER-CONTROLLED' }] },
+      { method: IPC.authenticatorAddUri, args: ['otpauth://totp/attacker'] },
+      { method: IPC.authenticatorRename, args: [{ id: 'entry-1', issuer: 'attacker' }] },
+      { method: IPC.authenticatorRemove, args: ['entry-1'] },
+      { method: IPC.authenticatorCode, args: ['entry-1'] },
+      { method: IPC.authenticatorCodes, args: [['entry-1']] },
+      { method: IPC.authenticatorReveal, args: ['entry-1'] },
+      { method: IPC.authenticatorExportSecrets, args: [{ ids: [], confirmed: true }] }
+    ]
+
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[i]!
+      s.peerSendsTunnelText(JSON.stringify({
+        t: 'req', id: 500 + i, method: call.method, args: call.args
+      }))
+    }
+
+    await vi.waitFor(() => {
+      const replies = s.textFrames
+        .map((frame) => JSON.parse(frame))
+        .filter((frame) => frame.t === 'res' && frame.id >= 500 && frame.id < 500 + calls.length)
+      expect(replies).toHaveLength(calls.length)
+      expect(replies.every((reply) =>
+        reply.ok === false && reply.error.code === 'E_FORBIDDEN'
+      )).toBe(true)
+    })
+    expect(store.load).not.toHaveBeenCalled()
+    expect(store.save).not.toHaveBeenCalled()
+    expect(store.seal).not.toHaveBeenCalled()
+    expect(store.unseal).not.toHaveBeenCalled()
   })
 })
 

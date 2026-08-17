@@ -353,6 +353,7 @@ export const IPC = {
   gitWorktreeList: 'git:worktree-list',
   gitWorktreeAdd: 'git:worktree-add',
   gitWorktreeMerge: 'git:worktree-merge',
+  gitWorktreeRemovalProof: 'git:worktree-removal-proof',
   gitWorktreeRemove: 'git:worktree-remove',
   gitSetActiveRemote: 'git:set-active-remote',
   shellOpenExternal: 'shell:open-external',

@@ -14,11 +14,17 @@ import {
   type RuleSourceState,
   type RuleSourceStates,
   type ScheduleRule,
+  type ScheduleSource,
   type ScheduledSettingsFile,
   type ScheduledSettingsActiveState,
   type SchedulableSettingsPatch
 } from '../shared/scheduled-settings'
-import { fetchApiSettingsSource, fetchHomeAssistantState, type HaFetchResult } from './scheduled-settings-network'
+import {
+  fetchApiSettingsSource,
+  fetchHomeAssistantState,
+  type ApiFetchResult,
+  type HaFetchResult
+} from './scheduled-settings-network'
 import {
   setHomeAssistantToken,
   getHomeAssistantToken,
@@ -31,6 +37,45 @@ import {
  *  interval only governs the steady re-check while a rule stays enabled with an external source. */
 const TICK_MS = 30_000
 
+type ScheduledSettingsStorePort = Pick<ScheduledSettingsStore, 'get' | 'loadState' | 'onChange'>
+
+export interface ScheduledSettingsServiceDependencies {
+  now(): number
+  fetchApiSettingsSource(url: string, timeoutMs?: number): Promise<ApiFetchResult>
+  fetchHomeAssistantState(baseUrl: string, entityId: string, token: string): Promise<HaFetchResult>
+  setHomeAssistantToken(ruleId: string, token: string | null): Promise<void>
+  getHomeAssistantToken(ruleId: string): Promise<string | null>
+  homeAssistantTokenStatus(ruleIds: readonly string[]): Promise<Record<string, boolean>>
+  pruneOrphanedTokens(liveRuleIds: ReadonlySet<string> | readonly string[]): Promise<void>
+}
+
+const DEFAULT_DEPENDENCIES: ScheduledSettingsServiceDependencies = {
+  now: Date.now,
+  fetchApiSettingsSource,
+  fetchHomeAssistantState,
+  setHomeAssistantToken,
+  getHomeAssistantToken,
+  homeAssistantTokenStatus,
+  pruneOrphanedTokens
+}
+
+function sourceKey(source: ScheduleSource): string {
+  switch (source.kind) {
+    case 'local':
+      return JSON.stringify(['local'])
+    case 'api':
+      return JSON.stringify(['api', source.url, source.timeoutMs ?? null])
+    case 'home-assistant':
+      return JSON.stringify(['home-assistant', source.baseUrl, source.entityId])
+  }
+}
+
+interface InFlightRefresh {
+  generation: number
+  sourceKey: string
+  promise: Promise<void>
+}
+
 export class ScheduledSettingsService {
   private readonly states: RuleSourceStates = {}
   /** Per-rule fetch generation: a fetch whose generation is no longer current when it completes —
@@ -38,58 +83,161 @@ export class ScheduledSettingsService {
    *  brief's "generation or cancellation guard": a slow, stale response can never overwrite a
    *  newer one. */
   private readonly generations = new Map<string, number>()
+  /** Exactly one external check owns a rule/source generation. A 31-second check must not be
+   *  replaced every 30-second tick forever, and a stale check's `finally` must not release the
+   *  newer source's slot after a retarget. */
+  private readonly inFlight = new Map<string, InFlightRefresh>()
   private readonly windowWasActive = new Map<string, boolean>()
   private timer: ReturnType<typeof setInterval> | null = null
   private lastPushSignature: string | null = null
   private unsubscribeStore: (() => void) | null = null
+  private credentialPruneInFlight: Promise<void> | null = null
 
-  constructor(private readonly store: ScheduledSettingsStore) {}
+  private readonly dependencies: ScheduledSettingsServiceDependencies
+
+  constructor(
+    private readonly store: ScheduledSettingsStorePort,
+    dependencies: Partial<ScheduledSettingsServiceDependencies> = {}
+  ) {
+    this.dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies }
+  }
 
   start(): void {
     this.unsubscribeStore = this.store.onChange((file, previous) => this.onFileChanged(file, previous))
     this.registerIpc()
+    this.retryOrphanedCredentialPrune()
     this.tick() // recompute (and kick off any due refreshes) immediately — don't wait 30s at boot
-    this.timer = setInterval(() => this.tick(), TICK_MS)
+    this.timer = setInterval(() => {
+      this.retryOrphanedCredentialPrune()
+      this.tick()
+    }, TICK_MS)
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
     this.unsubscribeStore?.()
     this.unsubscribeStore = null
+
+    // Startup/interval cleanup owns a SQLite handle until its transaction settles. Shutdown must
+    // drain that bounded owner before a shell removes or reuses userData; otherwise Windows can
+    // observe an EPERM/EBUSY sidecar even though the service has stopped scheduling new work.
+    // Background cleanup already reports its own warning, so a prior failure must not turn an
+    // otherwise orderly shell shutdown into a rejection.
+    const prune = this.credentialPruneInFlight
+    if (prune) {
+      try {
+        await prune
+      } catch {
+        // The retry warning is emitted by retryOrphanedCredentialPrune's attached handler.
+      }
+    }
   }
 
-  private onFileChanged(file: ScheduledSettingsFile, previous: ScheduledSettingsFile): void {
-    const liveIds = new Set(file.rules.map((r) => r.id))
-    // A rule that vanished (or whose source changed away from home-assistant) must not leave a
-    // stale cached "on"/value that could resurrect on a later re-add with the same id.
-    for (const id of Object.keys(this.states)) {
-      if (!liveIds.has(id)) {
-        delete this.states[id]
-        this.generations.delete(id)
-        this.windowWasActive.delete(id)
+  private invalidateSource(ruleId: string): void {
+    // Never delete/reset a generation number. An old check for a removed rule can still be alive;
+    // re-adding the same id must receive a genuinely newer generation rather than accidentally
+    // recreating the old number and accepting its response.
+    this.generations.set(ruleId, (this.generations.get(ruleId) ?? 0) + 1)
+    this.inFlight.delete(ruleId)
+    delete this.states[ruleId]
+    this.windowWasActive.delete(ruleId)
+  }
+
+  private async onFileChanged(file: ScheduledSettingsFile, previous: ScheduledSettingsFile): Promise<void> {
+    const previousById = new Map(previous.rules.map((rule) => [rule.id, rule]))
+    const nextById = new Map(file.rules.map((rule) => [rule.id, rule]))
+    const allIds = new Set([...previousById.keys(), ...nextById.keys()])
+
+    for (const id of allIds) {
+      const before = previousById.get(id)
+      const after = nextById.get(id)
+      // Compare the complete external-source identity, not only its kind. URL A -> URL B and HA
+      // entity A -> entity B are security-relevant retargets: cached A and an in-flight A response
+      // must disappear before B gets its immediate refresh.
+      if (!before || !after || sourceKey(before.source) !== sourceKey(after.source)) {
+        this.invalidateSource(id)
       }
     }
-    for (const prevRule of previous.rules) {
-      const next = file.rules.find((r) => r.id === prevRule.id)
-      if (next && prevRule.source.kind === 'home-assistant' && next.source.kind !== 'home-assistant') {
-        delete this.states[prevRule.id]
+
+    try {
+      await this.prunePublishedCredentials(file)
+    } finally {
+      // Recompute even when cleanup is incomplete. The store surfaces that failure, while the
+      // running schedule must still reflect the file that was successfully published.
+      this.tick()
+    }
+  }
+
+  /** Save-triggered cleanup must run after any older background attempt, then own a fresh prune
+   * for the schedule that was actually published. A background failure is retried here rather
+   * than being mistaken for this save's result. */
+  private async prunePublishedCredentials(file: ScheduledSettingsFile): Promise<void> {
+    while (this.credentialPruneInFlight) {
+      const previous = this.credentialPruneInFlight
+      try {
+        await previous
+      } catch {
+        // Background cleanup reports its own warning. This publication still needs its own
+        // current-ID attempt, whose failure is propagated to the store.
       }
     }
-    void pruneOrphanedTokens(
-      new Set(file.rules.filter((r) => r.source.kind === 'home-assistant').map((r) => r.id))
+    // A failed load deliberately installs a safe empty cache. It is not evidence that no rules
+    // exist, so it can never authorize deleting credential files.
+    if (!this.store.loadState().ok) return
+    await this.startCredentialPrune(
+      new Set(file.rules.filter((rule) => rule.source.kind === 'home-assistant').map((rule) => rule.id))
     )
-    this.tick()
+  }
+
+  private startCredentialPrune(liveIds: ReadonlySet<string>): Promise<void> {
+    if (this.credentialPruneInFlight) {
+      throw new Error('A scheduled credential cleanup already owns the mutation boundary.')
+    }
+    const run: Promise<void> = Promise.resolve()
+      .then(() => this.dependencies.pruneOrphanedTokens(liveIds))
+      .finally(() => {
+        if (this.credentialPruneInFlight === run) this.credentialPruneInFlight = null
+      })
+    this.credentialPruneInFlight = run
+    return run
+  }
+
+  /** Retry startup/crash-gap residue even when no later schedule edit occurs. The awaited save
+   * path reports failures inline; background retries are bounded to one operation and avoid
+   * logging credential paths or ids. */
+  private retryOrphanedCredentialPrune(): void {
+    if (this.credentialPruneInFlight) return
+    const load = this.store.loadState()
+    if (!load.ok) return
+    const liveIds = new Set(
+      load.file.rules
+        .filter((rule) => rule.source.kind === 'home-assistant')
+        .map((rule) => rule.id)
+    )
+    const run = this.startCredentialPrune(liveIds)
+    void run.catch(() => {
+      console.warn('[scheduled-settings] orphaned credential cleanup is incomplete; retrying')
+    })
   }
 
   private registerIpc(): void {
-    platform().handle(IPC.scheduledSettingsSetHaToken, (ruleId: string, token: string | null) =>
-      setHomeAssistantToken(ruleId, token)
-    )
+    platform().handle(IPC.scheduledSettingsSetHaToken, async (ruleId: string, token: string | null) => {
+      try {
+        await this.dependencies.setHomeAssistantToken(ruleId, token)
+      } finally {
+        // A credential mutation can change canonical state and then reject while cleaning an
+        // alternate artifact. Invalidate for every settled attempt so a partially-applied Clear
+        // cannot retain cached `on` state or accept an older bearer response.
+        this.invalidateSource(ruleId)
+        this.recomputeAndBroadcast()
+        this.tick()
+      }
+    })
     // Deliberately no "get token" handler anywhere in this file — only a status boolean ever
     // crosses the IPC boundary. See scheduled-settings-secrets.ts's doc on getHomeAssistantToken.
     platform().handle(IPC.scheduledSettingsTokenStatus, () =>
-      homeAssistantTokenStatus(this.store.get().rules.map((r) => r.id))
+      this.dependencies.homeAssistantTokenStatus(this.store.get().rules.map((r) => r.id))
     )
     platform().handle(IPC.scheduledSettingsRefreshRule, (ruleId: string) => this.refreshRuleById(ruleId))
     platform().handle(IPC.scheduledSettingsActiveState, () => this.currentState())
@@ -105,7 +253,7 @@ export class ScheduledSettingsService {
 
   private tick(): void {
     const file = this.store.get()
-    const now = Date.now()
+    const now = this.dependencies.now()
     const refreshes: Promise<void>[] = []
     for (const rule of file.rules) {
       if (!rule.enabled || rule.source.kind === 'local') continue
@@ -125,18 +273,61 @@ export class ScheduledSettingsService {
 
   private async refreshRule(rule: ScheduleRule): Promise<void> {
     if (rule.source.kind === 'local') return
-    const gen = (this.generations.get(rule.id) ?? 0) + 1
-    this.generations.set(rule.id, gen)
-    const now = Date.now()
-    const result: { ok: boolean; error?: string; values?: SchedulableSettingsPatch; on?: boolean } =
-      rule.source.kind === 'api'
-        ? await fetchApiSettingsSource(rule.source.url, rule.source.timeoutMs)
-        : await this.fetchHa(rule.id, rule.source.baseUrl, rule.source.entityId)
-    // Discard a stale response: a newer fetch for this rule has started since, or a save has since
-    // removed/retargeted it.
-    if (this.generations.get(rule.id) !== gen) return
-    const currentRule = this.store.get().rules.find((r) => r.id === rule.id)
-    if (!currentRule || currentRule.source.kind !== rule.source.kind) return
+    const key = sourceKey(rule.source)
+    const currentRule = this.store.get().rules.find((candidate) => candidate.id === rule.id)
+    if (!currentRule || sourceKey(currentRule.source) !== key) return
+
+    const generation = this.generations.get(rule.id) ?? 0
+    const existing = this.inFlight.get(rule.id)
+    if (existing && existing.generation === generation && existing.sourceKey === key) {
+      return existing.promise
+    }
+
+    const owner: InFlightRefresh = {
+      generation,
+      sourceKey: key,
+      promise: Promise.resolve()
+    }
+    // Defer the check one microtask so ownership is published before an injected/test fetcher can
+    // synchronously re-enter this service.
+    owner.promise = Promise.resolve()
+      .then(() => this.runRefresh(rule, owner))
+      .finally(() => {
+        // An invalidated old check must not clear the newer source generation's in-flight slot.
+        if (this.inFlight.get(rule.id) === owner) this.inFlight.delete(rule.id)
+      })
+    this.inFlight.set(rule.id, owner)
+    return owner.promise
+  }
+
+  private ownsRefresh(ruleId: string, owner: InFlightRefresh): boolean {
+    if (this.inFlight.get(ruleId) !== owner) return false
+    if ((this.generations.get(ruleId) ?? 0) !== owner.generation) return false
+    const current = this.store.get().rules.find((rule) => rule.id === ruleId)
+    return current !== undefined && sourceKey(current.source) === owner.sourceKey
+  }
+
+  private async runRefresh(rule: ScheduleRule, owner: InFlightRefresh): Promise<void> {
+    if (!this.ownsRefresh(rule.id, owner)) return
+    const now = this.dependencies.now()
+    let result: { ok: boolean; error?: string; values?: SchedulableSettingsPatch; on?: boolean } | null
+    try {
+      result =
+        rule.source.kind === 'api'
+          ? await this.dependencies.fetchApiSettingsSource(rule.source.url, rule.source.timeoutMs)
+          : await this.fetchHa(rule, owner)
+    } catch {
+      result = {
+        ok: false,
+        error:
+          rule.source.kind === 'home-assistant'
+            ? 'The stored Home Assistant token could not be read.'
+            : 'The scheduled source check failed.'
+      }
+    }
+    // `null` is a deliberately abandoned HA token-read barrier, not a source failure. The source
+    // was invalidated while the token was being read, so it owns no status update at all.
+    if (!result || !this.ownsRefresh(rule.id, owner)) return
 
     const previous = this.states[rule.id]
     const next: RuleSourceState = {
@@ -159,15 +350,19 @@ export class ScheduledSettingsService {
     this.states[rule.id] = next
   }
 
-  private async fetchHa(ruleId: string, baseUrl: string, entityId: string): Promise<HaFetchResult> {
-    const token = await getHomeAssistantToken(ruleId)
+  private async fetchHa(rule: ScheduleRule, owner: InFlightRefresh): Promise<HaFetchResult | null> {
+    if (rule.source.kind !== 'home-assistant') return null
+    const token = await this.dependencies.getHomeAssistantToken(rule.id)
+    // A Clear/retarget can finish while an OS keychain read is pending. Check ownership BEFORE
+    // putting the recovered bearer on a network request, not merely after that request returns.
+    if (!this.ownsRefresh(rule.id, owner)) return null
     if (!token) return { ok: false, error: 'No access token saved for this rule.' }
-    return fetchHomeAssistantState(baseUrl, entityId, token)
+    return this.dependencies.fetchHomeAssistantState(rule.source.baseUrl, rule.source.entityId, token)
   }
 
   private currentState(): ScheduledSettingsActiveState {
     const file = this.store.get()
-    const now = Date.now()
+    const now = this.dependencies.now()
     const resolved = resolveActiveSchedule(file, now, this.states)
     const sources: ScheduledSettingsActiveState['sources'] = {}
     for (const rule of file.rules) {

@@ -118,21 +118,84 @@ export function notify(store, title, body, tag) {
 // ---------------------------------------------------------------------
 export function log(store, title, body) {
   store.setState((s) => ({
-    history: [{ id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), title, body: body || '', when: nowIso(), tag: 'change' }].concat(s.history).slice(0, 300),
+    history: [historyEntry(title, body)].concat(s.history).slice(0, 300),
   }))
 }
+
+function historyEntry(title, body, undo) {
+  const entry = {
+    id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6),
+    title,
+    body: body || '',
+    when: nowIso(),
+    tag: 'change',
+  }
+  // Record-only events (an export or conversion) have no prior settings state and must not grow a
+  // fake Undo action. Old persisted rows naturally take this branch too.
+  if (undo && Object.keys(undo).length) entry.undo = undo
+  return entry
+}
+
 export function undoEntry(store, id) {
   const entry = store.state.history.find((h) => h.id === id)
-  if (!entry) return
-  store.setState({ history: store.state.history.filter((h) => h.id !== id) })
-  log(store, 'Undid: ' + entry.title, 'That step was taken out of the log. This undo is itself a new step, so you can undo the undo.')
-  toast(store, '↩️', 'Put back', '“' + entry.title + '” was undone as a brand new step.')
+  if (!entry) return false
+  const safeUndo = store.sanitizeUndoSnapshot(entry.undo)
+  if (!Object.keys(safeUndo).length) {
+    toast(store, '📖', 'Log entry only', '“' + entry.title + '” records an event, but it did not change a saved setting this page can put back.')
+    return false
+  }
+
+  const redo = store.captureDurableBefore(safeUndo)
+  const restored = JSON.parse(JSON.stringify(safeUndo))
+  const next = historyEntry(
+    'Put back: ' + entry.title,
+    'The saved values from before that change were restored. This restore can be reversed too.',
+    redo,
+  )
+  store.setState(Object.assign({}, restored, {
+    history: [next].concat(store.state.history.filter((h) => h.id !== id)).slice(0, 300),
+  }))
+  // Theme and text size are imperative document side effects as well as persisted values. A state-
+  // only restore left the live page painted with the value it claimed to have put back.
+  applyTheme(store.state)
+  toast(store, '↩️', 'Put back', '“' + entry.title + '” was restored as a brand new step.')
+  return true
 }
 
 // A patch-and-log helper mirroring the design's `this.save(patch, note)`.
 export function save(store, patch, note) {
-  store.setState(patch)
-  if (note) log(store, note)
+  if (!note) {
+    store.setState(patch)
+    return
+  }
+  const undo = store.captureDurableBefore(patch)
+  const sensitiveOnly =
+    !Object.keys(undo).length &&
+    Object.keys(patch).some((key) => ['auth', 'locks', 'schoolPin', 'history'].includes(key))
+  const body = sensitiveOnly
+    ? 'Record only: credential and history data is never copied into a persistent undo snapshot.'
+    : ''
+  // Publish the setting and the revision that can reverse it in ONE persisted state transition.
+  // Two separate setState calls can strand a changed setting without its undo row if storage
+  // becomes unavailable between them.
+  store.setState((s) => Object.assign({}, patch, {
+    history: [historyEntry(note, body, undo)].concat(s.history).slice(0, 300),
+  }))
+}
+
+/** Apply a durable change and its honest non-reversible event in one localStorage transition. */
+export function saveRecordOnly(store, patch, title, body) {
+  store.setState((s) => Object.assign({}, patch, {
+    history: [historyEntry(title, body)].concat(s.history).slice(0, 300),
+  }))
+}
+
+export function removeHistoryEntries(store, ids) {
+  const removing = new Set(ids)
+  store.setState({
+    history: store.state.history.filter((entry) => !removing.has(entry.id)),
+    picked: {},
+  })
 }
 
 export function fmtWhen(iso) {
@@ -248,14 +311,16 @@ export function menuDefs(store, deps) {
     const row = s.menuExtra || {}
     const extras = []
     if (row.url) extras.push({ icon: '🌐', label: 'Open this on GitHub', hint: 'new tab', run: () => { try { window.open(row.url, '_blank', 'noopener') } catch (_err) {} closeMenu(store) } })
-    if (s.sec === 'history') extras.push({ icon: '↩️', label: 'Put this change back', hint: '', run: () => { closeMenu(store); undoEntry(store, row.id) } })
+    if (s.sec === 'history' && row.canUndo) extras.push({ icon: '↩️', label: 'Put this saved change back', hint: '', run: () => { closeMenu(store); undoEntry(store, row.id) } })
     if (s.sec === 'shop') extras.push({ icon: '🧺', label: 'Put it in the basket', hint: '', run: () => { store.setState((st) => ({ cart: Object.assign({}, st.cart, { [row.id]: true }), menuOpen: false })); toast(store, '🧺', 'In the basket', 'A shopping list for your own machine — this page cannot pull models.') } })
     if (s.sec === 'auth') extras.push({ icon: '📋', label: 'Copy the six digits', hint: '', run: () => { deps.copy(s.codes[row.id] || ''); closeMenu(store) } })
+    const room = getRoom(s.sec)
+    const removeWarning = room?.removeWarning || 'This removal is permanent and cannot be put back.'
     return extras
       .concat([
         { icon: '✅', label: 'Pick or unpick this one', hint: '', run: () => { deps.togglePick(row.id); closeMenu(store) } },
         { icon: '📋', label: 'Copy it', hint: '', run: () => { deps.copy((row.title || '') + ' — ' + (row.body || '')); closeMenu(store) } },
-        { icon: '🗑', label: 'Throw this one away', hint: 'asks first', run: () => { closeMenu(store); askConfirm(store, 'Throw one away?', 'This removes “' + (row.title || '') + '” from the list. The time machine will remember that you did.', 'bye', () => deps.removeRows([row.id])) } },
+        { icon: '🗑', label: 'Throw this one away', hint: 'asks first', run: () => { closeMenu(store); askConfirm(store, 'Throw one away?', 'This removes “' + (row.title || '') + '” from the list. ' + removeWarning, 'bye', () => deps.removeRows([row.id])) } },
         { icon: '🔊', label: 'Read it out loud', hint: '', run: () => { store.setState({ menuOpen: false, narrate: true }); deps.speak((row.title || '') + '. ' + (row.body || '')) } },
         { icon: '📦', label: 'Take this list home', hint: '', run: () => deps.goRoom('export') },
       ])
@@ -388,9 +453,12 @@ export async function refreshCodes(store) {
 }
 export { totpSecondsLeft }
 
-export function copyToClipboard(store, text) {
+export async function copyToClipboard(store, text) {
   try {
-    navigator.clipboard.writeText(String(text))
+    // Clipboard writes are asynchronous in every modern browser. A synchronous try/catch reports
+    // success before a permission rejection arrives, leaving both a false success toast and an
+    // unhandled rejection. Wait for the browser's actual verdict before telling the user.
+    await navigator.clipboard.writeText(String(text))
     toast(store, '📋', 'Copied!', 'It is on your clipboard now.')
   } catch (_err) {
     toast(store, '😕', 'Could not copy', 'Your browser said no. Select the text by hand instead.')

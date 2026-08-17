@@ -92,37 +92,37 @@ describe('planRefresh', () => {
   })
 })
 
-describe('projectLabel on a Windows cwd', () => {
-  // Was `cwd.split('/').filter(Boolean).pop()`. A Windows cwd contains no '/' at all, so the
-  // split returned the WHOLE path and the find bar labelled every result with an absolute path
-  // instead of the project's name. The suite above never caught it because every fixture cwd is
-  // POSIX — which is exactly the shape of the bug: the code is correct on the platform the
-  // fixtures were written on.
-  const WIN = String.raw`C:\Users\me\beta`
+describe('projectLabel uses the recorded cwd dialect', () => {
+  // Native basename() was still host-dependent after replacing split('/'): Linux kept a Windows
+  // cwd whole. The POSIX backslash fixture is the inverse discriminator and keeps the regression
+  // observable on a Windows test process as well.
+  const hitFor = (cwd: string) => searchEntries([
+    { sessionId: 's1', transcriptPath: '/p/s1.jsonl', cwd, mtime: 1, title: 'x', text: 'tmux' }
+  ], 'tmux', 20)[0]
 
   it('labels with the folder name, not the whole path', () => {
-    const entries: TranscriptIndexEntry[] = [
-      { sessionId: 's1', transcriptPath: '/p/s1.jsonl', cwd: WIN, mtime: 1, title: 'x', text: 'tmux' }
-    ]
-    const hits = searchEntries(entries, 'tmux', 20)
-    expect(hits[0].projectLabel).toBe('beta')
+    const hit = hitFor(String.raw`C:\Users\me\beta`)
+    expect(hit.projectLabel).toBe('beta')
     // '\\', not String.raw — a raw template literal cannot END with a backslash, because the
     // backslash escapes the closing backtick even in raw mode. This is the one place the usual
     // String.raw advice does not apply.
-    expect(hits[0].projectLabel).not.toContain('\\')
+    expect(hit.projectLabel).not.toContain('\\')
   })
 
-  it('still labels a POSIX cwd correctly', () => {
-    const entries: TranscriptIndexEntry[] = [
-      { sessionId: 's1', transcriptPath: '/p/s1.jsonl', cwd: '/Users/me/alpha', mtime: 1, title: 'x', text: 'tmux' }
-    ]
-    expect(searchEntries(entries, 'tmux', 20)[0].projectLabel).toBe('alpha')
+  it.each([
+    ['forward-slash drive cwd', 'C:/Users/me/beta'],
+    ['backslash UNC cwd', String.raw`\\fileserver\share\team\beta`],
+    ['forward-slash UNC cwd', '//fileserver/share/team/beta']
+  ])('labels a Windows %s', (_case, cwd) => {
+    expect(hitFor(cwd).projectLabel).toBe('beta')
+  })
+
+  it('uses POSIX rules for a POSIX cwd, preserving a legal backslash in its leaf', () => {
+    expect(hitFor(String.raw`/Users/me/alpha\beta`).projectLabel).toBe(String.raw`alpha\beta`)
   })
 
   it('falls back to the cwd when there is no folder name to take', () => {
-    const entries: TranscriptIndexEntry[] = [
-      { sessionId: 's1', transcriptPath: '/p/s1.jsonl', cwd: '/', mtime: 1, title: 'x', text: 'tmux' }
-    ]
-    expect(searchEntries(entries, 'tmux', 20)[0].projectLabel).toBe('/')
+    expect(hitFor('/').projectLabel).toBe('/')
+    expect(hitFor('C:\\').projectLabel).toBe('C:\\')
   })
 })

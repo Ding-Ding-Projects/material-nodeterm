@@ -4,13 +4,19 @@ import { spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { createReadStream } from 'node:fs'
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as ResEdit from 'resedit'
 import unzipper from 'unzipper'
+import {
+  collectReleaseAssets,
+  nuspecMetadataElement,
+  readReleaseIdentity as readAssetReleaseIdentity,
+} from './release-assets.mjs'
 
 const require = createRequire(import.meta.url)
+// Keep Vitest/Vite and the production CLI on resedit's real CommonJS implementation.
+const ResEdit = require('resedit')
 const SCRIPT_FILE = fileURLToPath(import.meta.url)
 const REPO_ROOT = path.resolve(path.dirname(SCRIPT_FILE), '..')
 const ICON_RELATIVE_PATH = 'build/icon.ico'
@@ -19,7 +25,6 @@ const MAX_ICON_BYTES = 1024 * 1024
 const MAX_ARCHIVE_ENTRY_BYTES = 512 * 1024 * 1024
 const FULL_SHA_RE = /^[0-9a-f]{40}$/
 const REPOSITORY_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/
-const SEMVER_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 
 export const WINDOWS_RELEASE_IDENTITY = Object.freeze({
   packageId: 'node-terminal',
@@ -426,20 +431,18 @@ async function writeMetadataAtomic(file, metadata) {
 }
 
 export async function readReleaseIdentity(packageJsonFile) {
+  const assetIdentity = await readAssetReleaseIdentity(packageJsonFile)
   let value
   try {
     value = JSON.parse(await readFile(packageJsonFile, 'utf8'))
   } catch (error) {
-    fail(`could not read release identity from package.json: ${error instanceof Error ? error.message : String(error)}`)
+    fail(`could not read Windows package configuration: ${error instanceof Error ? error.message : String(error)}`)
   }
-  if (value.name !== WINDOWS_RELEASE_IDENTITY.packageId) {
+  if (assetIdentity.packageId !== WINDOWS_RELEASE_IDENTITY.packageId) {
     fail(`package.json name must remain ${WINDOWS_RELEASE_IDENTITY.packageId}`)
   }
-  if (value?.build?.productName !== WINDOWS_RELEASE_IDENTITY.productName) {
+  if (assetIdentity.productName !== WINDOWS_RELEASE_IDENTITY.productName) {
     fail(`package.json build.productName must remain ${WINDOWS_RELEASE_IDENTITY.productName}`)
-  }
-  if (typeof value.version !== 'string' || !SEMVER_RE.test(value.version)) {
-    fail(`package.json version is not an exact semantic version: ${JSON.stringify(value.version)}`)
   }
   if (value?.scripts?.['dist:win'] !== 'node scripts/windows-installer.mjs build') {
     fail('package.json scripts.dist:win must use the guarded Windows installer wrapper')
@@ -450,8 +453,12 @@ export async function readReleaseIdentity(packageJsonFile) {
   if (value?.build?.win?.icon !== ICON_RELATIVE_PATH) {
     fail(`package.json build.win.icon must remain ${ICON_RELATIVE_PATH}`)
   }
-  if (value?.build?.win?.signExecutable !== false || value?.build?.win?.forceCodeSigning !== false || value?.build?.forceCodeSigning !== false) {
-    fail('Windows packaging must keep signExecutable:false and forceCodeSigning:false')
+  if (
+    value?.build?.win?.signExecutable !== false ||
+    value?.build?.win?.forceCodeSigning !== false ||
+    value?.build?.forceCodeSigning !== false
+  ) {
+    fail('Windows packaging must keep signExecutable:false and both forceCodeSigning flags false')
   }
   if (value?.build?.win && Object.hasOwn(value.build.win, 'signAndEditExecutable')) {
     fail('build.win.signAndEditExecutable must be omitted so icon and PE metadata editing stay enabled')
@@ -465,23 +472,7 @@ export async function readReleaseIdentity(packageJsonFile) {
   if (value?.build?.squirrelWindows && Object.hasOwn(value.build.squirrelWindows, 'iconUrl')) {
     fail('squirrelWindows.iconUrl must be supplied only by the source-SHA-locked build wrapper')
   }
-  return { ...WINDOWS_RELEASE_IDENTITY, version: value.version }
-}
-
-function decodeXmlText(value) {
-  return value
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&amp;', '&')
-}
-
-function nuspecMetadataElement(xml, name, description) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const matches = [...xml.matchAll(new RegExp(`<${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escaped}>`, 'gi'))]
-  if (matches.length !== 1) fail(`${description} must contain exactly one <${name}> metadata element`)
-  return decodeXmlText(matches[0][1].trim())
+  return { ...WINDOWS_RELEASE_IDENTITY, version: assetIdentity.version }
 }
 
 async function entryBuffer(entry, description, maxBytes = MAX_ARCHIVE_ENTRY_BYTES) {
@@ -489,40 +480,6 @@ async function entryBuffer(entry, description, maxBytes = MAX_ARCHIVE_ENTRY_BYTE
   const value = await entry.buffer()
   if (value.length === 0 || value.length > maxBytes) fail(`${description} has an invalid byte size`)
   return value
-}
-
-function requireReleaseLine(text, expectedName, expectedPackage) {
-  const lines = text.trim().split(/\r?\n/)
-  if (lines.length !== 1) fail('RELEASES must contain exactly one full-package line')
-  const match = /^([0-9a-f]{40})\s+(\S+)\s+(\d+)$/i.exec(lines[0])
-  if (!match) fail('RELEASES line has an invalid format')
-  if (
-    match[2] !== expectedName ||
-    Number(match[3]) !== expectedPackage.bytes ||
-    match[1].toLowerCase() !== expectedPackage.digest
-  ) {
-    fail('RELEASES does not exactly identify the inspected full package')
-  }
-}
-
-async function collectSquirrelAssets(directory, identity) {
-  const names = await readdir(directory)
-  const setupName = `${identity.productName}-Setup-${identity.version}.exe`
-  const fullName = `${identity.packageId}-${identity.version}-full.nupkg`
-  const setupCandidates = names.filter((name) => /-Setup-.*\.exe$/i.test(name))
-  const packageCandidates = names.filter((name) => /\.nupkg$/i.test(name))
-  if (JSON.stringify(setupCandidates) !== JSON.stringify([setupName])) {
-    fail(`Squirrel output must contain only ${setupName}; found ${setupCandidates.join(', ') || 'none'}`)
-  }
-  if (JSON.stringify(packageCandidates) !== JSON.stringify([fullName])) {
-    fail(`Squirrel output must contain only ${fullName}; found ${packageCandidates.join(', ') || 'none'}`)
-  }
-  if (!names.includes('RELEASES')) fail('Squirrel output is missing RELEASES')
-  return {
-    setup: path.join(directory, setupName),
-    full: path.join(directory, fullName),
-    releases: path.join(directory, 'RELEASES'),
-  }
 }
 
 async function inspectFullPackage(file, expectedUrl, expectedIconBytes, expectedIdentity) {
@@ -588,7 +545,22 @@ export async function assertPackagedIconContract(directory, metadataFile, root =
   const icon = await readFile(path.join(root, ...ICON_RELATIVE_PATH.split('/')))
   if (sha256(icon) !== metadata.sha256) fail('packaged icon metadata does not match build/icon.ico')
   inspectIco(icon)
-  const assets = await collectSquirrelAssets(directory, releaseIdentity)
+  const collected = await collectReleaseAssets(
+    directory,
+    releaseIdentity.version,
+    releaseIdentity.packageId,
+    releaseIdentity.productName,
+  )
+  const fullPackages = collected.packages.filter((file) => /-full\.nupkg$/i.test(file))
+  if (fullPackages.length !== 1) {
+    fail(`expected exactly one full nupkg for PE identity inspection, found ${fullPackages.length}`)
+  }
+  const assets = {
+    setup: collected.setup,
+    full: fullPackages[0],
+    releases: collected.releases,
+    packages: collected.packages,
+  }
   const setupBytes = await readFile(assets.setup)
   inspectPeIconInventory(setupBytes, icon, 'Squirrel Setup executable', { kind: 'setup' })
   inspectPeProductIdentity(
@@ -597,8 +569,6 @@ export async function assertPackagedIconContract(directory, metadataFile, root =
     'Squirrel Setup executable',
   )
   inspectUnsignedPe(setupBytes, 'Squirrel Setup executable')
-  const fullDigest = await digestFile(assets.full, 'sha1')
-  requireReleaseLine(await readFile(assets.releases, 'utf8'), path.basename(assets.full), fullDigest)
   const packaged = await inspectFullPackage(assets.full, metadata.iconUrl, icon, releaseIdentity)
   const unpackedDirectory = path.join(root, 'dist', 'win-unpacked')
   for (const [fileName, expected] of [

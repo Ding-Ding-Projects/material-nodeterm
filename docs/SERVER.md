@@ -90,10 +90,12 @@ curl -fsSL https://raw.githubusercontent.com/eneskirca/nodeterm/main/scripts/ins
 The installer (`scripts/install-server.sh`) is idempotent — re-run it any time to update. It:
 
 - needs only `git`, `curl` and `tar` on the host — **Node.js is no longer a prerequisite**: if a
-  system Node ≥ 20 (with npm) is present it's used as-is, otherwise the installer downloads a
-  pinned Node LTS from nodejs.org into `~/.nodeterm-server-app/runtime/node` and uses it for the
+  system Node matching `^22.22.2 || ^24.15.0 || >=26.0.0` (with npm and a working `node:sqlite`
+  `DatabaseSync`) is present it's used as-is, otherwise the installer downloads pinned Node
+  v24.15.0 from nodejs.org into `~/.nodeterm-server-app/runtime/node` and uses it for the
   build and the systemd service (nothing is installed system-wide; Alpine/musl hosts still need a
-  distro `nodejs`). It also warns (with the apt/dnf one-liner) if the C toolchain
+  distro `nodejs`). A downloaded runtime must report that exact pin and pass the SQLite capability
+  probe before npm or systemd runs. It also warns (with the apt/dnf one-liner) if the C toolchain
   (`make`/`gcc`/`python3`) node-pty's native build needs is missing;
 - clones (or `git pull`s) the repo into `~/.nodeterm-server-app`;
 - installs deps (`npm ci --ignore-scripts`, then `npm rebuild node-pty` against Node's ABI —
@@ -151,7 +153,11 @@ Everything boots **exactly as usual** — the loopback hook server, the agent-st
 usage poll, the granted push senders (push-notify + Live-Activity), and the pending-approvals
 sweep — **except** the public HTTP/WS listener, which is **never bound**. There is no renderer
 serving and no auth surface. `NODETERM_HOST` / `NODETERM_PORT` are ignored (nothing binds), and
-`platform.broadcast` is a no-op while no browser UI is attached.
+`platform.broadcast` is a no-op while no browser UI is attached. Its shutdown owns the same core
+service lifecycle as the serving path: in particular the scheduled-settings poller is stopped
+before PTY/hook teardown. This matters in a container too — `node` is PID 1, `docker stop` delivers
+SIGTERM, and `NODETERM_HEADLESS=1` must not leave that interval/store listener running while close
+is in flight.
 
 ### Security rationale: zero open ports
 
@@ -228,19 +234,40 @@ Single-user auth. There is one password; sessions are per-browser.
 
 - **Password hashing:** scrypt (`N=16384, r=8, p=1`, 32-byte key, per-password random
   salt), stored as `auth.json` (mode `0600`) in the data dir. Login comparison is
-  constant-time (`crypto.timingSafeEqual`). The app never stores the plaintext.
+  constant-time (`crypto.timingSafeEqual`). The HTTP path uses asynchronous scrypt, at most two
+  active proofs and 32 pending proofs process-wide, with at most five pending for one TCP peer.
+  Same-peer proofs execute FIFO and re-check lockout after every wait, so requests that arrived
+  before the fifth failure cannot keep hashing or reset the resulting lockout. The persisted
+  salt/hash shape and cost parameters are validated at use time before scrypt starts; a hand-edited
+  cost cannot escape those resource bounds. The app never stores the plaintext.
 - **Session cookie:** on successful login the server sets `nt_session=<random>` with
   `HttpOnly; SameSite=Strict; Path=/` (and `Secure` when served over HTTPS). Sessions
   are persisted (`sessions.json`, mode `0600`) with a 30-day TTL and swept lazily.
-  `revokeAll()` exists to drop every session but is only wired programmatically in
-  Phase 2 (no logout-everywhere UI yet; `/auth/logout` clears the current cookie).
+  `/auth/logout` deletes the presented token from that file before clearing its cookie, so replaying
+  the old bearer after logout or a server restart fails while other browsers stay signed in.
+  `revokeAll()` remains the programmatic logout-everywhere operation.
 - **Origin check on WS upgrade:** the WebSocket endpoint requires a valid session
   cookie **and**, when the browser sends an `Origin` header, that its host matches the
   request `Host`. A malformed Origin is rejected (never throws). This blocks
   cross-site WebSocket hijacking. (Non-browser clients without an Origin still must
   present a valid cookie.)
-- **Login rate limit / lockout:** 5 failed password attempts trip a 60-second lockout
-  (further attempts get `429 too_many_attempts`); a success resets the counter.
+- **Login rate limit / lockout:** 5 failed password/passkey attempts from one kernel-observed TCP
+  peer trip that peer's 60-second lockout (further attempts get `429 too_many_attempts`); a success
+  resets only that peer. `X-Forwarded-For`, `Forwarded`, `X-Real-IP`, cookies, user-agent and source
+  port never select this bucket because clients can spoof or churn them. A reverse proxy therefore
+  shares one password bucket for its TCP address; proxy-authenticated requests bypass the password
+  path normally. Peer state is bounded to 1024 entries: locked or pending-password-proof entries
+  are never evicted, while the oldest unlocked inactive source can be replaced so a distributed
+  one-shot flood cannot create a permanent global lockout. Password proof concurrency/backlog
+  limits above remain the process-wide distributed-work backstop.
+- **Passkey challenge bounds:** WebAuthn freshness challenges live for two minutes, are single-use,
+  bound to both the TCP peer and ceremony purpose (`login` versus `register`), and capped at eight
+  per peer / 256 process-wide. Expiry is one complete bounded O(n) pass, including after a backward
+  system-clock adjustment. Repeated unauthenticated option requests therefore cannot grow memory
+  or cleanup work beyond that strict 256-entry bound.
+- **Unlock challenge bounds:** each locked peer can retain at most eight ladder nonces and all peer
+  ladders share a 256-nonce ceiling. A full ledger refuses refreshes until capacity genuinely frees,
+  and grading one answer invalidates every sibling nonce before the climb advances or exhausts.
 - **Auth gate:** every route except the login/setup pages and their POST handlers
   requires a valid session — HTML navigations redirect to `/login`, API/WS get `401`. The raw
   browser upload route is behind this same gate; an unauthenticated request cannot create a staging
@@ -322,6 +349,9 @@ and the clipboard runs in a secure context.
 
 Things the image decides for you (see the Dockerfile comments for the full why):
 
+- **Every stage pins Node 24.15.0.** The status mirror's OS-backed cross-process lock uses
+  unflagged `node:sqlite`, and the locked dependency graph has a stricter patch floor; a floating
+  Node major can conceal either runtime break.
 - **Both native addons are compiled against Node's ABI, not Electron's.** The repo's `postinstall`
   runs `electron-rebuild`, which targets Electron — every install in the image uses
   `--ignore-scripts` plus an explicit `npm rebuild node-pty smart-whisper`. Rebuilding only
@@ -347,12 +377,35 @@ Run the full repeatable image check after Docker/Compose/host changes:
 
 ```bash
 node scripts/test-docker-host.mjs
+# Or select an SSH-backed daemon without changing the current Docker context:
+node scripts/test-docker-host.mjs --docker-host ssh://docker@example.test
 ```
 
 It builds the real image, checks `/login`, both renderer/server bundles, `node-pty` and
 `smart-whisper`, verifies PID 1 is uid 1000, observes a clean SIGTERM exit, then proves auth and a
 data marker survive a restart and complete container recreation. It creates uniquely named test
 resources and removes only those resources when it finishes.
+
+The smoke is safe to aim at a shared SSH daemon: its recovery journal pins the daemon identity,
+and every image, volume, server, and helper has a
+cryptographic run id plus role and source-commit labels; every container is recorded by immutable
+id; and cleanup rechecks those identities and labels before removing anything. Runtime containers
+have no published host port, use `network=none`, run under bounded CPU/memory/swap/PID and capability
+limits, and probe HTTP/auth/assets from inside the server container. Passwords enter the probe over
+stdin and never appear in Docker arguments. Inherited Docker context, host, TLS, and builder
+environment controls are cleared after the selected endpoint is resolved.
+
+SSH uses the account's normal persistent host-key inventory. Configure that inventory to accept a
+new key non-interactively and to reject a changed key; the smoke never disables key comparison or
+rewrites global SSH settings. A recovery journal is written outside the repository before resources
+are created. If interruption leaves owned resources behind, run:
+
+```bash
+node scripts/test-docker-host.mjs --cleanup-run <run-uuid>
+```
+
+Recovery still requires the recorded daemon identity, immutable resource identities, and ownership
+labels to match. Cleanup residue is a failed smoke result, not a warning.
 
 ### CSP
 
@@ -378,6 +431,11 @@ Two intentional departures from `docs/superpowers/specs/2026-07-10-server-editio
 
 ## Phase 2 limitations
 
+- **Desktop phone pairing is intentionally unavailable.** The Server Edition browser is already
+  attached to this host and has no desktop one-shot LAN listener or local OS SSH-key store. Its
+  bridge declares `pairing.supported = false`; the quick action is hidden and Settings → Phone
+  shows the deliberate desktop-only route. Headless mobile push uses the separate SSH-possession
+  grant flow documented above.
 - **Terminal-only.** Terminal nodes work (spawn, I/O, resize, tmux continuity). The
   git panel, source control, Monaco editor/diff nodes, SDK chat node, agent-status
   badges/hooks, and the folder picker are **not** wired into the server bridge yet —
@@ -543,7 +601,13 @@ Consequences worth knowing:
 
 - The SDK **chat node** is still **deferred** — it is not wired into the server bridge.
 - **Canvas-control** (`agent:control`, the Claude-only `nodeterm` CLI verbs) is **not
-  wired** over the server.
+  wired** over the server, and since the strict-verb work it says so **by name**:
+  `/control/<verb>` answers HTTP 400 with `error: control-unsupported-on-this-edition`
+  and a sentence containing the literal *"do not retry"*. The old generic
+  `control unavailable` read to an agent like a transient outage, and an agent retries an
+  outage. `browser` additionally names why it is **structural** rather than unimplemented —
+  a browser node on this edition renders in the **viewer's own** browser tab, which this
+  server has no debugger for, and never can. See `src/server/control-unsupported.ts`.
 - The **`ptyDestroy` tail-teardown** — *resolved in Phase 3c.* Phase 3b left this skipped
   (agent tails self-cleared only on `SessionEnd`, so a node closed *without* one left an
   idle file-tail); the server now untracks agent tails on node close, at desktop parity.
@@ -569,7 +633,8 @@ desktop parity on agent-tail cleanup and first-connect behavior:
   and the app reloads on reopen, so first-load failure now behaves like a mid-session drop.
 
 **Still deferred** (unchanged from Phase 3b): the SDK **chat node**, **canvas-control**
-(`agent:control` / the `nodeterm` CLI verbs), full **two-master flow-control coordination**
+(`agent:control` / the `nodeterm` CLI verbs — now a *named, non-retryable* refusal rather
+than a generic failure, see above), full **two-master flow-control coordination**
 (the server still re-asserts its WS backpressure pause on each send rather than co-managing
 a single actuator with the renderer), and the web folder picker's **hardcoded start
 directory**.

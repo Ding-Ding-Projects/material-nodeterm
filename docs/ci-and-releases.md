@@ -8,15 +8,16 @@ deliberately does **not** do, and the honest cost of that trade-off.
 
 **GitHub Actions runs no tests, type-check or lint. Nothing in a workflow gates the release.**
 
-`release.yml` builds the app, packages a Windows installer, and publishes it as a GitHub
-Release — that is the whole job. A run fails only when the build, the packaging, or the
-publication itself fails. It does not run `npm test`, it does not run `npm run typecheck`,
-and it does not run a linter. This is a standing decision, not an oversight:
+When explicitly and manually dispatched from `main`, `release.yml` builds the app,
+packages a Windows installer, and publishes it as a GitHub Release — that is the whole job. A run
+fails only when its ref guard, build, packaging, validation, or publication fails. It does not run
+`npm test`, it does not run `npm run typecheck`, and it does not run a linter. This is a standing
+decision, not an oversight:
 
 - **What this costs.** With no gate in the pipeline, a release can ship from a commit whose
   tests would have failed. The first thing that notices is a person running the installer,
   not a red CI check. That is the accepted trade-off in exchange for artifacts reaching
-  people quickly and unconditionally, on every branch update push.
+  people quickly once a release owner deliberately dispatches the final `main` candidate.
 - **Where checking actually happens.** The repository's own test scripts
   (`npm test`, `npm run typecheck`) still exist and are still meant to be run — just locally,
   by whoever is changing the code, before they push. See `CONTRIBUTING.md`. A failing local
@@ -25,60 +26,74 @@ and it does not run a linter. This is a standing decision, not an oversight:
 - **`ci.yml` is not an exception to this.** It builds the app on a pull request (electron-vite
   compile only — no tests, no type-check, no lint) purely as fast, disposable feedback. It has
   no `needs:` relationship to `release.yml`, is not a required status check, and cancels a
-  superseded run outright (`concurrency: cancel-in-progress: true`) — safe only because it
-  never publishes anything. `release.yml` instead uses a non-cancelling group keyed by its
-  workflow name and run number. Attempts of one run cannot overlap, while different pushes do
-  not share a group and may build concurrently. A repository-wide release group is deliberately
-  rejected: GitHub keeps only one pending member of a concurrency group and cancels an older
-  pending member when a new one arrives, which would silently skip pushes.
+  superseded run outright (`concurrency: cancel-in-progress: true`) — safe only because it never
+  publishes anything. `release.yml` instead uses a non-cancelling group keyed by workflow and ref,
+  so two manual attempts for `main` cannot mutate one stable release concurrently. Release owners
+  dispatch one final candidate at a time.
 
 ## What `release.yml` actually does
 
-Triggered by every **branch** `push` (`branches: ['**']`, so tag pushes cannot match) and by
-`workflow_dispatch`, on `windows-latest` — Windows is the active delivery target for this
-project. Branch-deletion events are ignored because they contain no commit to package. One job:
+Triggered only by `workflow_dispatch`, on `windows-latest` — Windows is the active delivery target
+for this project. The workflow's first step refuses anything except a branch ref exactly equal to
+`refs/heads/main`, before checkout can load a feature-branch tree. Feature-branch, tag, scheduled,
+and ordinary push events cannot publish. Automatic publication is therefore disabled. The
+committed definition is manually dispatchable, while the hosted workflow is currently recorded as
+manually disabled pending the final packaged update interactions. Once re-enabled and deliberately
+dispatched, one job:
 
-1. **Checkout** with full history (`fetch-depth: 0`) — needed for the line-count report's
+1. **Refuse non-`main` refs** before checkout, dependency installation, or token-bearing release
+   steps. This is redundant with the manual trigger on purpose: manual dispatch can otherwise
+   select another ref.
+2. **Checkout** with full history (`fetch-depth: 0`) — needed for the line-count report's
    `git blame` attribution and for an honest commit link in the release notes.
-2. **Record the workflow start time** via `gh api repos/.../actions/runs/<run id>` (GitHub's
+3. **Verify the checked-out commit** equals the dispatch event's exact `GITHUB_SHA`; packaging a
+   different checkout under the intended commit's release would be a false provenance claim.
+4. **Record the workflow start time** via `gh api repos/.../actions/runs/<run id>` (GitHub's
    own `run_started_at`). If this call fails (missing `actions: read` on a fallback token,
    API hiccup) the step warns and leaves it unset — `release-notes.mjs` then reports the
    start time as **missing**, never an estimate.
-3. **Install dependencies** — `npm ci`, which also runs the project's own `postinstall` hook
+5. **Set up Node 22.23.2** with the npm cache, then compute the stable release tag — exactly
+   `v<package.json version>`. The version must be a stable `major.minor.patch` value; a run-number
+   or prerelease suffix is refused because the Windows updater's `latest/download` feed must never
+   point at a feature build masquerading as stable.
+6. **Verify stable version advancement before the build.** The release helper reads every hosted
+   tag and release, rejects a non-newer version or a tag already owned by another commit, and binds
+   this candidate to the exact source SHA. `0.4.0` is the candidate after `0.3.0`.
+7. **Install dependencies** — `npm ci`, which also runs the project's own `postinstall` hook
    (`scripts/patch-node-pty.mjs` + `electron-rebuild -f -w node-pty,smart-whisper` against
    this runner's Electron ABI). `windows-latest` already ships the Visual Studio Build Tools
    and Python that native module compilation needs; nothing extra is bootstrapped for that.
    If a future dependency needs a tool the runner image does not carry, add a check-then-
    install step here, immediately before it is needed.
-4. **Build** — `npm run make-icon` then `npm run build` (electron-vite: main + preload +
-   renderer).
-5. **Compute a monotonic release tag** — `v<package.json version>-ci.<run number>`. GitHub
-   guarantees a workflow's own run number only ever increases and never repeats, so no two
-   runs can collide on a tag and no prior release is ever recycled or overwritten.
-6. **Package only the Windows Squirrel target** —
-   `electron-builder --win squirrel --x64 --publish never`, producing `Setup.exe`, `RELEASES`,
-   the full `.nupkg` (and a delta `.nupkg` when present) under `dist/squirrel-windows/`.
-7. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: exactly one
-   setup executable, exactly one `RELEASES`, at least one full `.nupkg`, no empty assets, and
-   every package entry in `RELEASES` matching the file's SHA-1 and byte size. "The directory
-   contained something" is deliberately not enough.
-8. **Verify the setup is genuinely unsigned** — Authenticode must report exactly `NotSigned`.
+8. **Build and package through `npm run dist:win`.** The Windows-only wrapper runs the native
+   preflight, regenerates and proves the committed seven-frame ICO at an immutable source-SHA URL,
+   clears stale generated output, builds the app and session host, invokes only the x64 Squirrel
+   target with publishing disabled, then verifies the nuspec and Setup/app/stub PE resources.
+9. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: the exact
+   version/product Setup, legacy `node-terminal` full package, optional matching delta, exact
+   `RELEASES`, no other output entry, semantic ID/version/title in every nupkg, and bidirectional
+   RELEASES SHA-1/name/size agreement. It emits the exact name/size/SHA-256 manifest later checked
+   against GitHub's hosted digests. The workflow also reruns the packaged icon/nuspec proof.
+10. **Verify the setup is genuinely unsigned** — Authenticode must report exactly `NotSigned`.
    An invalid, untrusted, or otherwise anomalous signature is not accepted as a synonym for
    unsigned (see [Signing](#signing) below).
-9. **Stage one draft release** for the run's tag. A retry reuses its existing draft; a retry of
+11. **Stage one draft release** for the stable tag. A retry reuses its existing draft; a retry of
    an already-successful run verifies the release tag still resolves to this run's exact commit,
    then validates every public asset name and byte size before exiting without touching them.
    This avoids `gh release upload --clobber`'s delete-before-replace behaviour ever operating on
    a public asset.
-10. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
+12. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
     and expected names are replaced with `--clobber`. Any failure leaves a private draft, never
     a public empty or partial release.
-11. **Generate the final release notes after upload** (`scripts/release-notes.mjs`, embedding
+13. **Generate the final release notes after upload** (`scripts/release-notes.mjs`, embedding
     `scripts/count-lines.mjs`'s report — see [Release notes content](#release-notes-content)).
-12. **Read the draft back from GitHub and compare every expected name and byte size.** Only after
-    that exact remote inventory passes does one `gh release edit --draft=false` publish it. A
-    second read verifies the public transition retained the same complete inventory.
-13. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
+14. **Read the draft back and recheck version authority immediately before publication.** The
+    exact hosted asset inventory, draft/non-prerelease state, target/tag ownership, and stable
+    version ordering must all still hold; this catches a newer stable release created while the
+    build ran.
+15. **Publish once, explicitly as latest and non-prerelease**, then re-read the tag, release, and
+    latest-release view to prove the complete inventory and exact target survived the transition.
+16. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
     the collection and the upload — so a failed run still leaves the packaged output, the
     generated notes, and the run context inspectable, without ever masking or reversing the
     real pass/fail verdict of the steps above it. Only explicitly safe paths are copied: the
@@ -92,18 +107,20 @@ The public boundary is intentionally one-way: build → validate locally → cre
 create a non-draft release. An upload failure can leave a draft for inspection, but it cannot
 expose an assetless release to downloaders.
 
-`GITHUB_RUN_NUMBER` stays fixed across attempts, so a rerun owns the same tag. The per-run
-concurrency key and `cancel-in-progress: false` prevent two attempts from mutating that draft at
-once. A completed rerun is also safe: it checks the tag's exact commit plus the public names and
-sizes, then reuses the release instead of applying `--clobber`, whose replacement sequence could
-otherwise remove a good public asset and then fail before uploading its replacement. Different
-run numbers own different tags and drafts, so concurrent pushes cannot collide.
+The stable package version owns the tag, and the workflow/ref concurrency key with
+`cancel-in-progress: false` prevents two `main` attempts from mutating its draft at once. A
+completed rerun is also safe: it checks the tag's exact commit plus the public names and sizes,
+then reuses the release instead of applying `--clobber`, whose replacement sequence could
+otherwise remove a good public asset and then fail before uploading its replacement. A new
+release advances the package version before dispatch, so it owns a new tag and cannot overwrite
+the preceding stable channel.
 
-GitHub evaluates the workflow file from the pushed ref, not retroactively from `main`. Therefore
-this contract governs a branch only after that branch contains the corrected workflow. A
-read-only 2026-08-15 audit found 113 of 121 remote branches still carried a pre-change copy;
-updating or removing those refs is repository administration outside this code change, and no
-branch was modified here.
+GitHub evaluates the workflow file from the selected dispatch ref, not retroactively from
+`main`. The pre-checkout `main` guard therefore protects only refs that contain the corrected
+workflow. An old feature ref may still contain an unsafe historical copy; it must be updated,
+removed, or separately disabled before it can be treated as harmless. The current manual-only
+definition does not retroactively protect that old file. Removing those refs is
+repository administration outside this change.
 
 The workflow contract is checked locally, never in Actions:
 
@@ -114,7 +131,8 @@ npx vitest run src/main/release-workflow-contract.test.ts \
 ```
 
 The checker parses the YAML, follows invoked npm scripts, and verifies command ordering and draft
-state. Its gates deliberately mutate the trigger, tag guard, concurrency, package target, signing
+state. Its gates deliberately mutate the manual trigger, pre-checkout `main` guard, stable-version
+tag, concurrency, package target, signing
 status, draft creation, upload retry, remote verification, and hidden package-script validation;
 source-text presence alone is not accepted as evidence.
 
@@ -165,8 +183,8 @@ printed as **missing**, not guessed at. It always includes:
 2. **The project's line count at that exact commit**, via `scripts/count-lines.mjs` —
    see below.
 3. **What actually ran** — an explicit statement that no tests, type-check, or lint ran in
-   this workflow, alongside the real list of steps that did (`npm ci`, `npm run make-icon`,
-   `npm run build`, `electron-builder --win squirrel --x64 --publish never`). This section exists
+   this workflow, alongside the real list of steps that did (`npm ci`, then the guarded
+   `npm run dist:win` preflight/icon/build/Squirrel/post-package path). This section exists
    specifically so a release is never read as "passing" a check it never ran.
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
@@ -187,7 +205,9 @@ run of the counter and what a release actually reports can never drift apart.
   under `resources/mascot/` and `docs/assets/`, and prebuilt vendored binaries under
   `resources/bin/`. Any tracked file with an extension the counter does not recognize (images,
   fonts, `.plist`, `Dockerfile`, dotfiles, `.jsonl` fixtures, …) is listed separately as
-  uncounted rather than silently folded into either total.
+  uncounted rather than silently folded into either total. The committed `build/icon.ico` therefore
+  appears as an explicitly uncounted binary asset; generated, gitignored `build/icon.png` is not
+  part of the counted ref.
 - **Project total vs. grand total.** This repository has no tracked vendored source subtree,
   so the two are currently identical and the report says so plainly. The distinction is kept
   in the output shape anyway, so a future vendored subtree cannot silently merge into the
@@ -231,27 +251,43 @@ current on `main` — so pushing a fix to `main` could not reach, or stop, runs 
 being triggered by tags created before the fix existed. Only two things actually stopped the
 loop:
 
-1. **The trigger fix**, `on.push.branches: ['**']` (see the comment on that block) — this stops
-   any *new* tag from starting a *new* run, but only for runs that check out a workflow file
-   which already contains this filter.
+1. **The original trigger fix**, `on.push.branches: ['**']`, stopped new tags from starting runs
+   only when the selected ref already contained that corrected workflow.
 2. **Manually disabling the workflow** in GitHub Actions (`gh workflow disable release.yml` or
    the Actions UI) — this is what actually stopped runs that were still being triggered by
    already-published tags checking out their own, unfixed, copy of the file. The branch filter
    is necessary but was not, by itself, sufficient to end an already-running loop.
 
-**The workflow was manually disabled to stop that incident and has since been re-enabled.**
-A read-only `gh workflow list --all` check on 2026-08-15 reports `Release` as `active`; this
-change does not enable, disable, trigger, or otherwise mutate the live workflow.
+The durable contract is now narrower still: the committed workflow has **no push trigger**, only
+manual dispatch, and its first step accepts only `main`. The definition remains dispatchable once
+the hosted workflow is re-enabled; the hosted workflow itself is currently manually disabled.
+Publication of `0.4.0` is pending both the real production-identity `0.3.0` → `0.4.0` Setup
+migration and the isolated new-code updater fixture proof. This change does not dispatch or publish
+it.
 
-### The fail-fast tag guard
+### Recurrence snapshot (2026-08-16)
 
-The branch filter closes the trigger for new pushes, but it lives in the same file it is meant
-to protect: a future edit could loosen the trigger while accidentally leaving the job runnable,
-or a `workflow_dispatch` could target a tag ref. So the release job's very first step is a
-redundant check: `if: github.ref_type == 'tag'` fails before checkout or dependency install. It
-protects only refs whose own workflow copy contains the guard. A genuinely old/reverted copy
-without it is not retroactively protected; disabling the workflow or updating/removing the unsafe
-ref remains the remedy. On a normal branch run the condition is false and the step is skipped.
+The 43-release/85-run figures above are the first incident snapshot, not the current hosted
+inventory. Unsafe copies of the older push-triggered workflow later ran again from refs that did
+not contain the repair. Runs `31966370780` and `31966413527` completed successfully and published
+full Squirrel assets; the hosted latest release became `v0.3.0-ci.208` at commit `c42d8ec…`, with
+packaged application version `0.3.0`. That CI-suffixed release is not the stable feed authority the
+new updater requires, even though GitHub currently treats it as non-prerelease/latest.
+
+The hosted release workflow is now `disabled_manually`, and the recurrence audit found no queued
+or in-progress release run. Keep it disabled until the exact manual-only/main-guard workflow is on
+`main`, the packaged migration and isolated updater trials are green, and one verified `v0.4.0`
+release can deliberately replace the legacy CI release as repository latest. Do not reinterpret
+the absence of active runs as proof that an old ref was made safe; disabling the hosted workflow is
+the boundary that currently prevents those copies from publishing again.
+
+### The fail-fast `main` guard
+
+Manual dispatch can select a branch or tag, and the workflow file comes from that selected ref.
+So the release job's very first step fails unless `github.ref_type` is `branch` and `github.ref`
+is exactly `refs/heads/main`, before checkout or dependency installation. A genuinely old copy
+without that guard is not retroactively protected; leaving the hosted workflow disabled, or
+updating/removing the unsafe ref, remains the remedy.
 
 ### The honest cost of an ungated pipeline, restated
 
@@ -263,10 +299,22 @@ shipped once," but a runaway trigger turning one broken build into dozens of emp
 under an hour, entirely unattended, because nothing in the pipeline's own design could tell it to
 stop. An ungated pipeline is not just a pipeline that might publish something broken — it is a
 pipeline that, absent an explicit guard, has no internal reason to publish exactly one thing per
-change instead of an unbounded number. The fail-fast tag guard above is that explicit reason,
-made cheap and redundant on purpose: it does not reintroduce a quality gate (nothing here runs a
-test or a linter), it only guarantees the release job cannot be *entered* by the one trigger shape
-that is known to make it self-perpetuating.
+change instead of an unbounded number. The manual-only trigger and fail-fast `main` guard above are
+that explicit reason, made cheap and redundant on purpose: they do not reintroduce a quality gate
+(nothing here runs a test or a linter); they constrain publication to one deliberate stable
+candidate instead of letting an ordinary branch or tag event enter the release job.
+
+## Windows icon provenance
+
+`scripts/make-icon.mjs` contains the original SVG master and deterministically generates the
+committed seven-frame `build/icon.ico`. The Windows packaging wrapper derives a raw-content URL
+from the checkout's full source SHA, refuses a mismatched `GITHUB_SHA` or dirty/uncommitted source,
+requires that commit to be publicly reachable, downloads without credentials or redirects, and
+requires HTTP 200 plus exact bytes/SHA-256. It passes that URL as Squirrel's effective `iconUrl`.
+The post-package gate requires the URL in the full-nupkg semantic nuspec and compares all seven
+icon-frame hashes plus product/version metadata in Setup, `nodeterm.exe`, and
+`nodeterm_ExecutionStub.exe`. Squirrel's vendor `Update.exe` remains vendor-branded because the
+pinned plugin exposes no supported resource-edit hook; it is explicitly outside this gate.
 
 ## What is deliberately out of scope for this lane
 
@@ -281,8 +329,3 @@ that is known to make it self-perpetuating.
   `release.yml`. The active delivery scope for this project is Windows only. Historical
   macOS/Linux release history remains on GitHub as a record; reopening cross-platform delivery
   is a deliberate, explicit decision for later, not an oversight here.
-- **Windows app icon URL.** No `build.squirrelWindows.iconUrl` is configured. Electron-builder
-  derives a repository URL for the generated build-resource icon, but that file is ignored and
-  the derived URL may not resolve. This only affects the icon Squirrel shows in Windows'
-  "Apps & features" list (cosmetic; it does not fail packaging or the release). A real,
-  committed, multi-resolution `.ico` remains branding follow-up work.

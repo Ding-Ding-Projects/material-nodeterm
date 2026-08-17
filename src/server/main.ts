@@ -1,5 +1,5 @@
 import { resolveConfig } from './config'
-import { startServer } from './index'
+import { assertSupportedNodeRuntime } from '../core/node-runtime'
 
 /**
  * Script entry point for the headless server. Kept separate from index.ts so that
@@ -11,6 +11,11 @@ process.on('uncaughtException', (e) => console.error('[nodeterm-server] uncaught
 process.on('unhandledRejection', (e) => console.error('[nodeterm-server] unhandledRejection', e))
 
 async function main(): Promise<void> {
+  assertSupportedNodeRuntime()
+  // Keep the service graph behind the runtime gate. In the bundled server, node-pty is a native
+  // external; importing index.ts statically would load that ABI before an old Node reached the
+  // actionable SQLite/version diagnostic.
+  const { startServer } = await import('./index')
   const config = resolveConfig(process.env, process.argv.slice(2))
   const { port, close } = await startServer(config)
   // Headless binds no listener, so there is nothing to announce as "listening" (startServer already

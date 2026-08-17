@@ -1,5 +1,6 @@
-// Renders the nodeterm app icon into build/icon.png (1024x1024) for electron-builder,
-// which derives the macOS .icns from it. Run: npm run make-icon
+// Renders the nodeterm app icon into build/icon.png (1024x1024) and the committed,
+// deterministic multi-resolution build/icon.ico used by Windows packaging. electron-builder
+// derives the macOS .icns from the PNG. Run: npm run make-icon
 //
 // Design: a black macOS-Terminal-style window (dark rounded square + window dots),
 // with the nodeterm node-graph mark in our purple inside it.
@@ -61,6 +62,10 @@ console.log('wrote build/icon.png (1024x1024)')
 // writes a small hand-rolled ICO container around the PNGs — no extra npm dependency for
 // something this documented (MS-ICO: a 6-byte ICONDIR header, then one 16-byte ICONDIRENTRY per
 // frame, then the frame bytes back to back).
+//
+// build/icon.ico is intentionally tracked. Squirrel embeds a source-SHA URL for this exact file
+// in its nuspec, so changing the renderer must regenerate and commit the derivative in the same
+// change; the Windows packaging wrapper proves the checked-out bytes match the committed blob.
 const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
 
 /** Pack PNG buffers (one per size, same order as `sizes`) into a Windows ICO file buffer. */

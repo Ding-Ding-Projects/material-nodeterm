@@ -73,8 +73,25 @@ type ResolvedProject = ProjectRecord & {
 
 export class GitHubHostController {
   private credentialGeneration = 0
+  private credentialMutationTail: Promise<void> = Promise.resolve()
 
   constructor(private readonly dependencies: HostDependencies) {}
+
+  /**
+   * Begin the queue before token validation. Validation is a network operation, so queueing only
+   * the secret store lets a later Clear finish while an earlier Save is still validating; that
+   * stale Save then enters the store and resurrects the credential. This queue defines invocation
+   * order for one controller. Separate processes have no shared pre-validation clock and are
+   * truthfully ordered when their final store mutations enter the SQLite transaction.
+   */
+  private serializeCredentialMutation<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
+    const result = this.credentialMutationTail.then(operation)
+    this.credentialMutationTail = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
+  }
 
   async status(projectId?: string): Promise<GitHubControlView> {
     const state = await this.dependencies.controls.load()
@@ -155,20 +172,24 @@ export class GitHubHostController {
     return this.status()
   }
 
-  async saveToken(token: string): Promise<GitHubControlView> {
-    const identity = await this.dependencies.validateToken(token)
-    if (!identity) throw new GitHubHostError('invalid-token')
-    await this.dependencies.secret.save(token)
-    this.credentialGeneration += 1
-    this.dependencies.onCredentialBoundaryChange?.()
-    return this.status()
+  saveToken(token: string): Promise<GitHubControlView> {
+    return this.serializeCredentialMutation(async () => {
+      const identity = await this.dependencies.validateToken(token)
+      if (!identity) throw new GitHubHostError('invalid-token')
+      await this.dependencies.secret.save(token)
+      this.credentialGeneration += 1
+      this.dependencies.onCredentialBoundaryChange?.()
+      return this.status()
+    })
   }
 
-  async clearToken(): Promise<GitHubControlView> {
-    await this.dependencies.secret.clear()
-    this.credentialGeneration += 1
-    this.dependencies.onCredentialBoundaryChange?.()
-    return this.status()
+  clearToken(): Promise<GitHubControlView> {
+    return this.serializeCredentialMutation(async () => {
+      await this.dependencies.secret.clear()
+      this.credentialGeneration += 1
+      this.dependencies.onCredentialBoundaryChange?.()
+      return this.status()
+    })
   }
 
   async contextForProject(projectId: string): Promise<GitHubIssueServiceContext> {

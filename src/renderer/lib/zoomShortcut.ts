@@ -90,6 +90,39 @@ export function zoomShortcutAction(
   return zoomShortcutAllowed(ctx) ? chord : null
 }
 
+interface ZoomShortcutEffects {
+  preventDefault(): void
+  zoomTo100(): void
+  fitAll(): void
+}
+
+/**
+ * Execute a keydown's guarded zoom decision. Returning `false` promises that no effect — including
+ * preventDefault — ran, so a refused Shift+1 remains an ordinary printable `!`.
+ */
+export function dispatchZoomShortcut(
+  event: ZoomShortcutEvent,
+  context: ZoomShortcutContext,
+  effects: ZoomShortcutEffects
+): boolean {
+  const action = zoomShortcutAction(event, context)
+  if (action === null) return false
+  effects.preventDefault()
+  if (action === 'zoom-100') effects.zoomTo100()
+  else effects.fitAll()
+  return true
+}
+
+/** Execute the desktop-forwarded actual-size signal through the same board/focus refusals. */
+export function dispatchZoomActualSize(
+  context: ZoomShortcutContext,
+  zoomTo100: () => void
+): boolean {
+  if (!zoomShortcutAllowed(context)) return false
+  zoomTo100()
+  return true
+}
+
 /** Text surfaces the canvas must never steal a printable chord from. Mirrors the ⌘C branch. */
 const TEXT_SURFACE_SELECTOR = '.monaco-editor, .xterm'
 

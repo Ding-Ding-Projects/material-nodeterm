@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
-import { renameAtomic } from '../fs-atomic'
+import { renameAtomic, tempNameFor } from '../fs-atomic'
 
 /**
  * The single 32-byte secret every per-node capability derives from. It is the root
@@ -64,7 +64,7 @@ function decodeSealed(raw: string): Buffer {
  *  unlink the tmp in finally. A reader never observes a partial file. The rename retries
  *  briefly on Windows if the destination is momentarily held open (see fs-atomic.ts). */
 async function persistFile(file: string, data: string | Buffer): Promise<void> {
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+  const tmp = tempNameFor(file)
   await fs.mkdir(path.dirname(file), { recursive: true })
   try {
     await fs.writeFile(tmp, data, { mode: 0o600, flag: 'wx' })

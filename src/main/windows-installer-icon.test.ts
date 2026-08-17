@@ -10,7 +10,6 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import * as ResEdit from 'resedit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   SQUIRREL_SETUP_VENDOR_ICON_POLICY,
@@ -33,6 +32,7 @@ import { SQUIRREL_SHORTCUT_EXECUTABLE } from './squirrel-lifecycle'
 import { WINDOWS_APP_USER_MODEL_ID } from './windows-app-identity'
 
 const require = createRequire(import.meta.url)
+const ResEdit = require('resedit') as typeof import('resedit')
 const REPO_ROOT = resolve(import.meta.dirname, '../..')
 const SOURCE_ICON = readFileSync(join(REPO_ROOT, 'build', 'icon.ico'))
 const VENDOR_SETUP = readFileSync(join(dirname(require.resolve('electron-winstaller/package.json')), 'vendor', 'Setup.exe'))
@@ -450,6 +450,7 @@ describe('Windows installer identity contract', () => {
     const mutations: Array<[string, (config: PackageConfigFixture) => void]> = [
       ['signAndEditExecutable', (config) => { config.build.win.signAndEditExecutable = false }],
       ['signExecutable', (config) => { config.build.win.signExecutable = true }],
+      ['win forceCodeSigning', (config) => { config.build.win.forceCodeSigning = true }],
       ['win icon', (config) => { config.build.win.icon = 'build/icon.png' }],
       ['static iconUrl', (config) => { config.build.squirrelWindows.iconUrl = 'https://example.invalid/icon.ico' }],
       ['unguarded script', (config) => { config.scripts['dist:win'] = 'electron-builder --win squirrel' }],

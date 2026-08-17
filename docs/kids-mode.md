@@ -79,8 +79,16 @@ run normally has no `~/.nodeterm/shared/` directory to watch, so it holds exactl
 nearest existing ancestor, promotes toward the shared directory as it appears, and retries the
 promotion immediately after this process writes the first record. Promotion also reloads once:
 another app may have created and written the record before the narrower watcher was armed. There is
-no polling timer to leak at shutdown; `dispose()` closes the one live handle, and a lifecycle
-generation makes an event queued before shutdown inert when it eventually runs.
+no polling timer to leak at shutdown; `dispose()` closes the one live handle. Opening or replacing
+a watch handle is only a **recovering** state: every event/error/rearm invalidates policy
+synchronously, and the exact handle-generation/sync-epoch token becomes healthy only after a
+strict canonical read is acknowledged. A late read from before another event cannot heal the newer gap, and disposal
+invalidates every token so an event queued before shutdown is inert when it eventually runs.
+
+Record mutations do not write a document derived from process-local cache. Rename, enable and
+disable each enter the shared SQLite transaction, strictly read the current canonical record,
+change only their field, and compare-publish the observed revision. This is why a process that
+cached OFF cannot erase another process's newer ON merely by renaming the mode.
 
 An unsealable credential (a keychain reset, a machine migration) reads as **"cannot verify"** and
 leaves the mode **locked**, rather than throwing or falling open. The documented recovery is
@@ -90,13 +98,13 @@ deleting `~/.nodeterm/shared/`, which clears the record and the credential toget
 
 Deliberate, and asserted:
 
-- **A corrupt record reads as OFF.** A malformed byte must not leave a child in a mode nobody can
-  confirm the state of, and must not lock an adult out of their own app.
+- **A corrupt record may display the OFF default, but policy is unavailable.** Destructive actions
+  therefore take the two-key path and record mutations refuse to overwrite the recoverable bytes.
 - **A failed read preserves the last-known state.** Only `ENOENT` proves there is no record. A
   permission or I/O failure says nothing about whether Kids mode is on and must not silently turn
   it off; on first boot there is no earlier fact to preserve, so the in-memory default remains off.
-- **A shell that cannot reach the IPC leaves the renderer store OFF.** Defaulting to on would apply
-  restrictions nobody asked for and imply a protection that is not in force.
+- **A shell that cannot reach the IPC leaves the renderer display OFF but policy unavailable.** It
+  neither claims Kids mode is ON nor spends that unknown fact as permission for an ordinary delete.
 - **A wrong PIN leaves the mode on.** Obviously — but it is tested, because "fails open" is the
   failure that matters.
 
@@ -134,25 +142,34 @@ feature is *missing* from the other shell.
   below; those paths are now covered by behaviour tests and mutation probes. That review is not a
   substitute for observing whether the disclosure and confirmations are understood on real
   hardware, so this product-level validation remains outstanding.
+- **Remote account removal is not proven end-to-end here.** The renderer authorization is covered,
+  but a disconnected or ambiguous SSH-backed account cannot presently provide authoritative
+  deletion evidence, and the browser edition exposes account management as unsupported. The current
+  Desktop boundary can fall back or lose the remote command result in those cases, so its success
+  must not be treated as proof that the remote credential disappeared. Repair and live
+  remote-account verification remain separate work.
 
 ## Destructive-action coverage
 
-There are **six** `GuardedAction` values, and all six have a real runtime path:
+There are **seven** `GuardedAction` values, and all seven have a real runtime path:
 
 | `GuardedAction` | Current behaviour |
 | --- | --- |
 | `delete-node` | one planner covers canvas key/menu/header, kanban, Cmd/Ctrl+W, sessions sidebar, session-memory panel, and agent-control close; every surface uses the two-key gate in Kids mode ✅ |
 | `delete-project` | always uses the two-key gate ✅ |
-| `remove-worktree` | no Enter-confirm in Kids mode; disk deletion starts unticked, including an already-open dialog when Kids mode turns on ✅ |
+| `remove-worktree` | unbind stays non-destructive; deleting the directory requires a proof-bound two-key approval while policy is ON/unavailable, and a changed/unreadable checkout refuses ✅ |
 | `discard-changes` | two-key gate in Kids mode; plain confirm when off ✅ |
-| `remove-account` | confirmation happens before credentials, transcripts, serialized bindings, or login sessions are removed; cancelling preserves all of them, and approval closes login nodes through the already-authorized node funnel without a second prompt ✅ |
+| `remove-account` | the UI authorization and active-node funnel are two-key gated; authoritative deletion of disconnected/ambiguous SSH-backed account state remains the explicit limitation above |
+| `remove-authenticator` | exact sealed-entry revision is re-read after confirmation and compared again inside the credential-store mutation; ON/unavailable policy uses the two-key gate ✅ |
 | `revoke-device` | two-key gate in Kids mode; plain confirm when off ✅ |
 
-`remove-worktree` is handled differently from `delete-node` on purpose. The two-key gate cannot
-express an option, so replacing the dialog with it would hide whether the directory is deleted.
-Instead, Kids mode keeps that choice visible, resets it to **off** on entry (even while the dialog
-is open), and disables Enter confirmation. The user can still opt in deliberately with the
-checkbox and button.
+`remove-worktree` separates **Unbind** from disk deletion. Unbind changes only the canvas binding
+and remains available without a destructive authorization. Disk removal first discloses the exact
+branch/path/inventory. In Kids mode the disk choice starts unticked, an OFF→ON change resets an
+already-open dialog before paint, and Enter cannot commit the confirmation; the user may still opt
+in deliberately with the checkbox and button. The resulting two-key confirmation spends an opaque
+one-shot core proof. That avoids making the approval ambiguous about whether it merely unbound or
+actually deleted bytes.
 
 ## Where the permission gate is actually applied
 

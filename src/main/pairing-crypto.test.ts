@@ -14,6 +14,7 @@ import {
   encrypt,
   decrypt
 } from './remote/e2ee'
+import { openPairingEnvelope, sealPairingResponse } from './pairing-envelope'
 
 const enc = (s: string): Uint8Array => Uint8Array.from(Buffer.from(s, 'utf8'))
 const dec = (b: Uint8Array): string => Buffer.from(b).toString('utf8')
@@ -81,5 +82,58 @@ describe('encrypted pairing envelope (host ↔ phone round-trip)', () => {
     const tampered = Uint8Array.from(box)
     tampered[tampered.length - 1] ^= 0xff
     expect(decrypt(tampered, shared)).toBeNull()
+  })
+
+  it('the production opener refuses plaintext even when it contains a correct-looking token', () => {
+    const host = genKeyPair()
+    expect(
+      openPairingEnvelope(
+        { token: 'one-time-token', publicKey: 'ssh-ed25519 AAAA phone@nodeterm' },
+        host
+      )
+    ).toEqual({ ok: false, reason: 'encrypted pairing required' })
+  })
+
+  it('the production opener rejects a tampered request and non-canonical base64', () => {
+    const host = genKeyPair()
+    const eph = genKeyPair()
+    const shared = deriveSharedKey(publicKeyToB64(host.publicKey), eph.secretKey)
+    const box = encrypt(enc('{"token":"one-time-token"}'), shared)
+    box[box.length - 1] ^= 0xff
+
+    expect(
+      openPairingEnvelope(
+        { epk: publicKeyToB64(eph.publicKey), box: Buffer.from(box).toString('base64') },
+        host
+      )
+    ).toEqual({ ok: false, reason: 'decrypt failed' })
+    expect(
+      openPairingEnvelope(
+        { epk: `${publicKeyToB64(eph.publicKey)}!`, box: Buffer.from(box).toString('base64') },
+        host
+      )
+    ).toEqual({ ok: false, reason: 'bad epk' })
+  })
+
+  it('the production response exposes only ciphertext outside the box', () => {
+    const host = genKeyPair()
+    const eph = genKeyPair()
+    const phoneShared = deriveSharedKey(publicKeyToB64(host.publicKey), eph.secretKey)
+    const hostShared = deriveSharedKey(publicKeyToB64(eph.publicKey), host.secretKey)
+    const secretResponse = {
+      ok: true,
+      deviceId: 'minted-device',
+      agentToken: 'agent-bearer',
+      relayDeviceToken: 'relay-bearer'
+    }
+
+    const wire = sealPairingResponse(secretResponse, hostShared)
+
+    expect(Object.keys(wire)).toEqual(['box'])
+    expect(wire).not.toHaveProperty('agentToken')
+    expect(wire).not.toHaveProperty('relayDeviceToken')
+    const opened = decrypt(Uint8Array.from(Buffer.from(wire.box, 'base64')), phoneShared)
+    expect(opened).not.toBeNull()
+    expect(JSON.parse(dec(opened!))).toEqual(secretResponse)
   })
 })

@@ -29,6 +29,8 @@ import {
   installLinkClickFallback,
   makeDirListingLookup
 } from '../terminal/file-links'
+import { fileLinkDialect } from '../terminal/file-link-dialect'
+import { hostPlatformFor } from '../terminal/host-platform'
 import { sshFs } from '../terminal/ssh-fs'
 import type { FsApi, LaunchIntentExecutionResult, PendingLaunch } from '@shared/types'
 import {
@@ -145,6 +147,7 @@ import { useSshConn } from '../state/sshConn'
 import { useWorktrees } from '../state/worktrees'
 import { isRemoteSessionNode } from '@shared/worktree'
 import { useSession, useActiveSessionPresence } from '../session/session'
+import { isBrowserRuntime } from '../bridge/runtime'
 import {
   accountChipLabel,
   COLLAPSED_HEIGHT,
@@ -166,8 +169,10 @@ import {
   resumeCommand,
   agentConfig
 } from '@shared/agents/config'
-import { withPermissionMode } from '@shared/agents/approval-mode'
-import { ensureActivePermissionMode } from '../state/permissionMode'
+import {
+  commandForAgentLaunch,
+  ensureActiveAgentLaunchPlan
+} from '../state/permissionMode'
 import {
   buildSshArgs,
   sshConnectionIdForProject,
@@ -991,6 +996,23 @@ export function TerminalNode({
   // namespaces (pty, fs) go through it; app-global ones (clipboard, shell) stay on the global.
   const session = useSession()
   const { api } = session
+  // The path dialect belongs to the core that owns this tab's filesystem, not necessarily this
+  // browser/window. Server Edition and relay tabs can be viewed from a different OS, so their
+  // core reports `process.platform` through the already-core-bound tmux status call. Keep it in a
+  // ref: resolving this fact must not tear down and respawn the terminal lifecycle effect.
+  const corePlatformRef = useRef<string | null>(null)
+  useEffect(() => {
+    let live = true
+    corePlatformRef.current = null
+    void hostPlatformFor(api).then((platform) => {
+      // A failed read is not evidence of Linux. fileLinkDialect fails closed for server/relay;
+      // only the local desktop may use its viewer as the host because they are the same process.
+      if (live) corePlatformRef.current = platform
+    })
+    return () => {
+      live = false
+    }
+  }, [api])
   // The ACTIVE session's presence — where our focus/blur casts go. This node renders under Canvas's
   // active-session provider, so a relay tab reports focus over the relay core and a local tab hits
   // `defaultPresence` (byte-identical to before). Stable for the node's lifetime (a tab switch
@@ -2545,13 +2567,26 @@ export function TerminalNode({
         const project = st.projects.find((p) => p.id === st.activeProjectId)
         return project?.ssh ? { fs: sshFs(project.id), ssh: true } : { fs: api.fs, ssh: false }
       }
-      // Relay-remote nodes have no client fs, so file-path links are skipped (URL-only) — mirrors
-      // the CLAUDE.md note. A relay project carries the runtime-only `remote` flag.
-      const isRelayProject = (): boolean => {
+      const pathConvention = (): { windows?: boolean } | null => {
         const st = useProjects.getState()
-        return !!st.projects.find((p) => p.id === st.activeProjectId)?.remote
+        const project = st.projects.find((p) => p.id === st.activeProjectId)
+        const dialect = fileLinkDialect({
+          source: session.source,
+          browserRuntime: isBrowserRuntime(),
+          viewerWindows: isWindowsPlatform(),
+          corePlatform: corePlatformRef.current,
+          sshProject: !!project?.ssh,
+          // A standalone ssh terminal's output lives on the remote host, but its project's fs API
+          // is local. Disable file links rather than existence-checking a same-looking local path.
+          standaloneSsh: !project?.ssh && isRemoteSessionNode(data)
+        })
+        return dialect ? { windows: dialect === 'windows' } : null
       }
-      const lookup = makeDirListingLookup(async (dir) => projectFs().fs.list(dir))
+      const lookup = makeDirListingLookup(
+        async (dir) => projectFs().fs.list(dir),
+        3000,
+        pathConvention
+      )
       const getCwd = (): string | undefined => (data.cwd as string | undefined) || undefined
       const openFile = (abs: string, isDir: boolean): void => {
         if (isDir)
@@ -2563,18 +2598,8 @@ export function TerminalNode({
             })
           )
       }
-      // Which path convention this session's output uses. NOT simply "is the desktop Windows":
-      // an SSH project's paths are POSIX however the client is spelled, so a remote session keeps
-      // the POSIX matcher even on a Windows desktop. Getting that backwards would break the SSH
-      // links that already work in order to fix the local ones that never did.
-      const winPaths = isWindowsPlatform() && !remoteSession
       term.registerLinkProvider(
-        createFileLinkProvider(term, {
-          getCwd,
-          lookup,
-          activate: openFile,
-          windows: winPaths
-        })
+        createFileLinkProvider(term, { getCwd, lookup, activate: openFile, convention: pathConvention })
       )
       // Both providers above rely on xterm's own click handling, which
       // tmux/agent mouse-reporting swallows. This capture-phase mouse-up fallback restores
@@ -2586,8 +2611,8 @@ export function TerminalNode({
           lookup,
           activateFile: openFile,
           openUrl: (uri) => window.nodeTerminal.shell.openExternal(uri),
-          fileEnabled: () => !isRelayProject(),
-          windows: winPaths
+          fileEnabled: () => pathConvention() !== null,
+          convention: pathConvention
         })
       }
     }
@@ -2746,7 +2771,11 @@ export function TerminalNode({
           priorSessionId: status?.sessionId || data.agentSessionId,
           customAgentConfigured,
           ...(hasPermissionMode(agentId)
-            ? { permissionMode: await ensureActivePermissionMode(agentId) }
+            ? {
+                permissionMode: (
+                  await ensureActiveAgentLaunchPlan('terminal-cold-restore', agentId)
+                ).mode
+              }
             : {})
         }) ?? undefined
       }
@@ -3188,7 +3217,11 @@ export function TerminalNode({
               // Gated on THIS node's agent: claude's `auto` version gate must not decide what a grok
               // (or any other permission-mode-capable agent's) relaunch is flagged with.
               const cmd =
-                base && withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
+                base &&
+                commandForAgentLaunch(
+                  base,
+                  await ensureActiveAgentLaunchPlan('terminal-cold-restore', agentId)
+                )
               if (cmd) writeWhenShellReady(cmd) // same shell-startup race as initialCommand
             }
           }
@@ -3248,15 +3281,18 @@ export function TerminalNode({
         const agentSessionId = st?.sessionId
         const gate = restartEligibility(agentId, st?.state, agentSessionId)
         if (!gate.ok || !agentId || !agentSessionId || !restartTarget()) return 'not-eligible'
-        // Built HERE, not inside the choreography: `withPermissionMode` is the single funnel for
-        // every CLI launch path (shared/agents/config.ts) and the mode is a renderer-side, async
-        // read — exactly as the cold-restore relaunch above does it. Without it a canvas running
+        // Built HERE, not inside the choreography: the branded launch plan owns the renderer-side,
+        // async mode read — exactly as the cold-restore relaunch above does it. Without it a canvas
+        // running
         // in acceptEdits/plan would come back from a restart in the default mode, silently.
         // Re-resolved at call time for the same reason as there: the mode is a property of how a
         // session is launched, not of the node.
         const base = resumeCommand(agentId, agentSessionId)
         const command = base
-          ? withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
+          ? commandForAgentLaunch(
+              base,
+              await ensureActiveAgentLaunchPlan('terminal-restart-resume', agentId)
+            )
           : undefined
         return performRestartResume({
           agentId,
@@ -3341,7 +3377,7 @@ export function TerminalNode({
         const agentSessionId = st?.sessionId
         if (!agentId || !agentSessionId || !restartTarget()) return 'not-eligible'
         // Command FIRST, pane check LAST. Both of these awaits can take a moment (the claude
-        // version probe behind `ensureActivePermissionMode` most of all), and whatever is asked
+        // version probe behind `ensureActiveAgentLaunchPlan` most of all), and whatever is asked
         // first is stale by the time the delivery runs — so the fact that must be freshest is the
         // one asked last: what owns the pane we are about to type into.
         // Same funnel, same await, same reasoning as the restart closure above: the permission
@@ -3358,7 +3394,10 @@ export function TerminalNode({
         // meant an unusable session id erased the pane's line (three times, once per wake trigger)
         // and then declined to resume.
         if (!base) return 'not-eligible'
-        const command = withPermissionMode(base, agentId, await ensureActivePermissionMode(agentId))
+        const command = commandForAgentLaunch(
+          base,
+          await ensureActiveAgentLaunchPlan('terminal-hibernation-resume', agentId)
+        )
         // THE load-bearing gate of the wake half. Hours can pass between the exit and this
         // resume, and the pane is a REPL the user can type into: by now it may belong to vim, to
         // `top`, or to a claude the user launched by hand — and a launch line typed into a live
@@ -4120,7 +4159,7 @@ export function TerminalNode({
     // Clipboard bytes (a screenshot) have never been a file anywhere, so something has to write
     // one before there is a path to paste — worth the same "this is going somewhere" overlay the
     // SSH upload gets, since neither is instant and both paste nothing until they finish.
-    const needsWrite = files.some((f) => !window.nodeTerminal.getPathForFile(f))
+    const needsWrite = files.some((f) => !api.getPathForFile(f))
 
     let paths: string[]
     if (data.sshRemoteTmux) {
@@ -4138,7 +4177,7 @@ export function TerminalNode({
         text: `Uploading ${files.length === 1 ? files[0].name : `${files.length} files`}…`
       })
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: true, projectId })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: true, projectId })
       } finally {
         setUploadNote(null)
       }
@@ -4150,10 +4189,7 @@ export function TerminalNode({
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
       setUploadNote({ text: 'Saving pasted file…' })
       try {
-        paths = await droppedPaths(files, {
-          sshRemoteTmux: false,
-          projectId: ''
-        })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
       } finally {
         setUploadNote(null)
       }
@@ -4162,10 +4198,7 @@ export function TerminalNode({
         uploadNoteTimer.current = setTimeout(() => setUploadNote(null), 2500)
       }
     } else {
-      paths = await droppedPaths(files, {
-        sshRemoteTmux: false,
-        projectId: ''
-      })
+      paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
     }
     if (!paths.length) return
     // Enter the terminal and paste the path(s) like a real drop (trailing space to continue).

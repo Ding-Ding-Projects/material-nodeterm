@@ -1,5 +1,6 @@
 import { CATALOG } from './catalog'
 import type { Catalog, FunnyLevels, LanguageMode, LocalizedText } from './types'
+import { normalizeLanguageMode } from './validation'
 
 /**
  * Pure resolver: given a catalogue id, the caller's own English default, the active language
@@ -27,7 +28,7 @@ export function t(
   const yueRaw = entry.yue[levels.yue - 1]
   const yue = yueRaw && yueRaw.length > 0 ? yueRaw : en
 
-  switch (mode) {
+  switch (normalizeLanguageMode(mode)) {
     case 'en':
       return { primary: en, secondary: null }
     case 'yue':

@@ -26,7 +26,9 @@ plain web platform APIs (`<input type="file">` + `FileReader`). There is:
 
 The validated result is cached in this browser profile's `localStorage`
 (`nodeterm.personalVocabulary.v1`) purely so it survives a reload/restart; it is never synced,
-exported with the rest of app settings, or sent anywhere.
+exported with the rest of app settings, or sent anywhere. Hydration passes the cached JSON through
+the **same complete validator** as a new upload; hand-editing `localStorage` is not a second,
+weaker import path.
 
 ## The JSON contract (versioned, bounded)
 
@@ -64,10 +66,13 @@ Rejected outright, with no partial application:
   (`jsonScan.ts`), *not* `JSON.parse`. `JSON.parse` silently keeps only the **last** of a
   duplicate key before any application code ever sees the object, so duplicate-key rejection is
   structurally impossible on top of it; the scanner is why this project can actually enforce it.
-- an entry key that is `__proto__`, `constructor`, or `prototype` (prototype-pollution vectors,
-  rejected unconditionally even though the app only ever builds a plain object from these, never
-  assigns them onto a live prototype-bearing target — untrusted input gets the paranoid treatment
-  regardless),
+  Every object the scanner builds has a **null prototype**, so the JSON spelling `__proto__`
+  remains an own data property that validation can see instead of invoking JavaScript's legacy
+  prototype setter. `version` and `entries` must themselves be own properties — inherited values
+  are never schema fields.
+- a root or entry key that is `__proto__`, `constructor`, or `prototype` (prototype-pollution
+  vectors, rejected unconditionally; the validated entries dictionary also keeps a null prototype
+  so a future copy refactor cannot quietly reopen the setter boundary),
 - an empty key,
 - a key or value over its length limit,
 - a non-string value (**only string replacements are allowed** — no nested objects/arrays as

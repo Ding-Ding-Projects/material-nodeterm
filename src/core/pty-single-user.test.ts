@@ -87,6 +87,8 @@ vi.mock('node-pty', () => ({
  */
 const execCalls: Array<{ file: string; args: string[] }> = []
 const liveTmuxSessions = new Set<string>()
+let holdNextKill = false
+let releaseHeldKill: (() => void) | undefined
 
 vi.mock('child_process', () => {
   type Cb = (err: Error | null, res?: { stdout: string; stderr: string }) => void
@@ -94,7 +96,10 @@ vi.mock('child_process', () => {
     const cb = (typeof a === 'function' ? a : b) as Cb | undefined
     execCalls.push({ file, args })
     const ok = (stdout: string): void => cb?.(null, { stdout, stderr: '' })
-    if (args.includes('has-session')) {
+    if (args.includes('kill-session') && holdNextKill) {
+      holdNextKill = false
+      releaseHeldKill = () => ok('')
+    } else if (args.includes('has-session')) {
       const target = args[args.indexOf('-t') + 1]
       if (liveTmuxSessions.has(target)) ok('')
       // Real execFile carries tmux's exit status on err.code — 1 is what probeSaysAbsent
@@ -166,6 +171,8 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     spawnArgs.length = 0
     execCalls.length = 0
     liveTmuxSessions.clear()
+    holdNextKill = false
+    releaseHeldKill = undefined
     userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-solo-'))
     fake = fakePlatform({ userDataDir })
     initPlatform(fake)
@@ -471,7 +478,7 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
   // must reach `endSession`, which is the half a `destroySession`-only test cannot see.
   it('honours everySocket off the wire, and only for a literal true', async () => {
     await tmuxManager()
-    await (fake.senderListeners[IPC.ptyDestroy](
+    await (fake.handlers[IPC.ptyDestroy](
       SOLO,
       'never-opened-here',
       true
@@ -481,13 +488,48 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
       'nodeterm-rmt'
     ])
     execCalls.length = 0
-    await (fake.senderListeners[IPC.ptyDestroy](
+    await (fake.handlers[IPC.ptyDestroy](
       SOLO,
       'never-opened-2',
       'yes' as unknown as boolean
     ) as unknown as Promise<void>)
     expect(tmuxCalls('kill-session').map((c) => c.args[c.args.indexOf('-L') + 1])).toEqual([
       'node-terminal'
+    ])
+  })
+
+  it('does not let a narrow in-flight destroy falsely acknowledge a later every-socket request', async () => {
+    await tmuxManager()
+    holdNextKill = true
+
+    const narrow = fake.handlers[IPC.ptyDestroy](
+      SOLO,
+      'scope-upgrade-node',
+      false
+    ) as Promise<void>
+    await vi.waitFor(() => expect(releaseHeldKill).toBeTypeOf('function'))
+    const broad = fake.handlers[IPC.ptyDestroy](
+      SOLO,
+      'scope-upgrade-node',
+      true
+    ) as Promise<void>
+    let broadSettled = false
+    void broad.finally(() => {
+      broadSettled = true
+    })
+    await Promise.resolve()
+    expect(broadSettled).toBe(false)
+
+    releaseHeldKill?.()
+    await narrow
+    await broad
+
+    // First pass: node-terminal only. The stronger caller then runs a fresh unheld pass over BOTH
+    // sockets before resolving, so it never inherits a narrower acknowledgement.
+    expect(tmuxCalls('kill-session').map((c) => c.args[c.args.indexOf('-L') + 1])).toEqual([
+      'node-terminal',
+      'node-terminal',
+      'nodeterm-rmt'
     ])
   })
 
@@ -499,7 +541,7 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     await tmuxManager()
     const { sessionId } = await create(80, 24)
     fake.sent.length = 0
-    await (fake.senderListeners[IPC.ptyRecycle](SOLO, 'solo-1') as unknown as Promise<void>)
+    await (fake.handlers[IPC.ptyRecycle](SOLO, 'solo-1') as Promise<void>)
 
     const kills = tmuxCalls('kill-session')
     expect(kills).toHaveLength(1) // we hold the session; one socket, one kill

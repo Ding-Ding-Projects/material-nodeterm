@@ -96,7 +96,25 @@ describe('preload IPC wiring', () => {
     expect('executeLaunchIntent' in nonWindowsApi.pty).toBe(false)
   })
 
-  it('exposes an awaited desktop recycle without changing the existing recycle path', async () => {
+  it('awaits pty destroy through invoke and propagates a rejected backend acknowledgement', async () => {
+    h.invoke.mockRejectedValueOnce(new Error('session host outcome unknown'))
+
+    await expect(api.pty.destroy('node-1', { everySocket: true })).rejects.toThrow(
+      'session host outcome unknown'
+    )
+    expect(h.invoke).toHaveBeenCalledWith(IPC.ptyDestroy, 'node-1', true)
+    expect(h.send).not.toHaveBeenCalledWith(IPC.ptyDestroy, 'node-1', true)
+  })
+
+  it('awaits pty recycle through invoke so cwd mutation can wait for the host', async () => {
+    h.invoke.mockRejectedValueOnce(new Error('recycle outcome unknown'))
+
+    await expect(api.pty.recycle('node-2')).rejects.toThrow('recycle outcome unknown')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.ptyRecycle, 'node-2')
+    expect(h.send).not.toHaveBeenCalledWith(IPC.ptyRecycle, 'node-2')
+  })
+
+  it('exposes a distinct awaited desktop recycle-confirmation path', async () => {
     expect(api.pty.recycleConfirmed).toBeDefined()
     const target = { profileId: 'wsl:Ubuntu 24.04', cwd: 'C:\\work tree' }
     await api.pty.recycleConfirmed!('node-profile-switch', target)
@@ -104,9 +122,6 @@ describe('preload IPC wiring', () => {
 
     await api.pty.recycleConfirmed!('node-profile-switch-legacy')
     expect(h.invoke).toHaveBeenCalledWith(IPC.ptyRecycleConfirmed, 'node-profile-switch-legacy')
-
-    api.pty.recycle('node-worktree-move')
-    expect(h.send).toHaveBeenCalledWith(IPC.ptyRecycle, 'node-worktree-move')
   })
 
   it('awaits the main-process clipboard acknowledgement on the request-response channel', async () => {
@@ -183,5 +198,15 @@ describe('preload IPC wiring', () => {
     expect(got).toEqual([{ requestId: 'r7' }])
     off()
     expect(h.removeListener).toHaveBeenCalledWith(IPC.sshPassphraseDismiss, handler)
+  })
+
+  it('forwards pairing attempt ownership on both start and targeted stop', async () => {
+    const attemptId = '33333333-3333-4333-8333-333333333333'
+
+    await api.pairing.start(attemptId)
+    await api.pairing.stop(attemptId)
+
+    expect(h.invoke).toHaveBeenCalledWith(IPC.pairingStart, attemptId)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.pairingStop, attemptId)
   })
 })

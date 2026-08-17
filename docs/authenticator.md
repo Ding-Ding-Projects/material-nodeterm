@@ -109,6 +109,19 @@ Each entry has a **"Reveal secret"** action that fetches and shows the raw base3
 matching `otpauth://` URI) — for the rare case you need to re-pair the same secret into a *different*
 app. It is never shown by default, always behind that explicit click.
 
+## Removing an entry
+
+Removal deletes this app's sealed TOTP seed and therefore all future codes shown for that entry; it
+does not change the account at the service which issued the seed. While Kids policy is ON **or
+cannot be read authoritatively**, removal uses the same two-key destructive gate as node and
+worktree deletion. A known-OFF policy retains the ordinary one-button confirmation.
+
+The row carries a non-secret SHA-256 revision which binds every displayed metadata field and the
+exact sealed payload. After either confirmation, the renderer strictly lists the store again and
+refuses a renamed or replaced entry. Core repeats the decisive revision comparison inside the
+serialized `SecureStore.mutate` transaction immediately before removing it. A failed read, missing
+entry, changed revision, or rejected write stays visible and never removes the row optimistically.
+
 ## Secrets stay local, and out of ordinary exports
 
 Nothing about the authenticator syncs, phones home, or makes a network request of any kind — see
@@ -136,12 +149,20 @@ Like toy locks, the authenticator is **core-bound**: entries live wherever nodet
 runs (Electron's main process on Desktop; the server process for the Server Edition), reached over
 the same request/response channel every other core service uses. A relay tab (viewing another
 desktop's canvas over the E2EE relay) keeps its **own local** authenticator — it describes the
-viewer's own machine, exactly like the toy-lock list does.
+viewer's own machine, exactly like the toy-lock list does. That is enforced below the UI as well as
+in the bridge assembly: the desktop host's raw-relay dispatcher default-denies every
+`authenticator:*` method before handler lookup. A peer-crafted `reveal`, `export-secrets`, or live
+code request therefore receives `E_FORBIDDEN` without loading or unsealing the host's store; the
+renderer-only reveal and two-key export confirmations are never treated as a network authorization
+boundary. The Server Edition is unaffected — its authenticated browser socket still reaches the
+authenticator service running on that server.
 
 ## Known limitations
 
 - **No camera or image/clipboard QR scanning** for registering an existing secret — see
   [Registering an existing secret](#registering-an-existing-secret) above. Paste-a-URI and manual
   entry are the two supported routes in this pass.
-- **No automated test suite** for this pass (project-level delivery constraint for this change);
-  correctness is documented above via the RFC test-vector reasoning instead.
+- Codes are not verified against a live third-party account in the automated environment. RFC
+  vectors, store transactions, removal revision-CAS behavior, Desktop IPC, Server WebSocket wiring,
+  and relay default-deny behavior are automated; acceptance by a particular provider still depends
+  on that provider and the machine clock.

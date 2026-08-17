@@ -1,6 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UpdateProgress } from '@shared/types'
 import { useI18n } from '@renderer/lib/i18n'
+import {
+  annotatesStatusDuringUpdateError,
+  clearsAfterUpToDateTimeout,
+  progressPercent,
+  preservesStatusDuringManualCheck,
+  statusFromAvailable,
+  statusFromDownloaded,
+  updateCardControls,
+  updateBodyCopy,
+  type UpdateAvailableStatus,
+  type UpdateBodyKind,
+  type UpdateDownloadedStatus,
+  type UpdateManualStatus
+} from '@renderer/lib/update-card-state'
 
 // The full updater lifecycle as one status union, driving a fixed bottom-right card.
 // `checking` is only ever shown for a user-initiated manual check; automatic checks stay
@@ -8,15 +22,15 @@ import { useI18n } from '@renderer/lib/i18n'
 type Status =
   | { kind: 'idle' }
   | { kind: 'checking' }
-  | { kind: 'available'; version: string; percent: number }
+  | UpdateAvailableStatus
   // A .deb/.rpm Linux install can't self-install — show a manual download link, no progress/restart.
-  | { kind: 'manual'; version: string }
-  | { kind: 'downloaded'; version: string }
+  | UpdateManualStatus
+  | UpdateDownloadedStatus
   | { kind: 'upToDate' }
-  | { kind: 'required'; minSupported: string | null }
+  | { kind: 'required'; minSupported: string | null; error?: string }
   | { kind: 'error'; message: string }
 
-const RELEASES_URL = 'https://nodeterm.dev/releases'
+const RELEASES_URL = 'https://github.com/Ding-Ding-Projects/material-nodeterm/releases'
 
 export function UpdateCard(): JSX.Element | null {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
@@ -26,18 +40,16 @@ export function UpdateCard(): JSX.Element | null {
 
   useEffect(() => {
     const offAvailable = window.nodeTerminal.updates.onAvailable((info) => {
-      setStatus(
-        info.manual
-          ? { kind: 'manual', version: info.version }
-          : { kind: 'available', version: info.version, percent: 0 }
-      )
+      setStatus(statusFromAvailable(info))
       setMinimized(false)
     })
     const offProgress = window.nodeTerminal.updates.onProgress((p: UpdateProgress) => {
-      setStatus((s) => (s.kind === 'available' ? { ...s, percent: p.percent } : s))
+      setStatus((s) =>
+        s.kind === 'available' ? { ...s, percent: progressPercent(s.percent, p.percent) } : s
+      )
     })
     const offDownloaded = window.nodeTerminal.updates.onDownloaded((info) => {
-      setStatus({ kind: 'downloaded', version: info.version })
+      setStatus(statusFromDownloaded(info))
       setMinimized(false)
     })
     const offNotAvailable = window.nodeTerminal.updates.onNotAvailable(() => {
@@ -45,12 +57,14 @@ export function UpdateCard(): JSX.Element | null {
       setMinimized(false)
       if (upToDateTimer.current) window.clearTimeout(upToDateTimer.current)
       upToDateTimer.current = window.setTimeout(
-        () => setStatus((s) => (s.kind === 'required' ? s : { kind: 'idle' })),
+        () => setStatus((s) => (clearsAfterUpToDateTimeout(s.kind) ? { kind: 'idle' } : s)),
         4000
       )
     })
     const offError = window.nodeTerminal.updates.onError((message) => {
-      setStatus({ kind: 'error', message })
+      setStatus((s) =>
+        annotatesStatusDuringUpdateError(s.kind) ? { ...s, error: message } : { kind: 'error', message }
+      )
       setMinimized(false)
     })
     return () => {
@@ -68,12 +82,7 @@ export function UpdateCard(): JSX.Element | null {
   useEffect(() => {
     const onChecking = () => {
       setStatus((s) =>
-        s.kind === 'available' ||
-        s.kind === 'manual' ||
-        s.kind === 'downloaded' ||
-        s.kind === 'required'
-          ? s
-          : { kind: 'checking' }
+        preservesStatusDuringManualCheck(s.kind) ? s : { kind: 'checking' }
       )
       setMinimized(false)
     }
@@ -113,7 +122,9 @@ export function UpdateCard(): JSX.Element | null {
   if (minimized) {
     const label =
       status.kind === 'available'
-        ? `${Math.round(status.percent)}%`
+        ? status.percent === null
+          ? '…'
+          : `${Math.round(status.percent)}%`
         : status.kind === 'downloaded'
           ? ts('update.pill.ready', 'Ready')
           : status.kind === 'error'
@@ -146,12 +157,7 @@ export function UpdateCard(): JSX.Element | null {
                 ? ts('update.title.required', 'Update required')
                 : ts('update.title.error', 'Update failed')
 
-  const canMinimize = status.kind === 'available' || status.kind === 'downloaded'
-  const canDismiss =
-    status.kind === 'manual' ||
-    status.kind === 'downloaded' ||
-    status.kind === 'upToDate' ||
-    status.kind === 'error'
+  const { canMinimize, canDismiss } = updateCardControls(status.kind)
 
   const minSupportedClause =
     status.kind === 'required' && status.minSupported
@@ -159,6 +165,11 @@ export function UpdateCard(): JSX.Element | null {
           minSupported: status.minSupported
         }).primary
       : ''
+
+  const localizedUpdateBody = (kind: UpdateBodyKind, version?: string): string => {
+    const copy = updateBodyCopy(kind, version)
+    return t(copy.id, copy.fallback, copy.params).primary
+  }
 
   return (
     <div className="update-card">
@@ -192,38 +203,33 @@ export function UpdateCard(): JSX.Element | null {
 
       {status.kind === 'available' && (
         <>
-          <p className="update-card__body">
-            {t('update.body.downloading', 'nodeterm v{version} is downloading.', {
-              version: status.version
-            }).primary}
-          </p>
+          <p className="update-card__body">{localizedUpdateBody(status.kind, status.version)}</p>
           <button className="update-card__link" onClick={openReleases}>
             {ts('update.releaseNotes', 'Release notes')}
           </button>
           <div className="update-card__bar">
-            <div className="update-card__bar-fill" style={{ width: `${status.percent}%` }} />
+            <div
+              className={`update-card__bar-fill${
+                status.percent === null ? ' update-card__bar-fill--indeterminate' : ''
+              }`}
+              style={status.percent === null ? undefined : { width: `${status.percent}%` }}
+            />
           </div>
-          <p className="update-card__pct">
-            {
-              t('update.downloadingPct', 'Downloading… {percent}%', {
-                percent: String(Math.round(status.percent))
-              }).primary
-            }
-          </p>
+          {status.percent !== null && (
+            <p className="update-card__pct">
+              {
+                t('update.downloadingPct', 'Downloading… {percent}%', {
+                  percent: String(Math.round(status.percent))
+                }).primary
+              }
+            </p>
+          )}
         </>
       )}
 
       {status.kind === 'manual' && (
         <>
-          <p className="update-card__body">
-            {
-              t(
-                'update.body.manual',
-                'nodeterm v{version} is available. Download it to update.',
-                { version: status.version }
-              ).primary
-            }
-          </p>
+          <p className="update-card__body">{localizedUpdateBody(status.kind, status.version)}</p>
           <button className="update-card__btn" onClick={openReleases}>
             {ts('update.download', 'Download')}
           </button>
@@ -232,11 +238,10 @@ export function UpdateCard(): JSX.Element | null {
 
       {status.kind === 'downloaded' && (
         <>
-          <p className="update-card__body">
-            {t('update.body.ready', 'nodeterm v{version} is ready to install.', {
-              version: status.version
-            }).primary}
-          </p>
+          <p className="update-card__body">{localizedUpdateBody(status.kind, status.version)}</p>
+          {status.error && (
+            <p className="update-card__error" role="alert">{status.error}</p>
+          )}
           <button className="update-card__link" onClick={openReleases}>
             {ts('update.releaseNotes', 'Release notes')}
           </button>
@@ -266,6 +271,9 @@ export function UpdateCard(): JSX.Element | null {
               ).primary
             }
           </p>
+          {status.error && (
+            <p className="update-card__error" role="alert">{status.error}</p>
+          )}
           <button className="update-card__btn" onClick={() => window.nodeTerminal.updates.check()}>
             {ts('update.updateNow', 'Update now')}
           </button>

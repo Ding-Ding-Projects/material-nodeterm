@@ -10,19 +10,24 @@ export const MEDIA_SCHEME = 'nt-media'
 // Absolute paths the app has explicitly opened this session. Cleared only on quit.
 const allowed = new Set<string>()
 
-/** Build the nt-media:// URL for an absolute path (path encoded as the URL pathname). */
-export function mediaUrlFor(absPath: string): string {
+/** Build the nt-media:// URL for an absolute path (path encoded as the URL pathname).
+ *  `nativeSeparator` is injectable only so both host dialects are behavior-tested on one machine. */
+export function mediaUrlFor(absPath: string, nativeSeparator: '/' | '\\' = sep as '/' | '\\'): string {
   // Encode each path segment individually so reserved chars (?, #, &) round-trip through
   // the URL pathname (encodeURI leaves them, which would break the pathname match). The
   // decode side (resolveMediaPath → decodeURIComponent) stays symmetric.
   //
-  // Split on BOTH separators. `allowMediaPath` hands us `normalize()`d output, which on win32 is
-  // backslash-separated — so splitting on '/' alone produced ONE segment, encoded the
+  // Split on the HOST'S separator. `allowMediaPath` hands us `normalize()`d output, which on win32
+  // is backslash-separated — so splitting on '/' alone produced ONE segment, encoded the
   // backslashes to %5C, and emitted `nt-media://mediaC%3A%5CUsers%5C...`: no leading slash, so
   // the drive letter was swallowed into the URL's authority and the pathname came out empty.
   // Every image and video opened from a Windows path failed to load, with a 404 from the jail
   // that looked exactly like a path that was never allowlisted.
-  const segments = absPath.split(/[\\/]/).map((seg) => encodeURIComponent(seg))
+  //
+  // Do NOT split on both. On POSIX, `\` is legal filename text: `/tmp/a\b.png` names ONE file,
+  // not `/tmp/a/b.png`. Treating it as a separator made the URL point at a different path and the
+  // allowlist correctly rejected the app's own file.
+  const segments = absPath.split(nativeSeparator).map((seg) => encodeURIComponent(seg))
   // A POSIX absolute path starts with '/', so its first segment is empty and the join already
   // yields a leading slash. A Windows one starts with the drive letter, so it needs one added
   // or `new URL()` reads it as the authority. resolveMediaPath strips it back off.

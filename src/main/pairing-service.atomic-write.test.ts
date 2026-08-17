@@ -90,9 +90,9 @@ describe('pairing-service revoke: atomic writes', () => {
     const realWriteFile = fs.writeFile
     vi.spyOn(fs, 'writeFile').mockImplementation((async (p: any, ...rest: any[]) => {
       // The entry point serializes overlapping revokes (pinned in pairing-service.test.ts), so
-      // their writes arrive one after the other — uniqueness is carried by the `<pid>.<seq>` name
-      // alone. That name is what protects the unchained module-level writers and the crash window
-      // between tmp-write and rename, so it stays pinned even though the entry point no longer
+      // their writes arrive one after the other. UUID entropy protects the unchained module-level
+      // writers (including colliding PID namespaces) and the crash window between tmp-write and
+      // rename, so the distinct paths stay pinned even though the entry point no longer
       // produces true overlap.
       if (String(p).startsWith(agentJson())) agentSeen.push(String(p))
       else if (String(p).startsWith(authKeys())) keysSeen.push(String(p))
@@ -161,24 +161,23 @@ describe('pairing-service revoke: atomic writes', () => {
     expect(await fs.readFile(authKeys(), 'utf-8')).toBe(before) // the key file is untouched
   })
 
-  it('sweeps orphan agent.json temps left by dead writers, but never one bearing our own pid', async () => {
+  it('sweeps aged legacy agent.json litter but preserves fresh foreign-pid temps', async () => {
     const svc = await service()
     const legacy = `${agentJson()}.tmp` // a build from before per-call tmp names
-    const foreign = `${agentJson()}.${process.pid + 1}.7.tmp` // a run that died before its rename
+    const foreign = `${agentJson()}.${process.pid + 1}.7.tmp` // may be the live host agent
     const ours = `${agentJson()}.${process.pid}.999.tmp`
     for (const f of [legacy, foreign, ours]) {
       writeFileSync(f, JSON.stringify({ devices: [device('ghost')] }), { mode: 0o600 })
     }
+    await fs.utimes(legacy, 0, 0)
 
     await svc.revokeDevice('a')
 
     expect((await svc.listDevices()).map((d) => d.id)).toEqual(['b'])
-    // ~/.nodeterm is shared with the HOST AGENT — other processes write here — and a unique name is
-    // never written again, so an orphan is a 0600 file holding live `agentToken`s forever.
+    // ~/.nodeterm is shared with the HOST AGENT. The ownerless legacy path is decades old, but a
+    // fresh foreign-pid temp may be its live write and must survive.
     expect(existsSync(legacy)).toBe(false)
-    expect(existsSync(foreign)).toBe(false)
-    // Our own pid is off limits: it may be a CONCURRENT writer sitting between its write and its
-    // rename, and deleting it would reintroduce the very race the unique names fixed.
+    expect(existsSync(foreign)).toBe(true)
     expect(existsSync(ours)).toBe(true)
   })
 })

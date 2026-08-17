@@ -255,6 +255,8 @@ function StatusRow({
 function SourceEditor({
   source,
   hasToken,
+  tokenStatusUnknown,
+  tokenError,
   status,
   onChange,
   onSetToken,
@@ -262,9 +264,11 @@ function SourceEditor({
 }: {
   source: ScheduleSource
   hasToken: boolean
+  tokenStatusUnknown: boolean
+  tokenError: string | undefined
   status: ScheduledSettingsSourceStatus | undefined
   onChange: (s: ScheduleSource) => void
-  onSetToken: (token: string | null) => void
+  onSetToken: (token: string | null) => Promise<boolean>
   onRetry: () => void
 }): React.JSX.Element {
   const [tokenDraft, setTokenDraft] = useState('')
@@ -327,8 +331,11 @@ function SourceEditor({
           </Labeled>
           <Labeled
             label="Long-lived access token"
+            error={tokenError}
             hint={
-              hasToken
+              tokenStatusUnknown
+                ? 'The stored-token status could not be verified. Clear remains available so a credential is never hidden as absent.'
+                : hasToken
                 ? 'A token is saved for this rule (kept in the OS credential store; never shown again).'
                 : 'No token saved yet — this rule cannot be checked without one.'
             }
@@ -345,14 +352,18 @@ function SourceEditor({
               <Button
                 disabled={!tokenDraft}
                 onClick={() => {
-                  onSetToken(tokenDraft)
-                  setTokenDraft('')
+                  const submitted = tokenDraft
+                  void onSetToken(submitted).then((saved) => {
+                    // Keep a failed draft available for retry, and never erase a replacement the
+                    // user pasted while this request was in flight.
+                    if (saved) setTokenDraft((current) => (current === submitted ? '' : current))
+                  })
                 }}
               >
                 Save
               </Button>
-              {hasToken && (
-                <Button variant="ghost" onClick={() => onSetToken(null)}>
+              {(hasToken || tokenStatusUnknown) && (
+                <Button variant="ghost" onClick={() => void onSetToken(null)}>
                   Clear
                 </Button>
               )}
@@ -613,6 +624,8 @@ function RuleCard({
   count,
   isActive,
   hasToken,
+  tokenStatusUnknown,
+  tokenError,
   status,
   onPatch,
   onRemove,
@@ -625,11 +638,13 @@ function RuleCard({
   count: number
   isActive: boolean
   hasToken: boolean
+  tokenStatusUnknown: boolean
+  tokenError: string | undefined
   status: ScheduledSettingsSourceStatus | undefined
   onPatch: (patch: Partial<ScheduleRule>) => void
   onRemove: () => void
   onMove: (delta: -1 | 1) => void
-  onSetToken: (token: string | null) => void
+  onSetToken: (token: string | null) => Promise<boolean>
   onRetry: () => void
 }): React.JSX.Element {
   return (
@@ -683,6 +698,8 @@ function RuleCard({
         <SourceEditor
           source={rule.source}
           hasToken={hasToken}
+          tokenStatusUnknown={tokenStatusUnknown}
+          tokenError={tokenError}
           status={status}
           onChange={(source) => onPatch({ source })}
           onSetToken={onSetToken}
@@ -703,9 +720,12 @@ function RuleCard({
 export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const file = useScheduledSettings((s) => s.file)
   const hydrated = useScheduledSettings((s) => s.hydrated)
+  const loadError = useScheduledSettings((s) => s.loadError)
   const saveError = useScheduledSettings((s) => s.saveError)
   const active = useScheduledSettings((s) => s.active)
   const tokenStatus = useScheduledSettings((s) => s.tokenStatus)
+  const tokenStatusUnknown = useScheduledSettings((s) => s.tokenStatusUnknown)
+  const tokenErrors = useScheduledSettings((s) => s.tokenErrors)
   const update = useScheduledSettings((s) => s.update)
   const setHomeAssistantToken = useScheduledSettings((s) => s.setHomeAssistantToken)
   const refreshRule = useScheduledSettings((s) => s.refreshRule)
@@ -743,6 +763,34 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
     )
   }
 
+  if (loadError) {
+    return (
+      <SettingsSection
+        id="schedule"
+        title="Schedule"
+        description="Scheduled appearance overrides are disabled until the saved schedule can be read safely."
+        isActive={isActive}
+        searchEntries={ENTRIES}
+      >
+        <div
+          role="alert"
+          className="space-y-2 rounded-md border border-[color:var(--warn)] bg-[color:var(--warn)]/10 px-3 py-3 text-[13px] text-[color:var(--warn)]"
+        >
+          <p>
+            Scheduled settings are off because the saved file is {loadError.kind === 'corrupt'
+              ? 'not valid JSON'
+              : 'unreadable'}{loadError.code ? ` (${loadError.code})` : ''}.
+          </p>
+          <p>
+            The original evidence was left untouched at <code>{loadError.path}</code>. Repair or
+            move that file, then restart nodeterm. Editing stays locked so this recovery copy
+            cannot be overwritten.
+          </p>
+        </div>
+      </SettingsSection>
+    )
+  }
+
   return (
     <SettingsSection
       id="schedule"
@@ -769,7 +817,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
         <div className="space-y-4">
           {saveError && (
             <p className="rounded-md border border-[color:var(--warn)] bg-[color:var(--warn)]/10 px-3 py-2 text-[13px] text-[color:var(--warn)]">
-              Could not save: {saveError}
+              {saveError}
             </p>
           )}
           {file.rules.length === 0 && (
@@ -786,11 +834,13 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
               count={file.rules.length}
               isActive={active?.active?.ruleId === rule.id}
               hasToken={tokenStatus[rule.id] === true}
+              tokenStatusUnknown={tokenStatusUnknown[rule.id] === true}
+              tokenError={tokenErrors[rule.id]}
               status={active?.sources[rule.id]}
               onPatch={(patch) => patchRule(rule.id, patch)}
               onRemove={() => removeRule(rule.id)}
               onMove={(delta) => moveRule(rule.id, delta)}
-              onSetToken={(token) => void setHomeAssistantToken(rule.id, token)}
+              onSetToken={(token) => setHomeAssistantToken(rule.id, token)}
               onRetry={() => void refreshRule(rule.id)}
             />
           ))}

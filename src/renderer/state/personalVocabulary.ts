@@ -26,9 +26,21 @@ function readCache(): CachedPayload | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as CachedPayload
-    if (parsed?.version !== 1 || !parsed.entries || typeof parsed.entries !== 'object') return null
-    return parsed
+    // localStorage is hand-editable input too. Reusing the upload validator keeps a forged
+    // `__proto__` entry, duplicate key, oversized cache, or stale schema from bypassing the exact
+    // contract merely because it arrived on restart rather than through the file picker.
+    const validated = validateVocabularyPayload(raw)
+    if (!validated.ok) return null
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!Object.hasOwn(parsed, 'savedAt') || typeof parsed.savedAt !== 'number' || !Number.isFinite(parsed.savedAt)) {
+      return null
+    }
+    return {
+      version: 1,
+      entries: validated.entries,
+      entryCount: validated.entryCount,
+      savedAt: parsed.savedAt
+    }
   } catch {
     return null
   }

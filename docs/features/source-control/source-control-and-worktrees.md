@@ -39,8 +39,10 @@ politely undone the way a local merge can.
 
 - **Settings → Agents** — which local agent CLI (if any) generates commit messages and how, and
   the extra prompt appended to that generation.
-- Worktree removal offers an opt-in (default off) to also delete the worktree's directory on
-  disk; the underlying branch is kept either way.
+- **Unbind** only drops the canvas binding and never deletes the checkout. Disk removal is a
+  separate confirmed action. A checkout of a pre-existing branch keeps that branch; a branch which
+  nodeterm created locally is deleted only if Git proves it reachable and its exact full ref still
+  points at the tip disclosed by the removal proof.
 
 ## Failure modes
 
@@ -55,6 +57,11 @@ politely undone the way a local merge can.
   report "everything is gone" for a perfectly healthy remote repository. This is a stated v1
   limitation, not a silent gap — the affordance shows up disabled with the reason, rather than
   disappearing.
+- **Another program writes after the final proof check**: nodeterm serializes its own supported
+  removal processes and remeasures immediately before invoking Git, but no portable filesystem
+  transaction can freeze a non-cooperating editor between that check and `git worktree remove`.
+  Keep editors and shells idle after reviewing the final inventory; any change observed before the
+  invocation refuses and requires a fresh confirmation.
 
 ## Security considerations
 
@@ -63,6 +70,12 @@ politely undone the way a local merge can.
 - Worktree removal that would touch a dangerous path (the repository root itself, your home
   directory, or the filesystem root) is refused outright, regardless of how the removal was
   triggered.
+- Live-directory removal requires a fresh opaque one-shot proof. It binds the canonical repository,
+  checkout, common and administrative directories; their physical generations; the full branch
+  ref and tip; index state; every tracked, untracked and ignored file byte; empty directories; and
+  symlink targets. Only `ENOENT` is absence—permission, I/O and malformed-path errors refuse.
+- Directory creation and branch creation are separate machine-local provenance facts. Editing a
+  shared project file cannot manufacture branch-deletion authority.
 - Nothing this feature does leaves your machine unless you explicitly choose to push.
 
 ## Verification

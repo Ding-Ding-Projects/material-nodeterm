@@ -2,8 +2,9 @@ import { promises as fs, readFileSync } from 'fs'
 import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
-import { renameAtomic } from './fs-atomic'
+import { renameAtomic, tempNameFor } from './fs-atomic'
 import { DEFAULT_SETTINGS, type Settings } from '../shared/types'
+import { normalizeLanguageMode } from '../shared/i18n'
 import type { HistoryAction } from '../shared/local-history'
 
 /**
@@ -39,13 +40,13 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   if (gpu === false) merged.terminalGpuRendering = 'off'
   else if (gpu !== 'on' && gpu !== 'off' && gpu !== 'auto' && gpu !== 'shared')
     merged.terminalGpuRendering = 'auto'
+  // The JSON is hand-editable. A TypeScript `LanguageMode` annotation cannot stop a garbage
+  // runtime string from reaching the renderer, where the previously-exhaustive switch then
+  // returned `undefined` and took whole localized surfaces down. Normalize both load and save
+  // through this merge so Desktop and Server Edition persist the same safe English fallback.
+  merged.languageMode = normalizeLanguageMode(saved?.languageMode)
   return merged
 }
-
-/** Paired with `process.pid` in the temp name below: the counter makes a name unique WITHIN this
- *  process, the pid makes it unique ACROSS processes (it restarts at 0 in every new one). Same
- *  scheme as agent-status-mirror's local write. */
-let writeSeq = 0
 
 /**
  * Stores user settings in settings.json. Keeps a synchronous cache so the PtyManager
@@ -68,7 +69,7 @@ export class SettingsStore {
     before: Settings,
     after: Settings,
     override?: { action: HistoryAction; label: string }
-  ) => void
+  ) => void | Promise<void>
 
   private get filePath(): string {
     return path.join(platform().userDataDir, 'settings.json')
@@ -87,7 +88,11 @@ export class SettingsStore {
    *  `applyRestoredSettings`, which reaches `saveNow` with an explicit override so the new
    *  revision is labelled "Restored…" instead of running back through the generic diff. */
   setHistoryRecorder(
-    fn: (before: Settings, after: Settings, override?: { action: HistoryAction; label: string }) => void
+    fn: (
+      before: Settings,
+      after: Settings,
+      override?: { action: HistoryAction; label: string }
+    ) => void | Promise<void>
   ): void {
     this.historyRecorder = fn
   }
@@ -139,16 +144,14 @@ export class SettingsStore {
       // (src/renderer/state/settings.ts); on the Server Edition every WS frame is dispatched
       // concurrently (src/server/ws.ts), so even one browser tab can have two saves in the air.
       // With a shared name, one writer's rename publishes the other's half-written bytes, or moves
-      // the file out from under it entirely. The pid covers the other direction: two
-      // `nodeterm-server --data-dir X` processes share the dir with no lock, and their counters
-      // both start at 0.
-      const tmp = `${this.filePath}.${process.pid}.${++writeSeq}.tmp`
+      // the file out from under it entirely. `tempNameFor` also keeps two
+      // `nodeterm-server --data-dir X` processes sharing one data dir from choosing the same
+      // staging path.
+      const tmp = tempNameFor(this.filePath)
       try {
         // 0600 at open(2), before any bytes land, and the rename carries it onto settings.json.
-        // Two reasons: the temp name is predictable (`<file>.<pid>.<seq>.tmp`), so a same-uid
-        // process could pre-create it as a symlink for this write to follow; and every other
-        // writer in this family already creates owner-only — this one was the outlier, which is
-        // exactly what CodeQL's js/insecure-temporary-file was pointing at.
+        // Every writer in this family creates its staging file owner-only; this one used to be
+        // the outlier, which is exactly what CodeQL's js/insecure-temporary-file was pointing at.
         await fs.writeFile(tmp, JSON.stringify(this.cache, null, 2), { encoding: 'utf-8', mode: 0o600 })
         // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
         await renameAtomic(tmp, this.filePath)
@@ -173,7 +176,7 @@ export class SettingsStore {
       // but this catch covers a bad recorder implementation too — belt and braces around the one
       // guarantee this feature is not allowed to break.
       try {
-        this.historyRecorder?.(before, this.cache, historyOverride)
+        await this.historyRecorder?.(before, this.cache, historyOverride)
       } catch {
         // See above.
       }

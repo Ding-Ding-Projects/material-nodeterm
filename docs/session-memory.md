@@ -497,6 +497,16 @@ macOS (the ps path never runs on Linux)
     memory exactly 4.00× (18.87 → 4.72 GB). The darwin reaper default is now also guarded by a
     BEHAVIOURAL test (darwin-gated, mutation-verified on this machine: reverting the default to
     `readMemInfo` reaps 8) — see session-budget.test.ts, which CI's source-text check stands in for.
+    **Live reaper verification (2026-08-12):** an isolated-socket build of the main process ran for
+    66 minutes against 60 detached bait sessions using a zero-grace experimental configuration.
+    The 48-session cap reaped exactly 12 sessions — eight on the first sweep and four on the next —
+    then stayed silent for 36 minutes (at least three further sweeps) with 48 sessions still
+    eligible. During that silent window, `os.freemem()` reported 0.10 GB, a value under which the
+    former macOS byte reader would have reaped eight sessions per sweep. This run therefore
+    demonstrates cap convergence and directly discriminates the old `os.freemem()` behaviour; the
+    darwin-only behavioural test above is what pins the current no-byte-pressure default. The same
+    experiment exposed fractional configuration handling; that issue is fixed and documented in
+    §1, with focused tests covering fractional grace and integer-cap fallback.
  7. Open an SSH project: the panel must list THAT host's sessions and no local ones, and its header
     scope + the pill's title must read `user@host`.
  8. Open an SSH project BEFORE its ControlMaster is up. The pill must end on a NUMBER, not a

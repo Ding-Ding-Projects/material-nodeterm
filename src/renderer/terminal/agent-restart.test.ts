@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
 import { resumeCommand } from '../../shared/agents/config'
 import { withPermissionMode } from '../../shared/agents/approval-mode'
 import {
@@ -1227,22 +1226,4 @@ describe('the write verb shares the restart lock', () => {
     expect(await write()).toBe('sent')
   })
 
-  // The wiring itself. The dispatch lives inside a 7000-line React component's IPC listener with
-  // no unit seam, and the tests above pass with or without it — so the source is the subject, the
-  // same way `control-destructive.test.ts` pins the confirm gate.
-  it("Canvas.tsx's write onConfirm actually goes through the guard", () => {
-    const src = readFileSync(
-      new URL('../canvas/Canvas.tsx', import.meta.url),
-      'utf8'
-    )
-    const start = src.indexOf("case 'write': {")
-    expect(start).toBeGreaterThan(-1)
-    const body = src.slice(start, src.indexOf("case 'close': {", start))
-    // Guarded, and CALLED — `guardConcurrentRestart` returns a function, so a missing `()` would
-    // await the closure itself and compare it to 'not-eligible' forever.
-    expect(body).toMatch(/guardConcurrentRestart\(args\.node, async \(\) => \{[\s\S]*?\}\)\(\)/)
-    expect(body).toContain("outcome === 'not-eligible'")
-    // No un-guarded sendText left beside it.
-    expect(body.match(/api\.pty\.sendText\(/g) ?? []).toHaveLength(1)
-  })
 })

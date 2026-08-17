@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canCommitCanvas, canClearDirty } from './persistGuards'
+import { canCommitCanvas, canClearDirty, commitActiveCanvas } from './persistGuards'
 
 describe('canCommitCanvas', () => {
   it('commits while the nodes in hand belong to the active project', () => {
@@ -24,6 +24,28 @@ describe('canCommitCanvas', () => {
     expect(canCommitCanvas('a', '')).toBe(false)
     expect(canCommitCanvas(null, '')).toBe(false)
     expect(canCommitCanvas('', '')).toBe(false)
+  })
+})
+
+describe('commitActiveCanvas', () => {
+  it('does not call the store commit when the live canvas belongs to another project', () => {
+    let commits = 0
+    const committed = commitActiveCanvas(
+      {
+        nodesProjectId: 'project-a',
+        activeProjectId: 'project-b',
+        nodes: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+        bridges: [],
+        ropes: []
+      },
+      () => {
+        commits++
+      }
+    )
+
+    expect(committed).toBe(false)
+    expect(commits).toBe(0)
   })
 })
 

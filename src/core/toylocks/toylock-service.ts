@@ -128,26 +128,29 @@ export function startToyLockService(): { dispose(): void } {
   platform().handle(
     IPC.toylockCreatePassword,
     async (input: ToyLockCreatePasswordInput): Promise<ToyLockCreateResult> => {
-      const entries = await store.load()
-      if (findByTarget(entries, input.target.kind, input.target.id)) {
-        return { ok: false, error: 'This is already locked — remove the existing lock first.' }
-      }
-      if (!input.password || input.password.length < 1) {
-        return { ok: false, error: 'A password is required.' }
-      }
-      const meta: ToyLockRecord = {
-        id: randomUUID(),
-        target: input.target,
-        credentialKind: 'password',
-        createdAt: Date.now(),
-        duration: input.duration,
-        durationMinutes: input.durationMinutes,
-        lockedOnLaunch: input.lockedOnLaunch
-      }
-      const secretEnc = store.seal(hashPassword(input.password))
-      entries.push({ meta, secretEnc })
-      await store.save(entries)
-      return { ok: true, record: meta }
+      return store.mutate<ToyLockCreateResult>((entries) => {
+        if (findByTarget(entries, input.target.kind, input.target.id)) {
+          return {
+            changed: false,
+            result: { ok: false, error: 'This is already locked — remove the existing lock first.' }
+          }
+        }
+        if (!input.password || input.password.length < 1) {
+          return { changed: false, result: { ok: false, error: 'A password is required.' } }
+        }
+        const meta: ToyLockRecord = {
+          id: randomUUID(),
+          target: input.target,
+          credentialKind: 'password',
+          createdAt: Date.now(),
+          duration: input.duration,
+          durationMinutes: input.durationMinutes,
+          lockedOnLaunch: input.lockedOnLaunch
+        }
+        const secretEnc = store.seal(hashPassword(input.password))
+        entries.push({ meta, secretEnc })
+        return { changed: true, result: { ok: true, record: meta } }
+      })
     }
   )
 
@@ -208,16 +211,19 @@ export function startToyLockService(): { dispose(): void } {
         return { ok: false, error: "That code doesn't match — check the time on both devices and try again." }
       }
       pending.delete(input.lockId)
-      const entries = await store.load()
-      // A duplicate could only appear if two enrollments for the same target were confirmed in a
-      // race; the second one simply refuses rather than silently shadowing the first.
-      if (findByTarget(entries, p.meta.target.kind, p.meta.target.id)) {
-        return { ok: false, error: 'This is already locked — remove the existing lock first.' }
-      }
-      const secretEnc = store.seal(p.secret)
-      entries.push({ meta: p.meta, secretEnc })
-      await store.save(entries)
-      return { ok: true, record: p.meta }
+      return store.mutate<ToyLockConfirmTotpResult>((entries) => {
+        // A duplicate could only appear if two enrollments for the same target were confirmed in
+        // a race; this check and its append share one transaction, so both cannot win.
+        if (findByTarget(entries, p.meta.target.kind, p.meta.target.id)) {
+          return {
+            changed: false,
+            result: { ok: false, error: 'This is already locked — remove the existing lock first.' }
+          }
+        }
+        const secretEnc = store.seal(p.secret)
+        entries.push({ meta: p.meta, secretEnc })
+        return { changed: true, result: { ok: true, record: p.meta } }
+      })
     }
   )
 
@@ -228,23 +234,29 @@ export function startToyLockService(): { dispose(): void } {
   platform().handle(
     IPC.toylockUpdate,
     async (input: ToyLockUpdateInput): Promise<ToyLockRecord | null> => {
-      const entries = await store.load()
-      const entry = entries.find((e) => e.meta.id === input.id)
-      if (!entry) return null
-      if (input.duration !== undefined) entry.meta.duration = input.duration
-      if (input.durationMinutes !== undefined) entry.meta.durationMinutes = input.durationMinutes
-      if (input.lockedOnLaunch !== undefined) entry.meta.lockedOnLaunch = input.lockedOnLaunch
-      if (input.targetLabel !== undefined) entry.meta.target = { ...entry.meta.target, label: input.targetLabel }
-      await store.save(entries)
-      rate.delete(input.id)
-      return entry.meta
+      const updated = await store.mutate<ToyLockRecord | null>((entries) => {
+        const entry = entries.find((e) => e.meta.id === input.id)
+        if (!entry) return { changed: false, result: null }
+        if (input.duration !== undefined) entry.meta.duration = input.duration
+        if (input.durationMinutes !== undefined) entry.meta.durationMinutes = input.durationMinutes
+        if (input.lockedOnLaunch !== undefined) entry.meta.lockedOnLaunch = input.lockedOnLaunch
+        if (input.targetLabel !== undefined) {
+          entry.meta.target = { ...entry.meta.target, label: input.targetLabel }
+        }
+        return { changed: true, result: entry.meta }
+      })
+      if (updated) rate.delete(input.id)
+      return updated
     }
   )
 
   platform().handle(IPC.toylockRemove, async (id: string): Promise<void> => {
-    const entries = await store.load()
-    const next = entries.filter((e) => e.meta.id !== id)
-    if (next.length !== entries.length) await store.save(next)
+    await store.mutate<void>((entries) => {
+      const next = entries.filter((e) => e.meta.id !== id)
+      if (next.length === entries.length) return { changed: false, result: undefined }
+      entries.splice(0, entries.length, ...next)
+      return { changed: true, result: undefined }
+    })
     rate.delete(id)
   })
 

@@ -5,9 +5,10 @@ error. **Off by default** — the end-user opt-in is optional, the implementatio
 in **Settings → Interface → Narrator**.
 
 Implementation: `src/renderer/lib/narrator.ts` (the queue/voice engine), `narratorPhrases.ts`
-(bilingual content for the two built-in categories), and `components/settings/sections/
-NarratorSection.tsx` (the picker UI). Wired into the existing agent-status alert path and the
-app-error toast path in `renderer/canvas/Canvas.tsx`.
+(bilingual content for the two built-in categories), `canvas/narration-policy.ts` (the two
+point-of-use execution boundaries), and `components/settings/sections/NarratorSection.tsx` (the
+picker UI). Wired into the existing agent-status alert path and the app-error toast path in
+`renderer/canvas/Canvas.tsx`.
 
 ## Three surfaces
 
@@ -38,6 +39,21 @@ Plus one dynamic category:
 
 A future category just calls `narrate()` with a `category` string and English (+ optional
 Cantonese) text; the queue/cooldown/voice machinery is generic.
+
+### School Mode boundary
+
+School Mode does not silently turn off a narrator the user enabled; it reduces that narrator to
+English. Both Canvas event paths read the live School Mode store at the moment they are about to
+speak. Enabled state and unknown/unhydrated state force `language: 'en'`, omit the Cantonese phrase,
+and clear the Cantonese voice from the request. Only a successfully hydrated off record may apply
+the persisted Cantonese or bilingual preference. The preference is preserved and resumes when the
+mode is confirmed off. Each queued track re-checks the live policy immediately before synthesis;
+an allowed→suppressed transition invalidates queued/debounced Cantonese and cancels only an active
+Cantonese utterance, preserving English and important error narration. A Cantonese-only event
+keeps a dormant English copy that becomes eligible only when policy suppresses its Cantonese
+track, so the transition reduces the event instead of silencing it. Settings omits the Cantonese
+language/voice controls and search entries under the same policy, and a stale Preview click
+re-checks before speaking. An invalid hand-edited narrator language also fails closed to English.
 
 ## The queue: never overlapping, replace don't stack
 
@@ -82,14 +98,12 @@ overlap, and a category-replace removes both halves together.
 
 ### Tone vs. content
 
-Narration tone is meant to follow a per-language "funny level" — but this app does not yet ship
-the funny-level slider infrastructure described for other surfaces (no `funnyLevelEn`/
-`funnyLevelYue` settings exist anywhere in the codebase today). Until that lands, every category —
-including errors — speaks in one plain, factual voice; the *content* rule holds regardless of
-tone: narration always names the real failure/event, never a vaguer stand-in, and is never
-truncated or simplified to fit a rate-limiting scheme (see **Content fallback**, which favors
-"say it in the wrong language" over "say nothing"). Wiring narration into a future funny-level
-system is a follow-up, not a design decision this file is making now.
+The app now ships independent `funnyLevelEn` / `funnyLevelYue` settings for localized interface
+copy. Narrator phrases do not yet have tone variants, so every category — including errors — still
+speaks in one plain, factual voice. The *content* rule holds regardless of future tone variants:
+narration names the real failure/event, never a vaguer stand-in, and is never truncated or
+simplified to fit rate limiting (see **Content fallback**, which favors "say it in the wrong
+language" over "say nothing").
 
 ## Voice selection
 
@@ -188,14 +202,15 @@ hand-editable). 100% on each slider is the voice's own normal delivery — the s
 setting (`src/shared/types.ts`, `DEFAULT_SETTINGS`); no schema migration needed since these are
 new top-level keys picked up by the existing `{ ...DEFAULT_SETTINGS, ...saved }` merge.
 
-Not implemented in this pass: recording narrator settings changes in a **local version history**
-— this app does not currently have a local-version-history feature for `settings.json` at all (no
-such subsystem exists anywhere in the codebase to hook into). When one is added for settings
-generally, narrator settings should participate like any other setting.
+Narrator setting changes participate in the existing local settings history automatically: every
+whole-document settings save is snapshotted, and restoring an older revision applies it as a new
+save without erasing later history (see [local-history.md](local-history.md)).
 
 ## Verification
 
-Manual, since this pass is speech/audio and doesn't add automated tests:
+The queue, voice matching, School Mode decision, and both narration executors have focused
+automated Chuts. Platform voice quality, Canvas wiring, and audible output still require this
+device check:
 
 1. Settings → Interface → Narrator, toggle **Speak app events aloud** on.
 2. Open the two voice pickers — confirm the list is empty-then-populated (or immediately populated,

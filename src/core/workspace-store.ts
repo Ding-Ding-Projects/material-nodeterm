@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
-import { renameAtomic } from './fs-atomic'
+import { renameAtomic, sweepStaleTempFiles, tempNameFor } from './fs-atomic'
 import {
   DEFAULT_PROJECT_ID, EMPTY_WORKSPACE,
   type BridgeLink, type CanvasNodeState, type Project, type Workspace, type WorkspaceV1
@@ -75,12 +75,11 @@ export type TrustedNodeLaunchLookup =
   | { status: 'missing' }
   | { status: 'unavailable'; reason: TrustedNodeLaunchUnavailableReason }
 
-let tmpSeq = 0
 async function writeAtomic(filePath: string, content: string): Promise<void> {
   // Unique per write: writers that bypass each other's queue (a second app instance, the SSH
   // poll's index write) must never share a tmp file — interleaved writes into one shared tmp
   // published spliced JSON under the atomic rename.
-  const tmp = `${filePath}.${process.pid}.${++tmpSeq}.tmp`
+  const tmp = tempNameFor(filePath)
   try {
     await fs.writeFile(tmp, content, 'utf-8')
     // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
@@ -91,26 +90,6 @@ async function writeAtomic(filePath: string, content: string): Promise<void> {
     // where litter is visible. The error still propagates; per-file callers swallow it by design.
     await fs.rm(tmp, { force: true }).catch(() => {})
     throw e
-  }
-}
-
-/** Remove tmp litter next to `target` left by writers that died mid-write: the legacy fixed
- *  `<file>.tmp` name and any `<file>.<pid>.<seq>.tmp` from another (dead) pid. Our own pid's
- *  temps are in-flight writes and stay. Same family rule as provider-cookie's sweep. */
-async function sweepStaleTmp(target: string): Promise<void> {
-  try {
-    const dir = path.dirname(target)
-    const base = path.basename(target)
-    for (const entry of await fs.readdir(dir)) {
-      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>'
-      const owner = /^\.(\d+)\.\d+$/.exec(middle)?.[1]
-      if (middle === '' || (owner && owner !== String(process.pid))) {
-        await fs.rm(path.join(dir, entry), { force: true }).catch(() => undefined)
-      }
-    }
-  } catch {
-    // A dir we cannot read is not a reason to fail the load.
   }
 }
 
@@ -177,7 +156,7 @@ export class WorkspaceStore {
   private async loadInner(sideline: boolean): Promise<Workspace> {
     // Read-only loads (sideline: false — the relay blob path) must not mutate the disk, so the
     // litter sweep rides the same flag as the corrupt-file sideline.
-    if (sideline) await sweepStaleTmp(this.indexPath)
+    if (sideline) await sweepStaleTempFiles(this.indexPath)
     let raw: string
     try {
       raw = await fs.readFile(this.indexPath, 'utf-8')
@@ -253,7 +232,7 @@ export class WorkspaceStore {
         const { kanban, ...rest } = project
         built.push({ entry: e, project: validKanban(kanban) ? project : rest })
       } else if (e.cwd) {
-        if (sideline) await sweepStaleTmp(projectFilePath(e.cwd))
+        if (sideline) await sweepStaleTempFiles(projectFilePath(e.cwd))
         const read = await this.readProjectFile(e.cwd, sideline)
         if (read) {
           const p = read.file

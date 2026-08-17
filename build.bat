@@ -1,5 +1,9 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal EnableExtensions DisableDelayedExpansion
+rem Environment variables shadow cmd's dynamic pseudo-variables. Clear inherited poison before
+rem any privilege/status capture or collision-resistant temporary filename is derived.
+set "ERRORLEVEL="
+set "RANDOM="
 rem =============================================================================================
 rem build.bat -- takes a checkout with NOTHING installed to a built, runnable nodeterm.
 rem
@@ -19,50 +23,40 @@ rem ============================================================================
 
 set "NODETERM_ROOT=%~dp0"
 if "%NODETERM_ROOT:~-1%"=="\" set "NODETERM_ROOT=%NODETERM_ROOT:~0,-1%"
+set "NODETERM_OUT=%NODETERM_ROOT%\out"
 
 set "NODETERM_SILENT=0"
 if /I "%~1"=="/s" set "NODETERM_SILENT=1"
 if /I "%~1"=="--silent" set "NODETERM_SILENT=1"
 if /I "%SILENT%"=="1" set "NODETERM_SILENT=1"
 
+set "NODETERM_SYSTEM_POWERSHELL=%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%NODETERM_SYSTEM_POWERSHELL%" (
+    echo [FAILED] Privilege boundary - the inbox Windows PowerShell could not be found
+    exit /b 1
+)
+"%NODETERM_SYSTEM_POWERSHELL%" -NoProfile -NonInteractive -Command "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); if($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){exit 86}else{exit 0}" >nul 2>nul
+set "NODETERM_ELEVATION_PROBE=%ERRORLEVEL%"
+if "%NODETERM_ELEVATION_PROBE%"=="86" (
+    echo [FAILED] Privilege boundary - never run the root build as Administrator.
+    echo Close this prompt and rerun normally; only the printed toolchain helper may be elevated.
+    exit /b 5
+)
+if not "%NODETERM_ELEVATION_PROBE%"=="0" (
+    echo [FAILED] Privilege boundary - could not prove this is a normal user prompt.
+    exit /b 1
+)
+
 echo.
 echo === nodeterm build ===
-echo Repository : %NODETERM_ROOT%
+echo Repository : "%NODETERM_ROOT%"
 echo.
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 0: preconditions that make the whole build impossible, checked in about a second.
-rem
-rem `npm ci` below removes node_modules wholesale, and Windows refuses to delete a binary that a
-rem live process has mapped -- so a forgotten dev window makes the install die on
-rem node_modules\electron\dist\electron.exe with npm's own EPERM, which never mentions the app
-rem holding it. Measured: this script failed exactly that way, and its report could only say "see
-rem the npm output above for the real cause". The preflight names the file and the PID instead.
-rem
-rem Non-fatal by design when node is missing: the dependency phase installs node, so a machine
-rem without it yet must not be blocked by a check that needs it.
-rem ---------------------------------------------------------------------------------------------
-call :phase_begin "Preflight"
-where node >nul 2>&1
-if errorlevel 1 (
-    echo   node not on PATH yet - skipping the preflight; the dependency phase installs it.
-) else (
-    call node "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
-    if errorlevel 1 (
-        echo.
-        echo [FAILED] Preflight
-        echo   Dependency : a build precondition listed above
-        echo   Constraint : every precondition must hold before npm ci removes node_modules
-        echo   Source     : "%NODETERM_ROOT%\scripts\check-build-preflight.mjs"
-        echo   Error      : see the numbered problems above - each names its own fix
-        exit /b 1
-    )
-)
-call :phase_end "Preflight"
-
-rem ---------------------------------------------------------------------------------------------
-rem Phase 1: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
-rem the two scripts can never silently drift apart.
+rem Phase 0: dependencies. Always delegated to download-dependencies.bat, by ABSOLUTE path, so
+rem the two scripts can never silently drift apart. That script bootstraps Node and the native
+rem toolchain, then runs the Windows build preflight before npm ci/install; this ordering is what
+rem makes a truly fresh machine diagnosable instead of silently skipping a Node-powered preflight.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Dependencies"
 if "%NODETERM_SILENT%"=="1" (
@@ -70,21 +64,32 @@ if "%NODETERM_SILENT%"=="1" (
 ) else (
     call "%NODETERM_ROOT%\download-dependencies.bat"
 )
-if errorlevel 1 (
+set "DEPENDENCIES_EXIT=%ERRORLEVEL%"
+if not "%DEPENDENCIES_EXIT%"=="0" (
     echo.
     echo [FAILED] Dependencies
     echo   Dependency : see download-dependencies.bat output above for the exact one
     echo   Constraint : n/a
     echo   Source     : "%NODETERM_ROOT%\download-dependencies.bat"
-    echo   Error      : download-dependencies.bat exited non-zero
-    exit /b 1
+    echo   Error      : download-dependencies.bat exited with code %DEPENDENCIES_EXIT%
+    exit /b %DEPENDENCIES_EXIT%
 )
 call :phase_end "Dependencies"
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 2: build the real artifact through the project's own supported path.
+rem Phase 1: build the real artifact through the project's own supported path.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Build (npm run build)"
+if exist "%NODETERM_OUT%" rd /s /q "%NODETERM_OUT%" >nul 2>nul
+if exist "%NODETERM_OUT%" (
+    echo.
+    echo [FAILED] Build
+    echo   Dependency : clean generated output directory
+    echo   Constraint : stale output must be removed before npm run build
+    echo   Source     : "%NODETERM_OUT%"
+    echo   Error      : could not remove the previous output; close processes using it and retry
+    exit /b 1
+)
 pushd "%NODETERM_ROOT%"
 call npm run build
 set "BUILD_EXIT=%ERRORLEVEL%"
@@ -96,26 +101,25 @@ if not "%BUILD_EXIT%"=="0" (
     echo   Constraint : npm run build must exit 0
     echo   Source     : "%NODETERM_ROOT%\package.json" -^> scripts.build
     echo   Error      : npm exited with code %BUILD_EXIT% - see the build output above for the real cause
-    exit /b 1
+    exit /b %BUILD_EXIT%
 )
-if not exist "%NODETERM_ROOT%\out\main\index.js" (
-    echo.
-    echo [FAILED] Build
-    echo   Dependency : the built main-process entry point
-    echo   Constraint : out/main/index.js must exist after a successful build
-    echo   Source     : "%NODETERM_ROOT%\out\main\index.js"
-    echo   Error      : npm run build reported success but the expected output file is missing
-    exit /b 1
-)
+call :require_output "%NODETERM_ROOT%\out\main\index.js" "main-process entry point"
+if not "%ERRORLEVEL%"=="0" exit /b 1
+call :require_output "%NODETERM_ROOT%\out\preload\index.js" "preload entry point"
+if not "%ERRORLEVEL%"=="0" exit /b 1
+call :require_output "%NODETERM_ROOT%\out\renderer\index.html" "renderer entry point"
+if not "%ERRORLEVEL%"=="0" exit /b 1
+call :require_output "%NODETERM_ROOT%\out\session-host\host.cjs" "session-host bundle"
+if not "%ERRORLEVEL%"=="0" exit /b 1
 call :phase_end "Build (npm run build)"
 
 echo.
 echo === Build complete. ===
-echo Built output : %NODETERM_ROOT%\out
+echo Built output : "%NODETERM_ROOT%\out"
 echo.
 
 rem ---------------------------------------------------------------------------------------------
-rem Phase 3: offer to run it. This prompt is deliberately the LAST thing this script does, so a
+rem Phase 2: offer to run it. This prompt is deliberately the LAST thing this script does, so a
 rem failed build never gets as far as offering to launch nothing. Silent/CI runs never prompt and
 rem never launch a desktop GUI on somebody's behalf.
 rem ---------------------------------------------------------------------------------------------
@@ -146,6 +150,16 @@ rem ============================================================================
 echo --- %~1 ---
 for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()"`) do set "PHASE_T0=%%T"
 exit /b 0
+
+:require_output
+if exist "%~1" for %%F in ("%~1") do if %%~zF GTR 0 exit /b 0
+echo.
+echo [FAILED] Build
+echo   Dependency : the built %~2
+echo   Constraint : required output must be a non-empty regular file after a successful build
+echo   Source     : "%~1"
+echo   Error      : npm run build reported success but the expected output file is missing or empty
+exit /b 1
 
 :phase_end
 for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()"`) do set "PHASE_T1=%%T"

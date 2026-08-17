@@ -55,18 +55,12 @@ export function yamlFlow(value: unknown): string {
   return JSON.stringify(value)
 }
 
-const YAML_RESERVED = new Set(['null', 'Null', 'NULL', '~', 'true', 'True', 'TRUE', 'false', 'False', 'FALSE'])
-
 export function yamlScalarString(s: string): string {
-  const needsQuote =
-    s.length === 0 ||
-    YAML_RESERVED.has(s) ||
-    /^[-?:,[\]{}#&*!|>'"%@`]/.test(s) ||
-    /: |:$/.test(s) ||
-    /^\s|\s$/.test(s) ||
-    /[\r\n\t]/.test(s) ||
-    /^(-?\d+(\.\d+)?)$/.test(s)
-  return needsQuote ? JSON.stringify(s) : s
+  // JSON strings are YAML 1.2 double-quoted scalars. Always quoting avoids both structural
+  // tokens (`: ` / ` #`) and implicit typing (dates, booleans, infinities, numeric spellings).
+  // A selective plain-scalar allowlist is deceptively hard to keep parser-independent; an
+  // export codec should preserve data first and leave prettifying to a YAML-aware formatter.
+  return JSON.stringify(s)
 }
 
 export function tomlScalar(value: unknown): string | null {

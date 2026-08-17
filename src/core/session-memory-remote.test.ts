@@ -9,6 +9,12 @@ import {
   parseRemoteSessionMemory,
   fetchRemoteSessionMemory
 } from './session-memory-remote'
+import {
+  environmentForPosixShell,
+  posixShellScriptArgs,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS
+} from './testing/posix-shell'
 
 const run = promisify(execFile)
 
@@ -183,11 +189,10 @@ describe('fetchRemoteSessionMemory', () => {
   })
 })
 
-// The command is generated shell that no compiler checks. Run it for real — which needs a real
-// /bin/sh: execFile('/bin/sh', …) is an absolute POSIX path handed straight to child_process, and
-// win32 node resolves it as a literal executable name rather than searching PATH, so there is no
-// "/bin/sh" to find on Windows. Skipped there rather than failing on that environment gap.
-describe.skipIf(process.platform === 'win32')('remoteSessionMemoryCommand under /bin/sh', () => {
+// The command is generated shell that no compiler checks. Run it through the repository's real
+// POSIX-shell adapter: /bin/sh on POSIX and Git Bash on Windows. The fixture directory contains
+// spaces, exercising the native-path → shell-path quoting boundary as part of every case.
+describe('remoteSessionMemoryCommand under a real POSIX shell', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   let dir: string
   // Every temp dir is registered here and removed in afterAll, so a FAILING assertion cannot leak
   // one into tmpdir (an inline rmSync after the expects never runs when an expect throws).
@@ -203,16 +208,34 @@ describe.skipIf(process.platform === 'win32')('remoteSessionMemoryCommand under 
     return d
   }
 
-  // A fake tmux that answers list-panes and nothing else. It reports `$PPID` — the sh running our
-  // generated command — NOT its own `$$`: the fake exits immediately, so a `$$` pid is already dead
-  // by the time `ps` runs and every row would roll up to 0, making a size assertion vacuous.
-  // `$PPID` is alive for the whole sweep, so the row proves the rollup really joined the pane pid
-  // to the host's process table.
+  // Fixed host tools keep the generated shell semantics real while making the host facts portable:
+  // Git Bash's ps dialect differs from GNU/BSD ps, and Windows has no /proc/meminfo. The command
+  // must still invoke tmux/cat/grep/ps and parse their real pipe/status/quoting behavior.
   const FAKE_TMUX =
-    '#!/bin/sh\nfor a in "$@"; do [ "$a" = "list-panes" ] && { echo "nt-term-a|$PPID|claude"; exit 0; }; done\nexit 1\n'
+    '#!/bin/sh\nfor a in "$@"; do [ "$a" = "list-panes" ] && { echo "nt-term-a|100|claude"; exit 0; }; done\nexit 1\n'
+  const FAKE_PS = '#!/bin/sh\nprintf "100 1 1024\\n200 100 358400\\n"\n'
+  const FAKE_CAT =
+    '#!/bin/sh\nprintf "MemAvailable: 13500000 kB\\nMemTotal: 65700000 kB\\n"\n'
+
+  let scriptNumber = 0
+  const runGenerated = async (fixtureBin: string): Promise<string> => {
+    const script = path.join(fixtureBin, `generated-${++scriptNumber}.sh`)
+    fs.writeFileSync(script, `#!/bin/sh\n${remoteSessionMemoryCommand()}\n`, 'utf8')
+    fs.chmodSync(script, 0o755)
+    const { stdout } = await run(
+      REAL_POSIX_SHELL,
+      posixShellScriptArgs(script, [], fixtureBin),
+      {
+        env: environmentForPosixShell(),
+        encoding: 'utf8',
+        timeout: REAL_SHELL_TEST_TIMEOUT_MS
+      }
+    )
+    return String(stdout)
+  }
 
   beforeAll(() => {
-    dir = fakeHost('sessmem-', { tmux: FAKE_TMUX })
+    dir = fakeHost('sessmem host ', { tmux: FAKE_TMUX, ps: FAKE_PS, cat: FAKE_CAT })
   })
 
   afterAll(() => {
@@ -220,27 +243,12 @@ describe.skipIf(process.platform === 'win32')('remoteSessionMemoryCommand under 
   })
 
   it('produces a parseable report on a host with a tmux server', async () => {
-    const { stdout } = await run('/bin/sh', ['-c', remoteSessionMemoryCommand()], {
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ''}` }
-    })
+    const stdout = await runGenerated(dir)
     const r = parseRemoteSessionMemory(stdout)
     expect(r.ok).toBe(true)
     expect(r.rows.map((x) => x.nodeId)).toEqual(['term-a'])
-    // The pane pid was resolved against the REAL process table: a live shell plus its children.
-    // A 0 here would mean the rollup never found the pid, which is the failure worth catching.
-    expect(r.rows[0].totalMb).toBeGreaterThan(0)
-    // Never assert `mem` unconditionally: this repo is maintained from macOS, which has no
-    // /proc/meminfo, so a bare `not.toBeNull()` turns `npm test` red there — and contradicts the
-    // sibling test below, which asserts that exact absence is fine.
-    //
-    // The condition is what the SWEEP produced, not `fs.existsSync('/proc/meminfo')`: the test
-    // process's view of the kernel is not the shell's (a stubbed `cat` breaks the read while
-    // existsSync still says yes). So: IF the host emitted any MemAvailable/MemTotal lines, THEN we
-    // must have understood them. Not tautological — it is the only check that the generated
-    // `grep -E '^(MemAvailable|MemTotal):'` matches the kernel's own text, which the unit tests
-    // cannot catch because they feed that section by hand.
-    const memSection = stdout.slice(stdout.indexOf('##MEM'), stdout.indexOf('##PANES'))
-    if (/Mem(Available|Total):/.test(memSection)) expect(r.mem).not.toBeNull()
+    expect(r.rows[0]).toMatchObject({ selfMb: 1, childrenMb: 350, totalMb: 351 })
+    expect(r.mem).toEqual({ availableMb: 13184, totalMb: 64160 })
   })
 
   // A host with no /proc/meminfo (the macOS/BSD shape). Deliberately NO free/vm_stat/sysctl
@@ -253,10 +261,12 @@ describe.skipIf(process.platform === 'win32')('remoteSessionMemoryCommand under 
   // macOS would need a `mem`-producing fallback, which is deliberately not implemented.
   it('still reports rows with mem:null when /proc/meminfo is unreadable', async () => {
     // Stub `cat` so reading /proc/meminfo fails the way it does off Linux.
-    const noproc = fakeHost('sessmem-nomem-', { tmux: FAKE_TMUX, cat: '#!/bin/sh\nexit 1\n' })
-    const { stdout } = await run('/bin/sh', ['-c', remoteSessionMemoryCommand()], {
-      env: { ...process.env, PATH: `${noproc}:${process.env.PATH ?? ''}` }
+    const noproc = fakeHost('sessmem no mem ', {
+      tmux: FAKE_TMUX,
+      ps: FAKE_PS,
+      cat: '#!/bin/sh\nexit 1\n'
     })
+    const stdout = await runGenerated(noproc)
     const r = parseRemoteSessionMemory(stdout)
     expect(r.ok).toBe(true)
     expect(r.mem).toBeNull()
@@ -267,12 +277,12 @@ describe.skipIf(process.platform === 'win32')('remoteSessionMemoryCommand under 
   // A blanket `exit 1` would pass this test while proving nothing: it cannot tell "no server" from
   // "tmux is broken", which are the two cases the fence exists to separate.
   it('exits 0 and reports no rows when tmux says no server is running', async () => {
-    const empty = fakeHost('sessmem-notmux-', {
-      tmux: '#!/bin/sh\necho "no server running on /tmp/tmux-0/default" >&2\nexit 1\n'
+    const empty = fakeHost('sessmem no tmux ', {
+      tmux: '#!/bin/sh\necho "no server running on /tmp/tmux-0/default" >&2\nexit 1\n',
+      ps: FAKE_PS,
+      cat: FAKE_CAT
     })
-    const { stdout } = await run('/bin/sh', ['-c', remoteSessionMemoryCommand()], {
-      env: { ...process.env, PATH: `${empty}:${process.env.PATH ?? ''}` }
-    })
+    const stdout = await runGenerated(empty)
     const r = parseRemoteSessionMemory(stdout)
     // A clean miss is an ANSWER: the sweep ran, the host simply has nothing.
     expect(r.ok).toBe(true)
@@ -284,14 +294,14 @@ describe.skipIf(process.platform === 'win32')('remoteSessionMemoryCommand under 
   // old command (stderr to /dev/null, status dropped) this stream was byte-identical to the one
   // above and the panel said "No sessions are running here." over thirty live sessions.
   it('reports ok:false when the tmux client itself is broken on every socket', async () => {
-    const broken = fakeHost('sessmem-brokentmux-', {
+    const broken = fakeHost('sessmem broken tmux ', {
       tmux:
         '#!/bin/sh\necho "tmux: error while loading shared libraries: libevent-2.1.so.7: ' +
-        'cannot open shared object file: No such file or directory" >&2\nexit 127\n'
+        'cannot open shared object file: No such file or directory" >&2\nexit 127\n',
+      ps: FAKE_PS,
+      cat: FAKE_CAT
     })
-    const { stdout } = await run('/bin/sh', ['-c', remoteSessionMemoryCommand()], {
-      env: { ...process.env, PATH: `${broken}:${process.env.PATH ?? ''}` }
-    })
+    const stdout = await runGenerated(broken)
     // The shell still exits 0 and still prints all three markers plus a real process table — which
     // is exactly why the panes section had to carry a per-socket STATUS to tell the two apart.
     expect(stdout).toContain('##MEM')

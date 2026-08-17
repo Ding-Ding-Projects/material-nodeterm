@@ -23,4 +23,13 @@ describe('SETTINGS_GROUPS', () => {
     // No group is left empty by the filter.
     expect(visibleSettingsGroups(false).every((g) => g.sections.length > 0)).toBe(true)
   })
+
+  it('omits Language while School mode is unknown/on without hiding unrelated Interface controls', () => {
+    const hidden = visibleSettingsGroups(true, false).flatMap((g) => g.sections.map((s) => s.id))
+    expect(hidden).not.toContain('language')
+    expect(hidden).toContain('appearance')
+    expect(hidden).toContain('narrator')
+    const restored = visibleSettingsGroups(true, true).flatMap((g) => g.sections.map((s) => s.id))
+    expect(restored).toContain('language')
+  })
 })

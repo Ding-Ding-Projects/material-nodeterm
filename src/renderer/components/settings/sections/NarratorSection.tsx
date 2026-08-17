@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSettings } from '../../../state/settings'
+import { useSchoolMode } from '../../../state/schoolMode'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
@@ -16,6 +17,8 @@ import {
   voicesForTrack,
   type NarratorTrack
 } from '@renderer/lib/narrator'
+import { schoolModeAllowsOptionalFeatures } from '@renderer/lib/schoolModePolicy'
+import { executeNarratorPreview } from '@renderer/canvas/narration-policy'
 import type { NarratorLanguage } from '@shared/types'
 
 const ROWS = {
@@ -41,6 +44,7 @@ const ROWS = {
   }
 }
 const ENTRIES = Object.values(ROWS)
+const ENGLISH_ONLY_ENTRIES = [ROWS.enabled, ROWS.voiceEn, ROWS.delivery]
 
 const LANGUAGE_OPTIONS: { value: NarratorLanguage; label: string }[] = [
   { value: 'en', label: 'English' },
@@ -76,6 +80,7 @@ function VoicePicker({
   voiceURI,
   rate,
   pitch,
+  disabled,
   onChange
 }: {
   track: NarratorTrack
@@ -83,6 +88,7 @@ function VoicePicker({
   voiceURI: string | null
   rate: number
   pitch: number
+  disabled: boolean
   onChange: (voiceURI: string | null) => void
 }): React.JSX.Element {
   const { voices, ready } = useTrackVoices(track)
@@ -99,6 +105,7 @@ function VoicePicker({
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-2">
             <Select
+              disabled={disabled}
               aria-label={label}
               className="w-56"
               value={voiceURI ?? ''}
@@ -113,8 +120,17 @@ function VoicePicker({
               ))}
             </Select>
             <Button
-              onClick={() => previewVoice(track, voiceURI, rate, pitch)}
-              disabled={!status.voice}
+              onClick={() => {
+                // A shared-mode update can land after this button's click was queued but before
+                // React removes the Cantonese picker. Re-check at the speech boundary so a stale
+                // control cannot preview the capability School Mode just suppressed.
+                if (!disabled) {
+                  executeNarratorPreview(track, useSchoolMode.getState, () => {
+                    previewVoice(track, voiceURI, rate, pitch)
+                  })
+                }
+              }}
+              disabled={disabled || !status.voice}
               title={status.voice ? 'Play a short sample' : 'No voice available to preview'}
             >
               Preview
@@ -144,8 +160,18 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
   const narratorVoiceYue = useSettings((s) => s.settings.narratorVoiceYue)
   const narratorRate = useSettings((s) => s.settings.narratorRate)
   const narratorPitch = useSettings((s) => s.settings.narratorPitch)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
   const update = useSettings((s) => s.update)
   const available = isSynthesisAvailable()
+  const narratorControlsDisabled = !narratorEnabled || !available
+  const cantoneseAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
+  const updateCantoneseIfAllowed = (patch: Parameters<typeof update>[0]): void => {
+    if (schoolModeAllowsOptionalFeatures(useSchoolMode.getState())) update(patch)
+  }
 
   return (
     <SettingsSection
@@ -153,7 +179,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
       title="Narrator"
       description="A spoken narrator for app events — a turn finishing, an agent needing you, or an error. Off by default."
       isActive={isActive}
-      searchEntries={ENTRIES}
+      searchEntries={cantoneseAllowed ? ENTRIES : ENGLISH_ONLY_ENTRIES}
     >
       {!available && (
         <p className="text-[13px] text-[color:var(--warn)]">
@@ -176,26 +202,37 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
           }
         />
       </SearchableRow>
-      <div
+      <fieldset
+        disabled={narratorControlsDisabled}
+        ref={(element) => {
+          // React 18's DOM typings predate `inert`, but Chromium/Electron implement it. Keep the
+          // native disabled fieldset for form controls and inert the whole subtree for any future
+          // focusable non-form descendant.
+          element?.toggleAttribute('inert', narratorControlsDisabled)
+        }}
         className={
-          'space-y-5' + (narratorEnabled && available ? '' : ' pointer-events-none opacity-40')
+          'm-0 min-w-0 space-y-5 border-0 p-0' +
+          (narratorEnabled && available ? '' : ' pointer-events-none opacity-40')
         }
-        aria-disabled={!narratorEnabled || !available}
+        aria-disabled={narratorControlsDisabled}
+        data-narrator-controls=""
       >
-        <SearchableRow {...ROWS.language}>
-          <FieldRow
-            label="Narrated language"
-            description="“Both” speaks the English line, then the Cantonese line — one after the other, never overlapping."
-            control={
-              <SegmentedPill
-                ariaLabel="Narrated language"
-                value={narratorLanguage}
-                options={LANGUAGE_OPTIONS}
-                onChange={(v) => update({ narratorLanguage: v })}
-              />
-            }
-          />
-        </SearchableRow>
+        {cantoneseAllowed && (
+          <SearchableRow {...ROWS.language}>
+            <FieldRow
+              label="Narrated language"
+              description="“Both” speaks the English line, then the Cantonese line — one after the other, never overlapping."
+              control={
+                <SegmentedPill
+                  ariaLabel="Narrated language"
+                  value={narratorLanguage}
+                  options={LANGUAGE_OPTIONS}
+                  onChange={(v) => updateCantoneseIfAllowed({ narratorLanguage: v })}
+                />
+              }
+            />
+          </SearchableRow>
+        )}
         <SearchableRow {...ROWS.voiceEn}>
           <VoicePicker
             track="en"
@@ -203,19 +240,23 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
             voiceURI={narratorVoiceEn}
             rate={narratorRate}
             pitch={narratorPitch}
+            disabled={narratorControlsDisabled}
             onChange={(v) => update({ narratorVoiceEn: v })}
           />
         </SearchableRow>
-        <SearchableRow {...ROWS.voiceYue}>
-          <VoicePicker
-            track="yue"
-            label="Cantonese voice"
-            voiceURI={narratorVoiceYue}
-            rate={narratorRate}
-            pitch={narratorPitch}
-            onChange={(v) => update({ narratorVoiceYue: v })}
-          />
-        </SearchableRow>
+        {cantoneseAllowed && (
+          <SearchableRow {...ROWS.voiceYue}>
+            <VoicePicker
+              track="yue"
+              label="Cantonese voice"
+              voiceURI={narratorVoiceYue}
+              rate={narratorRate}
+              pitch={narratorPitch}
+              disabled={narratorControlsDisabled}
+              onChange={(v) => updateCantoneseIfAllowed({ narratorVoiceYue: v })}
+            />
+          </SearchableRow>
+        )}
         <SearchableRow {...ROWS.delivery}>
           {/* SpeechSynthesisUtterance documents rate as 0.1–10 and pitch as 0–2; the sliders cap
               at a usable window (0.5x–3x rate, 0–2x pitch) rather than exposing the full range,
@@ -262,7 +303,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
             }
           />
         </SearchableRow>
-      </div>
+      </fieldset>
     </SettingsSection>
   )
 }

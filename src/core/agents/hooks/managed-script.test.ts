@@ -3,11 +3,27 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync, utimesSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { buildManagedScript } from './managed-script'
+import { buildManagedScript, MANAGED_SCRIPT_REVISION } from './managed-script'
 import { hookServer } from '../hook-server'
 import { nodeAuthToken } from '../node-auth-token'
 import { initPlatform, resetPlatformForTests } from '../../platform'
 import { fakePlatform } from '../../platform-fake'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS,
+  pathForPosixShell,
+  pathsForPosixShellEnv,
+  posixShellScriptArgs,
+  quotePathForPosixShell
+} from '../../testing/posix-shell'
+
+const SHELL_PATH_ENV_KEYS = [
+  'HOME',
+  'NODETERM_HOOK_ENDPOINT',
+  'NODETERM_HOOK_SOCK',
+  'NODETERM_NODE_TOKEN_DIR'
+] as const
 
 describe('buildManagedScript', () => {
   const s = buildManagedScript('claude')
@@ -41,6 +57,18 @@ describe('buildManagedScript', () => {
     expect((s.match(/\n *curl -sS/g) ?? []).length).toBe(4)
     expect((s.match(/\n *nt_hook_headers \|/g) ?? []).length).toBe(4)
     expect((s.match(/--config -/g) ?? []).length).toBe(4)
+  })
+
+  it('stamps its own revision on every POST, through the same stdin emitter', () => {
+    // Finding F2: the `version` field below is sourced from the ENDPOINT FILE, so it reports the
+    // SERVER's protocol version and can never answer "which client is this?". Without the stamp an
+    // old script and a current one with a missing token file are byte-identical on the wire.
+    expect(s).toContain(`nt_client_rev=${MANAGED_SCRIPT_REVISION}`)
+    expect(s).toContain('printf \'header = "X-Nodeterm-Hook-Client: %s"')
+    expect(s).not.toContain('-H "X-Nodeterm-Hook-Client')
+    // Set once, at the top — not inside any function, and in particular not where the failover
+    // clears the vars that belong to the endpoint rather than to this file.
+    expect((s.match(/nt_client_rev=/g) ?? []).length).toBe(1)
   })
 
   describe('deterministic hook-reply approvals (PermissionRequest wait branch)', () => {
@@ -206,9 +234,9 @@ describe('buildManagedScript', () => {
 function fakeCurlScript(log: string, tail = ''): string {
   return [
     '#!/bin/sh',
-    `printf 'ARGV %s\\n' "$*" >> ${JSON.stringify(log)}`,
-    `sed 's/^/CFG /' >> ${JSON.stringify(log)}`,
-    `printf 'END\\n' >> ${JSON.stringify(log)}`,
+    `printf 'ARGV %s\\n' "$*" >> ${quotePathForPosixShell(log)}`,
+    `sed 's/^/CFG /' >> ${quotePathForPosixShell(log)}`,
+    `printf 'END\\n' >> ${quotePathForPosixShell(log)}`,
     tail,
     'exit 0',
     ''
@@ -243,8 +271,8 @@ function curlCalls(log: string): CurlCall[] {
 // same discipline as the canvas-control shim and the remote-usage command. This is the ONLY thing
 // that proves the glob candidate actually expands (a quoted pattern passes every string assertion
 // above and still self-heals nothing).
-describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
-  const sh = spawnSync('sh', ['-c', 'exit 0'])
+describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
+  const sh = spawnSync(REAL_POSIX_SHELL, ['-c', 'exit 0'], { env: environmentForPosixShell() })
   const shAvailable = sh.status === 0 && !sh.error
   const dir = shAvailable ? mkdtempSync(join(tmpdir(), 'nt-hook-failover-')) : ''
   afterAll(() => {
@@ -277,13 +305,13 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
         // it is a filesystem path, and an unquoted `VAR=value` assignment has POSIX sh strip
         // every backslash (win32) or word-split on a space (any platform, e.g. macOS's
         // "Application Support") when the managed script later sources this file.
-        `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'hook-oldproject.sock')}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR='${deadTokens}'\n`,
+        `NODETERM_HOOK_SOCK=${quotePathForPosixShell(join(home, '.nodeterm', 'hook-oldproject.sock'))}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(deadTokens)}\n`,
         'utf8'
       )
       // The live project's endpoint, rewritten by the most recent connect.
       writeFileSync(
         join(home, '.nodeterm', 'hook-endpoint-liveproject.env'),
-        `NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_TOKEN=live-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR='${liveTokens}'\n`,
+        `NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_TOKEN=live-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(liveTokens)}\n`,
         'utf8'
       )
       // Fake curl: log every invocation, fail the unix-socket transport (dead tunnel), succeed on TCP.
@@ -296,16 +324,16 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
       writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
       // The perm-wait branch sends the request POST in the FOREGROUND, so the run is deterministic
       // (the normal branch backgrounds it and would race this assertion).
-      const res = spawnSync('sh', [script], {
+      const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
         encoding: 'utf8',
         input: '{"hook_event_name":"PermissionRequest"}',
-        env: {
-          PATH: `${bin}:${process.env.PATH ?? ''}`,
+        env: environmentForPosixShell(pathsForPosixShellEnv({
+          PATH: process.env.PATH ?? '',
           HOME: home,
           NODETERM_NODE_ID: 'node-1',
           NODETERM_HOOK_ENDPOINT: dead,
           NODETERM_PERM_WAIT_SECS: '1'
-        }
+        }, SHELL_PATH_ENV_KEYS))
       })
       expect(res.status).toBe(0)
       const calls = curlCalls(log)
@@ -337,7 +365,15 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
       expect(calls[0].cfg).toContain('header = "X-Nodeterm-Node-Token: PRIMARY-NODE-TOKEN"')
       expect(calls[1].cfg).toContain('header = "X-Nodeterm-Node-Token: FALLBACK-NODE-TOKEN"')
       expect(calls[1].cfg).not.toContain('PRIMARY-NODE-TOKEN')
-    }
+      // The client stamp is a property of THIS SCRIPT, so it survives the endpoint switch that
+      // clears sock/port/token-dir — on both legs, with the same value.
+      for (const c of calls) {
+        expect(c.cfg).toContain(`header = "X-Nodeterm-Hook-Client: ${MANAGED_SCRIPT_REVISION}"`)
+      }
+    },
+    // Git Bash on Windows starts the generated hook, the fixture curl, and the fallback scan as
+    // separate processes. The behavior completes in ~8 s on a busy host, past Vitest's 5 s default.
+    REAL_SHELL_TEST_TIMEOUT_MS
   )
 
   // The other half of the same subtlety: an OLDER instance's endpoint file carries no
@@ -356,7 +392,7 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
     const dead = join(home, '.nodeterm', 'hook-endpoint-oldproject.env')
     writeFileSync(
       dead,
-      `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'dead.sock')}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR='${tokens}'\n`,
+      `NODETERM_HOOK_SOCK=${quotePathForPosixShell(join(home, '.nodeterm', 'dead.sock'))}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(tokens)}\n`,
       'utf8'
     )
     // A pre-v2 endpoint file: port + token + version, and no token dir.
@@ -371,16 +407,16 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
     })
     const script = join(dir, 'claude2.sh')
     writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
-    const res = spawnSync('sh', [script], {
+    const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       encoding: 'utf8',
       input: '{"hook_event_name":"PermissionRequest"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: home,
         NODETERM_NODE_ID: 'node-1',
         NODETERM_HOOK_ENDPOINT: dead,
         NODETERM_PERM_WAIT_SECS: '1'
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(res.status).toBe(0)
     const calls = curlCalls(log)
@@ -406,11 +442,11 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', () => {
 // (`-H "X: ${empty}"` sends nothing at all). That is exactly the contract we want — the server
 // treats an absent header and an empty one identically as `legacy` — so "empty header" below
 // means "absent or empty", read as `headers[...] ?? ''`.
-describe('managed script presents the per-node token', () => {
+describe('managed script presents the per-node token', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const SECRET = Buffer.alloc(32, 7)
   const FOREIGN_SECRET = Buffer.alloc(32, 9)
   const NODE = 'node-1'
-  const sh = spawnSync('sh', ['-c', 'exit 0'])
+  const sh = spawnSync(REAL_POSIX_SHELL, ['-c', 'exit 0'], { env: environmentForPosixShell() })
   const shAvailable = sh.status === 0 && !sh.error
 
   let dir = ''
@@ -464,10 +500,10 @@ describe('managed script presents the per-node token', () => {
    * ASYNC on purpose: `spawnSync` blocks node's event loop, so the hook server in this very
    * process never accepts the connection and every POST "fails" into the failover path.
    */
-  function runHook(home: string, env: Record<string, string>): Promise<number> {
+  function runHook(home: string, env: Record<string, string>, fixtureBin?: string): Promise<number> {
     return new Promise((resolve) => {
-      const child = spawn('sh', [script], {
-        env: {
+      const child = spawn(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], fixtureBin), {
+        env: environmentForPosixShell(pathsForPosixShellEnv({
           PATH: process.env.PATH ?? '',
           HOME: home,
           NODETERM_NODE_ID: NODE,
@@ -475,7 +511,7 @@ describe('managed script presents the per-node token', () => {
           NODETERM_HOOK_TOKEN: hookServer.getToken(),
           NODETERM_PERM_WAIT_SECS: '1',
           ...env
-        },
+        }, SHELL_PATH_ENV_KEYS)),
         stdio: ['pipe', 'ignore', 'ignore']
       })
       child.stdin.end('{"hook_event_name":"PermissionRequest"}')
@@ -497,7 +533,7 @@ describe('managed script presents the per-node token', () => {
     const endpoint = join(home, '.nodeterm', 'hook-endpoint-live.env')
     writeFileSync(
       endpoint,
-      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR='${tokens}'\n`,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(tokens)}\n`,
       'utf8'
     )
     expect(
@@ -541,7 +577,10 @@ describe('managed script presents the per-node token', () => {
   // proves the leak is gone AND that delivery still works (the server's own verdict below). A test
   // that only checked the server would pass with the leak fully intact.
   it.skipIf(!shAvailable)('sends both credentials on stdin, never on curl\'s command line', async () => {
-    const realCurl = spawnSync('sh', ['-c', 'command -v curl'], { encoding: 'utf8' }).stdout.trim()
+    const realCurl = spawnSync(REAL_POSIX_SHELL, ['-c', 'command -v curl'], {
+      encoding: 'utf8',
+      env: environmentForPosixShell()
+    }).stdout.trim()
     const bin = join(dir, 'argv-bin')
     mkdirSync(bin, { recursive: true })
     const argvLog = join(dir, 'argv-curl.argv')
@@ -550,13 +589,13 @@ describe('managed script presents the per-node token', () => {
       join(bin, 'curl'),
       [
         '#!/bin/sh',
-        `printf '%s\\n' "$*" >> ${JSON.stringify(argvLog)}`,
+        `printf '%s\\n' "$*" >> ${quotePathForPosixShell(argvLog)}`,
         // Only a curl told to read its config from stdin gets a reader, so a regression that put
         // the headers back on argv fails on the assertions below rather than blocking on a stdin
         // nobody closes.
         'case "$*" in',
-        `  *"--config -"*) tee -a ${JSON.stringify(stdinLog)} | ${JSON.stringify(realCurl)} "$@" ;;`,
-        `  *) ${JSON.stringify(realCurl)} "$@" </dev/null ;;`,
+        `  *"--config -"*) tee -a ${quotePathForPosixShell(stdinLog)} | ${quotePathForPosixShell(realCurl)} "$@" ;;`,
+        `  *) ${quotePathForPosixShell(realCurl)} "$@" </dev/null ;;`,
         'esac',
         ''
       ].join('\n'),
@@ -568,10 +607,11 @@ describe('managed script presents the per-node token', () => {
     const token = nodeAuthToken(SECRET, NODE)
     const tokens = tokenDirWith('tokens-argv', { [NODE]: token })
     expect(
-      await runHook(newHome('home-argv'), {
-        NODETERM_NODE_TOKEN_DIR: tokens,
-        PATH: `${bin}:${process.env.PATH ?? ''}`
-      })
+      await runHook(
+        newHome('home-argv'),
+        { NODETERM_NODE_TOKEN_DIR: tokens },
+        bin
+      )
     ).toBe(0)
     // Delivery is unchanged: the server still verified this node from the header it received.
     expect(raws).toEqual([{ nodeId: NODE, verified: true }])
@@ -599,13 +639,13 @@ describe('managed script presents the per-node token', () => {
     const dead = join(home, '.nodeterm', 'hook-endpoint-dead.env')
     writeFileSync(
       dead,
-      `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'nothing-listens-here.sock')}\nNODETERM_HOOK_TOKEN=dead\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR='${primaryTokens}'\n`,
+      `NODETERM_HOOK_SOCK=${quotePathForPosixShell(join(home, '.nodeterm', 'nothing-listens-here.sock'))}\nNODETERM_HOOK_TOKEN=dead\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(primaryTokens)}\n`,
       'utf8'
     )
     const live = join(home, '.nodeterm', 'hook-endpoint-live.env')
     writeFileSync(
       live,
-      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR='${fallbackTokens}'\n`,
+      `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\nNODETERM_HOOK_VERSION=2\nNODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(fallbackTokens)}\n`,
       'utf8'
     )
     // `ls -t` picks the freshest candidate — make the dead one unambiguously older.
@@ -623,8 +663,8 @@ describe('managed script presents the per-node token', () => {
   })
 })
 
-describe('buildManagedScript generated shell is syntactically valid', () => {
-  const sh = spawnSync('sh', ['-c', 'exit 0'])
+describe('buildManagedScript generated shell is syntactically valid', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
+  const sh = spawnSync(REAL_POSIX_SHELL, ['-c', 'exit 0'], { env: environmentForPosixShell() })
   const shAvailable = sh.status === 0 && !sh.error
   const dir = shAvailable ? mkdtempSync(join(tmpdir(), 'nt-managed-script-')) : ''
   afterAll(() => {
@@ -634,7 +674,10 @@ describe('buildManagedScript generated shell is syntactically valid', () => {
     it.skipIf(!shAvailable)(`passes \`sh -n\` for ${agentId}`, () => {
       const file = join(dir, `hook-${agentId}.sh`)
       writeFileSync(file, buildManagedScript(agentId), 'utf8')
-      const res = spawnSync('sh', ['-n', file], { encoding: 'utf8' })
+      const res = spawnSync(REAL_POSIX_SHELL, ['-n', pathForPosixShell(file)], {
+        encoding: 'utf8',
+        env: environmentForPosixShell()
+      })
       expect(res.stderr || '').toBe('')
       expect(res.status).toBe(0)
     })

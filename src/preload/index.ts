@@ -5,6 +5,7 @@ import type {
   CanvasState,
   ClipboardWriteOptions,
   NodeTerminalApi,
+  PairingDoneResult,
   Project,
   PtyCreateOptions,
   PtyPressure,
@@ -87,8 +88,8 @@ const api: NodeTerminalApi = {
       ipcRenderer.send(IPC.ptyFlow, sessionId, resume, viewerId),
     kill: (sessionId, viewerId) => ipcRenderer.send(IPC.ptyKill, sessionId, viewerId),
     destroy: (persistKey, opts) =>
-      ipcRenderer.send(IPC.ptyDestroy, persistKey, opts?.everySocket === true),
-    recycle: (persistKey) => ipcRenderer.send(IPC.ptyRecycle, persistKey),
+      ipcRenderer.invoke(IPC.ptyDestroy, persistKey, opts?.everySocket === true),
+    recycle: (persistKey) => ipcRenderer.invoke(IPC.ptyRecycle, persistKey),
     recycleConfirmed: (persistKey, target) =>
       target === undefined
         ? ipcRenderer.invoke(IPC.ptyRecycleConfirmed, persistKey)
@@ -361,8 +362,10 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.gitWorktreeAdd, repoPath, wtPath, branch, baseRef, isNew),
     worktreeMerge: (repoPath, branch, baseRef, push) =>
       ipcRenderer.invoke(IPC.gitWorktreeMerge, repoPath, branch, baseRef, push),
-    worktreeRemove: (repoPath, wtPath, deleteBranch, pruneOnly) =>
-      ipcRenderer.invoke(IPC.gitWorktreeRemove, repoPath, wtPath, deleteBranch, pruneOnly),
+    worktreeRemovalProof: (repoPath, wtPath) =>
+      ipcRenderer.invoke(IPC.gitWorktreeRemovalProof, repoPath, wtPath),
+    worktreeRemove: (repoPath, wtPath, request) =>
+      ipcRenderer.invoke(IPC.gitWorktreeRemove, repoPath, wtPath, request),
     setActiveRemote: (projectId) => ipcRenderer.invoke(IPC.gitSetActiveRemote, projectId)
   },
   clipboard: {
@@ -518,7 +521,7 @@ const api: NodeTerminalApi = {
     addManual: (input) => ipcRenderer.invoke(IPC.authenticatorAddManual, input),
     addFromUri: (uri) => ipcRenderer.invoke(IPC.authenticatorAddUri, uri),
     rename: (input) => ipcRenderer.invoke(IPC.authenticatorRename, input),
-    remove: (id) => ipcRenderer.invoke(IPC.authenticatorRemove, id),
+    remove: (input) => ipcRenderer.invoke(IPC.authenticatorRemove, input),
     code: (id) => ipcRenderer.invoke(IPC.authenticatorCode, id),
     codes: (ids) => ipcRenderer.invoke(IPC.authenticatorCodes, ids),
     reveal: (id) => ipcRenderer.invoke(IPC.authenticatorReveal, id),
@@ -631,10 +634,11 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.handoffBuild, sessionId, agentId, sourceNodeId, cwd, accountId)
   },
   pairing: {
-    start: () => ipcRenderer.invoke(IPC.pairingStart),
-    stop: () => ipcRenderer.invoke(IPC.pairingStop),
+    supported: true,
+    start: (attemptId) => ipcRenderer.invoke(IPC.pairingStart, attemptId),
+    stop: (attemptId) => ipcRenderer.invoke(IPC.pairingStop, attemptId),
     onDone: (cb) => {
-      const handler = (_e: unknown, result: { ok: boolean }) => cb(result)
+      const handler = (_e: unknown, result: PairingDoneResult) => cb(result)
       ipcRenderer.on(IPC.pairingDone, handler)
       return () => ipcRenderer.removeListener(IPC.pairingDone, handler)
     },

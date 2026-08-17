@@ -38,21 +38,31 @@ export interface StoredNode {
  * - `reopen`  — a closed project (its sessions still run): restore the tab, then activate it.
  * - `blocked` — a project whose files are unreadable: travelling there would show an empty canvas.
  * - `unknown` — no open project owns this node id.
+ * - `ambiguous` — more than one project claims the id; choosing either would cross an identity boundary.
  */
 export type ControlRoute =
   | { kind: 'active' }
   | { kind: 'switch'; projectId: string }
   | { kind: 'reopen'; projectId: string }
   | { kind: 'blocked'; projectId: string }
+  | { kind: 'ambiguous'; projectIds: string[] }
   | { kind: 'unknown' }
 
 /** Which project owns `sourceNodeId`, and what Canvas must do to be able to act on it. */
 export function routeControlSource(
   projects: readonly ControlProject[],
   activeProjectId: string,
-  sourceNodeId: string
+  sourceNodeId: string,
+  activeCanvasHasSource = false
 ): ControlRoute {
-  const owner = projects.find((p) => p.nodes.some((n) => n.id === sourceNodeId))
+  const ownerIds = new Set(
+    projects.filter((p) => p.nodes.some((n) => n.id === sourceNodeId)).map((p) => p.id)
+  )
+  // A just-created live node can precede its serialized project snapshot. Count that live fact,
+  // and fail closed if another project's stale/same id would otherwise steal its control request.
+  if (activeCanvasHasSource && activeProjectId) ownerIds.add(activeProjectId)
+  if (ownerIds.size > 1) return { kind: 'ambiguous', projectIds: [...ownerIds].sort() }
+  const owner = projects.find((p) => p.id === [...ownerIds][0])
   if (!owner) return { kind: 'unknown' }
   const travel = projectTravel(
     projects.map((p) => ({ id: p.id, closed: p.closed, unavailable: p.unavailable, nodes: [] })),

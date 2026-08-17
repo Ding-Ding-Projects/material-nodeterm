@@ -9,3 +9,4 @@ export type {
 } from './types'
 export { CATALOG } from './catalog'
 export { formatText, t, tf, ts, tsf } from './resolve'
+export { normalizeLanguageMode } from './validation'

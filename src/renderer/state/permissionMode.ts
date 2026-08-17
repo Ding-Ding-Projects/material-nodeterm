@@ -11,6 +11,47 @@ import { useSettings } from './settings'
 import { useSshConn, type SshAutoPermAnswer } from './sshConn'
 import { useKidsMode } from './kidsMode'
 import { gateKidsPermissionMode } from '@shared/kids-mode-policy'
+import { withPermissionMode } from '@shared/agents/approval-mode'
+
+/**
+ * Every production surface that can start (or resume) an agent CLI.
+ *
+ * This is a closed inventory on purpose: the behavior Chut exercises every row under Kids mode,
+ * while the branded plan prevents a raw settings value from being handed to the command builders.
+ * A new surface has to name itself here before it can obtain a production launch plan.
+ */
+export const AGENT_LAUNCH_SURFACES = [
+  'source-control-explain',
+  'canvas-new-agent',
+  'branch-conversation',
+  'handoff-transfer',
+  'kanban-new-agent',
+  'transcript-resume',
+  'canvas-control-open-agent',
+  'canvas-control-verify',
+  'canvas-control-spawn-team',
+  'terminal-cold-restore',
+  'terminal-restart-resume',
+  'terminal-hibernation-resume'
+] as const
+
+export type AgentLaunchSurface = (typeof AGENT_LAUNCH_SURFACES)[number]
+
+const ACTIVE_AGENT_LAUNCH_PLAN = Symbol('active-agent-launch-plan')
+
+/**
+ * A permission-mode decision made at launch time through the live resolver.
+ *
+ * The symbol brand is deliberately private to this module. Production command builders accept
+ * this plan rather than a plain `AgentPermissionMode`, so hand-editable raw settings cannot be
+ * threaded around the version/Kids gates by accident.
+ */
+export interface ActiveAgentLaunchPlan {
+  readonly surface: AgentLaunchSurface
+  readonly agentId: AgentId
+  readonly mode: AgentPermissionMode
+  readonly [ACTIVE_AGENT_LAUNCH_PLAN]: true
+}
 
 /**
  * Local Claude CLI capabilities, probed once per app run through `claude.cliCaps()` (main/server →
@@ -119,6 +160,43 @@ export function activePermissionMode(agentId: AgentId = 'claude'): AgentPermissi
   return gateKidsPermissionMode(versionGated, useKidsMode.getState().enabled).mode
 }
 
+/**
+ * Resolve one synchronous production launch through the live permission-mode funnel.
+ *
+ * Kept separate from `activePermissionMode` so low-level resolver tests can still assert the mode
+ * as a string, while launch builders require the branded proof that this decision was made for a
+ * named surface and agent.
+ */
+export function activeAgentLaunchPlan(
+  surface: AgentLaunchSurface,
+  agentId: AgentId = 'claude'
+): ActiveAgentLaunchPlan {
+  return Object.freeze({
+    surface,
+    agentId,
+    mode: activePermissionMode(agentId),
+    [ACTIVE_AGENT_LAUNCH_PLAN]: true as const
+  })
+}
+
+/** Apply a branded launch decision to a freshly-built command. */
+export function commandForAgentLaunch(command: string, plan: ActiveAgentLaunchPlan): string {
+  return withPermissionMode(command, plan.agentId, plan.mode)
+}
+
+/**
+ * Extract the mode for the agent-node factory, refusing a mismatched plan rather than applying a
+ * decision made for another CLI. `undefined` preserves the factory's legacy/test-only bare-command
+ * path; production call sites all pass a branded plan.
+ */
+export function permissionModeFromLaunchPlan(
+  plan: ActiveAgentLaunchPlan | undefined,
+  agentId: AgentId
+): AgentPermissionMode | undefined {
+  if (!plan || plan.agentId !== agentId) return undefined
+  return plan.mode
+}
+
 /** How long a launch on an SSH project may wait for the REMOTE probe's first answer. The probe
  *  fires right after connect and pushes every attempt's answer immediately, so this usually
  *  resolves in the first couple of seconds; the cap keeps a dead probe from stalling a relaunch. */
@@ -171,6 +249,20 @@ export async function ensureActivePermissionMode(
     await waitForSshAutoAnswer(project.id, SSH_AUTO_PROBE_WAIT_MS)
   }
   return activePermissionMode('claude')
+}
+
+/** The async launch-plan variant for relaunches that must await Claude's capability probe. */
+export async function ensureActiveAgentLaunchPlan(
+  surface: AgentLaunchSurface,
+  agentId: AgentId = 'claude'
+): Promise<ActiveAgentLaunchPlan> {
+  const mode = await ensureActivePermissionMode(agentId)
+  return Object.freeze({
+    surface,
+    agentId,
+    mode,
+    [ACTIVE_AGENT_LAUNCH_PLAN]: true as const
+  })
 }
 
 /**

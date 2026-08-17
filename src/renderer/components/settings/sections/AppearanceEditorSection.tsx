@@ -15,6 +15,7 @@ import {
 import { openAppearanceEditor } from '@renderer/state/appearanceEditorHost'
 import { APP_CHROME_TARGETS, kindLabel } from '@renderer/lib/appearance/registry'
 import { isStyleEmpty } from '@renderer/lib/appearance/apply'
+import { saveBlobDownload } from '@renderer/lib/exportSave'
 
 const ROWS = {
   chrome: { title: 'App chrome', keywords: ['appearance', 'editor', 'chrome', 'menu', 'dialog', 'tab bar'] },
@@ -69,12 +70,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
   function exportPresets(): void {
     const file = buildExportFile(presets)
     const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'nodeterm-appearance-presets.json'
-    a.click()
-    URL.revokeObjectURL(url)
+    saveBlobDownload(blob, 'nodeterm-appearance-presets.json')
   }
 
   function onImportFile(e: React.ChangeEvent<HTMLInputElement>): void {

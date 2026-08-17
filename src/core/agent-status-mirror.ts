@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { platform } from './platform'
-import { renameAtomic } from './fs-atomic'
+import { publishMirrorGeneration, reserveMirrorGeneration } from './mirror-publication'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentState, NormalizedAgentEvent } from '@shared/agents/normalize'
 import { WORKING_STALE_MS, isStaleWorking } from '@shared/agents/stale'
@@ -55,6 +55,47 @@ export interface MirrorEntry {
    *  must be held as `waiting` (see reduceEntry). Cleared by anything that supersedes the
    *  ask — a new turn, other tool activity, an interrupt, or a session boundary. */
   awaitingInput?: boolean
+  /**
+   * Did the hook POST that set the CURRENT `state` present a per-node token this instance minted
+   * for this node id? Set from `ev.verified` (hook-server.ts), which is a LABEL on the wire and
+   * must stay one for every other consumer — invariant 2 says /hook/* accepts a tokenless POST
+   * forever, and `normalize.ts` says outright that no consumer may treat it as reject.
+   *
+   * Messaging is the ONE consumer that reads it, and it reads it as a GATE rather than a filter:
+   * gate 2 admits a target as idle only on a verified `done`, because a gate whose input an
+   * attacker writes is a comment. Nothing else in the product may start branching on this field
+   * without re-reading Decision A1 of the messaging design.
+   *
+   * `false` after a `true` is meaningful and is written: a legacy event SUPERSEDES an earlier proof
+   * about a state that has since changed.
+   */
+  stateVerified?: boolean
+  /**
+   * The revision of the managed hook script that posted the event behind the current `state`
+   * (`ev.clientRevision`). `undefined` = no stamp, which is what a script predating per-node
+   * identity sends — and the ONLY thing that separates "this session cannot read a token" from
+   * "there is no token for it to read". Those need opposite advice, and before the stamp existed
+   * they were byte-identical on the wire (Finding F2).
+   *
+   * Written on the same edge as `stateVerified` and, like it, moves DOWN as readily as up: an SSH
+   * project reconnected against an older desktop really is running an older script now.
+   */
+  clientRevision?: number
+  /** When proof was last seen at all. Never cleared by a later legacy event — "we once saw this
+   *  node prove itself" stays true, and it is what separates a node that CAN verify (retryable)
+   *  from one that never has (not retryable). See the plan's Correction C1 mitigation. */
+  verifiedAt?: number
+  /**
+   * This entry's `state` came off disk at boot, not off a hook event this run. The mirror restores
+   * with a 6 h expiry and never pushes the restored copy to a listener — it is 6-hour-old evidence
+   * about a pane that has since done anything at all, including being replaced.
+   *
+   * Gate 2 refuses it outright (`targetNotIdleUnknown`), which is why the flag exists: without it a
+   * restored `done` is indistinguishable from a fresh one and the most dangerous moment in the
+   * product (just after a relaunch, sessions re-adopted, nothing re-confirmed) would read as the
+   * safest. Cleared by the first live event.
+   */
+  restored?: true
 }
 
 /** This host's Server-Edition install metadata (spec: server-update). Written by the installer
@@ -89,6 +130,11 @@ export interface MirrorSettings {
 
 export interface MirrorFile {
   v: 1
+  /**
+   * Cross-process publication order. Absent on pre-generation v1 files (treated as generation 0)
+   * and ignored by older readers. A lower generation may never replace a higher one.
+   */
+  generation?: number
   updatedAt: number
   nodes: Record<
     string,
@@ -307,6 +353,10 @@ export function reduceEntry(
   now: number
 ): MirrorEntry {
   const next: MirrorEntry = prev ? { ...prev } : { updatedAt: now }
+  // ANY event is this run's traffic from this node, so the entry is no longer "restored and
+  // unheard-from". Done before every branch — including the ones that return early — because what
+  // the flag means is "nothing has been heard since boot", not "the state is still the restored one".
+  delete next.restored
   // Identity is captured off ANY event (mirrors the renderer's per-event setSessionId +
   // agentId threading). agentId is always present on a NormalizedAgentEvent.
   if (ev.agentId) next.agentId = ev.agentId
@@ -344,12 +394,24 @@ export function reduceEntry(
     if (!heldOff) {
       next.state = ev.state
       next.updatedAt = now
+      // Set on the SAME edge the state is set on, and only there: a context/usage event carrying a
+      // verified flag says nothing about how the current state arrived, and a held-off working did
+      // not change the state whose proof this describes.
+      next.stateVerified = ev.verified === true
+      if (ev.verified === true) next.verifiedAt = now
+      // Same edge, and ASSIGNED rather than merged: an event with no stamp is a report that this
+      // node is running a script that cannot send one, which is exactly the state a stale entry
+      // would hide.
+      next.clientRevision = ev.clientRevision
     }
   } else if (ev.kind === 'session') {
     // SessionStart / SessionEnd both reset the node to idle (renderer: setState(id, undefined)).
     next.state = undefined
     next.awaitingInput = undefined
     next.updatedAt = now
+    // The proof went with the state it was about. `verifiedAt` stays — "this node has proven
+    // itself at least once" survives a session boundary and is what makes a refusal retryable.
+    next.stateVerified = false
   }
   // subagent-start / subagent-end / recurring: identity captured above, main state untouched.
   return next
@@ -376,7 +438,12 @@ export function reduceEntry(
 export function filterMirrorForNodes(doc: MirrorFile, nodeIds: ReadonlySet<string>): MirrorFile {
   const nodes: MirrorFile['nodes'] = {}
   for (const [id, e] of Object.entries(doc.nodes)) if (nodeIds.has(id)) nodes[id] = e
-  const out: MirrorFile = { v: doc.v, updatedAt: doc.updatedAt, nodes }
+  const out: MirrorFile = {
+    v: doc.v,
+    ...(doc.generation === undefined ? {} : { generation: doc.generation }),
+    updatedAt: doc.updatedAt,
+    nodes
+  }
   if (doc.inbox) {
     const inboxNodes: Record<string, InboxNodeNow> = {}
     for (const [id, n] of Object.entries(doc.inbox.nodes)) if (nodeIds.has(id)) inboxNodes[id] = n
@@ -511,7 +578,11 @@ const STALE_SWEEP_MS = 60_000
 let sweepTimer: ReturnType<typeof setInterval> | null = null
 let targetFile: string | null = null
 let writeTimer: NodeJS.Timeout | null = null
-let writeSeq = 0
+// Keep flush invocations FIFO inside one process. mirror-publication.ts adds the other half:
+// durable generations plus a lock/CAS boundary across processes that share the data directory.
+// Unique temp names prevent byte splicing; both ordering layers prevent a complete-but-stale
+// document winning afterwards.
+let flushWriteChain: Promise<void> = Promise.resolve()
 const flushListeners = new Set<(doc: MirrorFile) => void>()
 // Supplies the host-level settings block, consulted fresh on every flush (so a mid-session
 // permission-mode / account change is picked up without re-wiring). Null = no block written.
@@ -995,7 +1066,13 @@ function loadPersisted(file: string): void {
           agentId: e.agentId,
           sessionId: e.sessionId,
           ...(e.name ? { name: e.name } : {}),
-          updatedAt
+          updatedAt,
+          // Marked, and FORCED unverified whatever the file said. `buildFile` writes neither field
+          // — it is an allowlist, which is what keeps `stateVerified` off disk — but a file this
+          // process did not write (hand-edited, downgraded, or from a future build) must not be
+          // able to hand gate 2 a proof nothing presented this run. See `restored`.
+          restored: true,
+          stateVerified: false
         })
       }
     }
@@ -1559,32 +1636,60 @@ function scheduleWrite(): void {
   writeTimer.unref?.()
 }
 
-/** Prune + atomically write the file (tmp + rename, mode 0600). Best-effort. The rename retries
- *  briefly on Windows if the destination is momentarily held open (see fs-atomic.ts). */
-export async function flush(): Promise<void> {
-  const file = resolveFile()
-  if (!file) return
+function buildCurrentMirror(generation?: number): MirrorFile {
   const now = Date.now()
   const inbox: MirrorInbox = { events: inboxEvents, nodes: Object.fromEntries(inboxNodes) }
   const doc = buildFile(Object.fromEntries(state), now, undefined, safeSettings(), safeUsage(), inbox, safeServer())
+  if (generation !== undefined) doc.generation = generation
   // Also drop expired entries from memory so the map itself can't grow without bound.
   for (const [id, e] of state) if (now - e.updatedAt > EXPIRE_MS) state.delete(id)
   // Prune stale per-node activity the same way (events stay — they are capped feed history).
   for (const [id, n] of inboxNodes) if (now - n.updatedAt > EXPIRE_MS) inboxNodes.delete(id)
+  return doc
+}
+
+async function flushOne(file: string): Promise<void> {
+  let generation: number
+  try {
+    // Reserve before snapshotting. The reservation order is the cross-process invocation order;
+    // a process delayed before it reserves has not captured an older document that could later
+    // masquerade as newer.
+    generation = await reserveMirrorGeneration(file)
+  } catch {
+    return
+  }
+
+  const doc = buildCurrentMirror(generation)
+  try {
+    await publishMirrorGeneration(file, generation, JSON.stringify(doc))
+  } catch {
+    // The mirror is best-effort. A failed counter/read/lock/write must not take down either shell,
+    // and the next flush reserves a later generation and retries from current in-memory state.
+  }
+}
+
+/**
+ * Prune + publish the file (mode 0600), ordered across this process and every other supported
+ * process sharing the mirror path. Generation reservation happens before the snapshot; the final
+ * locked compare rejects a writer that a newer complete generation overtook. Best-effort.
+ */
+export async function flush(): Promise<void> {
+  const file = resolveFile()
+  if (!file) return
+  // onMirrorFlush is a live side-channel (remote status pushes use it), not an assertion that
+  // this machine's mirror reached disk. Fire it from the call-time snapshot before any lock or I/O
+  // can wait/fail, preserving the pre-generation contract exactly.
+  const liveDoc = buildCurrentMirror()
   for (const cb of flushListeners) {
     try {
-      cb(doc)
+      cb(liveDoc)
     } catch {
       // A listener must never break the local write (or its sibling listeners).
     }
   }
-  const tmp = `${file}.${process.pid}.${++writeSeq}.tmp`
-  try {
-    await fs.promises.writeFile(tmp, JSON.stringify(doc), { mode: 0o600 })
-    await renameAtomic(tmp, file)
-  } catch {
-    await fs.promises.rm(tmp, { force: true }).catch(() => {})
-  }
+  const queued = flushWriteChain.then(() => flushOne(file), () => flushOne(file))
+  flushWriteChain = queued.then(() => undefined, () => undefined)
+  await queued
 }
 
 // ---- Test helpers --------------------------------------------------------------------------
@@ -1597,6 +1702,7 @@ export function _resetForTest(): void {
   targetFile = null
   if (writeTimer) clearTimeout(writeTimer)
   writeTimer = null
+  flushWriteChain = Promise.resolve()
   flushListeners.clear()
   settingsProvider = null
   usageProvider = null
@@ -1608,6 +1714,12 @@ export function _resetForTest(): void {
   nodeStateChangeListeners.clear()
   nodeNowChangeListeners.clear()
   pendingQuestions.clear()
+}
+
+/** Cancel only the debounced disk write while retaining in-memory state. Test-process helper. */
+export function _cancelScheduledWriteForTest(): void {
+  if (writeTimer) clearTimeout(writeTimer)
+  writeTimer = null
 }
 
 /** Snapshot the in-memory map. Test-only. */

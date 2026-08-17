@@ -8,7 +8,6 @@ import type { RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
 import { useSchoolMode } from '../../state/schoolMode'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
-const GROUPS = visibleSettingsGroups(isMac)
 import { matchesEntry } from './search'
 import { SectionIcon } from './SettingsIcons'
 
@@ -34,6 +33,9 @@ export function SettingsSidebar({
   // Once School mode is renamed, the shipped "School mode" label must never surface anywhere —
   // this is the one spot the sidebar nav's otherwise-static section titles need a live override.
   const schoolModeName = useSchoolMode((s) => s.name)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const groups = visibleSettingsGroups(isMac, schoolModeHydrated && !schoolModeEnabled)
   return (
     <aside className="flex w-[256px] shrink-0 flex-col border-r border-border bg-panel">
       <div
@@ -94,7 +96,7 @@ export function SettingsSidebar({
       </div>
 
       <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
-        {GROUPS.map((group) => (
+        {groups.map((group) => (
           <div key={group.id} className="space-y-0.5">
             <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-2">
               {ts(`settings.group.${group.id}`, group.title)}

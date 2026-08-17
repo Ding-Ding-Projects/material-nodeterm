@@ -357,6 +357,19 @@ users before 4d is wired (it grants `pty.create` to peers).
   **local**. Two load-bearing exceptions: `pty.onData` reads the LOCAL per-session channel (relay
   pty output is re-emitted there by main), and `dialog.selectFolder/selectFile` are the in-app
   **host** directory browser (a remote tab's folder pick is a host pick — obligation d).
+- **Exact peer surface, in both directions** (`src/main/relay-rpc-policy.ts`) — approval grants the
+  reviewed project/session methods and events, not every CorePlatform registration. Unknown raw
+  requests fail `E_FORBIDDEN`; unknown casts and host→peer events are dropped before handler,
+  listener, or peer-sink lookup. This keeps authenticator/TOTP, settings/mode/license/usage state,
+  converter paths, and local model streams on the physical desktop even though those services use
+  the same CorePlatform seam for the Server Edition. Whole-workspace save is deliberately absent:
+  a project-scoped relay must not rewrite the host's unrelated workspace index.
+- **File handoff follows the session machine** — terminal/card/canvas drops pass the active
+  `NodeTerminalApi` into the resolver. A relay API never treats Electron's viewer-local `File` path
+  as a host path; it uploads bytes through host `files.saveUpload` / `saveCanvasImage`, so the path
+  pasted into the shell or persisted in an image node exists where that session runs. The Server
+  Edition's optional raw-Blob carrier avoids base64 expansion; relay retains the 64 MiB-limited
+  base64 RPC carrier.
 - **Remote session as a project tab** (`src/renderer/session/relay-tab.ts` `openRelayTab`,
   `Canvas.tsx`) — `createSession('relay', api, label)` bound to a projects tab; the Canvas subtree
   is keyed by `session.id` so an api swap remounts (4a obligation 3). Presence teardown held +
@@ -455,6 +468,10 @@ the dialect deletion orphaned, blanking the phone; that flag is gone).
   against the seam and needs no change; what is missing is a subscription per session feeding
   `SessionStores.agentStatus`.
 - **SDK chat node over relay** — refuses (`E_UNSUPPORTED`) in a relay tab, matching Server Edition.
+- **SSH project inside a relay tab** — no scoped carrier exists for the host desktop's
+  ControlMaster. `sshProject`/`sshFs` on the relay API refuse instead of falling back to the
+  viewing desktop's unrelated connection. Ordinary relay file drop and quick-open are host-routed;
+  nested SSH upload/quick-open need a host-scoped composite RPC before they can be enabled.
 - **The preload↔main relay IPC boundary is not covered by vitest** (it needs Electron). Two real
   send/handle + payload-shape bugs were found and fixed by inspection during 4c; the two-instance
   acceptance run is what exercises it live. A preload-shape unit guard would help.
@@ -549,9 +566,11 @@ session):
    chooses a path on the CLIENT machine while the clone runs on the SESSION's core —
    harmless today (same machine), wrong on a remote tab. 4c must route the picker per
    session (the Server Edition's in-app server-directory browser is the precedent).
-5. **Deferred namespaces still read off the global:** `sshProject`, `contextLink`,
-   `context`, `transcripts`, `handoff`, `files`. They live in files 4c rewrites; 4c
-   must decide each one (core-bound → session, or app-global → stays on the client).
+5. **Resolve every former global explicitly.** `files` and `context` are core-bound; terminal and
+   canvas file drops now receive the session API and relay viewer paths are forced through a host
+   upload. `sshProject`/`sshFs` refuse on relay until a scoped host carrier exists. `contextLink`,
+   `transcripts`, and `handoff` remain documented local/deferred surfaces rather than silently
+   pretending their viewer-local results belong to the host.
 
 ## Testing
 

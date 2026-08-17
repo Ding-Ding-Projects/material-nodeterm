@@ -13,7 +13,7 @@ import { FORMAT_INFO, safeIdentifier } from './catalog'
 import { describeTableLossage, describeDocumentLossage } from './lossy'
 import { encodeTable } from './table'
 import { encodeDocument } from './document'
-import { buildZip, type ZipEntry } from './zip'
+import { buildZip, sanitizeZipPath, type ZipEntry } from './zip'
 
 const LINE_ENDING_BY_FORMAT: Record<ExportFormat, 'LF' | 'CRLF'> = {
   csv: 'CRLF',
@@ -66,22 +66,35 @@ export interface ArchiveMember {
 /** Bundle several already-built exports into one ZIP, plus a MANIFEST.json naming every member,
  *  its format, its byte size and any lossy notes — the sidecar metadata a single JSONL/CSV file
  *  cannot carry inline (see table.ts's note on why JSONL stays header-free). Paths are sanitized
- *  by `buildZip` itself; this only shapes the manifest and the file list. */
+ *  once here so the manifest describes the exact names handed to `buildZip`; collisions after
+ *  sanitizing and attempts to replace MANIFEST.json are rejected rather than made ambiguous. */
 export function buildArchive(name: string, members: ArchiveMember[]): { filename: string; mimeType: string; bytes: Uint8Array } {
   const encoder = new TextEncoder()
-  const entries: ZipEntry[] = members.map((m) => ({ path: m.path, data: encoder.encode(m.built.content) }))
+  const encodedMembers = members.map((member) => ({
+    member,
+    path: sanitizeZipPath(member.path),
+    data: encoder.encode(member.built.content)
+  }))
+  const seenPaths = new Set<string>(['MANIFEST.json'])
+  for (const { path } of encodedMembers) {
+    if (seenPaths.has(path)) {
+      throw new Error(`duplicate or reserved archive path after sanitizing: ${path}`)
+    }
+    seenPaths.add(path)
+  }
+  const entries: ZipEntry[] = encodedMembers.map(({ path, data }) => ({ path, data }))
   const manifest = {
     $schema: 'nodeterm-export-manifest/v1',
     archive: name,
     exportedAt: new Date().toISOString(),
     encoding: 'utf-8',
-    members: members.map((m) => ({
-      path: m.path,
-      filename: m.built.filename,
-      mimeType: m.built.mimeType,
-      lineEnding: m.built.lineEnding,
-      bytes: m.built.content.length,
-      lossy: m.built.lossy
+    members: encodedMembers.map(({ member, path, data }) => ({
+      path,
+      filename: member.built.filename,
+      mimeType: member.built.mimeType,
+      lineEnding: member.built.lineEnding,
+      bytes: data.length,
+      lossy: member.built.lossy
     }))
   }
   entries.push({ path: 'MANIFEST.json', data: encoder.encode(JSON.stringify(manifest, null, 2) + '\n') })

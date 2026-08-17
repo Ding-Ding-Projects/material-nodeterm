@@ -1,4 +1,6 @@
 export interface GroupWorktree {
+  /** Stable canvas-binding generation; legacy records are normalized before destructive use. */
+  bindingId?: string
   /** Main repo root chosen at bind time. */
   repoPath: string
   /** The worktree's branch (new or existing). */
@@ -7,13 +9,19 @@ export interface GroupWorktree {
   baseRef: string
   /** Worktree directory on disk. */
   path: string
-  /** Whether this app created the worktree (gates safe directory deletion). */
+  /** Whether this app created the directory. UI provenance only; never core deletion authority. */
   createdByApp: boolean
+  /** Explicit successor to `createdByApp`; absent only on a legacy persisted binding. */
+  directoryCreatedByApp?: boolean
+  /** True only when creation used `git worktree add -b`, never for an existing branch. */
+  branchCreatedByApp?: boolean
 }
 
 export interface WorktreeEntry {
   path: string
   branch: string | null
+  /** Full symbolic ref exactly as Git reported it (`refs/heads/...`). */
+  branchRef?: string | null
   head: string | null
   isBare: boolean
   /**
@@ -116,6 +124,8 @@ export interface WorktreeCreateValue {
   branch: string
   baseRef: string
   path: string
+  /** Returned by core after the worktree and its ownership record were both published. */
+  ownership?: import('./types').GitWorktreeOwnership
 }
 
 /** Last-resort merge target when the repo's default branch cannot be read. */
@@ -131,16 +141,21 @@ export function resolveBaseRef(entries: WorktreeEntry[]): string {
 }
 
 /**
- * Binding for a worktree THIS APP just created — `createdByApp: true` grants Remove the right
- * to delete the directory. Only call this after `git worktree add` succeeded.
+ * Binding for a worktree THIS APP just created. These persisted booleans choose UI defaults only;
+ * core grants directory/branch authority from its machine-local record. Only call this after both
+ * `git worktree add` and ownership publication succeeded.
  */
 export function worktreeFromCreate(v: WorktreeCreateValue): GroupWorktree {
+  const ownership = v.ownership
   return {
+    bindingId: crypto.randomUUID(),
     repoPath: v.repoPath.trim(),
     branch: v.branch.trim(),
     baseRef: v.baseRef.trim() || DEFAULT_BASE_REF,
     path: v.path.trim(),
-    createdByApp: true
+    createdByApp: true,
+    directoryCreatedByApp: ownership?.directoryCreatedByApp ?? true,
+    branchCreatedByApp: ownership?.branchCreatedByApp ?? v.mode === 'new'
   }
 }
 
@@ -159,11 +174,14 @@ export function worktreeFromEntry(
   const repo = repoPath.trim()
   if (!repo || !branch || !path) return null
   return {
+    bindingId: crypto.randomUUID(),
     repoPath: repo,
     branch,
     baseRef: baseRef.trim() || DEFAULT_BASE_REF,
     path,
-    createdByApp: false
+    createdByApp: false,
+    directoryCreatedByApp: false,
+    branchCreatedByApp: false
   }
 }
 
@@ -175,6 +193,7 @@ export function parseWorktreePorcelain(out: string): WorktreeEntry[] {
     entries.push({
       path: c.path!,
       branch: c.branch ?? null,
+      branchRef: c.branchRef ?? null,
       head: c.head ?? null,
       isBare: c.isBare ?? false,
       prunable: c.prunable ?? false
@@ -190,7 +209,8 @@ export function parseWorktreePorcelain(out: string): WorktreeEntry[] {
     } else if (line.startsWith('HEAD ')) {
       cur.head = line.slice('HEAD '.length)
     } else if (line.startsWith('branch ')) {
-      cur.branch = line.slice('branch '.length).replace(/^refs\/heads\//, '')
+      cur.branchRef = line.slice('branch '.length)
+      cur.branch = cur.branchRef.replace(/^refs\/heads\//, '')
     } else if (line === 'bare') {
       cur.isBare = true
     } else if (line === 'prunable' || line.startsWith('prunable ')) {
@@ -202,11 +222,29 @@ export function parseWorktreePorcelain(out: string): WorktreeEntry[] {
   return entries
 }
 
-/** Is `child` the directory `parent` itself, or somewhere inside it? (Trailing slashes ignored.) */
+interface ComparablePath {
+  value: string
+  windowsStyle: boolean
+  invalid: boolean
+}
+
+/** Browser-safe comparison for persisted native paths and Git's always-`/` porcelain. */
+function comparablePath(value: string): ComparablePath {
+  let normalized = value.trim().replace(/\\/g, '/')
+  const devicePath = normalized.startsWith('//./') || normalized.startsWith('//?/')
+  const driveRelative = /^[A-Za-z]:[^/]/.test(normalized)
+  const windowsStyle = /^[A-Za-z]:\//.test(normalized) || normalized.startsWith('//')
+  normalized = normalized.replace(/\/+$/, '') || '/'
+  if (windowsStyle) normalized = normalized.toLocaleLowerCase('en-US')
+  return { value: normalized, windowsStyle, invalid: devicePath || driveRelative }
+}
+
+/** Is `child` the directory `parent` itself, or somewhere inside it? */
 export const isAncestorPath = (parent: string, child: string): boolean => {
-  const p = parent.replace(/\/+$/, '')
-  const c = child.replace(/\/+$/, '')
-  return c === p || c.startsWith(p + '/')
+  const p = comparablePath(parent)
+  const c = comparablePath(child)
+  if (p.invalid || c.invalid || p.windowsStyle !== c.windowsStyle) return false
+  return c.value === p.value || c.value.startsWith(p.value + '/')
 }
 
 /** `isAncestorPath` for an optional cwd: "does this node live in that directory?" */
@@ -302,11 +340,19 @@ export function displacedByWorktree(
 
 /** Refuse removals that would nuke the repo, home, or filesystem root. */
 export function isDangerousWorktreeRemovalPath(worktreePath: string, repoPath: string, homeDir: string): boolean {
-  const wt = (worktreePath || '').replace(/\/+$/, '')
-  if (!wt) return true
-  if (wt === '/' || wt === repoPath.replace(/\/+$/, '') || wt === homeDir.replace(/\/+$/, '')) return true
+  const wt = comparablePath(worktreePath || '')
+  if (!worktreePath.trim() || wt.invalid) return true
+  const filesystemRoot =
+    wt.value === '/' ||
+    /^[a-z]:$/.test(wt.value) ||
+    /^\/\/[^/]+\/[^/]+$/.test(wt.value)
+  if (filesystemRoot) return true
+  const repo = comparablePath(repoPath)
+  const home = comparablePath(homeDir)
+  if (repo.invalid || home.invalid) return true
+  if (wt.value === repo.value || wt.value === home.value) return true
   // worktree is an ancestor of the repo or of home → dangerous.
-  if (isAncestorPath(wt, repoPath) || isAncestorPath(wt, homeDir)) return true
+  if (isAncestorPath(worktreePath, repoPath) || isAncestorPath(worktreePath, homeDir)) return true
   return false
 }
 

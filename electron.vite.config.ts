@@ -31,7 +31,7 @@ export default defineConfig({
           // asar-packaged Electron apps need CJS for the main process entry point.
           format: 'cjs',
           entryFileNames: '[name].js',
-          // bootstrap.ts loads the application graph lazily so Squirrel lifecycle processes do
+          // startup.ts loads the application graph lazily so Squirrel lifecycle processes do
           // not evaluate it. Keep that dynamic chunk beside the entry: index.ts resolves the
           // preload, renderer, HUD, and unpackaged icon relative to out/main, and Vite's default
           // chunks/ directory would silently move that __dirname boundary.

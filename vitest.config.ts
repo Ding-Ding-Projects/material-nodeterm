@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     include: [
       'src/core/**/*.test.ts',
+      'src/session-host/**/*.test.ts',
       'src/shared/**/*.test.ts',
       'src/main/**/*.test.ts',
       'src/preload/**/*.test.ts',
@@ -19,6 +20,10 @@ export default defineConfig({
       'scripts/**/*.test.mjs',
       'test/server/**/*.test.ts',
       'test/remote/**/*.test.ts',
+      // Build bootstrap behavior lives beside the shipped plain-Node script it exercises.
+      'scripts/check-build-preflight.test.mjs',
+      'scripts/ensure-windows-build-toolchain.test.mjs',
+      'scripts/ensure-windows-python.test.mjs',
       // Opt-in end-to-end tests against a real sshd in Docker. They self-skip unless
       // NODETERM_SSH_DOCKER is set, so a machine without Docker still runs a green suite.
       'test/ssh-docker/**/*.test.ts'

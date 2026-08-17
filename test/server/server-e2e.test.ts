@@ -12,6 +12,20 @@ import { TMUX_SOCKET, sessionName } from '../../src/core/tmux-naming'
 
 const hasTmux = (() => { try { execSync('tmux -V'); return true } catch { return false } })()
 
+function removeFixtureDir(dataDir: string): void {
+  // On Windows the final directory handle can remain transiently busy after the websocket,
+  // HTTP listener and SQLite-backed services have all reported closed. The full serial suite
+  // reliably exercises that lag even though this file passes alone. Node's recursive remover
+  // retries only when maxRetries is non-zero, so give teardown a bounded one-second grace period
+  // instead of turning an already-proved shutdown into a nondeterministic EPERM failure.
+  fs.rmSync(dataDir, {
+    recursive: true,
+    force: true,
+    maxRetries: 20,
+    retryDelay: 50
+  })
+}
+
 // Unique per run so a leftover `nt-<persistKey>` tmux session (e.g. from a crashed prior run)
 // can never make the fresh-check below return false — the test asserts fresh === true, which
 // is the whole point (a real cold start spawns a real pty inside a brand-new tmux session).
@@ -53,7 +67,7 @@ describe.skipIf(!hasTmux)('server e2e: login → ws → pty echo round-trip', ()
     } catch {
       // session already gone / no server — fine
     }
-    fs.rmSync(dataDir, { recursive: true, force: true })
+    removeFixtureDir(dataDir)
   })
 
   it('creates a real pty, echoes output over binary frames, destroys it', async () => {
@@ -143,7 +157,7 @@ describe('server shutdown with a live websocket', () => {
     } finally {
       if (closeTimer) clearTimeout(closeTimer)
       ws.terminate()
-      fs.rmSync(dataDir, { recursive: true, force: true })
+      removeFixtureDir(dataDir)
     }
   }, 10_000)
 })

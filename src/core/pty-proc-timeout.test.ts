@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { POSIX_TEST_SHELL } from './test-posix-shell'
+import { environmentForPosixShell, REAL_POSIX_SHELL } from './testing/posix-shell'
 
 const execFileAsync = promisify(execFile)
 
@@ -24,23 +24,29 @@ describe('the assumption the pty-manager timeout rests on', () => {
     // 400ms is not "forever", but it is long past when a bounded call would have been killed:
     // the point is that the default does not interrupt it at all.
     const started = Date.now()
-    await execFileAsync(POSIX_TEST_SHELL, ['-c', 'sleep 0.4'])
+    await execFileAsync(REAL_POSIX_SHELL, ['-c', 'sleep 0.4'], {
+      env: environmentForPosixShell()
+    })
     expect(Date.now() - started).toBeGreaterThanOrEqual(350)
   })
 
   it('execFile WITH a timeout kills the child and rejects', async () => {
     await expect(
-      execFileAsync(POSIX_TEST_SHELL, ['-c', 'sleep 5'], { timeout: 200 })
-    ).rejects.toBeTruthy()
+      execFileAsync(REAL_POSIX_SHELL, ['-c', 'sleep 5'], {
+        env: environmentForPosixShell(),
+        timeout: 200
+      })
+    ).rejects.toMatchObject({ killed: true })
   })
 
   it('a timeout does NOT look like tmux reporting "no such session"', async () => {
     // `probeSaysAbsent` reads `code === 1`, and the whole degrade depends on a timeout NOT
     // matching it: "we could not ask" must mean "assume the session exists" (warm attach), never
     // "it is gone" (which would cold-start a session that is alive and lose the user's work).
-    const err = await execFileAsync(POSIX_TEST_SHELL, ['-c', 'sleep 5'], { timeout: 200 }).catch(
-      (e) => e
-    )
+    const err = await execFileAsync(REAL_POSIX_SHELL, ['-c', 'sleep 5'], {
+      env: environmentForPosixShell(),
+      timeout: 200
+    }).catch((e) => e)
     expect((err as { code?: unknown }).code).not.toBe(1)
     expect((err as { killed?: boolean }).killed).toBe(true)
   })

@@ -72,6 +72,12 @@ archive export below when the metadata matters.
 Line endings: CSV uses CRLF (RFC 4180's convention); every other text format uses LF. Both are
 stated explicitly in `BuiltExport.lineEnding`.
 
+YAML mappings quote **every key and string scalar** as a YAML 1.2-compatible JSON string. Plain
+YAML text has structural edge cases (`: ` starts a value and ` #` starts a comment) plus implicit
+types such as timestamps, so Cantonese, emoji, colon, quote, or comment-shaped text must remain
+data rather than become YAML syntax. The encoder's round-trip test feeds these hostile values
+through `js-yaml`, a parser independent of the emitter.
+
 ## Archives: ZIP, not 7z
 
 Multiple exports bundle into one **ZIP** archive (`buildArchive`) with a `MANIFEST.json` naming
@@ -91,7 +97,16 @@ size, solid vs non-solid, multi-threading, split volumes, and both AES-256 conte
 
 Every archive entry's path is **sanitized** (`sanitizeZipPath`) before it is written: a leading
 drive/slash is stripped and `..`/`.` segments are resolved away, so an archive this module writes
-can never extract outside its destination directory (Zip Slip).
+can never extract outside its destination directory (Zip Slip). The manifest records that exact
+sanitized path, and paths that collide after sanitizing (or try to replace `MANIFEST.json`) reject
+the archive instead of creating two meanings for one name.
+
+The manifest's `bytes` field is the length of the member's actual `TextEncoder` output, not a
+JavaScript string's UTF-16 code-unit count; Cantonese and emoji therefore report their real bytes
+on disk. Both each local header and its central-directory record carry ZIP general-purpose bit 11,
+declaring the filename bytes as UTF-8 rather than legacy CP437. The test opens the completed bytes
+with the independent `unzipper` reader, round-trips non-ASCII names/content, and checks its stored
+CRC-32 against both the extracted bytes and the standard `123456789` reference vector.
 
 ## How a save actually happens
 

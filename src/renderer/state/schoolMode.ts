@@ -25,31 +25,84 @@ interface SchoolModeState {
   refreshHasCredential(): Promise<void>
 }
 
-let initStarted = false
+/** A bridge can be temporarily unavailable while a Server Edition tab reconnects. Keep the
+ * renderer fail-closed, then retry instead of permanently laundering that transient failure into
+ * a confirmed OFF record. */
+export const SCHOOL_MODE_HYDRATION_RETRY_MS = 1000
 
-export const useSchoolMode = create<SchoolModeState>((set) => ({
+let initInFlight: Promise<void> | null = null
+let unsubscribe: (() => void) | null = null
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+let liveRevision = 0
+let initialLoadComplete = false
+
+export const useSchoolMode = create<SchoolModeState>((set, get) => ({
   enabled: false,
   name: DEFAULT_SCHOOL_MODE_NAME,
   hydrated: false,
   hasCredential: false,
 
   init: async () => {
-    if (initStarted) return
-    initStarted = true
-    try {
-      const [record, hasCredential] = await Promise.all([
-        window.nodeTerminal.schoolMode.load(),
-        window.nodeTerminal.schoolMode.hasCredential()
-      ])
-      set({ enabled: record.enabled, name: record.name, hasCredential, hydrated: true })
-    } catch {
-      // A shell that can't reach the school-mode IPC (a very old bridge, mid-connect) leaves the
-      // default (off) in place rather than blocking boot.
-      set({ hydrated: true })
+    if (initInFlight) return initInFlight
+    if (initialLoadComplete && unsubscribe) return
+
+    const scheduleRetry = (): void => {
+      if (retryTimer) return
+      retryTimer = setTimeout(() => {
+        retryTimer = null
+        void get().init()
+      }, SCHOOL_MODE_HYDRATION_RETRY_MS)
     }
-    window.nodeTerminal.schoolMode.onChanged((record) => {
-      set({ enabled: record.enabled, name: record.name })
+    const clearRetry = (): void => {
+      if (!retryTimer) return
+      clearTimeout(retryTimer)
+      retryTimer = null
+    }
+
+    const run = (async (): Promise<void> => {
+      let subscriptionReady = unsubscribe !== null
+      if (!subscriptionReady) {
+        try {
+          unsubscribe = window.nodeTerminal.schoolMode.onChanged((record) => {
+            liveRevision += 1
+            clearRetry()
+            set({ enabled: record.enabled, name: record.name, hydrated: true })
+          })
+          subscriptionReady = true
+        } catch {
+          // Loading below may still give us a trustworthy snapshot. Retry the live subscription
+          // separately so a mid-connect Server tab does not stay frozen on that snapshot forever.
+        }
+      }
+
+      const revisionAtLoadStart = liveRevision
+      try {
+        const [record, hasCredential] = await Promise.all([
+          window.nodeTerminal.schoolMode.load(),
+          window.nodeTerminal.schoolMode.hasCredential()
+        ])
+        initialLoadComplete = true
+        if (revisionAtLoadStart === liveRevision) {
+          set({ enabled: record.enabled, name: record.name, hasCredential, hydrated: true })
+        } else {
+          // A live update that arrived while load() was in flight is newer than its snapshot.
+          // Keep that record, but the credential result is independent and still useful.
+          set({ hasCredential, hydrated: true })
+        }
+        if (subscriptionReady) clearRetry()
+        else scheduleRetry()
+      } catch {
+        // Crucially, do NOT set `hydrated: true` here. The default `enabled: false` is not a fact,
+        // and every covered capability stays omitted until a retry or live event proves the mode
+        // is actually off. If an earlier real record exists, Zustand simply preserves it.
+        scheduleRetry()
+      }
+    })()
+
+    initInFlight = run.finally(() => {
+      initInFlight = null
     })
+    return initInFlight
   },
 
   enable: async (pin) => {

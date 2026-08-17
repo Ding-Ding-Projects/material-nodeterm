@@ -19,6 +19,14 @@ npm test           # vitest, unit + integration
 
 `npm run server:dev` boots the Server Edition (browser UI) if you are working on that surface.
 
+The supported Node runtime is **`^22.22.2 || ^24.15.0 || >=26.0.0`**. This is a minor/patch
+boundary, not
+"Node 22" shorthand: the cross-process agent-status mirror uses `node:sqlite`, which was absent in
+22.0–22.4 and remained opt-in through 22.12, while the locked dependency graph sets the stricter
+floors above and excludes Node 23 and 25. Both Desktop and Server Edition probe the real
+`DatabaseSync` capability at
+startup, so a custom build or `--no-experimental-sqlite` fails before persistent services start.
+
 **If `src/main/node-pty-patch.test.ts` is red, your `node_modules` is unpatched — not your code.**
 Run `npm run rebuild`. node-pty 1.1.0 leaks a pty device per spawn on macOS
 ([node-pty#950](https://github.com/microsoft/node-pty/issues/950)); we patch its source before
@@ -78,22 +86,112 @@ need it too, and wire it in the same change.
   and most of this was written on macOS, so the recurring defect is code that is genuinely correct
   on POSIX — `split('/')`, `startsWith('/')` as an is-absolute test, a bare `fs.rename`. Use
   `path.basename`/`join`/`sep`, publish files with `renameAtomic`, and write at least one test with
-  a real `C:\`-shaped input. Guards enforce some of this and will fail your PR.
+  a real `C:\`-shaped input. Guards enforce some of this and will fail your PR. In the Server
+  Edition and relay tabs, the browser's OS is NOT the filesystem's OS: obtain the dialect from the
+  core that owns the files, and keep an unobserved host unknown rather than guessing. Conversely,
+  on POSIX a backslash is legal filename text — do not treat both separators as interchangeable
+  unless the owning filesystem is known to be Windows. Native `path.basename` also follows the
+  current process, not a serialized path: for records that can cross hosts, select `path.win32` or
+  `path.posix` from explicit owner metadata or anchored drive/UNC syntax instead of the runner OS.
 
-- **Building on Windows has two preconditions, and `npm run dist:win` checks both up front.**
+- **Building on Windows requires a callable Node runtime in the supported range
+  `^22.22.2 || ^24.15.0 || >=26.0.0`, the Visual Studio C++ workload plus Spectre libraries, a
+  supported 64-bit Python, and an unlocked native-module tree.** The root BAT reuses a supported
+  PATH Node, obtains one through winget when suitable, or falls back to the exact SHA-pinned
+  portable manifest version. It verifies or repairs the toolchain and Python, then runs the
+  two-check preflight before npm can replace `node_modules`; `npm run dist:win` and rebuild rerun
+  that preflight up front.
   Close every running instance of the app first: Windows will not delete a DLL a live process has
   loaded, so a dev window you forgot about makes the build die with an `EPERM` about a `.node`
-  file that says nothing about the real cause. And install the **Spectre-mitigated MSVC libs**
-  (Visual Studio Installer → Individual components) — node-pty asks for the mitigation in its own
-  `binding.gyp`, and without them the build dies minutes in with `MSB8040`. The preflight names
-  the PID holding a file and the exact component to tick, and reports both problems at once so
-  you fix them in one pass. Neither can happen on macOS or Linux.
+  file that says nothing about the real cause. The bootstrap detects the
+  **Spectre-mitigated MSVC libs** and repairs them through the separately elevated helper-only
+  command when needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them
+  the build dies minutes in with `MSB8040`. Visual Studio changes require elevation; the script
+  never triggers UAC, so an unelevated run exits access-denied and prints one exact
+  **helper-only** command. Run only that helper elevated, close the Administrator prompt, then rerun
+  the root BAT normally — npm lifecycle scripts must never inherit elevation. The BAT also ensures
+  x86/x64 are always checked and ARM64 is added on ARM64 hosts. The BAT also ensures a supported
+  per-user Python for node-gyp, with SHA-pinned fallbacks for machines without winget, and exports
+  the verified interpreter through every node-gyp precedence channel.
+  The preflight names the PID holding a file and independently verifies the component, reporting
+  both problems at once. Neither check can fail on macOS or Linux.
+
+- **Windows packaging and Windows updating are one Squirrel contract.** `npm run dist:win`
+  produces an unsigned `Setup.exe`, `RELEASES`, and full `.nupkg`; the installed app consumes that
+  set with Electron's built-in updater, not `electron-updater`'s NSIS metadata. Stable update
+  continuity depends on the existing Squirrel package id `node-terminal`: do not enable
+  `useAppIdAsId`. The runtime and installed shortcut AppUserModelID must both remain
+  `com.squirrel.node-terminal.nodeterm`, derived from the effective package id and executable.
+  Stable update authority is one manually dispatched release from `main`, tagged exactly with a
+  newly advanced stable package version. Never publish a feature-branch build behind
+  `releases/latest/download`,
+  never manufacture byte progress that Squirrel does not expose, and handle Squirrel lifecycle
+  arguments before loading the normal app. The one-shot button controls an immediate restart; a
+  downloaded update can still apply on the next normal launch, so the stable publisher—not a
+  post-download UI check—is the channel boundary. Use the isolated `0.4.0-fixture.1` →
+  `0.4.0-fixture.2` loopback fixture in a disposable Windows VM/Sandbox for a real update proof;
+  that proves the new updater code, not the one-time production migration. Installed Windows
+  `0.3.0` expects NSIS metadata at the old generic feed and cannot discover the Squirrel `0.4.0`
+  release. Separately prove `0.3.0` → `0.4.0` with the downloaded Setup while the old app is
+  closed and while it is running, then document which sequence is supported. Closing first is a
+  provisional recommendation, not a verified fact. The collision-safe fixture identity and
+  loopback runtime contract exist, but its dedicated dirty-manifest-safe packaging provenance
+  route is still pending; do not weaken the production wrapper's clean-tree/exact-commit guard to
+  create fixture artifacts. The Server Edition and mobile companion do not use this desktop
+  installer.
 
 - **Never publish a file with a bare `fs.rename`.** Use `renameAtomic` or `writeFileAtomic` from
   `src/core/fs-atomic.ts`. On Windows a rename fails with `EPERM` whenever anything has the
   destination open — Defender scanning the file you just wrote, the search indexer, OneDrive — so
   the plain version loses saves intermittently and only on other people's machines. A test scans
-  for this and will fail your PR; `docs/atomic-writes.md` explains why the retry is safe.
+  for this and will fail your PR; `docs/atomic-writes.md` explains why the retry is safe. A temp
+  name needs random UUID entropy: `Date.now()` is shared by every save in the same millisecond, and
+  pid-plus-counter also repeats across PID namespaces, worker isolates, and PID reuse. Keep pid and
+  sequence as ownership/diagnostic fields, not as the uniqueness guarantee. And never sweep a temp
+  merely because its pid differs or signal zero reports `ESRCH` — another live instance may share
+  the directory through another PID namespace. `sweepStaleTempFiles` never auto-deletes a
+  PID-bearing temp; only the exact aged ownerless legacy `<target>.tmp` shape is collectible. A
+  credential Clear must use `clearAtomicTarget`, perform its final canonical-path recheck, and
+  surface `clear-incomplete` while any recognized temp remains or the canonical credential
+  reappears. Preserving a plausible live writer is correct, but telling the UI its bearer bytes are
+  gone is not.
+  The desktop relay advertisement runs that same sweep before creating its own temp. It may collect
+  only an exact aged ownerless legacy `relay.json.tmp`; PID-bearing UUID temps, young candidates,
+  unreadable metadata, malformed names, and uninspectable directories remain untouched. The sweep
+  never reads a temp's contents.
+  Every temp/part staging name must also be unique per call across processes and cleaned by its
+  owner —
+  including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot
+  see. Keep a remote temp's own leaf bounded: extending an already-valid maximum-length target leaf
+  with a UUID suffix turns an atomic write into a guaranteed `ENAMETOOLONG` failure.
+
+- **Unique temp files do not order whole-document writers.** If two flushes can snapshot the same
+  store concurrently, publish them FIFO (or reject stale generations). A process-local FIFO is not
+  enough when two supported processes may share one data directory: they have two queues.
+  `agent-status-mirror` reserves a durable generation under an OS-backed SQLite write transaction
+  before it takes its snapshot, then re-reads the published generation under that same lock before
+  rename. An older temp that wakes after a newer complete document is discarded. Never implement
+  this as a stealable timeout lease: a paused live writer is not a dead writer. The reservation is
+  the publication order; it does not merge independently disagreeing in-memory stores. Any new
+  shared-directory store owes an equivalent cross-process order; unique names prevent byte
+  splicing, not time running backwards.
+  This protocol makes the runtime floor load-bearing: keep `package.json`, the Server installer,
+  container image and both shell preflights on the exact supported range above. Do not restore a
+  top-level `node:sqlite` import; lazy capability loading is what lets an incompatible runtime emit
+  the actionable preflight error instead of dying during dependency evaluation.
+
+- **Credential mutation ordering starts before the strict read.** Serializing only `save()` still
+  lets two callers read one snapshot and publish incompatible derivatives. `SecureStore.mutate`
+  and the scheduled/provider/shared-mode/GitHub credential stores use
+  `core/fs-transaction-lock.ts`: a SQLite `BEGIN IMMEDIATE` transaction spans strict read,
+  mutation, compared publication, clear, and prune. Only `ENOENT` means empty; corrupt/unreadable
+  canonical bytes or lock evidence must remain untouched and reject. A suspended writer keeps the
+  OS lock, a crashed process releases it, and a monotonic bounded busy wait returns `lock-timeout`—
+  never steal ownership with a PID or timestamp lease. The lock key realpaths the parent so aliases
+  converge, and the exact SHA-256 revision is compared before rename. Enqueue before reading, keep
+  local queues recoverable after rejection, and add real two-process barrier/crash/busy/corrupt-
+  evidence Chuts. GitHub's controller queue begins before network validation so Clear cannot be
+  overtaken by a prior Save; separate processes are truthfully ordered at SQLite transaction entry.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.
@@ -102,12 +200,40 @@ bug.
 different facts and must stay distinguishable at every layer. Collapsing them is how a panel ends up
 reporting "no sessions" on a host running thirty.
 
+For `scheduled-settings.json`, this rule includes startup: only `ENOENT` is an empty schedule.
+Corrupt/unreadable evidence must remain untouched while both shells boot with overrides disabled,
+surface the structured recovery state, and refuse a save that could overwrite it. Start/stop the
+feature through `ScheduledSettingsRuntime`, not a shell-local store/service sequence. In the
+renderer, release the scheduled-save in-flight owner on failure as well as success so one rejected
+bridge request cannot wedge later edits.
+
+**School Mode optional features require a confirmed-off record at their execution boundary.** The
+renderer begins with `enabled: false` before it has loaded anything; that placeholder is not
+permission to use Cantonese/bilingual copy, funny levels, personal vocabulary, dim sum, or
+Cantonese narration. Use `schoolModeAllowsOptionalFeatures`, and re-check it immediately before an
+effect or write. Both Canvas narrator paths must go through `canvas/narration-policy.ts`: enabled or
+unknown School Mode keeps an opted-in English narrator, but never passes the persisted Cantonese
+track or voice to `narrate()`. Keep the queue's actual-start check and selective Cantonese
+invalidation too; canceling the whole narrator would wrongly discard English app errors, while
+dropping a Cantonese-only track without its dormant English fallback would silence that event.
+
 **Serialize a shared store's decision, not only its final write.** Atomic rename prevents torn
 bytes, but it does not stop two callers from loading the same snapshot and publishing complete,
 conflicting replacements. Funnel read-modify-write operations through one mutation API; the
 approved-device store does this so an older approval cannot land after a revoke and restore the
 revoked key. Only a checked `ENOENT` is an empty store — unreadable or corrupt data must stay an
 error so the next mutation cannot overwrite it as if it were absent.
+
+**A Git-backed history write must be fenced across processes, not only queued in one process.** This
+store never shares its working file/index transaction: it writes an owner-unique replay journal,
+builds through an owner-unique `GIT_INDEX_FILE`, and publishes with old-OID `update-ref` CAS. A loser
+rebuilds; a crash is replayed. Never steal an aged/PID lock, delete a foreign index/journal, or use
+`reset`/`clean` as recovery — a suspended live writer may still own it. Reads snapshot one exact
+head OID, and restore accepts only a full reachable commit. Strip inherited `GIT_DIR`, worktree,
+object-directory and namespace redirects; only the private index override is allowed. Git
+calls/retries are bounded and hooks disabled. An unborn repository is a readable empty history. A
+settings restore is not complete until the awaited history recorder settles, the renderer
+cancels/epochs coalesced saves, joins dispatched saves, and rehydrates live state.
 
 **Degrade to nothing, never to something wrong.** A probe that fails means the bare, safe command —
 never a substituted nearest match. A hand-editable value that is unrecognised must yield the safe
@@ -130,15 +256,58 @@ UTF-16/NUL-padded output, keep names with spaces as one argument, and call that 
 or launch is an actionable error, never permission to guess `/mnt/<drive>`, switch distributions,
 or open a different shell.
 
-**Test generated shell for real.** If you generate a shell command, run it under an actual
-`/bin/sh` against a fixture tree. A composed fixture will not tell you that `echo ##MEM` prints an
-empty line because `#` starts a comment.
+**Test generated shell for real.** If you generate a shell command, run it under an actual POSIX
+shell (`/bin/sh` on POSIX) against a fixture tree. A composed fixture will not tell you that
+`echo ##MEM` prints an empty line because `#` starts a comment.
+
+On Windows, keep those tests real rather than blanket-skipping them. Use
+`src/core/testing/posix-shell.ts`: it resolves Git Bash from Git's own installation, translates
+native fixture paths to the shell's `/c/...` spelling, and puts fake tools ahead of Git Bash's
+bundled tools *after* the shell initializes. Passing a native `C:\...` path into generated shell,
+or prepending a fake `curl` only to the parent process's PATH, silently exercises the wrong file.
+Only behavior that fundamentally requires an AF_UNIX socket should use an explicit Windows skip.
 
 **Credentials never ride argv — local or SSH.** Not a tmux `-e` pair, not `curl -H`, not a remote
 command string. `/proc/<pid>/cmdline` is mode 444 on a stock Linux, and a remote command line is argv
 on the host too: we shipped the hook bearer that way and any other account on the machine could read
 it and open a terminal running an arbitrary command. Pass secrets by 0600 file or by **stdin**
 (`curl --config -`), and never add an argv fallback. See `docs/node-identity.md`.
+
+**Server password admission is one ordered, bounded decision per TCP peer.** Do not put a synchronous
+password hash back in the HTTP handler or split `loginAllowed` from the proof/result update: slow
+request bodies can all pass an early check, and synchronous scrypt stalls every terminal socket.
+`Auth.attemptPassword` owns the same-peer FIFO, bounded async-scrypt pool and authoritative checks
+after each wait. Lockout identity comes only from `req.socket.remoteAddress`; forwarding headers,
+cookies, user-agent and source port are caller-controlled or unstable. Peers have independent
+failure/escalation/ladder state over one shared ladder-clear budget. Ladder and WebAuthn challenges
+have per-peer plus process-wide ceilings; old ladder nonces cannot cross a rung transition, while
+WebAuthn nonces bind the peer plus login/register purpose. Logout must delete the presented persisted
+bearer before clearing its cookie. The deterministic barriers and restart replay proofs live in
+`src/server/auth.test.ts`, `src/server/http.test.ts` and `src/server/unlock-ladder-routes.test.ts`.
+
+**Phone-pairing credentials never ride plaintext LAN HTTP.** A pairing start must load and
+advertise the host's NaCl public key; the client POSTs `{epk,box}`, and the success response is a
+single encrypted `box`. If the host key or encryption is unavailable, pairing refuses before it
+writes an SSH key or bearer. Never restore the old `{token,publicKey}` plaintext fallback.
+`PairingPayloadInput.hostKey` is required, and `buildPairingPayload` must reject a missing or blank
+value at runtime too; TypeScript alone does not protect stale compiled or hand-written callers.
+Only `ENOENT` proves the pairing registry absent: corrupt, wrongly-shaped, or unreadable
+`agent.json` must propagate without rewrite. Register a paired device before activating its SSH
+key, so every possibly-live key remains visible and revocable even when the second write fails.
+The key-append path also treats only `ENOENT` as absence; appending after an unreadable
+`authorized_keys` read can splice two keys when the existing file lacks its final newline.
+Likewise, revoke may treat only an `ENOENT` `authorized_keys` read as absence; every other read
+failure must leave the visible registry entry in place rather than hiding a possibly-live SSH key,
+and the UI must retain the row with an explicit retry/access warning. Take
+`~/.nodeterm/agent.json.lock` before every authoritative registry read-modify-write and hold it
+through the related key-file mutation. Atomic rename is not cross-process serialization, and a
+lock timeout must fail closed rather than guessing that another writer is stale. Every external
+  host-agent writer must honor the same lock protocol. Pairing owners also need a cryptographic
+  attempt ID carried through start, targeted stop, and completion plus cancellation guards after
+  every credential await: a stopped or superseded attempt may leave a visible registry record, but
+  must remove any attributable key activated while cancellation was in flight and must not deliver a
+  bearer. A renderer epoch alone is instance-local and cannot keep an unmounted surface from stopping
+  a newly mounted replacement.
 
 **The Server Edition image has two native addons, not one.** Both `node-pty` and `smart-whisper`
 must be rebuilt for Node's ABI in the Docker deps stage; the normal postinstall targets Electron's
@@ -148,7 +317,38 @@ SIGTERM directly. The wrappers' generated `.env` and temporary credential files 
 both Git and the Docker build context. Wrapper launches must pin the Compose file/project/profiles,
 export the exact bind/port/password values they validated, and reject inherited Compose controls;
 otherwise Compose's richer dotenv syntax can bypass a hand-written safety parser. Run
-`node scripts/test-docker-host.mjs` after changing the image or host wrappers.
+`node scripts/test-docker-host.mjs` after changing the image or host wrappers. To use an SSH daemon,
+pass an explicit `--docker-host ssh://...` endpoint. The harness pins that endpoint, creates only
+cryptographically unique and labelled resources, publishes no host port, applies runtime resource
+and capability limits, sends probe credentials over stdin, and treats verified cleanup as part of
+success. It never weakens SSH host-key checking; provision non-interactive persistent trust before
+the run. If an interrupted run retains its recovery journal, `--cleanup-run <uuid>` removes only
+resources whose recorded daemon identity, immutable resource identity, and ownership labels still
+match.
+
+**Registering a CorePlatform handler does not authorize relay access.** The Server Edition and the
+desktop relay share the same handler-registration seam, but a relay peer may call or receive only
+the exact request/cast/event allowlists in `src/main/relay-rpc-policy.ts`. When adding a host-routed
+relay method or event, wire it in `src/renderer/bridge/relay-api.ts` and review/add that one channel
+to the allowlist in the same change. Machine-global namespaces — settings, licenses, usage
+credentials, School/Kids mode, scheduled-setting tokens, toy locks, and the authenticator — stay
+local and fail closed before a raw relay frame reaches their handler or a host-global broadcast
+reaches their socket. Do not replace this with a denylist: a newly registered credential service
+must be unreachable by default.
+
+**Destructive approval expires when its target or policy changes.** Node, authenticator and
+worktree confirmations re-read their exact identity and authoritative Kids policy at the commit
+boundary; an unreadable policy takes the two-key path. Live worktree deletion additionally requires
+an opaque, one-shot core proof over canonical Git/filesystem generations and the complete ignored
+as well as untracked byte inventory. Never make that proof optional, derive branch authority from
+shared canvas JSON, collapse path I/O errors into absence, or replace the exact-tip ref CAS with a
+plain branch delete.
+
+**A File path is scoped to the machine that produced it.** File drop/paste helpers must take the
+active session API explicitly. Never use `window.nodeTerminal.getPathForFile` or global `files.*`
+from a session-bound surface: in a relay tab that turns a viewer-local path/write into text pasted
+into the host shell. Force byte upload through the session API, and visibly refuse any nested SSH
+case until a scoped host-side carrier exists.
 
 **Both raw listeners change together** — `src/main/index.ts` and `src/server/agent-status.ts`. A new
 field on a hook event that reaches only the desktop leaves the Server Edition quietly without the
@@ -167,6 +367,12 @@ accelerator is handled before the page, so your `keydown` branch simply never ru
 different set. And any chord that reaches the canvas needs the two refusals every canvas shortcut
 here has: not while the kanban board covers it, not while the user is typing.
 
+**Every agent launch carries a branded launch plan.** Add a new production surface to
+`AGENT_LAUNCH_SURFACES`, obtain its `ActiveAgentLaunchPlan` at the moment of launch, and pass that
+proof to `commandForAgentLaunch` / `createAgentNode`. Never thread a raw permission setting into a
+command builder: it skips the live CLI-version and Kids-mode gates. The funnel Chut executes every
+inventory row and must distinguish both permissive inputs from the resulting manual CLI arguments.
+
 **Every node/session close goes through `renderer/lib/nodeDeletion.ts`.** That includes node-header
 × buttons (intercepted at React Flow's `onBeforeDelete`), the canvas and kanban, Cmd/Ctrl+W, the
 sessions sidebar/session-memory panel, and agent-control `close`. The funnel preserves ordinary
@@ -177,6 +383,23 @@ canonical delete frees the children, and the latter performs irreversible teardo
 **Comments explain WHY, and name the failure they prevent.** The codebase is deliberately dense with
 reasoning. A comment that restates the code is noise; one that says "do not simplify this back,
 here is what broke" is the point.
+
+**Treat appearance choices as families and async previews as generations.** A nested settings
+patch replaces the whole object, so selecting a shipped logo must retain an existing custom image
+unless the user explicitly removes it. Image decode/crop/fit completions may arrive out of order;
+only the newest generation may publish. Likewise, an accent is not only `--accent`: update its RGB,
+hover, readable-text and Material primary/container roles together for the current light/dark
+surface. HSV/CMYK are editor formats, not browser CSS—persist their RGBA conversion, including
+alpha. Blob downloads keep their object URL alive past the click turn before revoking it.
+
+**Treat session-host state as desired ownership, not a sequence of best-effort commands.** Several
+`SessionHostPty` views share one client socket, so pause and geometry must retain the individual view
+identity and cross the wire only after aggregation. Reconnect must await attach/pause/size restoration
+before ordinary requests, and transport or emulator backpressure must own tickets independent from
+renderer flow. Only `ENOENT` proves an ownership file absent, and a permanent node deletion may update
+the canvas only after the backing session-host kill acknowledges. Focused Chuts for this subsystem
+must include co-attach, delayed response, socket-drop, and write-backpressure races; a happy-path mock
+does not exercise the contracts that keep persistent processes truthful.
 
 ## Testing
 

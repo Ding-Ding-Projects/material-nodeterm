@@ -280,6 +280,54 @@ describe('buildRealApi: private Windows launch intent boundary', () => {
   })
 })
 
+describe('buildRealApi: host platform', () => {
+  it('requests pty destroy and propagates a rejected server acknowledgement', async () => {
+    const c = fakeClient()
+    c.request = (method: string, ...args: unknown[]) => {
+      c.calls.push({ kind: 'request', method, args })
+      return Promise.reject(new Error('session host outcome unknown'))
+    }
+    const api = buildRealApi(c as never)
+
+    await expect(api.pty.destroy('node-1', { everySocket: true })).rejects.toThrow(
+      'session host outcome unknown'
+    )
+    expect(c.calls).toEqual([
+      { kind: 'request', method: IPC.ptyDestroy, args: ['node-1', true] }
+    ])
+  })
+
+  it('requests pty recycle and propagates a rejected server acknowledgement', async () => {
+    const c = fakeClient()
+    c.request = (method: string, ...args: unknown[]) => {
+      c.calls.push({ kind: 'request', method, args })
+      return Promise.reject(new Error('recycle outcome unknown'))
+    }
+    const api = buildRealApi(c as never)
+
+    await expect(api.pty.recycle('node-2')).rejects.toThrow('recycle outcome unknown')
+    expect(c.calls).toEqual([
+      { kind: 'request', method: IPC.ptyRecycle, args: ['node-2'] }
+    ])
+  })
+
+  it('keeps a failed host read unknown instead of inventing Linux from the browser bridge', async () => {
+    const c = fakeClient()
+    c.request = (method: string, ...args: unknown[]) => {
+      c.calls.push({ kind: 'request', method, args })
+      return Promise.reject(new Error('server unavailable'))
+    }
+    const api = buildRealApi(c as never)
+
+    await expect(api.pty.tmuxStatus()).resolves.toEqual({
+      available: true,
+      installCommand: null,
+      installLabel: null,
+      platform: null
+    })
+  })
+})
+
 describe('buildRealApi: sessionMemory', () => {
   // A real WS namespace, not a stub: the same core service (`startSessionMemoryService`) registers
   // both channels in the server shell, so the browser gets a genuine per-session breakdown of the

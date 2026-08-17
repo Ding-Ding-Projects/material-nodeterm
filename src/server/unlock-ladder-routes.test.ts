@@ -19,6 +19,7 @@ import type { DimSumChallenge, MathChallenge } from '../core/unlock-ladder'
 let dir: string, rendererDir: string, server: http.Server, base: string, auth: Auth
 
 const PASSWORD = 'correct horse battery'
+const HTTP_CLIENT = 'peer:127.0.0.1'
 
 beforeEach(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-ladder-'))
@@ -38,7 +39,7 @@ afterEach(async () => {
 
 /** Drive the real login route until the account locks, exactly as a person would. */
 async function lockOut(): Promise<void> {
-  for (let i = 0; i < 6 && auth.loginAllowed(); i++) {
+  for (let i = 0; i < 6 && auth.loginAllowed(HTTP_CLIENT); i++) {
     await fetch(`${base}/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -46,7 +47,7 @@ async function lockOut(): Promise<void> {
       redirect: 'manual'
     })
   }
-  expect(auth.loginAllowed(), 'the account should be locked by now').toBe(false)
+  expect(auth.loginAllowed(HTTP_CLIENT), 'the account should be locked by now').toBe(false)
 }
 
 const post = (p: string, body: unknown) =>
@@ -91,7 +92,7 @@ describe('the boundary — what clearing the ladder may and may not do', () => {
     await lockOut()
     const v = (await (await solveDimSum()).json()) as { cleared: boolean }
     expect(v.cleared).toBe(true)
-    expect(auth.loginAllowed()).toBe(true)
+    expect(auth.loginAllowed(HTTP_CLIENT)).toBe(true)
   })
 
   it('NEVER issues a session — the password is still required', async () => {
@@ -110,12 +111,12 @@ describe('the boundary — what clearing the ladder may and may not do', () => {
 
   it('does not shorten the NEXT lockout', async () => {
     await lockOut()
-    const first = auth.lockoutRemainingMs()
+    const first = auth.lockoutRemainingMs(HTTP_CLIENT)
     await solveDimSum()
-    expect(auth.loginAllowed()).toBe(true)
+    expect(auth.loginAllowed(HTTP_CLIENT)).toBe(true)
 
     await lockOut()
-    const second = auth.lockoutRemainingMs()
+    const second = auth.lockoutRemainingMs(HTTP_CLIENT)
     // Escalation is untouched by the ladder: the second wait is still twice the first, so a
     // script that spends its whole ladder budget still walks into an exponentially longer wall.
     expect(second).toBeGreaterThan(first)
@@ -126,7 +127,7 @@ describe('the boundary — what clearing the ladder may and may not do', () => {
     await solveDimSum()
     // Five wrong guesses re-lock, exactly as they would have after serving the clock.
     let attempts = 0
-    while (auth.loginAllowed() && attempts < 10) {
+    while (auth.loginAllowed(HTTP_CLIENT) && attempts < 10) {
       await fetch(`${base}/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },

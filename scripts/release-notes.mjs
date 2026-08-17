@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * release-notes.mjs — builds the body of the GitHub Release the CI workflow publishes
- * on each branch push whose ref carries the workflow. Prints markdown to stdout; the workflow
- * redirects it to a file, attaches it to the verified draft, then makes that draft public.
+ * release-notes.mjs — builds the body of the GitHub Release a maintainer dispatches from main.
+ * Prints markdown to stdout; the workflow redirects it to a file, attaches it to the verified
+ * draft, then makes that draft public.
  *
  * This script never claims a check ran that did not, and it never estimates a missing
  * timestamp — see docs/ci-and-releases.md for the governing policy: this workflow runs
@@ -20,9 +20,12 @@
  *   GITHUB_SHA               the built commit. Optional.
  *   RELEASE_ASSET_PATHS      newline-separated list of installer file paths to list with
  *                             their size. Optional — omitted assets are simply not listed.
+ *   RELEASE_ASSET_MANIFEST   validated JSON manifest containing each asset's SHA-256.
+ *                             The release workflow always supplies it.
  */
 import { stat } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { basename, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { computeLineCounts } from './count-lines.mjs'
 
 function fmtBytes(n) {
@@ -58,12 +61,30 @@ async function listAssets() {
     .map((s) => s.trim())
     .filter(Boolean)
   const rows = []
+  let hashes = new Map()
+  if (process.env.RELEASE_ASSET_MANIFEST) {
+    let manifest
+    try {
+      manifest = JSON.parse(process.env.RELEASE_ASSET_MANIFEST)
+    } catch (error) {
+      throw new Error(`RELEASE_ASSET_MANIFEST is not valid JSON: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    if (!Array.isArray(manifest?.assets)) throw new Error('RELEASE_ASSET_MANIFEST must contain an assets array')
+    hashes = new Map(
+      manifest.assets.map((asset) => {
+        if (typeof asset?.name !== 'string' || typeof asset?.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(asset.sha256)) {
+          throw new Error('RELEASE_ASSET_MANIFEST contains an invalid asset SHA-256')
+        }
+        return [asset.name, asset.sha256]
+      }),
+    )
+  }
   for (const p of paths) {
     try {
       const s = await stat(p)
-      rows.push({ path: p, name: basename(p), size: s.size })
+      rows.push({ path: p, name: basename(p), size: s.size, sha256: hashes.get(basename(p)) ?? null })
     } catch {
-      rows.push({ path: p, name: basename(p), size: null })
+      rows.push({ path: p, name: basename(p), size: null, sha256: hashes.get(basename(p)) ?? null })
     }
   }
   return rows
@@ -160,10 +181,9 @@ function renderChecksSection() {
     '',
     '- `npm ci` — installed dependencies exactly as locked, including the postinstall',
     '  patch + native rebuild of `node-pty` for this runner\'s Electron ABI.',
-    '- `npm run make-icon` — regenerated the app icon.',
-    '- `npm run build` (electron-vite) — compiled the main, preload, and renderer bundles.',
-    '- `electron-builder --win squirrel --x64 --publish never` — packaged the Windows Squirrel',
-    '  installer (unsigned; see below).',
+    '- `npm run dist:win` — ran the Windows preflight, regenerated and verified the committed',
+    '  source-SHA icon, compiled the app/session-host bundles, packaged the unsigned x64',
+    '  Squirrel set, and checked RELEASES/nupkg identity plus Setup/app/stub icon metadata.',
     '',
     '**Not run here:** unit/integration tests (`npm test`), type-check (`npm run typecheck`),',
     'lint. Those are run locally by whoever changes the code, and their real results are',
@@ -184,12 +204,15 @@ function renderSigningSection() {
   ].join('\n')
 }
 
-async function renderAssetsSection() {
+export async function renderAssetsSection() {
   const assets = await listAssets()
   if (assets.length === 0) return null
   const lines = ['## Assets', '']
   for (const a of assets) {
-    lines.push(`- \`${a.name}\`${a.size != null ? ` — ${fmtBytes(a.size)}` : ' — (size unavailable)'}`)
+    lines.push(
+      `- \`${a.name}\`${a.size != null ? ` — ${fmtBytes(a.size)}` : ' — (size unavailable)'}` +
+        `${a.sha256 ? ` — SHA-256 \`${a.sha256}\`` : ' — SHA-256 unavailable'}`,
+    )
   }
   return lines.join('\n')
 }
@@ -223,7 +246,10 @@ async function main() {
   console.log(parts.join('\n'))
 }
 
-main().catch((err) => {
-  console.error('release-notes.mjs failed:', err)
-  process.exitCode = 1
-})
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+if (isMain) {
+  main().catch((err) => {
+    console.error('release-notes.mjs failed:', err)
+    process.exitCode = 1
+  })
+}

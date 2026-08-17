@@ -7,9 +7,9 @@
 // scripts nothing, just the `host:build` npm script) and the Electron main process bundle
 // (electron-vite). See docs/windows-session-host.md for the architecture this implements.
 
-/** Bumped whenever a request/response/event SHAPE changes. Carried in the host's state file so a
- *  client can in principle refuse to talk to an incompatible host — not enforced yet (this is the
- *  first version), but the field exists from day one so it never has to be added under pressure. */
+/** Bumped whenever a request/response/event SHAPE changes. Carried in the host's state file and
+ * enforced by the client before hello, so a newly packaged client cannot reuse a long-lived host
+ * whose attach/flow contract predates its own. */
 export const SESSION_HOST_PROTOCOL_VERSION = 2
 
 /** Concrete parser owned by the live terminal generation. Kept in the host so a new renderer/main
@@ -55,6 +55,9 @@ export type SessionHostRequest =
       /** Capability established by a confirmed kill. Required to cold-create that reserved name;
        * other authenticated app clients cannot steal the replacement window. */
       replacementToken?: string
+      /** The reconnecting connection already owes an explicit flow pause. Restored before the
+       * screen barrier and live subscriber activation, so no output leaks through reconnect. */
+      paused?: boolean
     }
   /** Warm attach that is atomic with the host's existence check. It deliberately carries no
    * spawn plan: absence/exit is an error and can never recreate a session with stale settings. */
@@ -64,6 +67,11 @@ export type SessionHostRequest =
       name: string
       /** When known, prevents a same-name replacement from satisfying a stale warm attach. */
       expectedGeneration?: string
+      /** Optional aggregate reconnect state. Older v2 clients omit it; the host then reuses the
+       * generation's current geometry while retaining the no-spawn/expected-generation guard. */
+      cols?: number
+      rows?: number
+      paused?: boolean
     }
   | { id: number; cmd: 'hasSession'; name: string }
   | { id: number; cmd: 'write'; name: string; data: string }
@@ -149,9 +157,10 @@ export interface AttachResult {
   /**
    * The reconstructed screen — an xterm.js `SerializeAddon` dump (colors/attributes, private-mode
    * restore, alt-buffer switch and cursor placement all included — see terminal-emulator.ts).
-   * Present only when `fresh` is false and the session has painted anything since it started;
-   * absent (never an empty string) otherwise, mirroring `PtyCreateResult.screen`'s own contract
-   * ("guaranteed non-empty when present").
+   * Present on an ordinary warm attach, or on an idempotent replay of a consumed replacement token,
+   * when the session has painted anything since it started; absent (never an empty string)
+   * otherwise, mirroring `PtyCreateResult.screen`'s own contract ("guaranteed non-empty when
+   * present").
    */
   screen?: string
   /** Opaque identity for the exact host-owned process behind this attachment. */

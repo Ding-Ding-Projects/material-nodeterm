@@ -12,7 +12,8 @@ import {
   rewriteKeyComment,
   toPublicDevices,
   upsertDevice,
-  type DeviceEntry
+  type DeviceEntry,
+  type PairingPayloadInput
 } from './pairing-core'
 
 // A real Ed25519 public key blob (32 zero bytes) wrapped in the OpenSSH wire format:
@@ -41,10 +42,11 @@ describe('buildPairingPayload', () => {
       user: 'enes',
       token: 'tok123',
       pairPort: 54321,
-      name: 'MacBook'
+      name: 'MacBook',
+      hostKey: 'AAAAhostpub'
     })
     expect(json).toBe(
-      '{"v":1,"host":"192.168.1.5","port":22,"user":"enes","token":"tok123","pairPort":54321,"nodeterm":true,"name":"MacBook"}'
+      '{"v":1,"host":"192.168.1.5","port":22,"user":"enes","token":"tok123","pairPort":54321,"nodeterm":true,"name":"MacBook","hostKey":"AAAAhostpub"}'
     )
     expect(json).not.toContain('\n')
     expect(JSON.parse(json)).toMatchObject({ v: 1, port: 22, nodeterm: true })
@@ -57,24 +59,27 @@ describe('buildPairingPayload', () => {
       user: 'u',
       token: 't',
       pairPort: 1,
-      name: 'n'
+      name: 'n',
+      hostKey: 'AAAAhostpub'
     })
     expect(JSON.parse(json).port).toBe(2222)
   })
 
-  it('omits the relay block when absent (byte-for-byte legacy LAN-only shape)', () => {
+  it('omits the relay block while retaining the mandatory host identity', () => {
     const json = buildPairingPayload({
       host: 'h',
       user: 'u',
       token: 't',
       pairPort: 1,
-      name: 'n'
+      name: 'n',
+      hostKey: 'AAAAhostpub'
     })
     expect(json).not.toContain('relay')
     expect(JSON.parse(json)).not.toHaveProperty('relay')
+    expect(JSON.parse(json).hostKey).toBe('AAAAhostpub')
   })
 
-  it('appends hostKey after name when supplied (no relay)', () => {
+  it('places the mandatory hostKey after name when no relay is supplied', () => {
     const json = buildPairingPayload({
       host: '192.168.1.5',
       user: 'enes',
@@ -110,19 +115,26 @@ describe('buildPairingPayload', () => {
     expect(JSON.parse(json)).toMatchObject({ hostKey: 'AAAAhostpub', relay })
   })
 
-  it('omits hostKey when absent (byte-for-byte legacy shape)', () => {
-    const json = buildPairingPayload({
+  it('rejects a missing hostKey at both the type and runtime boundary', () => {
+    const missingHostKey = {
       host: 'h',
       user: 'u',
       token: 't',
       pairPort: 1,
       name: 'n'
-    })
-    expect(json).not.toContain('hostKey')
-    expect(JSON.parse(json)).not.toHaveProperty('hostKey')
+    }
+
+    // If hostKey becomes optional again, typecheck reports this directive as unused.
+    // @ts-expect-error PairingPayloadInput requires the host identity that seals /pair.
+    expect(() => buildPairingPayload(missingHostKey)).toThrow(/requires a hostKey/)
+    for (const hostKey of ['', ' \t']) {
+      expect(() =>
+        buildPairingPayload({ ...missingHostKey, hostKey } satisfies PairingPayloadInput)
+      ).toThrow(/requires a hostKey/)
+    }
   })
 
-  it('appends the relay block after name when supplied', () => {
+  it('appends the relay block after the mandatory hostKey', () => {
     const relay = {
       hostId: 'abcABC012_-def012ghij',
       hostPublicKeyB64: 'AAAA',
@@ -134,10 +146,11 @@ describe('buildPairingPayload', () => {
       token: 'tok',
       pairPort: 5,
       name: 'Mac',
+      hostKey: 'AAAAhostpub',
       relay
     })
     expect(json).toBe(
-      '{"v":1,"host":"192.168.1.5","port":22,"user":"enes","token":"tok","pairPort":5,"nodeterm":true,"name":"Mac","relay":{"hostId":"abcABC012_-def012ghij","hostPublicKeyB64":"AAAA","relayEndpoint":"wss://relay.nodeterm.dev"}}'
+      '{"v":1,"host":"192.168.1.5","port":22,"user":"enes","token":"tok","pairPort":5,"nodeterm":true,"name":"Mac","hostKey":"AAAAhostpub","relay":{"hostId":"abcABC012_-def012ghij","hostPublicKeyB64":"AAAA","relayEndpoint":"wss://relay.nodeterm.dev"}}'
     )
     expect(JSON.parse(json).relay).toEqual(relay)
   })

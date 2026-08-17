@@ -26,30 +26,50 @@ export interface WorktreeOpResult {
 /**
  * Delete the worktree's branch — and report what git ACTUALLY did.
  *
- * `git branch -d` refuses a branch that is not fully merged, and that refusal is the safety: an
- * unmerged branch is unpublished work, and `-D` would throw it away. We keep the refusal (we never
- * escalate to `-D`) but we no longer SWALLOW it. The confirm dialog tells the user the branch is
- * deleted; when git declines, the result has to say so, or the user walks away believing a branch
- * is gone while it is still sitting in `git branch` — the one thing worse than not deleting it.
+ * Branch preservation is explicit: `merge-base --is-ancestor <tip> HEAD` retains any tip not
+ * reachable from the repository checkout, then `update-ref -d <full-ref> <tip>` makes the final
+ * deletion an exact-tip CAS. A short-name `branch -d` could delete a different ref incarnation
+ * after the worktree disappeared; omitting the old OID from `update-ref` has the same race.
  *
- * The refusal is hedged in the wording ("git would not delete it") rather than asserted as
- * "unmerged": -d also refuses for other reasons (the branch is checked out in another worktree), and
- * claiming a specific cause we did not verify is the same sin in the other direction.
+ * The refusal remains hedged in the wording ("git would not delete it") because a failed ancestry
+ * or ref transaction can have several causes; claiming one we did not verify is still misleading.
  *
  * Returns a sentence to append to the caller's message, or '' when no branch deletion was asked for.
  */
 async function deleteWorktreeBranch(
   git: GitExecutor,
   repoPath: string,
-  /** `null` = the worktree has a detached HEAD, so there is no branch to delete. */
-  branch: string | null | undefined,
+  expected: WorktreeBranchExpectation | undefined,
   deleteBranch: boolean
 ): Promise<string> {
-  if (!deleteBranch || !branch || !isValidGitRef(branch)) return ''
-  const r = await git(repoPath, ['branch', '-d', branch])
+  if (!deleteBranch || !expected) return ''
+  const prefix = 'refs/heads/'
+  const branch = expected.branchRef.startsWith(prefix)
+    ? expected.branchRef.slice(prefix.length)
+    : ''
+  if (!branch || !isValidGitRef(branch) || !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(expected.branchTip)) {
+    return ' The branch was kept because its exact identity could not be verified.'
+  }
+  const current = await git(repoPath, ['rev-parse', '--verify', expected.branchRef])
+  if (!current.ok || current.out.trim() !== expected.branchTip) {
+    return ` Branch ${branch} was kept because it changed before deletion.`
+  }
+  // `update-ref -d <ref> <old>` gives branch deletion the same compare-and-swap boundary as the
+  // directory proof. First retain `branch -d`'s preservation rule explicitly: only a tip already
+  // reachable from the repository's checked-out base may be removed.
+  const merged = await git(repoPath, ['merge-base', '--is-ancestor', expected.branchTip, 'HEAD'])
+  if (!merged.ok) {
+    return ` Branch ${branch} was kept — git would not delete it (it may have unmerged commits).`
+  }
+  const r = await git(repoPath, ['update-ref', '-d', expected.branchRef, expected.branchTip])
   return r.ok
     ? ` Branch ${branch} deleted.`
-    : ` Branch ${branch} was kept — git would not delete it (it may have unmerged commits).`
+    : ` Branch ${branch} was kept because it changed before deletion.`
+}
+
+export interface WorktreeBranchExpectation {
+  branchRef: string
+  branchTip: string
 }
 
 export async function repoRoot(git: GitExecutor, cwd: string): Promise<string | null> {
@@ -66,6 +86,12 @@ export async function repoRoot(git: GitExecutor, cwd: string): Promise<string | 
 export type PathExists = (p: string) => Promise<boolean>
 
 const alwaysExists: PathExists = async () => true
+
+/** Git porcelain always uses `/`, while Node supplies native `\\` paths on Windows. */
+function comparableWorktreePath(value: string): string {
+  const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
+  return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
+}
 
 /**
  * List a repo's worktrees, with `prunable` made TRUE for any entry whose directory is not on disk.
@@ -99,13 +125,19 @@ export async function listWorktrees(
   if (!repoPath) return { ok: false, entries: [] }
   const r = await git(repoPath, ['worktree', 'list', '--porcelain'])
   if (!r.ok) return { ok: false, entries: [] }
-  const entries = await Promise.all(
-    parseWorktreePorcelain(r.out).map(async (e) => ({
-      ...e,
-      prunable: e.prunable || !(await pathExists(e.path))
-    }))
-  )
-  return { ok: true, entries }
+  try {
+    const entries = await Promise.all(
+      parseWorktreePorcelain(r.out).map(async (e) => {
+        // Never short-circuit this strict probe on Git's advisory `prunable` line: the directory
+        // may have reappeared, or the probe may now be unreadable. Either fact must reach callers.
+        const present = await pathExists(e.path)
+        return { ...e, prunable: e.prunable || !present }
+      })
+    )
+    return { ok: true, entries }
+  } catch {
+    return { ok: false, entries: [] }
+  }
 }
 
 /** What every op says when git itself could not be read. Never `worktreeGone` — see `listWorktrees`. */
@@ -221,7 +253,10 @@ export async function worktreeRemove(
   pruneOnly = false,
   /** See `PathExists` / `worktreeList`: git's `prunable` flag needs git ≥ 2.36; the stat is the
    *  fallback that makes every older git tell the truth about a deleted directory. */
-  pathExists: PathExists = alwaysExists
+  pathExists: PathExists = alwaysExists,
+  expectedBranch?: WorktreeBranchExpectation,
+  /** Runs after every cheap path/ref check and immediately before the filesystem mutation. */
+  beforeRemove?: () => Promise<void>
 ): Promise<WorktreeOpResult> {
   // Reject a path that could be parsed as an option flag (argv injection).
   if (!wtPath || wtPath.startsWith('-')) return { ok: false, message: 'Invalid worktree path.' }
@@ -234,7 +269,8 @@ export async function worktreeRemove(
   // terminal's tmux session and rewrite their persisted cwds while the directory is still there.
   // Report the failure; a removal the user can retry beats a removal that destroys the wrong thing.
   if (!listed.ok) return UNREADABLE(repoPath)
-  const entry = listed.entries.find((e) => e.path.replace(/\/+$/, '') === wtPath.replace(/\/+$/, ''))
+  const expectedPath = comparableWorktreePath(wtPath)
+  const entry = listed.entries.find((e) => comparableWorktreePath(e.path) === expectedPath)
   if (!entry) {
     // git answered, and it does not know this path. Only the DIRECTORY's absence proves the
     // worktree is gone: a path git does not list but that still EXISTS is a binding pointing
@@ -253,15 +289,26 @@ export async function worktreeRemove(
     await git(repoPath, ['worktree', 'prune'])
     return { ok: false, worktreeGone: true, message: 'Worktree is not registered — it is already gone.' }
   }
-  const branch = entry.branch
+  if (
+    expectedBranch &&
+    (entry.branchRef !== expectedBranch.branchRef || entry.head !== expectedBranch.branchTip)
+  ) {
+    return { ok: false, message: 'The worktree branch changed. Nothing was removed.' }
+  }
   // git still lists it, but is the directory actually there? `prunable` is git's own answer
   // (≥ 2.36); the stat is the fallback for older gits, which never set the flag.
-  const dirGone = entry.prunable || !(await pathExists(wtPath))
+  let directoryPresent: boolean
+  try {
+    directoryPresent = await pathExists(wtPath)
+  } catch {
+    return { ok: false, message: 'The worktree path could not be inspected. Nothing was changed.' }
+  }
+  const dirGone = !directoryPresent
   if (dirGone) {
     // The directory is gone. `worktree remove` would fail; prune the registration instead and
     // touch no files.
     await git(repoPath, ['worktree', 'prune'])
-    const branchNote = await deleteWorktreeBranch(git, repoPath, branch, !pruneOnly && deleteBranch)
+    const branchNote = await deleteWorktreeBranch(git, repoPath, expectedBranch, !pruneOnly && deleteBranch)
     return {
       ok: true,
       worktreeGone: true,
@@ -271,10 +318,18 @@ export async function worktreeRemove(
   if (pruneOnly) {
     return { ok: false, message: 'The worktree directory still exists; nothing was pruned.' }
   }
+  if (!beforeRemove) {
+    return { ok: false, message: 'A final worktree removal proof is required. Nothing was removed.' }
+  }
+  try {
+    await beforeRemove()
+  } catch {
+    return { ok: false, message: 'The worktree changed before removal. Nothing was removed.' }
+  }
   // `--` ends option parsing so wtPath can never be read as a flag (verified git ≥2.39).
   const rm = await git(repoPath, ['worktree', 'remove', '--force', '--', wtPath])
   if (!rm.ok) return { ok: false, message: rm.err }
   await git(repoPath, ['worktree', 'prune'])
-  const branchNote = await deleteWorktreeBranch(git, repoPath, branch, deleteBranch)
+  const branchNote = await deleteWorktreeBranch(git, repoPath, expectedBranch, deleteBranch)
   return { ok: true, message: `Worktree removed.${branchNote}` }
 }

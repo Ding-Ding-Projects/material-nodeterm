@@ -33,7 +33,7 @@ import {
 import path from 'path'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { platform } from './platform'
-import { renameAtomicSync } from './fs-atomic'
+import { renameAtomicSync, tempNameFor } from './fs-atomic'
 
 /**
  * How long the SERVER gives itself to mint a thread (`startCodexThreadAt`'s default).
@@ -194,7 +194,7 @@ export function writeCodexThreadIdentity(
   }
   const signature = identitySignature(threadId, nodeId, hookEndpoint)
   const file = identityFile(threadId, root)
-  const tmp = path.join(root, `.${threadId}.${process.pid}.${Date.now()}`)
+  const tmp = tempNameFor(file)
   mkdirSync(root, { recursive: true, mode: 0o700 })
   let renamed = false
   try {

@@ -223,9 +223,9 @@ export async function performResumePhase(d: {
   sessionId: string
   io: DeliveryIo
   /**
-   * The exact launch line to relaunch with, when the caller has one. `withPermissionMode` is the
-   * app's single funnel for every CLI launch, and it needs the ACTIVE mode — an async read that
-   * belongs to the node, not to this module. Without it a canvas running in `acceptEdits` / `plan`
+   * The exact launch line to relaunch with, when the caller has one. The caller builds it from a
+   * branded active launch plan, whose async mode read belongs to the node rather than this module.
+   * Without it a canvas running in `acceptEdits` / `plan`
    * would come back from a bulk restart in the default mode and start prompting.
    *
    * Eligibility is still decided by the bare `resumeCommand` below: a session id this app would

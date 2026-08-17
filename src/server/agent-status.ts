@@ -43,6 +43,9 @@ export interface WireAgentStatusOptions {
   hooks?: HookLike
   subagentTail?: SubagentTail
   contextTail?: ContextTail
+  /** PtyManager's confirmed-end subscription. Kept as a narrow callback so this server-only
+   * module does not need the manager implementation just to release transcript tails. */
+  onSessionEnded?: (listener: (nodeId: string) => void) => void
 }
 
 /**
@@ -270,11 +273,10 @@ export function wireAgentStatus(
     }
   })
 
-  // Session end → tear down its tails and clear the maps (server parity with desktop
-  // `src/main/index.ts`'s local `ipcMain.on(IPC.ptyDestroy, …)` branch; the remote/SSH lines are
-  // dropped — the server has no SSH-project manager). Coexists with PtyManager's own listeners via
-  // the multi-listener `on`: those kill the tmux session, these untrack the tails. Untracking a
-  // non-tracked session/subagent is a no-op, so a repeat is harmless.
+  // Session end → tear down its tails and clear the maps (server parity with desktop; the
+  // remote/SSH lines are dropped because the server has no SSH-project manager). The manager
+  // calls this only after session-host kill acknowledgement when that backend owns it, so failure leaves every tail
+  // and map intact for the still-present, retryable node. Repeats are harmless.
   //  - pty:destroy — the node was deleted;
   //  - pty:recycle — the node was moved into a worktree: it stays, but this session is replaced, so
   //    the old session's tails are dead either way (the respawned agent re-registers its own).
@@ -295,8 +297,7 @@ export function wireAgentStatus(
       nodeSubagents.delete(nodeId)
     }
   }
-  platform.on(IPC.ptyDestroy, (nodeId: string) => releaseNodeTails(nodeId))
-  platform.on(IPC.ptyRecycle, (nodeId: string) => releaseNodeTails(nodeId))
+  opts.onSessionEnded?.(releaseNodeTails)
 
   return { contextTail, geminiContextTail }
 }

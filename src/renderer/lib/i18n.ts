@@ -2,12 +2,15 @@ import { useCallback, useMemo } from 'react'
 import { useSettings } from '../state/settings'
 import {
   formatText,
+  normalizeLanguageMode,
   t as resolveText,
   ts as resolveString,
   type FunnyLevels,
   type LanguageMode,
   type LocalizedText
 } from '@shared/i18n'
+import { useSchoolMode } from '../state/schoolMode'
+import { schoolModeAllowsOptionalFeatures } from './schoolModePolicy'
 
 /**
  * Renderer-side binding of the pure `@shared/i18n` resolver to the live `languageMode` /
@@ -31,14 +34,27 @@ export function useI18n(): {
    *  toggle is off, so `` `${emoji('🗑️')} Delete this file` `` degrades cleanly either way. */
   emoji: (e: string) => string
 } {
-  const mode = useSettings((s) => s.settings.languageMode)
+  const configuredMode = useSettings((s) => s.settings.languageMode)
   const funnyLevelEn = useSettings((s) => s.settings.funnyLevelEn)
   const funnyLevelYue = useSettings((s) => s.settings.funnyLevelYue)
   const showEmojiInDialogs = useSettings((s) => s.settings.showEmojiInDialogs)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const languageFeaturesAllowed = schoolModeAllowsOptionalFeatures({
+    hydrated: schoolModeHydrated,
+    enabled: schoolModeEnabled
+  })
+
+  // Preserve the user's configured mode/levels in settings; School mode only suppresses them.
+  // Unknown hydration is fail-closed, and a hand-edited invalid mode is English rather than an
+  // `undefined` resolver result. Level 1 is the documented plain/professional voice.
+  const mode: LanguageMode = languageFeaturesAllowed ? normalizeLanguageMode(configuredMode) : 'en'
+  const effectiveFunnyLevelEn = languageFeaturesAllowed ? funnyLevelEn : 1
+  const effectiveFunnyLevelYue = languageFeaturesAllowed ? funnyLevelYue : 1
 
   const levels: FunnyLevels = useMemo(
-    () => ({ en: funnyLevelEn, yue: funnyLevelYue }),
-    [funnyLevelEn, funnyLevelYue]
+    () => ({ en: effectiveFunnyLevelEn, yue: effectiveFunnyLevelYue }),
+    [effectiveFunnyLevelEn, effectiveFunnyLevelYue]
   )
 
   const t = useCallback(
@@ -63,5 +79,13 @@ export function useI18n(): {
 
   const emoji = useCallback((e: string) => (showEmojiInDialogs ? e : ''), [showEmojiInDialogs])
 
-  return { mode, funnyLevelEn, funnyLevelYue, showEmojiInDialogs, t, ts, emoji }
+  return {
+    mode,
+    funnyLevelEn: effectiveFunnyLevelEn,
+    funnyLevelYue: effectiveFunnyLevelYue,
+    showEmojiInDialogs,
+    t,
+    ts,
+    emoji
+  }
 }
