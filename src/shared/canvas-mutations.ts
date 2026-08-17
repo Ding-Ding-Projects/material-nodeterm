@@ -4,7 +4,39 @@
 
 import { acceptNewInboundNode, carryLocalNodeExec, sanitizeInboundNode } from './node-exec'
 import { REF_MAX_LEN } from './presence'
-import type { CanvasMutation, CanvasNodeState } from './types'
+import type { BridgeLink, CanvasEdgeKind, CanvasMutation, CanvasNodeState } from './types'
+
+/**
+ * A canvas as the publisher sees it: the nodes React Flow manages, plus the two PERSISTED edge
+ * lists (`bridges` = context links, `ropes` = display-only "spawned by" lineage).
+ *
+ * The edges are in here for one reason, and it is a data-loss reason rather than a cosmetic one.
+ * They ride the same whole-file `workspace.save` as the nodes but were NOT in the mutation
+ * vocabulary, so an edge you drew never reached your teammate — and their next save, of a canvas
+ * that never had it, DELETED it. (Same in reverse.) Syncing them is what makes the file the two
+ * clients converge on the file they both agree with.
+ */
+export interface CanvasScene {
+  nodes: CanvasNodeState[]
+  bridges: BridgeLink[]
+  ropes: BridgeLink[]
+}
+
+/** A bare node array read as a scene with no edges — the shape every pre-edge caller passes. */
+export function asScene(s: CanvasScene | CanvasNodeState[]): CanvasScene {
+  return Array.isArray(s) ? { nodes: s, bridges: [], ropes: [] } : s
+}
+
+/** Does this mutation address an edge (rather than a node)? */
+export function isEdgeMutation(
+  m: CanvasMutation
+): m is Extract<CanvasMutation, { op: 'edge-upsert' | 'edge-remove' }> {
+  return m.op === 'edge-upsert' || m.op === 'edge-remove'
+}
+
+function isEdgeKind(value: unknown): value is CanvasEdgeKind {
+  return value === 'bridge' || value === 'rope'
+}
 
 /**
  * Ceiling on one mutation's serialized size. A node carries free text (a sticky's body, an
@@ -37,8 +69,18 @@ export function isRefId(value: unknown): value is string {
  */
 export function isCanvasMutation(value: unknown): value is CanvasMutation {
   if (!value || typeof value !== 'object') return false
-  const m = value as { op?: unknown; id?: unknown; node?: unknown }
+  const m = value as { op?: unknown; id?: unknown; node?: unknown; kind?: unknown; edge?: unknown }
   if (m.op === 'remove') return isRefId(m.id)
+  if (m.op === 'edge-remove') return isEdgeKind(m.kind) && isRefId(m.id)
+  if (m.op === 'edge-upsert') {
+    if (!isEdgeKind(m.kind)) return false
+    const edge = m.edge as { id?: unknown; source?: unknown; target?: unknown } | undefined
+    if (!edge || typeof edge !== 'object') return false
+    // All three ids are ADDRESSES — an edge with a truncated endpoint would attach to the wrong
+    // node on every peer — so they are rejected rather than capped, exactly like a node id.
+    if (!isRefId(edge.id) || !isRefId(edge.source) || !isRefId(edge.target)) return false
+    return withinSizeLimit(m)
+  }
   if (m.op !== 'upsert') return false
   const node = m.node as { id?: unknown; position?: { x?: unknown; y?: unknown } } | undefined
   if (!node || typeof node !== 'object') return false
@@ -120,7 +162,8 @@ function sameNodeValue(a: CanvasNodeState, b: CanvasNodeState): boolean {
 export function createMutationGuard(): (m: CanvasMutation) => boolean {
   const refused = new Map<string, CanvasNodeState>()
   return (m) => {
-    // A `remove` is a couple of dozen bytes: nothing to amortize, and nothing that can grow.
+    // A `remove` and both edge ops are a couple of dozen bytes (ids only): nothing to amortize,
+    // and nothing that can grow. Only a node `upsert` carries free text.
     if (!m || typeof m !== 'object' || (m as { op?: unknown }).op !== 'upsert')
       return isCanvasMutation(m)
     const node = (m as { node?: CanvasNodeState }).node
@@ -154,6 +197,11 @@ export function applyCanvasMutation(
   m: CanvasMutation,
   options?: { defaultTerminalProfileId?: string }
 ): CanvasNodeState[] {
+  // An edge mutation addresses neither of these nodes. Returned UNCHANGED (by reference, so a
+  // caller's `next === prev` short-circuit still fires) rather than trusted to be pre-filtered:
+  // every caller here is applying something that came off the wire, and a silent no-op is the only
+  // safe reading of "this list is not what that mutation is about".
+  if (isEdgeMutation(m)) return states
   if (m.op === 'remove') return states.filter((n) => n.id !== m.id)
   const idx = states.findIndex((n) => n.id === m.node.id)
   if (idx === -1)
@@ -163,6 +211,36 @@ export function applyCanvasMutation(
   // …and OUR exec fields stay on the node the upsert replaces: they are per-machine, so a peer
   // dragging our ssh terminal must not hand it back stripped of the jump host we configured.
   next[idx] = carryLocalNodeExec(states[idx], node)
+  return next
+}
+
+/**
+ * Apply one EDGE mutation to one of a project's edge lists, returning a NEW array (the input is
+ * never mutated). A mutation for the other kind — or for a node — leaves the list untouched, by
+ * reference, so the caller's `next === prev` check still short-circuits.
+ *
+ * There is nothing to sanitize here the way `sanitizeInboundNode` sanitizes a node: an edge is
+ * three ids and carries no exec-enabling field, and `isCanvasMutation` has already bounded all
+ * three. What it CAN carry is a dangling endpoint (the peer deleted that node a moment ago) —
+ * deliberately not filtered here, because this function does not know the node list. Canvas's
+ * existing prune effects drop a dangling edge on the next node change, which is the same treatment
+ * a locally-drawn edge gets.
+ */
+export function applyEdgeMutation(
+  edges: BridgeLink[],
+  kind: CanvasEdgeKind,
+  m: CanvasMutation
+): BridgeLink[] {
+  if (!isEdgeMutation(m) || m.kind !== kind) return edges
+  if (m.op === 'edge-remove') {
+    const next = edges.filter((e) => e.id !== m.id)
+    return next.length === edges.length ? edges : next
+  }
+  const edge: BridgeLink = { id: m.edge.id, source: m.edge.source, target: m.edge.target }
+  const idx = edges.findIndex((e) => e.id === edge.id)
+  if (idx === -1) return [...edges, edge]
+  const next = edges.slice()
+  next[idx] = edge
   return next
 }
 
@@ -180,29 +258,70 @@ function stableStringify(value: unknown): string {
   })
 }
 
+/** The edge half of `diffToMutations`, for one kind. Same shape: changed/added → upsert (in
+ *  next-array order), dropped → remove (in prev-array order). An edge is three short ids, so the
+ *  compare is a plain field compare rather than a stringify. */
+function diffEdges(
+  prev: BridgeLink[],
+  next: BridgeLink[],
+  kind: CanvasEdgeKind,
+  upserts: CanvasMutation[],
+  removes: CanvasMutation[]
+): void {
+  const prevById = new Map(prev.map((e) => [e.id, e]))
+  const nextIds = new Set(next.map((e) => e.id))
+  for (const edge of next) {
+    const before = prevById.get(edge.id)
+    if (!before || before.source !== edge.source || before.target !== edge.target) {
+      upserts.push({ op: 'edge-upsert', kind, edge })
+    }
+  }
+  for (const edge of prev) {
+    if (!nextIds.has(edge.id)) removes.push({ op: 'edge-remove', kind, id: edge.id })
+  }
+}
+
 /**
- * Diff two node snapshots into the minimal mutation list (deterministic): an `upsert` for every
- * node that was added or changed (deep-equal via stable stringify), and a `remove` for every node
- * that was dropped. Never throws on normal input.
+ * Diff two canvas snapshots into the minimal mutation list (deterministic): an `upsert` for every
+ * node that was added or changed (deep-equal via stable stringify), a `remove` for every node that
+ * was dropped, and the same for both edge lists. Never throws on normal input.
+ *
+ * A bare node array is accepted as a scene with no edges, so every caller that predates edge sync
+ * keeps its exact behaviour.
+ *
+ * THE ORDER OF THE BATCH IS LOAD-BEARING: additions before removals, and within each half nodes
+ * before edges. A peer applies these one at a time, so an `edge-upsert` naming a node that has not
+ * arrived yet would draw an edge into nothing (React Flow drops it and warns) — and an
+ * `edge-remove` for an edge whose node is removed in the SAME batch has to land while the edge is
+ * still there. Adds: nodes, then edges. Removes: edges, then nodes.
  */
 export function diffToMutations(
-  prev: CanvasNodeState[],
-  next: CanvasNodeState[]
+  prev: CanvasScene | CanvasNodeState[],
+  next: CanvasScene | CanvasNodeState[]
 ): CanvasMutation[] {
-  const mutations: CanvasMutation[] = []
-  const prevById = new Map(prev.map((node) => [node.id, node]))
-  const nextIds = new Set(next.map((node) => node.id))
+  const a = asScene(prev)
+  const b = asScene(next)
+  const upserts: CanvasMutation[] = []
+  const removes: CanvasMutation[] = []
+  const prevById = new Map(a.nodes.map((node) => [node.id, node]))
+  const nextIds = new Set(b.nodes.map((node) => node.id))
 
   // upserts: added or changed nodes (in next-array order for determinism).
-  for (const node of next) {
+  for (const node of b.nodes) {
     const before = prevById.get(node.id)
     if (!before || stableStringify(before) !== stableStringify(node)) {
-      mutations.push({ op: 'upsert', node })
+      upserts.push({ op: 'upsert', node })
     }
   }
   // removes: nodes present in prev but gone from next (in prev-array order).
-  for (const node of prev) {
-    if (!nextIds.has(node.id)) mutations.push({ op: 'remove', id: node.id })
+  for (const node of a.nodes) {
+    if (!nextIds.has(node.id)) removes.push({ op: 'remove', id: node.id })
   }
-  return mutations
+
+  const edgeUpserts: CanvasMutation[] = []
+  const edgeRemoves: CanvasMutation[] = []
+  diffEdges(a.bridges, b.bridges, 'bridge', edgeUpserts, edgeRemoves)
+  diffEdges(a.ropes, b.ropes, 'rope', edgeUpserts, edgeRemoves)
+
+  return [...upserts, ...edgeUpserts, ...edgeRemoves, ...removes]
 }

@@ -36,10 +36,36 @@
 //      this, a late ack left the client permanently on the losing value and its whole-file save
 //      wrote those bytes over everyone else's canvas.
 //
+//   4. A DELETE IS NOT AN EDIT, AND `seq` ALONE CANNOT TELL THEM APART. Rules 1-3 order mutations
+//      but say nothing about INTENT, and for one pair that gap was a real defect: A deletes a node
+//      while B is mid-drag, B's next frame is ordered after A's remove, so the upsert wins — the
+//      node SURVIVES on every canvas as a shell around a terminal `tmux kill-session` already
+//      killed. Consistent, and wrong: nobody asked for that node back.
+//
+//      The missing fact is CAUSALITY. B's frame is not a decision to re-create the node; it was
+//      produced in ignorance of the delete. So every mutation carries `seen` — the highest `seq`
+//      its sender had applied when it cast — and the rule is exact, with no timer and no heuristic:
+//
+//          an upsert for a removed node is DROPPED iff `seen < the seq the remove was ordered at`.
+//
+//      A stale drag frame carries `seen` from before the remove and dies; a deliberate re-creation
+//      (⌘Z on the delete, a node re-added later) necessarily carries `seen` at or past it and is
+//      applied, which is what keeps this from becoming a blunt "delete always wins" — the tiebreak
+//      docs/team-presence.md rejected precisely because it would let one stale frame from a
+//      disconnected peer erase a node that was legitimately re-created.
+//
+//      Its mirror on the receiving side: a `remove` is never held off by rule 2. Rule 2 rests on
+//      "our unacked mutation is later in the total order, so it wins everywhere" — and under this
+//      rule it no longer does, because every other client is about to drop it for the same reason
+//      we would be dropping the remove. Suppressing the remove here would be the one way to
+//      diverge from them.
+//
+//      An UNSTAMPED mutation (no `seen`: an older peer, or a path with no reflector) is judged
+//      exactly as it was before this rule existed — applied. Degrade, never break.
+//
 // Together those give: every client ends on the mutation with the highest `seq` for that node.
-// Convergence, on any interleaving. What it deliberately does NOT give is intent preservation —
-// two people dragging one node still fight, and a delete concurrent with an edit is decided by the
-// total order, not by "delete wins" (see docs/team-presence.md, which states the resolution).
+// Convergence, on any interleaving. What it deliberately does NOT give is intent preservation for
+// two people dragging the SAME node — they still fight, and last-write-wins decides.
 //
 // Pure: no React, no DOM, no timers (the pending TTL below is a lazy clock read, not a timer).
 
@@ -62,12 +88,63 @@ import type { CanvasMutation } from './types'
  */
 export const PENDING_TTL_MS = 5000
 
-/** The node a mutation addresses. */
-export function mutationNodeId(m: CanvasMutation): string {
-  return m.op === 'remove' ? m.id : m.node.id
+/**
+ * How many removed node ids stay judgeable (rule 4). An entry is dropped the moment the node is
+ * legitimately re-created, so this only bounds nodes that were deleted and never came back — i.e.
+ * a session's whole delete history. Far past any real canvas, and the eviction is a plain LRU:
+ * losing the OLDEST entry degrades exactly to the pre-rule-4 behaviour for that node (a stale
+ * upsert could resurrect it), never to something worse.
+ */
+export const REMOVED_MAX = 512
+
+/**
+ * The THING a mutation addresses — the key everything below orders by.
+ *
+ * Nodes and edges live in ONE key space with a prefix, not two maps: a node id and an edge id are
+ * generated independently and could collide, and the rules here (highest `seq` wins, our unacked
+ * cast suppresses peers, a remove tombstones the key) are the same for both. The prefix is what
+ * keeps them from being confused for one another.
+ *
+ * Edges key on the id ALONE — the `kind` is deliberately not in the key. One id is one edge; a
+ * bridge and a rope claiming the same id must fight in the total order and be resolved to one
+ * thing, not held as two independent entities on different clients.
+ */
+export function mutationKey(m: CanvasMutation): string {
+  if (m.op === 'edge-remove') return `e:${m.id}`
+  if (m.op === 'edge-upsert') return `e:${m.edge.id}`
+  return `n:${m.op === 'remove' ? m.id : m.node.id}`
+}
+
+/** The node a mutation addresses. Node ops only — an edge mutation addresses no node. */
+export function mutationNodeId(m: CanvasMutation): string | null {
+  if (m.op === 'remove') return m.id
+  if (m.op === 'upsert') return m.node.id
+  return null
+}
+
+/** Does this mutation ADD-OR-REPLACE its subject (as opposed to dropping it)? Nodes and edges are
+ *  ordered by the same rules, so every rule below asks this rather than `op === 'upsert'`. */
+function isUpsert(m: CanvasMutation): boolean {
+  return m.op === 'upsert' || m.op === 'edge-upsert'
+}
+
+/** Does this mutation DROP its subject? The mirror of `isUpsert`. */
+function isRemove(m: CanvasMutation): boolean {
+  return m.op === 'remove' || m.op === 'edge-remove'
 }
 
 export interface CanvasOrder {
+  /**
+   * Stamp a mutation we are ABOUT to cast with our causal position (`seen`) — rule 4.
+   *
+   * PURE, and separate from `onLocal` on purpose: the caller has to run the shared
+   * `isCanvasMutation` size guard on the EXACT payload it will cast (a mutation the reflector
+   * refuses is dropped silently, and one that recorded a pending entry would deafen that node to
+   * its peers for a whole TTL). Stamping inside `onLocal` would mean guarding a payload a few
+   * bytes smaller than the one that actually goes on the wire — the one difference that can put a
+   * borderline mutation on the wrong side of the cap.
+   */
+  stamp(m: CanvasMutation): CanvasMutation
   /** Record a mutation WE are casting (it becomes pending until its echo comes back). */
   onLocal(m: CanvasMutation): void
   /**
@@ -120,6 +197,44 @@ export function createCanvasOrder(
    * late ack is APPLIED rather than dropped, if the total order still says it wins.
    */
   const superseded = new Set<string>()
+  /**
+   * RULE 4 — nodes a `remove` has taken off the canvas, and the `seq` that remove was ordered at.
+   * An upsert whose sender had not yet applied that remove (`seen` below it) was produced in
+   * ignorance of the delete and is dropped; anything at or past it is a deliberate re-creation and
+   * is applied (which also clears the entry). Insertion-ordered, capped at REMOVED_MAX.
+   */
+  const removed = new Map<string, number>()
+  /**
+   * The highest `seq` we have applied or deliberately dropped, across ALL nodes — our causal
+   * position in the total order, and what `stamp` puts on every mutation we cast. Global, not per
+   * node: rule 4 compares a sender's knowledge of the ORDER against a remove's place in it, and
+   * "what did this client know when it cast" has nothing to do with which node it addressed.
+   */
+  let lastSeq = 0
+
+  const noteRemoved = (id: string, seq: number): void => {
+    removed.delete(id) // re-insert so the Map's iteration order stays the LRU order
+    removed.set(id, seq)
+    while (removed.size > REMOVED_MAX) {
+      const oldest = removed.keys().next().value as string | undefined
+      if (oldest === undefined) break
+      removed.delete(oldest)
+    }
+  }
+
+  /**
+   * Rule 4's verdict: is this upsert a stale frame from before the node was removed?
+   *
+   * An UNSTAMPED mutation (`seen` undefined — an older peer, the relay mirror, a test bus with no
+   * reflector) is never blocked: we cannot judge its causality, and guessing "stale" would drop a
+   * legitimate edit. Degrade to the pre-rule-4 behaviour rather than break.
+   */
+  const supersededByRemove = (m: CanvasMutation, id: string): boolean => {
+    if (!isUpsert(m)) return false
+    const at = removed.get(id)
+    if (at === undefined) return false
+    return typeof m.seen === 'number' && m.seen < at
+  }
 
   /** Is rule 2's suppression live for this node? Lapses on the TTL (the entry stays: see Pending). */
   const suppressing = (id: string): boolean => {
@@ -134,8 +249,15 @@ export function createCanvasOrder(
   }
 
   return {
+    stamp(m) {
+      // `lastSeq` 0 = we have applied nothing from the reflector yet, which is also the value an
+      // unstamped mutation would carry. Stamp it anyway: 0 is a truthful causal position (we know
+      // about nothing), and it is what makes a first-frame drag lose to a delete that precedes it.
+      return { ...m, seen: lastSeq }
+    },
+
     onLocal(m) {
-      const id = mutationNodeId(m)
+      const id = mutationKey(m)
       const p = pending.get(id)
       if (p) {
         p.count++
@@ -151,19 +273,33 @@ export function createCanvasOrder(
     },
 
     accept(m) {
-      const id = mutationNodeId(m)
+      const id = mutationKey(m)
       const seq = m.seq ?? 0
       const highest = seen.get(id) ?? 0
       // `seq` 0 means an unstamped mutation (no reflector in the path) — never treat it as stale.
       const current = seq === 0 || seq > highest
       if (seq > highest) seen.set(id, seq)
+      // Our causal position for the mutations WE cast next (rule 4). Advanced for EVERYTHING we
+      // process — our own echo included, and a straggler too: both prove the order has reached at
+      // least that far, and "what did this client know" says nothing about who sent it.
+      if (seq > lastSeq) lastSeq = seq
+
+      // Rule 4's bookkeeping, before any verdict below reads it. Only a CURRENT mutation may move
+      // it: a straggler describes a state the total order has already left behind.
+      const stale = supersededByRemove(m, id)
+      if (current) {
+        if (isRemove(m)) noteRemoved(id, seq)
+        else if (!stale) removed.delete(id) // a deliberate re-creation: this node is alive again
+      }
 
       if (m.src && m.src === src) {
         const p = pending.get(id)
         // Rule 3: our optimistic value was overwritten by a peer while this cast was in flight (the
         // TTL had lapsed, so rule 2 no longer held it off). If this echo still wins the total order,
         // it is a REPAIR, not a rubber-band — apply it and land where every other client already is.
-        const repair = superseded.has(id) && current
+        // Rule 4 forecloses that: a value the delete superseded lost on every OTHER client, so
+        // replaying it here would resurrect — on this canvas alone — a node nobody else has.
+        const repair = superseded.has(id) && current && !stale
         // Rule 1: otherwise our own echo is just an ack — consume it, apply nothing.
         if (p && --p.count <= 0) {
           pending.delete(id)
@@ -174,9 +310,16 @@ export function createCanvasOrder(
       // A straggler: a mutation the total order has already superseded on this client (applied, or
       // deliberately dropped). Applying it would move the node BACKWARDS out of the total order.
       if (!current) return false
+      // Rule 4: cast in ignorance of the delete — a stale frame, not a decision to bring the node
+      // back. (A re-creation carries `seen` at or past the remove and never reaches here.)
+      if (stale) return false
       // Rule 2: an edit of ours for this node is still in flight, so it is later in the total order
       // than this one and will win everywhere. Keep ours; the peers will land on it.
-      if (suppressing(id)) return false
+      //
+      // NEVER for a `remove`. Rule 2 rests on our unacked mutation winning everywhere, and under
+      // rule 4 it does not: every other client is about to drop it for being older than this
+      // delete. Holding the remove off here is the one way to end up disagreeing with them.
+      if (!isRemove(m) && suppressing(id)) return false
       // Applying a peer's mutation over an unacked cast of ours (the TTL lapsed — `suppressing`
       // just said so, but the entry is still there): remember that our value is gone, so the late
       // ack can repair it (rule 3).
@@ -188,6 +331,11 @@ export function createCanvasOrder(
       seen.clear()
       pending.clear()
       superseded.clear()
+      // The core may have restarted at seq 0 — a `removed` entry stamped with the OLD counter would
+      // then outrank every new mutation and blackhole that node, and a stale `lastSeq` would put a
+      // causal position on our casts that the new order has not reached.
+      removed.clear()
+      lastSeq = 0
     }
   }
 }

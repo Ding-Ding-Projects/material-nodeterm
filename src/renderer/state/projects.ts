@@ -10,6 +10,7 @@ import type {
   Workspace
 } from '@shared/types'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
+import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 
 interface ProjectsState {
@@ -92,6 +93,15 @@ interface ProjectsState {
     mutation: CanvasMutation,
     defaultTerminalProfileId?: string
   ): boolean
+  /**
+   * The EDGE counterpart, for the same background-project path. Edges (`bridges` = context links,
+   * `ropes` = display-only lineage) ride the same whole-file save as the nodes, so dropping a
+   * peer's edge mutation for a project we are not looking at has the identical failure mode: our
+   * next save writes a project without their edge, deleting it for everyone.
+   *
+   * Returns false if the project is unknown here (nothing applied).
+   */
+  applyEdgeMutation(projectId: string, mutation: CanvasMutation): boolean
   /** Renames a node within a project (source of truth for inactive projects). */
   renameNode(projectId: string, nodeId: string, title: string): void
   /** Recolors a node within a project. */
@@ -368,6 +378,26 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
         applyCanvasMutation(nodes, mutation, { defaultTerminalProfileId })
       )
+    }))
+    return true
+  },
+
+  applyEdgeMutation(projectId, mutation) {
+    if (!get().projects.some((p) => p.id === projectId)) return false
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id !== projectId) return p
+        const bridges = applyEdgeMutation(p.bridges ?? [], 'bridge', mutation)
+        const ropes = applyEdgeMutation(p.ropes ?? [], 'rope', mutation)
+        // `applyEdgeMutation` returns the SAME array when the mutation is not about that list, so
+        // the untouched kind keeps its identity — and a project whose stored list was `undefined`
+        // stays `undefined` rather than being materialized as an empty array on every peer edge
+        // (which would dirty the file with `"bridges": []` on projects that have never had one).
+        const nextBridges = bridges === (p.bridges ?? []) ? p.bridges : bridges
+        const nextRopes = ropes === (p.ropes ?? []) ? p.ropes : ropes
+        if (nextBridges === p.bridges && nextRopes === p.ropes) return p
+        return { ...p, bridges: nextBridges, ropes: nextRopes }
+      })
     }))
     return true
   },
