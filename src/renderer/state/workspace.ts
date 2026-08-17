@@ -21,6 +21,7 @@ import { sshHostKey } from '@shared/ssh'
 import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
+import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -53,6 +54,10 @@ const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
+/** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
+ *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
+ *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
+const ANNOTATION_SIZE = { width: 240, height: 160 }
 
 /** Height of a node when collapsed (header only). */
 export const COLLAPSED_HEIGHT = 40
@@ -167,6 +172,10 @@ export interface NodeData {
    * SSH-project editor still routes to the remote fs after reopen.
    */
   sshFs?: boolean
+  /** annotation-only: 'line' or 'arrow' — see createAnnotationNode and AnnotationNode.tsx. */
+  annotationVariant?: 'line' | 'arrow'
+  /** annotation-only: which corner-to-corner diagonal of the node's box the line/arrow follows. */
+  annotationDir?: 'tl-br' | 'tr-bl'
   [key: string]: unknown
 }
 
@@ -923,6 +932,41 @@ export function createGroupNode(
   }
 }
 
+/**
+ * Creates a standalone line/arrow annotation — pure decoration with no relationship to any other
+ * node (issue #145). This is deliberately NOT an edge: unlike a bridge (context link), a rope
+ * (spawn lineage) or a canvas-control dependency edge, it is rendered as an ordinary node
+ * (AnnotationNode.tsx) and never carries a `source`/`target` referencing another node, has no
+ * connect handles, and cannot be drawn between two nodes — the structural fact that keeps it
+ * impossible to mistake for a link that changes what an agent can read.
+ *
+ * `rect` is normally the geometry a drag produced (`annotationRectFromPoints`); a caller with no
+ * drag (e.g. a hypothetical future palette-only path) may pass a default box instead. `index`
+ * only picks the initial color off the shared palette — the color dot on the node lets the user
+ * repick afterwards, same as every other colorable node.
+ */
+export function createAnnotationNode(
+  rect: AnnotationRect,
+  variant: AnnotationVariant,
+  index = 0
+): CanvasNode {
+  return {
+    id: nextId('annotation'),
+    type: 'annotation',
+    position: rect.position,
+    width: rect.size.width,
+    height: rect.size.height,
+    style: { width: rect.size.width, height: rect.size.height },
+    data: {
+      title: variant === 'arrow' ? 'Arrow' : 'Line',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      annotationVariant: variant,
+      annotationDir: rect.dir
+    }
+  }
+}
+
 /** Creates a new project. When `ssh` is set, this is an SSH project (its terminals run remote). */
 export function createProject(
   index: number,
@@ -1209,7 +1253,12 @@ export function groupSelectedNodes(
  * copy resume the source conversation or execute work the source already consumed.
  */
 export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
-  const kind: NodeKind = node.type === 'sticky' ? 'sticky' : node.type === 'group' ? 'group' : 'terminal'
+  const kind = duplicateKind(node.type)
+  // Mirrors the factories exactly: `createTerminalNode` mints `term-…` and every other factory
+  // uses its own kind as the prefix (`editor-`, `diff-`, `video-`, `web-`, `browser-`, `sticky-`,
+  // `scheduler-`, `dino-`, `group-`, `annotation-`). Not cosmetic — the relay's node-id guard
+  // (`SAFE_NODE_ID` in core/project-node-append, twinned in nodeterm-ios) accepts only `term-…`
+  // for a registered terminal session, so do NOT "simplify" this to a bare `kind`.
   const prefix = kind === 'terminal' ? 'term' : kind
   return {
     ...node,
@@ -1225,7 +1274,26 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       pendingLaunch: undefined,
       pendingLaunchError: undefined,
       pendingLaunchErrorKind: undefined,
-      agentSessionId: undefined
+      agentSessionId: undefined,
+      // One-shot respawn trigger, never serialized: the number means something only as a CHANGE,
+      // so a copy born holding the source's counter is stale from birth.
+      respawnNonce: undefined,
+      // A worktree binding is 1:1 with one checkout on disk, and the destructive Merge/Remove
+      // paths are keyed on it (`releaseWorktreeBinding`). A second frame claiming the same
+      // binding could remove the directory the ORIGINAL frame is still working in.
+      worktree: undefined,
+      // Grants an agent control of this tab through the Browser Plugin. An agent propagates its
+      // own grant when IT opens a popup; a user duplicating a node must not hand that authority
+      // to a tab the agent never opened.
+      browserOwnerNodeId: undefined,
+      // Loop CONFIG (task/interval/targets) is what a user duplicating a Loop wants copied; the
+      // RUN is not. Canvas's scheduler sweep fires every `loopEnabled` node, so a copy of a
+      // running Loop would be a second live scheduler pushing the same prompt at the same agents
+      // on the same cadence. `loopNextRunAt`/`loopLastRunAt` are that run's bookkeeping, not
+      // config, so they go with it.
+      loopEnabled: undefined,
+      loopNextRunAt: undefined,
+      loopLastRunAt: undefined
     }
   }
 }
@@ -1504,7 +1572,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         ssh: n.ssh,
         sshRemoteTmux: n.sshRemoteTmux,
         sshFs: n.sshFs,
-        worktree: n.worktree
+        worktree: n.worktree,
+        annotationVariant: n.annotationVariant,
+        annotationDir: n.annotationDir
       }
     }
   })
@@ -1532,7 +1602,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
                       ? NATIVE_LOOP_SIZE
                   : kind === 'dino'
                     ? DINO_SIZE
-                    : TERMINAL_SIZE
+                    : kind === 'annotation'
+                      ? ANNOTATION_SIZE
+                      : TERMINAL_SIZE
   return nodes
     .map((n) => {
       const kind: NodeKind = (n.type as NodeKind) ?? 'terminal'
@@ -1580,7 +1652,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         ssh: n.data.ssh,
         sshRemoteTmux: n.data.sshRemoteTmux,
         sshFs: n.data.sshFs,
-        worktree: n.data.worktree
+        worktree: n.data.worktree,
+        annotationVariant: n.data.annotationVariant,
+        annotationDir: n.data.annotationDir
       }
     })
 }

@@ -77,6 +77,9 @@ import {
 } from '../terminal/webgl-budget'
 import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode, setWorktreeActionHandler } from '../nodes/GroupNode'
+import { AnnotationNode } from '../nodes/AnnotationNode'
+import { useAnnotationDrawTool } from './useAnnotationDrawTool'
+import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
 import BrowserNode from '../nodes/BrowserNode'
@@ -99,6 +102,8 @@ import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import {
+  IconAnnotationArea,
+  IconAnnotationArrow,
   IconCollapse,
   IconBellFilled,
   IconBranch,
@@ -1531,6 +1536,7 @@ export function Canvas() {
       terminal: withNodeBoundary(TerminalNode),
       sticky: withNodeBoundary(StickyNode),
       group: withNodeBoundary(GroupNode),
+      annotation: withNodeBoundary(AnnotationNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -2327,6 +2333,11 @@ export function Canvas() {
   // Expose markDirty to surfaces outside Canvas (a canvas node editing its kanban labels), so they
   // ride the same debounced whole-file save.
   useEffect(() => registerWorkspaceDirty(markDirty), [markDirty])
+
+  // Drag-to-draw for the two annotation tools (issue #145): "Draw colored area" / "Draw line" /
+  // "Draw arrow" — see useAnnotationDrawTool.ts for the interaction and src/renderer/lib/annotation.ts
+  // for the pure geometry. `drawTool.tool` also gates the crosshair cursor on .flow-wrap below.
+  const drawTool = useAnnotationDrawTool({ flowWrapRef, screenToFlowPosition, setNodes, markDirty })
 
   const kanbanOpen = useViewMode((s) => !!activeProjectId && viewFor(s, activeProjectId) === 'kanban')
   const projectKanban = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.kanban)
@@ -7831,6 +7842,26 @@ export function Canvas() {
             onClick: () => openWorktreeDialog(null, at)
           },
           { type: 'separator' },
+          // Draw tools (issue #145): arm one, then drag on the canvas — Esc cancels. "Draw colored
+          // area" is an empty group frame (the SAME coloured frame `groupSelectedNodes` already
+          // builds around a selection); "Draw line"/"Draw arrow" are standalone annotation nodes
+          // with no relationship to any other node — never an edge, never a context link.
+          {
+            label: 'Draw colored area',
+            icon: <IconAnnotationArea />,
+            onClick: () => drawTool.startTool('area')
+          },
+          {
+            label: 'Draw line',
+            icon: <IconAnnotationArrow />,
+            onClick: () => drawTool.startTool('line')
+          },
+          {
+            label: 'Draw arrow',
+            icon: <IconAnnotationArrow />,
+            onClick: () => drawTool.startTool('arrow')
+          },
+          { type: 'separator' },
           // Canvas actions.
           { label: 'Select all', icon: <IconSelectAll />, onClick: selectAll },
           // fitAll, NOT the raw fitView: fitAll frames against the CURRENT chrome layout (the same
@@ -7878,7 +7909,8 @@ export function Canvas() {
       arrangeAllNodes,
       hasArrangeableNodes,
       hasRestartableAgents,
-      restartIdleAgents
+      restartIdleAgents,
+      drawTool.startTool
     ]
   )
 
@@ -11514,6 +11546,30 @@ export function Canvas() {
         note: isSshProject ? WORKTREE_SSH_HINT : undefined,
         run: () => openWorktreeDialog(null)
       },
+      // Draw tools (issue #145) — arms the next canvas drag; Esc cancels. Same three tools as the
+      // pane context menu, see the comment there for why "colored area" reuses the group frame and
+      // "line"/"arrow" are a brand-new, purely decorative node kind (never an edge/context link).
+      {
+        id: 'draw-area',
+        label: 'Draw colored area',
+        hint: 'box rectangle frame group blue red color',
+        icon: <IconAnnotationArea />,
+        run: () => drawTool.startTool('area')
+      },
+      {
+        id: 'draw-line',
+        label: 'Draw line',
+        hint: 'annotation shape',
+        icon: <IconAnnotationArrow />,
+        run: () => drawTool.startTool('line')
+      },
+      {
+        id: 'draw-arrow',
+        label: 'Draw arrow',
+        hint: 'annotation shape',
+        icon: <IconAnnotationArrow />,
+        run: () => drawTool.startTool('arrow')
+      },
       { id: 'new-project', label: 'New project', icon: <IconProject />, run: () => addProject() },
       { id: 'clone-repo', label: 'Clone repository…', icon: <IconProject />, run: () => setCloneDialogOpen(true) },
       {
@@ -11773,6 +11829,7 @@ export function Canvas() {
     isSshProject,
     newProjectFile,
     addProject,
+    drawTool.startTool,
     fitView,
     persist,
     switchProject,
@@ -12101,7 +12158,56 @@ export function Canvas() {
         </button>
       </div>
 
-      <div className="flow-wrap" ref={flowWrapRef}>
+      <div
+        className={`flow-wrap${drawTool.tool ? ' canvas-draw-active' : ''}`}
+        ref={flowWrapRef}
+      >
+        {/* Live preview of the annotation drag in progress (issue #145) — screen-space `fixed`
+            overlay, so it needs no pan/zoom transform math; useAnnotationDrawTool computes the
+            rect from real mousedown/mousemove client coordinates. Purely visual: the actual node
+            is created once on mouseup, from the SAME geometry helper the preview borrows here. */}
+        {drawTool.preview &&
+          (drawTool.preview.tool === 'area' ? (
+            <div
+              className="canvas-draw-preview canvas-draw-preview--area"
+              style={{
+                left: drawTool.preview.x,
+                top: drawTool.preview.y,
+                width: drawTool.preview.width,
+                height: drawTool.preview.height
+              }}
+            />
+          ) : (
+            <div
+              className="canvas-draw-preview"
+              style={{
+                left: drawTool.preview.x,
+                top: drawTool.preview.y,
+                width: drawTool.preview.width,
+                height: drawTool.preview.height
+              }}
+            >
+              <svg className="canvas-draw-preview__line" width="100%" height="100%">
+                {(() => {
+                  const { from, to } = annotationEndpoints(
+                    { width: drawTool.preview.width, height: drawTool.preview.height },
+                    drawTool.preview.dir
+                  )
+                  return (
+                    <line
+                      x1={from.x}
+                      y1={from.y}
+                      x2={to.x}
+                      y2={to.y}
+                      stroke="var(--accent)"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                    />
+                  )
+                })()}
+              </svg>
+            </div>
+          ))}
         {/* First-contact guidance: an empty canvas used to be a black void (field report:
             "didn't know what to do first"). Pointer-events-none so it can never eat a
             right-click or box-select; keyed off the LIVE nodes array, so it reappears on

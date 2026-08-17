@@ -5,13 +5,17 @@ import {
   arrangeNodes,
   commonParentId,
   createAccountLoginNode,
+  createAnnotationNode,
   createCodexAccountLoginNode,
   createAgentNode,
   createCanvasControlTerminalNode,
   createDinoNode,
+  createGroupNode,
+  duplicateNode,
   fitGroupToChildren,
   flowToNodeStates,
   groupSelectedNodes,
+  NODE_COLORS,
   nodeStatesToFlow,
   nodeSshFor,
   reorderGroupWithinParent,
@@ -22,6 +26,7 @@ import {
   ungroupNodes
 } from './workspace'
 import type { CanvasNode } from './workspace'
+import type { AnnotationRect } from '../lib/annotation'
 import { resetCodexIdentityCapsForTests } from './codexIdentity'
 import { codexRemoteCommand } from '../../shared/agents/config'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
@@ -843,6 +848,92 @@ describe('dino node serialization', () => {
     expect(node.type).toBe('dino')
     expect(node.data.highScore).toBe(0)
     expect(node.width).toBe(600)
+  })
+})
+
+describe('annotation node (issue #145 — line/arrow drawing tool)', () => {
+  const rect: AnnotationRect = {
+    position: { x: 40, y: 60 },
+    size: { width: 200, height: 120 },
+    dir: 'tl-br'
+  }
+
+  it('createAnnotationNode places a line at the drawn rect with a palette color', () => {
+    const node = createAnnotationNode(rect, 'line', 1)
+    expect(node.type).toBe('annotation')
+    expect(node.position).toEqual({ x: 40, y: 60 })
+    expect(node.width).toBe(200)
+    expect(node.height).toBe(120)
+    expect(node.data.annotationVariant).toBe('line')
+    expect(node.data.annotationDir).toBe('tl-br')
+    expect(node.data.title).toBe('Line')
+    // Colored from the shared palette like every other node, never hard-coded.
+    expect(node.data.color).toBe(NODE_COLORS[1 % NODE_COLORS.length])
+  })
+
+  it('createAnnotationNode places an arrow and records the opposite diagonal', () => {
+    const node = createAnnotationNode({ ...rect, dir: 'tr-bl' }, 'arrow', 0)
+    expect(node.data.annotationVariant).toBe('arrow')
+    expect(node.data.annotationDir).toBe('tr-bl')
+    expect(node.data.title).toBe('Arrow')
+  })
+
+  it('is NEVER an edge: it carries no source/target and is a plain node like a sticky or group', () => {
+    const node = createAnnotationNode(rect, 'arrow', 0)
+    expect(node).not.toHaveProperty('source')
+    expect(node).not.toHaveProperty('target')
+    expect(node).not.toHaveProperty('sourceHandle')
+    expect(node).not.toHaveProperty('targetHandle')
+  })
+
+  it('round-trips an annotation node through the persisted-state serializers', () => {
+    const node = createAnnotationNode(rect, 'arrow', 2)
+    const states = flowToNodeStates([node])
+    expect(states[0].kind).toBe('annotation')
+    expect(states[0].annotationVariant).toBe('arrow')
+    expect(states[0].annotationDir).toBe('tl-br')
+    expect(states[0].position).toEqual({ x: 40, y: 60 })
+    expect(states[0].size).toEqual({ width: 200, height: 120 })
+
+    const back = nodeStatesToFlow(states)
+    expect(back[0].type).toBe('annotation')
+    expect(back[0].data.annotationVariant).toBe('arrow')
+    expect(back[0].data.annotationDir).toBe('tl-br')
+    expect(back[0].data.color).toBe(node.data.color)
+  })
+
+  it('falls back to a sane default box when a legacy/hand-edited record has no size', () => {
+    // Mirrors the dino/chat migration tests above: a project.json is hand-editable, so a
+    // malformed annotation record must still hydrate into something clickable rather than crash.
+    const states = flowToNodeStates([
+      { ...createAnnotationNode(rect, 'line', 0), width: undefined, height: undefined } as unknown as CanvasNode
+    ])
+    expect(states[0].size.width).toBeGreaterThan(0)
+    expect(states[0].size.height).toBeGreaterThan(0)
+  })
+
+  it('duplicateNode keeps an annotation an annotation (not silently demoted to a terminal)', () => {
+    const node = createAnnotationNode(rect, 'arrow', 0)
+    const copy = duplicateNode(node)
+    expect(copy.type).toBe('annotation')
+    expect(copy.id).not.toBe(node.id)
+    expect(copy.data.annotationVariant).toBe('arrow')
+    expect(copy.data.annotationDir).toBe('tl-br')
+    // Duplicating never carries execution/session state — irrelevant here, but the same contract
+    // every other kind gets.
+    expect(copy.data.initialCommand).toBeUndefined()
+  })
+
+  it('an empty colored area is just createGroupNode placed at the drawn rect — no new node kind', () => {
+    // The "coloured area" tool deliberately reuses the existing group frame rather than inventing
+    // a second decorative box kind: a group with zero children already renders as a plain dashed
+    // colored frame (GroupNode.tsx), which IS the "area" the issue asks for.
+    const group = createGroupNode(rect.position, rect.size, 0)
+    expect(group.type).toBe('group')
+    expect(group.position).toEqual(rect.position)
+    expect(group.width).toBe(rect.size.width)
+    expect(group.height).toBe(rect.size.height)
+    expect(group.parentId).toBeUndefined()
   })
 })
 

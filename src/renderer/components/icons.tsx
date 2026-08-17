@@ -345,3 +345,18 @@ export const IconOllama = () => (
     <path d="M9.5 16h5" />
   </svg>
 )
+
+/** Draw-a-colored-area tool: an empty dashed box, the same shape a group frame renders as. */
+export const IconAnnotationArea = () => (
+  <svg {...S}>
+    <rect x="4" y="5" width="16" height="14" rx="2" strokeDasharray="3 3" />
+  </svg>
+)
+
+/** Draw-a-line/arrow tool: a diagonal with an open arrowhead at its end. */
+export const IconAnnotationArrow = () => (
+  <svg {...S}>
+    <path d="M6 18L18 6" />
+    <path d="M10 6h8v8" />
+  </svg>
+)

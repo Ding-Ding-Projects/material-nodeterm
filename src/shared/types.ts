@@ -295,6 +295,11 @@ export interface RecycledInfo {
 // 'subagent' and 'loop' are render-only (ephemeral hook-driven viz) and never persisted.
 // 'scheduler' is the user-created, persisted NodeTerm Loop; the internal name avoids colliding
 // with the existing derived agent card.
+// 'annotation' is pure decoration — a free-standing line/arrow drawn on the canvas (issue #145).
+// It is a NODE, never an Edge: unlike a bridge (context link), a rope (spawn lineage) or a
+// dependency edge, it carries no `source`/`target` referencing another node and cannot be
+// connected to anything, which is what keeps it structurally impossible to mistake for a link
+// that changes what an agent can read. See src/renderer/lib/annotation.ts and AnnotationNode.tsx.
 export type NodeKind =
   | 'terminal'
   | 'sticky'
@@ -308,6 +313,7 @@ export type NodeKind =
   | 'loop'
   | 'scheduler'
   | 'dino'
+  | 'annotation'
 
 /** Persisted state of a single canvas node (terminal, sticky note, group frame, or editor). */
 /**
@@ -426,6 +432,14 @@ export interface CanvasNodeState {
   commitOid?: string
   /** group-only: when bound, the git worktree this group works in. */
   worktree?: GroupWorktree
+  /** annotation-only: 'line' has no arrowhead, 'arrow' has one at its end point. Pure decoration —
+   *  carries no relationship to any other node (see the NodeKind doc comment above). */
+  annotationVariant?: 'line' | 'arrow'
+  /** annotation-only: which corner-to-corner diagonal of the node's box the line/arrow follows —
+   *  'tl-br' runs top-left→bottom-right, 'tr-bl' runs top-right→bottom-left. Recomputed by
+   *  `annotationRectFromPoints` (src/renderer/lib/annotation.ts) from the draw gesture; unaffected
+   *  by a later resize, which just stretches the same diagonal to the new box. */
+  annotationDir?: 'tl-br' | 'tr-bl'
 }
 
 /**

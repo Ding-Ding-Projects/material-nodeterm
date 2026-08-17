@@ -5960,6 +5960,118 @@ body,
   box-shadow: 0 0 0 1.5px var(--accent), 0 6px 20px rgba(0, 0, 0, calc(0.45 * var(--shadow-k)));
 }
 
+/* ---- Annotation node (standalone line/arrow — issue #145) ---- */
+/* Fully transparent by default: it must read as "just a line", never as a filled box. Neutralize
+   React Flow's own default-node chrome the same way .react-flow__node-group does for frames. */
+.react-flow__node-annotation {
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.react-flow__node-annotation.selectable:hover,
+.react-flow__node-annotation.selectable.selected,
+.react-flow__node-annotation.selectable:focus,
+.react-flow__node-annotation.selectable:focus-visible {
+  box-shadow: none;
+}
+
+.annotation-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* A faint dashed bounding box while selected, so the resize handles read as belonging to
+   something — an unselected annotation shows none of this, only the line/arrow itself. */
+.annotation-node.selected {
+  outline: 1px dashed rgba(var(--tint-rgb), 0.35);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.annotation-node__svg {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Midpoint toolbar: color dot, arrowhead toggle, delete. Same idea as .group-node__label, scaled
+   down (an annotation carries no name to edit). Hidden until hover/selected so a canvas full of
+   small arrows doesn't grow permanent chrome on every one of them. */
+.annotation-node__toolbar {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.annotation-node:hover .annotation-node__toolbar,
+.annotation-node.selected .annotation-node__toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.annotation-node__dot {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.annotation-node__variant,
+.annotation-node__close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.annotation-node__variant:hover,
+.annotation-node__close:hover {
+  background: var(--panel-header);
+  color: var(--text);
+}
+
+/* The next drag on the canvas creates an area/line/arrow — a crosshair says so before the click. */
+.flow-wrap.canvas-draw-active {
+  cursor: crosshair;
+}
+
+/* Live rectangle/line preview while dragging a canvas draw tool. Screen-space (fixed), so no
+   pan/zoom transform math is needed — it exists only for the duration of one drag. */
+.canvas-draw-preview {
+  position: fixed;
+  pointer-events: none;
+  z-index: 40;
+}
+.canvas-draw-preview--area {
+  border: 1.5px dashed var(--accent);
+  border-radius: 10px;
+  background: rgba(var(--tint-rgb), 0.06);
+}
+.canvas-draw-preview__line {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
 /* ---- Subagent (ephemeral, hook-driven) node ---- */
 .subagent-node {
   width: 100%;
