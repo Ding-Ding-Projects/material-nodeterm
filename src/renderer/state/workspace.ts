@@ -1286,30 +1286,39 @@ function duplicateKind(type: string | undefined): NodeKind {
  * carry one-shot launch state, an armed launch, or the provider session id: doing so can make the
  * copy resume the source conversation or execute work the source already consumed.
  *
- * It KEEPS the source's kind. This used to enumerate sticky/group (and later annotation) and send
- * every other kind to `terminal`, so duplicating an editor, diff, video, web, browser, dino or
- * Loop node produced a `terminal`-typed copy still carrying `filePath`/`url`/loop config in its
- * data: an empty terminal with no session. `flowToNodeStates` and `projects.duplicateNode` (the
- * inactive-project path) both already preserved the kind, so the live canvas was the odd one out —
- * duplicating an editor from the sessions sidebar gave you an editor in an inactive project and a
- * broken terminal in the active one.
+ * `kind` resolves the source's OWN type and is used for BOTH the copy's `type` and its id prefix.
+ * It used to enumerate sticky/group (later annotation) and collapse everything else to `terminal`
+ * — which never demoted the copy (`type` rides the `...node` spread and was not reassigned), but
+ * did mint an editor/diff/video/web/browser/dino/Loop copy a `term-…` id. That is not cosmetic:
+ * `SAFE_NODE_ID` (core/project-node-append, twinned in nodeterm-ios) is how the relay decides an
+ * id may register as a TERMINAL session, and it matches on exactly that prefix — so a duplicated
+ * editor carried a terminal's credentials in its name. `projects.duplicateNode` (the
+ * inactive-project path) already keyed its id off `src.kind`, so the live canvas was the odd one
+ * out: the same editor duplicated in an inactive project got `editor-…` and in the active one
+ * `term-…`. Assigning `type` explicitly keeps the pair honest in the other direction too — a
+ * legacy or hand-edited type normalizes to `terminal` alongside its `term-` id instead of keeping
+ * a bogus type that the prefix then contradicts.
  *
  * What it does NOT keep is anything that would give the copy an identity or authority of its own:
- * see the cleared fields below. Content identity — `filePath`, `url`, `cwd`, `diffStaged`,
- * `commitOid`, `text`, `highScore`, `annotationVariant` — is exactly what a duplicate is FOR and
- * is kept. `fileMissing` is kept too: it is a fact about the filesystem, not about the source
- * node, so clearing it would only make the copy claim a deleted file is there and try to read it.
+ * see the cleared fields below. Each of those was live before this — a duplicated frame really did
+ * claim the source's worktree, and a duplicated running Loop really was a second scheduler.
+ * Content identity — `filePath`, `url`, `cwd`, `diffStaged`, `commitOid`, `text`, `highScore`,
+ * `annotationVariant` — is exactly what a duplicate is FOR and is kept. `fileMissing` is kept
+ * too: it is a fact about the filesystem, not about the source node, so clearing it would only
+ * make the copy claim a deleted file is there and try to read it.
  */
 export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
   const kind = duplicateKind(node.type)
   // Mirrors the factories exactly: `createTerminalNode` mints `term-…` and every other factory
   // uses its own kind as the prefix (`editor-`, `diff-`, `video-`, `web-`, `browser-`, `sticky-`,
-  // `scheduler-`, `dino-`, `group-`, `annotation-`). Not cosmetic — the relay's node-id guard
-  // (`SAFE_NODE_ID` in core/project-node-append, twinned in nodeterm-ios) accepts only `term-…`
-  // for a registered terminal session, so do NOT "simplify" this to a bare `kind`.
+  // `scheduler-`, `dino-`, `group-`, `annotation-`). Do NOT "simplify" this to a bare `kind`: an
+  // `editor-` id on a terminal would be refused by the relay's guard, and a `term-` id on an
+  // editor would be accepted by it.
   const prefix = kind === 'terminal' ? 'term' : kind
   return {
     ...node,
+    // Same source as `prefix`, so type and id can never disagree about what this node is.
+    type: kind,
     id: nextId(prefix),
     position: { x: node.position.x + offset, y: node.position.y + offset },
     selected: true,

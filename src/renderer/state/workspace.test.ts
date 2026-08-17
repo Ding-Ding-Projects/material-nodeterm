@@ -26,9 +26,10 @@ import {
   ungroupNodes
 } from './workspace'
 import type { CanvasNode } from './workspace'
+import type { NodeKind } from '@shared/types'
 import type { AnnotationRect } from '../lib/annotation'
 import { resetCodexIdentityCapsForTests } from './codexIdentity'
-import { codexRemoteCommand } from '../../shared/agents/config'
+import { agentLaunchProgram, codexRemoteCommand } from '../../shared/agents/config'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import type { ActiveAgentLaunchPlan } from './permissionMode'
 
@@ -1033,8 +1034,262 @@ describe('createAgentNode prompt injection', () => {
       remoteFlag: true,
       appServer: true
     })
+    // A LOCAL shared-identity node reaches its launcher BY NAME, because pty-manager prepends
+    // `codexLauncherDir()` to that one session's PATH (and explicitly does not when `sshRemote`
+    // is set). Asserting the absolute `codexRemoteCommand()` here would pin the wrong contract
+    // twice over: it is the REMOTE form, and the directory it names (`$HOME/.nodeterm/bin`) is
+    // not even where the local launcher is installed (`userDataDir/codex-bin`) — nor would
+    // `$HOME` expand for a local Windows spawn. The remote form is applied at the remote seam
+    // instead, from the host's own preflight-resolved `sshRemote.codexLauncherPath`.
     expect(createAgentNode('codex', 0, undefined, undefined, 'do X').data.initialCommand).toBe(
-      `${codexRemoteCommand()} 'do X'`
+      `${agentLaunchProgram('codex', 'codex', true)} 'do X'`
     )
+    expect(agentLaunchProgram('codex', 'codex', true)).not.toBe(codexRemoteCommand())
+  })
+})
+
+describe('duplicateNode across every node kind', () => {
+  /** Minimal node of a given kind. `data` carries whatever that kind needs to be itself. */
+  const nodeOf = (kind: NodeKind, data: Record<string, unknown> = {}): CanvasNode =>
+    ({
+      id: `${kind}-source`,
+      type: kind,
+      position: { x: 100, y: 200 },
+      width: 320,
+      height: 240,
+      data: { title: `a ${kind}`, color: '#888', group: null, ...data }
+    }) as unknown as CanvasNode
+
+  // `Record<NodeKind, …>` rather than an array: adding a kind to the union is a typecheck error
+  // here until it is given an expected id prefix, so a new kind cannot join without being
+  // covered. The prefixes are the ones the factories in workspace.ts actually mint.
+  const EXPECTED_PREFIX: Record<NodeKind, string> = {
+    terminal: 'term',
+    sticky: 'sticky',
+    group: 'group',
+    editor: 'editor',
+    diff: 'diff',
+    video: 'video',
+    web: 'web',
+    browser: 'browser',
+    subagent: 'subagent',
+    loop: 'loop',
+    scheduler: 'scheduler',
+    dino: 'dino',
+    annotation: 'annotation'
+  }
+  const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
+
+  it.each(ALL_KINDS)('keeps a %s a %s, with a matching id prefix', (kind) => {
+    // The prefix half is the regression: `kind` used to collapse everything except sticky/group/
+    // annotation to `terminal`, so an editor/diff/video/web/browser/dino/Loop copy was minted a
+    // `term-…` id — the exact shape `SAFE_NODE_ID` (core/project-node-append) accepts as a
+    // registered TERMINAL session. The type itself always survived, on the `...node` spread.
+    const copy = duplicateNode(nodeOf(kind))
+    expect(copy.type).toBe(kind)
+    expect(copy.id.startsWith(`${EXPECTED_PREFIX[kind]}-`)).toBe(true)
+    expect(copy.id).not.toBe(`${kind}-source`)
+  })
+
+  it('falls back to a terminal only for a type that is not a kind at all', () => {
+    // A hand-edited project.json or a record from a newer build reaches here as a plain string;
+    // the removed `chat` kind is the real historical case.
+    for (const bogus of ['chat', 'not-a-kind', '']) {
+      const copy = duplicateNode({ ...nodeOf('terminal'), type: bogus } as unknown as CanvasNode)
+      expect(copy.type).toBe('terminal')
+      expect(copy.id.startsWith('term-')).toBe(true)
+    }
+    const noType = duplicateNode({ ...nodeOf('terminal'), type: undefined } as unknown as CanvasNode)
+    expect(noType.type).toBe('terminal')
+  })
+
+  it('does not accept a prototype key as a node kind', () => {
+    // The lookup is a Set, not `type in table`: `in` walks the prototype, so `constructor` and
+    // `toString` would both pass as kinds — and would then be spliced into a minted node id.
+    for (const key of ['constructor', 'toString', 'hasOwnProperty']) {
+      const copy = duplicateNode({ ...nodeOf('terminal'), type: key } as unknown as CanvasNode)
+      expect(copy.type).toBe('terminal')
+      expect(copy.id.startsWith('term-')).toBe(true)
+    }
+  })
+
+  it('keeps the content identity that makes a duplicate worth having', () => {
+    const editor = duplicateNode(
+      nodeOf('editor', { filePath: '/repo/src/a.ts', sshFs: true, fileMissing: true })
+    )
+    expect(editor.type).toBe('editor')
+    expect(editor.data.filePath).toBe('/repo/src/a.ts')
+    expect(editor.data.sshFs).toBe(true)
+    // `fileMissing` is a fact about the FILESYSTEM, not about the source node: the file is just
+    // as gone for the copy. Clearing it would make the copy claim a deleted file is there and
+    // try to read it, which is strictly worse than the honest notice.
+    expect(editor.data.fileMissing).toBe(true)
+
+    const diff = duplicateNode(
+      nodeOf('diff', {
+        cwd: '/repo',
+        filePath: 'src/a.ts',
+        diffStaged: true,
+        commitOid: 'abc1234def'
+      })
+    )
+    expect(diff.type).toBe('diff')
+    // A diff node is a VIEW of one commit's diff; a duplicate is a second view of the same one,
+    // exactly as an editor duplicate is a second view of the same file.
+    expect(diff.data.commitOid).toBe('abc1234def')
+    expect(diff.data.cwd).toBe('/repo')
+    expect(diff.data.filePath).toBe('src/a.ts')
+    expect(diff.data.diffStaged).toBe(true)
+
+    const web = duplicateNode(nodeOf('web', { url: 'https://example.com' }))
+    expect(web.data.url).toBe('https://example.com')
+
+    const video = duplicateNode(nodeOf('video', { filePath: '/repo/clip.mp4', sshFs: true }))
+    expect(video.data.filePath).toBe('/repo/clip.mp4')
+    expect(video.data.sshFs).toBe(true)
+
+    const sticky = duplicateNode(nodeOf('sticky', { text: 'remember this' }))
+    expect(sticky.data.text).toBe('remember this')
+
+    // The project's record, seeded onto the node — a duplicate showing the same record is right.
+    const dino = duplicateNode(nodeOf('dino', { highScore: 412 }))
+    expect(dino.data.highScore).toBe(412)
+
+    const annotation = duplicateNode(
+      nodeOf('annotation', { annotationVariant: 'arrow', annotationDir: 'tr-bl' })
+    )
+    expect(annotation.data.annotationVariant).toBe('arrow')
+    expect(annotation.data.annotationDir).toBe('tr-bl')
+  })
+
+  it('does not hand a browser copy the agent control grant on the source tab', () => {
+    // `browserOwnerNodeId` is authority, not provenance: it is the agent allowed to drive this
+    // tab through the Browser Plugin. An agent propagates its OWN grant when it opens a popup;
+    // a user duplicating a node must not silently give that agent a tab it never opened. This was
+    // live before — the copy was already a real browser node, so it already registered itself
+    // with the source's owner (BrowserSurface → `browser.register`).
+    const copy = duplicateNode(
+      nodeOf('browser', { url: 'https://example.com', browserOwnerNodeId: 'term-agent-1' })
+    )
+    expect(copy.type).toBe('browser')
+    expect(copy.data.url).toBe('https://example.com')
+    expect(copy.data.browserOwnerNodeId).toBeUndefined()
+  })
+
+  it('copies a Loop node paused, with its config but not its run', () => {
+    // Canvas's scheduler sweep fires every `loopEnabled` node, and the copy was already a real
+    // scheduler node — so duplicating a RUNNING Loop already produced a second live scheduler
+    // pushing the same prompt at the same agents on the same cadence, silently doubling the
+    // traffic. The most consequential thing this change fixes.
+    const copy = duplicateNode(
+      nodeOf('scheduler', {
+        loopTask: 'sweep the issues',
+        loopIntervalMs: 900_000,
+        loopTargetIds: ['term-a', 'term-b'],
+        loopEnabled: true,
+        loopNextRunAt: 1_770_000_000_000,
+        loopLastRunAt: 1_769_999_000_000
+      })
+    )
+    expect(copy.type).toBe('scheduler')
+    // Config is what the user duplicating a Loop wants.
+    expect(copy.data.loopTask).toBe('sweep the issues')
+    expect(copy.data.loopIntervalMs).toBe(900_000)
+    expect(copy.data.loopTargetIds).toEqual(['term-a', 'term-b'])
+    // The run is not.
+    expect(copy.data.loopEnabled).toBeFalsy()
+    expect(copy.data.loopNextRunAt).toBeUndefined()
+    expect(copy.data.loopLastRunAt).toBeUndefined()
+  })
+
+  it('never lets a copied frame claim the source frame worktree binding', () => {
+    // A binding is 1:1 with one checkout on disk and the destructive Merge/Remove paths are keyed
+    // on it, so a second claimant could remove the directory the ORIGINAL frame still works in.
+    const source = nodeOf('group', {
+      worktree: {
+        repoPath: '/repo',
+        branch: 'feature/x',
+        baseRef: 'main',
+        path: '/repo/.worktrees/x',
+        createdByApp: true
+      }
+    })
+    const copy = duplicateNode(source)
+    expect(copy.type).toBe('group')
+    expect(copy.data.worktree).toBeUndefined()
+    // The source keeps its own binding — the copy must not cost the original anything.
+    expect((source.data.worktree as { path: string }).path).toBe('/repo/.worktrees/x')
+  })
+
+  it('clears the one-shot respawn trigger', () => {
+    // Local-only and never serialized: the number means something only as a CHANGE, so a copy
+    // born holding the source's counter is stale from birth.
+    const copy = duplicateNode(nodeOf('terminal', { respawnNonce: 7 }))
+    expect(copy.data.respawnNonce).toBeUndefined()
+  })
+
+  it.each(ALL_KINDS)('clears execution identity on a %s copy too', (kind) => {
+    // The pre-existing terminal contract, asserted for every kind now that every kind survives.
+    const copy = duplicateNode(
+      nodeOf(kind, {
+        initialCommand: 'claude --resume src-session',
+        agentLaunchIntent: { kind: 'agent', action: 'resume', agentId: 'claude', sessionId: 'src' },
+        agentSessionId: 'src-session',
+        pendingLaunch: { after: ['term-dep'], launchId: 'id-1', launch: { kind: 'agent' } },
+        pendingLaunchError: 'delivery failed',
+        pendingLaunchErrorKind: 'unknown'
+      })
+    )
+    expect(copy.data.initialCommand).toBeUndefined()
+    expect(copy.data.agentLaunchIntent).toBeUndefined()
+    expect(copy.data.agentSessionId).toBeUndefined()
+    expect(copy.data.pendingLaunch).toBeUndefined()
+    expect(copy.data.pendingLaunchError).toBeUndefined()
+    expect(copy.data.pendingLaunchErrorKind).toBeUndefined()
+  })
+
+  it.each(ALL_KINDS)('leaves the source %s untouched and lands the copy top-level', (kind) => {
+    const source = nodeOf(kind, { filePath: '/repo/a.ts', initialCommand: 'run me' })
+    const sourceData = source.data
+    const copy = duplicateNode(source, 28)
+
+    expect(copy.data).not.toBe(sourceData)
+    expect(source.data).toBe(sourceData)
+    expect(source.data.initialCommand).toBe('run me')
+    expect(source.type).toBe(kind)
+    expect(copy.position).toEqual({ x: 128, y: 228 })
+    expect(copy.selected).toBe(true)
+    expect(copy.parentId).toBeUndefined()
+    expect(copy.extent).toBeUndefined()
+  })
+
+  it('mints distinct ids for copies of different kinds made in one tick', () => {
+    const ids = ALL_KINDS.flatMap((kind) => [
+      duplicateNode(nodeOf(kind)).id,
+      duplicateNode(nodeOf(kind)).id
+    ])
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  // Current behavior, pinned rather than changed: duplicating a frame does NOT deep-copy its
+  // subtree. `duplicateNode` places every copy at the top level, so the frame copy comes back
+  // empty, and a co-selected child's copy lands beside it rather than inside it. Canvas's
+  // `duplicateNodes` passes the raw selection (not `selectedRootIds`, which "Group selection"
+  // does use), so a box-select that caught a frame and its children produces exactly this.
+  // Separate from — and older than — the id-prefix bug fixed above; pinned so the shape is
+  // known rather than assumed.
+  it('duplicating a frame copies the frame only, never its children', () => {
+    const child = term('term-child', { x: 20, y: 30 }, 'group-source')
+    const frameCopy = duplicateNode(nodeOf('group'))
+    expect(frameCopy.type).toBe('group')
+    expect(frameCopy.parentId).toBeUndefined()
+    // Nothing points at the copy: the child still belongs to the original frame.
+    expect(child.parentId).toBe('group-source')
+
+    // And a child duplicated alongside its frame is promoted to the top level, not re-parented
+    // into the frame copy.
+    const childCopy = duplicateNode(child)
+    expect(childCopy.parentId).toBeUndefined()
+    expect(childCopy.extent).toBeUndefined()
   })
 })
