@@ -316,6 +316,22 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     issues.push('checked-out HEAD must be proven equal to GITHUB_SHA with a dependency-free shell check immediately after checkout')
   }
 
+  const installAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm ci'))
+  const dependencyBackedScriptSteps = steps.flatMap((step, index) =>
+    logicalCommands(step?.run)
+      .filter((command) => /\bnode\s+scripts\//.test(command))
+      .map((command) => ({ index, command })),
+  )
+  const preInstallScriptCalls = dependencyBackedScriptSteps.filter(({ index }) => index < installAt)
+  if (installAt < 0 || preInstallScriptCalls.length) {
+    const details = preInstallScriptCalls.map(({ index, command }) => `step ${index}: ${command}`).join(' | ')
+    issues.push(
+      details
+        ? `dependency-backed node scripts must not run before npm ci: ${details}`
+        : 'workflow must install dependencies with npm ci before any dependency-backed node scripts',
+    )
+  }
+
   const tagAt = stepIndex(steps, 'tag')
   const tagCommandList = logicalCommands(steps[tagAt]?.run)
   const tagCommands = tagCommandList.join('\n')
@@ -362,7 +378,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   )
   const buildAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm run dist:win'))
   if (
-    versionAt <= tagAt ||
+    versionAt !== installAt + 1 ||
     versionAt >= buildAt ||
     versionTagsAt < 0 ||
     versionReleasesAt <= versionTagsAt ||

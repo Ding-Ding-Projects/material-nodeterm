@@ -97,6 +97,16 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
+      # hook's own bootstrap (scripts/patch-node-pty.mjs + `electron-rebuild -f -w
+      # node-pty,smart-whisper` against this runner's Electron ABI). windows-latest already
+      # ships the Visual Studio Build Tools + Python that native module compilation needs
+      # (part of the standard GitHub-hosted Windows runner image), so nothing extra is
+      # installed here. If a future dependency needs a tool the image doesn't carry, this
+      # step is where to add the missing bootstrap — check for it, install only if absent.
+      - name: Install dependencies
+        run: npm ci
+
       - name: Verify stable version advancement
         id: version
         shell: bash
@@ -107,16 +117,6 @@ jobs:
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" > "$RUNNER_TEMP/tags-before-build.json"
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-before-build.json"
           node scripts/release-assets.mjs assert-version "$RELEASE_VERSION" "$RUNNER_TEMP/tags-before-build.json" "$RUNNER_TEMP/releases-before-build.json" "$GITHUB_SHA"
-
-      # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
-      # hook's own bootstrap (scripts/patch-node-pty.mjs + `electron-rebuild -f -w
-      # node-pty,smart-whisper` against this runner's Electron ABI). windows-latest already
-      # ships the Visual Studio Build Tools + Python that native module compilation needs
-      # (part of the standard GitHub-hosted Windows runner image), so nothing extra is
-      # installed here. If a future dependency needs a tool the image doesn't carry, this
-      # step is where to add the missing bootstrap — check for it, install only if absent.
-      - name: Install dependencies
-        run: npm ci
 
       # Unsigned, permanently. No CSC_LINK/CSC_KEY_PASSWORD is ever set in this workflow, so
       # electron-builder has no certificate to sign with in the first place;
