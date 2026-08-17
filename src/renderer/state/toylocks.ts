@@ -18,6 +18,7 @@ import type { ToyLockRecord } from '@shared/toylock'
 interface ToyLocksState {
   records: ToyLockRecord[]
   loaded: boolean
+  loadError: string | null
   unlockedUntil: Record<string, number>
   refresh(): Promise<void>
   byTarget(kind: string, id: string): ToyLockRecord | undefined
@@ -32,11 +33,17 @@ interface ToyLocksState {
 export const useToyLocks = create<ToyLocksState>((set, get) => ({
   records: [],
   loaded: false,
+  loadError: null,
   unlockedUntil: {},
 
   async refresh() {
-    const records = await window.nodeTerminal.toylock.list()
-    set({ records, loaded: true })
+    try {
+      const records = await window.nodeTerminal.toylock.list()
+      set({ records, loaded: true, loadError: null })
+    } catch {
+      // Retain any last-known records; an unreadable credential store is not an empty lock list.
+      set({ loaded: true, loadError: 'Could not read the toy-lock credential store.' })
+    }
   },
 
   byTarget(kind, id) {

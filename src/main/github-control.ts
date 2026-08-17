@@ -1,7 +1,19 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { renameAtomic } from '../core/fs-atomic'
+import { clearAtomicTarget, sweepStaleTempFiles } from '../core/fs-atomic'
+import {
+  readAtomicFileSnapshot,
+  withCrossProcessLock,
+  writeAtomicFileCompared,
+  type CrossProcessLease
+} from '../core/fs-transaction-lock'
 import type { GitHubSecretStore } from '../core/github/credentials'
+import {
+  GitHubTokenDocumentError,
+  parseGitHubTokenDocument,
+  validGitHubToken,
+  type GitHubTokenDocument
+} from '../core/github/token-document'
 import type { GitHubSecretAvailability } from '../shared/github-issues'
 import { IPC } from '../shared/ipc'
 import type { GitHubHostController } from '../core/github/host'
@@ -15,79 +27,24 @@ export interface SafeStorageLike {
   decryptString(value: Buffer): string
 }
 
-type TokenDocument =
-  | { version: 1; kind: 'safe-storage'; value: string }
-  | { version: 1; kind: 'restricted-file'; token: string }
-
 export class GitHubSecretError extends Error {
-  constructor(readonly code: 'invalid-token' | 'keyring-locked') {
+  constructor(readonly code: 'invalid-token' | 'keyring-locked' | 'clear-incomplete') {
     super(code)
   }
 }
 
-function validToken(token: string): boolean {
-  return token.trim() === token && token.length > 0 && token.length <= 4096 && !/[\r\n\0]/.test(token)
-}
-
-/** Paired with `process.pid` in the temp name below: the counter makes a name unique WITHIN this
- *  process, the pid makes it unique ACROSS processes (it restarts at 0 in every new one — and
- *  `NT_MULTI=1` without `NT_USER_DATA` skips the single-instance lock while keeping the default
- *  userData dir, so two instances can share this file, see src/main/index.ts). Same scheme as
- *  agent-status-mirror's local write. */
-let writeSeq = 0
-
-/**
- * Remove temp files no writer in THIS process owns: the legacy fixed `<file>.tmp` (written by
- * builds before per-call names) and any `<file>.<pid>.<seq>.tmp` whose pid is not ours. Best
- * effort — a failure here must never break a save.
- *
- * The token file is not config: an orphan here is a live PAT at 0600 that nothing will ever
- * overwrite, because a unique name is never written twice. So it has to be collected rather than
- * left. Temps bearing our own pid are untouchable: one may belong to a concurrent write sitting
- * between its `writeFile` and its `rename`, and deleting it would recreate the exact race the
- * unique names fixed. A foreign pid can in theory be a second LIVE process on the same dir; that
- * setup has no lock to begin with, and the worst case is that process's rename failing cleanly
- * (ENOENT, rethrown to its caller) instead of a forgotten PAT sitting on disk forever.
- */
-async function sweepStaleTmp(target: string): Promise<void> {
-  try {
-    const directory = path.dirname(target)
-    const base = path.basename(target)
-    for (const entry of await fs.readdir(directory)) {
-      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>'
-      const owner = /^\.(\d+)\.\d+$/.exec(middle)?.[1]
-      if (middle === '' || (owner && owner !== String(process.pid))) {
-        await fs.rm(path.join(directory, entry), { force: true }).catch(() => undefined)
-      }
-    }
-  } catch {
-    // A dir we cannot read is not a reason to fail (or skip) the write below.
-  }
-}
-
-async function atomicWrite(file: string, document: TokenDocument): Promise<void> {
+async function atomicWrite(
+  file: string,
+  document: GitHubTokenDocument,
+  expectedRevision: string,
+  lease: CrossProcessLease
+): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
-  await sweepStaleTmp(file)
-  // The store's per-instance chain orders this write against its sibling mutations; the per-call
-  // temp name covers the writers the chain cannot see — a second app process on the same
-  // userDataDir (every process's counter starts at 0, hence the pid) and a crash between
-  // tmp-write and rename. With a shared name one writer's rename publishes the other's
-  // half-written PAT, or moves the file out from under it entirely and the loser's rename fails.
-  // The rename itself now retries a transient Windows sharing-violation error — see src/core/fs-atomic.ts.
-  const temporary = `${file}.${process.pid}.${++writeSeq}.tmp`
-  try {
-    await fs.writeFile(temporary, JSON.stringify(document), { encoding: 'utf-8', mode: 0o600 })
-    await fs.chmod(temporary, 0o600)
-    await renameAtomic(temporary, file)
-  } catch (error) {
-    // A failed write MUST remove its own temp, because here a leaked temp IS a leaked PAT: a
-    // unique name is never written again, so only this cleanup (or a later run's sweep above, once
-    // the pid is dead) will ever collect it. The error still propagates.
-    await fs.rm(temporary, { force: true }).catch(() => {})
-    throw error
-  }
-  await fs.chmod(file, 0o600)
+  await sweepStaleTempFiles(file)
+  await writeAtomicFileCompared(file, JSON.stringify(document), expectedRevision, lease, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
 }
 
 export class ElectronGitHubSecretStore implements GitHubSecretStore {
@@ -117,43 +74,58 @@ export class ElectronGitHubSecretStore implements GitHubSecretStore {
   }
 
   save(token: string): Promise<void> {
-    return this.chained(() => this.saveNow(token))
+    return this.chained(() =>
+      withCrossProcessLock(this.filePath, (lease) => this.saveNow(token, lease))
+    )
   }
 
-  private async saveNow(token: string): Promise<void> {
-    if (!validToken(token)) throw new GitHubSecretError('invalid-token')
-    const current = await this.readDocument()
-    if (current?.kind === 'safe-storage' && !this.canEncrypt()) {
+  private async saveNow(token: string, lease: CrossProcessLease): Promise<void> {
+    if (!validGitHubToken(token)) throw new GitHubSecretError('invalid-token')
+    const current = await this.readDocumentSnapshot()
+    if (current.document?.kind === 'safe-storage' && !this.canEncrypt()) {
       throw new GitHubSecretError('keyring-locked')
     }
-    const document: TokenDocument = this.canEncrypt()
+    if (current.document?.kind === 'safe-storage') {
+      // A syntactically valid envelope can still carry undecryptable keyring bytes. Preserve that
+      // evidence instead of accepting a replacement as though the prior credential were absent.
+      this.decryptDocument(current.document)
+    }
+    const document: GitHubTokenDocument = this.canEncrypt()
       ? {
           version: 1,
           kind: 'safe-storage',
           value: this.safeStorage.encryptString(token).toString('base64')
         }
       : { version: 1, kind: 'restricted-file', token }
-    await atomicWrite(this.filePath, document)
+    await atomicWrite(this.filePath, document, current.revision, lease)
   }
 
   clear(): Promise<void> {
-    return this.chained(async () => {
-      // Sweep here too: clearing a token that leaves an orphan temp behind has not cleared anything.
-      await sweepStaleTmp(this.filePath)
-      await fs.rm(this.filePath, { force: true })
-    })
+    return this.chained(() =>
+      withCrossProcessLock(this.filePath, async (lease) => {
+        await lease.fence()
+        const result = await clearAtomicTarget(this.filePath)
+        if (!result.cleared) throw new GitHubSecretError('clear-incomplete')
+      })
+    )
   }
 
   async readForHost(): Promise<string | null> {
     const document = await this.readDocument()
     if (!document) return null
-    if (document.kind === 'restricted-file') return validToken(document.token) ? document.token : null
-    if (!this.canEncrypt()) return null
+    if (document.kind === 'restricted-file') return document.token
+    if (!this.canEncrypt()) throw new GitHubSecretError('keyring-locked')
+    return this.decryptDocument(document)
+  }
+
+  private decryptDocument(document: Extract<GitHubTokenDocument, { kind: 'safe-storage' }>): string {
     try {
       const token = this.safeStorage.decryptString(Buffer.from(document.value, 'base64'))
-      return validToken(token) ? token : null
-    } catch {
-      return null
+      if (!validGitHubToken(token)) throw new GitHubTokenDocumentError()
+      return token
+    } catch (error) {
+      if (error instanceof GitHubTokenDocumentError) throw error
+      throw new GitHubTokenDocumentError('The encrypted GitHub credential could not be decrypted.')
     }
   }
 
@@ -166,22 +138,23 @@ export class ElectronGitHubSecretStore implements GitHubSecretStore {
     }
   }
 
-  private async readDocument(): Promise<TokenDocument | null> {
+  private async readDocument(): Promise<GitHubTokenDocument | null> {
+    return (await this.readDocumentSnapshot()).document
+  }
+
+  private async readDocumentSnapshot(): Promise<{
+    document: GitHubTokenDocument | null
+    revision: string
+  }> {
+    const snapshot = await readAtomicFileSnapshot(this.filePath)
+    if (!snapshot.exists) return { document: null, revision: snapshot.revision }
+    let value: unknown
     try {
-      const value: unknown = JSON.parse(await fs.readFile(this.filePath, 'utf-8'))
-      if (!value || typeof value !== 'object') return null
-      const document = value as Partial<TokenDocument>
-      if (document.version !== 1) return null
-      if (document.kind === 'safe-storage' && typeof document.value === 'string') {
-        return document as TokenDocument
-      }
-      if (document.kind === 'restricted-file' && typeof document.token === 'string') {
-        return document as TokenDocument
-      }
-      return null
-    } catch {
-      return null
+      value = JSON.parse(snapshot.data.toString('utf8'))
+    } catch (cause) {
+      throw new GitHubTokenDocumentError('The stored GitHub credential document is corrupt.', { cause })
     }
+    return { document: parseGitHubTokenDocument(value), revision: snapshot.revision }
   }
 }
 

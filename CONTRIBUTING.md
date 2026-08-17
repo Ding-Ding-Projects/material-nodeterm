@@ -19,6 +19,14 @@ npm test           # vitest, unit + integration
 
 `npm run server:dev` boots the Server Edition (browser UI) if you are working on that surface.
 
+The supported Node runtime is **`^22.22.2 || ^24.15.0 || >=26.0.0`**. This is a minor/patch
+boundary, not
+"Node 22" shorthand: the cross-process agent-status mirror uses `node:sqlite`, which was absent in
+22.0–22.4 and remained opt-in through 22.12, while the locked dependency graph sets the stricter
+floors above and excludes Node 23 and 25. Both Desktop and Server Edition probe the real
+`DatabaseSync` capability at
+startup, so a custom build or `--no-experimental-sqlite` fails before persistent services start.
+
 **If `src/main/node-pty-patch.test.ts` is red, your `node_modules` is unpatched — not your code.**
 Run `npm run rebuild`. node-pty 1.1.0 leaks a pty device per spawn on macOS
 ([node-pty#950](https://github.com/microsoft/node-pty/issues/950)); we patch its source before
@@ -102,6 +110,35 @@ need it too, and wire it in the same change.
   including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot
   see. Keep a remote temp's own leaf bounded: extending an already-valid maximum-length target leaf
   with a UUID suffix turns an atomic write into a guaranteed `ENAMETOOLONG` failure.
+  for this and will fail your PR; `docs/atomic-writes.md` explains why the retry is safe. A temp
+  name needs random UUID entropy: `Date.now()` is shared by every save in the same millisecond, and
+  pid-plus-counter also repeats across PID namespaces, worker isolates, and PID reuse. Keep pid and
+  sequence as ownership/diagnostic fields, not as the uniqueness guarantee. And never sweep a temp
+  merely because its pid differs — another live instance may share the directory. Signal-zero and
+  `ESRCH` are namespace-local, so they cannot prove that a writer on a mounted volume died;
+  `sweepStaleTempFiles` preserves every pid-bearing temp and age-collects only the exact historical
+  ownerless `<target>.tmp` shape. A credential Clear must then use
+  `clearAtomicTarget` and surface `clear-incomplete` while any recognized temp remains — preserving
+  a plausible live writer is correct, but telling the UI its bearer bytes are gone is not.
+
+- **Unique temp files do not order whole-document writers.** If two flushes can snapshot the same
+  store concurrently, publish them FIFO (or reject stale generations). Otherwise an older flush can
+  stall inside `renameAtomic`, let a newer document land, then wake and overwrite it intact with
+  stale state. Unique names prevent byte splicing; they do not prevent time from running backwards.
+  For a read-modify-write store, the FIFO begins before the read and ends after publication; queuing
+  only `save()` still lets two readers derive conflicting documents. Key it by the resolved physical
+  file, not by an object instance or a lossy logical id.
+  An in-memory FIFO orders one JavaScript process only; a store intentionally shared by multiple
+  processes needs a proven cross-process transaction or an explicit last-publisher contract.
+  Credential stores use SQLite `BEGIN IMMEDIATE` across strict read, mutation and publication;
+  corrupt/unreadable input and lock sidecars remain evidence instead of becoming empty state.
+  Never implement this as a stealable timeout lease: a paused live writer is not a dead writer.
+  Real two-process barriers, crash release and bounded-contention tests are required. This makes the
+  runtime floor load-bearing for SQLite-backed transactions: keep
+  `package.json`, the Server installer, container image and both shell preflights on the exact
+  supported range above. Do not restore a top-level `node:sqlite` import; lazy capability loading is
+  what lets an incompatible runtime emit the actionable preflight error instead of dying during
+  dependency evaluation.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.

@@ -38,7 +38,7 @@ import type { Settings } from '../shared/types'
 import { publicKeyToB64, deriveSharedKey, encrypt, decrypt, type KeyPair } from './remote/e2ee'
 import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
-import { renameAtomic } from '../core/fs-atomic'
+import { renameAtomic, sweepStaleTempFiles, tempNameFor } from '../core/fs-atomic'
 
 const execFileAsync = promisify(execFile)
 
@@ -211,41 +211,6 @@ async function readAgentJson(): Promise<Record<string, unknown>> {
   }
 }
 
-/** Paired with `process.pid` in the temp names below: the counter makes a name unique WITHIN this
- *  process, the pid makes it unique ACROSS processes (it restarts at 0 in every new one). Same
- *  scheme as agent-status-mirror's local write (src/core/agent-status-mirror.ts). */
-let writeSeq = 0
-
-/**
- * Remove agent.json temps no writer in THIS process owns: the legacy fixed `agent.json.tmp`
- * (written by builds from before per-call names) and any `agent.json.<pid>.<seq>.tmp` whose pid is
- * not ours. Best effort — a failure here must never break (or skip) the write that follows.
- *
- * agent.json is not config: every device entry carries the `agentToken` bearer the phone presents
- * on the host-agent WebSocket, so an orphan is a live credential at 0600 that nothing will ever
- * overwrite — a unique name is never written twice. Temps bearing our own pid are untouchable: one
- * may belong to a concurrent write sitting between its `writeFile` and its `rename`, and deleting
- * it would recreate the exact race the unique names fixed. A foreign pid can in theory be the HOST
- * AGENT mid-write; ~/.nodeterm is shared with it and has no lock to begin with, and the worst case
- * is that process's rename failing cleanly (ENOENT, rethrown to its caller) instead of a forgotten
- * token file sitting on disk forever.
- */
-async function sweepStaleAgentTmp(): Promise<void> {
-  try {
-    const base = path.basename(AGENT_JSON_PATH)
-    for (const entry of await fs.readdir(AGENT_DIR)) {
-      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>'
-      const owner = /^\.(\d+)\.\d+$/.exec(middle)?.[1]
-      if (middle === '' || (owner && owner !== String(process.pid))) {
-        await fs.rm(path.join(AGENT_DIR, entry), { force: true }).catch(() => undefined)
-      }
-    }
-  } catch {
-    // A dir we cannot read is not a reason to fail (or skip) the write below.
-  }
-}
-
 /** Detect the machine's display name (macOS ComputerName, else hostname). */
 async function computerName(): Promise<string> {
   if (process.platform === 'darwin') {
@@ -352,24 +317,25 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
    * it unchained — the same by-construction guarantee as GitHubControlStore's private write().
    * Overlapping entry points (the pairing POST, renderer revokes) are ordered by the chain; the
    * per-call temp name covers the writers the chain cannot see — the host agent is a separate
-   * PROCESS writing this same ~/.nodeterm (`writeSeq` stays module-level so a second service
-   * instance in THIS process keeps counting instead of restarting into colliding names), and a
-   * crash between tmp-write and rename. The rename itself now retries a transient Windows
-   * sharing-violation error — see src/core/fs-atomic.ts.
+   * PROCESS writing this same ~/.nodeterm, and a crash between tmp-write and rename. `tempNameFor`
+   * supplies UUID entropy so PID namespaces, workers and PID reuse still cannot share its staging
+   * path. The rename itself retries a transient Windows sharing-violation error — see
+   * src/core/fs-atomic.ts.
    */
   async function writeAgentJson(obj: Record<string, unknown>): Promise<void> {
     await fs.mkdir(AGENT_DIR, { recursive: true, mode: 0o700 })
     await fs.chmod(AGENT_DIR, 0o700).catch(() => {})
-    await sweepStaleAgentTmp()
-    const tmp = `${AGENT_JSON_PATH}.${process.pid}.${++writeSeq}.tmp`
+    await sweepStaleTempFiles(AGENT_JSON_PATH)
+    const tmp = tempNameFor(AGENT_JSON_PATH)
     try {
       await fs.writeFile(tmp, JSON.stringify(obj, null, 2) + '\n', { mode: 0o600 })
       await fs.chmod(tmp, 0o600).catch(() => {})
       await renameAtomic(tmp, AGENT_JSON_PATH)
     } catch (e) {
       // A unique name never self-heals the way the fixed one did (the next write just reused it),
-      // and here a leaked temp IS a leaked credential: only this cleanup — or a later run's sweep,
-      // once this pid is dead — will ever collect it. The error still propagates.
+      // and here a leaked temp IS a leaked credential. A later cross-namespace-safe sweep keeps
+      // pid-bearing temps, so this writer owns the only automatic cleanup.
+      // The error propagates.
       await fs.rm(tmp, { force: true }).catch(() => {})
       throw e
     }
@@ -401,7 +367,7 @@ export function createPairingService(relayDeps?: PairingRelayDeps): PairingServi
     }
     const next = filterAuthorizedKeys(content, deviceId)
     if (next === content) return
-    const tmp = `${AUTH_KEYS_PATH}.${process.pid}.${++writeSeq}.tmp`
+    const tmp = tempNameFor(AUTH_KEYS_PATH)
     try {
       await fs.writeFile(tmp, next, { mode: 0o600 })
       await fs.chmod(tmp, 0o600).catch(() => {})

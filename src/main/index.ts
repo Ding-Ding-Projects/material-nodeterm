@@ -208,6 +208,12 @@ import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
 import { applyWindowsAppUserModelId } from './windows-app-identity'
+import { assertSupportedNodeRuntime } from '../core/node-runtime'
+
+// Fail before Electron initializes any persistent service. mirror-publication loads node:sqlite
+// lazily so an incompatible embedded runtime reaches this clear diagnostic instead of an import
+// error during module evaluation.
+assertSupportedNodeRuntime()
 
 // Dev-only: NT_MULTI lets a SECOND instance run (host + client testing on one machine) with an
 // isolated userData via NT_USER_DATA — its own device-id/session/license/workspace. Never active

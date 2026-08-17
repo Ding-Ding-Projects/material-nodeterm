@@ -70,16 +70,41 @@ devices.
 
 `renameAtomic` / `renameAtomicSync` / `writeFileAtomic` / `removeAtomic` in
 [`src/core/fs-atomic.ts`](../src/core/fs-atomic.ts) retry briefly; a guard test fails on any bare
-rename anywhere in `src/core`, `src/main` or `src/server`.
+rename anywhere in `src/core`, `src/main`, `src/server` or the standalone `src/session-host`, apart
+from the two platform-appropriate publication helpers themselves.
 
 Five of those sites also shared a **fixed temp name**, so two writers could publish each other's
-half-written bytes. Fixed, and guarded by the property (a pid, counter or per-call UUID in the
-name) rather than by "must call the helper", because several stores build the same name inline and
-are correct. A later SSH audit found the same race outside direct `fs` calls: remote shell writes
-shared `<target>.tmp`, scp downloads and media-cache fetches shared `<target>.part`, and upload
-directories used a timestamp plus a per-manager counter. Those now use per-call UUID staging,
-clean only their own failed stage, and reserve user-visible download names
-across app processes before transferring.
+half-written bytes. Fixed, and guarded by the collision-resistant property rather than by “must
+call the helper,” because an inline random UUID is equally valid.
+
+The property is specifically **random UUID entropy**. `Date.now()` collides inside one millisecond;
+pid-plus-counter collides across PID namespaces, worker isolates, and PID reuse. Same-millisecond
+saves collided in the sealed-secret, scheduled-settings-secret,
+shared-mode credential, generic atomic-JSON and Ollama chat stores; the node-token writer had the
+same weak suffix. The old guard also saw only templates ending in `.tmp`, so the two `tmp-…` forms
+were invisible until its matcher was widened. Cross-run cleanup now has one rule too: a foreign pid
+may be a live second instance in another namespace, so `sweepStaleTempFiles` never removes a
+pid-bearing temp automatically. Signal-zero/`ESRCH` is namespace-local and PID reuse is ambiguous.
+Only the exact historical ownerless `<target>.tmp` shape is collected after 24 hours; current temps
+are recognized only by their canonical lowercase v4 UUID shape.
+
+Credential Clear paths use `clearAtomicTarget`: they remove the canonical file but return an
+explicit `clear-incomplete` failure while any recognized temp remains or the directory could not be
+inspected. That keeps a plausible cross-namespace live writer safe without telling the UI that a
+PAT, cookie, or Home Assistant token is completely gone while bearer bytes remain on disk.
+
+One more race is orthogonal to the temp name. A whole-document flush that snapshots old state can
+stall in the retry loop, let a newer flush publish, then wake and replace it with an intact but stale
+document. `agent-status-mirror` now publishes flush generations FIFO, with a barrier-controlled test
+that recreates the old ordering. The FIFO is process-local; multiple apps sharing a data directory
+retain last-publisher semantics until a cross-process lock or compare-and-swap generation is added.
+
+The same rule covers SSH and scp staging outside direct `fs` calls: remote shell writes use a
+bounded per-call UUID sibling, scp downloads and media-cache fetches use hidden UUID `.part` paths,
+and upload directories use UUID names rather than a timestamp plus a per-manager counter. Failed
+operations clean only their own stage, while ordinary downloads reserve user-visible names across
+app processes before transferring. The guard checks the collision-resistant property rather than
+requiring one helper because several stores build names inline.
 
 ### Paths
 

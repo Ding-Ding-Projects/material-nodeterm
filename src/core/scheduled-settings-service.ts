@@ -42,14 +42,19 @@ export class ScheduledSettingsService {
   private timer: ReturnType<typeof setInterval> | null = null
   private lastPushSignature: string | null = null
   private unsubscribeStore: (() => void) | null = null
+  private credentialPruneInFlight: Promise<void> | null = null
 
   constructor(private readonly store: ScheduledSettingsStore) {}
 
   start(): void {
     this.unsubscribeStore = this.store.onChange((file, previous) => this.onFileChanged(file, previous))
     this.registerIpc()
+    this.retryOrphanedCredentialPrune()
     this.tick() // recompute (and kick off any due refreshes) immediately — don't wait 30s at boot
-    this.timer = setInterval(() => this.tick(), TICK_MS)
+    this.timer = setInterval(() => {
+      this.retryOrphanedCredentialPrune()
+      this.tick()
+    }, TICK_MS)
   }
 
   stop(): void {
@@ -59,7 +64,7 @@ export class ScheduledSettingsService {
     this.unsubscribeStore = null
   }
 
-  private onFileChanged(file: ScheduledSettingsFile, previous: ScheduledSettingsFile): void {
+  private async onFileChanged(file: ScheduledSettingsFile, previous: ScheduledSettingsFile): Promise<void> {
     const liveIds = new Set(file.rules.map((r) => r.id))
     // A rule that vanished (or whose source changed away from home-assistant) must not leave a
     // stale cached "on"/value that could resurrect on a later re-add with the same id.
@@ -76,10 +81,34 @@ export class ScheduledSettingsService {
         delete this.states[prevRule.id]
       }
     }
-    void pruneOrphanedTokens(
-      new Set(file.rules.filter((r) => r.source.kind === 'home-assistant').map((r) => r.id))
+    try {
+      await pruneOrphanedTokens(
+        new Set(file.rules.filter((r) => r.source.kind === 'home-assistant').map((r) => r.id))
+      )
+    } finally {
+      // Recompute even when cleanup is incomplete. The store awaits and surfaces that failure,
+      // while the running schedule must still reflect the file that was successfully published.
+      this.tick()
+    }
+  }
+
+  /** Retry startup/crash-gap residue even when no later schedule edit occurs. The awaited save
+   * path reports failures inline; background retries are logged without credential paths/ids. */
+  private retryOrphanedCredentialPrune(): void {
+    if (this.credentialPruneInFlight) return
+    const liveIds = new Set(
+      this.store.get().rules
+        .filter((rule) => rule.source.kind === 'home-assistant')
+        .map((rule) => rule.id)
     )
-    this.tick()
+    const run: Promise<void> = pruneOrphanedTokens(liveIds)
+      .catch(() => {
+        console.warn('[scheduled-settings] orphaned credential cleanup is incomplete; retrying')
+      })
+      .finally(() => {
+        if (this.credentialPruneInFlight === run) this.credentialPruneInFlight = null
+      })
+    this.credentialPruneInFlight = run
   }
 
   private registerIpc(): void {
@@ -160,7 +189,12 @@ export class ScheduledSettingsService {
   }
 
   private async fetchHa(ruleId: string, baseUrl: string, entityId: string): Promise<HaFetchResult> {
-    const token = await getHomeAssistantToken(ruleId)
+    let token: string | null
+    try {
+      token = await getHomeAssistantToken(ruleId)
+    } catch {
+      return { ok: false, error: 'The stored Home Assistant token could not be read.' }
+    }
     if (!token) return { ok: false, error: 'No access token saved for this rule.' }
     return fetchHomeAssistantState(baseUrl, entityId, token)
   }

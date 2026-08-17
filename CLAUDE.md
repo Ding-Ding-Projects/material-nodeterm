@@ -2151,12 +2151,69 @@ one indivisible rename, so a retry cannot tear a write. They deliberately do NOT
 eventually lands), do not retry `ENOENT`/`ENOSPC`, do not branch on platform (or the behaviour under
 test on a Mac is not the behaviour shipped to Windows), and never swallow the final error.
 
+**A unique temp name owes random UUID entropy. `Date.now()` and pid-plus-counter are not global
+dimensions** — two bridge calls routinely start in the same millisecond, while containers can both
+be PID 1, worker isolates share a PID with separate module counters, and the OS reuses PIDs after
+crashes. `tempNameFor` owns UUID uniqueness while retaining pid/sequence for ownership and
+diagnostics. The cleanup is equally strict:
+`sweepStaleTempFiles` never reads “foreign pid” as “dead process”; desktop multi-instance mode and
+two Server Edition processes can deliberately share a directory. It never removes a pid-bearing
+temp automatically: signal-zero/`ESRCH` is namespace-local and PID reuse makes the inverse equally
+unreliable. Only the exact historical ownerless `<target>.tmp` shape is collected after the
+24-hour grace. Current names are recognized only with the canonical lowercase v4 UUID shape; broad
+dot-free tokens are not cleanup authority. A pid-bearing temp may be an in-flight credential write.
+Credential clear paths use `clearAtomicTarget`: it
+removes the canonical file without sabotaging that possible writer, inspects for every recognized
+temp, and returns an incomplete result while any remain or inspection fails. The PAT/cookie/token
+callers propagate that as `clear-incomplete`; they must never report success while bearer bytes are
+still beside the canonical path.
+
+**Unique paths prevent splicing, not stale generations.** A writer that snapshots a whole document
+must also serialize publishes (or reject an out-of-date generation). `agent-status-mirror.flush`
+demonstrated the separate race: flush A captured old state and slept during `renameAtomic`'s
+transient-`EPERM` retry, flush B published new state, then A woke and atomically replaced it with
+the complete but stale document. A FIFO closes that race only inside one JavaScript process. A
+credential store intentionally shared by Desktop and Server Edition additionally holds a SQLite
+`BEGIN IMMEDIATE` transaction across strict read, mutation and publication/removal.
+
+For load→mutate→save code, serialize the **whole transaction**, starting before the strict read.
+A save-only queue still allows two callers to read the same document and publish incompatible
+derivatives in sequence. `SecureStore.mutate` applies this physical-path-global (not instance-local)
+rule to toy-lock and authenticator credentials; a mutation read rejects corrupt/unreadable input,
+duplicate ids and non-v4 ids instead of turning “could not read” into “empty.” Scheduled Home
+Assistant token set, clear, alternate-format cleanup and orphan pruning likewise share one
+directory-wide SQLite transaction. Provider-cookie, shared-mode and GitHub credential mutations use
+the same primitive. GitHub's controller FIFO begins before network token validation; otherwise a
+later Clear can finish before the earlier Save reaches the store and then be resurrected. Separate
+processes are ordered at final SQLite transaction entry because they have no shared pre-validation
+invocation clock. Their cleanup errors propagate
+through the schedule save result and renderer: a durable schedule plus retained bearer bytes must
+never be mislabeled as either a disk-write failure or a completed credential clear.
+
+Do not replace this with a timestamp lease. SQLite keeps an OS lock while a process is suspended,
+releases it on process death, and uses a bounded monotonic busy retry without deleting foreign
+ownership evidence. The lock key realpaths the existing parent so directory aliases converge. A
+corrupt/unreadable sidecar stays untouched and fails closed. Real forked-process tests park a writer,
+prove its peer cannot read the stale snapshot, kill an owner to prove crash release, exercise a busy
+timeout and directory alias, and retain corrupt sidecar bytes.
+
+The SQLite module is loaded only after `core/node-runtime.ts` has performed the exact startup
+preflight. Keep it lazy: a static `node:sqlite` import is evaluated before either shell can print an
+actionable incompatibility error. The supported runtime is
+`^22.22.2 || ^24.15.0 || >=26.0.0`; package engines,
+the headless installer, the pinned container stages and both shell preflights are one contract.
+`scripts/check-node-runtime.mjs` also opens and closes an in-memory database, because a version
+number does not prove a custom build or a runtime launched with `--no-experimental-sqlite` exposes
+the capability.
+
 **Nothing in the toolchain catches the bare version.** 28 files had it, across three spellings — the user's canvas, their
 settings, their sealed credentials, their pinned devices — and every one of them reads as a correct
 atomic write, because on the platform most of this was written on it is one. The only signal in a
 6,000-test suite was one store's overlapping-saves test, red on Windows for that store's whole life.
-So it is enforced by scan: `src/core/fs-atomic.guard.test.ts` fails on any bare `fs.rename` outside
-the helper. Full write-up, including the separate shared-temp-name bug at the same sites:
+So it is enforced by scan: `src/core/fs-atomic.guard.test.ts` covers core, both shells and the
+standalone session host, and fails on any bare `fs.rename` outside the two publication helpers
+(`core/fs-atomic.ts`; `session-host/state-file.ts`, which cannot import core). Full write-up,
+including the separate shared-temp-name bug at the same sites:
 **`docs/atomic-writes.md`**.
 
 SSH/scp staging follows the same ownership rule outside direct `fs` calls. Atomic remote stdin

@@ -194,9 +194,9 @@ describe('settings:save atomic write', () => {
   it('overlapping saves never reuse a tmp name (no torn write, no leftovers)', async () => {
     const settingsPath = path.join(dir, 'settings.json')
     // save() calls are serialized by the store's saveChain, so their writes arrive one after the
-    // other — uniqueness is carried by the `<pid>.<seq>` name alone. That name is what protects
-    // writers that bypass the chain (a second `nodeterm-server --data-dir X` process on the same
-    // dir) and the crash window between tmp-write and rename, so it stays pinned here.
+    // other. UUID entropy protects writers that bypass the chain (a second server process or PID
+    // namespace on the same data dir) and the crash window between tmp-write and rename, so the
+    // distinct paths stay pinned here.
     const tmps: string[] = []
     const realWriteFile = fs.writeFile
     vi.spyOn(fs, 'writeFile').mockImplementation((async (p: any, ...rest: any[]) => {
@@ -269,9 +269,8 @@ describe('settings:save atomic write', () => {
   it('writes settings.json owner-only, like every other store this app persists', async () => {
     // The temp is created with an explicit restrictive mode BEFORE any bytes land, and the rename
     // carries that mode onto settings.json. Without it the file lands at the umask default (0644):
-    // group/world-readable, and created under a predictable `<file>.<pid>.<seq>.tmp` name that a
-    // same-uid process could pre-create as a symlink for the write to follow. Every other writer
-    // in this store family already passes 0o600; this one was the outlier.
+    // group/world-readable. Every other writer in this store family already passes 0o600; this one
+    // was the outlier. The staging name now also carries random UUID entropy.
     const store = new SettingsStore()
     store.registerIpc()
 

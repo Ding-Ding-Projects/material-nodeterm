@@ -188,9 +188,9 @@ describe('minimax cookie storage', () => {
     await expect(hasProviderCookie('minimax')).resolves.toBe(false)
   })
 
-  it('reports no cookie rather than throwing on a corrupt file', async () => {
+  it('does not mistake a corrupt credential file for an absent cookie', async () => {
     fs.writeFileSync(path.join(dir, 'minimax-cookie.json'), '{{{')
-    await expect(readProviderCookie('minimax')).resolves.toBeNull()
+    await expect(readProviderCookie('minimax')).rejects.toBeInstanceOf(SyntaxError)
   })
 
   it('leaves no temp file behind after a write', async () => {

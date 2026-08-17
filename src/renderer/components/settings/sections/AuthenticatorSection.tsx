@@ -237,6 +237,7 @@ function EntryRow({
 
 export function AuthenticatorSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const [entries, setEntries] = useState<AuthenticatorEntry[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [codes, setCodes] = useState<Record<string, AuthenticatorCode>>({})
   const [filter, setFilter] = useState('')
   const [showExportGate, setShowExportGate] = useState(false)
@@ -246,7 +247,13 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
   entriesRef.current = entries
 
   useEffect(() => {
-    void window.nodeTerminal.authenticator.list().then(setEntries)
+    void window.nodeTerminal.authenticator
+      .list()
+      .then((next) => {
+        setEntries(next)
+        setLoadError(null)
+      })
+      .catch(() => setLoadError('Could not read the authenticator credential store.'))
   }, [])
 
   // Live codes: polled once a second while this section is on screen. `authenticatorCodes` batches
@@ -306,6 +313,11 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
     >
       <SearchableRow {...ROW}>
         <div className="space-y-4">
+          {loadError && (
+            <div role="alert" className="toylock-error">
+              {loadError} Existing entries could not be verified.
+            </div>
+          )}
           <AddEntryForm onAdded={(e) => setEntries((cur) => [...cur, e])} />
           <input
             type="text"
@@ -315,7 +327,7 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
             className="w-full rounded-lg border border-border bg-transparent px-3 py-1.5 text-[13px] text-text placeholder:text-muted"
             aria-label="Filter authenticator entries"
           />
-          {filtered.length === 0 ? (
+          {loadError ? null : filtered.length === 0 ? (
             <p className="text-[13px] text-muted">No entries yet.</p>
           ) : (
             <ul className="toylock-auth-list">

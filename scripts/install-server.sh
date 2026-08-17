@@ -29,10 +29,9 @@ APP_DIR="${NODETERM_APP_DIR:-$HOME/.nodeterm-server-app}"
 DATA_DIR="${NODETERM_DATA_DIR:-$HOME/.nodeterm-server}"
 SERVICE_NAME="nodeterm-server"
 UPDATE_SERVICE_NAME="nodeterm-server-update"
-MIN_NODE_MAJOR=20
-# When the system Node is missing or too old we provision this pinned LTS privately (see ensure_node).
-# v22.14.0 is a Node 22 "Jod" LTS release. Override with NODETERM_NODE_VERSION for a different pin.
-NODE_LTS_VERSION="${NODETERM_NODE_VERSION:-v22.14.0}"
+# When the system Node is missing or unsupported we provision this pinned LTS privately (see ensure_node).
+# Override with NODETERM_NODE_VERSION only to another version accepted by the checked-out graph.
+NODE_LTS_VERSION="${NODETERM_NODE_VERSION:-v24.15.0}"
 NODE_DIST_BASE="${NODETERM_NODE_DIST_BASE:-https://nodejs.org/dist}"
 
 # ---- pretty output ---------------------------------------------------------------------------
@@ -48,23 +47,25 @@ command -v git >/dev/null 2>&1 || fail "git is not installed. Install it first (
 
 # ---- Node.js: use a good-enough system install, else provision a private one --------------------
 # Sets NODE_BIN (absolute — used by npm ci, the node-pty rebuild, and the systemd ExecStart) and,
-# when it provisions, prepends its bin to PATH so `node`/`npm`/`npx`/build scripts all use it. This
-# is what makes the one-tap iOS install flow work on a host whose system Node is missing or < 20.
+# when it provisions, prepends its bin to PATH so `node`/`npm`/`npx`/build scripts all use it. The
+# capability probe comes from the freshly cloned checkout and rejects flagged/disabled node:sqlite,
+# not merely an old major number.
 ensure_node() {
-  # 1. A good-enough system Node (>= MIN_NODE_MAJOR, with npm)? Use it unchanged — today's behavior.
+  # 1. A supported system Node with unflagged, working DatabaseSync (and npm)? Use it unchanged.
   if command -v node >/dev/null 2>&1; then
-    local sys_node sys_major
+    local sys_node sys_version
     sys_node="$(command -v node)"
-    sys_major="$("$sys_node" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
-    if [ "$sys_major" -ge "$MIN_NODE_MAJOR" ] && command -v npm >/dev/null 2>&1; then
+    sys_version="$("$sys_node" --version 2>/dev/null || echo unknown)"
+    if "$sys_node" "$APP_DIR/scripts/check-node-runtime.mjs" --quiet >/dev/null 2>&1 \
+      && command -v npm >/dev/null 2>&1; then
       NODE_BIN="$sys_node"
       ok "Using system Node.js $("$NODE_BIN" -v)"
       return
     fi
-    if [ "$sys_major" -ge "$MIN_NODE_MAJOR" ]; then
-      warn "System Node.js $("$sys_node" -v) found but npm is missing — provisioning a private Node runtime instead."
+    if "$sys_node" "$APP_DIR/scripts/check-node-runtime.mjs" --quiet >/dev/null 2>&1; then
+      warn "System Node.js ${sys_version} is supported but npm is missing — provisioning a private Node runtime instead."
     else
-      info "System Node.js $("$sys_node" -v) is older than v${MIN_NODE_MAJOR} — provisioning Node ${NODE_LTS_VERSION} privately (no system changes)."
+      info "System Node.js ${sys_version} lacks the required unflagged node:sqlite runtime — provisioning Node ${NODE_LTS_VERSION} privately (no system changes)."
     fi
   else
     info "Node.js not found — provisioning Node ${NODE_LTS_VERSION} privately (no system changes)."
@@ -75,17 +76,17 @@ ensure_node() {
   case "$(uname -s)" in
     Linux)  os="linux" ;;
     Darwin) os="darwin" ;;
-    *) fail "Automatic Node provisioning supports Linux and macOS only (found $(uname -s)). Install Node.js >= ${MIN_NODE_MAJOR} manually and re-run." ;;
+    *) fail "Automatic Node provisioning supports Linux and macOS only (found $(uname -s)). Install Node.js ^22.22.2, ^24.15.0, or >=26.0.0 and re-run." ;;
   esac
   case "$(uname -m)" in
     x86_64|amd64)  arch="x64" ;;
     aarch64|arm64) arch="arm64" ;;
-    *) fail "Automatic Node provisioning supports x64 and arm64 only (found $(uname -m)). Install Node.js >= ${MIN_NODE_MAJOR} manually and re-run." ;;
+    *) fail "Automatic Node provisioning supports x64 and arm64 only (found $(uname -m)). Install Node.js ^22.22.2, ^24.15.0, or >=26.0.0 and re-run." ;;
   esac
 
   # The official tarballs are glibc-linked; musl (Alpine) can't run them.
   if [ "$os" = "linux" ] && { [ -f /etc/alpine-release ] || ldd --version 2>&1 | grep -qi musl; }; then
-    fail "This host uses musl libc (e.g. Alpine); the official Node.js binaries need glibc. Install Node.js >= ${MIN_NODE_MAJOR} via your package manager (e.g. 'apk add nodejs npm') and re-run."
+    fail "This host uses musl libc (e.g. Alpine); the official Node.js binaries need glibc. Install Node.js ^22.22.2, ^24.15.0, or >=26.0.0 via your package manager (e.g. 'apk add nodejs npm') and re-run."
   fi
 
   runtime_dir="$APP_DIR/runtime/node"
@@ -126,7 +127,11 @@ ensure_node() {
   # 3. Verify the binary runs before we depend on it, then put it first on PATH so npm/npx/build use it.
   if ! "$node_bin" --version >/dev/null 2>&1; then
     rm -rf "$runtime_dir"
-    fail "The provisioned Node.js binary at $node_bin does not run on this host. Install Node.js >= ${MIN_NODE_MAJOR} manually and re-run."
+    fail "The provisioned Node.js binary at $node_bin does not run on this host. Install Node.js ^22.22.2, ^24.15.0, or >=26.0.0 manually and re-run."
+  fi
+  if ! "$node_bin" "$APP_DIR/scripts/check-node-runtime.mjs" --quiet; then
+    rm -rf "$runtime_dir"
+    fail "The provisioned Node ${NODE_LTS_VERSION} does not provide the required unflagged node:sqlite DatabaseSync capability. Choose a supported NODETERM_NODE_VERSION and re-run."
   fi
   NODE_BIN="$node_bin"
   export PATH="$runtime_dir/bin:$PATH"
@@ -163,6 +168,9 @@ else
 fi
 
 cd "$APP_DIR"
+
+[ -f "$APP_DIR/scripts/check-node-runtime.mjs" ] \
+  || fail "The checkout is missing scripts/check-node-runtime.mjs; refusing to guess whether its Node runtime is supported."
 
 # ---- Node.js runtime (system if good enough, else provision under $APP_DIR/runtime/node) ------
 # Runs AFTER the clone so the runtime lives inside the checkout without tripping the clone's

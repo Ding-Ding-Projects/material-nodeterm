@@ -90,8 +90,9 @@ curl -fsSL https://raw.githubusercontent.com/eneskirca/nodeterm/main/scripts/ins
 The installer (`scripts/install-server.sh`) is idempotent — re-run it any time to update. It:
 
 - needs only `git`, `curl` and `tar` on the host — **Node.js is no longer a prerequisite**: if a
-  system Node ≥ 20 (with npm) is present it's used as-is, otherwise the installer downloads a
-  pinned Node LTS from nodejs.org into `~/.nodeterm-server-app/runtime/node` and uses it for the
+  system Node matching `^22.22.2 || ^24.15.0 || >=26.0.0` (with npm and a working `node:sqlite`
+  `DatabaseSync`) is present it's used as-is, otherwise the installer downloads pinned Node
+  v24.15.0 from nodejs.org into `~/.nodeterm-server-app/runtime/node` and uses it for the
   build and the systemd service (nothing is installed system-wide; Alpine/musl hosts still need a
   distro `nodejs`). It also warns (with the apt/dnf one-liner) if the C toolchain
   (`make`/`gcc`/`python3`) node-pty's native build needs is missing;
@@ -326,6 +327,9 @@ and the clipboard runs in a secure context.
 
 Things the image decides for you (see the Dockerfile comments for the full why):
 
+- **Every stage pins Node 24.15.0.** The status mirror's OS-backed cross-process lock uses
+  unflagged `node:sqlite`, and the locked dependency graph has a stricter patch floor; a floating
+  Node major can conceal either runtime break.
 - **Both native addons are compiled against Node's ABI, not Electron's.** The repo's `postinstall`
   runs `electron-rebuild`, which targets Electron — every install in the image uses
   `--ignore-scripts` plus an explicit `npm rebuild node-pty smart-whisper`. Rebuilding only
@@ -333,6 +337,10 @@ Things the image decides for you (see the Dockerfile comments for the full why):
 - **The server process is unprivileged.** The entrypoint starts as root, repairs only root-owned
   uid/gid entries on the literal `/data` filesystem for compatibility with the older image, then
   immediately `exec`s Node as uid 1000. It never follows an operator-supplied `NODETERM_DATA_DIR`.
+- **node-pty and smart-whisper are compiled against Node's ABI, not Electron's.** The repo's
+  `postinstall` runs `electron-rebuild`, which targets Electron — every install in the image uses
+  `--ignore-scripts` plus an explicit `npm rebuild node-pty smart-whisper`. Don't "simplify" that
+  away.
 - **`--insecure-http` is passed** because the container must bind `0.0.0.0` for the proxy to
   reach it, and TLS lives in the proxy. Never publish the port directly on a public interface.
 - **A container restart/redeploy kills the tmux server** (it lives inside the container). The

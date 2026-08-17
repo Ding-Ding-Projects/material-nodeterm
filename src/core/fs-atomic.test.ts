@@ -8,7 +8,16 @@ import { mkdtemp, readFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { removeAtomic, renameAtomic, renameAtomicSync, writeFileAtomic } from './fs-atomic'
+import {
+  clearAtomicTarget,
+  removeAtomic,
+  renameAtomic,
+  renameAtomicSync,
+  STALE_TEMP_AGE_MS,
+  sweepStaleTempFiles,
+  tempNameFor,
+  writeFileAtomic
+} from './fs-atomic'
 
 let dir: string
 beforeEach(async () => {
@@ -269,5 +278,197 @@ describe('removeAtomic', () => {
     }) as typeof fs.unlink)
     expect(await removeAtomic(join(dir, 'a-directory'))).toBe(false)
     expect(calls).toBe(1)
+  })
+})
+
+describe('unique temp names and abandoned-temp collection', () => {
+  it('separates same-millisecond calls and colliding PID namespaces/module counters', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
+    const a = tempNameFor(join(dir, 'secret.json'))
+    const b = tempNameFor(join(dir, 'secret.json'))
+    expect(a).not.toBe(b)
+    expect(a).toContain(`.${process.pid}.`)
+    expect(b).toContain(`.${process.pid}.`)
+
+    const sameNamespace = { pid: 1, sequence: 1 }
+    const defaultUuidA = tempNameFor(join(dir, 'secret.json'), sameNamespace)
+    const defaultUuidB = tempNameFor(join(dir, 'secret.json'), sameNamespace)
+    expect(defaultUuidA).not.toBe(defaultUuidB)
+    const containerA = tempNameFor(join(dir, 'secret.json'), {
+      ...sameNamespace,
+      uuid: () => 'uuid-a'
+    })
+    const containerB = tempNameFor(join(dir, 'secret.json'), {
+      ...sameNamespace,
+      uuid: () => 'uuid-b'
+    })
+    expect(containerA).not.toBe(containerB)
+    expect(containerA).toContain('.1.1.uuid-a.tmp')
+    expect(containerB).toContain('.1.1.uuid-b.tmp')
+    now.mockRestore()
+  })
+
+  it('keeps every fresh temp, even when its owner is already dead', async () => {
+    const target = join(dir, 'secret.json')
+    const legacy = `${target}.tmp`
+    const foreign = `${target}.4242.1.tmp`
+    await Promise.all([fs.writeFile(legacy, 'legacy'), fs.writeFile(foreign, 'foreign')])
+    const writtenAt = Math.min((await fs.lstat(legacy)).mtimeMs, (await fs.lstat(foreign)).mtimeMs)
+
+    await sweepStaleTempFiles(target, {
+      now: writtenAt + STALE_TEMP_AGE_MS - 1
+    })
+
+    expect((await fs.readdir(dir)).sort()).toEqual(['secret.json.4242.1.tmp', 'secret.json.tmp'])
+  })
+
+  it('removes only an aged ownerless legacy temp and preserves every PID-bearing shape', async () => {
+    const target = join(dir, 'secret.json')
+    const legacy = `${target}.tmp`
+    const priorPidShape = `${target}.1111.1.tmp`
+    const current = `${target}.2222.2.22222222-2222-4222-8222-222222222222.tmp`
+    const ours = `${target}.${process.pid}.3.33333333-3333-4333-8333-333333333333.tmp`
+    const unknown = `${target}.not-an-owner.tmp`
+    const unrelated = join(dir, 'other-file!.tmp') // same basename length as secret.json
+    await Promise.all(
+      [legacy, priorPidShape, current, ours, unknown, unrelated].map((file) => fs.writeFile(file, file))
+    )
+    const writtenAt = Math.max(
+      ...(await Promise.all(
+        [legacy, priorPidShape, current, ours, unknown, unrelated].map((file) => fs.lstat(file))
+      ))
+        .map((stat) => stat.mtimeMs)
+    )
+
+    await sweepStaleTempFiles(target, { now: writtenAt + STALE_TEMP_AGE_MS })
+
+    expect((await fs.readdir(dir)).sort()).toEqual([
+      `secret.json.${process.pid}.3.33333333-3333-4333-8333-333333333333.tmp`,
+      'other-file!.tmp',
+      'secret.json.1111.1.tmp',
+      'secret.json.2222.2.22222222-2222-4222-8222-222222222222.tmp',
+      'secret.json.not-an-owner.tmp'
+    ].sort())
+  })
+
+  it('does not use namespace-local signal zero to judge an aged PID-bearing temp', async () => {
+    const target = join(dir, 'secret.json')
+    const foreign = `${target}.3333.1.11111111-1111-4111-8111-111111111111.tmp`
+    await fs.writeFile(foreign, 'foreign')
+    const writtenAt = (await fs.lstat(foreign)).mtimeMs
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw errWithCode('ESRCH')
+    })
+
+    await sweepStaleTempFiles(target, { now: writtenAt + STALE_TEMP_AGE_MS })
+
+    expect(kill).not.toHaveBeenCalled()
+    expect(await fs.readFile(foreign, 'utf8')).toBe('foreign')
+  })
+})
+
+describe('clearAtomicTarget', () => {
+  it('removes the canonical file but reports a young current temp as retained', async () => {
+    const target = join(dir, 'secret.json')
+    const foreign = `${target}.4242.1.11111111-1111-4111-8111-111111111111.tmp`
+    await Promise.all([fs.writeFile(target, 'canonical'), fs.writeFile(foreign, 'bearer')])
+    const writtenAt = (await fs.lstat(foreign)).mtimeMs
+
+    const result = await clearAtomicTarget(target, {
+      now: writtenAt + STALE_TEMP_AGE_MS - 1
+    })
+
+    expect(result).toEqual({
+      cleared: false,
+      canonicalRemoved: true,
+      retainedTempCount: 1,
+      inspectionComplete: true
+    })
+    await expect(fs.access(target)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await fs.readFile(foreign, 'utf8')).toBe('bearer')
+  })
+
+  it('does not delete or bless an aged temp whose owner may be in another PID namespace', async () => {
+    const target = join(dir, 'secret.json')
+    const foreign = `${target}.5151.1.22222222-2222-4222-8222-222222222222.tmp`
+    await fs.writeFile(foreign, 'bearer')
+    const writtenAt = (await fs.lstat(foreign)).mtimeMs
+
+    const result = await clearAtomicTarget(target, { now: writtenAt + STALE_TEMP_AGE_MS })
+
+    expect(result.cleared).toBe(false)
+    expect(result.retainedTempCount).toBe(1)
+    expect(await fs.readFile(foreign, 'utf8')).toBe('bearer')
+  })
+
+  it('reports an aged temp whose deletion failed instead of swallowing the incomplete clear', async () => {
+    const target = join(dir, 'secret.json')
+    const legacy = `${target}.tmp`
+    await fs.writeFile(legacy, 'bearer')
+    const writtenAt = (await fs.lstat(legacy)).mtimeMs
+    const realRm = fs.rm
+    vi.spyOn(fs, 'rm').mockImplementation((async (file: any, options?: any) => {
+      if (String(file) === legacy) throw errWithCode('EACCES')
+      return (realRm as any)(file, options)
+    }) as typeof fs.rm)
+
+    const result = await clearAtomicTarget(target, { now: writtenAt + STALE_TEMP_AGE_MS })
+
+    expect(result.cleared).toBe(false)
+    expect(result.retainedTempCount).toBe(1)
+    expect(await fs.readFile(legacy, 'utf8')).toBe('bearer')
+  })
+
+  it('reports success only after an aged ownerless temp and the canonical file are gone', async () => {
+    const target = join(dir, 'secret.json')
+    const legacy = `${target}.tmp`
+    await Promise.all([fs.writeFile(target, 'canonical'), fs.writeFile(legacy, 'bearer')])
+    const writtenAt = (await fs.lstat(legacy)).mtimeMs
+
+    const result = await clearAtomicTarget(target, { now: writtenAt + STALE_TEMP_AGE_MS })
+
+    expect(result).toEqual({
+      cleared: true,
+      canonicalRemoved: true,
+      retainedTempCount: 0,
+      inspectionComplete: true
+    })
+    expect(await fs.readdir(dir)).toEqual([])
+  })
+
+  it('does not mistake an arbitrary dot-free token for a UUID temp', async () => {
+    const target = join(dir, 'secret.json')
+    const lookalike = `${target}.6262.1.not-a-uuid.tmp`
+    await Promise.all([fs.writeFile(target, 'canonical'), fs.writeFile(lookalike, 'unrelated')])
+
+    const result = await clearAtomicTarget(target)
+
+    expect(result).toEqual({
+      cleared: true,
+      canonicalRemoved: true,
+      retainedTempCount: 0,
+      inspectionComplete: true
+    })
+    expect(await fs.readFile(lookalike, 'utf8')).toBe('unrelated')
+  })
+
+  it('reports a canonical file republished between unlink and inspection as uncleared', async () => {
+    const target = join(dir, 'secret.json')
+    await fs.writeFile(target, 'old')
+    const realReaddir = fs.readdir
+    let reads = 0
+    vi.spyOn(fs, 'readdir').mockImplementation((async (directory: any, options?: any) => {
+      reads++
+      // First read is the conservative sweep; second is the post-unlink completeness scan.
+      if (reads === 2) await fs.writeFile(target, 'republished')
+      return (realReaddir as any)(directory, options)
+    }) as typeof fs.readdir)
+
+    const result = await clearAtomicTarget(target)
+
+    expect(result.cleared).toBe(false)
+    expect(result.canonicalRemoved).toBe(false)
+    expect(result.retainedTempCount).toBe(0)
+    expect(await fs.readFile(target, 'utf8')).toBe('republished')
   })
 })

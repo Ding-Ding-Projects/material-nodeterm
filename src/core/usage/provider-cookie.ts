@@ -17,7 +17,13 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
-import { renameAtomic } from '../fs-atomic'
+import { clearAtomicTarget, sweepStaleTempFiles } from '../fs-atomic'
+import {
+  readAtomicFileSnapshot,
+  withCrossProcessLock,
+  writeAtomicFileCompared,
+  type CrossProcessLease
+} from '../fs-transaction-lock'
 
 /** Owner read/write only. The whole reason these are separate files. */
 const MODE = 0o600
@@ -25,6 +31,24 @@ const MODE = 0o600
 /** Providers whose usage is read with a pasted browser cookie. */
 export const COOKIE_PROVIDERS = ['minimax', 'opencode'] as const
 export type CookieProvider = (typeof COOKIE_PROVIDERS)[number]
+
+export class ProviderCookieClearError extends Error {
+  readonly code = 'clear-incomplete' as const
+
+  constructor() {
+    super(
+      'The provider cookie could not be fully cleared; canonical or temporary credential files remain or could not be inspected.'
+    )
+  }
+}
+
+export class ProviderCookieInvalidError extends Error {
+  readonly code = 'invalid-cookie' as const
+
+  constructor(options: { cause?: unknown } = {}) {
+    super('The provider cookie is malformed.', options)
+  }
+}
 
 export function isCookieProvider(v: unknown): v is CookieProvider {
   return typeof v === 'string' && (COOKIE_PROVIDERS as readonly string[]).includes(v)
@@ -34,51 +58,41 @@ function file(provider: CookieProvider): string {
   return path.join(platform().userDataDir, `${provider}-cookie.json`)
 }
 
-/** The stored cookie header, or null when this provider has not been configured. */
-export async function readProviderCookie(provider: CookieProvider): Promise<string | null> {
-  try {
-    const raw = await fs.readFile(file(provider), 'utf-8')
-    const j = JSON.parse(raw) as Record<string, unknown>
-    return typeof j.cookie === 'string' && j.cookie.trim() ? j.cookie : null
-  } catch {
-    return null
-  }
+function validCookie(cookie: string): boolean {
+  return (
+    cookie.trim() === cookie &&
+    cookie.length > 0 &&
+    cookie.length <= 32 * 1024 &&
+    !/[\r\n\0]/u.test(cookie)
+  )
 }
 
-/** Paired with `process.pid` in the temp name: the counter makes a name unique WITHIN this process,
- *  the pid makes it unique ACROSS processes (it restarts at 0 in every new one — two
- *  `nodeterm-server --data-dir X` processes share the dir with no lock). Same scheme as
- *  agent-status-mirror's local write. */
-let writeSeq = 0
-
-/**
- * Remove temp files no writer in THIS process owns: the legacy fixed `<file>.tmp` (written by
- * builds before per-call names) and any `<file>.<pid>.<seq>.tmp` whose pid is not ours. Best
- * effort — a failure here must never break a save.
- *
- * Unlike settings.json, an orphan here is a live credential at 0600 that nothing will ever
- * overwrite, so it has to be collected rather than left. Temps bearing our own pid are untouchable:
- * one may belong to a concurrent write sitting between its `writeFile` and its `rename`, and
- * deleting it would recreate the exact race the unique names fixed. A foreign pid can in theory be
- * a second LIVE process on the same data dir; that setup has no lock to begin with, and the worst
- * case is that process's rename failing cleanly (ENOENT, rethrown to its caller) instead of a
- * forgotten cookie sitting on disk forever.
- */
-async function sweepStaleTmp(target: string): Promise<void> {
+function parseCookieDocument(raw: string): string {
+  let document: unknown
   try {
-    const dir = path.dirname(target)
-    const base = path.basename(target)
-    for (const entry of await fs.readdir(dir)) {
-      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>'
-      const owner = /^\.(\d+)\.\d+$/.exec(middle)?.[1]
-      if (middle === '' || (owner && owner !== String(process.pid))) {
-        await fs.rm(path.join(dir, entry), { force: true }).catch(() => undefined)
-      }
-    }
-  } catch {
-    // A dir we cannot read is not a reason to fail (or skip) the write below.
+    document = JSON.parse(raw)
+  } catch (cause) {
+    throw new ProviderCookieInvalidError({ cause })
   }
+  const cookie = document && typeof document === 'object'
+    ? (document as { cookie?: unknown }).cookie
+    : undefined
+  if (typeof cookie !== 'string' || !validCookie(cookie)) {
+    throw new ProviderCookieInvalidError()
+  }
+  return cookie
+}
+
+/** The stored cookie header, or null when this provider has not been configured. */
+export async function readProviderCookie(provider: CookieProvider): Promise<string | null> {
+  let raw: string
+  try {
+    raw = await fs.readFile(file(provider), 'utf-8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+  return parseCookieDocument(raw)
 }
 
 /**
@@ -97,37 +111,49 @@ export function writeProviderCookie(provider: CookieProvider, cookie: string): P
   // an earlier set sits between tmp-write and rename — the parked rename then resurrects the
   // credential the UI just reported cleared. Unique tmp names cannot fix that; only ordering can.
   // Each caller still sees only its own write's failure.
-  const prev = writeChains.get(provider) ?? Promise.resolve()
-  const run = prev.then(() => writeCookieNow(provider, cookie))
-  writeChains.set(provider, run.catch(() => {}))
+  const target = file(provider)
+  const key = path.resolve(target)
+  const prev = writeChains.get(key) ?? Promise.resolve()
+  const run = prev.then(() =>
+    withCrossProcessLock(target, (lease) => writeCookieNow(target, cookie, lease))
+  )
+  const recovered = run.then(
+    () => undefined,
+    () => undefined
+  )
+  writeChains.set(key, recovered)
+  void recovered.then(() => {
+    if (writeChains.get(key) === recovered) writeChains.delete(key)
+  })
   return run
 }
 
-const writeChains = new Map<CookieProvider, Promise<unknown>>()
+const writeChains = new Map<string, Promise<unknown>>()
 
-async function writeCookieNow(provider: CookieProvider, cookie: string): Promise<void> {
-  const target = file(provider)
-  // Both paths sweep: clearing a cookie that leaves an orphan temp behind has not cleared anything.
-  await sweepStaleTmp(target)
+async function writeCookieNow(
+  target: string,
+  cookie: string,
+  lease: CrossProcessLease
+): Promise<void> {
   if (!cookie.trim()) {
-    await fs.rm(target, { force: true })
+    // A fresh foreign temp may be a live writer and must survive. That makes this clear
+    // incomplete, though: surface it instead of reporting that bearer bytes are gone.
+    await lease.fence()
+    const result = await clearAtomicTarget(target)
+    if (!result.cleared) throw new ProviderCookieClearError()
     return
   }
-  const tmp = `${target}.${process.pid}.${++writeSeq}.tmp`
-  try {
-    await fs.writeFile(tmp, JSON.stringify({ cookie }), { encoding: 'utf-8', mode: MODE })
-    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
-    await renameAtomic(tmp, target)
-  } catch (e) {
-    // A failed write MUST remove its own temp, because here a leaked temp IS a leaked cookie: a
-    // unique name is never written again, so only this cleanup (or a later run's sweep above, once
-    // the pid is dead) will ever collect it. The error still propagates.
-    await fs.rm(tmp, { force: true }).catch(() => {})
-    throw e
-  }
-  // Defense in depth on the PUBLISHED file: the temp is created 0600 and rename preserves the
-  // mode, so this is a second lock on the door — cheap, and the one thing an attacker would need.
-  await fs.chmod(target, MODE).catch(() => undefined)
+  if (!validCookie(cookie)) throw new ProviderCookieInvalidError()
+  await sweepStaleTempFiles(target)
+  const current = await readAtomicFileSnapshot(target)
+  if (current.exists) parseCookieDocument(current.data.toString('utf8'))
+  await writeAtomicFileCompared(
+    target,
+    JSON.stringify({ cookie }),
+    current.revision,
+    lease,
+    { encoding: 'utf8', mode: MODE }
+  )
 }
 
 /** Whether a cookie is stored — for the settings UI, which must never read the value back. */

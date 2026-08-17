@@ -47,6 +47,8 @@
 //   - It does not swallow the final failure. The last error is thrown with its original code.
 
 import { promises as fs, renameSync } from 'fs'
+import { randomUUID } from 'crypto'
+import path from 'path'
 
 /**
  * Errors that mean "someone else has the destination open right now", rather than "this will
@@ -126,6 +128,83 @@ export function renameAtomicSync(
 const SLEEP_SLOT = new Int32Array(new SharedArrayBuffer(4))
 
 /**
+ * Minimum age before a startup/save sweep may consider temp litter abandoned.
+ *
+ * The grace is intentionally long. PID-bearing temps are never collected automatically because
+ * local process liveness says nothing reliable about a writer in another PID namespace. The age
+ * applies only to the historical ownerless `<target>.tmp` shape.
+ */
+export const STALE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
+
+export interface SweepStaleTempOptions {
+  /** Test seam; production uses the wall clock. */
+  now?: number
+}
+
+interface AtomicTempCandidate {
+  ownerPid?: number
+}
+
+/** Recognize only the temp formats this module has actually published. Prefix checking is part of
+ * the decision: two unrelated basenames can have the same length, and slicing first made one
+ * store's sweeper mistake the other's file for its own. */
+function atomicTempCandidate(base: string, entry: string): AtomicTempCandidate | null {
+  if (!entry.startsWith(base)) return null
+  const suffix = entry.slice(base.length)
+  if (suffix === '.tmp') return {}
+  // Accept the historical pid+sequence name and ONLY the canonical v4 UUID shape emitted now.
+  // A broad "anything without a dot" token made unrelated lookalikes part of cleanup policy.
+  const owned = /^\.(\d+)\.\d+(?:\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?\.tmp$/.exec(suffix)
+  return owned ? { ownerPid: Number(owned[1]) } : null
+}
+
+/**
+ * Best-effort collection of abandoned temp files next to `target`.
+ *
+ * Current temp names are `<target>.<pid>.<seq>.<uuid>.tmp`; the prior pid+sequence form is also
+ * recognized during upgrades. A different pid is NOT proof that a writer died: desktop
+ * multi-instance mode and two Server Edition processes may deliberately share a data directory.
+ * A pid-bearing temp is never removed automatically. Signal-0/ESRCH is namespace-local, so it
+ * cannot prove that a writer on a shared Docker/Server volume is dead; PID reuse makes the inverse
+ * equally unreliable. Credential Clear reports such a temp as incomplete instead. The legacy
+ * fixed `<target>.tmp` name has no owner or UUID and predates cross-process-safe writers, so the
+ * long age grace is the only evidence available for collecting that one exact shape.
+ *
+ * Unknown temp-name shapes are left alone. Every current writer removes its own temp on failure;
+ * this sweep exists only for process death and must never recreate the writer-vs-sweeper race that
+ * unique names fixed.
+ */
+export async function sweepStaleTempFiles(
+  target: string,
+  opts: SweepStaleTempOptions = {}
+): Promise<void> {
+  const now = opts.now ?? Date.now()
+  try {
+    const directory = path.dirname(target)
+    const base = path.basename(target)
+    for (const entry of await fs.readdir(directory)) {
+      const candidate = atomicTempCandidate(base, entry)
+      if (!candidate) continue
+
+      const temp = path.join(directory, entry)
+      let mtimeMs: number
+      try {
+        mtimeMs = (await fs.lstat(temp)).mtimeMs
+      } catch {
+        continue
+      }
+      if (!Number.isFinite(mtimeMs) || now - mtimeMs < STALE_TEMP_AGE_MS) continue
+
+      // Foreign ownership cannot be proved dead across PID namespaces; fail conservative.
+      if (candidate.ownerPid !== undefined) continue
+      await fs.rm(temp, { force: true }).catch(() => undefined)
+    }
+  } catch {
+    // A directory we cannot read is not a reason to fail the load/save that requested the sweep.
+  }
+}
+
+/**
  * Delete `target`, retrying the same transient Windows codes, and treating "already gone" as
  * success. Returns false if it is still there afterwards.
  *
@@ -156,9 +235,73 @@ export async function removeAtomic(target: string): Promise<boolean> {
   }
 }
 
-/** Paired with `process.pid` in the temp name below: the counter makes a name unique WITHIN this
- *  process, the pid makes it unique ACROSS processes (it restarts at 0 in every new one). */
+/** The counter keeps names readable and ordered within this module instance. It is not the unique
+ *  dimension: workers and separate PID namespaces can share a pid and start their counters at 1. */
 let writeSeq = 0
+
+export interface TempNameOptions {
+  /** Deterministic seams for behavior tests that model separate PID namespaces/module instances. */
+  pid?: number
+  sequence?: number
+  uuid?: () => string
+}
+
+export interface ClearAtomicTargetResult {
+  /** True only when the canonical path is absent and no recognized publication temp remains. */
+  cleared: boolean
+  /** Whether the canonical path was removed (or was already absent). */
+  canonicalRemoved: boolean
+  /** Recognized legacy/current temps retained because they may be live or could not be removed. */
+  retainedTempCount: number
+  /** False when the parent directory could not be inspected, so absence cannot be claimed. */
+  inspectionComplete: boolean
+}
+
+/**
+ * Remove an atomic target without claiming a credential clear that did not actually finish.
+ *
+ * The ordinary sweep remains conservative: a pid-bearing temp may be a live writer in another PID
+ * namespace at any age and must not be deleted merely because signal 0 reports ESRCH here. Clear removes
+ * the canonical file, then reports every recognized temp still present. Callers can surface an
+ * explicit incomplete-clear error instead of telling the UI that a PAT/cookie is gone while its
+ * bearer bytes remain next door. This is a point-in-time result, not a cross-process lock; a
+ * foreign writer that publishes after the inspection still has last-publisher semantics.
+ */
+export async function clearAtomicTarget(
+  target: string,
+  opts: SweepStaleTempOptions = {}
+): Promise<ClearAtomicTargetResult> {
+  await sweepStaleTempFiles(target, opts)
+  const removeSucceeded = await removeAtomic(target)
+  const directory = path.dirname(target)
+  const base = path.basename(target)
+  let retainedTempCount = 0
+  let inspectionComplete = true
+  try {
+    const entries = await fs.readdir(directory)
+    retainedTempCount = entries.filter((entry) => atomicTempCandidate(base, entry) !== null).length
+  } catch (error) {
+    if (codeOf(error) !== 'ENOENT') inspectionComplete = false
+  }
+  // A foreign writer can rename its temp onto the canonical path after our unlink and before the
+  // directory scan. Temp-count zero is therefore not enough: recheck the destination last so this
+  // point-in-time result cannot report success over a credential that has already reappeared.
+  let canonicalAbsent = removeSucceeded
+  if (canonicalAbsent) {
+    try {
+      await fs.lstat(target)
+      canonicalAbsent = false
+    } catch (error) {
+      if (codeOf(error) !== 'ENOENT') canonicalAbsent = false
+    }
+  }
+  return {
+    cleared: canonicalAbsent && inspectionComplete && retainedTempCount === 0,
+    canonicalRemoved: canonicalAbsent,
+    retainedTempCount,
+    inspectionComplete
+  }
+}
 
 /**
  * A temp path for publishing over `target`, unique per call.
@@ -168,19 +311,19 @@ let writeSeq = 0
  * writer's rename publishes the other's half-written bytes — or moves the temp out from under it,
  * and the loser fails with a confusing `ENOENT` that says nothing about what actually happened.
  *
- * Both halves of the name matter and for different reasons. The counter separates writers inside
- * one process. The pid separates PROCESSES, which is the case that looks impossible until it is
- * not: the Server Edition takes a `--data-dir`, so two servers can be pointed at one directory,
- * and a desktop app can share it too. Several stores here reasoned "only one instance exists" and
- * were right about their own process and silent about the other one. `scrollback-store` had the
- * counter and no pid, which is exactly that gap.
+ * The UUID is the uniqueness guarantee. PID plus a module counter is useful ownership/diagnostic
+ * metadata, but is not globally unique: two containers can both be PID 1, worker isolates share a
+ * PID while loading separate module counters, and an OS can reuse a PID after crash litter remains.
  *
  * The cost of uniqueness is that a temp never self-heals the way a fixed one did, where the next
  * save simply overwrote the litter. Every caller therefore owes its own cleanup on failure —
  * `writeFileAtomic` does it for you, and a site that builds its own sequence must do it by hand.
  */
-export function tempNameFor(target: string): string {
-  return `${target}.${process.pid}.${++writeSeq}.tmp`
+export function tempNameFor(target: string, opts: TempNameOptions = {}): string {
+  const pid = opts.pid ?? process.pid
+  const sequence = opts.sequence ?? ++writeSeq
+  const uuid = opts.uuid ?? randomUUID
+  return `${target}.${pid}.${sequence}.${uuid()}.tmp`
 }
 
 /**
@@ -200,7 +343,7 @@ export async function writeFileAtomic(
   data: string,
   opts: { mode?: number } = {}
 ): Promise<void> {
-  const tmp = `${target}.${process.pid}.${++writeSeq}.tmp`
+  const tmp = tempNameFor(target)
   try {
     await fs.writeFile(tmp, data, { encoding: 'utf-8', ...opts })
     await renameAtomic(tmp, target)

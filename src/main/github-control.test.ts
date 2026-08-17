@@ -64,7 +64,60 @@ describe('ElectronGitHubSecretStore', () => {
     const locked = new ElectronGitHubSecretStore(userDataDir, safeStorage({ available: false }))
     await expect(locked.save('replacement-token')).rejects.toMatchObject({ code: 'keyring-locked' })
     expect(await fs.readFile(path.join(userDataDir, 'github-issues-token.json'), 'utf-8')).toBe(before)
-    expect(await locked.readForHost()).toBeNull()
+    await expect(locked.readForHost()).rejects.toMatchObject({ code: 'keyring-locked' })
+  })
+
+  it('rejects corrupt credential bytes on read and save without replacing the evidence', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const corrupt = '{"version":1,"kind":"safe-storage","value":'
+    await fs.writeFile(tokenFile, corrupt, { encoding: 'utf-8', mode: 0o600 })
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+
+    await expect(store.readForHost()).rejects.toMatchObject({ code: 'credential-unavailable' })
+    await expect(store.save('replacement-token')).rejects.toMatchObject({
+      code: 'credential-unavailable'
+    })
+    expect(await fs.readFile(tokenFile, 'utf-8')).toBe(corrupt)
+  })
+
+  it('rejects non-canonical safe-storage bytes before decrypt or replacement', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const malformed = JSON.stringify({ version: 1, kind: 'safe-storage', value: 'not-base64' })
+    await fs.writeFile(tokenFile, malformed, { encoding: 'utf-8', mode: 0o600 })
+    const storage = safeStorage()
+    const decrypt = vi.spyOn(storage, 'decryptString')
+    const store = new ElectronGitHubSecretStore(userDataDir, storage)
+
+    await expect(store.readForHost()).rejects.toMatchObject({ code: 'credential-unavailable' })
+    await expect(store.save('replacement-token')).rejects.toMatchObject({
+      code: 'credential-unavailable'
+    })
+    expect(decrypt).not.toHaveBeenCalled()
+    expect(await fs.readFile(tokenFile, 'utf-8')).toBe(malformed)
+  })
+
+  it('rejects unreadable reads and saves, then recovers the shared queue for another store instance', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const first = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    const second = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await first.save('original-token')
+    const before = await fs.readFile(tokenFile, 'utf-8')
+    const realReadFile = fs.readFile
+    let canonicalReadFailures = 2
+    vi.spyOn(fs, 'readFile').mockImplementation((async (file: any, ...args: any[]) => {
+      if (String(file) === tokenFile && canonicalReadFailures > 0) {
+        canonicalReadFailures -= 1
+        throw Object.assign(new Error('EACCES: credential is unreadable'), { code: 'EACCES' })
+      }
+      return (realReadFile as any)(file, ...args)
+    }) as typeof fs.readFile)
+
+    await expect(first.readForHost()).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(first.save('first-replacement')).rejects.toMatchObject({ code: 'EACCES' })
+    expect(await (realReadFile as any)(tokenFile, 'utf-8')).toBe(before)
+    await expect(second.save('second-replacement')).resolves.toBeUndefined()
+    vi.restoreAllMocks()
+    await expect(second.readForHost()).resolves.toBe('second-replacement')
   })
 
   it('clears only the stored token file', async () => {
@@ -91,9 +144,9 @@ describe('ElectronGitHubSecretStore atomic write', () => {
   it('overlapping token saves never reuse a tmp name (no torn write, no leftovers)', async () => {
     const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
     // The store's chain serializes its own mutations, so the writes arrive one after the other —
-    // uniqueness is carried by the `<pid>.<seq>` name alone. That name is what protects writers
-    // the chain cannot see (a second app process on the same userDataDir) and the crash window
-    // between tmp-write and rename, so it stays pinned here.
+    // UUID uniqueness protects writers the chain cannot see (a second app process or PID namespace
+    // on the same userDataDir) and the crash window between tmp-write and rename, so the distinct
+    // filesystem paths stay pinned here.
     const long = `github_pat_${'a'.repeat(600)}`
     const short = `github_pat_${'b'.repeat(7)}`
     const tmps: string[] = []
@@ -138,29 +191,29 @@ describe('ElectronGitHubSecretStore atomic write', () => {
     expect(existsSync(tokenFile())).toBe(false)
   })
 
-  it('sweeps orphan temps left by dead writers, but never one bearing our own pid', async () => {
+  it('sweeps aged legacy litter but never a fresh temp merely because its pid differs', async () => {
     const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
     const legacy = `${tokenFile()}.tmp` // a build from before per-call tmp names
-    const foreign = `${tokenFile()}.${process.pid + 1}.7.tmp` // a run that died before its rename
+    const foreign = `${tokenFile()}.${process.pid + 1}.7.tmp` // may be a second live process
     const ours = `${tokenFile()}.${process.pid}.999.tmp`
     for (const file of [legacy, foreign, ours]) {
       await fs.writeFile(file, JSON.stringify({
         version: 1, kind: 'restricted-file', token: 'stale-secret'
       }), { encoding: 'utf-8', mode: 0o600 })
     }
+    await fs.utimes(legacy, 0, 0)
 
     await store.save('github_pat_fresh')
 
     expect(await store.readForHost()).toBe('github_pat_fresh')
-    // Unique names are never reused, so an orphan is a 0600 file holding a live PAT forever.
+    // The legacy path is decades old. The foreign temp is fresh and may belong to another live
+    // app in multi-instance mode, so its different pid is not permission to remove it.
     expect(existsSync(legacy)).toBe(false)
-    expect(existsSync(foreign)).toBe(false)
-    // Our own pid is off limits: it may be a CONCURRENT writer sitting between its write and its
-    // rename, and deleting it would reintroduce the very race the unique names fixed.
+    expect(existsSync(foreign)).toBe(true)
     expect(existsSync(ours)).toBe(true)
   })
 
-  it('sweeps orphan temps on the clear path too — a "cleared" token must leave nothing behind', async () => {
+  it('clear removes the canonical token but rejects while credential temps remain', async () => {
     const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
     await store.save('github_pat_secret')
     for (const file of [`${tokenFile()}.tmp`, `${tokenFile()}.${process.pid + 1}.7.tmp`]) {
@@ -169,11 +222,18 @@ describe('ElectronGitHubSecretStore atomic write', () => {
       }), { encoding: 'utf-8', mode: 0o600 })
     }
 
-    await store.clear()
+    await expect(store.clear()).rejects.toMatchObject({ code: 'clear-incomplete' })
 
     expect(await store.readForHost()).toBeNull()
     expect(existsSync(tokenFile())).toBe(false)
-    expect(await tmpsLeft()).toEqual([])
+    expect((await tmpsLeft()).sort()).toEqual([
+      `github-issues-token.json.${process.pid + 1}.7.tmp`,
+      'github-issues-token.json.tmp'
+    ].sort())
+
+    const recovered = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await expect(recovered.save('recovered-token')).resolves.toBeUndefined()
+    await expect(recovered.readForHost()).resolves.toBe('recovered-token')
   })
 
   it('a failed rename removes its own temp and still rejects (a leaked temp here is a live PAT)', async () => {

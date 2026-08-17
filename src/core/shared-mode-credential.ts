@@ -25,7 +25,11 @@ import { promises as fs } from 'fs'
 import path from 'path'
 
 import { platform } from './platform'
-import { renameAtomic } from './fs-atomic'
+import {
+  readAtomicFileSnapshot,
+  withCrossProcessLock,
+  writeAtomicFileCompared
+} from './fs-transaction-lock'
 
 const SCRYPT_KEYLEN = 32
 export const MIN_PIN_LENGTH = 4
@@ -80,16 +84,11 @@ export interface StoredCredential {
  *  partial file, and a crash mid-write never corrupts the previous good copy. The rename retries
  *  briefly on Windows if the destination is momentarily held open (see fs-atomic.ts). */
 export async function persistFile(file: string, data: string): Promise<void> {
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
   await fs.mkdir(path.dirname(file), { recursive: true })
-  try {
-    await fs.writeFile(tmp, data, { mode: 0o600 })
-    await renameAtomic(tmp, file)
-    await fs.chmod(file, 0o600).catch(() => {})
-  } catch (e) {
-    await fs.rm(tmp, { force: true }).catch(() => {})
-    throw e
-  }
+  await withCrossProcessLock(file, async (lease) => {
+    const current = await readAtomicFileSnapshot(file)
+    await writeAtomicFileCompared(file, data, current.revision, lease, { mode: 0o600 })
+  })
 }
 
 /** Whether this shell can seal secrets at rest. Throws when a shell supplies exactly one of the
@@ -113,8 +112,11 @@ export async function hasCredential(file: string): Promise<boolean> {
   try {
     await fs.access(file)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    // An unreadable credential is still a credential. Propagate unavailable state so callers do
+    // not offer first-enable and overwrite the only recoverable hash.
+    throw error
   }
 }
 

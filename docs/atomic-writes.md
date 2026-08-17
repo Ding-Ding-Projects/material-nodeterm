@@ -5,8 +5,11 @@ would have been lost to a passing antivirus scan land instead.** A disk that is 
 that is read-only, or a file some process holds open indefinitely will still fail — loudly, which
 is the point. Nothing here protects against a machine losing power between two saves.
 
-Implementation: [`src/core/fs-atomic.ts`](../src/core/fs-atomic.ts). Tests:
-`src/core/fs-atomic.test.ts` (behaviour) and `src/core/fs-atomic.guard.test.ts` (the scan).
+Implementations: [`src/core/fs-atomic.ts`](../src/core/fs-atomic.ts) for publication and
+[`src/core/fs-transaction-lock.ts`](../src/core/fs-transaction-lock.ts) for cross-process
+read/modify/write transactions. Tests: `src/core/fs-atomic.test.ts` (behaviour),
+`src/core/fs-atomic.guard.test.ts` (the scan), and
+`src/core/fs-transaction-lock.process.test.ts` (real two-process barriers and crash recovery).
 
 ## What every store does
 
@@ -91,9 +94,11 @@ concurrent writers. One writer's rename then publishes the other's half-written 
 temp out from under it so the loser fails with a confusing `ENOENT`.
 
 `writeFileAtomic` and `tempNameFor` generate a per-call unique name
-(`<target>.<pid>.<seq>.tmp`). Both halves matter and for different reasons: the counter separates
-writers inside one process, the pid separates PROCESSES. Remote-shell writes use the equivalent
-property with a locally minted random UUID; the remote host never has to interpolate a nonce.
+(`<target>.<pid>.<seq>.<uuid>.tmp`). The UUID is the uniqueness guarantee. PID and sequence remain
+because they make ownership metadata and diagnostics useful, but they are not globally unique:
+containers can both be PID 1, worker isolates share a PID with independent module counters, and an
+OS can reuse a PID while crash litter remains. Remote-shell writes use the equivalent property with
+a locally minted random UUID; the remote host never has to interpolate a nonce.
 
 The same rule applies to SSH and scp staging even though those writes do not call `fs.writeFile`.
 `remoteAtomicWrite` mints a bounded `.nodeterm-<uuid>.tmp` sibling before quoting both complete
@@ -123,21 +128,100 @@ litter. A unique one does not, so every caller must remove its own temp on failu
 `writeFileAtomic` does that for you; three of the five sites built their own sequence and had no
 cleanup at all, so it was added with the rename.
 
-The guard checks the PROPERTY, not the helper: several stores build the same pid+counter name
-inline and are perfectly correct.
+`Date.now()` does **not** make the name unique. Two bridge calls, shutdown flushes, or WS clients can
+enter a save inside one millisecond. Nor is pid-plus-counter globally unique across PID namespaces,
+worker isolates, or PID reuse. A safe local temp name therefore carries random UUID entropy;
+`tempNameFor` supplies it and retains pid/sequence metadata. The guard deliberately rejects
+pid-plus-clock and pid-plus-counter names, including the historical
+`<file>.tmp-<pid>-<clock>` suffix form rather than scanning only templates that end in `.tmp`.
+
+Cleanup must not reverse the fix. A different pid only means “another process,” not “a dead
+process”: desktop multi-instance mode and two `nodeterm-server --data-dir X` processes can share a
+directory intentionally. All cross-run collection goes through `sweepStaleTempFiles`, which keeps
+fresh files and every pid-bearing file. Signal-zero/`ESRCH` is namespace-local, so it cannot prove
+that a writer on a mounted Docker/Server volume died; PID reuse also makes a locally visible pid
+unreliable evidence of life. The only cross-run shape collected automatically is the exact legacy
+fixed `<file>.tmp`, after a 24-hour age grace. Current pid-bearing names are recognized only with a
+canonical lowercase v4 UUID (plus the historical pid-and-sequence form); an arbitrary dot-free
+token is not cleanup authority. Current writers still remove their own temp immediately when their
+write fails.
+
+A credential **Clear** has a stricter reporting contract without a more destructive cleanup
+policy. `clearAtomicTarget` removes the canonical file, runs the conservative sweep, then inspects
+for every recognized legacy/current temp. It reports incomplete while a young, live, unjudgeable,
+or failed-to-delete temp remains (or the directory cannot be inspected), and PAT/cookie/token
+callers propagate that failure to the UI/API. A plausible foreign writer is still preserved; the
+important distinction is that retained bearer bytes can no longer be reported as a completed
+clear. By itself this is a point-in-time result, not a cross-process lock. Credential stores call it
+while holding their SQLite transaction, so another supported process cannot publish between removal,
+inspection, the final canonical-path recheck, and transaction completion.
+
+## A unique temp does not order snapshots
+
+Temp uniqueness and publish ordering solve different races. If two calls snapshot a whole in-memory
+store, writer A can capture older state, stall during `renameAtomic`'s transient-sharing retry,
+writer B can publish newer state, and then A can wake and atomically overwrite it. Nothing is torn;
+the final document is simply stale.
+
+Whole-document writers that can overlap therefore need a FIFO publish chain (or a generation check)
+in addition to unique temps. `agent-status-mirror.flush` uses FIFO. Its test blocks the first rename,
+records a newer state, starts the second flush, and proves the newer generation is final; removing
+the queue makes that test deterministically red.
+
+That FIFO orders one JavaScript process. Credential documents deliberately shared by Desktop and
+Server Edition additionally use `withCrossProcessLock`, whose `BEGIN IMMEDIATE` transaction holds
+SQLite's kernel-backed file lock across the strict read, mutation, temp publication and clear/prune
+checks. A suspended writer keeps ownership; process death releases it. There is no timestamp lease,
+PID probe, or stale-owner deletion, because none can prove a writer on another namespace or a paused
+machine is dead. Busy retries use a monotonic deadline and fail with `lock-timeout`; a corrupt or
+unreadable sidecar remains evidence and fails with `lock-evidence-unreadable`.
+
+The rendezvous path is derived from the real parent directory plus the canonical basename, so a
+directory symlink/junction cannot split one physical resource into two locks. Publication compares
+the exact SHA-256 revision read inside the transaction before rename. The SQLite lock orders every
+supported writer; the comparison also rejects an out-of-protocol edit observed before publication.
+Neither mechanism claims compatibility with an older writer that does not participate in the
+transaction, so sharing a data directory during a rolling downgrade remains unsupported.
+
+A read-modify-write store must enqueue before it reads and hold the same turn through publication.
+Serializing only `save()` faithfully writes both stale derivatives and still loses one caller's
+change. `SecureStore.mutate` therefore coordinates by physical file across independent store
+instances and processes. Its read degrades to an empty list only for `ENOENT`; corruption, duplicate
+or non-v4 secret ids, and permission failures propagate as unavailable and are never permission to
+replace the credential document. `save()` validates the same schema before publication so it cannot
+report success for bytes its next strict read rejects. Scheduled token set/clear/prune operations
+use one directory-wide transaction so a prune cannot miss a parked set or wake after a later set and
+delete it. Provider cookies, shared-mode credentials, and Desktop/Server GitHub token stores preserve
+the same strict-read evidence and transaction boundary. GitHub Save begins a controller-local FIFO
+before its network validation, so a later Clear in that controller cannot finish first and be
+resurrected. Separate processes have no shared pre-validation invocation clock; their final durable
+mutations are ordered when they enter the SQLite transaction.
+
+`node:sqlite` is loaded lazily so an incompatible runtime can reach the actionable startup preflight.
+The supported floor is `^22.22.2 || ^24.15.0 || >=26.0.0`; package metadata, the installer, container
+image and both application shells enforce that same capability contract.
+
+The guard checks the PROPERTY, not the helper: an inline `randomUUID()` path is also correct.
 
 ## The rule, and how it is enforced
 
 > No store publishes a file with a bare `fs.rename`. Use `renameAtomic`, or `writeFileAtomic` if
 > the whole temp-write-publish cycle is what you want.
 
-`src/core/fs-atomic.guard.test.ts` scans `src/core`, `src/main` and `src/server` and fails on any
-bare rename in all three spellings. It flags a bare `rename`/`renameSync` only when the file
+`src/core/fs-atomic.guard.test.ts` scans `src/core`, `src/main`, `src/server` and the standalone
+`src/session-host`, and fails on any bare rename in all three spellings. The only helpers exempted
+are `core/fs-atomic.ts` and `session-host/state-file.ts` (the standalone host cannot import core).
+It flags a bare `rename`/`renameSync` only when the file
 actually imported that name from `fs`: several stores have a `rename()` method of their own (kids
 mode, School mode and the Ollama chat store each rename something), and a guard that cries wolf is
 a guard somebody deletes. It is a scan rather than a convention because the convention
 is unverifiable by reading: a store added next year gets the retry because the test refuses the
 alternative, not because its author read this page.
+
+The temp-name half inventories local Node filesystem `.tmp` templates assigned directly or through
+`path.join`. It does not parse generated remote-shell paths or transfer `.part` conventions; those
+need behavior gates at their own shell/transport boundary rather than pretending a TypeScript regex
+understands the remote program.
 
 The guard strips comments before matching, so a file may still *discuss* `fs.rename` in the prose
 explaining why it no longer calls one. It also asserts it found a source tree at all — a scan that

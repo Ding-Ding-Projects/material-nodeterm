@@ -307,7 +307,7 @@ Mirrors tmux's server lifetime rule as closely as a different OS allows:
   must both finish. If either fails, the host closes its listener, destroys any socket from that
   pre-publication window, removes its owned token/state/endpoint, and exits nonzero. This catch is
   explicit because the daemon's `uncaughtException` hook is diagnostic and suppresses Node's
-  default fatal exit; letting publication throw into it creates an undiscoverable orphan host.
+default fatal exit; letting publication throw into it creates an undiscoverable orphan host.
 
 The spawned program follows the same resolver as a direct local PTY. With no explicit program and
 an empty `settings.defaultShell`, Windows selects PowerShell 7, then built-in Windows PowerShell,

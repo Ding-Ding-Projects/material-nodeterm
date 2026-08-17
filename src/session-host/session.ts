@@ -113,7 +113,6 @@ export class HostSession {
   /** Shared completion for the natural-exit / explicit-kill race. A second caller waits for the
    *  first caller's output drain instead of acknowledging while teardown is still in flight. */
   ending: Promise<void> | null = null
-
   constructor(
     name: string,
     spawn: SessionHostSpawnOptions,
