@@ -331,6 +331,21 @@ confirmed `{ok:true}` host responses, while a transport/request rejection remain
 propagated. That propagation is what lets the periodic snapshot keep its dirty bit for a retry and
 what prevents a delete from claiming a persistent process is gone when the host never confirmed it.
 
+The `hello` hand-off has an equally strict ownership boundary. The handshake installs named
+`connect`/`data`/`error`/`close` listeners, accepts only the response carrying its captured hello
+request id, removes only those listeners, and then installs the production frame listener before
+resolving the connection promise. Never restore broad `removeAllListeners('data')` cleanup here:
+the original order installed the production listener and immediately deleted it, so the first
+`attach` response and every later frame disappeared while the socket still looked connected.
+
+An initial `attach` registers its local subscriber before sending because startup output may race
+the response. If the request rejects, it rolls back only that subscriber and its own remembered
+attach options; a concurrent co-attach's state is left intact. Capture and kill preserve the same
+failure distinction across reconnects: an empty capture and an idempotently absent kill are both
+confirmed `{ok:true}` host responses, while a transport/request rejection remains unknown and is
+propagated. That propagation is what lets the periodic snapshot keep its dirty bit for a retry and
+what prevents a delete from claiming a persistent process is gone when the host never confirmed it.
+
 ## Lifetime
 
 Mirrors tmux's server lifetime rule as closely as a different OS allows:
