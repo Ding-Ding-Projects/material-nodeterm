@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { createAgentNode } from './workspace'
+import { resetCodexIdentityCapsForTests } from './codexIdentity'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import type { ActiveAgentLaunchPlan } from './permissionMode'
 
@@ -8,6 +9,8 @@ const launchPlan = (
   mode: AgentPermissionMode
 ): ActiveAgentLaunchPlan =>
   ({ surface: 'canvas-new-agent', agentId, mode }) as ActiveAgentLaunchPlan
+
+afterEach(() => resetCodexIdentityCapsForTests())
 
 /**
  * The separator is the whole reason `argvPromptSeparator` exists, and it is invisible in the config
@@ -125,11 +128,27 @@ describe('createAgentNode — permission mode meets the argv separator', () => {
     expect(cmd('gemini', 'explain this repo', 'acceptEdits')).toBe(
       "gemini 'explain this repo' --approval-mode auto_edit"
     )
-    // codex in a mode it cannot express: the bare command, never a substituted flag.
+    // An unknown/failed shared-identity probe stays on the historical bare Codex command.
+    // Codex in a mode it cannot express gets no substituted flag.
     expect(cmd('codex', 'explain this repo', 'plan')).toBe("codex 'explain this repo'")
     // ...and in one it can, the flag lands last, same convention.
     expect(cmd('codex', 'explain this repo', 'auto')).toBe(
       "codex 'explain this repo' --ask-for-approval on-request"
+    )
+  })
+
+  it('uses the managed Codex launcher only after shared identity is proven', () => {
+    resetCodexIdentityCapsForTests({
+      shared: true,
+      launcherPath: 'C:\\nodeterm\\nodeterm-codex.cmd',
+      remoteFlag: true,
+      appServer: true
+    })
+    expect(cmd('codex', 'explain this repo', 'plan')).toBe(
+      "nodeterm-codex 'explain this repo'"
+    )
+    expect(cmd('codex', 'explain this repo', 'auto')).toBe(
+      "nodeterm-codex 'explain this repo' --ask-for-approval on-request"
     )
   })
 
@@ -146,6 +165,8 @@ describe('createAgentNode — permission mode meets the argv separator', () => {
       'grok --permission-mode bypassPermissions'
     )
     expect(cmd('gemini', undefined, 'bypassPermissions')).toBe('gemini --approval-mode yolo')
-    expect(cmd('codex', undefined, 'bypassPermissions')).toBe('codex --ask-for-approval never')
+    expect(cmd('codex', undefined, 'bypassPermissions')).toBe(
+      'codex --ask-for-approval never'
+    )
   })
 })

@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
-import { randomUUID, timingSafeEqual } from 'crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { writeFileSync, mkdirSync } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
@@ -119,7 +119,10 @@ export function parseControlBody(
     return { nodeId: form.nodeId ?? '', args }
   }
   try {
-    const parsed = JSON.parse(raw) as { nodeId?: string; args?: Record<string, string> }
+    const parsed = JSON.parse(raw) as {
+      nodeId?: string
+      args?: Record<string, string>
+    }
     return { nodeId: parsed.nodeId ?? '', args: parsed.args ?? {} }
   } catch {
     return { nodeId: '', args: {} }
@@ -193,11 +196,38 @@ class HookServer {
    * `nodeTokenVerified`.
    */
   private codexThreadStartHandler:
-    | ((req: { nodeId: string; cwd: string; hookEndpoint: string }) => Promise<string>)
+    | ((req: {
+        nodeId: string
+        cwd: string
+        hookEndpoint: string
+        accountId?: string
+      }) => Promise<string>)
     | null = null
   private codexThreadBindHandler:
-    | ((req: { nodeId: string; threadId: string; hookEndpoint: string }) => Promise<void>)
+    | ((req: {
+        nodeId: string
+        threadId: string
+        hookEndpoint: string
+        accountId?: string
+      }) => Promise<void>)
     | null = null
+  private codexThreadObservedHandler:
+    | ((req: {
+        nodeId: string
+        threadId: string
+        hookEndpoint: string
+        accountId?: string
+        name?: string
+      }) => Promise<void>)
+    | null = null
+  private codexThreadAuthorizeHandler:
+    ((req: { nodeId: string; threadId: string; accountId?: string }) => Promise<void>) | null = null
+  private codexThreadExposeHandler:
+    ((req: { nodeId: string; threadId: string; accountId?: string }) => Promise<void>) | null = null
+  private codexThreadCatalogHandler:
+    | ((req: { nodeId: string }) => Promise<Array<{ accountId?: string; socketPath: string }>>)
+    | null = null
+  private codexRelayRuntime: { executable: string; script: string } | null = null
   private codexIdentityListener: ((e: CodexIdentityEvent) => void) | null = null
   /** `/git/remote-op` executor (git-remote-proxy.ts), registered by the desktop shell — the
    *  route 404s when absent, which the phone reads as "proxy unavailable". */
@@ -234,6 +264,26 @@ class HookServer {
   }
   getVersion(): string {
     return NODETERM_HOOK_PROTOCOL_VERSION
+  }
+
+  /**
+   * Mint the capability a Codex process must present for node-scoped identity operations.
+   * The global hook bearer proves only "this request came from some NodeTerm session"; it cannot
+   * prove WHICH session. Binding a caller-supplied nodeId with that shared bearer made thread
+   * ownership attacker-writable. This capability is stable across app restarts, scoped to one
+   * node id, and never written to the shared endpoint file.
+   */
+  codexNodeAuthToken(nodeId: string): string {
+    if (!/^[A-Za-z0-9._-]+$/.test(nodeId)) return ''
+    if (!this.nodeAuthSecret)
+      throw new Error('NodeTerm Codex node authentication is unavailable')
+    return createHmac('sha256', this.nodeAuthSecret).update(nodeId).digest('base64url')
+  }
+
+  /** Main injects a keychain-backed, restart-stable secret before any Codex PTY is created. */
+  setCodexNodeAuthSecret(secret: Uint8Array): void {
+    if (secret.byteLength < 32) throw new Error('Invalid NodeTerm Codex node-auth secret')
+    this.nodeAuthSecret = Buffer.from(secret)
   }
 
   setListener(cb: (e: NormalizedAgentEvent) => void): void {
@@ -405,6 +455,26 @@ class HookServer {
     this.gitRemoteHandler = cb
   }
 
+  setCodexThreadObservedHandler(cb: NonNullable<HookServer['codexThreadObservedHandler']>): void {
+    this.codexThreadObservedHandler = cb
+  }
+
+  setCodexThreadAuthorizeHandler(cb: NonNullable<HookServer['codexThreadAuthorizeHandler']>): void {
+    this.codexThreadAuthorizeHandler = cb
+  }
+
+  setCodexThreadExposeHandler(cb: NonNullable<HookServer['codexThreadExposeHandler']>): void {
+    this.codexThreadExposeHandler = cb
+  }
+
+  setCodexThreadCatalogHandler(cb: NonNullable<HookServer['codexThreadCatalogHandler']>): void {
+    this.codexThreadCatalogHandler = cb
+  }
+
+  setCodexRelayRuntime(executable: string, script: string): void {
+    this.codexRelayRuntime = { executable, script }
+  }
+
   async start(): Promise<void> {
     if (this.server) return
     this.token = randomUUID()
@@ -423,6 +493,9 @@ class HookServer {
         }
         req.setTimeout(SLOWLORIS_MS, () => req.destroy())
         const reqUrl = new URL(req.url ?? '/', 'http://127.0.0.1')
+        // The body guard protects only the receive phase. Identity routes may cold-start a shared
+        // Codex app-server, so give their handler the same bounded ceiling as control/context-link.
+        req.setTimeout(CONTROL_CEILING_MS, () => req.destroy())
         // THE TUNNEL PROBE. `RemoteHooks.verifyTunnel` curls this through the reverse socket and
         // requires exactly 204 before it will write the remote endpoint file or install a single
         // hook script. It proves ONE thing — the socket reaches this server — and it must answer on
@@ -441,8 +514,231 @@ class HookServer {
           res.end()
           return
         }
-        if (reqUrl.pathname.startsWith('/codex-thread/')) {
-          await this.handleCodexThread(reqUrl.pathname, req, res)
+        if (reqUrl.pathname === '/codex-thread/start') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const cwd = form.cwd ?? ''
+          const accountId = form.accountId || undefined
+          if (
+            !isSafeNodeId(nodeId) ||
+            !path.isAbsolute(cwd) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))
+          ) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
+          try {
+            const threadId = this.codexThreadStartHandler
+              ? await this.codexThreadStartHandler({
+                  nodeId,
+                  cwd,
+                  hookEndpoint: this.endpointFilePath(),
+                  accountId
+                })
+              : ''
+            if (!isSafeThreadId(threadId)) throw new Error('invalid thread id')
+            this.codexIdentityListener?.({ nodeId, mode: 'shared' })
+            res.writeHead(200, {
+              'content-type': 'text/plain; charset=utf-8'
+            })
+            res.end(`${threadId}\n`)
+          } catch {
+            res.writeHead(503)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/bind') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const threadId = form.threadId ?? ''
+          const accountId = form.accountId || undefined
+          if (
+            !isSafeNodeId(nodeId) ||
+            !isSafeThreadId(threadId) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))
+          ) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadBindHandler) throw new Error('bind handler unavailable')
+            await this.codexThreadBindHandler({
+              nodeId,
+              threadId,
+              hookEndpoint: this.endpointFilePath(),
+              accountId
+            })
+            this.codexIdentityListener?.({ nodeId, mode: 'shared' })
+            res.writeHead(204)
+            res.end()
+          } catch {
+            res.writeHead(409)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/observed') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const threadId = form.threadId ?? ''
+          const accountId = form.accountId || undefined
+          const name = form.name?.trim() || undefined
+          if (
+            !isSafeNodeId(nodeId) ||
+            !isSafeThreadId(threadId) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId)) ||
+            (name?.length ?? 0) > 500
+          ) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadObservedHandler) throw new Error('observed handler unavailable')
+            await this.codexThreadObservedHandler({
+              nodeId,
+              threadId,
+              hookEndpoint: this.endpointFilePath(),
+              accountId,
+              name
+            })
+            res.writeHead(204)
+            res.end()
+          } catch {
+            res.writeHead(409)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/authorize') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const threadId = form.threadId ?? ''
+          const accountId = form.accountId || undefined
+          if (
+            !isSafeNodeId(nodeId) ||
+            !isSafeThreadId(threadId) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))
+          ) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadAuthorizeHandler) throw new Error('authorize handler unavailable')
+            await this.codexThreadAuthorizeHandler({
+              nodeId,
+              threadId,
+              accountId
+            })
+            res.writeHead(204)
+            res.end()
+          } catch {
+            res.writeHead(409)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/expose') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          const threadId = form.threadId ?? ''
+          const accountId = form.accountId || undefined
+          if (
+            !isSafeNodeId(nodeId) ||
+            !isSafeThreadId(threadId) ||
+            (accountId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(accountId))
+          ) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadExposeHandler) throw new Error('expose handler unavailable')
+            await this.codexThreadExposeHandler({
+              nodeId,
+              threadId,
+              accountId
+            })
+            res.writeHead(204)
+            res.end()
+          } catch {
+            res.writeHead(409)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/catalog') {
+          const nodeId = String(req.headers['x-nodeterm-node-id'] ?? '')
+          if (
+            !isSafeNodeId(nodeId) ||
+            !this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])
+          ) {
+            res.writeHead(403)
+            res.end()
+            return
+          }
+          try {
+            if (!this.codexThreadCatalogHandler) throw new Error('catalog handler unavailable')
+            const accounts = await this.codexThreadCatalogHandler({ nodeId })
+            res.writeHead(200, {
+              'content-type': 'application/json; charset=utf-8'
+            })
+            res.end(JSON.stringify({ accounts }))
+          } catch {
+            res.writeHead(503)
+            res.end()
+          }
+          return
+        }
+        if (reqUrl.pathname === '/codex-thread/fallback') {
+          const form = parseForm(await readBody(req))
+          const nodeId = form.nodeId ?? ''
+          if (!isSafeNodeId(nodeId)) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          // Fallback reports are deliberately accepted without a verified node capability: the
+          // launcher reaches this route precisely when it could not obtain one. A forged token is
+          // still refused, while legacy and cross-instance callers remain fail-open.
+          if (verifyNodeToken(this.nodeAuthSecretOrNull(), nodeId, req.headers['x-nodeterm-node-token']) === 'forged') {
+            res.writeHead(403)
+            res.end()
+            return
+          }
+          const reason = (form.reason ?? '').slice(0, 64).replace(/[^A-Za-z0-9._-]/g, '') || 'unknown'
+          this.codexIdentityListener?.({ nodeId, mode: 'plain', reason })
+          res.writeHead(204)
+          res.end()
           return
         }
         if (reqUrl.pathname.startsWith('/control/')) {
@@ -848,6 +1144,19 @@ class HookServer {
     }
   }
 
+  private codexNodeTokenMatches(nodeId: string, provided: string | string[] | undefined): boolean {
+    if (typeof provided !== 'string') return false
+    let expected = ''
+    try {
+      expected = this.codexNodeAuthToken(nodeId)
+    } catch {
+      return false
+    }
+    const a = Buffer.from(provided)
+    const b = Buffer.from(expected)
+    return a.length === b.length && timingSafeEqual(a, b)
+  }
+
   // The managed script sources this file at invocation to get the LIVE port/token.
   // tmux sessions outlive the app, so env-baked coords go stale after a restart.
   private writeEndpointFile(): void {
@@ -920,6 +1229,12 @@ class HookServer {
       // by $NODETERM_NODE_ID and advertised in the endpoint file) — where the launcher
       // (core/codex-identity-proxy.ts) reads it, exactly as the managed script and both sh shims
       // do, so shared identity is LIVE with no credential in anyone's argv.
+      ...(agentId === 'codex' && this.codexRelayRuntime
+        ? {
+            NODETERM_CODEX_RELAY_RUNTIME: this.codexRelayRuntime.executable,
+            NODETERM_CODEX_RELAY_SCRIPT: this.codexRelayRuntime.script
+          }
+        : {})
     }
   }
 

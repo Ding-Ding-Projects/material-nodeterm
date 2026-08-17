@@ -13,13 +13,16 @@
 //            `update_topic` tool call that carries the name (core/gemini-session.ts)
 //   codex  → `Thread.name`, read over the shared app-server's own socket (core/codex-session-name.ts).
 //            There is no file to read: with the shared server the name lives in the server, and the
-//            node's session id IS the thread id.
+//            node's session id IS the thread id. Managed accounts select their own app-server
+//            socket, so equal thread ids never cross account boundaries.
 // Anything else has no readable session name; the claude reader answers null for it, which is what
 // every pre-grok caller already got.
 import { readSessionName, readSmallTail, TITLE_TAIL_BYTES } from './transcript-reader'
 import { readGrokSessionName } from './grok-session'
 import { pickGeminiTitle } from './gemini-session'
 import { readCodexSessionName } from './codex-session-name'
+import { codexSocketForAccount } from './codex-accounts-core'
+import { platform } from './platform'
 
 /**
  * Per-agent associations this router cannot own itself, injected by the shell.
@@ -56,9 +59,9 @@ async function readGeminiSessionName(
  * The session's display name, or null when it cannot be resolved.
  *
  * `agentId` is TRAILING and optional so every pre-grok caller is unchanged — omitted means claude's
- * transcript reader, the only reader that existed. `accountId` is claude's (managed accounts are
- * Claude-only), and the other legs ignore it. `deps` is likewise trailing: a caller with no gemini
- * association simply gets null for gemini nodes.
+ * transcript reader, the only reader that existed. `accountId` selects the managed Claude root or
+ * Codex app-server socket; the other legs ignore it. `deps` is likewise trailing: a caller with no
+ * gemini association simply gets null for gemini nodes.
  *
  * Routing MATTERS beyond correctness: claude's resolver scans `~/.claude/projects` when its cache
  * misses, and a grok or gemini session id can never be found there — so an unrouted node would pay
@@ -75,6 +78,11 @@ export function readAgentSessionName(
   if (agentId === 'gemini') return readGeminiSessionName(sessionId, deps?.geminiPathFor)
   // Never falls through to claude's reader: that one SCANS ~/.claude/projects on a cache miss, so
   // an unrouted codex node would pay that scan once a minute for a guaranteed null.
-  if (agentId === 'codex') return readCodexSessionName(sessionId)
+  if (agentId === 'codex') {
+    return readCodexSessionName(
+      sessionId,
+      codexSocketForAccount(platform().userDataDir, accountId)
+    )
+  }
   return readSessionName(sessionId, accountId)
 }

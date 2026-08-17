@@ -4,7 +4,7 @@ import { useProjects } from '../state/projects'
 import { useViewMode, viewFor } from '../state/viewMode'
 import { useAgentStatus } from '../state/agentStatus'
 import { useSettings } from '../state/settings'
-import { accountsForProject, sshAccountsHint, systemAccountDisplay } from '../state/workspace'
+import { accountsForProject, sshAccountsHint } from '../state/workspace'
 import { useSshConn } from '../state/sshConn'
 import { sshAutoModeHint } from '../state/permissionMode'
 import { useSystemAccount } from '../state/systemAccount'
@@ -16,6 +16,9 @@ import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
 import { resolveAppDisplayName } from '@shared/appIdentity'
 import { resolveLogoPreset } from './appearance/BrandMark'
+import { AccountIdentityPills } from './AccountIdentityPills'
+import { presentAccount } from '../lib/accountPresentation'
+import { sshHostKey } from '@shared/ssh'
 import {
   ALL_PERMISSION_MODES,
   PERMISSION_MODE_LABELS,
@@ -100,9 +103,11 @@ export function TabBar({
   const [menuId, setMenuId] = useState<string | null>(null)
   // `flipBase` is the ANCHOR's top edge: when the menu would overflow the bottom of the window,
   // it opens upward from the caret button instead (see useMenuFlip below).
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number; flipBase: number } | null>(
-    null
-  )
+  const [menuPos, setMenuPos] = useState<{
+    top: number
+    left: number
+    flipBase: number
+  } | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   // Tab drag-reorder: the project id being dragged + the current drop target ('' = end zone).
@@ -123,8 +128,8 @@ export function TabBar({
   // The mode a project without an override falls back to, shown in the "Use global (…)" entry.
   const globalMode = useSettings((s) => s.settings.claudePermissionMode)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
+  const remoteSystemAccountLabels = useSettings((s) => s.settings.remoteSystemAccountLabels)
   const systemEmail = useSystemAccount((s) => s.email)
-  const systemLabel = systemAccountDisplay(systemLabelSetting, systemEmail)
 
   // Session labels appear only once a second session exists (4c: remote tabs). For a solo user
   // this is always false, so the tab strip renders exactly as before. Plain call, not a
@@ -139,6 +144,13 @@ export function TabBar({
   // SSH project with no accounts on its host: say where accounts for this host come from instead
   // of presenting a bare System-only list (which read as "multi-account is broken on SSH").
   const menuAccountsHint = sshAccountsHint(menuProject, menuAccounts)
+  const menuHost = menuProject?.ssh ? sshHostKey(menuProject.ssh.server) : undefined
+  const systemPresentation = presentAccount({
+    label: menuHost ? remoteSystemAccountLabels[menuHost] : systemLabelSetting,
+    email: menuHost ? undefined : systemEmail,
+    host: menuHost,
+    machineLabel: menuProject?.ssh?.server.label
+  })
   // Live remote-probe view for the Auto rows below: on an SSH project `auto` only applies once the
   // REMOTE claude CLI is confirmed >= 2.1.71, and without a hint that silent fail-open degrade is
   // indistinguishable from a broken dropdown. Subscribed (not getState) so the ⚠︎ clears the
@@ -517,10 +529,10 @@ export function TabBar({
                         closeMenu()
                       }}
                     >
-                      <span className="tab-menu__check">
-                        {menuProject.defaultAccountId ? '' : '✓'}
-                      </span>
-                      {systemLabel}
+                      <AccountIdentityPills
+                        account={systemPresentation}
+                        selected={!menuProject.defaultAccountId}
+                      />
                     </button>
                     {menuAccounts.map((a) => (
                       <button
@@ -530,10 +542,15 @@ export function TabBar({
                           closeMenu()
                         }}
                       >
-                        <span className="tab-menu__check">
-                          {menuProject.defaultAccountId === a.id ? '✓' : ''}
-                        </span>
-                        {a.label}
+                        <AccountIdentityPills
+                          account={presentAccount({
+                            label: a.label,
+                            email: a.email,
+                            host: a.host,
+                            machineLabel: menuProject.ssh?.server.label
+                          })}
+                          selected={menuProject.defaultAccountId === a.id}
+                        />
                       </button>
                     ))}
                     {menuAccountsHint && (

@@ -79,6 +79,16 @@ vi.mock('node-pty', () => ({
   }
 }))
 
+vi.mock('./codex-identity-proxy', () => ({
+  installCodexLauncher: () => '/isolated/.nodeterm/bin/nodeterm-codex',
+  codexLauncherDir: () => '/isolated/.nodeterm/bin',
+  codexIdentityProxyManager: () => ({
+    ensureNode: async (nodeId: string) => `/isolated/${nodeId}.sock`,
+    socketForNode: (nodeId: string) => `/isolated/${nodeId}.sock`,
+    stop: () => undefined
+  })
+}))
+
 /**
  * Every tmux side-call the manager makes (has-session / capture-pane / kill-session) goes through
  * child_process, so mocking it lets us (a) decide whether a tmux session already exists — which is
@@ -110,6 +120,10 @@ vi.mock('child_process', () => {
       ok('__NT_PATH_START__/usr/bin:/bin__NT_PATH_END__')
     } else if (args.includes('capture-pane')) {
       ok('PANE SNAPSHOT')
+    } else if (args.includes('kill-session')) {
+      const target = args[args.indexOf('-t') + 1]
+      liveTmuxSessions.delete(target)
+      ok('')
     } else {
       ok('')
     }
@@ -168,9 +182,9 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
 
   beforeEach(() => {
     spawned.length = 0
+    liveTmuxSessions.clear()
     spawnArgs.length = 0
     execCalls.length = 0
-    liveTmuxSessions.clear()
     holdNextKill = false
     releaseHeldKill = undefined
     userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-solo-'))
@@ -427,6 +441,18 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     await m.killAll()
     expect(spawned[0].killed).toBe(true)
     expect(tmuxCalls('kill-session')).toEqual([])
+  })
+
+  it('killAll preserves a local shared-app-server Codex pane across Electron restart', async () => {
+    const m = await tmuxManager()
+    liveTmuxSessions.add(sessionName('codex-node'))
+    const before = await create(80, 24, 'codex-node', { agentId: 'codex' })
+    expect(before.fresh).toBe(false)
+    execCalls.length = 0
+    await m.killAll()
+    expect(tmuxCalls('kill-session')).toEqual([])
+    const after = await create(80, 24, 'codex-node', { agentId: 'codex' })
+    expect(after.fresh).toBe(false)
   })
 
   it('destroy (the × button) DOES kill the tmux session', async () => {

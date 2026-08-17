@@ -188,8 +188,7 @@ describe('moveNodeToGroup', () => {
     useProjects.getState().moveNodeToGroup('p1', 'nope', 'g1')
     expect(useProjects.getState().getProject('p1')!.nodes).toBe(before)
   })
-
-    it('moves nested group subtrees and rejects a cycle', () => {
+  it('moves nested group subtrees and rejects a cycle', () => {
     const outer = group('outer', 100, 80)
     const inner = { ...group('inner', 30, 40), parentId: 'outer' }
     const target = group('target', 500, 200)

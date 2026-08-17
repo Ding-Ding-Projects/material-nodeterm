@@ -28,6 +28,7 @@ export interface SessionsSidebarProps {
   onTogglePin(): void
   onClose(): void
   onFocusNode(id: string): void
+  onFocusProject?(projectId: string): void
   onCloseSession(projectId: string, id: string): void
   onRenameSession(projectId: string, id: string, title: string): void
   onAiNameSession(projectId: string, id: string, cwd?: string): void | Promise<void>
@@ -340,7 +341,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           {members.length > 0 && (
             <button
               className="ss-subgroup__ai"
-              title="Name group with AI (from every session below it)"
+              title="Name group with AI (from all descendant sessions' output)"
               disabled={!!namingById[bucket.id]}
               onClick={(e) => {
                 e.stopPropagation()

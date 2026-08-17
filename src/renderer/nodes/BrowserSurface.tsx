@@ -22,6 +22,8 @@ type WebviewEl = HTMLElement & {
 interface BrowserSurfaceProps {
   /** The node id — registers the guest webContents so main can route its new-window requests. */
   nodeId: string
+  /** Agent node allowed to expose this browser surface through the Codex Browser Plugin. */
+  ownerNodeId?: string
   /** Initial URL (seeded once at mount). */
   url: string
   /** Persist the top-level URL after a navigation. */
@@ -37,7 +39,7 @@ interface BrowserSurfaceProps {
  * webview never emits dom-ready, so imperative loadURL before then is a no-op); `did-navigate` only
  * updates the address, so in-page navigation can't loop.
  */
-export function BrowserSurface({ nodeId, url, onUrlChange, onTitleChange }: BrowserSurfaceProps) {
+export function BrowserSurface({ nodeId, ownerNodeId, url, onUrlChange, onTitleChange }: BrowserSurfaceProps) {
   const ref = useRef<WebviewEl | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const lastUrlRef = useRef('')
@@ -152,14 +154,14 @@ export function BrowserSurface({ nodeId, url, onUrlChange, onTitleChange }: Brow
     let wcId = 0
     const onReady = (): void => {
       wcId = wv.getWebContentsId()
-      window.nodeTerminal.browser.register(wcId, nodeId)
+      window.nodeTerminal.browser.register(wcId, nodeId, ownerNodeId)
     }
     wv.addEventListener('dom-ready', onReady)
     return () => {
       wv.removeEventListener('dom-ready', onReady)
       if (wcId) window.nodeTerminal.browser.unregister(wcId)
     }
-  }, [nodeId, discarded])
+  }, [nodeId, ownerNodeId, discarded])
 
   // ── Memory saver ────────────────────────────────────────────────────────────────────────────
   // A browser node parked off-screen is a whole Chromium renderer process doing nothing, and the

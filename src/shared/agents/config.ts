@@ -30,6 +30,10 @@ export interface AgentConfig {
   expectedProcess: string
 }
 
+export function codexRemoteCommand(): string {
+  return '$HOME/.nodeterm/bin/nodeterm-codex'
+}
+
 export const BUILTIN_AGENT_IDS: readonly BuiltinAgentId[] = [
   'claude',
   'codex',
@@ -49,6 +53,10 @@ export const AGENT_CONFIG: Record<BuiltinAgentId, AgentConfig> = {
   codex: {
     label: 'Codex',
     color: '#10a37f',
+    // Keep the trusted declaration shell-neutral. Shared/local launches are routed through
+    // `agentLaunchProgram`; legacy managed-home and SSH launchers are selected explicitly at the
+    // call site. Putting `$HOME/...` here makes the opaque launch parser reject the builtin before
+    // either router gets a chance to choose its fail-closed plain-Codex fallback.
     launchCmd: 'codex',
     promptInjectionMode: 'argv',
     expectedProcess: 'codex'
@@ -297,22 +305,67 @@ export function withSessionId(cmd: string, id: AgentId, sessionId: string): stri
 }
 
 /**
+ * Recognize the narrow legacy shape produced when an older canvas agent uses
+ * `open-terminal --cmd "codex resume <id>"` instead of `open-agent --resume <id>`.
+ *
+ * This is deliberately not a shell parser. Only one plain argv-equivalent command is promoted;
+ * flags, quoting, redirections, command chaining and substitutions remain ordinary terminal
+ * commands. That keeps arbitrary shell intent untouched while preventing an exact Codex resume
+ * from losing its durable agent/account metadata and NodeTerm launcher.
+ */
+export function explicitCodexResumeSession(command: string | undefined): string | null {
+  const match = command?.trim().match(
+    /^(?:codex|nodeterm-codex|\$HOME\/\.nodeterm\/bin\/nodeterm-codex)[ \t]+resume[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*)$/
+  )
+  return match?.[1] ?? null
+}
+
+/**
  * The command that resumes a resumable agent's prior conversation by its provider session id.
  * Used on a cold restart (machine reboot) where the tmux session — and the live agent — are
  * gone, so the conversation must be reconstructed via the agent CLI's own `--resume`.
  * Returns null for non-resumable/custom agents or an unsafe/empty session id.
  *
- * `sharedIdentity` routes a SHARED_IDENTITY_CAPABLE agent's resume through the managed launcher,
- * so the resumed session re-claims the node's own thread instead of opening it as an anonymous
- * client. Default false = the bare command this has always emitted (see `agentLaunchProgram`).
+ * A legacy boolean retains HEAD's `sharedIdentity` contract: true routes a
+ * SHARED_IDENTITY_CAPABLE agent through the local managed launcher. The options form keeps the
+ * incoming native/managed-home routes explicit, so `true` can never mean both "shared local" and
+ * "native remote" at different call sites.
  */
-export function resumeCommand(id: AgentId, sessionId: string, sharedIdentity = false): string | null {
+export interface ResumeCommandOptions {
+  /** Route a capable local agent through the PATH-exposed shared-identity launcher. */
+  sharedIdentity?: boolean
+  /** Force the remote/system Codex CLI. Wins over the other Codex options. */
+  nativeCodex?: boolean
+  /** Explicit trusted managed launcher path (for example `codexRemoteCommand()`). */
+  codexProgram?: string
+}
+
+const SAFE_CODEX_PROGRAM =
+  /^(?:codex|nodeterm-codex|\$HOME\/\.nodeterm\/bin\/nodeterm-codex|\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*)$/
+
+function codexResumeProgram(route: boolean | ResumeCommandOptions): string {
+  if (typeof route === 'boolean') return agentLaunchProgram('codex', 'codex', route)
+  if (route.nativeCodex) return 'codex'
+  if (Object.hasOwn(route, 'codexProgram')) {
+    const requested = typeof route.codexProgram === 'string' ? route.codexProgram.trim() : ''
+    // This string reaches a shell command. An unsafe or malformed explicit path degrades to the
+    // plain CLI instead of being interpolated or turning a recoverable resume into a dead node.
+    return requested && SAFE_CODEX_PROGRAM.test(requested) ? requested : 'codex'
+  }
+  return agentLaunchProgram('codex', 'codex', !!route.sharedIdentity)
+}
+
+export function resumeCommand(
+  id: AgentId,
+  sessionId: string,
+  route: boolean | ResumeCommandOptions = false
+): string | null {
   if (!canResume(id)) return null
   const sid = sessionId.trim()
   if (!sid || !SAFE_SESSION_ID.test(sid)) return null
   switch (id) {
     case 'codex':
-      return `${agentLaunchProgram('codex', 'codex', sharedIdentity)} resume ${sid}`
+      return `${codexResumeProgram(route)} resume ${sid}`
     case 'opencode':
       return `opencode --session ${sid}`
     case 'claude':

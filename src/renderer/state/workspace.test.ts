@@ -1,11 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
 import {
   addSelectionToGroup,
   alignNodes,
   arrangeNodes,
   commonParentId,
   createAccountLoginNode,
+  createCodexAccountLoginNode,
   createAgentNode,
+  createCanvasControlTerminalNode,
   createDinoNode,
   fitGroupToChildren,
   flowToNodeStates,
@@ -20,6 +22,8 @@ import {
   ungroupNodes
 } from './workspace'
 import type { CanvasNode } from './workspace'
+import { resetCodexIdentityCapsForTests } from './codexIdentity'
+import { codexRemoteCommand } from '../../shared/agents/config'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import type { ActiveAgentLaunchPlan } from './permissionMode'
 
@@ -28,6 +32,8 @@ const launchPlan = (
   mode: AgentPermissionMode
 ): ActiveAgentLaunchPlan =>
   ({ surface: 'canvas-new-agent', agentId, mode }) as ActiveAgentLaunchPlan
+
+afterEach(() => resetCodexIdentityCapsForTests())
 
 const term = (id: string, pos: { x: number; y: number }, parentId?: string): CanvasNode =>
   ({
@@ -86,7 +92,6 @@ describe('reparentNode', () => {
     expect(reparentNode(nodes, 'nope', 'g1')).toBe(nodes)
     expect(reparentNode(nodes, 't1', 't1')).toBe(nodes) // target is a terminal, not a group
   })
-
   it('moves a whole group subtree between nested containers without moving it in root space', () => {
     const nodes = [
       grp('outer', { x: 100, y: 80 }),
@@ -285,7 +290,6 @@ describe('groupSelectedNodes', () => {
     const nodes = [grp('g1', { x: 0, y: 0 }), term('t1', { x: 10, y: 10 }, 'g1')]
     expect(groupSelectedNodes(nodes, ['g1', 't1'], 1)).toBe(nodes)
   })
-
   it('refuses members that live in different containers', () => {
     const nodes = [
       grp('g1', { x: 0, y: 0 }),
@@ -507,6 +511,49 @@ describe('reorderNodeBefore', () => {
   })
 })
 
+describe('reorderGroupWithinParent', () => {
+  it('moves a nested group subtree before a sibling without changing geometry or parenting', () => {
+    const nodes = [
+      grp('outer', { x: 0, y: 0 }),
+      grp('a', { x: 10, y: 10 }, 'outer'),
+      grp('a-child', { x: 5, y: 5 }, 'a'),
+      grp('b', { x: 20, y: 20 }, 'outer'),
+      term('inside-a', { x: 2, y: 3 }, 'a')
+    ]
+    const out = reorderGroupWithinParent(nodes, 'b', 'outer', 'a')
+    expect(out.map((node) => node.id)).toEqual(['outer', 'b', 'a', 'a-child', 'inside-a'])
+    expect(out.find((node) => node.id === 'b')).toMatchObject({
+      parentId: 'outer',
+      position: { x: 20, y: 20 }
+    })
+  })
+
+  it('appends a whole group subtree after its last sibling', () => {
+    const nodes = [
+      grp('a', { x: 0, y: 0 }),
+      grp('a-child', { x: 0, y: 0 }, 'a'),
+      grp('b', { x: 0, y: 0 }),
+      term('inside-a', { x: 0, y: 0 }, 'a')
+    ]
+    expect(reorderGroupWithinParent(nodes, 'a', null, null).map((node) => node.id)).toEqual([
+      'b',
+      'a',
+      'a-child',
+      'inside-a'
+    ])
+  })
+
+  it('rejects cross-parent and invalid-target reorders', () => {
+    const nodes = [
+      grp('outer', { x: 0, y: 0 }),
+      grp('a', { x: 0, y: 0 }, 'outer'),
+      grp('b', { x: 0, y: 0 })
+    ]
+    expect(reorderGroupWithinParent(nodes, 'a', null, 'b')).toBe(nodes)
+    expect(reorderGroupWithinParent(nodes, 'a', 'outer', 'missing')).toBe(nodes)
+  })
+})
+
 describe('group worktree serialization', () => {
   it('round-trips data.worktree on a group node', () => {
     const group = {
@@ -567,10 +614,81 @@ describe('accountId on Claude node factories', () => {
   it('does not stamp accountId onto a non-Claude agent node', () => {
     const node = createAgentNode('codex', 0, undefined, undefined, undefined, undefined, 'a1')
     expect(node.data.accountId).toBeUndefined()
+    expect(node.data.codexAccountId).toBe('a1')
   })
   it('omits accountId when none is given', () => {
     const node = createAgentNode('claude', 0)
     expect(node.data.accountId).toBeUndefined()
+  })
+})
+
+describe('Codex account node factories', () => {
+  it('creates a login terminal inside only the selected CODEX_HOME', () => {
+    const node = createCodexAccountLoginNode('codex-a', 0)
+    expect(node.data).toMatchObject({
+      title: 'Codex login',
+      codexAccountId: 'codex-a'
+    })
+    expect(node.data.initialCommand).toMatch(/^cd \"\$HOME\" && codex /)
+    expect(node.data.initialCommand).toContain('login --device-auth')
+  })
+})
+
+describe('canvas-control terminal compatibility', () => {
+  it('promotes an exact direct Codex resume to an account-aware agent node', () => {
+    const node = createCanvasControlTerminalNode(
+      0,
+      '/repo',
+      undefined,
+      'codex resume thread-a',
+      undefined,
+      'codex-a'
+    )
+    expect(node.data).toMatchObject({
+      agentId: 'codex',
+      codexAccountId: 'codex-a',
+      cwd: '/repo',
+      initialCommand: 'codex resume thread-a',
+      agentLaunchIntent: {
+        kind: 'agent',
+        action: 'resume',
+        agentId: 'codex',
+        sessionId: 'thread-a'
+      },
+      agentSessionId: 'thread-a'
+    })
+  })
+
+  it('keeps non-exact commands as plain terminal nodes', () => {
+    const node = createCanvasControlTerminalNode(
+      0,
+      '/repo',
+      undefined,
+      'codex resume thread-a; echo done',
+      undefined,
+      'codex-a'
+    )
+    expect(node.data.agentId).toBeUndefined()
+    expect(node.data.codexAccountId).toBeUndefined()
+    expect(node.data.initialCommand).toBe('codex resume thread-a; echo done')
+  })
+
+  it('uses the managed launcher for a promoted resume only after shared identity is proven', () => {
+    resetCodexIdentityCapsForTests({
+      shared: true,
+      launcherPath: 'C:\\nodeterm\\nodeterm-codex.cmd',
+      remoteFlag: true,
+      appServer: true
+    })
+    const node = createCanvasControlTerminalNode(
+      0,
+      '/repo',
+      undefined,
+      'codex resume thread-a',
+      undefined,
+      'codex-a'
+    )
+    expect(node.data.initialCommand).toBe('nodeterm-codex resume thread-a')
   })
 })
 
@@ -588,6 +706,26 @@ describe('accountId serialization', () => {
     expect(states[0].accountId).toBe('a1')
     const back = nodeStatesToFlow(states)
     expect(back[0].data.accountId).toBe('a1')
+  })
+  it('round-trips data.codexAccountId on a Codex terminal node', () => {
+    const node = {
+      id: 'codex-term-1',
+      type: 'terminal',
+      position: { x: 0, y: 0 },
+      width: 600,
+      height: 400,
+      data: {
+        title: 'Codex',
+        color: '#888',
+        group: null,
+        agentId: 'codex',
+        codexAccountId: 'codex-a'
+      }
+    } as unknown as CanvasNode
+    const states = flowToNodeStates([node])
+    expect(states[0].codexAccountId).toBe('codex-a')
+    const back = nodeStatesToFlow(states)
+    expect(back[0].data.codexAccountId).toBe('codex-a')
   })
   it('leaves accountId undefined when unset', () => {
     const node = {
@@ -776,6 +914,12 @@ describe('createAgentNode permission mode', () => {
     )
     expect(custom.data.initialCommand).toBe('custom:x')
   })
+
+  it('uses native codex for an SSH project node', () => {
+    const ssh = { server: { host: 'example.test', user: 'tester' } } as any
+    const node = createAgentNode('codex', 0, undefined, undefined, undefined, ssh)
+    expect(node.data.initialCommand).toBe('codex')
+  })
 })
 
 describe('createAgentNode prompt injection', () => {
@@ -788,7 +932,18 @@ describe('createAgentNode prompt injection', () => {
     expect(n.data.initialCommand).toBe("opencode --prompt 'it'\\''s tricky'")
   })
   it('keeps argv injection byte-identical for codex and gemini', () => {
-    expect(createAgentNode('codex', 0, undefined, undefined, 'do X').data.initialCommand).toBe("codex 'do X'")
+    expect(createAgentNode('codex', 0, undefined, undefined, 'do X').data.initialCommand).toBe(
+      "codex 'do X'"
+    )
     expect(createAgentNode('gemini', 0, undefined, undefined, 'do X').data.initialCommand).toBe("gemini 'do X'")
+    resetCodexIdentityCapsForTests({
+      shared: true,
+      launcherPath: codexRemoteCommand(),
+      remoteFlag: true,
+      appServer: true
+    })
+    expect(createAgentNode('codex', 0, undefined, undefined, 'do X').data.initialCommand).toBe(
+      `${codexRemoteCommand()} 'do X'`
+    )
   })
 })

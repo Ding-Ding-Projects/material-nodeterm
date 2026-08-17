@@ -188,19 +188,6 @@ export interface GroupBucket {
   children: GroupBucket[]
 }
 
-/** Every session in this frame's whole subtree, outermost frame first. */
-export function groupSessionRows(group: GroupBucket): SessionRowVM[] {
-  return [...group.sessions, ...group.children.flatMap(groupSessionRows)]
-}
-
-/** How many sessions live in this frame's whole subtree. */
-export function groupSessionCount(group: GroupBucket): number {
-  return (
-    group.sessions.length +
-    group.children.reduce((sum, child) => sum + groupSessionCount(child), 0)
-  )
-}
-
 export interface SessionGroup {
   projectId: string
   projectName: string
@@ -241,6 +228,14 @@ function toRow(n: SessionNodeInput, status: AgentNodeStatus | undefined): Sessio
 function matches(row: SessionRowVM, needle: string): boolean {
   const hay = `${row.title} ${row.session ?? ''}`.toLowerCase()
   return hay.includes(needle)
+}
+
+export function groupSessionRows(group: GroupBucket): SessionRowVM[] {
+  return [...group.sessions, ...group.children.flatMap(groupSessionRows)]
+}
+
+export function groupSessionCount(group: GroupBucket): number {
+  return group.sessions.length + group.children.reduce((sum, child) => sum + groupSessionCount(child), 0)
 }
 
 export function buildSessionList(

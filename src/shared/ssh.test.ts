@@ -346,7 +346,7 @@ describe('buildSshArgs exec guard', () => {
     ])
   })
 
-  it('honors the local user\'s OWN ProxyCommand (a corporate jump host still works)', () => {
+  it("honors the local user's OWN ProxyCommand (a corporate jump host still works)", () => {
     expect(
       buildSshArgs({ ...base, extraArgs: '-o ProxyCommand=corp-proxy %h', execTrusted: true })
     ).toEqual(['-p', '22', '-o', 'ProxyCommand=corp-proxy', '%h', 'u@h'])

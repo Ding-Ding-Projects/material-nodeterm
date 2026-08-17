@@ -402,8 +402,8 @@ const api: NodeTerminalApi = {
     writeHtml: (html: string) => ipcRenderer.invoke(IPC.mediaWriteHtml, html)
   },
   browser: {
-    register: (webContentsId: number, nodeId: string) =>
-      ipcRenderer.send(IPC.browserRegister, webContentsId, nodeId),
+    register: (webContentsId: number, nodeId: string, ownerNodeId?: string) =>
+      ipcRenderer.send(IPC.browserRegister, webContentsId, nodeId, ownerNodeId),
     unregister: (webContentsId: number) => ipcRenderer.send(IPC.browserUnregister, webContentsId),
     onBrowserNewWindow: (listener) => {
       const handler = (_e: unknown, ev: { url: string; sourceNodeId: string }) => listener(ev)
@@ -574,6 +574,36 @@ const api: NodeTerminalApi = {
     waitLogin: (id, ctx) => ipcRenderer.invoke(IPC.claudeAccountsWaitLogin, id, ctx),
     cancelWaitLogin: (id) => ipcRenderer.invoke(IPC.claudeAccountsCancelWait, id),
     remove: (id, ctx) => ipcRenderer.invoke(IPC.claudeAccountsRemove, id, ctx)
+  },
+  codexAccounts: {
+    add: (ctx) => ipcRenderer.invoke(IPC.codexAccountsAdd, ctx),
+    waitLogin: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsWaitLogin, id, ctx),
+    cancelWaitLogin: (id) => ipcRenderer.invoke(IPC.codexAccountsCancelWait, id),
+    remove: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsRemove, id, ctx),
+    identity: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsIdentity, id, ctx),
+    systemIdentity: (ctx) => ipcRenderer.invoke(IPC.codexAccountsSystemIdentity, ctx),
+    switchThread: (threadId, cwd, sourceAccountId, targetAccountId) =>
+      ipcRenderer.invoke(
+        IPC.codexAccountsSwitchThread,
+        threadId,
+        cwd,
+        sourceAccountId,
+        targetAccountId
+      ),
+    transferThreadToSsh: (threadId, sourceAccountId, targetAccountId, ctx) =>
+      ipcRenderer.invoke(
+        IPC.codexAccountsTransferThreadToSsh,
+        threadId,
+        sourceAccountId,
+        targetAccountId,
+        ctx
+      ),
+    commitSwitch: (rollbackToken) =>
+      ipcRenderer.invoke(IPC.codexAccountsCommitSwitch, rollbackToken),
+    finishSwitch: (rollbackToken) =>
+      ipcRenderer.invoke(IPC.codexAccountsFinishSwitch, rollbackToken),
+    rollbackSwitch: (rollbackToken) =>
+      ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, rollbackToken)
   },
   transcripts: {
     search: (query: string) => ipcRenderer.invoke(IPC.transcriptSearch, query)

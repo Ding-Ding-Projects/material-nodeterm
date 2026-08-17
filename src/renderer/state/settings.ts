@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { DEFAULT_SETTINGS, type Settings } from '@shared/types'
 import type { SchedulableSettingsPatch } from '@shared/scheduled-settings'
 import type { HistoryRestoreResult } from '@shared/local-history'
+import {
+  applyResolvedCodexAccounts,
+  discoverResolvedCodexAccounts
+} from './codexAccountReconcile'
 
 interface SettingsState {
   /** What actually RENDERS: `base` with the currently-active scheduled-settings override (if
@@ -101,6 +105,20 @@ export const useSettings = create<SettingsState>((set, get) => ({
     const s = await window.nodeTerminal.settings.load()
     const base = { ...DEFAULT_SETTINGS, ...s }
     set({ base, settings: withOverride(base), hydrated: true })
+    // Pending is renderer persistence, while auth.json/app-server identity is authoritative.
+    // Reconcile at application startup so a completed login becomes selectable without requiring
+    // the user to discover and reopen Settings after every restart.
+    void discoverResolvedCodexAccounts(
+      base.codexAccounts,
+      (id) => window.nodeTerminal.codexAccounts.identity(id)
+    ).then((resolved) => {
+      if (resolved.length === 0) return
+      // Reconcile the persisted layer. Reading the effective scheduled-settings layer here would
+      // let a transient override leak into the user's saved account inventory.
+      const current = get().base
+      const codexAccounts = applyResolvedCodexAccounts(current.codexAccounts, resolved)
+      get().update({ codexAccounts })
+    })
   },
 
   update(patch) {

@@ -128,6 +128,8 @@ import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
 import { ContextMeter } from '../components/ContextMeter'
+import { AccountIdentityPills } from '../components/AccountIdentityPills'
+import { presentAccount } from '../lib/accountPresentation'
 import { isZoomModifierHeld } from '../lib/zoomModifier'
 import { isHidden } from '../lib/ui-visibility'
 import { readsClaudeTranscript } from '../lib/transcriptGates'
@@ -144,7 +146,10 @@ import { useAgentNodes } from '../state/agentNodes'
 import { useProjects } from '../state/projects'
 import { useViewMode, viewFor } from '../state/viewMode'
 import { useSshConn } from '../state/sshConn'
+import { useSshServers } from '../state/sshServers'
 import { useWorktrees } from '../state/worktrees'
+import { useSystemAccount } from '../state/systemAccount'
+import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { isRemoteSessionNode } from '@shared/worktree'
 import { useSession, useActiveSessionPresence } from '../session/session'
 import { isBrowserRuntime } from '../bridge/runtime'
@@ -207,6 +212,16 @@ import { executePendingLaunchForSession } from '../terminal/pending-launch-execu
  *  overlay it falls back to is cheap and self-healing, so waiting longer buys nothing. */
 export const SSH_REMOTE_WAIT_MS = 20000
 
+/** Replace only the trusted Codex program at the start of a renderer-built command. Remote
+ * account-scoped sessions must use the launcher installed for that host; when the host did not
+ * report one, fail open to the native CLI rather than borrowing the local shared-identity toggle. */
+function codexCommandForRemoteHost(command: string, launcherPath?: string): string {
+  return command.replace(
+    /^(?:codex|nodeterm-codex|\$HOME\/\.nodeterm\/bin\/nodeterm-codex)(?=\s|$)/,
+    launcherPath || 'codex'
+  )
+}
+
 /**
  * Which connection scope a remote node in the ACTIVE project runs over: the project's own id when
  * the project IS that SSH endpoint, otherwise the project × endpoint host attachment — a remote
@@ -253,6 +268,9 @@ export async function resolveSshRemote(
       hookEndpointPath?: string
       tmuxConfPath?: string
       remoteHome?: string
+      codexLauncherPath?: string
+      codexRelayScriptPath?: string
+      codexRelayRuntimePath?: string
     }
   | undefined
 > {
@@ -311,13 +329,15 @@ export async function resolveSshRemote(
   // managed remote account (Task 12). Optional (fail-open): absent → the remote account env is
   // skipped and the session runs under the remote system default `~/.claude`.
   const remoteHome = useSshConn.getState().getRemoteHome(projectId)
+  const codexRuntime = useSshConn.getState().getCodexRuntime(projectId)
   return {
     controlPath,
     conn,
     remoteCwd: cwd || '~',
     hookEndpointPath,
     tmuxConfPath,
-    remoteHome
+    remoteHome,
+    ...codexRuntime
   }
 }
 
@@ -1073,11 +1093,20 @@ export function TerminalNode({
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   const terminalProfiles = useTerminalProfiles((s) => s.profiles)
   const defaultTerminalProfileId = useSettings((s) => s.settings.defaultTerminalProfileId)
+  const codexAccounts = useSettings((s) => s.settings.codexAccounts)
+  const systemClaudeLabel = useSettings((s) => s.settings.systemAccountLabel)
+  const systemCodexLabel = useSettings((s) => s.settings.systemCodexAccountLabel)
+  const remoteSystemClaudeLabels = useSettings((s) => s.settings.remoteSystemAccountLabels)
+  const remoteSystemCodexLabels = useSettings((s) => s.settings.remoteSystemCodexAccountLabels)
+  const systemClaudeEmail = useSystemAccount((s) => s.email)
+  const systemCodexEmail = useSystemCodexAccount((s) => s.email)
+  const remoteSystemCodexEmails = useSystemCodexAccount((s) => s.remoteEmails)
+  const sshConnections = useSshConn((s) => s.byProject)
+  const sshServers = useSshServers((s) => s.servers)
   // Header buttons the user chose to hide (Settings). A selector, so toggling one re-renders every
   // mounted node right away instead of waiting for a remount. Search, Close and the worktree-move
   // button are absent from `isHidden`'s inventory and stay put whatever the list says.
   const hiddenHeaderButtons = useSettings((s) => s.settings.hiddenHeaderButtons)
-  const accountChip = accountChipLabel(data.accountId, claudeAccounts)
   const bodyRef = useRef<HTMLDivElement>(null)
   /** Where a press on the hover guard started, for the click-vs-drag test in `onGuardUp`. */
   const guardDownAt = useRef<{ x: number; y: number } | null>(null)
@@ -1309,6 +1338,58 @@ export function TerminalNode({
   // offer this node's in-place restart from the SAME derivation, and a second copy drifting from
   // this one yields a row whose closure refuses every click.
   const agentId = createdAgentId(data)
+  const sshConnection = data.ssh as SshConnection | undefined
+  const sshMachineKey = sshConnection ? sshHostKey(sshConnection) : null
+  const machineLabel = sshConnection
+    ? sshServers.find((server) => sshHostKey(server) === sshMachineKey)?.label || sshConnection.host
+    : null
+  const remoteIdentityProjectId = sshMachineKey
+    ? Object.entries(sshConnections).find(
+        ([, connection]) => connection.hostKey === sshMachineKey
+      )?.[0]
+    : undefined
+  const accountRecord =
+    agentId === 'codex'
+      ? codexAccounts.find((account) => account.id === data.codexAccountId)
+      : claudeAccounts.find((account) => account.id === data.accountId)
+  const accountPresentation = agentId === 'claude' || agentId === 'codex'
+    ? presentAccount({
+        label:
+          accountRecord?.label ||
+          (agentId === 'codex'
+            ? sshMachineKey
+              ? remoteSystemCodexLabels[sshMachineKey]
+              : systemCodexLabel
+            : sshMachineKey
+              ? remoteSystemClaudeLabels[sshMachineKey]
+              : systemClaudeLabel),
+        email:
+          accountRecord?.email ||
+          (agentId === 'codex'
+            ? sshMachineKey
+              ? remoteSystemCodexEmails[sshMachineKey]
+              : systemCodexEmail
+            : sshMachineKey
+              ? undefined
+              : systemClaudeEmail),
+        host: sshMachineKey,
+        machineLabel
+      })
+    : null
+  useEffect(() => {
+    if (agentId === 'codex') useSystemCodexAccount.getState().ensure()
+    if (agentId === 'claude') useSystemAccount.getState().ensure()
+  }, [agentId])
+  useEffect(() => {
+    if (agentId === 'codex' && sshMachineKey && remoteIdentityProjectId) {
+      useSystemCodexAccount.getState().ensureRemote(sshMachineKey, remoteIdentityProjectId)
+    }
+  }, [agentId, sshMachineKey, remoteIdentityProjectId])
+  useEffect(() => {
+    if (sshConnection && useSshServers.getState().servers.length === 0) {
+      void useSshServers.getState().hydrate()
+    }
+  }, [sshMachineKey])
   // Gate each former `isClaude` site by the capability it actually represents.
   const showStatus = !!agentId && hasHooks(agentId) // status badge + session-title capture
   const showLoop = !!agentId && canRecur(agentId) // /loop · /schedule · /cron chrome
@@ -2796,6 +2877,7 @@ export function TerminalNode({
           persistKey: id,
           agentId: data.agentId,
           accountId: data.accountId,
+          codexAccountId: data.codexAccountId as string | undefined,
           sshRemote,
           // Belt AND braces: the guard above cannot see a `ssh` executable that has gone missing,
           // which is core's other route into the local branch.
@@ -2820,7 +2902,11 @@ export function TerminalNode({
             if (unavailable) {
               setCo(termKey, { offline: true })
               if (!disposed)
-                term.write('\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n')
+                term.write(
+                  unavailable === 'codex-account'
+                    ? '\r\n\x1b[90m[Codex account unavailable — nothing was started; open Settings → Accounts]\x1b[0m\r\n'
+                    : '\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n'
+                )
               if (sshProjectId) reportSshDrop(sshProjectId, id)
               return
             }
@@ -3172,7 +3258,14 @@ export function TerminalNode({
               }
             // Run a legacy one-shot command on non-profile/SSH/Server paths, then forget it.
             } else if (data.initialCommand) {
-              writeWhenShellReady(data.initialCommand)
+              const initial =
+                agentId === 'codex' && sshProjectId
+                  ? codexCommandForRemoteHost(
+                      String(data.initialCommand),
+                      sshRemote?.codexLauncherPath
+                    )
+                  : data.initialCommand
+              writeWhenShellReady(initial)
               updateNodeData(id, { initialCommand: undefined })
             } else if (fresh && agentId && !data.pendingLaunch) {
               // Cold restart of an agent node: the live agent is gone, so re-launch it. Resume the
@@ -3200,7 +3293,7 @@ export function TerminalNode({
                 agentId,
                 priorSessionId: priorId,
                 customLaunchCmd,
-                sharedIdentity: shared
+                  sharedIdentity: shared
               })
               if (!relaunch.reconstructable) {
                 // The shell exists, but executing the opaque custom id would cross the execution trust
@@ -3212,7 +3305,17 @@ export function TerminalNode({
                 return
               }
               setCo(termKey, { agentRelaunchError: null })
-              const base = relaunch.command
+              const remoteCodexResume =
+                agentId === 'codex' && sshProjectId && priorId
+                  ? resumeCommand(agentId, priorId, {
+                      codexProgram: sshRemote?.codexLauncherPath
+                    })
+                  : null
+              const base =
+                agentId === 'codex' && sshProjectId
+                  ? remoteCodexResume ||
+                    codexCommandForRemoteHost(relaunch.command, sshRemote?.codexLauncherPath)
+                  : relaunch.command
               // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
               // a persisted property of the node, so the current setting wins after a reboot. `base`
               // is always freshly built here — never a command string read back from node data — so
@@ -3292,7 +3395,15 @@ export function TerminalNode({
         // in acceptEdits/plan would come back from a restart in the default mode, silently.
         // Re-resolved at call time for the same reason as there: the mode is a property of how a
         // session is launched, not of the node.
-        const base = resumeCommand(agentId, agentSessionId)
+        const base = resumeCommand(
+          agentId,
+          agentSessionId,
+          agentId === 'codex' && sshProjectId
+            ? {
+                codexProgram: useSshConn.getState().getCodexRuntime(sshProjectId).codexLauncherPath
+              }
+            : false
+        )
         const command = base
           ? commandForAgentLaunch(
               base,
@@ -4309,7 +4420,9 @@ export function TerminalNode({
     let timer: ReturnType<typeof setTimeout> | undefined
     const sync = async () => {
       if (!titleAutoRef.current || editingTitleRef.current) return
-      const name = await api.pty.readSessionName(sid, data.accountId, agentId)
+      const accountScope =
+        agentId === 'codex' ? (data.codexAccountId as string | undefined) : data.accountId
+      const name = await api.pty.readSessionName(sid, accountScope, agentId)
       if (cancelled) return
       if (name) delayMs = 15000
       if (name && titleAutoRef.current && !editingTitleRef.current && name !== titleRef.current) {
@@ -4542,19 +4655,14 @@ export function TerminalNode({
               plain codex
             </span>
           )}
-          {accountChip && (
-            <span
-              className={`node-account-chip${accountFallback ? ' node-account-chip--warning' : ''}`}
-              title={
-                accountFallback
-                  ? 'Account folder missing — running on system account'
-                  : accountChip.tooltip
-              }
-            >
-              {accountChip.short}
-            </span>
-          )}
-          {data.ssh ? (
+          {accountPresentation ? (
+            <AccountIdentityPills
+              className="node-identity-chips nodrag"
+              account={accountPresentation}
+              warning={accountFallback}
+            />
+          ) : null}
+          {data.ssh && !accountPresentation ? (
             <span
               className="term-ssh-chip"
               title={`ssh ${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`}
@@ -4935,10 +5043,30 @@ export function TerminalNode({
           )}
           {armed && !mdMode && (
             <div
-              className="term-hover-guard"
+              className="term-hover-guard nowheel"
               onMouseDown={onGuardDown}
               onMouseUp={onGuardUp}
-              title="Click to type · drag to move · scroll to pan"
+              onWheel={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                termRef.current?.element?.dispatchEvent(
+                  new WheelEvent('wheel', {
+                    bubbles: true,
+                    cancelable: true,
+                    deltaMode: event.deltaMode,
+                    deltaX: event.deltaX,
+                    deltaY: event.deltaY,
+                    deltaZ: event.deltaZ,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                    ctrlKey: event.ctrlKey,
+                    metaKey: event.metaKey,
+                    shiftKey: event.shiftKey,
+                    altKey: event.altKey
+                  })
+                )
+              }}
+              title="Click to type · drag to move · scroll terminal"
             />
           )}
           {mdMode &&

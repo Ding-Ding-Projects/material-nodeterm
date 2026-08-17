@@ -20,6 +20,7 @@ import {
 // No `resolveGpuRendering`: the renderer row is a four-way CHOICE now (the 'shared' mode), so the
 // row renders the raw setting and `App.tsx` resolves it through `resolveTerminalRenderer`.
 import type { Settings, TerminalCursorInactiveStyle, TerminalCursorStyle } from '@shared/types'
+import { isMacPlatform } from '@shared/platform-utils'
 
 /**
  * Row metadata for the settings search. Keywords matter as much as titles: an appearance setting
@@ -360,7 +361,9 @@ export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.
         <FieldRow
           label="Terminal rendering"
           description={
-            'Auto uses one GPU context per terminal; switch to Off if the window flickers. ' +
+            (isMacPlatform()
+              ? 'Auto uses the sharp DOM renderer on macOS. GPU per terminal can flicker or composite black there; Shared GPU trades exact xterm text parity for one canvas-wide context. '
+              : 'Auto uses one GPU context per terminal; switch to Off if the window flickers. ') +
             'Shared GPU draws every terminal into a single canvas-wide context, which lifts the ' +
             'per-terminal context limit; GPU per terminal gives each one its own context; Off uses ' +
             'no GPU at all. Shared GPU falls back to DOM on failure.'

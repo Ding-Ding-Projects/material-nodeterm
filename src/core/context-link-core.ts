@@ -2,6 +2,7 @@
 // builder, and the standalone CLI source. No electron / node-pty imports, so this module
 // (and CLI_SCRIPT) are unit-testable. The electron/fs/ipc wiring lives in context-link.ts.
 import type { ContextLinkInfo } from '../shared/types'
+import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from './codex-thread-identity-sh'
 import { sessionName } from './tmux-naming'
 import { HOOK_CURL_HEADERS_SH } from './agents/hook-curl-config-sh'
 
@@ -145,6 +146,8 @@ export function buildLinkDoc(
 // loopback for a local one. Same script either way; sh + curl only.
 export const CONTEXT_SHIM_SCRIPT = `#!/bin/sh
 # nodeterm context-link CLI (auto-generated — do not edit).
+
+${CODEX_THREAD_IDENTITY_RESOLVER_SH}
 
 if [ -z "$NODETERM_NODE_ID" ]; then
   echo "Not a nodeterm session (NODETERM_NODE_ID unset) — nothing to read."
