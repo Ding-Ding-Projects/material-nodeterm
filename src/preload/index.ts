@@ -99,12 +99,19 @@ const api: NodeTerminalApi = {
     readScrollback: (persistKey) => ipcRenderer.invoke(IPC.ptyReadScrollback, persistKey),
     sendText: (persistKey, text, opts) =>
       ipcRenderer.invoke(IPC.ptySendText, persistKey, text, opts?.enter),
-    ...(process.platform === 'win32'
-      ? {
-          executeLaunchIntent: (sessionId, launchId, intent) =>
-            ipcRenderer.invoke(IPC.ptyExecuteLaunchIntent, sessionId, launchId, intent)
-        }
-      : {}),
+    // `executeLaunchIntent` is deliberately NOT exposed yet.
+    //
+    // The renderer decides whether to use the structured launch path by asking whether this
+    // function exists on the bridge (`supportsStructuredLaunch`). Exposing it here made that
+    // answer yes on every Windows install — while `registerLaunchIntentIpc` is never called from
+    // the main process and `PtyManager` has no `executeLaunchIntent` method at all. So the whole
+    // feature is absent, and every agent launch that took this route rejected with Electron's
+    // "No handler registered for 'pty:execute-launch-intent'".
+    //
+    // A bridge member is a capability CLAIM, and a claim main cannot answer is worse than a
+    // missing one: the renderer has no way to tell the difference until the call fails. Restore
+    // this line in the same change that implements the manager method and registers the handler
+    // — not before.
     tmuxStatus: () => ipcRenderer.invoke(IPC.ptyTmuxStatus),
     paneCommand: (persistKey) => ipcRenderer.invoke(IPC.ptyPaneCommand, persistKey),
     readSessionName: (sessionId, accountId, agentId) =>

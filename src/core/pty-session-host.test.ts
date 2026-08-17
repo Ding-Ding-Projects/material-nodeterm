@@ -9,7 +9,20 @@ const backend = vi.hoisted(() => ({
   attachExisting: vi.fn(),
   capture: vi.fn(async () => ''),
   hasSession: vi.fn(async () => false),
-  kill: vi.fn(async () => {}),
+  // Mirrors `sessionHostKillSession(name, options)`. The parameters are load-bearing even though
+  // this default body ignores them: several tests assert on the options the caller passed, and a
+  // zero-arg mock infers `() => Promise<void>`, which makes every one of those
+  // `mockImplementationOnce((name, options) => …)` a type error.
+  kill: vi.fn(
+    async (
+      _name: string,
+      _options: {
+        reserveReplacement?: boolean
+        requireV2?: boolean
+        expectedAbsent?: boolean
+      } = {}
+    ): Promise<void> => {}
+  ),
   list: vi.fn(async () => []),
   paneCommand: vi.fn(async () => null),
   sendKeys: vi.fn(async () => false)

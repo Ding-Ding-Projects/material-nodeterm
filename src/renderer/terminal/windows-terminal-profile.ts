@@ -38,7 +38,24 @@ export function windowsTerminalProfileId({
   // Presence, not truthiness: even a hand-edited empty legacy value belongs to the old executable
   // path and must not silently turn into a different profile.
   if (shell !== undefined) return undefined
-  return terminalProfileId ?? defaultTerminalProfileId
+
+  // An explicit per-node choice always wins.
+  if (terminalProfileId !== undefined) return terminalProfileId
+
+  // A machine default that is still the SHIPPED default is not a choice anybody made, and must
+  // not be read as one. Returning it here put every ordinary Windows terminal — including a
+  // freshly created node nobody had configured — through profile resolution and the new session
+  // host, instead of the direct spawn that had always served them. Typing then reached nothing:
+  // the client's `write()` is fire-and-forget and swallows a failed delivery, so a broken round
+  // trip looks exactly like a terminal that renders a cursor and ignores the keyboard.
+  //
+  // So the default only travels once the user has actually moved it off 'auto'. That keeps the
+  // profile path fully live for anyone who opts in, and keeps the untouched majority on the path
+  // that was already working.
+  if (defaultTerminalProfileId !== undefined && defaultTerminalProfileId !== 'auto') {
+    return defaultTerminalProfileId
+  }
+  return undefined
 }
 
 /** Stable fallback labels for the node header; detection details stay private to the core. */
