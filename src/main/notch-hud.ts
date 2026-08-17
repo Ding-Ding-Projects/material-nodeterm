@@ -9,9 +9,9 @@
 // the model) via the module-level notchHudOn* functions, which no-op when the HUD is off.
 
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
-import { join } from 'path'
 import { IPC } from '../shared/ipc'
 import { getMainWindow, sendToMain } from './main-window'
+import { desktopBuildPaths } from './desktop-build-paths'
 import {
   onNodeStateChange,
   onNodeNowChange,
@@ -290,6 +290,7 @@ class NotchHudController {
   private createWindow(): void {
     if (getHudWindow()) return
     const g = this.geometry()
+    const buildPaths = desktopBuildPaths(__dirname)
     const win = new BrowserWindow({
       x: g.x,
       y: g.y,
@@ -320,7 +321,7 @@ class NotchHudController {
       acceptFirstMouse: true,
       backgroundColor: '#00000000',
       webPreferences: {
-        preload: join(__dirname, '../preload/hud.js'),
+        preload: buildPaths.hudPreload,
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false
@@ -344,7 +345,7 @@ class NotchHudController {
     if (devUrl) {
       void win.loadURL(`${devUrl}/hud.html`)
     } else {
-      void win.loadFile(join(__dirname, '../renderer/hud.html'))
+      void win.loadFile(buildPaths.hudRenderer)
     }
     win.webContents.on('did-finish-load', () => {
       win.showInactive() // show without stealing focus

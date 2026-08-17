@@ -49,6 +49,16 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 - Windows terminals now retain session-host continuity across an app close, crash, and relaunch.
   A provisional or rejected attach is torn down, stays non-persistent, and reports its real reason
   instead of being indexed as a working persistent terminal or replaced by a throwaway shell.
+
+- The lazy Squirrel bootstrap no longer lets Vite move the main application graph under
+  `out/main/chunks`, where its relative preload, renderer, HUD, and unpackaged icon paths pointed
+  at files that do not exist. Main-process chunks now retain the `out/main` runtime boundary, and
+  startup rejects a future nested layout explicitly instead of opening a blank window.
+- Windows' previous updater expected NSIS metadata at a generic feed that did not carry the
+  Squirrel artifacts produced by the release pipeline. Squirrel startup events are now handled
+  before the main application graph loads, first-run checks wait for Squirrel's package lock,
+  duplicate checks/installs are coalesced, and an offline or missing feed leaves the installed
+  version running with an honest non-blocking error for user-requested checks.
 - **Seven chrome highlights were frozen to the dark theme** and never followed the light theme or
   a user-chosen accent colour: the canvas lock button, the dock's active button, the welcome
   screen's remove-recent hover, the palette's secondary hover, the success and error toast icons,

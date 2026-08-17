@@ -46,6 +46,33 @@ microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring
 `npm test` runs the vitest suite (unit + integration; the remote e2e suites skip when the
 companion server repo isn't checked out). `npm run typecheck` is the fastest correctness gate.
 
+**Node runtime floor: `^22.22.2 || ^24.15.0 || >=26.0.0`.** Do not simplify that to a
+major-only check.
+`node:sqlite` arrived in 22.5 but required `--experimental-sqlite` through 22.12; 22.13 made it
+unflagged. The locked dependency graph sets the stricter install/build floors above and excludes
+Node 23 and 25. `core/node-runtime.ts` checks both the exact version range and the actual
+`DatabaseSync` capability before Desktop or Server Edition initializes persistent services. The
+installer uses the same contract through `scripts/check-node-runtime.mjs`, and the container pins
+24.15.0 rather than floating on a Node major. A supported version launched with
+`--no-experimental-sqlite`, or a custom build without SQLite, is still unsupported and fails closed.
+The installer also requires a newly extracted runtime to report the exact requested pin before it
+runs npm or writes/restarts systemd units; the capability probe alone is not evidence that archive
+contents match the requested version.
+
+`npm run build && npm run check:wired` is the built-app interaction gate. It launches with
+`NT_MULTI=1` and a disposable `NT_USER_DATA`, drives real controls over CDP, and removes both that
+profile and every checkout-owned Electron process it created from a `finally` block. Do not point
+it at the operator's real profile, weaken cleanup failure into success, or prove app wiring with an
+element the probe invented itself. Settings persistence crosses a renderer reload; the appearance
+probe changes a production Switch's computed background, then restores it.
+
+The Squirrel bootstrap imports the normal application graph lazily. That graph is therefore a
+Rollup dynamic chunk, but it must remain beside `out/main/index.js`: the main window, Notch HUD,
+and unpackaged icon resolve their built files from that `out/main` boundary. Electron Vite's
+default `chunks/` directory changes `__dirname` and produces a blank window with no preload bridge.
+Keep `main.build.rollupOptions.output.chunkFileNames` flat and keep the executable path guard in
+`desktop-build-paths.ts`; `npm run build && npm run check:wired` is the final artifact proof.
+
 ## Process model (Electron, three contexts)
 
 The codebase is split by Electron process boundary — keep code on the correct side:

@@ -48,6 +48,7 @@ import { runGitHubCliCommand } from '../core/github/credentials'
 import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './github-control'
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
+import { desktopBuildPaths } from './desktop-build-paths'
 import { fetchCheck } from '../core/check'
 import { hookServer } from '../core/agents/hook-server'
 import { askpassServer, ensureAskpassScript } from './remote-ssh/ssh-askpass'
@@ -454,6 +455,7 @@ if (process.platform !== 'win32' && typeof process.setFdLimit === 'function') {
 }
 
 function createWindow(): BrowserWindow {
+  const buildPaths = desktopBuildPaths(__dirname)
   // On Linux the window/taskbar icon is not supplied by an app bundle (unlike macOS),
   // so set it explicitly from the bundled png (extraResources). mac is untouched — an icon
   // there would do nothing useful and could clobber the bundled .icns. A packaged Windows exe
@@ -463,9 +465,9 @@ function createWindow(): BrowserWindow {
     process.platform === 'linux'
       ? app.isPackaged
         ? join(process.resourcesPath, 'icon.png')
-        : join(__dirname, '../../build/icon.png')
+        : buildPaths.devIcon
       : process.platform === 'win32' && !app.isPackaged
-        ? join(__dirname, '../../build/icon.png') // BrowserWindow.icon accepts PNG fine; the
+        ? buildPaths.devIcon // BrowserWindow.icon accepts PNG fine; the
           // .ico is only required for the exe/installer resource electron-builder embeds.
         : undefined
   // macOS gets the traffic lights integrated into our own top bar (`hiddenInset` + a custom
@@ -501,7 +503,7 @@ function createWindow(): BrowserWindow {
     icon: platformIcon,
     ...titleBarOptions,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: buildPaths.mainPreload,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -607,7 +609,7 @@ function createWindow(): BrowserWindow {
   if (process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(buildPaths.mainRenderer)
   }
 
   return win

@@ -182,6 +182,19 @@ here is what broke" is the point.
 
 `npm test` must pass, and `npm run typecheck` is the fastest gate.
 
+For renderer controls, `npm run build && npm run check:wired` drives the built app and asserts
+observable consequences over CDP. Keep that harness profile-isolated (`NT_MULTI` + a disposable
+`NT_USER_DATA`) and cleanup in `finally`: a gate must never toggle the operator's real settings or
+leave the persistent session host holding `electron.exe` after an early connection failure. A
+probe-created element proves the browser primitive, not the app; consequences must come from a real
+app control and persistence claims must cross a reload.
+
+The lazy Squirrel bootstrap makes the normal main application a Rollup dynamic chunk. Keep main
+chunks directly in `out/main`, beside the bootstrap entry. Moving them into Vite's default
+`out/main/chunks` directory changes `__dirname`, so the real preload, renderer, HUD, and unpackaged
+icon paths all point at files that do not exist. The production path resolver rejects that layout;
+the focused path gate and `npm run build && npm run check:wired` cover the source and built behavior.
+
 Beyond that, one habit is worth more than any other here:
 
 **Mutation-test your guards.** Delete or invert the check you just added and confirm a test *fails*.
