@@ -104,7 +104,7 @@ export function SettingsPage({
             <AppIdentitySection isActive={active === 'app-identity'} />
             {isMac && <NotchSection isActive={active === 'notch'} />}
             <PhoneSection isActive={active === 'phone'} />
-            <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />
+            <SpeechSection isActive={active === 'speech'} />
             <LanguageSection isActive={active === 'language'} />
             <ScheduleSection isActive={active === 'schedule'} />
             <AgentsSection isActive={active === 'agents'} />

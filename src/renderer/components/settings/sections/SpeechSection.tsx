@@ -12,7 +12,6 @@ import {
   type ShortcutKeyEvent
 } from '@shared/shortcut'
 import { useSettings } from '../../../state/settings'
-import { useEntitlement } from '../../../state/entitlement'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
@@ -186,18 +185,9 @@ function modelLabel(id: string): string {
     .join(' ')
 }
 
-export function SpeechSection({
-  isActive,
-  onNavigate
-}: {
-  isActive: boolean
-  /** Switches the active settings tab — used to route a free user who clicks a PRO model's
-   *  select/download to the License section (the sales surface; there is no paywall dialog). */
-  onNavigate: (id: SettingsSectionId) => void
-}): React.JSX.Element {
+export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
-  const isPremium = useEntitlement((s) => s.isPremium)
 
   const [models, setModels] = useState<SpeechModelInfo[]>([])
   const [progress, setProgress] = useState<Record<string, number>>({})
@@ -251,19 +241,13 @@ export function SpeechSection({
     update({ speech: { ...settings.speech, shortcut } })
   }
 
+  // No gate: every model is free to pick and free to download. The larger ones simply cost more
+  // disk and more time to run, which the size on each row already tells the user.
   const selectModel = (m: SpeechModelInfo): void => {
-    if (m.pro && !isPremium) {
-      onNavigate('license')
-      return
-    }
     update({ speech: { ...settings.speech, model: m.id } })
   }
 
   const downloadModel = async (m: SpeechModelInfo): Promise<void> => {
-    if (m.pro && !isPremium) {
-      onNavigate('license')
-      return
-    }
     setRowError((e) => ({ ...e, [m.id]: '' }))
     setBusy((b) => ({ ...b, [m.id]: true }))
     setProgress((p) => ({ ...p, [m.id]: 0 }))
@@ -360,7 +344,6 @@ export function SpeechSection({
               {models.map((m) => {
                 const pct = progress[m.id]
                 const downloading = busy[m.id] && pct !== undefined
-                const locked = m.pro && !isPremium
                 return (
                   <div
                     key={m.id}
@@ -378,15 +361,6 @@ export function SpeechSection({
                         <div className="flex items-center gap-2">
                           <span className="text-[13px] font-medium text-text">
                             {modelLabel(m.id)}
-                          </span>
-                          <span
-                            className={
-                              m.pro
-                                ? 'rounded-full bg-[color:var(--accent)]/15 px-2 py-0.5 text-[11px] font-medium text-[color:var(--accent)]'
-                                : 'rounded-full bg-fill-weak px-2 py-0.5 text-[11px] font-medium text-muted'
-                            }
-                          >
-                            {m.pro ? 'PRO' : 'FREE'}
                           </span>
                         </div>
                         <p className="text-[12px] text-muted">
@@ -409,8 +383,6 @@ export function SpeechSection({
                         >
                           Delete
                         </Button>
-                      ) : locked ? (
-                        <Button onClick={() => onNavigate('license')}>Unlock with Pro</Button>
                       ) : (
                         <Button disabled={busy[m.id]} onClick={() => void downloadModel(m)}>
                           {downloading ? `${pct}%` : 'Download'}

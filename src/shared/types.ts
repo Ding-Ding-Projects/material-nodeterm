@@ -1271,6 +1271,14 @@ export interface Settings {
    *  (or hard-disable with DO_NOT_TRACK / NODETERM_TELEMETRY_DISABLED). Note: a lighter anonymous
    *  install count also rides the /v1/check call and is NOT gated on this toggle — see core/check.ts. */
   telemetryEnabled: boolean
+  /** Unlock every capability. Default ON and free — nobody ever pays a penny to use this app, so
+   *  there is no purchase, licence, subscription, lapsing trial, or paywalled feature behind it.
+   *
+   *  The lock exists for ONE reason: speed. A locked app runs fewer features and does less
+   *  background work, so it lags less on an older or busy machine and uses less battery. It is a
+   *  performance choice the user makes, never a payment one — locking takes nothing away
+   *  permanently and unlocking never costs anything. Settings → Features. */
+  proFeaturesEnabled: boolean
   /** Keep a standing relay host connection so a paired phone can reach this Mac from anywhere
    *  (end-to-end encrypted). Default on — the host only admits SAS-approved, pinned devices, so
    *  an un-paired install just keeps an idle listener. Toggle in Settings → Phone. */
@@ -1417,6 +1425,7 @@ export const DEFAULT_SETTINGS: Settings = {
   seenShortcuts: false,
   seenOnboarding: false,
   notifyOnClaudeDone: true,
+  proFeaturesEnabled: true,
   gitAutoFetch: true,
   notifyConsentAsked: false,
   soundEffects: true,
