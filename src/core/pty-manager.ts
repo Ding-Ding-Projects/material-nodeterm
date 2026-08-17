@@ -7,6 +7,7 @@ import { platform } from './platform'
 import * as pty from 'node-pty'
 import { IPC } from '../shared/ipc'
 import { safeSessionProgram } from '../shared/node-exec'
+import { posixQuote } from '../shared/ssh'
 import { REF_MAX_LEN } from '../shared/presence'
 import {
   DEFAULT_SETTINGS,
@@ -32,7 +33,8 @@ import {
   remotePaneCommandArgs,
   remotePaneOwnerArgs,
   remoteForegroundArgvArgs,
-  remotePaneCursorArgs
+  remotePaneCursorArgs,
+  childArgs
 } from './remote-ssh/control-master'
 import { parsePaneCursor } from './pane-cursor'
 import { PANE_OWNER_FMT, foregroundArgvArgs, paneOwnerFrom, parsePaneOwner } from './agents/pane-owner'
@@ -101,6 +103,14 @@ import {
   type ResolvedWindowsTerminalProfile,
   type WindowsTerminalProfileResolver
 } from './windows-terminal-profiles'
+import {
+  codexAccountHome,
+  codexSessionEnv,
+  codexTmuxEnvArgs,
+  remoteCodexHome,
+  remoteCodexTmuxEnvArgs,
+  needsCodexAccountScope
+} from './codex-accounts-core'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
 // kills the tmux server) can still replay recent output on cold restart. A final snapshot also
@@ -509,6 +519,8 @@ interface Session {
    * degrade rather than an honest one. This field is unconditional, so it has no such hole.
    */
   nodeId?: string
+  /** Agent process expected inside this pane; used for Codex's controlled cold-resume on shutdown. */
+  agentId?: string
   /** The node id this session is CO-ATTACH-INDEXED under (`byPersistKey`) — set only for a session
    *  a second client may join, i.e. NOT for a relay-served (detached) pty, which is deliberately
    *  not indexed. See `nodeId` above for the plain "which node is this". */
@@ -1789,6 +1801,36 @@ export class PtyManager {
     if (options.requireRemote && !(options.sshRemote && options.persistKey && findSsh())) {
       return { sessionId: '', fresh: false, unavailable: 'ssh' }
     }
+    // Account-login nodes are intentionally plain terminals, not agent nodes. The selected
+    // Codex account is therefore identified by codexAccountId itself — never by agentId.
+    // Otherwise a login terminal silently falls through to the system CODEX_HOME and overwrites
+    // that account's credentials.
+    if (
+      options.codexAccountId &&
+      !options.sshRemote &&
+      !fs.existsSync(codexAccountHome(platform().userDataDir, options.codexAccountId))
+    ) {
+      return { sessionId: '', fresh: false, unavailable: 'codex-account' }
+    }
+    if (options.codexAccountId && options.sshRemote) {
+      const ssh = findSsh()
+      const remoteHome = options.sshRemote.remoteHome
+      if (!ssh || !remoteHome) return { sessionId: '', fresh: false, unavailable: 'codex-account' }
+      const home = remoteCodexHome(remoteHome, options.codexAccountId)
+      try {
+        await runAsync(
+          ssh,
+          childArgs(
+            options.sshRemote.conn,
+            options.sshRemote.controlPath,
+            `test -d ${posixQuote(home)}`
+          ),
+          { timeout: PROBE_TIMEOUT_MS }
+        )
+      } catch {
+        return { sessionId: '', fresh: false, unavailable: 'codex-account' }
+      }
+    }
     // A tmux-backed session is "fresh" (cold start) when no live session exists to reattach to
     // — i.e. first open, or after a machine reboot killed the tmux server. Plain (non-tmux)
     // sessions are always fresh: they have no cross-restart continuity. The renderer uses this
@@ -2358,12 +2400,22 @@ export class PtyManager {
     // ANTHROPIC_API_KEY wins over CLAUDE_CONFIG_DIR credentials). System-default nodes
     // (no accountId) are untouched. Remote (ssh) sessions get their account env via the
     // remote tmux `-e` list instead (the local ssh client process doesn't need it).
+    let accountFallback = false
+    if (needsCodexAccountScope(options.agentId, options.codexAccountId) && !options.sshRemote) {
+      if (
+        options.codexAccountId &&
+        !fs.existsSync(codexAccountHome(platform().userDataDir, options.codexAccountId))
+      ) {
+        throw new Error('Managed Codex account home is unavailable')
+      }
+      Object.assign(env, codexSessionEnv(platform().userDataDir, options.codexAccountId))
+    }
+
     let accountDir =
       options.accountId && !options.sshRemote ? claudeConfigDirFor(options.accountId) : null
     // Missing/deleted account dir (spec: error handling) → fall back to system default
     // instead of pointing claude at a dead dir; the node then behaves like an unbound one.
     // `accountFallback` is surfaced to the renderer (warning chip) via the create() result.
-    let accountFallback = false
     if (accountDir && !fs.existsSync(accountDir)) {
       console.warn(`[accounts] config dir missing for ${options.accountId}, using system default`)
       accountDir = null
@@ -2438,6 +2490,18 @@ export class PtyManager {
       // NODETERM_NODE_ID = persistKey, and Canvas.tsx onAgentStatus keys agentStatus.byId /
       // selection off that raw id with no `nt-` stripping. Passing the session name here would
       // emit events under `nt-<id>` that match no node → no badge/notification/session/loop.
+      const remoteCodex = (options.agentId ?? 'claude') === 'codex'
+      const remoteCodexScope = needsCodexAccountScope(options.agentId, options.codexAccountId)
+      if (
+        remoteCodex &&
+        (!options.sshRemote.remoteHome ||
+          !options.sshRemote.hookEndpointPath ||
+          !options.sshRemote.codexLauncherPath ||
+          !options.sshRemote.codexRelayScriptPath ||
+          !options.sshRemote.codexRelayRuntimePath)
+      ) {
+        throw new Error('NodeTerm Codex runtime is unavailable on this SSH host')
+      }
       const hookExtraEnv = options.sshRemote.hookEndpointPath
         ? [
             ...remoteHookEnvArgs(
@@ -2451,7 +2515,15 @@ export class PtyManager {
             // Arm the remote permission hook's wait-branch too (deterministic approvals over SSH):
             // the request/answer files live on the REMOTE host; the desktop answers over the
             // ControlMaster. Only when the hook endpoint is set (else no POST → nothing learns the id).
-            ...(permWaitSecs > 0 ? ['-e', `NODETERM_PERM_WAIT_SECS=${permWaitSecs}`] : [])
+            ...(permWaitSecs > 0 ? ['-e', `NODETERM_PERM_WAIT_SECS=${permWaitSecs}`] : []),
+            ...(remoteCodex
+              ? [
+                  '-e',
+                  `NODETERM_CODEX_RELAY_RUNTIME=${options.sshRemote.codexRelayRuntimePath}`,
+                  '-e',
+                  `NODETERM_CODEX_RELAY_SCRIPT=${options.sshRemote.codexRelayScriptPath}`
+                ]
+              : [])
           ]
         : []
       // Managed REMOTE Claude account (Task 12): inject CLAUDE_CONFIG_DIR into the remote tmux
@@ -2461,7 +2533,13 @@ export class PtyManager {
       // failed on connect) skips the account env and the session runs under the remote `~/.claude`.
       const remoteAccountEnv =
         options.accountId && options.sshRemote.remoteHome
-          ? accountTmuxEnvArgs(remoteAccountConfigDirAbs(options.sshRemote.remoteHome, options.accountId))
+          ? accountTmuxEnvArgs(
+              remoteAccountConfigDirAbs(options.sshRemote.remoteHome, options.accountId)
+            )
+          : []
+      const remoteCodexEnv =
+        remoteCodexScope && options.sshRemote.remoteHome
+          ? remoteCodexTmuxEnvArgs(options.sshRemote.remoteHome, options.codexAccountId)
           : []
       args = remoteTmuxPtyArgs(
         options.sshRemote.conn,
@@ -2474,7 +2552,7 @@ export class PtyManager {
         // place a foreign value is most at home.
         reqShell,
         options.shellArgs,
-        [...hookExtraEnv, ...remoteAccountEnv],
+        [...hookExtraEnv, ...remoteAccountEnv, ...remoteCodexEnv],
         // Source nodeterm's remote tmux.conf via `-f` (written on connect, Task 2) so a cold-start
         // session gets mouse/clipboard/scrollback. Fail-open: undefined → remote tmux host defaults.
         options.sshRemote.tmuxConfPath
@@ -2529,6 +2607,9 @@ export class PtyManager {
       // The account config dir must ride `-e` like the hook env: the tmux server is shared
       // and long-lived, so session env comes from creation args, not client inheritance.
       const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
+      const codexEnvArgs = needsCodexAccountScope(options.agentId, options.codexAccountId)
+        ? codexTmuxEnvArgs(platform().userDataDir, options.codexAccountId)
+        : []
       const attachFlags = tmuxAttachFlags(!!sinks)
         args = [
           '-L',
@@ -2541,6 +2622,7 @@ export class PtyManager {
           ...pathEnvArgs,
           ...langEnvArgs,
           ...accountEnvArgs,
+          ...codexEnvArgs,
           '-c',
           cwd,
           '-s',
@@ -2667,6 +2749,7 @@ export class PtyManager {
       // exactly as before, because its sink never reports a size at create time.
       appliedSize: clientId === null ? undefined : spawnSize,
       nodeId: options.persistKey,
+      agentId: options.agentId,
       indexKey: options.persistKey && !sinks ? options.persistKey : undefined,
       onData: sinks?.onData,
       onExit: sinks?.onExit,
@@ -4167,6 +4250,10 @@ export class PtyManager {
         finals.push(
           this.snapshotScrollback(session.persistKey, session.sshRemote, !!session.sessionHost)
         )
+      // Every tmux-backed agent, including a Codex client connected to the process-external shared
+      // app-server, survives Electron restarts. The old per-node proxy used to die with Electron
+      // and required killing Codex panes here; that proxy no longer exists. Killing them now loses
+      // the only live thread binding and turns the next launch into an unrelated bare session.
       releasePty(session.proc as ReleasablePty)
     }
     // Shadows are child processes of OURS, so quitting takes them with us — the tmux sessions they

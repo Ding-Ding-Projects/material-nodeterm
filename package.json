@@ -39,6 +39,8 @@
     "appId": "com.nodeterm.app",
     "productName": "nodeterm",
     "afterSign": "./scripts/windows-pe-identity.mjs",
+    "beforePack": "./scripts/before-pack.cjs",
+    "afterPack": "./scripts/after-pack.cjs",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -64,6 +66,10 @@
       {
         "from": "node_modules/node-pty",
         "to": "session-host/node_modules/node-pty"
+      },
+      {
+        "from": "dist/.pack-resources/codex-relay.js",
+        "to": "codex-relay.js"
       }
     ],
     "linux": {

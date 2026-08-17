@@ -7,6 +7,7 @@ import { FieldRow } from '../FieldRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { uuid } from '@renderer/lib/uuid'
+import type { SettingsSectionId } from '../nav'
 
 const ROWS = {
   servers: {
@@ -19,7 +20,13 @@ const ROWS = {
 }
 const ENTRIES = Object.values(ROWS)
 
-export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+export function SshSection({
+  isActive,
+  onNavigate
+}: {
+  isActive: boolean
+  onNavigate: (id: SettingsSectionId) => void
+}): React.JSX.Element {
   const sshServers = useSshServers((s) => s.servers)
   const [sshDraft, setSshDraft] = useState<SshServer | null>(null)
   const [importMsg, setImportMsg] = useState<string | null>(null)
@@ -71,10 +78,18 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
   }
 
   const saveDisabled =
-    !sshDraft ||
-    !sshDraft.label.trim() ||
-    !sshDraft.host.trim() ||
-    !sshDraft.user.trim()
+    !sshDraft || !sshDraft.label.trim() || !sshDraft.host.trim() || !sshDraft.user.trim()
+
+  const saveDraft = async (manageAccounts: boolean): Promise<void> => {
+    if (!sshDraft || saveDisabled) return
+    await useSshServers.getState().save({
+      ...sshDraft,
+      remoteCwd: sshDraft.remoteCwd?.trim() || '~'
+    })
+    setSshDraft(null)
+    setTestMsg(null)
+    if (manageAccounts) onNavigate('accounts')
+  }
 
   /**
    * Open a ControlMaster to the draft's endpoint, then close it — the same connect a project (or a
@@ -93,7 +108,7 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
         sshDraft,
         sshDraft.remoteCwd?.trim() || '~'
       )
-      setTestMsg('Connection successful.')
+      setTestMsg('Connection successful. NodeTerm and Codex are available on this machine.')
     } catch (error) {
       setTestMsg(`Connection failed: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
@@ -107,8 +122,8 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
   return (
     <SettingsSection
       id="ssh"
-      title="Remote (SSH)"
-      description="Saved SSH servers appear under “New remote”, and can host nodes on a local canvas. Opening remote terminals over SSH is free."
+      title="Remote machines (SSH)"
+      description="Add a machine once, then run terminals and isolated Codex accounts on it from any local canvas."
       isActive={isActive}
       searchEntries={ENTRIES}
     >
@@ -129,6 +144,7 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
                 </div>
               </div>
               <div className="flex shrink-0 gap-2">
+                <Button onClick={() => onNavigate('accounts')}>Accounts</Button>
                 <Button
                   onClick={() => {
                     setTestMsg(null)
@@ -196,8 +212,8 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
                 }
               />
               <FieldRow
-                label="Default folder"
-                description="Where browsing this machine starts: the folder “New remote” opens at, and the one Test connection dials."
+                label="Default working directory"
+                description="Where browsing and Test connection start, and the default for new remote terminals and Codex nodes when no more specific folder is set."
                 control={
                   <Input
                     className="w-72 font-mono"
@@ -251,19 +267,15 @@ export function SshSection({ isActive }: { isActive: boolean }): React.JSX.Eleme
                 <Button disabled={saveDisabled || testing} onClick={() => void testConnection()}>
                   {testing ? 'Testing…' : 'Test connection'}
                 </Button>
+                <Button disabled={saveDisabled} onClick={() => void saveDraft(false)}>
+                  Save
+                </Button>
                 <Button
                   variant="primary"
                   disabled={saveDisabled}
-                  onClick={async () => {
-                    await useSshServers.getState().save({
-                      ...sshDraft,
-                      remoteCwd: sshDraft.remoteCwd?.trim() || '~'
-                    })
-                    setSshDraft(null)
-                    setTestMsg(null)
-                  }}
+                  onClick={() => void saveDraft(true)}
                 >
-                  Save
+                  Save &amp; manage accounts
                 </Button>
               </div>
             </div>

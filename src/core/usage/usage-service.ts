@@ -60,7 +60,6 @@ interface OAuthCreds {
  * Adding a provider is one entry here plus its fetcher — no changes to the service or the UI.
  */
 const OTHER_PROVIDERS: { id: string; fetch: () => Promise<ProviderUsage> }[] = [
-  { id: 'codex', fetch: fetchCodexUsage },
   { id: 'gemini', fetch: fetchGeminiUsage },
   { id: 'grok', fetch: fetchGrokUsage },
   { id: 'kimi', fetch: fetchKimiUsage },
@@ -191,6 +190,13 @@ export interface UsageServiceOptions {
    * accounts). The shell owns this because settings live in the shell. Absent ⇒ system only.
    */
   localAccounts?: () => string[]
+  /** Managed local Codex homes. Every row is fetched separately and rendered by account. */
+  codexAccounts?: () => Array<{
+    id: string
+    home: string
+    label: string
+    email?: string | null
+  }>
   /**
    * Fired after any account's cache is (re)populated — the mirror wires this to a flush so the
    * phone-facing `usage` block refreshes when a poll lands. Best-effort; must never throw.
@@ -290,12 +296,40 @@ export function startUsageService(opts: UsageServiceOptions = {}): UsageService 
   let providersAt = 0
   let providersCache: ProviderUsage[] = []
   let providersInFlight: Promise<ProviderUsage[]> | null = null
+  let codexAccountsFingerprint = ''
+
+  const readCodexAccounts = (): ReturnType<NonNullable<UsageServiceOptions['codexAccounts']>> => {
+    try {
+      return opts.codexAccounts?.() ?? []
+    } catch {
+      return []
+    }
+  }
+
+  const fingerprintCodexAccounts = (
+    accounts: ReturnType<NonNullable<UsageServiceOptions['codexAccounts']>>
+  ): string =>
+    accounts
+      .map(
+        (account) =>
+          `${account.id}\0${account.home}\0${account.label}\0${account.email ?? ''}`
+      )
+      .join('\x01')
 
   const runProviders = async (): Promise<ProviderUsage[]> => {
     if (providersInFlight) return providersInFlight
+    const codexAccounts = readCodexAccounts()
+    codexAccountsFingerprint = fingerprintCodexAccounts(codexAccounts)
+    const codexProviders = [
+      { id: 'codex', fetch: () => fetchCodexUsage() },
+      ...codexAccounts.map((account) => ({
+        id: 'codex',
+        fetch: () => fetchCodexUsage(account.home, account)
+      }))
+    ]
     // One slow provider must not withhold the others — settle each independently.
     providersInFlight = Promise.all(
-      OTHER_PROVIDERS.map((p) =>
+      [...codexProviders, ...OTHER_PROVIDERS].map((p) =>
         p.fetch().catch(
           (): ProviderUsage => ({
             provider: p.id,
@@ -335,6 +369,8 @@ export function startUsageService(opts: UsageServiceOptions = {}): UsageService 
   })
 
   platform().handle(IPC.usageProviders, (force?: boolean) => {
+    const currentFingerprint = fingerprintCodexAccounts(readCodexAccounts())
+    if (currentFingerprint !== codexAccountsFingerprint) providersAt = 0
     if (!force && providersAt && Date.now() - providersAt < REFETCH_DEBOUNCE_MS) {
       return providersCache
     }

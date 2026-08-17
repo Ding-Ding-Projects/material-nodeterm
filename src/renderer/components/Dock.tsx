@@ -25,6 +25,7 @@ interface DockProps {
   /** Receives only the stable trusted-core profile id selected by the user. */
   onAddTerminalWithProfile?: (profileId: string) => void
   onAddSticky: () => void
+  onAddLoop: () => void
   onAddDino: () => void
   onAddAgent: (agentId: AgentId, accountId?: string) => void
   onOpenFile: () => void
@@ -55,6 +56,7 @@ export function Dock({
   terminalProfileEmptyState,
   onAddTerminalWithProfile,
   onAddSticky,
+  onAddLoop,
   onAddDino,
   onAddAgent,
   onOpenFile,
@@ -269,6 +271,10 @@ export function Dock({
                   <NoteIcon />
                   <span>Sticky Note</span>
                 </button>
+                <button role="menuitem" onClick={pick(onAddLoop)}>
+                  <LoopIcon />
+                  <span>Loop</span>
+                </button>
                 <button role="menuitem" onClick={pick(onAddDino)}>
                   <DinoIcon />
                   <span>Dino Game</span>
@@ -411,6 +417,14 @@ function NoteIcon() {
     <svg {...S}>
       <path d="M4 4h16v11l-5 5H4z" />
       <path d="M20 15h-5v5" />
+    </svg>
+  )
+}
+function LoopIcon() {
+  return (
+    <svg {...S}>
+      <path d="M20 7v5h-5M4 17v-5h5" />
+      <path d="M6.1 9a7 7 0 0 1 11.8-2L20 12M4 12l2.1 5a7 7 0 0 0 11.8-2" />
     </svg>
   )
 }

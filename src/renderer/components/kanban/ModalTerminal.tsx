@@ -61,6 +61,7 @@ export interface ModalSpawn {
   /** Persisted provider id used only to derive a trusted cold-resume intent. */
   agentSessionId?: string
   accountId?: string
+  codexAccountId?: string
   /** The node's `data.ssh` — a local `ssh <host>` node runs ssh as its pty program. */
   ssh?: SshConnection
   /** SSH-project node: tmux runs on the REMOTE host (over the project's ControlMaster). */
@@ -312,12 +313,17 @@ export function ModalTerminal({
         persistKey: nodeId,
         agentId: spawn.agentId,
         accountId: spawn.accountId,
+        codexAccountId: spawn.codexAccountId,
         sshRemote,
         requireRemote: spawn.sshRemoteTmux
       })
       // Refused core-side (the master died inside our round-trip, or `ssh` is missing).
       if (res.unavailable) {
-        term.write('\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n')
+        term.write(
+          res.unavailable === 'codex-account'
+            ? '\r\n\x1b[90m[Codex account unavailable — nothing was started; open Settings → Accounts]\x1b[0m\r\n'
+            : '\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n'
+        )
         if (projectId) reportSshDrop(projectId, nodeId)
         return
       }

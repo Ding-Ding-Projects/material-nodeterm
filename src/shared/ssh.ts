@@ -70,7 +70,10 @@ function optionKeyword(value: string): string {
  * Both spellings of an option are covered (`-o ProxyCommand=x` and `-oProxyCommand=x`), and `-F`
  * (an alternate ssh_config, which may itself carry a ProxyCommand) counts as exec-enabling.
  */
-export function stripLocalExecArgs(tokens: string[]): { args: string[]; dropped: string[] } {
+export function stripLocalExecArgs(tokens: string[]): {
+  args: string[]
+  dropped: string[]
+} {
   const args: string[] = []
   const dropped: string[] = []
   for (let i = 0; i < tokens.length; i++) {
@@ -114,8 +117,8 @@ export interface SshServer extends SshConnection {
   id: string
   label: string
   /** Where browsing this machine STARTS: the folder the "New remote" project dialog opens at, and
-   *  the folder Test connection dials. It is a starting point, not an inherited default — a node's
-   *  cwd comes from the project or node it was created in, never from here. Absent means `~`. */
+   *  the folder Test connection dials. Attached agent nodes also use it when their account does
+   *  not provide a narrower cwd; a project or node-specific cwd still wins. Absent means `~`. */
   remoteCwd?: string
 }
 
@@ -161,8 +164,9 @@ export function sshAttachmentId(projectId: string, conn: SshConnection): string 
  * prompt. The project's binding is the authority on how THIS user reaches that machine, so a node
  * naming the same host is served by it.
  *
- * The cost is a deliberate one: inside an SSH project you cannot pin a node to a second ACCOUNT on
- * the same host. A different machine still gets its own attachment, which is the case this is for.
+ * The cost is a deliberate one: inside an SSH project you cannot pin a node to a second SSH login
+ * account on the same host. Isolated Codex accounts still share this master and separate state by
+ * `CODEX_HOME`; a different machine gets its own attachment, which is the case this is for.
  */
 export function sshConnectionIdForProject(
   projectId: string,

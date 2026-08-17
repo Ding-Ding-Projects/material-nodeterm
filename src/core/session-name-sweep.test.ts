@@ -7,7 +7,7 @@ function deps(
     names?: Record<string, string | null>
     nodes?: Record<string, { accountId?: string; titleAuto?: boolean }>
     throwFor?: string
-    /** The real `supports` is TITLE_READ_CAPABLE (claude, grok, gemini) — the READ list, since the
+    /** The real `supports` is TITLE_READ_CAPABLE (claude, codex, grok, gemini) — the READ list, since the
      *  sweep only reads names. */
     supportsGrok?: boolean
   } = {}
@@ -146,7 +146,8 @@ describe('the default supports gate (TITLE_READ_CAPABLE)', () => {
     // gemini is the reason the lists split: it names its own sessions (its transcript's
     // `update_topic` title) but has no rename command, so it is read-only — and read is all the
     // sweep ever does. On the write list it would be skipped here and the phone would show a stale
-    // node title forever.
+    // node title forever. codex joined the read leg the same way: the shared app-server exposes
+    // Thread.name (core/codex-session-name.ts), while nothing pushes a name back to it yet.
     const { published, asked } = await sweepWithDefaultGate([
       { nodeId: 'c', sessionId: 'cs', agentId: 'claude' },
       { nodeId: 'g', sessionId: 'gs', agentId: 'grok' },
@@ -165,7 +166,8 @@ describe('the default supports gate (TITLE_READ_CAPABLE)', () => {
   })
 
   it('never asks about an agent whose name we cannot read', async () => {
-    // A custom agent has no reader at all, and an entry with no agentId cannot be routed. Asking
+    // A custom agent has no reader at all, and a node with no agentId is a plain terminal that
+    // cannot be routed. Asking
     // anyway would send them through claude's resolver, which SCANS ~/.claude/projects for an id
     // that can never be there — once a minute, per node, forever.
     const { published, asked } = await sweepWithDefaultGate([

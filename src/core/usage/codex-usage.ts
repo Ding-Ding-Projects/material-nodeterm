@@ -106,8 +106,13 @@ export function mapCodexLimits(rateLimit: unknown): UsageLimit[] {
   ].filter((l): l is UsageLimit => l !== null)
 }
 
-function snapshot(limits: UsageLimit[], status: ProviderUsage['status']): ProviderUsage {
-  return { provider: 'codex', limits, account: null, updatedAt: Date.now(), status }
+function snapshot(
+  limits: UsageLimit[],
+  status: ProviderUsage['status'],
+  account: string | null = null,
+  accountId?: string
+): ProviderUsage {
+  return { provider: 'codex', limits, account, accountId, updatedAt: Date.now(), status }
 }
 
 /** Tier 1: the endpoint the Codex CLI itself reads. */
@@ -226,20 +231,35 @@ async function fetchViaAppServer(home: string): Promise<ProviderUsage | null> {
  * Never rejects: an unreachable backend and a missing CLI are both "we don't know", and the
  * caller renders that as no data rather than an error the user can't act on.
  */
-export async function fetchCodexUsage(home = codexHome()): Promise<ProviderUsage> {
+export async function fetchCodexUsage(
+  home = codexHome(),
+  identity?: { id?: string; label?: string | null; email?: string | null }
+): Promise<ProviderUsage> {
   try {
     const viaBackend = await fetchViaBackend(home)
-    if (viaBackend) return viaBackend
+    if (viaBackend) {
+      return {
+        ...viaBackend,
+        account: identity?.email || identity?.label || null,
+        accountId: identity?.id
+      }
+    }
   } catch {
     // fall through to the app-server tier
   }
   try {
     const viaAppServer = await fetchViaAppServer(home)
-    if (viaAppServer) return viaAppServer
+    if (viaAppServer) {
+      return {
+        ...viaAppServer,
+        account: identity?.email || identity?.label || null,
+        accountId: identity?.id
+      }
+    }
   } catch {
     // fall through to 'unavailable'
   }
   // Not signed in, no CLI, or both transports declined — nothing to show, same as Claude on
   // API-key billing. 'unavailable' hides the provider rather than showing a broken row.
-  return snapshot([], 'unavailable')
+  return snapshot([], 'unavailable', identity?.email || identity?.label || null, identity?.id)
 }

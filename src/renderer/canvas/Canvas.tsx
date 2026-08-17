@@ -40,6 +40,7 @@ import {
 import { solveFitPadding } from './fit-view'
 import { MacWheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
 import { selectedLocalFilePaths } from './canvas-file-copy'
+import { codexAccountSwitchStillEligible } from './codex-account-switch'
 import {
   canvasImagePasteArmedAfterKey,
   canvasImportRefusal,
@@ -79,6 +80,14 @@ import BrowserNode from '../nodes/BrowserNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
+import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
+import {
+  loopMessageId,
+  loopRunDue,
+  nextLoopRun,
+  parseLoopInterval,
+  validLoopInterval
+} from '../lib/nativeLoop'
 import { withNodeBoundary } from '../components/NodeBoundary'
 import { Dock } from '../components/Dock'
 import { TabBar } from '../components/TabBar'
@@ -260,7 +269,17 @@ import { useAgentStatus } from '../state/agentStatus'
 import { useToyLocks } from '../state/toylocks'
 import { LockWizard } from '../components/toylocks/LockWizard'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
-import { useCodexIdentity, codexFallbackText } from '../state/codexIdentity'
+import {
+  useCodexIdentity,
+  codexFallbackText,
+  codexSharedIdentity
+} from '../state/codexIdentity'
+import {
+  agentMailbox,
+  renderAgentMessage,
+  type AgentMessage,
+  type AgentMessageEndpoint
+} from '../state/agentMailbox'
 import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
 import { SubagentNode } from '../nodes/SubagentNode'
@@ -297,10 +316,12 @@ import {
   agentConfig,
   hasHooks,
   canBranch,
+  canControlCanvas,
   canRename,
   canTransferFrom,
   canContextLink,
   createdAgentId,
+  explicitCodexResumeSession,
   resumeCommand,
   AGENT_CONFIG,
   BUILTIN_AGENT_IDS,
@@ -350,9 +371,10 @@ import { useSessionNaming } from '../state/sessionNaming'
 import { useSshServers } from '../state/sshServers'
 import { useSshConn } from '../state/sshConn'
 import { useSystemAccount } from '../state/systemAccount'
+import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { useEntitlement } from '../state/entitlement'
-import type { SshServer } from '@shared/ssh'
-import { sshHostKey } from '@shared/ssh'
+import type { SshServer, SshConnection } from '@shared/ssh'
+import { sshAttachmentId, sshHostKey } from '@shared/ssh'
 import type {
   CanvasNodeState,
   Project,
@@ -367,6 +389,7 @@ import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTag
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
 import { canClearDirty, canCommitCanvas } from '../state/persistGuards'
 import { isHidden } from '../lib/ui-visibility'
+import { presentAccount, type AccountPresentation } from '../lib/accountPresentation'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
 import { isKanbanOpen, useViewMode, viewFor } from '../state/viewMode'
@@ -394,14 +417,17 @@ import {
   commonParentId,
   fitGroupToChildren,
   createAccountLoginNode,
+  createCodexAccountLoginNode,
   isAccountLoginNode,
-  systemAccountDisplay,
+  isCodexAccountLoginNode,
   createAgentNode,
+  createCanvasControlTerminalNode,
   createBrowserNode,
   createDinoNode,
   createDiffNode,
   createEditorNode,
   createGroupNode,
+  createNativeLoopNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createStickyNode,
@@ -431,6 +457,31 @@ import {
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 const GRID = 24
+
+/** Codex accounts usable from this canvas. A local canvas may host remote nodes; a full SSH
+ * project remains restricted to its own host. */
+function codexAccountsForCanvas(
+  accounts: ReturnType<typeof useSettings.getState>['settings']['codexAccounts'],
+  project: Project | undefined
+) {
+  if (project?.ssh) return accountsForProject(accounts, project)
+  const savedHosts = new Set(useSshServers.getState().servers.map((server) => sshHostKey(server)))
+  return accounts.filter(
+    (account) => !account.pending && (!account.host || savedHosts.has(account.host))
+  )
+}
+
+function sshForCodexAccount(accountId: string | undefined): Project['ssh'] | undefined {
+  if (!accountId) return undefined
+  const account = useSettings
+    .getState()
+    .settings.codexAccounts.find((entry) => entry.id === accountId)
+  if (!account?.host) return undefined
+  const server = useSshServers
+    .getState()
+    .servers.find((entry) => sshHostKey(entry) === account.host)
+  return server ? { server, remoteCwd: account.remoteCwd || server.remoteCwd || '~' } : undefined
+}
 
 /** The empty opaque set (glyphgrid), shared so the render-time compute allocates nothing on the
  *  overwhelmingly common "nothing overlaps / layer off" path. */
@@ -667,7 +718,10 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
     agentId: n.data.agentId as string | undefined,
     // What the card modal's co-attach terminal needs to join THIS node's session the same way the
     // canvas TerminalNode does.
-    spawn: modalSpawnFromNodeData(n.data)
+    spawn: {
+      ...modalSpawnFromNodeData(n.data),
+      codexAccountId: n.data.codexAccountId as string | undefined
+    }
   }
 }
 
@@ -817,10 +871,8 @@ export function Canvas() {
   // told here rather than being left with a note their teammates never see. Dismissible; re-armed
   // by the next refused cast (the publisher keeps retrying that node, so it syncs once trimmed).
   const [syncNote, setSyncNote] = useState<string | null>(null)
-  // A transient warning banner. Two producers, both of which must be SEEN rather than swallowed:
-  // a copy-to-clipboard failure (browser build only — the bridge clipboard stub dispatches
-  // `nodeterm:toast` when neither the Clipboard API nor execCommand can copy, typically a
-  // non-secure context over a LAN), and a Codex node reporting that it fell back to plain codex.
+  // Clipboard failures (browser text copy and desktop file copy) and Codex launcher fallbacks share
+  // this visible strip. Each refusal or fallback must be seen rather than swallowed.
   const [copyError, setCopyError] = useState<string | null>(null)
   // Cmd+V only drops an image on the canvas when the LAST pointer press was on the pane itself —
   // otherwise a paste aimed at a panel or a dialog would spawn a node behind it. See
@@ -829,7 +881,10 @@ export function Canvas() {
   // Result of a worktree operation (merge / remove). These used to be `window.alert`s — a modal
   // that blocks the whole app to say "Merged feat into main." Shown as a strip in the existing
   // top-banner column instead; an 'info' one fades itself out, an 'error' stays until dismissed.
-  const [notice, setNotice] = useState<{ kind: 'info' | 'error'; text: string } | null>(null)
+  const [notice, setNotice] = useState<{
+    kind: 'info' | 'error'
+    text: string
+  } | null>(null)
   useEffect(() => {
     if (notice?.kind !== 'info') return
     const t = setTimeout(() => setNotice(null), noticeDwellMs(notice.text))
@@ -842,6 +897,9 @@ export function Canvas() {
   // Flow's own lock convention. Transient by design: a lock that survives restart reads as
   // "the app is frozen" to whoever opens it next.
   const [canvasLocked, setCanvasLocked] = useState(false)
+  // Paste is a canvas action only after the user's last pointer interaction landed on the real
+  // React Flow pane. Prevents a global paste listener from hijacking Welcome/Usage/sidebar UI.
+  const canvasImagePasteArmedRef = useRef(false)
   /** SPACE is held: a left-drag pans instead of box-selecting, Figma-style (issue #86). */
   const [spacePan, setSpacePan] = useState(false)
 
@@ -916,7 +974,10 @@ export function Canvas() {
   const [notifCenterOpen, setNotifCenterOpen] = useState(false)
   const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
-  const [phonePairAnchor, setPhonePairAnchor] = useState<{ right: number; bottom: number } | null>(null)
+  const [phonePairAnchor, setPhonePairAnchor] = useState<{
+    right: number
+    bottom: number
+  } | null>(null)
   // "+" opens the start screen (WelcomeScreen) on demand over existing projects.
   const [welcomeOpen, setWelcomeOpen] = useState(false)
   // Optional deep-link target when opening settings (e.g. RemotePicker → the SSH section).
@@ -1246,7 +1307,6 @@ export function Canvas() {
     zoomIn,
     zoomOut,
     screenToFlowPosition,
-    setCenter,
     getZoom,
     getInternalNode,
     getNodes,
@@ -1409,6 +1469,7 @@ export function Canvas() {
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
+      scheduler: withNodeBoundary(NativeLoopNode),
       dino: withNodeBoundary(DinoNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
@@ -1461,6 +1522,7 @@ export function Canvas() {
   // guarantees exactly-once. A confirmed failure retry mints a new id; transport uncertainty
   // keeps the same id so the host ledger can answer without re-executing.
   const launchInFlight = useRef<Set<string>>(new Set())
+  const codexAccountSwitchInFlight = useRef<Set<string>>(new Set())
   const launchAttempts = useRef<Map<string, number>>(new Map())
   // Fire armed nodes whose upstream stations have all gone idle. This is the edge that makes
   // the canvas a graph rather than a fan-out: the dependent starts itself, with no orchestrator
@@ -1741,6 +1803,68 @@ export function Canvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- depEdgeSig IS the ref's signature
     [depEdgeSig]
   )
+  // Native Loop delivery edges are derived from each persisted scheduler node's target ids.
+  // Reducing to a primitive signature keeps drag frames from rebuilding every edge object.
+  const schedulePairsRef = useRef<
+    Array<{ id: string; source: string; target: string; enabled: boolean }>
+  >([])
+  const scheduleEdgeSig = useMemo(() => {
+    const ids = new Set(nodes.map((node) => node.id))
+    const pairs: Array<{
+      id: string
+      source: string
+      target: string
+      enabled: boolean
+    }> = []
+    for (const node of nodes) {
+      if (node.type !== 'scheduler') continue
+      for (const target of (node.data.loopTargetIds as string[] | undefined) ?? []) {
+        if (!ids.has(target)) continue
+        pairs.push({
+          id: `schedule-${node.id}-${target}`,
+          source: node.id,
+          target,
+          enabled: !!node.data.loopEnabled
+        })
+      }
+    }
+    schedulePairsRef.current = pairs
+    return pairs.map((pair) => `${pair.id}:${pair.enabled ? 1 : 0}`).join('|')
+  }, [nodes])
+  const scheduleEdges = useMemo(
+    () =>
+      schedulePairsRef.current.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: 'schedule-out',
+        targetHandle: 'link-in',
+        type: 'default' as const,
+        selectable: false,
+        label: edge.enabled ? '↻ Loop' : '↻ paused',
+        labelStyle: {
+          fill: edge.enabled ? '#ffb340' : '#8e8e93',
+          fontSize: 11,
+          fontWeight: 700
+        },
+        labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.9 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 5,
+        style: {
+          stroke: edge.enabled ? '#ffb340' : '#636366',
+          strokeWidth: 2,
+          strokeDasharray: '8 5'
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: edge.enabled ? '#ffb340' : '#636366',
+          width: 14,
+          height: 14
+        }
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scheduleEdgeSig signs the ref
+    [scheduleEdgeSig]
+  )
   const displayEdges = useMemo(() => {
     const stickyIds = new Set(stickySig ? stickySig.split('|') : [])
     // ONE edge per pair. A node an agent opens gets both a rope (lineage) and a context bridge
@@ -1799,11 +1923,11 @@ export function Canvas() {
     // durable relation and stays. Built above (depEdges), keyed on the dependency signature so a
     // drag frame does not rebuild it.
     const extra =
-      ephemeralEdges.length || ropes.length || depEdges.length
-        ? [...ephemeralEdges, ...ropes, ...depEdges]
+      ephemeralEdges.length || ropes.length || depEdges.length || scheduleEdges.length
+        ? [...scheduleEdges, ...ephemeralEdges, ...ropes, ...depEdges]
         : []
     return extra.length ? [...decorated, ...extra] : decorated
-  }, [linkEdges, ephemeralEdges, controlEdges, accent, stickySig, depEdges])
+  }, [linkEdges, ephemeralEdges, controlEdges, accent, stickySig, depEdges, scheduleEdges])
 
   // Header pin button (and ⌘⇧L): toggle the persisted pin preference. Clears the transient
   // dismiss so (re)pinning shows the docked panel; unpinning collapses it to hover-peek.
@@ -2710,6 +2834,30 @@ export function Canvas() {
   const onConnect = useCallback(
     (c: Connection) => {
       if (!c.source || !c.target || c.source === c.target) return
+      const sourceNode = nodesRef.current.find((node) => node.id === c.source)
+      const targetNode = nodesRef.current.find((node) => node.id === c.target)
+      // Native Loop → agent: store the exact target on the Loop node. The visible schedule edge
+      // is derived from that persisted list; it is deliberately not a context link.
+      if (sourceNode?.type === 'scheduler') {
+        if (targetNode?.type !== 'terminal' || !createdAgentId(targetNode.data)) return
+        const targets = (sourceNode.data.loopTargetIds as string[] | undefined) ?? []
+        if (targets.includes(c.target)) return
+        setNodes((current) =>
+          current.map((node) =>
+            node.id === c.source
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    loopTargetIds: [...targets, c.target!]
+                  }
+                }
+              : node
+          )
+        )
+        markDirty()
+        return
+      }
       const se = linkEndpointOf(c.source)
       const te = linkEndpointOf(c.target)
       if (!se || !te) return
@@ -2761,12 +2909,31 @@ export function Canvas() {
       )
       if (msg) void api.pty.sendText(target, msg)
     },
-    [linkEndpointOf, agentIdOf, setLinkEdges, markDirty, nodes]
+    [linkEndpointOf, agentIdOf, setLinkEdges, setNodes, markDirty, nodes]
   )
 
   // Double-click a context link to remove it (ephemeral subagent/loop edges are left alone).
   const onEdgeDoubleClick = useCallback(
     (_e: React.MouseEvent, edge: Edge) => {
+      if (edge.id.startsWith('schedule-')) {
+        setNodes((current) =>
+          current.map((node) =>
+            node.id === edge.source
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    loopTargetIds: ((node.data.loopTargetIds as string[] | undefined) ?? []).filter(
+                      (target) => target !== edge.target
+                    )
+                  }
+                }
+              : node
+          )
+        )
+        markDirty()
+        return
+      }
       // Control ropes are removable the same way as context links (ephemeral edges are not).
       if (controlEdgesRef.current.some((b) => b.id === edge.id)) {
         // A rope may be the only DRAWN edge for a pair that also has a context bridge (see
@@ -2784,7 +2951,7 @@ export function Canvas() {
       setLinkEdges((es) => es.filter((b) => b.id !== edge.id))
       markDirty()
     },
-    [setLinkEdges, markDirty]
+    [setLinkEdges, setNodes, markDirty]
   )
 
   // Route edge changes (selection) to the right store: `ctrl-` ids are control ropes (local
@@ -2812,6 +2979,24 @@ export function Canvas() {
       return valid.length === es.length ? es : valid
     })
   }, [nodes])
+
+  // A deleted target cannot remain a hidden scheduler recipient. Prune stale ids from the Loop
+  // node itself (the persistence source), not merely from the derived edge list.
+  useEffect(() => {
+    const ids = new Set(nodes.map((node) => node.id))
+    let changed = false
+    const next = nodes.map((node) => {
+      if (node.type !== 'scheduler') return node
+      const targets = (node.data.loopTargetIds as string[] | undefined) ?? []
+      const valid = targets.filter((target) => ids.has(target))
+      if (valid.length === targets.length) return node
+      changed = true
+      return { ...node, data: { ...node.data, loopTargetIds: valid } }
+    })
+    if (!changed) return
+    setNodes(next)
+    markDirty()
+  }, [nodes, setNodes, markDirty])
 
   // Rewrite link files when a linked node's session starts/changes: main resolves
   // codex/gemini transcripts by sessionId, so a session that appears after the edge was
@@ -2850,7 +3035,7 @@ export function Canvas() {
         sticky,
         agentId,
         sessionId: agentId ? useAgentStatus.getState().byId[id]?.sessionId : undefined,
-        accountId: sticky ? undefined : ((n?.data.accountId as string) || undefined)
+        accountId: sticky ? undefined : (n?.data.accountId as string) || undefined
       }
     }
     // Merge in the link maps of every OTHER project (from their serialized nodes + bridges):
@@ -3780,6 +3965,17 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
+  const addNativeLoop = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createNativeLoopNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   const addDino = useCallback(
     (center?: { x: number; y: number }) => {
       // Seed with the project record, maxed with any live dino nodes (pre-record projects
@@ -3823,8 +4019,13 @@ export function Canvas() {
   // to open a terminal node running `claude /login` under the new account's config dir.
   useEffect(() => {
     const onAddAccountLogin = (ev: Event): void => {
-      const detail = (ev as CustomEvent<{ accountId: string; remote?: boolean; host?: string }>)
-        .detail
+      const detail = (
+        ev as CustomEvent<{
+          accountId: string
+          remote?: boolean
+          host?: string
+        }>
+      ).detail
       const accountId = detail?.accountId
       if (!accountId) return
       // A REMOTE account logs in ON ITS HOST: resolve the ssh binding BY HOST (from the event),
@@ -3882,29 +4083,94 @@ export function Canvas() {
     return () => window.removeEventListener('nodeterm:open-settings', onOpenSettings)
   }, [])
 
+  useEffect(() => {
+    const onAddCodexAccountLogin = (ev: Event): void => {
+      const detail = (
+        ev as CustomEvent<{
+          accountId: string
+          remote?: boolean
+          host?: string
+        }>
+      ).detail
+      const accountId = detail?.accountId
+      if (!accountId) return
+      let ssh: ReturnType<typeof useProjects.getState>['projects'][number]['ssh']
+      if (detail.remote) {
+        const live = Object.values(useSshConn.getState().byProject).find(
+          (entry) => entry.hostKey === detail.host && entry.conn
+        )
+        const project = useProjects
+          .getState()
+          .projects.find(
+            (p) =>
+              p.ssh &&
+              sshHostKey(p.ssh.server) === detail.host &&
+              useSshConn.getState().byProject[p.id]
+          )
+        const account = useSettings
+          .getState()
+          .settings.codexAccounts.find((entry) => entry.id === accountId)
+        if (project?.ssh) ssh = project.ssh
+        else if (live?.conn)
+          ssh = {
+            server: live.conn,
+            remoteCwd: account?.remoteCwd || live.remoteCwd || '~'
+          }
+        else return
+      }
+      setNodes((ns) => [
+        ...ns.map((n) => ({ ...n, selected: false })),
+        {
+          ...createCodexAccountLoginNode(accountId, ns.length, viewCenter(), ssh),
+          selected: true
+        }
+      ])
+      markDirty()
+      setSettingsOpen(false)
+    }
+    window.addEventListener('nodeterm:add-codex-account-login', onAddCodexAccountLogin)
+    return () =>
+      window.removeEventListener('nodeterm:add-codex-account-login', onAddCodexAccountLogin)
+  }, [setNodes, markDirty, viewCenter])
+
   // Resolve the system account's email once, so context menus (built via getState) can label
   // the "System account" entry with it.
   useEffect(() => useSystemAccount.getState().ensure(), [])
+  useEffect(() => useSystemCodexAccount.getState().ensure(), [])
 
   const addAgentNode = useCallback(
-    (agentId: AgentId, center?: { x: number; y: number }, groupId?: string, accountId?: string) => {
+    (
+      agentId: AgentId,
+      center?: { x: number; y: number },
+      groupId?: string,
+      accountId?: string,
+      sshOverride?: Project['ssh']
+    ) => {
       const project = useProjects.getState().getProject(activeProjectId)
-      const cwd = cwdForNewNodeIn(groupId) ?? project?.cwd
+      const localCwd = cwdForNewNodeIn(groupId) ?? project?.cwd
       // Funnel through resolveNewNodeAccount so the project default applies even without an
       // explicit pick. The factory drops the account for non-claude agents.
-      const account = resolveNewNodeAccount(
-        accountId,
-        project,
-        useSettings.getState().settings.claudeAccounts
-      )
+      const settings = useSettings.getState().settings
+      const eligibleCodexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
+      const account =
+        agentId === 'claude'
+          ? resolveNewNodeAccount(accountId, project, settings.claudeAccounts)
+          : agentId === 'codex' &&
+              accountId &&
+              eligibleCodexAccounts.some((a) => a.id === accountId)
+            ? accountId
+            : undefined
       setNodes((ns) => {
+        const accountSsh = agentId === 'codex' ? sshForCodexAccount(account) : undefined
+        const ssh = sshOverride ?? accountSsh ?? project?.ssh
+        const cwd = ssh?.remoteCwd ?? localCwd
         const node = createAgentNode(
           agentId,
           ns.length,
           cwd,
           center ?? emptyNodePos(),
           undefined,
-          project?.ssh,
+          ssh,
           account,
           activePermissionMode(agentId),
           terminalCreationOptionsFor(activeProjectId)
@@ -4368,6 +4634,42 @@ export function Canvas() {
     return () => window.removeEventListener(ACCOUNT_REMOVAL_COMMITTED_EVENT, onAccountRemovalCommitted)
   }, [setNodes, markDirty])
 
+  useEffect(() => {
+    const onCodexAccountRemoved = (ev: Event): void => {
+      const accountId = (ev as CustomEvent<{ accountId: string }>).detail?.accountId
+      if (!accountId) return
+      const loginIds = nodesRef.current
+        .filter((n) => n.data.codexAccountId === accountId && isCodexAccountLoginNode(n.data))
+        .map((n) => n.id)
+      if (loginIds.length) deleteNodes(loginIds)
+      setNodes((ns) =>
+        ns.some((n) => n.data.codexAccountId === accountId)
+          ? ns.map((n) =>
+              n.data.codexAccountId === accountId
+                ? { ...n, data: { ...n.data, codexAccountId: undefined } }
+                : n
+            )
+          : ns
+      )
+      markDirty()
+    }
+    window.addEventListener('nodeterm:codex-account-removed', onCodexAccountRemoved)
+    return () => window.removeEventListener('nodeterm:codex-account-removed', onCodexAccountRemoved)
+  }, [setNodes, markDirty, deleteNodes])
+
+  useEffect(() => {
+    const onQueryUse = (ev: Event): void => {
+      const detail = (ev as CustomEvent<{ accountId: string; count: number }>).detail
+      if (!detail?.accountId) return
+      detail.count += nodesRef.current.filter(
+        (node) =>
+          node.data.codexAccountId === detail.accountId && !isCodexAccountLoginNode(node.data)
+      ).length
+    }
+    window.addEventListener('nodeterm:query-live-codex-account-use', onQueryUse)
+    return () => window.removeEventListener('nodeterm:query-live-codex-account-use', onQueryUse)
+  }, [])
+
   // Delete / Backspace asks for confirmation, then deletes the selected nodes.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -4516,7 +4818,11 @@ export function Canvas() {
   // (`cwdForNewNodeIn`), so the frame IS the binding.
   const attachWorktree = useCallback(
     (
-      target: { groupId: string | null; at?: { x: number; y: number }; size?: { width: number; height: number } },
+      target: {
+        groupId: string | null
+        at?: { x: number; y: number }
+        size?: { width: number; height: number }
+      },
       wt: GroupWorktree
     ): string => {
       let groupId = target.groupId
@@ -5363,6 +5669,255 @@ export function Canvas() {
     )
   }, [])
 
+  const switchCodexAccount = useCallback(
+    async (nodeId: string, targetAccountId?: string, targetSsh?: Project['ssh']) => {
+      const node = nodesRef.current.find((n) => n.id === nodeId)
+      if (!node || restartAgentIdOf(node) !== 'codex') return
+      const status = useAgentStatus.getState().byId[nodeId]
+      const gate = restartEligibility('codex', status?.state, status?.sessionId)
+      if (!gate.ok || !status?.sessionId) {
+        const reason = gate.ok ? 'no-session' : gate.reason
+        setNotice({
+          kind: 'error',
+          text:
+            reason === 'working'
+              ? 'Finish the current Codex turn before switching accounts.'
+              : 'This Codex node has no conversation to move yet.'
+        })
+        return
+      }
+      const sourceAccountId = node.data.codexAccountId as string | undefined
+      // `system` is represented by an undefined account id on every machine. A local-system to
+      // remote-system transfer therefore has equal account ids but still changes the host.
+      if (!targetSsh && sourceAccountId === targetAccountId) return
+      const cwd = node.data.cwd as string | undefined
+      if (!cwd) {
+        setNotice({
+          kind: 'error',
+          text: 'This Codex node has no project directory to resume in.'
+        })
+        return
+      }
+      if (codexAccountSwitchInFlight.current.has(nodeId)) {
+        setNotice({
+          kind: 'error',
+          text: 'This Codex node is already switching accounts.'
+        })
+        return
+      }
+      const expected = {
+        accountId: sourceAccountId,
+        agentId: 'codex' as const,
+        cwd,
+        sessionId: status.sessionId,
+        ssh: !!node.data.ssh
+      }
+      codexAccountSwitchInFlight.current.add(nodeId)
+      if (!node.data.ssh && targetSsh) {
+        try {
+          const targetHost = sshHostKey(targetSsh.server)
+          const existing = Object.entries(useSshConn.getState().byProject).find(
+            ([, connection]) => connection.hostKey === targetHost
+          )
+          const ownerProjectId = useProjects.getState().activeProjectId
+          if (!ownerProjectId) throw new Error('No active project owns this transfer')
+          const projectId = existing?.[0] ?? sshAttachmentId(ownerProjectId, targetSsh.server)
+          if (!existing) {
+            const info = await window.nodeTerminal.sshProject.connect(
+              projectId,
+              targetSsh.server,
+              targetSsh.remoteCwd
+            )
+            useSshConn.getState().setConn(projectId, {
+              ...info,
+              hostKey: targetHost,
+              conn: targetSsh.server,
+              remoteCwd: targetSsh.remoteCwd,
+              ownerProjectId
+            })
+          }
+          const transferred = await window.nodeTerminal.codexAccounts.transferThreadToSsh(
+            status.sessionId,
+            sourceAccountId,
+            targetAccountId,
+            { projectId }
+          )
+          const currentNode = nodesRef.current.find((candidate) => candidate.id === nodeId)
+          const currentStatus = useAgentStatus.getState().byId[nodeId]
+          if (
+            !currentNode ||
+            !codexAccountSwitchStillEligible(expected, {
+              accountId: currentNode.data.codexAccountId as string | undefined,
+              agentId: restartAgentIdOf(currentNode),
+              cwd: currentNode.data.cwd as string | undefined,
+              sessionId: currentStatus?.sessionId,
+              ssh: !!currentNode.data.ssh,
+              state: currentStatus?.state
+            })
+          ) {
+            throw new Error('Conversation was copied, but the node changed before it could move.')
+          }
+          transport.recycle(nodeId)
+          const nextNodes = nodesRef.current.map((candidate) =>
+            candidate.id === nodeId
+              ? {
+                  ...candidate,
+                  data: {
+                    ...candidate.data,
+                    cwd: targetSsh.remoteCwd,
+                    ssh: targetSsh.server,
+                    sshRemoteTmux: true,
+                    codexAccountId: targetAccountId,
+                    initialCommand: `$HOME/.nodeterm/bin/nodeterm-codex resume ${transferred.threadId}`,
+                    respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
+                  }
+                }
+              : candidate
+          )
+          nodesRef.current = nextNodes
+          setNodes(nextNodes)
+          markDirty()
+          setNotice({
+            kind: 'info',
+            text: 'Conversation copied to the SSH machine and resumed there. The Mac copy remains available.'
+          })
+        } catch (error) {
+          setNotice({
+            kind: 'error',
+            text:
+              error instanceof Error
+                ? error.message
+                : 'Could not transfer this Codex conversation to SSH.'
+          })
+        } finally {
+          codexAccountSwitchInFlight.current.delete(nodeId)
+        }
+        return
+      }
+      if (node.data.ssh) {
+        try {
+          const currentNode = nodesRef.current.find((candidate) => candidate.id === nodeId)
+          if (
+            !currentNode ||
+            !codexAccountSwitchStillEligible(expected, {
+              accountId: currentNode.data.codexAccountId as string | undefined,
+              agentId: restartAgentIdOf(currentNode),
+              cwd: currentNode.data.cwd as string | undefined,
+              sessionId: useAgentStatus.getState().byId[nodeId]?.sessionId,
+              state: useAgentStatus.getState().byId[nodeId]?.state
+            })
+          )
+            throw new Error('Codex node changed before account switch')
+          transport.recycle(nodeId)
+          const nextNodes = nodesRef.current.map((candidate) =>
+            candidate.id === nodeId
+              ? {
+                  ...candidate,
+                  data: {
+                    ...candidate.data,
+                    codexAccountId: targetAccountId,
+                    initialCommand: `$HOME/.nodeterm/bin/nodeterm-codex resume ${status.sessionId}`,
+                    respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
+                  }
+                }
+              : candidate
+          )
+          nodesRef.current = nextNodes
+          setNodes(nextNodes)
+          markDirty()
+        } catch (error) {
+          setNotice({
+            kind: 'error',
+            text: error instanceof Error ? error.message : 'Could not switch Codex account.'
+          })
+        } finally {
+          codexAccountSwitchInFlight.current.delete(nodeId)
+        }
+        return
+      }
+      let rollbackToken: string | undefined
+      try {
+        const switched = await window.nodeTerminal.codexAccounts.switchThread(
+          status.sessionId,
+          cwd,
+          sourceAccountId,
+          targetAccountId
+        )
+        rollbackToken = switched.rollbackToken
+        const currentNode = nodesRef.current.find((candidate) => candidate.id === nodeId)
+        const currentStatus = useAgentStatus.getState().byId[nodeId]
+        if (
+          !currentNode ||
+          !codexAccountSwitchStillEligible(expected, {
+            accountId: currentNode.data.codexAccountId as string | undefined,
+            agentId: restartAgentIdOf(currentNode),
+            cwd: currentNode.data.cwd as string | undefined,
+            sessionId: currentStatus?.sessionId,
+            ssh: !!currentNode.data.ssh,
+            state: currentStatus?.state
+          })
+        ) {
+          if (rollbackToken) {
+            await window.nodeTerminal.codexAccounts.rollbackSwitch(rollbackToken)
+            rollbackToken = undefined
+          }
+          setNotice({
+            kind: 'error',
+            text: 'Account switch cancelled because this Codex session changed or became busy.'
+          })
+          return
+        }
+        if (rollbackToken) {
+          await window.nodeTerminal.codexAccounts.commitSwitch(rollbackToken)
+        }
+        // A provider account is part of the process environment, not a mutable TUI preference.
+        // Recycle the one node's tmux session, then resume the same rollout under the target
+        // CODEX_HOME. Account identity changes; conversation identity does not.
+        transport.recycle(nodeId)
+        const nextNodes = nodesRef.current.map((candidate) =>
+          candidate.id === nodeId
+            ? {
+                ...candidate,
+                data: {
+                  ...candidate.data,
+                  codexAccountId: targetAccountId,
+                  initialCommand: `nodeterm-codex resume ${switched.threadId}`,
+                  respawnNonce: ((candidate.data.respawnNonce as number | undefined) ?? 0) + 1
+                }
+              }
+            : candidate
+        )
+        // Account removal queries nodesRef synchronously. Publish outside React's scheduled state
+        // updater before releasing the Main reservation, then render that exact snapshot.
+        nodesRef.current = nextNodes
+        setNodes(nextNodes)
+        markDirty()
+        if (rollbackToken) {
+          const token = rollbackToken
+          try {
+            await window.nodeTerminal.codexAccounts.finishSwitch(token)
+          } catch {
+            // Both operations only release the Main-process reservation after commit; the
+            // verified hardlink and switched node remain valid either way.
+            await window.nodeTerminal.codexAccounts.rollbackSwitch(token)
+          }
+          rollbackToken = undefined
+        }
+      } catch {
+        if (rollbackToken) {
+          await window.nodeTerminal.codexAccounts.rollbackSwitch(rollbackToken)
+        }
+        setNotice({
+          kind: 'error',
+          text: 'Could not switch this Codex conversation. The original node was left running.'
+        })
+      } finally {
+        codexAccountSwitchInFlight.current.delete(nodeId)
+      }
+    },
+    [setNodes, markDirty]
+  )
+
   // Who the bulk restart would act on, right now: the ACTIVE project's canvas (nodesRef holds
   // exactly that). Read fresh at every call — agent state and session ids arrive asynchronously.
   const bulkRestartPlan = useCallback((): BulkRestartPlan => {
@@ -5658,7 +6213,8 @@ export function Canvas() {
 
   const onNodeDoubleClick = useCallback(
     (_e: React.MouseEvent, node: Node) => {
-      if (useSettings.getState().settings.doubleClickFocus) goToNode(node)
+      if (!useSettings.getState().settings.doubleClickFocus) return
+      goToNode(node)
     },
     [goToNode]
   )
@@ -6064,6 +6620,131 @@ export function Canvas() {
             ] as MenuItem[]
           })()
         : []),
+      ...(ids.length === 1
+        ? (() => {
+            const node = nodesRef.current.find((candidate) => candidate.id === ids[0])
+            const nodeHost = node?.data.ssh
+              ? sshHostKey(node.data.ssh as SshConnection)
+              : undefined
+            const accountSettings = useSettings.getState().settings
+            const allAccounts = accountSettings.codexAccounts.filter(
+              (account) => !account.pending
+            )
+            const accounts = allAccounts.filter((account) => account.host === nodeHost)
+            if (!node || restartAgentIdOf(node) !== 'codex') {
+              return []
+            }
+            const current = node.data.codexAccountId as string | undefined
+            const status = useAgentStatus.getState().byId[node.id]
+            const gate = restartEligibility('codex', status?.state, status?.sessionId)
+            const servers = useSshServers.getState().servers
+            const serverForHost = (host?: string) =>
+              host ? servers.find((server) => sshHostKey(server) === host) : undefined
+            const savedServer = serverForHost(nodeHost)
+            const systemPresentation = presentAccount({
+              label: nodeHost
+                ? useSettings.getState().settings.remoteSystemCodexAccountLabels[nodeHost]
+                : useSettings.getState().settings.systemCodexAccountLabel,
+              email: nodeHost
+                ? useSystemCodexAccount.getState().remoteEmails[nodeHost]
+                : useSystemCodexAccount.getState().email,
+              host: nodeHost,
+              machineLabel: savedServer?.label
+            })
+            const accountPresentation = (
+              account: (typeof allAccounts)[number]
+            ): AccountPresentation =>
+              presentAccount({
+                label: account.label,
+                email: account.email,
+                host: account.host,
+                machineLabel: serverForHost(account.host)?.label
+              })
+            const item = (
+              presentation: AccountPresentation,
+              target?: string,
+              targetSsh?: Project['ssh']
+            ): MenuItem => ({
+              label: '',
+              accountPresentation: presentation,
+              accountSelected:
+                current === target &&
+                nodeHost === (targetSsh ? sshHostKey(targetSsh.server) : nodeHost),
+              disabled: (current === target && !targetSsh) || !gate.ok,
+              hint: !gate.ok
+                ? gate.reason === 'working'
+                  ? 'Finish the current turn before switching accounts.'
+                  : 'Nothing to switch yet — this node has no conversation id.'
+                : targetSsh
+                  ? 'Copies this conversation to the SSH machine, then resumes this node there. The source copy remains on this Mac.'
+                  : 'Continues this conversation with the selected account, then restarts only this node.',
+              onClick: () => void switchCodexAccount(node.id, target, targetSsh)
+            })
+            const currentAccount = current
+              ? accounts.find((account) => account.id === current)
+              : undefined
+            const currentPresentation = currentAccount
+              ? accountPresentation(currentAccount)
+              : current
+                ? presentAccount({
+                    label: 'Unknown account',
+                    host: nodeHost,
+                    machineLabel: savedServer?.label
+                  })
+                : systemPresentation
+            return [
+              {
+                type: 'submenu',
+                label: 'Codex account',
+                accountPresentation: currentPresentation,
+                icon: <AgentIcon agentId="codex" />,
+                children: [
+                  item(systemPresentation),
+                  ...accounts.map((account) => item(accountPresentation(account), account.id)),
+                  ...(!nodeHost && servers.length > 0
+                    ? [
+                        { type: 'separator' } as MenuItem,
+                        ...servers.flatMap((server): MenuItem[] => {
+                          const host = sshHostKey(server)
+                          const systemRemote = presentAccount({
+                            label: accountSettings.remoteSystemCodexAccountLabels[host],
+                            email: useSystemCodexAccount.getState().remoteEmails[host],
+                            host,
+                            machineLabel: server.label
+                          })
+                          const remoteSsh = {
+                            server,
+                            remoteCwd: server.remoteCwd || '~'
+                          }
+                          return [
+                            item(systemRemote, undefined, remoteSsh),
+                            ...allAccounts
+                              .filter((account) => account.host === host)
+                              .map((account) =>
+                                item(accountPresentation(account), account.id, {
+                                  server,
+                                  remoteCwd: account.remoteCwd || server.remoteCwd || '~'
+                                })
+                              )
+                          ]
+                        })
+                      ]
+                    : []),
+                  { type: 'separator' },
+                  {
+                    label: nodeHost
+                      ? 'Manage Codex accounts on this host…'
+                      : 'Manage Codex accounts…',
+                    hint: nodeHost
+                      ? 'Add another login on this SSH host in Settings → Accounts.'
+                      : 'Add or remove Codex logins in Settings → Accounts.',
+                    onClick: () => setSettingsOpen(true)
+                  }
+                ]
+              }
+            ] as MenuItem[]
+          })()
+        : []),
       // Restart the agent CLI itself (single selection): quit it and relaunch with `--resume`, so a
       // newly released model appears in its model list with the conversation intact. Unlike "Reload
       // terminal" above (which re-attaches the pane and leaves the CLI running) this one types into
@@ -6164,6 +6845,7 @@ export function Canvas() {
     api,
     assessProfileRestartForNode,
     requestRestartWithTerminalProfile,
+    switchCodexAccount,
     restartAgentNode,
     profileText
   ])
@@ -6172,24 +6854,51 @@ export function Canvas() {
    *  `at` is the flow position to create at; with `groupId` the node is parented into that group. */
   const agentCreationItems = useCallback(
     (at?: { x: number; y: number }, groupId?: string): MenuItem[] => {
-      const disabled = useSettings.getState().settings.disabledAgents
+      const settings = useSettings.getState().settings
+      const disabled = settings.disabledAgents
       // Accounts selectable in the active project: local accounts for a local project, or this
       // host's accounts for an SSH project (pending logins always excluded).
       const project = useProjects.getState().getProject(activeProjectId)
-      const accounts = accountsForProject(useSettings.getState().settings.claudeAccounts, project)
-      // The system entry shows the user's custom label / detected email so it stays
-      // distinguishable from managed accounts (falls back to "System account").
-      const systemLabel = systemAccountDisplay(
-        useSettings.getState().settings.systemAccountLabel,
-        useSystemAccount.getState().email
-      )
+      const accounts = accountsForProject(settings.claudeAccounts, project)
+      const codexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
+      const servers = useSshServers.getState().servers
+      const serverForHost = (host?: string) =>
+        host ? servers.find((server) => sshHostKey(server) === host) : undefined
+      const accountPresentation = (
+        account: { label?: string; email?: string; host?: string },
+        fallbackHost?: string
+      ): AccountPresentation => {
+        const host = account.host ?? fallbackHost
+        return presentAccount({
+          ...account,
+          host,
+          machineLabel: serverForHost(host)?.label
+        })
+      }
+      const projectHost = project?.ssh ? sshHostKey(project.ssh.server) : undefined
+      const systemClaudePresentation = presentAccount({
+        label: projectHost
+          ? settings.remoteSystemAccountLabels[projectHost]
+          : settings.systemAccountLabel,
+        email: projectHost ? undefined : useSystemAccount.getState().email,
+        host: projectHost,
+        machineLabel: project?.ssh?.server.label
+      })
+      const systemCodexPresentation = presentAccount({
+        label: projectHost
+          ? settings.remoteSystemCodexAccountLabels[projectHost]
+          : settings.systemCodexAccountLabel,
+        email: projectHost
+          ? useSystemCodexAccount.getState().remoteEmails[projectHost]
+          : useSystemCodexAccount.getState().email,
+        host: projectHost,
+        machineLabel: project?.ssh?.server.label
+      })
       // ✓ marks what a bare "New Claude" resolves to: the project default while it still
       // exists, else the system account (mirrors resolveNewNodeAccount's stale-id guard).
       const defaultAccountId = accounts.some((a) => a.id === project?.defaultAccountId)
         ? project?.defaultAccountId
         : undefined
-      const withDefaultMark = (label: string, id?: string): string =>
-        id === defaultAccountId ? `${label} ✓` : label
       // SSH project with no accounts on its host: keep the submenu, with a disabled row saying
       // where this host's accounts come from — local accounts are correctly invisible here, and
       // a bare flat entry read as "multi-account is broken on SSH".
@@ -6209,14 +6918,17 @@ export function Canvas() {
               icon: <AgentIcon agentId={aid} />,
               children: [
                 {
-                  label: withDefaultMark(systemLabel),
+                  label: '',
+                  accountPresentation: systemClaudePresentation,
+                  accountSelected: !defaultAccountId,
                   icon: <AgentIcon agentId="claude" />,
                   shortcut: shortcutAgent === 'claude' ? ['⌘', '⇧', 'C'] : undefined,
                   onClick: () => addAgentNode('claude', at, groupId)
                 },
-                ...accounts.map(
-                  (a): MenuItem => ({
-                    label: withDefaultMark(a.label, a.id),
+                ...accounts.map((a): MenuItem => ({
+                  label: '',
+                  accountPresentation: accountPresentation(a),
+                  accountSelected: a.id === defaultAccountId,
                     icon: <AgentIcon agentId="claude" />,
                     onClick: () => addAgentNode('claude', at, groupId, a.id)
                   })
@@ -6231,6 +6943,48 @@ export function Canvas() {
                       } satisfies MenuItem
                     ]
                   : [])
+              ]
+            }
+          }
+          if (
+            aid === 'codex' &&
+            (codexAccounts.length > 0 ||
+              (!project?.ssh && useSshServers.getState().servers.length > 0))
+          ) {
+            return {
+              type: 'submenu',
+              label: `New ${AGENT_CONFIG[aid].label}`,
+              icon: <AgentIcon agentId={aid} />,
+              children: [
+                {
+                  label: '',
+                  accountPresentation: systemCodexPresentation,
+                  icon: <AgentIcon agentId="codex" />,
+                  onClick: () => addAgentNode('codex', at, groupId)
+                },
+                ...(!project?.ssh
+                  ? useSshServers.getState().servers.map((server): MenuItem => ({
+                      label: '',
+                      accountPresentation: presentAccount({
+                        label: settings.remoteSystemCodexAccountLabels[sshHostKey(server)],
+                        email: useSystemCodexAccount.getState().remoteEmails[sshHostKey(server)],
+                        host: sshHostKey(server),
+                        machineLabel: server.label
+                      }),
+                      icon: <AgentIcon agentId="codex" />,
+                      onClick: () =>
+                        addAgentNode('codex', at, groupId, undefined, {
+                          server,
+                          remoteCwd: server.remoteCwd || '~'
+                        })
+                    }))
+                  : []),
+                ...codexAccounts.map((a): MenuItem => ({
+                  label: '',
+                  accountPresentation: accountPresentation(a),
+                  icon: <AgentIcon agentId="codex" />,
+                  onClick: () => addAgentNode('codex', at, groupId, a.id)
+                }))
               ]
             }
           }
@@ -6303,7 +7057,16 @@ export function Canvas() {
         },
         ...terminalProfileCreationItems(at, groupId),
         ...agentCreationItems(at, groupId),
-        { label: 'New sticky note', icon: <IconNote />, onClick: () => addSticky(at, groupId) },
+        {
+          label: 'New sticky note',
+          icon: <IconNote />,
+          onClick: () => addSticky(at, groupId)
+        },
+        {
+          label: 'New Loop',
+          icon: <IconReload />,
+          onClick: () => addNativeLoop(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -6341,6 +7104,7 @@ export function Canvas() {
       terminalProfileCreationItems,
       agentCreationItems,
       addSticky,
+      addNativeLoop,
       addToExistingGroup,
       groupSelection
     ]
@@ -6354,7 +7118,7 @@ export function Canvas() {
     const st = useAgentNodes.getState()
     const isLoop = id.startsWith('loop-')
     return [
-      { type: 'label', label: isLoop ? 'Loop card' : 'Subagent card' },
+      { type: 'label', label: isLoop ? 'Claude Loop card' : 'Subagent card' },
       {
         label: st.expanded[id] ? 'Collapse' : 'Expand',
         icon: <IconCollapse />,
@@ -6410,10 +7174,31 @@ export function Canvas() {
           },
           { type: 'separator' },
           // Content nodes.
-          { label: 'New browser', icon: <IconRemote />, onClick: () => addBrowser(at) },
-          { label: 'New sticky note', icon: <IconNote />, onClick: () => addSticky(at) },
-          { label: 'New dino game', icon: <IconDino />, onClick: () => addDino(at) },
-          { label: 'Open file…', icon: <IconEditor />, onClick: () => void openFileDialog(at) },
+          {
+            label: 'New browser',
+            icon: <IconRemote />,
+            onClick: () => addBrowser(at)
+          },
+          {
+            label: 'New sticky note',
+            icon: <IconNote />,
+            onClick: () => addSticky(at)
+          },
+          {
+            label: 'New Loop',
+            icon: <IconReload />,
+            onClick: () => addNativeLoop(at)
+          },
+          {
+            label: 'New dino game',
+            icon: <IconDino />,
+            onClick: () => addDino(at)
+          },
+          {
+            label: 'Open file…',
+            icon: <IconEditor />,
+            onClick: () => void openFileDialog(at)
+          },
           ...(hasCwd
             ? [{ label: 'New file…', icon: <IconEditor />, onClick: () => void newProjectFile(at) }]
             : []),
@@ -6453,6 +7238,7 @@ export function Canvas() {
       terminalProfileCreationItems,
       agentCreationItems,
       addSticky,
+      addNativeLoop,
       addDino,
       addBrowser,
       openFileDialog,
@@ -6753,7 +7539,7 @@ export function Canvas() {
       // Log card-created directly here — the assignment above is written straight to the store
       // (not via onKanbanChange), so its diff never runs and never double-logs a card-moved.
       const toName = columnId
-        ? board.columns.find((c) => c.id === columnId)?.title ?? 'Ungrouped'
+        ? (board.columns.find((c) => c.id === columnId)?.title ?? 'Ungrouped')
         : 'Ungrouped'
       const kindLabel =
         choice.kind === 'terminal'
@@ -6762,10 +7548,10 @@ export function Canvas() {
             ? 'Sticky note'
             : choice.kind === 'browser'
               ? 'Browser'
-              : agentConfig(choice.agentId)?.label ??
+              : (agentConfig(choice.agentId)?.label ??
               useSettings.getState().settings.customAgents.find((a) => a.id === choice.agentId)
                 ?.label ??
-              choice.agentId
+              choice.agentId)
       const title = (node.data.title as string) || kindLabel
       useBoardLog.getState().append(api, activeProjectId, {
         kind: 'event',
@@ -6938,7 +7724,9 @@ export function Canvas() {
       const node = createBrowserNode(nodesRef.current.length, url, {
         x: src.position.x + (srcGroup?.position.x ?? 0) + srcW / 2 + 40,
         y: src.position.y + (srcGroup?.position.y ?? 0) + srcH + 80 + 280
-      })
+      },
+      src.data.browserOwnerNodeId as string | undefined
+    )
       const placed = src.parentId ? parentInto(node, src.parentId) : node
       setNodes((ns) => [...ns, placed])
       setControlEdges((es) => [...es, ropeEdge(`ctrl-${sourceNodeId}-${placed.id}`, sourceNodeId, placed.id, '#0a84ff')])
@@ -6946,6 +7734,181 @@ export function Canvas() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Persistent inter-agent mailbox delivery. Store first, then inject only at a safe turn
+  // boundary. The in-flight set prevents a startup flush and a status edge from delivering the
+  // same queued message twice.
+  const mailboxDeliveryInFlightRef = useRef(new Set<string>())
+  const deliverMailboxMessage = useCallback(
+    async (message: AgentMessage): Promise<boolean> => {
+      if (message.status !== 'queued') return message.status === 'delivered'
+      if (message.recipient.projectId !== useProjects.getState().activeProjectId) return false
+      const target = nodesRef.current.find((node) => node.id === message.recipient.nodeId)
+      if (!target || target.type !== 'terminal') return false
+      const configuredAgent = createdAgentId(target.data)
+      const live = useAgentStatus.getState().byId[target.id]
+      // A terminal shell accepting bytes is not proof that an agent turn received them. Only
+      // created agent nodes whose expected CLI currently owns the pane may advance to delivered.
+      if (!configuredAgent || live?.agentId !== configuredAgent) return false
+      const expectedProcess = agentConfig(configuredAgent)?.expectedProcess
+      const paneProcess = (await api.pty.paneCommand(target.id))?.split('/').pop()
+      if (!expectedProcess || paneProcess !== expectedProcess) return false
+      const state = live.state
+      if (state === 'working' || state === 'blocked' || state === 'waiting') return false
+      const inFlight = mailboxDeliveryInFlightRef.current
+      if (inFlight.has(message.id)) return false
+      inFlight.add(message.id)
+      try {
+        const ok = await api.pty.sendText(target.id, renderAgentMessage(message))
+        if (ok) agentMailbox().markDelivered(message.id)
+        return ok
+      } catch {
+        return false
+      } finally {
+        inFlight.delete(message.id)
+      }
+    },
+    [api]
+  )
+  const flushMailbox = useCallback(
+    async (nodeId?: string): Promise<void> => {
+      const projectId = useProjects.getState().activeProjectId
+      for (const message of agentMailbox().queued(projectId)) {
+        if (!nodeId || message.recipient.nodeId === nodeId) await deliverMailboxMessage(message)
+      }
+    },
+    [deliverMailboxMessage]
+  )
+
+  const fireNativeLoop = useCallback(
+    async (loopId: string, scheduledAt: number): Promise<number> => {
+      const projectId = useProjects.getState().activeProjectId
+      if (!projectId) return 0
+      const loop = nodesRef.current.find((node) => node.id === loopId && node.type === 'scheduler')
+      const body = String(loop?.data.loopTask ?? '').trim()
+      if (!loop || !body) return 0
+      const title = String(loop.data.title || 'Loop').trim() || 'Loop'
+      const targets = [...new Set((loop.data.loopTargetIds as string[] | undefined) ?? [])]
+      let queued = 0
+      for (const targetId of targets) {
+        const target = nodesRef.current.find((node) => node.id === targetId)
+        if (!target || target.type !== 'terminal') continue
+        const agentId = createdAgentId(target.data)
+        if (!agentId) continue
+        const id = loopMessageId(loopId, targetId, scheduledAt)
+        let message = agentMailbox().get(id)
+        if (!message) {
+          const status = useAgentStatus.getState().byId[targetId]
+          message = agentMailbox().create({
+            id,
+            sender: { projectId, nodeId: loopId, title },
+            recipient: {
+              projectId,
+              nodeId: targetId,
+              title: String(target.data.title || agentConfig(agentId)?.label || agentId),
+              agentId,
+              sessionId: status?.sessionId
+            },
+            subject: `LOOP: ${title}`,
+            body,
+            now: new Date(scheduledAt)
+          })
+        }
+        queued += 1
+        void deliverMailboxMessage(message)
+      }
+      return queued
+    },
+    [deliverMailboxMessage]
+  )
+
+  const loopRunsInFlightRef = useRef(new Set<string>())
+  useEffect(
+    () =>
+      setNativeLoopRunHandler((loopId) => {
+        const now = Date.now()
+        void fireNativeLoop(loopId, now).then((count) => {
+          if (!count) return
+          setNodes((current) =>
+            current.map((node) =>
+              node.id === loopId ? { ...node, data: { ...node.data, loopLastRunAt: now } } : node
+            )
+          )
+          markDirty()
+        })
+      }),
+    [fireNativeLoop, markDirty, setNodes]
+  )
+
+  useEffect(() => {
+    const tick = (): void => {
+      const now = Date.now()
+      for (const node of nodesRef.current) {
+        if (node.type !== 'scheduler' || !node.data.loopEnabled) continue
+        const intervalMs = validLoopInterval(node.data.loopIntervalMs)
+        const targets = (node.data.loopTargetIds as string[] | undefined) ?? []
+        if (!String(node.data.loopTask ?? '').trim() || targets.length === 0) continue
+        if (!loopRunDue(now, node.data.loopNextRunAt)) {
+          if (typeof node.data.loopNextRunAt === 'number') continue
+          setNodes((current) =>
+            current.map((candidate) =>
+              candidate.id === node.id
+                ? {
+                    ...candidate,
+                    data: {
+                      ...candidate.data,
+                      loopNextRunAt: nextLoopRun(now, intervalMs)
+                    }
+                  }
+                : candidate
+            )
+          )
+          markDirty()
+          continue
+        }
+        const scheduledAt = node.data.loopNextRunAt
+        const runKey = `${node.id}:${scheduledAt}`
+        if (loopRunsInFlightRef.current.has(runKey)) continue
+        loopRunsInFlightRef.current.add(runKey)
+        // Advance before awaiting delivery. A restart or a slow/busy target cannot replay this
+        // due instant; a missed interval produces one catch-up message, never a burst.
+        setNodes((current) =>
+          current.map((candidate) =>
+            candidate.id === node.id
+              ? {
+                  ...candidate,
+                  data: {
+                    ...candidate.data,
+                    loopLastRunAt: scheduledAt,
+                    loopNextRunAt: nextLoopRun(now, intervalMs, scheduledAt)
+                  }
+                }
+              : candidate
+          )
+        )
+        markDirty()
+        void fireNativeLoop(node.id, scheduledAt).finally(() => {
+          loopRunsInFlightRef.current.delete(runKey)
+        })
+      }
+    }
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [activeProjectId, fireNativeLoop, markDirty, setNodes])
+
+  const mailboxNodeSig = useMemo(
+    () =>
+      nodes
+        .filter((node) => node.type === 'terminal')
+        .map((node) => node.id)
+        .sort()
+        .join('|'),
+    [nodes]
+  )
+  useEffect(() => {
+    void flushMailbox()
+  }, [activeProjectId, mailboxNodeSig, flushMailbox])
 
   // Apply canvas-control commands issued by a control-capable agent's `nodeterm` CLI. Reads the
   // LATEST nodes via nodesRef (so the effect deps stay []), validates the source as the real
@@ -7014,6 +7977,16 @@ export function Canvas() {
         const st = useProjects.getState()
         return st.getProject(st.activeProjectId ?? '')
       })()
+      const endpointFor = (node: CanvasNode): AgentMessageEndpoint => {
+        const status = useAgentStatus.getState().byId[node.id]
+        return {
+          projectId: ctlProject?.id ?? useProjects.getState().activeProjectId,
+          nodeId: node.id,
+          title: ((node.data.title as string) || node.id).replace(/\s+/g, ' ').trim(),
+          agentId: (node.data.agentId as AgentId | undefined) ?? status?.agentId,
+          sessionId: status?.sessionId
+        }
+      }
       const ctlSsh = ctlProject?.ssh
       const sshFor = (cwd?: string) => nodeSshFor(ctlSsh, cwd)
       // Place opened nodes BELOW the source and rope them to it (source flow-out → target
@@ -7131,6 +8104,42 @@ export function Canvas() {
         }
         return ids
       }
+      const resolveLoopTargets = (raw: string | undefined): string[] | null => {
+        const ids = [
+          ...new Set(
+            (raw ?? sourceNodeId)
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+          )
+        ]
+        if (!ids.length) {
+          reply({
+            ok: false,
+            error: `${verb}: --to must contain at least one exact agent node id`
+          })
+          return null
+        }
+        for (const id of ids) {
+          const target = nodesRef.current.find((node) => node.id === id)
+          const targetAgent = target && createdAgentId(target.data)
+          if (
+            !target ||
+            target.type !== 'terminal' ||
+            !targetAgent ||
+            !canControlCanvas(targetAgent)
+          ) {
+            reply({
+              ok: false,
+              error: `${verb}: ${id} is not an addressable agent node`
+            })
+            return null
+          }
+        }
+        return ids
+      }
+      const nativeLoop = (id: string | undefined): CanvasNode | undefined =>
+        nodesRef.current.find((node) => node.id === id && node.type === 'scheduler')
       // Hold a freshly-built node's launch instead of running it on open. Agent launches stay
       // semantic until the trusted core knows the live shell dialect; an explicit terminal --cmd
       // remains opaque, locally-authorized shell source. The whole record is machine-local.
@@ -7218,8 +8227,227 @@ export function Canvas() {
             })
             return
           }
+          case 'create-loop': {
+            const targets = resolveLoopTargets(args.to)
+            if (!targets) return
+            const intervalMs = parseLoopInterval(args.every)
+            if (intervalMs === null) {
+              reply({
+                ok: false,
+                error: 'create-loop: invalid or out-of-range --every interval'
+              })
+              return
+            }
+            const start = Object.prototype.hasOwnProperty.call(args, 'start')
+            const now = Date.now()
+            const node = createNativeLoopNode(nodesRef.current.length, placeBelow(0))
+            node.data = {
+              ...node.data,
+              title: args.title?.trim() || 'Loop',
+              loopTask: args.task?.trim() ?? '',
+              loopIntervalMs: intervalMs,
+              loopEnabled: start,
+              loopNextRunAt: start ? nextLoopRun(now, intervalMs) : undefined,
+              loopTargetIds: targets
+            }
+            const id = addAndConnect(node)
+            reply({
+              ok: true,
+              message: `created ${start ? 'running' : 'paused'} Loop ${id} → ${targets.join(', ')}`,
+              result: { id, enabled: start, intervalMs, targets }
+            })
+            return
+          }
+          case 'update-loop': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({
+                ok: false,
+                error: `update-loop: no Loop with id ${args.node ?? 'missing'}`
+              })
+              return
+            }
+            const intervalMs = Object.prototype.hasOwnProperty.call(args, 'every')
+              ? parseLoopInterval(args.every)
+              : undefined
+            if (intervalMs === null) {
+              reply({
+                ok: false,
+                error: 'update-loop: invalid or out-of-range --every interval'
+              })
+              return
+            }
+            const targets = Object.prototype.hasOwnProperty.call(args, 'to')
+              ? resolveLoopTargets(args.to)
+              : undefined
+            if (targets === null) return
+            const now = Date.now()
+            const clearsTask =
+              Object.prototype.hasOwnProperty.call(args, 'task') && !args.task?.trim()
+            setNodes((current) =>
+              current.map((node) =>
+                node.id !== loop.id
+                  ? node
+                  : {
+                      ...node,
+                      data: {
+                        ...node.data,
+                        ...(Object.prototype.hasOwnProperty.call(args, 'title')
+                          ? { title: args.title?.trim() || 'Loop' }
+                          : {}),
+                        ...(Object.prototype.hasOwnProperty.call(args, 'task')
+                          ? { loopTask: args.task?.trim() ?? '' }
+                          : {}),
+                        ...(intervalMs === undefined
+                          ? {}
+                          : {
+                              loopIntervalMs: intervalMs,
+                              loopNextRunAt: node.data.loopEnabled
+                                ? nextLoopRun(now, intervalMs)
+                                : undefined
+                            }),
+                        ...(targets === undefined ? {} : { loopTargetIds: targets }),
+                        ...(clearsTask ? { loopEnabled: false, loopNextRunAt: undefined } : {})
+                      }
+                    }
+              )
+            )
+            markDirty()
+            reply({ ok: true, message: `updated Loop ${loop.id}` })
+            return
+          }
+          case 'start-loop':
+          case 'pause-loop': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({
+                ok: false,
+                error: `${verb}: no Loop with id ${args.node ?? 'missing'}`
+              })
+              return
+            }
+            const enabled = verb === 'start-loop'
+            const task = String(loop.data.loopTask ?? '').trim()
+            const targets = (loop.data.loopTargetIds as string[] | undefined) ?? []
+            if (enabled && (!task || !targets.length)) {
+              reply({
+                ok: false,
+                error: 'start-loop: Loop needs a task and at least one target'
+              })
+              return
+            }
+            const intervalMs = validLoopInterval(loop.data.loopIntervalMs)
+            setNodes((current) =>
+              current.map((node) =>
+                node.id === loop.id
+                  ? {
+                      ...node,
+                      data: {
+                        ...node.data,
+                        loopEnabled: enabled,
+                        loopNextRunAt: enabled ? nextLoopRun(Date.now(), intervalMs) : undefined
+                      }
+                    }
+                  : node
+              )
+            )
+            markDirty()
+            reply({
+              ok: true,
+              message: `${enabled ? 'started' : 'paused'} Loop ${loop.id}`
+            })
+            return
+          }
+          case 'run-loop': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({
+                ok: false,
+                error: `run-loop: no Loop with id ${args.node ?? 'missing'}`
+              })
+              return
+            }
+            const now = Date.now()
+            const count = await fireNativeLoop(loop.id, now)
+            if (!count) {
+              reply({
+                ok: false,
+                error: 'run-loop: Loop needs a task and at least one valid target'
+              })
+              return
+            }
+            setNodes((current) =>
+              current.map((node) =>
+                node.id === loop.id ? { ...node, data: { ...node.data, loopLastRunAt: now } } : node
+              )
+            )
+            markDirty()
+            reply({
+              ok: true,
+              message: `queued Loop ${loop.id} for ${count} target(s)`,
+              result: { id: loop.id, queued: count }
+            })
+            return
+          }
+          case 'loop-status': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({
+                ok: false,
+                error: `loop-status: no Loop with id ${args.node ?? 'missing'}`
+              })
+              return
+            }
+            const result = {
+              id: loop.id,
+              title: loop.data.title,
+              task: loop.data.loopTask,
+              intervalMs: validLoopInterval(loop.data.loopIntervalMs),
+              enabled: !!loop.data.loopEnabled,
+              targets: (loop.data.loopTargetIds as string[] | undefined) ?? [],
+              nextRunAt: loop.data.loopNextRunAt,
+              lastRunAt: loop.data.loopLastRunAt
+            }
+            reply({ ok: true, message: JSON.stringify(result), result })
+            return
+          }
+          case 'delete-loop': {
+            const loop = nativeLoop(args.node)
+            if (!loop) {
+              reply({
+                ok: false,
+                error: `delete-loop: no Loop with id ${args.node ?? 'missing'}`
+              })
+              return
+            }
+            if (confirmBusy()) {
+              reply({
+                ok: false,
+                error: 'a confirmation is already pending — try again'
+              })
+              return
+            }
+            setConfirm({
+              message: `Agent "${srcTitle}" wants to delete Loop "${String(loop.data.title || loop.id)}".`,
+              confirmLabel: 'Delete Loop',
+              requestedBy: srcTitle,
+              onConfirm: () => {
+                setConfirm(null)
+                deleteNodes([loop.id])
+                reply({ ok: true, message: `deleted Loop ${loop.id}` })
+              },
+              onCancel: () => reply({ ok: false, error: 'denied by user' })
+            })
+            return
+          }
           case 'open-terminal': {
-            const count = Math.max(1, Math.min(8, parseInt(args.count || '1', 10) || 1))
+            // Backward compatibility: older/stale agent instructions sometimes issued an exact
+            // `open-terminal --cmd "codex resume <id>"`. Treat that one narrow shape as the agent
+            // resume it semantically is, so it gets hooks, account identity and agent menus.
+            const promotedResume = explicitCodexResumeSession(args.cmd)
+            const count = promotedResume
+              ? 1
+              : Math.max(1, Math.min(8, parseInt(args.count || '1', 10) || 1))
             const intoGroupId = resolveIntoGroup()
             if (intoGroupId === null) return // bad --group, already replied
             const groupCwd = intoGroupId
@@ -7228,25 +8456,45 @@ export function Canvas() {
             const after = resolveAfter()
             if (after === null) return // bad --after, already replied
             const termCwd = args.cwd || groupCwd || srcCwd
-            const make = (i: number): CanvasNode =>
-              armAfter(
-                createTerminalNode(
-                  nodesRef.current.length + i,
-                  termCwd,
-                  placeBelow(i),
-                  args.cmd,
-                  sshFor(termCwd),
-                  terminalCreationOptionsFor(useProjects.getState().activeProjectId)
-                ),
-                after ?? []
+            const termSsh = sshFor(termCwd)
+            const inheritedCodexAccount = src.data.codexAccountId as string | undefined
+            if (promotedResume && inheritedCodexAccount && termSsh) {
+              reply({
+                ok: false,
+                error: 'open-terminal: managed Codex accounts are unavailable on SSH projects'
+              })
+              return
+            }
+            const make = (i: number): CanvasNode => {
+              const node = createCanvasControlTerminalNode(
+                nodesRef.current.length + i,
+                termCwd,
+                placeBelow(i),
+                args.cmd,
+                termSsh,
+                inheritedCodexAccount,
+                activePermissionMode('codex'),
+                terminalCreationOptionsFor(useProjects.getState().activeProjectId)
               )
+              return armAfter(node, after ?? [])
+            }
             const ids = intoGroupId
               ? addGrouped(intoGroupId, count, make)
               : Array.from({ length: count }, (_, i) => addAndConnect(make(i)))
+            const bridged = promotedResume
+              ? bridgeTo(sourceNodeId, ids, (id) =>
+                  id === sourceNodeId
+                    ? linkEndpointOf(id)
+                    : ids.includes(id)
+                      ? { kind: 'terminal', contextCapable: true }
+                      : linkEndpointOf(id)
+                ).linked
+              : false
             reply({
               ok: true,
               message:
-                `opened ${count} terminal(s): ${ids.join(', ')}` +
+                `opened ${count} ${promotedResume ? 'codex session(s)' : 'terminal(s)'}: ${ids.join(', ')}` +
+                (bridged ? `\ncontext-linked to you: ${ids.join(', ')}` : '') +
                 (after?.length ? `\nwaiting for ${after.join(', ')} before running` : ''),
               result: { ids, id: ids[0], after: after ?? [] }
             })
@@ -7257,7 +8505,9 @@ export function Canvas() {
             // open-claude is the legacy fixed-agent form; open-agent takes any builtin
             // (claude/codex/gemini) or custom agent id — resolveAgent falls back for the rest.
             const agentId = (verb === 'open-agent' ? args.agent : 'claude') as AgentId
-            const count = Math.max(1, Math.min(5, parseInt(args.count || '1', 10) || 1))
+            const count = args.resume
+              ? 1
+              : Math.max(1, Math.min(5, parseInt(args.count || '1', 10) || 1))
             // --group parents the new node(s) into an existing group frame; a worktree-bound
             // group also hands its worktree path down as the cwd (same inheritance as
             // UI-created nodes — cwdForNewNodeIn is the one resolver for that).
@@ -7266,32 +8516,80 @@ export function Canvas() {
             const groupCwd = intoGroupId
               ? worktreeControlRef.current.cwdForNewNodeIn(intoGroupId)
               : undefined
-            // Inherit the source node's managed account, else the project default, else system —
-            // the same funnel as addAgentNode (the factory drops accounts on non-claude agents).
+            // Account inheritance is provider-specific. A managed Codex opener must never pass
+            // through the Claude account list (which previously downgraded its children to system).
             const projStore = useProjects.getState()
-            const account = resolveNewNodeAccount(
-              src.data.accountId as string | undefined,
-              projStore.getProject(projStore.activeProjectId ?? ''),
-              useSettings.getState().settings.claudeAccounts
-            )
+            const settings = useSettings.getState().settings
+            const requestedAccount = args.account === 'system' ? undefined : args.account
+            if (args.account && agentId !== 'codex') {
+              reply({
+                ok: false,
+                error: 'open-agent --account is supported only for Codex'
+              })
+              return
+            }
+            const project = projStore.getProject(projStore.activeProjectId ?? '')
+            const eligibleCodexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
+            if (requestedAccount && !eligibleCodexAccounts.some((a) => a.id === requestedAccount)) {
+              reply({
+                ok: false,
+                error: 'open-agent: unknown or unavailable Codex account'
+              })
+              return
+            }
+            const account =
+              agentId === 'codex'
+                ? args.account
+                  ? requestedAccount
+                  : (src.data.codexAccountId as string | undefined)
+                : resolveNewNodeAccount(
+                    src.data.accountId as string | undefined,
+                    project,
+                    settings.claudeAccounts
+                  )
             const after = resolveAfter()
             if (after === null) return // bad --after, already replied
-            const agentCwd = args.cwd || groupCwd || srcCwd
-            const make = (i: number): CanvasNode =>
-              armAfter(
-                createAgentNode(
-                  agentId,
-                  nodesRef.current.length + i,
-                  agentCwd,
-                  placeBelow(i),
-                  args.prompt,
-                  sshFor(agentCwd),
-                  account,
-                  activePermissionMode(agentId),
-                  terminalCreationOptionsFor(projStore.activeProjectId)
-                ),
-                after ?? []
+            const requestedCwd = args.cwd || groupCwd || srcCwd
+            const agentSsh =
+              agentId === 'codex'
+                ? (sshForCodexAccount(account) ?? sshFor(requestedCwd))
+                : sshFor(requestedCwd)
+            const agentCwd = agentSsh?.remoteCwd ?? requestedCwd
+            const make = (i: number): CanvasNode => {
+              const permissionMode = activePermissionMode(agentId)
+              const node = createAgentNode(
+                agentId,
+                nodesRef.current.length + i,
+                agentCwd,
+                placeBelow(i),
+                args.prompt,
+                agentSsh,
+                account,
+                permissionMode,
+                terminalCreationOptionsFor(projStore.activeProjectId)
               )
+              if (args.resume) {
+                const resume = resumeCommand(
+                  agentId,
+                  args.resume,
+                  codexSharedIdentity(node.data.ssh || node.data.sshRemoteTmux)
+                )
+                if (!resume) throw new Error('Agent does not support session resume')
+                node.data = {
+                  ...node.data,
+                  initialCommand: withPermissionMode(resume, agentId, permissionMode),
+                  agentLaunchIntent: {
+                    kind: 'agent',
+                    action: 'resume',
+                    agentId,
+                    sessionId: args.resume,
+                    ...(permissionMode ? { permissionMode } : {})
+                  },
+                  agentSessionId: args.resume
+                }
+              }
+              return armAfter(node, after ?? [])
+            }
             const ids = intoGroupId
               ? addGrouped(intoGroupId, count, make)
               : Array.from({ length: count }, (_, i) => addAndConnect(make(i)))
@@ -7392,8 +8690,14 @@ export function Canvas() {
               reply({ ok: false, error: 'open-browser requires a valid http(s) --url' })
               return
             }
-            const id = addAndConnect(createBrowserNode(nodesRef.current.length, browserUrl, placeBelow()))
-            reply({ ok: true, message: `opened browser ${id}`, result: { id } })
+            const id = addAndConnect(
+              createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), sourceNodeId)
+            )
+            reply({
+              ok: true,
+              message: `opened browser ${id}`,
+              result: { id }
+            })
             return
           }
           case 'group': {
@@ -7920,7 +9224,9 @@ export function Canvas() {
             // Same semantics as renameSession: an explicit rename takes ownership of the
             // name (titleAuto off) and mirrors it into a rename-capable agent's session.
             setNodes((ns) =>
-              ns.map((nd) => (nd.id === id ? { ...nd, data: { ...nd.data, title, titleAuto: false } } : nd))
+              ns.map((nd) =>
+                nd.id === id ? { ...nd, data: { ...nd.data, title, titleAuto: false } } : nd
+              )
             )
             markDirty()
             const agentId = target.data.agentId as AgentId | undefined
@@ -7930,6 +9236,127 @@ export function Canvas() {
               void pushSessionRename(api.pty, id, title)
             }
             reply({ ok: true, message: `renamed ${id} to "${title}"` })
+            return
+          }
+          case 'send': {
+            const target = nodesRef.current.find((node) => node.id === args.node)
+            const targetAgent = target && endpointFor(target).agentId
+            if (
+              !target ||
+              target.type !== 'terminal' ||
+              !targetAgent ||
+              !canControlCanvas(targetAgent)
+            ) {
+              reply({
+                ok: false,
+                error: `send: target is not an addressable agent node (${args.node ?? 'missing'})`
+              })
+              return
+            }
+            try {
+              const message = agentMailbox().create({
+                id: `msg-${crypto.randomUUID()}`,
+                sender: endpointFor(src),
+                recipient: endpointFor(target),
+                subject: args.subject ?? '',
+                body: args.text ?? ''
+              })
+              const delivered = await deliverMailboxMessage(message)
+              reply({
+                ok: true,
+                message: `${delivered ? 'delivered' : 'queued'} ${message.id}`,
+                result: {
+                  id: message.id,
+                  status: delivered ? 'delivered' : 'queued'
+                }
+              })
+            } catch (error) {
+              reply({ ok: false, error: `send: ${String(error)}` })
+            }
+            return
+          }
+          case 'reply': {
+            const original = agentMailbox().get(args.message ?? '')
+            if (!original) {
+              reply({
+                ok: false,
+                error: `reply: unknown message (${args.message ?? 'missing'})`
+              })
+              return
+            }
+            if (
+              original.recipient.projectId !==
+                (ctlProject?.id ?? useProjects.getState().activeProjectId) ||
+              original.recipient.nodeId !== sourceNodeId
+            ) {
+              reply({
+                ok: false,
+                error: 'reply: this node is not the authenticated recipient'
+              })
+              return
+            }
+            const target = nodesRef.current.find((node) => node.id === original.sender.nodeId)
+            if (!target || target.type !== 'terminal') {
+              reply({
+                ok: false,
+                error: 'reply: original sender node is unavailable'
+              })
+              return
+            }
+            try {
+              const message = agentMailbox().create({
+                id: `msg-${crypto.randomUUID()}`,
+                conversationId: original.conversationId,
+                replyTo: original.id,
+                sender: endpointFor(src),
+                recipient: endpointFor(target),
+                subject: `RE: ${original.subject}`,
+                body: args.text ?? ''
+              })
+              const delivered = await deliverMailboxMessage(message)
+              reply({
+                ok: true,
+                message: `${delivered ? 'delivered' : 'queued'} ${message.id}`,
+                result: {
+                  id: message.id,
+                  status: delivered ? 'delivered' : 'queued'
+                }
+              })
+            } catch (error) {
+              reply({ ok: false, error: `reply: ${String(error)}` })
+            }
+            return
+          }
+          case 'status': {
+            const message = agentMailbox().get(args.message ?? '')
+            if (!message) {
+              reply({
+                ok: false,
+                error: `status: unknown message (${args.message ?? 'missing'})`
+              })
+              return
+            }
+            const projectId = ctlProject?.id ?? useProjects.getState().activeProjectId
+            const isSender =
+              message.sender.projectId === projectId && message.sender.nodeId === sourceNodeId
+            const isRecipient =
+              message.recipient.projectId === projectId && message.recipient.nodeId === sourceNodeId
+            if (!isSender && !isRecipient) {
+              reply({
+                ok: false,
+                error: 'status: this node is not a participant'
+              })
+              return
+            }
+            reply({
+              ok: true,
+              message: `${message.status} ${message.id}`,
+              result: {
+                id: message.id,
+                status: message.status,
+                deliveredAt: message.deliveredAt
+              }
+            })
             return
           }
           case 'write': {
@@ -8128,7 +9555,7 @@ export function Canvas() {
               useBoardLog.getState().append(api, pid, { kind: 'event', nodeId: nid, event })
             }
             const where = columnId
-              ? next.columns.find((c) => c.id === columnId)?.title ?? columnId
+              ? (next.columns.find((c) => c.id === columnId)?.title ?? columnId)
               : 'Ungrouped'
             reply({
               ok: true,
@@ -8630,8 +10057,12 @@ export function Canvas() {
           }
           break
       }
+      const nextState = cs.byId[e.nodeId]?.state
+      if (nextState !== 'working' && nextState !== 'blocked' && nextState !== 'waiting') {
+        void flushMailbox(e.nodeId)
+      }
     })
-  }, [])
+  }, [api, flushMailbox])
 
   // Safety net for a lost Stop POST / crashed CLI: decay working entries that saw no hook
   // event at all for STALE_WORKING_MS (the sweep itself is cheap; see agentStatus.ts).
@@ -8825,26 +10256,35 @@ export function Canvas() {
         if (attached) return connectHostAttachment(scopeId, attached, sshConnect, sshDisconnect)
         const projectId = scopeId
         const project = useProjects.getState().getProject(projectId)
-        if (!project?.ssh) return false
-        const ssh = project.ssh
+        const attached = useSshConn.getState().byProject[projectId]
+        const ssh =
+          project?.ssh ??
+          (attached?.conn
+            ? { server: attached.conn, remoteCwd: attached.remoteCwd || '~' }
+            : undefined)
+        if (!ssh) return false
         // Same post-connect sequence as the active-project effect: arm remote git routing first
         // (only if this project is still the active tab), then record the connection info.
-        const info = await window.nodeTerminal.sshProject.connect(projectId, ssh.server, ssh.remoteCwd)
-        if (useProjects.getState().activeProjectId === projectId) {
+        const info = await window.nodeTerminal.sshProject.connect(
+          projectId,
+          ssh.server,
+          ssh.remoteCwd
+        )
+        if (project?.ssh && useProjects.getState().activeProjectId === projectId) {
           await api.git.setActiveRemote(projectId)
         }
-        useSshConn.getState().setConn(projectId, info)
+        useSshConn.getState().setConn(projectId, { ...attached, ...info })
         return true
       },
       respawn: (scopeId, nodeIds) => {
         // The nodes live on the OWNING canvas, which for an attachment is not the scope id.
-        const projectId = useSshConn.getState().ownerProjectId(scopeId)
-        if (useProjects.getState().activeProjectId !== projectId) {
+        const ownerProjectId = useSshConn.getState().ownerProjectId(scopeId)
+        if (useProjects.getState().activeProjectId !== ownerProjectId) {
           // The project was switched away between the drop and the reconnect: nothing is mounted,
           // and any park is holding the DEAD pty (the node unmount-parked before the master came
           // back). Drop those parks so switching back mounts fresh sessions over the new master —
           // adopting one would hand the user a frozen corpse for TERM_PARK_MS.
-          const sessionId = sessionForProject(projectId).id
+          const sessionId = sessionForProject(ownerProjectId).id
           for (const nid of nodeIds) disposeParkedTerminal(terminalKey(sessionId, nid))
           return
         }
@@ -8910,7 +10350,9 @@ export function Canvas() {
   // whose request expired main-side, so a late answer cannot land in a dead request.
   useEffect(() => {
     return window.nodeTerminal.sshProject.onPassphraseRequest((e) =>
-      setSshPassphraseQueue((prev) => (prev.some((r) => r.requestId === e.requestId) ? prev : [...prev, e]))
+      setSshPassphraseQueue((prev) =>
+        prev.some((r) => r.requestId === e.requestId) ? prev : [...prev, e]
+      )
     )
   }, [])
   useEffect(() => {
@@ -9296,11 +10738,31 @@ export function Canvas() {
             label: `New Claude — ${a.label}`,
             icon: <AgentIcon agentId="claude" />,
             run: () => addAgentNode('claude', undefined, undefined, a.id)
-          })
-        ),
-      { id: 'new-sticky', label: 'New sticky note', icon: <IconNote />, run: () => addSticky() },
-      { id: 'new-dino', label: 'New dino game', icon: <IconDino />, run: () => addDino() },
-      { id: 'open-file', label: 'Open file…', icon: <IconEditor />, run: () => void openFileDialog() },
+          })),
+          {
+            id: 'new-sticky',
+            label: 'New sticky note',
+            icon: <IconNote />,
+            run: () => addSticky()
+          },
+          {
+            id: 'new-loop',
+            label: 'New Loop',
+            icon: <IconReload />,
+            run: () => addNativeLoop()
+          },
+          {
+            id: 'new-dino',
+            label: 'New dino game',
+            icon: <IconDino />,
+            run: () => addDino()
+          },
+          {
+            id: 'open-file',
+            label: 'Open file…',
+            icon: <IconEditor />,
+            run: () => void openFileDialog()
+          },
       // "New file…" needs a project folder to create into — hidden when the project has no cwd.
       ...(newFileHasCwd
         ? [{ id: 'new-file', label: 'New file…', icon: <IconEditor />, run: () => void newProjectFile() }]
@@ -9559,6 +11021,7 @@ export function Canvas() {
     terminalProfileMenuChoices,
     addAgentNode,
     addSticky,
+    addNativeLoop,
     addDino,
     addWebView,
     addBrowser,
@@ -9899,7 +11362,8 @@ export function Canvas() {
           <div className="empty-canvas-hint" aria-hidden>
             <div>Right-click to add a terminal or agent</div>
             <div>
-              <span className="kbd">{hintLabel('⌘K')}</span> command palette · <span className="kbd">+</span> in the dock below
+              <span className="kbd">{hintLabel('⌘K')}</span> command palette ·{' '}
+              <span className="kbd">+</span> in the dock below
             </div>
           </div>
         )}
@@ -10260,6 +11724,7 @@ export function Canvas() {
           setSessionsDismissed(true)
         }}
         onFocusNode={focusNodeById}
+        onFocusProject={switchProject}
         onCloseSession={closeSession}
         onRenameSession={renameSession}
         onReorderProject={reorderProject}
@@ -10506,6 +11971,7 @@ export function Canvas() {
           profileTerminalCreationHandler(addTerminal, profileId)()
         }
         onAddSticky={addSticky}
+        onAddLoop={addNativeLoop}
         onAddDino={addDino}
         onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
         onOpenFile={() => void openFileDialog()}

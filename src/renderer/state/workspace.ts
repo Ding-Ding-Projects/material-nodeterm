@@ -1,7 +1,14 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
-import { agentConfig, agentLaunchProgram, mintsSessionId, withSessionId } from '@shared/agents/config'
+import {
+  agentConfig,
+  agentLaunchProgram,
+  explicitCodexResumeSession,
+  mintsSessionId,
+  resumeCommand,
+  withSessionId
+} from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { uuid } from '@renderer/lib/uuid'
 import { claudeCliCapsNow } from './permissionMode'
@@ -41,6 +48,7 @@ const DINO_SIZE = { width: 600, height: 200 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
+const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 
 /** Height of a node when collapsed (header only). */
 export const COLLAPSED_HEIGHT = 40
@@ -58,6 +66,13 @@ export interface NodeData {
   group: string | null
   tags?: string[]
   collapsed?: boolean
+  /** Native persisted Loop node fields (type='scheduler'). */
+  loopTask?: string
+  loopIntervalMs?: number
+  loopEnabled?: boolean
+  loopNextRunAt?: number
+  loopLastRunAt?: number
+  loopTargetIds?: string[]
   /** Expanded height to restore when un-collapsing (kept out of the persisted size). */
   expandedHeight?: number
   /** One-shot command run once when the terminal first opens (not persisted). */
@@ -105,6 +120,8 @@ export interface NodeData {
   fileMissing?: boolean
   /** web-only: live URL to load in the web (webview) node. */
   url?: string
+  /** Browser-only: agent node allowed to control this tab through the Browser Plugin. */
+  browserOwnerNodeId?: string
   diffStaged?: boolean
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
@@ -126,6 +143,8 @@ export interface NodeData {
    * inside the CLI, and this field only remembers the id we chose at first launch.
    */
   agentSessionId?: string
+  /** Codex nodes only: managed CODEX_HOME. Undefined = system ~/.codex account. */
+  codexAccountId?: string
   /** group-only: the git worktree this group is bound to (single source of truth). */
   worktree?: import('@shared/worktree').GroupWorktree
   /**
@@ -338,7 +357,11 @@ const FALLBACK_AGENT_COLOR = '#888888'
  * custom agents are looked up by id in the settings store. Falls back to the id itself for
  * unknown agents so a node still spawns something sensible.
  */
-function resolveAgent(agentId: AgentId): { label: string; color: string; launchCmd: string } {
+function resolveAgent(agentId: AgentId): {
+  label: string
+  color: string
+  launchCmd: string
+} {
   const builtin = agentConfig(agentId)
   if (builtin) return { label: builtin.label, color: builtin.color, launchCmd: builtin.launchCmd }
   const custom = useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
@@ -353,10 +376,10 @@ function resolveAgent(agentId: AgentId): { label: string; color: string; launchC
  * are always excluded. Keeps a project's add-menus / default-account picker from offering an
  * account that can't run there (a remote account's credentials live on its host's filesystem).
  */
-export function accountsForProject(
-  accounts: ClaudeAccount[],
+export function accountsForProject<T extends Pick<ClaudeAccount, 'pending' | 'host'>>(
+  accounts: T[],
   project: { ssh?: { server: { host: string; user: string } } } | undefined
-): ClaudeAccount[] {
+): T[] {
   const hostKey = project?.ssh ? sshHostKey(project.ssh.server) : undefined
   return accounts.filter((a) => !a.pending && (hostKey ? a.host === hostKey : !a.host))
 }
@@ -401,7 +424,7 @@ export function createAgentNode(
   center?: { x: number; y: number },
   initialPrompt?: string,
   ssh?: Project['ssh'],
-  accountId?: string,
+  selectedAccountId?: string,
   permissionMode?: AgentPermissionMode,
   options?: TerminalNodeCreationOptions
 ): CanvasNode {
@@ -409,7 +432,8 @@ export function createAgentNode(
   // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
   // machine actually has one — otherwise the bare CLI, byte-identical to before. Asked through the
   // capability helper, never `agentId === 'codex'`; `codexSharedIdentity` folds in the SSH answer
-  // (a host has no launcher installed yet, so a remote node must stay on the bare command).
+  // too. An SSH node stays bare at factory construction so TerminalNode can rewrite the trusted
+  // launch to the host's preflight-resolved `codexLauncherPath` once its attachment is available.
   const baseCmd =
     agentId === 'claude'
       ? claudeLaunchCommand()
@@ -494,11 +518,11 @@ export function createAgentNode(
       group: null,
       tags: [],
       agentId,
-      // Accounts are inherently Claude-only — never stamp one onto another agent's node.
-      ...(accountId && agentId === 'claude' ? { accountId } : {}),
+      ...(selectedAccountId && agentId === 'claude' ? { accountId: selectedAccountId } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
+      ...(selectedAccountId && agentId === 'codex' ? { codexAccountId: selectedAccountId } : {}),
       cwd: ssh ? ssh.remoteCwd : cwd,
       initialCommand,
       agentLaunchIntent,
@@ -506,6 +530,52 @@ export function createAgentNode(
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
   }
+}
+
+/**
+ * Canvas-control compatibility for older agents that invoke an exact Codex resume through
+ * `open-terminal --cmd`. Promote only that narrow command to a real agent node so account metadata
+ * and capability-gated shared identity are retained; every other command remains an ordinary
+ * terminal command.
+ */
+export function createCanvasControlTerminalNode(
+  index: number,
+  cwd?: string,
+  center?: { x: number; y: number },
+  initialCommand?: string,
+  ssh?: Project['ssh'],
+  selectedCodexAccountId?: string,
+  permissionMode?: AgentPermissionMode,
+  options?: TerminalNodeCreationOptions
+): CanvasNode {
+  const sessionId = explicitCodexResumeSession(initialCommand)
+  if (!sessionId) return createTerminalNode(index, cwd, center, initialCommand, ssh, options)
+
+  const node = createAgentNode(
+    'codex',
+    index,
+    cwd,
+    center,
+    undefined,
+    ssh,
+    ssh ? undefined : selectedCodexAccountId,
+    permissionMode,
+    options
+  )
+  const command = resumeCommand('codex', sessionId, codexSharedIdentity(ssh))
+  if (!command) return createTerminalNode(index, cwd, center, initialCommand, ssh, options)
+  node.data.initialCommand = permissionMode
+    ? withPermissionMode(command, 'codex', permissionMode)
+    : command
+  node.data.agentLaunchIntent = {
+    kind: 'agent',
+    action: 'resume',
+    agentId: 'codex',
+    sessionId,
+    ...(permissionMode ? { permissionMode } : {})
+  }
+  node.data.agentSessionId = sessionId
+  return node
 }
 
 /**
@@ -535,7 +605,7 @@ export function accountChipLabel(
  * distinguishable once managed accounts exist.
  */
 export function systemAccountDisplay(label: string | undefined, email?: string | null): string {
-  return (label ?? '').trim() || email || 'System account'
+  return (label ?? '').trim() || email || 'Default account'
 }
 
 /**
@@ -580,6 +650,34 @@ export function isAccountLoginNode(data: {
 }): boolean {
   if (data.accountLogin !== undefined) return data.accountLogin
   return data.title === 'Claude login' || (data.initialCommand ?? '').startsWith('claude /login')
+}
+
+export function createCodexAccountLoginNode(
+  accountId: string,
+  index: number,
+  center?: { x: number; y: number },
+  ssh?: Parameters<typeof createTerminalNode>[4]
+): CanvasNode {
+  const node = createTerminalNode(index, undefined, center, undefined, ssh)
+  node.data = {
+    ...node.data,
+    title: 'Codex login',
+    codexAccountId: accountId,
+    // Account login has no relationship to the active project. In particular, keeping the
+    // project's cwd here makes macOS evaluate Documents/Desktop TCC before Codex can even show
+    // its device-flow URL. A denied project directory then looks like a broken account home.
+    // Move to the user's neutral home first; the selected CODEX_HOME still comes from the node's
+    // codexAccountId and remains fully isolated.
+    initialCommand: `cd \"$HOME\" && codex -c cli_auth_credentials_store=\"file\" login --device-auth`
+  }
+  return node
+}
+
+export function isCodexAccountLoginNode(data: {
+  title?: string
+  initialCommand?: string
+}): boolean {
+  return data.title === 'Codex login' || (data.initialCommand ?? '').includes('login --device-auth')
 }
 
 /**
@@ -678,7 +776,8 @@ export function createWebNode(
 export function createBrowserNode(
   index: number,
   url: string,
-  center?: { x: number; y: number }
+  center?: { x: number; y: number },
+  ownerNodeId?: string
 ): CanvasNode {
   const title = url ? url.replace(/^https?:\/\//, '').slice(0, 40) : 'Browser'
   return {
@@ -692,7 +791,8 @@ export function createBrowserNode(
       title,
       color: '#0a84ff',
       group: null,
-      ...(url ? { url } : {})
+      ...(url ? { url } : {}),
+      ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {})
     }
   }
 }
@@ -739,6 +839,27 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
       color: '#ffd60a',
       group: null,
       text: ''
+    }
+  }
+}
+
+/** Creates a user-owned Loop scheduler. It has no PTY; outgoing schedule handles target agents. */
+export function createNativeLoopNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('scheduler'),
+    type: 'scheduler',
+    position: placeAt(center, index, NATIVE_LOOP_SIZE.width, NATIVE_LOOP_SIZE.height),
+    width: NATIVE_LOOP_SIZE.width,
+    height: NATIVE_LOOP_SIZE.height,
+    style: { width: NATIVE_LOOP_SIZE.width, height: NATIVE_LOOP_SIZE.height },
+    data: {
+      title: 'Loop',
+      color: '#ffb340',
+      group: null,
+      loopTask: '',
+      loopIntervalMs: 15 * 60_000,
+      loopEnabled: false,
+      loopTargetIds: []
     }
   }
 }
@@ -828,7 +949,7 @@ export function commonParentId(nodes: CanvasNode[], ids: string[]): string | nul
   const members = nodes.filter((nd) => set.has(nd.id))
   if (members.length === 0) return undefined
   const parents = new Set(members.map((m) => m.parentId ?? null))
-  return parents.size === 1 ? members[0].parentId ?? null : undefined
+  return parents.size === 1 ? (members[0].parentId ?? null) : undefined
 }
 
 /**
@@ -842,7 +963,12 @@ export function commonParentId(nodes: CanvasNode[], ids: string[]): string | nul
 export function arrangeNodes(
   nodes: CanvasNode[],
   ids: string[],
-  opts?: { layout?: ArrangeLayout; cols?: number; gap?: number; origin?: { x: number; y: number } }
+  opts?: {
+    layout?: ArrangeLayout
+    cols?: number
+    gap?: number
+    origin?: { x: number; y: number }
+  }
 ): CanvasNode[] {
   const set = new Set(ids)
   const members = nodes.filter((nd) => set.has(nd.id))
@@ -912,16 +1038,7 @@ export function alignNodes(nodes: CanvasNode[], ids: string[], edge: AlignEdge):
   return nodes.map((nd) => (set2.has(nd.id) ? { ...nd, position: move(nd) } : nd))
 }
 
-/**
- * Group (parent) nodes must precede their descendants in the array (React Flow requirement).
- * With nesting the old "all groups, then everything else" split is not enough — a child frame
- * could still be emitted before its parent — so groups are emitted depth-first from the root.
- *
- * This order is also the DOWNGRADE contract: `flowToNodeStates` preserves array order, and an
- * older build's flat `kind === 'group'` sort returns 0 for two groups, which a stable sort
- * (ES2019+) leaves alone. So a nested tree written by this build still hydrates parent-first,
- * and therefore still RENDERS, on a build that predates nesting.
- */
+/** Group (parent) nodes must precede their descendants in the array (React Flow requirement). */
 function groupsFirst(nodes: CanvasNode[]): CanvasNode[] {
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const emitted = new Set<string>()
@@ -929,7 +1046,7 @@ function groupsFirst(nodes: CanvasNode[]): CanvasNode[] {
   const groups: CanvasNode[] = []
   const emitGroup = (node: CanvasNode): void => {
     if (emitted.has(node.id) || node.type !== 'group') return
-    if (visiting.has(node.id)) return // cyclic parentId: emit once, don't recurse forever
+    if (visiting.has(node.id)) return
     visiting.add(node.id)
     const parent = node.parentId ? byId.get(node.parentId) : undefined
     if (parent?.type === 'group') emitGroup(parent)
@@ -943,7 +1060,6 @@ function groupsFirst(nodes: CanvasNode[]): CanvasNode[] {
   return [...groups, ...nodes.filter((node) => node.type !== 'group')]
 }
 
-/** A node's position in ROOT space: its own position plus every ancestor frame's origin. */
 function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: number } {
   const byId = new Map(nodes.map((candidate) => [candidate.id, candidate]))
   const seen = new Set<string>([node.id])
@@ -973,11 +1089,8 @@ function isDescendant(nodes: CanvasNode[], candidateId: string, ancestorId: stri
   return false
 }
 
-/**
- * Returns only the selected subtree ROOTS. Box-selection routinely catches a frame together with
- * its children; a structural action must move that subtree ONCE, through its selected ancestor,
- * or the children are torn out of the frame that is being moved.
- */
+/** Returns only selected subtree roots. Box-selection often includes a group and its children;
+ *  structural actions must move/group that subtree once, through its selected ancestor. */
 export function selectedRootIds(nodes: CanvasNode[], ids: string[]): string[] {
   const selected = new Set(ids)
   const byId = new Map(nodes.map((node) => [node.id, node]))
@@ -1154,7 +1267,6 @@ export function ungroupNodes(nodes: CanvasNode[], groupId: string): CanvasNode[]
   )
   return groupsFirst(moved.filter((node) => node.id !== groupId))
 }
-
 /**
  * Returns `node` repositioned for a new parent (`targetParentId`, or null for top level),
  * keeping its on-canvas position fixed via root↔relative conversion across arbitrary nesting
@@ -1236,6 +1348,72 @@ export function addSelectionToGroup(
  * Reorders one group subtree among its siblings without changing its parent or its geometry.
  * `beforeId = null` appends it after the last sibling. Descendants travel with their frame so
  * the persisted parent-before-child order stays coherent.
+ */
+export function reorderGroupWithinParent<T extends { id: string; parentId?: string }>(
+  nodes: T[],
+  draggedId: string,
+  parentId: string | null,
+  beforeId: string | null
+): T[] {
+  if (draggedId === beforeId) return nodes
+  const dragged = nodes.find((node) => node.id === draggedId)
+  if (!dragged || (dragged.parentId ?? null) !== parentId) return nodes
+  const before = beforeId ? nodes.find((node) => node.id === beforeId) : undefined
+  if (beforeId && (!before || (before.parentId ?? null) !== parentId)) return nodes
+
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const belongsToDraggedSubtree = (node: T): boolean => {
+    if (node.id === draggedId) return true
+    const seen = new Set<string>()
+    let current = node
+    while (current.parentId && !seen.has(current.parentId)) {
+      if (current.parentId === draggedId) return true
+      seen.add(current.parentId)
+      const next = byId.get(current.parentId)
+      if (!next) return false
+      current = next
+    }
+    return false
+  }
+  const subtree = nodes.filter(belongsToDraggedSubtree)
+  const without = nodes.filter((node) => !belongsToDraggedSubtree(node))
+  const at = beforeId ? without.findIndex((node) => node.id === beforeId) : without.length
+  if (at < 0) return nodes
+  return [...without.slice(0, at), ...subtree, ...without.slice(at)]
+}
+
+/**
+ * Adds the selected root objects to an existing group. When both an ancestor and one of its
+ * descendants are selected, only the ancestor moves; its subtree follows automatically.
+ */
+export function addSelectionToGroup(
+  nodes: CanvasNode[],
+  selectedIds: string[],
+  groupId: string
+): CanvasNode[] {
+  if (!nodes.some((node) => node.id === groupId && node.type === 'group')) return nodes
+  const selected = new Set(selectedIds)
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const roots = nodes.filter((node) => {
+    if (node.id === groupId || !selected.has(node.id)) return false
+    const seen = new Set<string>()
+    let parentId = node.parentId
+    while (parentId && !seen.has(parentId)) {
+      if (selected.has(parentId)) return false
+      seen.add(parentId)
+      parentId = byId.get(parentId)?.parentId
+    }
+    return true
+  })
+  let next = nodes
+  for (const root of roots) next = reparentNode(next, root.id, groupId)
+  return next
+}
+
+/**
+ * Reorders one group subtree among its siblings without changing its parent or canvas geometry.
+ * `beforeId = null` appends it after the last sibling. Descendants travel with their group so the
+ * persisted parent-before-child order remains coherent.
  */
 export function reorderGroupWithinParent<T extends { id: string; parentId?: string }>(
   nodes: T[],
@@ -1354,6 +1532,12 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         tags: n.tags,
         collapsed,
         expandedHeight: n.size.height,
+        loopTask: n.loopTask,
+        loopIntervalMs: n.loopIntervalMs,
+        loopEnabled: n.loopEnabled,
+        loopNextRunAt: n.loopNextRunAt,
+        loopLastRunAt: n.loopLastRunAt,
+        loopTargetIds: n.loopTargetIds,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         cwd: n.cwd,
@@ -1369,6 +1553,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         // Migrate the old title-only identity into an explicit true/false on the next save.
         accountLogin: n.accountLogin ?? isAccountLoginNode(n),
         agentSessionId: n.agentSessionId,
+        codexAccountId: n.codexAccountId,
         pendingLaunch: n.pendingLaunch,
         ssh: n.ssh,
         sshRemoteTmux: n.sshRemoteTmux,
@@ -1397,6 +1582,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
                 ? BROWSER_SIZE
                 : kind === 'web'
                   ? WEB_SIZE
+                    : kind === 'scheduler'
+                      ? NATIVE_LOOP_SIZE
                   : kind === 'dino'
                     ? DINO_SIZE
                     : TERMINAL_SIZE
@@ -1412,8 +1599,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
           width: n.measured?.width ?? n.width ?? sizeFor(kind).width,
           // While collapsed, persist the expanded height, not the shrunk one.
           height: collapsed
-            ? n.data.expandedHeight ?? sizeFor(kind).height
-            : n.measured?.height ?? n.height ?? sizeFor(kind).height
+            ? (n.data.expandedHeight ?? sizeFor(kind).height)
+            : (n.measured?.height ?? n.height ?? sizeFor(kind).height)
         },
         title: n.data.title,
         titleAuto: n.data.titleAuto,
@@ -1421,6 +1608,12 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         group: n.data.group,
         tags: n.data.tags,
         collapsed: n.data.collapsed,
+        loopTask: n.data.loopTask,
+        loopIntervalMs: n.data.loopIntervalMs,
+        loopEnabled: n.data.loopEnabled,
+        loopNextRunAt: n.data.loopNextRunAt,
+        loopLastRunAt: n.data.loopLastRunAt,
+        loopTargetIds: n.data.loopTargetIds,
         parentId: n.parentId,
         shell: n.data.shell,
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
@@ -1436,6 +1629,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         accountId: n.data.accountId,
         accountLogin: n.data.accountLogin,
         agentSessionId: n.data.agentSessionId,
+        codexAccountId: n.data.codexAccountId,
         pendingLaunch: n.data.pendingLaunch,
         ssh: n.data.ssh,
         sshRemoteTmux: n.data.sshRemoteTmux,

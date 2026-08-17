@@ -164,9 +164,9 @@ function stateIsDescendant(
   return false
 }
 
-/** Returns `node` repositioned for a new parent (groupId, or null for top level), keeping its
- *  root-space position fixed across arbitrary nesting. Unchanged if the target is not a
- *  group. `extent` is omitted — nodeStatesToFlow re-derives it from parentId on load. */
+  /** Returns `node` repositioned for a new parent (groupId, or null for top level), keeping its
+   *  root-space position fixed across arbitrary nesting. Unchanged if the target is not a
+   *  group. `extent` is omitted — nodeStatesToFlow re-derives it from parentId on load. */
 function repositionState(
   node: CanvasNodeState,
   groupId: string | null,

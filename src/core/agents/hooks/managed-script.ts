@@ -51,30 +51,40 @@
  * `identityRoot` is where the Codex thread → node records live (`codexThreadIdentityRoot()`).
  * It is a PARAMETER because this builder is also called from tests that never boot a platform,
  * and because the prelude has to bake the path in — the shell it runs in has no idea where the
- * app's data dir is. Undefined (no platform yet) ⇒ no prelude, i.e. today's script exactly.
+ * app's data dir is. When the platform is not initialized yet, the remote `$HOME/.nodeterm`
+ * resolver is used; an explicit null omits the prelude for the legacy/degraded path.
  *
  * The prelude is prepended for EVERY agent, not just codex. It is inert without `CODEX_THREAD_ID`,
  * which no other agent's tool shell sets, and one builder beats a codex-only fork of it.
  */
-import { codexThreadIdentityResolverSh } from '../../codex-thread-identity-sh'
+import {
+  CODEX_THREAD_IDENTITY_RESOLVER_SH,
+  codexThreadIdentityResolverSh
+} from '../../codex-thread-identity-sh'
 import { codexThreadIdentityRoot } from '../../codex-identity-proxy'
 import { HOOK_CURL_HEADERS_SH } from '../hook-curl-config-sh'
 
-function safeIdentityRoot(): string | null {
+function defaultIdentityResolver(): string {
   try {
-    return codexThreadIdentityRoot()
+    return codexThreadIdentityResolverSh(codexThreadIdentityRoot())
   } catch {
-    return null
+    return CODEX_THREAD_IDENTITY_RESOLVER_SH
   }
 }
 
 export function buildManagedScript(
   agentId: string,
-  identityRoot: string | null = safeIdentityRoot()
+  identityRoot?: string | null
 ): string {
+  const identityResolver =
+    identityRoot === null
+      ? null
+      : typeof identityRoot === 'string'
+        ? codexThreadIdentityResolverSh(identityRoot)
+        : defaultIdentityResolver()
   return [
     '#!/bin/sh',
-    ...(identityRoot ? [codexThreadIdentityResolverSh(identityRoot)] : []),
+    ...(identityResolver ? [identityResolver] : []),
     'if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then',
     '  . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',

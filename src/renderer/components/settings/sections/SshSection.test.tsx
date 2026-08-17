@@ -17,7 +17,7 @@ const SERVER: SshServer = {
   remoteCwd: '/home/corvin/projects/app'
 }
 
-describe('SshSection', () => {
+describe('SshSection machine setup', () => {
   let root: Root | undefined
   let host: HTMLElement
   let connect: ReturnType<typeof vi.fn>
@@ -49,9 +49,9 @@ describe('SshSection', () => {
     host.remove()
   })
 
-  const mount = (): void => {
+  const mount = (onNavigate = vi.fn()): void => {
     root = createRoot(host)
-    act(() => root!.render(<SshSection isActive />))
+    act(() => root!.render(<SshSection isActive onNavigate={onNavigate} />))
   }
 
   const button = (label: string): HTMLButtonElement => {
@@ -67,6 +67,13 @@ describe('SshSection', () => {
   it('shows each machine’s default folder in the list', () => {
     mount()
     expect(host.textContent).toContain('Default folder: /home/corvin/projects/app')
+  })
+
+  it('routes a saved machine directly to account management', () => {
+    const onNavigate = vi.fn()
+    mount(onNavigate)
+    act(() => click(button('Accounts')))
+    expect(onNavigate).toHaveBeenCalledWith('accounts')
   })
 
   it('tests the machine with its configured default folder and always disconnects', async () => {

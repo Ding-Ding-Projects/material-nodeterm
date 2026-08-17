@@ -5,9 +5,16 @@ import { useMenuFlip } from '../ui/useMenuFlip'
 import { useMenuFilter, type MenuFilterItem } from './menu/useMenuFilter'
 import { FilterableMenuHeader } from './menu/FilterableMenu'
 import { keyLabel } from '@shared/platform-utils'
+import type { AccountPresentation } from '../lib/accountPresentation'
+import { AccountIdentityPills } from './AccountIdentityPills'
+
+type AccountMenuPresentation = {
+  accountPresentation?: AccountPresentation
+  accountSelected?: boolean
+}
 
 export type MenuItem =
-  | {
+  | ({
       type?: 'item'
       label: string
       onClick: () => void
@@ -28,11 +35,27 @@ export type MenuItem =
        * bound shortcut — never pad the column with a placeholder.
        */
       shortcut?: string[]
-    }
+    } & AccountMenuPresentation)
   | { type: 'separator' }
   | { type: 'label'; label: string }
   | { type: 'colors'; onPick: (color: string) => void }
-  | { type: 'submenu'; label: string; icon?: ReactNode; children: MenuItem[] }
+  | ({
+      type: 'submenu'
+      label: string
+      icon?: ReactNode
+      children: MenuItem[]
+    } & AccountMenuPresentation)
+
+function MenuItemLabel({ item }: { item: AccountMenuPresentation & { label: string } }) {
+  return (
+    <span className="ctx-item__label">
+      {item.label ? <span>{item.label}</span> : null}
+      {item.accountPresentation ? (
+        <AccountIdentityPills account={item.accountPresentation} selected={item.accountSelected} />
+      ) : null}
+    </span>
+  )
+}
 
 /** `['⌘', '⇧', 'T']` → `"Meta+Shift+T"` — the token shape `aria-keyshortcuts` expects, so a
  *  screen reader announces the binding as a shortcut rather than reading decorative glyphs. */
@@ -223,7 +246,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                   }}
                 >
                   <span className="ctx-icon">{item.icon}</span>
-                  <span className="ctx-item__label">{item.label}</span>
+                  <MenuItemLabel item={item} />
                 </button>
                 {openSub === i && (
                   <div
@@ -244,7 +267,11 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                       if (child.type === 'separator')
                         return <div key={j} className="ctx-sep" role="separator" />
                       if (child.type === 'label')
-                        return <div key={j} className="ctx-label">{child.label}</div>
+                        return (
+                          <div key={j} className="ctx-label">
+                            {child.label}
+                          </div>
+                        )
                       if (child.type === 'colors' || child.type === 'submenu') return null
                       const reasonId = child.disabled && child.hint
                         ? `${submenuId}-reason-${j}`
@@ -274,7 +301,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                         >
                           <span className="ctx-icon">{child.icon}</span>
                           <span className="ctx-item__copy">
-                            <span className="ctx-item__label">{child.label}</span>
+                            <MenuItemLabel item={child} />
                             {reasonId && (
                               <span id={reasonId} className="ctx-item__hint">
                                 {child.hint}
@@ -327,7 +354,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
             >
               <span className="ctx-icon">{item.icon}</span>
               <span className="ctx-item__copy">
-                <span className="ctx-item__label">{item.label}</span>
+                <MenuItemLabel item={item} />
                 {reasonId && (
                   <span id={reasonId} className="ctx-item__hint">
                     {item.hint}

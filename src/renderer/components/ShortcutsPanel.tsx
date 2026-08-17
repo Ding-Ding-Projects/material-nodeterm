@@ -46,7 +46,7 @@ function buildSections(dictationKeys: string[], dictationLabel: string): { title
         { keys: ['Right-click'], label: 'Actions menu (empty space or node)' },
         { keys: ['Left-drag'], label: 'Box-select (touch to select)' },
         { keys: ['Middle / Right-drag'], label: 'Pan the canvas' },
-        { keys: ['Double-click'], label: 'Center & focus a node' },
+        { keys: ['Double-click'], label: 'Frame & focus a node' },
         { keys: ['⌘', 'wheel'], label: 'Zoom in / out' },
         // Advertised on BOTH surfaces, unlike "Jump to project" above. ⌘1-9 is dropped there
         // because the browser RESERVES it (tab switching, un-preventable) for something unrelated;

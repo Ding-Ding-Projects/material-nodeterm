@@ -22,6 +22,192 @@ describe('buildManagedScript', () => {
   it('still no-ops without node id / endpoint', () => {
     expect(s).toContain('NODETERM_NODE_ID')
   })
+  it('recovers shared Codex identity from CODEX_THREAD_ID mapping before the node-id gate', () => {
+    const codex = buildManagedScript('codex')
+    expect(codex).toContain(
+      '$HOME/.nodeterm/codex-thread-nodes/$nt_codex_scope/$CODEX_THREAD_ID'
+    )
+    expect(codex.indexOf('nt_codex_map=')).toBeLessThan(
+      codex.indexOf('if [ -z "$NODETERM_NODE_ID" ]; then\n  exit 0')
+    )
+  })
+  it('posts a mapped resumed Codex hook under its own node id', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-map-'))
+    const bin = join(root, 'bin')
+    const maps = join(root, '.nodeterm', 'codex-thread-nodes')
+    const endpoint = join(root, 'hook.env')
+    const capture = join(root, 'curl-args')
+    const script = join(root, 'hook.sh')
+    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    writeFileSync(
+      join(bin, 'curl'),
+      '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n',
+      { mode: 0o700 }
+    )
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
+    writeFileSync(join(maps, 'thread-a'), `nodeId=node-a\nendpoint=${endpoint}\n`)
+    writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
+    const result = spawnSync('/bin/sh', [script], {
+      input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: root,
+        CODEX_THREAD_ID: 'thread-a',
+        CAPTURE: capture
+      }
+    })
+    expect(result.status).toBe(0)
+    expect(readFileSync(capture, 'utf8')).toContain('nodeId=node-a')
+    rmSync(root, { recursive: true, force: true })
+  })
+  it('recovers a unique managed mapping when the tool shell carries an empty system scope', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-empty-scope-'))
+    const bin = join(root, 'bin')
+    const maps = join(root, '.nodeterm', 'codex-thread-nodes', 'account-a')
+    const endpoint = join(root, 'hook.env')
+    const capture = join(root, 'curl-args')
+    const script = join(root, 'hook.sh')
+    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
+    writeFileSync(
+      join(maps, 'thread-a'),
+      `accountId=account-a\nnodeId=node-a\nendpoint=${endpoint}\n`
+    )
+    writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
+    const result = spawnSync('/bin/sh', [script], {
+      input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: root,
+        CODEX_THREAD_ID: 'thread-a',
+        NODETERM_CODEX_ACCOUNT_ID: '',
+        CAPTURE: capture
+      }
+    })
+    expect(result.status).toBe(0)
+    expect(readFileSync(capture, 'utf8')).toContain('nodeId=node-a')
+    rmSync(root, { recursive: true, force: true })
+  })
+  it('keeps an empty asserted scope fail-closed when the thread id exists in two accounts', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-ambiguous-scope-'))
+    const bin = join(root, 'bin')
+    const maps = join(root, '.nodeterm', 'codex-thread-nodes')
+    const endpoint = join(root, 'hook.env')
+    const capture = join(root, 'curl-args')
+    const script = join(root, 'hook.sh')
+    spawnSync('/bin/mkdir', ['-p', bin, join(maps, 'account-a'), join(maps, 'account-b')])
+    writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
+    for (const account of ['account-a', 'account-b']) {
+      writeFileSync(
+        join(maps, account, 'thread-a'),
+        `accountId=${account}\nnodeId=node-${account}\nendpoint=${endpoint}\n`
+      )
+    }
+    writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
+    const result = spawnSync('/bin/sh', [script], {
+      input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: root,
+        CODEX_THREAD_ID: 'thread-a',
+        NODETERM_CODEX_ACCOUNT_ID: '',
+        CAPTURE: capture
+      }
+    })
+    expect(result.status).toBe(0)
+    expect(() => readFileSync(capture, 'utf8')).toThrow()
+    rmSync(root, { recursive: true, force: true })
+  })
+  it('keeps an empty asserted scope fail-closed when system and managed mappings collide', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-system-managed-collision-'))
+    const bin = join(root, 'bin')
+    const maps = join(root, '.nodeterm', 'codex-thread-nodes')
+    const endpoint = join(root, 'hook.env')
+    const capture = join(root, 'curl-args')
+    const script = join(root, 'hook.sh')
+    spawnSync('/bin/mkdir', ['-p', bin, join(maps, 'system'), join(maps, 'account-a')])
+    writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
+    for (const scope of ['system', 'account-a']) {
+      writeFileSync(
+        join(maps, scope, 'thread-a'),
+        `accountId=${scope}\nnodeId=node-${scope}\nendpoint=${endpoint}\n`
+      )
+    }
+    writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
+    const result = spawnSync('/bin/sh', [script], {
+      input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: root,
+        CODEX_THREAD_ID: 'thread-a',
+        NODETERM_CODEX_ACCOUNT_ID: '',
+        CAPTURE: capture
+      }
+    })
+    expect(result.status).toBe(0)
+    expect(() => readFileSync(capture, 'utf8')).toThrow()
+    rmSync(root, { recursive: true, force: true })
+  })
+  it('never crosses from an explicit missing account scope into another account', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-explicit-scope-'))
+    const bin = join(root, 'bin')
+    const maps = join(root, '.nodeterm', 'codex-thread-nodes', 'account-b')
+    const endpoint = join(root, 'hook.env')
+    const capture = join(root, 'curl-args')
+    const script = join(root, 'hook.sh')
+    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
+    writeFileSync(
+      join(maps, 'thread-a'),
+      `accountId=account-b\nnodeId=node-b\nendpoint=${endpoint}\n`
+    )
+    writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
+    const result = spawnSync('/bin/sh', [script], {
+      input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: root,
+        CODEX_THREAD_ID: 'thread-a',
+        NODETERM_CODEX_ACCOUNT_ID: 'account-a',
+        CAPTURE: capture
+      }
+    })
+    expect(result.status).toBe(0)
+    expect(() => readFileSync(capture, 'utf8')).toThrow()
+    rmSync(root, { recursive: true, force: true })
+  })
+  it('rejects a uniquely discovered mapping whose account directory is invalid', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-invalid-discovered-scope-'))
+    const bin = join(root, 'bin')
+    const maps = join(root, '.nodeterm', 'codex-thread-nodes', 'bad scope')
+    const endpoint = join(root, 'hook.env')
+    const capture = join(root, 'curl-args')
+    const script = join(root, 'hook.sh')
+    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
+    writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
+    writeFileSync(
+      join(maps, 'thread-a'),
+      `accountId=bad scope\nnodeId=node-a\nendpoint=${endpoint}\n`
+    )
+    writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
+    const result = spawnSync('/bin/sh', [script], {
+      input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: root,
+        CODEX_THREAD_ID: 'thread-a',
+        CAPTURE: capture
+      }
+    })
+    expect(result.status).toBe(0)
+    expect(() => readFileSync(capture, 'utf8')).toThrow()
+    rmSync(root, { recursive: true, force: true })
+  })
   it('gates the hook body on the NODE ID only (not the token) so an empty-endpoint session self-heals', () => {
     // A phone-spawned session created before any host process existed has a node id but no token
     // (its baked NODETERM_HOOK_ENDPOINT resolved empty). The gate must exit on a MISSING NODE ID,

@@ -181,7 +181,7 @@ describe('title read vs rename write', () => {
     for (const id of RENAME_CAPABLE) expect(canReadTitle(id), id).toBe(true)
   })
 
-  it('codex reads but does not write — the same split gemini forced', () => {
+  it('reads Codex task names without claiming two-way rename support', () => {
     // With the shared app-server a codex node owns a THREAD, and that thread has a `Thread.name`
     // we can read over the server's own socket (core/codex-session-name.ts). There is still no
     // measured rename command, and one list for both legs would light the rename UI on a node
