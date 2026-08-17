@@ -67,6 +67,10 @@ function fixture(prefix: string): { userDataDir: string; endpoint: string } {
       endpoint: paths.endpoint,
       tokenPath: paths.tokenPath,
       startedAt: Date.now(),
+      // These fixtures must model a CURRENT host: the flows here create terminals, and creation is
+      // a v2-only operation the client rightly refuses against a legacy host. So the published
+      // version, the advertised hello version and the per-attach `generation` all have to agree —
+      // a fake host that publishes 2 while answering like a v1 host is inconsistent, not legacy.
       protocolVersion: SESSION_HOST_PROTOCOL_VERSION
     })
   )
@@ -162,9 +166,15 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
-            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true } }))
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
           } else if (request.cmd === 'pause') {
             flowCommands.push('pause')
             socket.write(encodeFrame({ id: request.id, ok: true }))
@@ -235,9 +245,15 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
-            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true } }))
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
           } else if (request.cmd === 'pause') {
             flowCommands.push('pause')
             // Resolve in this same server callback after writing the acknowledgement. The test's
@@ -299,10 +315,16 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             if (request.spawn.args[0] === 'surviving-owner') {
-              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true } }))
+              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
             } else {
               commands.push('attach:rejected-neighbor')
               rejectedAttach.resolve({ socket, id: request.id })
@@ -373,7 +395,13 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             attachHeld.resolve({ socket, id: request.id })
             socket.write(
@@ -414,9 +442,9 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     await eventLoopTurn()
     expect(delivered).toEqual([])
     heldAttach.socket.write(
-      encodeFrame({ id: heldAttach.id, ok: true, result: { fresh: true } })
+      encodeFrame({ id: heldAttach.id, ok: true, result: { fresh: true, generation: 'flow-generation' } })
     )
-    await expect(within(ready, 'cold attach acknowledgement')).resolves.toEqual({ fresh: true })
+    await expect(within(ready, 'cold attach acknowledgement')).resolves.toEqual({ fresh: true, generation: 'flow-generation' })
     expect(order).toEqual(['data:COLD-PRE-ACK', 'ready'])
 
     await expect(within(client.hasSession('nt-cold-pre-ack'), 'post-ack data barrier')).resolves.toBe(
@@ -439,14 +467,20 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             attachClaims.push({
               args: request.spawn.args,
               cols: request.spawn.cols,
               rows: request.spawn.rows
             })
-            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true } }))
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
           } else if (request.cmd === 'resize') {
             resizeRequests.push({ cols: request.cols, rows: request.rows })
             socket.write(encodeFrame({ id: request.id, ok: true }))
@@ -523,10 +557,16 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
             if (ownConnection === 2) sequence.push('request:hello')
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             if (ownConnection === 1) {
-              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true } }))
+              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
             } else {
               sequence.push('request:attach')
               replaySocket = socket
@@ -662,7 +702,13 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: ownConnection === 1 } }))
             if (ownConnection > 1) {
@@ -722,7 +768,13 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             if (ownConnection === 1) {
               delayedAttachId = request.id
@@ -771,7 +823,7 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     await within(attachSeen.promise, 'delayed attach request')
     pty.destroy()
     firstSocket!.write(
-      encodeFrame({ id: delayedAttachId!, ok: true, result: { fresh: true } })
+      encodeFrame({ id: delayedAttachId!, ok: true, result: { fresh: true, generation: 'flow-generation' } })
     )
     await within(detachSeen.promise, 'compensating detach')
     await expect(within(readySettled, 'canceled ready settlement')).resolves.toBe('rejected')
@@ -804,10 +856,16 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             if (request.spawn.args[0] === 'old-generation') {
-              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true } }))
+              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
             } else {
               afterInitial.push('attach:replacement')
               replacementAttachReachedHost.resolve()
@@ -816,7 +874,7 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
                   id: request.id,
                   ok: true,
                   result: killed
-                    ? { fresh: true }
+                    ? { fresh: true, generation: 'flow-generation' }
                     : { fresh: false, screen: 'PRE-KILL-GENERATION' }
                 })
               )
@@ -898,11 +956,17 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             if (ownConnection === 1) {
               firstConnectionAttachArgs.push(request.spawn.args)
-              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true } }))
+              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
             } else {
               reconnectAttachArgs.push(request.spawn.args)
               replayAttach.resolve(request)
