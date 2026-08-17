@@ -175,10 +175,11 @@ npm install
 npm run dist:win
 ```
 
-`dist:win` is `make-icon` (generates `build/icon.ico` — see below) → `electron-vite build` →
-`electron-builder --win --x64`. The output lands in `dist/`: a Squirrel `Setup.exe`, `RELEASES`,
-the full `.nupkg` (and generated delta packages on a repeat build against a prior release), plus a
-`.zip`.
+`dist:win` preflights the native build, then runs `make-icon` (generates `build/icon.ico` — see
+below) → `electron-vite build` → `electron-builder --win squirrel --x64 --publish never`. The
+output lands in `dist/squirrel-windows/`: a Squirrel `Setup.exe`, `RELEASES`, and the full `.nupkg`
+(plus a delta package when one is generated). This command deliberately does not build the zip
+target configured for broader packaging.
 
 - **Target**: `squirrel` (per project policy — never NSIS, never portable-only). Requires the
   `electron-builder-squirrel-windows` package, declared as a devDependency alongside
@@ -187,9 +188,10 @@ the full `.nupkg` (and generated delta packages on a repeat build against a prio
   into a real multi-resolution `build/icon.ico` (16/24/32/48/64/128/256px PNG-compressed frames
   packed into a hand-written ICO container — no extra npm dependency, and no PNG-renamed-to-.ico
   shortcut). electron-builder reads it via `build.win.icon`.
-- **Signing**: `build.win.forceCodeSigning`, `signExecutable`, and `signAndEditExecutable` are all
-  explicitly `false` in `package.json`. Nothing in this build path requests, discovers, or invokes
-  a signer, per the permanent no-signing policy. Do not add a certificate or a signing script.
+- **Signing**: `build.win.signExecutable` and root `build.forceCodeSigning` are explicitly `false`
+  in `package.json`. Resource editing stays enabled so icons and version metadata are still
+  applied. Nothing in this build path requests, discovers, or invokes a signer, per the permanent
+  no-signing policy. Do not add a certificate or a signing script.
 - **`npm run rebuild`** still matters on Windows exactly as it does on macOS/Linux: it rebuilds
   `node-pty` (and `smart-whisper`) against Electron's ABI via `electron-rebuild`. The
   `patch-node-pty.mjs` step it runs first patches a **darwin-only** `pty_posix_spawn` fd leak

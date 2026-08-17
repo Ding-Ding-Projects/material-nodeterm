@@ -7,9 +7,11 @@ platform-difference defects were found, what now guards against them, and what i
 Keep the split — a user reading "what degrades" should not have to wade through regex archaeology,
 and a contributor about to touch a path needs the archaeology.
 
-**The Windows installer is built and published on every push, by CI, on `windows-latest`** — a real
-Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), non-draft, downloadable, unsigned by
-policy. That is the shipping path and it works.
+**The Windows installer workflow builds and publishes each branch push whose ref contains the
+corrected workflow, on `windows-latest`** — a real Squirrel.Windows set (`Setup.exe`, full
+`.nupkg`, `RELEASES`), unsigned by policy. CI
+stages it as a draft, verifies the complete remote inventory, and only then makes it non-draft and
+downloadable; an upload failure exposes no empty release. That is the shipping path.
 
 **It also builds locally now**, which it did not for most of this work. `build.bat /s` completes in
 about 107 s and `build-installer.bat /s` in about 199 s, producing the same three-artifact Squirrel
@@ -226,8 +228,15 @@ compile.
 
 ## Known gaps
 
-- **The profile/session-host change has no packaged interaction evidence yet.** Resolver and
-  protocol tests cover a separate automated gate, but the Windows x64 installer still
+- **No packaged build has been INSTALLED and launched.** CI is configured to build and publish the
+  installer on each update of a branch carrying the corrected workflow (verified historically:
+  `v0.3.0-ci.165` carries a 206.8 MB `nodeterm-Setup-0.3.0.exe`, non-draft, HTTP 206 on a range
+  request), but nobody has run one. So the runtime behaviour of a real install — tmux absence and
+  the session-host fallback above all (see [windows-session-host.md](windows-session-host.md)) —
+  is unverified. Downloading one and clicking through it is the single highest-value Windows check
+  still outstanding.
+- **The profile/session-host change specifically has no packaged interaction evidence yet.**
+  Resolver and protocol tests cover a separate automated gate, but the Windows x64 installer still
   needs the required cheap headless run across every available profile, WSL cwd, destructive
   switching, and post-relaunch process/screen continuity. See
   [windows-session-host.md](windows-session-host.md); no capture or installed-build claim should be
