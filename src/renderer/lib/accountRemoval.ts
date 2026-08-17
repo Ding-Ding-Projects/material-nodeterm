@@ -88,6 +88,22 @@ export function dispatchAccountRemoval(
   })
 }
 
+/** Exact non-secret account metadata disclosed by the removal dialog. */
+export function accountRemovalTargetIdentity(
+  account: ClaudeAccount,
+  affectedNodeIdentities: readonly string[] = []
+): string {
+  return destructiveTargetIdentity([
+    account.id,
+    account.label,
+    account.email,
+    account.host,
+    account.pending,
+    account.createdAt,
+    ...[...affectedNodeIdentities].sort()
+  ])
+}
+
 /**
  * Synchronous handshake between Settings (which owns the account transaction) and Canvas (which
  * owns live terminal teardown). `handled` is deliberately mutable: `dispatchEvent` invokes every
@@ -105,6 +121,43 @@ export interface AccountRemovalTeardownDetail {
 
 export const ACCOUNT_REMOVAL_TEARDOWN_EVENT = 'nodeterm:account-removal-approved'
 export const ACCOUNT_REMOVAL_COMMITTED_EVENT = 'nodeterm:account-removal-committed'
+export const ACCOUNT_REMOVAL_SCOPE_EVENT = 'nodeterm:account-removal-scope'
+
+export interface AccountRemovalScopeDetail {
+  accountId: string
+  handled: boolean
+  identities: string[]
+}
+
+/** Synchronously read the active Canvas facts which are newer than its serialized project copy. */
+export function requestAccountRemovalScope(
+  accountId: string,
+  dispatch: (detail: AccountRemovalScopeDetail) => void
+): string[] | null {
+  const detail: AccountRemovalScopeDetail = { accountId, handled: false, identities: [] }
+  dispatch(detail)
+  return detail.handled ? [...detail.identities].sort() : null
+}
+
+export function accountRemovalNodeTargetIdentity(input: {
+  projectId: string
+  id: string
+  type?: string
+  title?: string
+  accountId?: string
+  accountLogin?: boolean
+  incarnation?: number
+}): string {
+  return destructiveTargetIdentity([
+    input.projectId,
+    input.id,
+    input.type,
+    input.title,
+    input.accountId,
+    input.accountLogin,
+    input.incarnation
+  ])
+}
 
 export function requestAccountRemovalTeardown(
   accountId: string,

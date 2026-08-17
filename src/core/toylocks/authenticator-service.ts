@@ -208,7 +208,7 @@ export function startAuthenticatorService(
   platform().handle(
     IPC.authenticatorCode,
     async (id: string): Promise<AuthenticatorCode | null> => {
-      const entries = await store.load()
+      const entries = await store.loadStrict()
       const entry = entries.find((e) => e.meta.id === id)
       if (!entry) return null
       const secret = store.unseal<StoredSecret>(entry.secretEnc)
@@ -219,7 +219,7 @@ export function startAuthenticatorService(
   platform().handle(
     IPC.authenticatorCodes,
     async (ids: string[]): Promise<Record<string, AuthenticatorCode>> => {
-      const entries = await store.load()
+      const entries = await store.loadStrict()
       const wanted = new Set(ids)
       const out: Record<string, AuthenticatorCode> = {}
       for (const entry of entries) {
@@ -234,7 +234,7 @@ export function startAuthenticatorService(
   platform().handle(
     IPC.authenticatorReveal,
     async (id: string): Promise<AuthenticatorRevealResult> => {
-      const entries = await store.load()
+      const entries = await store.loadStrict()
       const entry = entries.find((e) => e.meta.id === id)
       if (!entry) return { ok: false, error: 'This entry no longer exists.' }
       const secret = store.unseal<StoredSecret>(entry.secretEnc)
@@ -258,7 +258,7 @@ export function startAuthenticatorService(
     IPC.authenticatorExportSecrets,
     async (input: AuthenticatorExportInput): Promise<AuthenticatorExportResult> => {
       if (!input?.confirmed) return { ok: false, error: 'Export was not confirmed.' }
-      const entries = await store.load()
+      const entries = await store.loadStrict()
       const wanted = new Set(input.ids)
       const out: AuthenticatorExportEntry[] = []
       for (const entry of entries) {

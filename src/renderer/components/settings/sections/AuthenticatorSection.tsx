@@ -121,6 +121,7 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
 function EntryRow({
   entry,
   code,
+  readCurrentEntry,
   onRemoved,
   onRenamed,
   onRefreshed,
@@ -128,6 +129,7 @@ function EntryRow({
 }: {
   entry: AuthenticatorEntry
   code: AuthenticatorCode | undefined
+  readCurrentEntry: (id: string) => AuthenticatorEntry | null
   onRemoved: () => void
   onRenamed: (next: AuthenticatorEntry) => void
   onRefreshed: (entries: AuthenticatorEntry[]) => void
@@ -306,6 +308,7 @@ function EntryRow({
           </>
         )}
       </div>
+      {removeError && <div className="toylock-error">{removeError}</div>}
       {revealed && (
         <div className="toylock-manual-secret">
           <span className="toylock-field__label">Secret for {entry.issuer} — {entry.account}</span>
@@ -441,6 +444,7 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
                   key={e.id}
                   entry={e}
                   code={codes[e.id]}
+                  readCurrentEntry={(id) => entriesRef.current.find((entry) => entry.id === id) ?? null}
                   onRemoved={() => setEntries((cur) => cur.filter((x) => x.id !== e.id))}
                   onRenamed={(next) => setEntries((cur) => cur.map((x) => (x.id === next.id ? next : x)))}
                   onRefreshed={setEntries}

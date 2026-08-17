@@ -44,7 +44,7 @@ describe('node deletion funnel', () => {
         surface: 'account-removal',
         kidsModeOn: true,
         titles: ['Account login'],
-        authorizedBy: 'remove-account'
+        authorizedBy: { action: 'remove-account', authorization: 'two-key' }
       }).confirmation
     ).toBe('immediate')
   })
@@ -55,7 +55,7 @@ describe('node deletion funnel', () => {
         surface: 'canvas',
         kidsModeOn: true,
         titles: ['Ordinary terminal'],
-        authorizedBy: 'remove-account'
+        authorizedBy: { action: 'remove-account', authorization: 'two-key' }
       }).confirmation
     ).toBe('destructive-gate')
   })

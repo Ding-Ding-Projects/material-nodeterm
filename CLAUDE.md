@@ -1805,6 +1805,14 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   - **Destructive safety** — `createdByApp` gates removal: nodeterm deletes only worktrees it
     created; one the user merely **adopted** unbinds by default, and deleting its directory is an
     explicit opt-in that **defaults to off** (its branch is kept either way).
+    Under Kids mode, or while the renderer cannot establish a loaded + subscribed Kids record,
+    every disk-removal choice defaults off and then requires the two-key gate. Both the status-probe
+    await and final confirmation re-read the owning project, binding generation, group incarnation,
+    repo/path/branch/base/creator fields, and affected-node identities. Core also re-measures the
+    checkout registration, HEAD, index, tracked differences, and untracked-content fingerprint and
+    compares that proof immediately before forced removal; a rebound or content-changed worktree
+    cannot spend the earlier dialog on its replacement, and an in-flight Git result cannot clear a
+    newer binding.
     `isDangerousWorktreeRemovalPath` refuses a path that is the repo, `$HOME`, `/`, or an ancestor
     of any of them, on **every** removal path. **Merge** always confirms — it merges into the base's
     _working tree_ (`decideMergeStrategy`: merge in the base's checkout when it is clean, else a

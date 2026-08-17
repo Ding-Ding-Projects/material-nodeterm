@@ -8,8 +8,10 @@ import type { CanvasNodeState, ClaudeAccount, Project } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import {
   ACCOUNT_REMOVAL_COMMITTED_EVENT,
+  ACCOUNT_REMOVAL_SCOPE_EVENT,
   ACCOUNT_REMOVAL_TEARDOWN_EVENT,
   type AccountRemovalCommittedDetail,
+  type AccountRemovalScopeDetail,
   type AccountRemovalTeardownDetail
 } from '../../../lib/accountRemoval'
 import { useDestructiveGate } from '../../../state/destructiveGate'
@@ -99,6 +101,8 @@ describe('AccountsSection account-removal transaction', () => {
   let committedEvents: number
   let onAuthorized: EventListener
   let onCommitted: EventListener
+  let onScope: EventListener
+  let liveScopeIdentity: string
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -108,6 +112,7 @@ describe('AccountsSection account-removal transaction', () => {
     activeLoginOpen = true
     authorizedEvents = 0
     committedEvents = 0
+    liveScopeIdentity = 'active-generation-1'
     cancelWaitLogin = vi.fn(async () => {
       order.push('cancel-wait')
     })
@@ -124,7 +129,12 @@ describe('AccountsSection account-removal transaction', () => {
     const settings = { ...DEFAULT_SETTINGS, claudeAccounts: [ACCOUNT] }
     useSettings.setState({ settings, base: settings, hydrated: true })
     useProjects.setState({ projects: projects(), activeProjectId: 'active', reloadNonce: 0 })
-    useKidsMode.setState({ enabled: true, hydrated: true, hasCredential: true })
+    useKidsMode.setState({
+      enabled: true,
+      hydrated: true,
+      policyStatus: 'ready',
+      hasCredential: true
+    })
     useSystemAccount.setState({ email: null, loaded: true })
     useSshConn.setState({ byProject: {} })
     useDestructiveGate.setState({ request: null })
@@ -141,8 +151,13 @@ describe('AccountsSection account-removal transaction', () => {
       committedEvents += 1
       order.push('committed')
     }) as EventListener
+    onScope = ((event: CustomEvent<AccountRemovalScopeDetail>) => {
+      event.detail.handled = true
+      event.detail.identities = [liveScopeIdentity]
+    }) as EventListener
     window.addEventListener(ACCOUNT_REMOVAL_TEARDOWN_EVENT, onAuthorized)
     window.addEventListener(ACCOUNT_REMOVAL_COMMITTED_EVENT, onCommitted)
+    window.addEventListener(ACCOUNT_REMOVAL_SCOPE_EVENT, onScope)
   })
 
   afterEach(async () => {
@@ -150,6 +165,7 @@ describe('AccountsSection account-removal transaction', () => {
     root = undefined
     window.removeEventListener(ACCOUNT_REMOVAL_TEARDOWN_EVENT, onAuthorized)
     window.removeEventListener(ACCOUNT_REMOVAL_COMMITTED_EVENT, onCommitted)
+    window.removeEventListener(ACCOUNT_REMOVAL_SCOPE_EVENT, onScope)
     useDestructiveGate.setState({ request: null })
     await vi.runOnlyPendingTimersAsync()
     vi.useRealTimers()
@@ -202,7 +218,7 @@ describe('AccountsSection account-removal transaction', () => {
     expect(useProjects.getState().projects).toEqual(projectsBefore)
   })
 
-  it('closes the login before a deferred remove and commits every store only after success', async () => {
+  it('cancels the pending poll, closes login, then commits every store only after success', async () => {
     let resolveRemove!: () => void
     remove.mockImplementationOnce(
       () =>
@@ -222,7 +238,7 @@ describe('AccountsSection account-removal transaction', () => {
       await Promise.resolve()
     })
 
-    expect(order).toEqual(['close-login', 'cancel-wait', 'remove'])
+    expect(order).toEqual(['cancel-wait', 'close-login', 'remove'])
     expect(activeLoginOpen).toBe(false)
     expect(cancelWaitLogin).toHaveBeenCalledWith(ACCOUNT.id)
     expect(remove).toHaveBeenCalledWith(ACCOUNT.id, undefined)
@@ -250,7 +266,7 @@ describe('AccountsSection account-removal transaction', () => {
         .projects[0].nodes.find((candidate) => candidate.id === 'unrelated')?.accountId
     ).toBe('account-2')
     expect(committedEvents).toBe(1)
-    expect(order).toEqual(['close-login', 'cancel-wait', 'remove', 'committed'])
+    expect(order).toEqual(['cancel-wait', 'close-login', 'remove', 'committed'])
 
     await vi.advanceTimersByTimeAsync(300)
     expect(save).toHaveBeenCalledOnce()
@@ -277,7 +293,7 @@ describe('AccountsSection account-removal transaction', () => {
       await Promise.resolve()
     })
 
-    expect(order).toEqual(['close-login', 'cancel-wait', 'remove'])
+    expect(order).toEqual(['cancel-wait', 'close-login', 'remove'])
     expect(activeLoginOpen).toBe(false)
     expect(useSettings.getState().settings).toEqual(settingsBefore)
     expect(useProjects.getState().projects).toEqual(projectsBefore)
@@ -287,7 +303,7 @@ describe('AccountsSection account-removal transaction', () => {
   })
 
   it('rechecks Kids mode before an already-open ordinary confirmation can commit', () => {
-    useKidsMode.setState({ enabled: false })
+    useKidsMode.setState({ enabled: false, policyStatus: 'ready' })
     mount()
 
     act(() => click(removeButton()))
@@ -303,5 +319,124 @@ describe('AccountsSection account-removal transaction', () => {
     expect(remove).not.toHaveBeenCalled()
     expect(authorizedEvents).toBe(0)
     expect(activeLoginOpen).toBe(true)
+  })
+
+  it('upgrades an ordinary confirmation when the Kids record becomes unavailable', () => {
+    useKidsMode.setState({ enabled: false, policyStatus: 'ready' })
+    mount()
+
+    act(() => click(removeButton()))
+    const ordinaryRemove = document.querySelector<HTMLButtonElement>('.confirm__btn.danger')
+    expect(ordinaryRemove).toBeTruthy()
+
+    act(() => useKidsMode.setState({ policyStatus: 'unavailable' }))
+    act(() => click(ordinaryRemove!))
+
+    expect(gateRequest().title).toMatch(/Remove account/)
+    expect(remove).not.toHaveBeenCalled()
+    expect(authorizedEvents).toBe(0)
+  })
+
+  it('performs zero teardown when the disclosed account changes under the dialog', () => {
+    useKidsMode.setState({ enabled: false, policyStatus: 'ready' })
+    mount()
+
+    act(() => click(removeButton()))
+    const ordinaryRemove = document.querySelector<HTMLButtonElement>('.confirm__btn.danger')
+    expect(ordinaryRemove).toBeTruthy()
+    act(() => {
+      const state = useSettings.getState()
+      state.update({
+        claudeAccounts: state.settings.claudeAccounts.map((account) =>
+          account.id === ACCOUNT.id ? { ...account, label: 'Replacement identity' } : account
+        )
+      })
+    })
+    act(() => click(ordinaryRemove!))
+
+    expect(remove).not.toHaveBeenCalled()
+    expect(cancelWaitLogin).not.toHaveBeenCalled()
+    expect(authorizedEvents).toBe(0)
+    expect(host.textContent).toMatch(/changed while the confirmation was open/i)
+  })
+
+  it('performs zero teardown when the live active-node scope changes under the dialog', () => {
+    useKidsMode.setState({ enabled: false, policyStatus: 'ready' })
+    mount()
+
+    act(() => click(removeButton()))
+    const ordinaryRemove = document.querySelector<HTMLButtonElement>('.confirm__btn.danger')
+    expect(ordinaryRemove).toBeTruthy()
+    liveScopeIdentity = 'active-generation-2'
+    act(() => click(ordinaryRemove!))
+
+    expect(remove).not.toHaveBeenCalled()
+    expect(cancelWaitLogin).not.toHaveBeenCalled()
+    expect(authorizedEvents).toBe(0)
+    expect(host.textContent).toMatch(/changed while the confirmation was open/i)
+  })
+
+  it('performs zero teardown when the account changes during the pending-login await', async () => {
+    let resolveCancel!: () => void
+    cancelWaitLogin.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCancel = resolve
+        })
+    )
+    mount()
+    act(() => click(removeButton()))
+    const request = gateRequest()
+    act(() => {
+      useDestructiveGate.getState().close()
+      request.onConfirm()
+    })
+
+    act(() => {
+      const state = useSettings.getState()
+      state.update({
+        claudeAccounts: state.settings.claudeAccounts.map((account) =>
+          account.id === ACCOUNT.id ? { ...account, label: 'Replacement during await' } : account
+        )
+      })
+    })
+    await act(async () => {
+      resolveCancel()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(authorizedEvents).toBe(0)
+    expect(activeLoginOpen).toBe(true)
+    expect(remove).not.toHaveBeenCalled()
+    expect(host.textContent).toMatch(/changed before removal could commit/i)
+  })
+
+  it('opens a fresh gate when policy becomes unavailable during the pending-login await', async () => {
+    let resolveCancel!: () => void
+    cancelWaitLogin.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCancel = resolve
+        })
+    )
+    useKidsMode.setState({ enabled: false, policyStatus: 'ready' })
+    mount()
+    act(() => click(removeButton()))
+    const ordinaryRemove = document.querySelector<HTMLButtonElement>('.confirm__btn.danger')
+    expect(ordinaryRemove).toBeTruthy()
+    act(() => click(ordinaryRemove!))
+
+    act(() => useKidsMode.setState({ policyStatus: 'unavailable' }))
+    await act(async () => {
+      resolveCancel()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(gateRequest().title).toMatch(/Remove account/)
+    expect(authorizedEvents).toBe(0)
+    expect(activeLoginOpen).toBe(true)
+    expect(remove).not.toHaveBeenCalled()
   })
 })

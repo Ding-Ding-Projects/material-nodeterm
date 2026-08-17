@@ -401,6 +401,15 @@ behaviour but makes the Kids-mode two-key gate unavoidable. Do not add a direct 
 or `deleteNodes` path: the former expands group deletion to every descendant, while nodeterm's
 canonical delete frees the children, and the latter performs irreversible teardown with no ask.
 
+**A confirmation authorizes the disclosed target, not an id-shaped slot.** The asynchronous
+node/session, managed-account, authenticator-seed, and worktree-removal funnels re-read both their
+target and Kids policy immediately before the irreversible call through
+`renderer/lib/destructiveAuthorization.ts`. Missing, unreadable, renamed, rebound, or replaced
+targets perform nothing. A one-button confirmation that outlives a Kids OFF→ON or
+ready→unavailable transition performs nothing and starts a fresh two-key request. Keep the callback
+one-shot: a double click or re-entrant acknowledgement must not run a deletion twice. Apply the same
+boundary to any new asynchronous destructive funnel; a synchronous native confirm has no await gap.
+
 **Comments explain WHY, and name the failure they prevent.** The codebase is deliberately dense with
 reasoning. A comment that restates the code is noise; one that says "do not simplify this back,
 here is what broke" is the point.

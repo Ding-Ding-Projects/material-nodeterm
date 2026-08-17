@@ -204,6 +204,14 @@ remain: canvas deletion is gated, kanban/sidebar/agent-control use a plain confi
 Cmd/Ctrl+W closes immediately. This makes Kids mode consistent without silently changing the
 ordinary-mode product contract.
 
+An authorization is bound to the exact target facts the dialog disclosed. Immediately before
+commit, `createNodeDeletionCommitBarrier` re-reads the active project plus each node's id, type,
+title, account binding, and live object/session generation. Orphan sessions receive a fresh scoped
+session sweep before teardown. A missing/replaced target cancels with zero teardown. If a plain dialog
+was opened under a known-OFF record and Kids mode turns on — or the record becomes unavailable — the
+plain approval performs nothing and starts a fresh two-key request. Account, authenticator, and
+worktree removal use the same one-shot live barrier with their own exact target identities.
+
 ## Verified against a running build
 
 Not only by tests. On 2026-08-15 the mode was driven through a real packaged build over CDP, and
@@ -243,6 +251,10 @@ and by unwiring the gate (red).
 ```bash
 npx vitest run src/core/kids-mode.test.ts src/shared/kids-mode-policy.test.ts \
   src/renderer/state/permissionMode.kids.test.ts src/renderer/lib/nodeDeletion.test.ts \
-  src/renderer/lib/accountRemoval.test.ts
+  src/renderer/lib/accountRemoval.test.ts src/renderer/lib/destructiveAuthorization.test.ts \
+  src/renderer/lib/authenticatorRemoval.test.ts src/renderer/lib/worktreeRemoval.test.ts \
+  src/renderer/state/kidsMode.test.ts \
+  src/renderer/components/settings/sections/AccountsSection.test.tsx \
+  src/renderer/components/settings/sections/AuthenticatorSection.test.tsx
 node scripts/check-app-contract.mjs
 ```

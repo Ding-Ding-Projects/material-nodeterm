@@ -265,6 +265,112 @@ export function createNodeDeletionCommitBarrier(
   })
 }
 
+/** Fields which make one disclosed node target distinguishable from a replacement using its id. */
+export interface NodeDeletionTarget {
+  id: string
+  projectId?: string
+  type?: string
+  title?: string
+  accountId?: string
+  /** Object-generation token: catches a same-id node/session replacement with identical labels. */
+  incarnation?: number
+  /** External-session generation facts for a target which has no canvas object. */
+  runtimeIdentity?: string
+}
+
+const nodeTargetIncarnations = new WeakMap<object, number>()
+let nextNodeTargetIncarnation = 1
+
+/** Stable for one live object, different for a replacement object even when every label is reused. */
+export function nodeDeletionTargetIncarnation(target: object): number {
+  const existing = nodeTargetIncarnations.get(target)
+  if (existing !== undefined) return existing
+  const created = nextNodeTargetIncarnation++
+  nodeTargetIncarnations.set(target, created)
+  return created
+}
+
+export function nodeDeletionTargetIdentity(targets: readonly NodeDeletionTarget[]): string {
+  return destructiveTargetIdentity(
+    targets.flatMap((target) => [
+      target.id,
+      target.projectId,
+      target.type,
+      target.title,
+      target.accountId,
+      target.incarnation,
+      target.runtimeIdentity
+    ])
+  )
+}
+
+export function orphanSessionRuntimeIdentity(row: {
+  session: string
+  nodeId: string
+  panePid: number
+  command: string
+}): string {
+  return destructiveTargetIdentity([row.session, row.nodeId, row.panePid, row.command])
+}
+
+export interface NodeDeletionCommitBarrierOptions {
+  disclosedTargets: readonly NodeDeletionTarget[]
+  authorization: DestructiveAuthorization
+  readCurrent(): NodeDeletionTarget[] | null
+  kidsGateRequired(): boolean
+  perform(targets: NodeDeletionTarget[]): void
+  upgradeToTwoKey(targets: NodeDeletionTarget[]): void
+  refuse?(reason: DestructiveCommitRefusal): void
+}
+
+/** Behavior-tested live target/policy seam used by every node/session confirmation surface. */
+export function createNodeDeletionCommitBarrier(
+  options: NodeDeletionCommitBarrierOptions
+): () => DestructiveCommitResult {
+  return createDestructiveCommitBarrier({
+    disclosedIdentity: nodeDeletionTargetIdentity(options.disclosedTargets),
+    authorization: options.authorization,
+    readCurrent: () => {
+      const current = options.readCurrent()
+      return current
+        ? {
+            identity: nodeDeletionTargetIdentity(current),
+            target: current,
+            kidsGateRequired: options.kidsGateRequired()
+          }
+        : null
+    },
+    perform: options.perform,
+    upgradeToTwoKey: options.upgradeToTwoKey,
+    refuse: options.refuse
+  })
+}
+
+export interface ProjectOwnedNodeDeletionDeps {
+  /** Read at commit time; a confirmation may outlive a project switch. */
+  readActiveProjectId(): string | null
+  deleteFromActiveProject(): void
+  deleteFromStoredProject(): void
+}
+
+/**
+ * Commit a sidebar deletion against the project that still owns the disclosed node.
+ *
+ * The active project is deliberately re-read here. Capturing it when the dialog opens lets a
+ * later project switch route the approved deletion into the replacement canvas instead.
+ */
+export function performProjectOwnedNodeDeletion(
+  projectId: string,
+  deps: ProjectOwnedNodeDeletionDeps
+): 'active-project' | 'stored-project' {
+  if (deps.readActiveProjectId() === projectId) {
+    deps.deleteFromActiveProject()
+    return 'active-project'
+  }
+  deps.deleteFromStoredProject()
+  return 'stored-project'
+}
+
 /**
  * Convert React Flow's expanded deletion set back to the managed roots the user asked to remove.
  *
@@ -291,9 +397,9 @@ export function managedDeletionRoots(
  */
 export function initialWorktreeDeleteFromDisk(
   createdByApp: boolean,
-  kidsModeOn: boolean
+  kidsGateRequired: boolean
 ): boolean {
-  return createdByApp && !kidsModeOn
+  return createdByApp && !kidsGateRequired
 }
 
 /**
@@ -304,8 +410,8 @@ export function initialWorktreeDeleteFromDisk(
  */
 export function worktreeDeleteFromDiskAfterModeChange(
   current: boolean,
-  wasKidsModeOn: boolean,
-  kidsModeOn: boolean
+  wasKidsGateRequired: boolean,
+  kidsGateRequired: boolean
 ): boolean {
-  return !wasKidsModeOn && kidsModeOn ? false : current
+  return !wasKidsGateRequired && kidsGateRequired ? false : current
 }

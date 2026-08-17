@@ -141,6 +141,8 @@ export class KidsModeStore {
   private chain: Promise<unknown> = Promise.resolve()
   /** Invalidates watcher reloads that were queued before dispose/re-init. */
   private lifecycle = 0
+  /** Invalidates a read that began before a newer watcher event announced possible replacement. */
+  private recordChangeGeneration = 0
 
   constructor(deps: KidsModeStoreDeps = {}) {
     this.readSnapshot = deps.readSnapshot ?? readAtomicFileSnapshot

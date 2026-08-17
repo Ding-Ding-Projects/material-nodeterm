@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   ACCOUNT_REMOVAL_COMMITTED_EVENT,
+  accountRemovalTargetIdentity,
   dispatchAccountRemoval,
   handleAccountRemovalCommitted,
   handleAccountRemovalTeardown,
@@ -10,9 +11,32 @@ import {
   type AccountRemovalTeardownDetail,
   type AuthorizedAccountLoginDeletion
 } from './accountRemoval'
-import { dispatchNodeDeletion, planNodeDeletion } from './nodeDeletion'
+import {
+  createNodeDeletionCommitBarrier,
+  dispatchNodeDeletion,
+  planNodeDeletion,
+  type NodeDeletionTarget
+} from './nodeDeletion'
 
 describe('account-removal transaction gate', () => {
+  it('binds account metadata and the exact serialized affected-node set', () => {
+    const account = {
+      id: 'account-1',
+      label: 'Family',
+      email: 'family@example.test',
+      host: 'example.test',
+      pending: true,
+      createdAt: 1
+    }
+    const original = accountRemovalTargetIdentity(account, ['project-a/node-1'])
+    const variants = [
+      accountRemovalTargetIdentity({ ...account, label: 'Replacement' }, ['project-a/node-1']),
+      accountRemovalTargetIdentity(account, ['project-a/node-2']),
+      accountRemovalTargetIdentity(account, ['project-a/node-1', 'project-b/node-3'])
+    ]
+    for (const variant of variants) expect(variant).not.toBe(original)
+  })
+
   it('keeps the account transaction untouched when the Kids-mode gate is cancelled', () => {
     let accountPresent = true
     let loginSessionOpen = true
@@ -57,8 +81,17 @@ describe('account-removal transaction gate', () => {
           authorizedBy: { action: 'remove-account', authorization }
         }),
         {
-          perform: () => {
-            loginSessionOpen = false
+          perform: (nodeAuthorization) => {
+            createNodeDeletionCommitBarrier({
+              disclosedTargets: loginTarget,
+              authorization: nodeAuthorization,
+              readCurrent: () => loginTarget,
+              kidsGateRequired: () => true,
+              perform: () => {
+                loginSessionOpen = false
+              },
+              upgradeToTwoKey: secondGate
+            })()
           },
           openGate: secondGate,
           openConfirm: vi.fn(() => true)

@@ -50,6 +50,8 @@ export function DestructiveConfirmGate({
   if (!idRef.current) idRef.current = nextDialogId()
   const id = idRef.current
   const firstKeyRef = useRef<HTMLButtonElement>(null)
+  const completingRef = useRef(false)
+  const completionTimerRef = useRef<number | null>(null)
 
   const [keyA, setKeyA] = useState(false)
   const [keyB, setKeyB] = useState(false)
@@ -63,7 +65,10 @@ export function DestructiveConfirmGate({
   useEffect(() => {
     pushDialog(id)
     firstKeyRef.current?.focus()
-    return () => popDialog(id)
+    return () => {
+      if (completionTimerRef.current !== null) window.clearTimeout(completionTimerRef.current)
+      popDialog(id)
+    }
   }, [id])
 
   // Return focus to the control that opened this, whichever way it closes.
@@ -75,7 +80,7 @@ export function DestructiveConfirmGate({
   }, [])
 
   const handleCancel = (): void => {
-    if (completing) return // authorization is already in flight — Escape can't un-fire it
+    if (completingRef.current) return // authorization is already in flight — Escape can't un-fire it
     onCancel()
   }
 
@@ -98,10 +103,16 @@ export function DestructiveConfirmGate({
   // user sees confirmation land before the dialog disappears out from under them.
   const armAndMaybeFire = (v: number): void => {
     setValue(v)
-    if (v >= 100 && bothArmed && !completing) {
+    if (v >= 100 && bothArmed && !completingRef.current) {
+      // State updates are asynchronous. The ref is the synchronous one-shot latch that prevents
+      // an input event plus the same gesture's key-up from scheduling two irreversible commits.
+      completingRef.current = true
       setCompleting(true)
       const delay = prefersReducedMotion() ? 120 : 480
-      window.setTimeout(() => onConfirm(), delay)
+      completionTimerRef.current = window.setTimeout(() => {
+        completionTimerRef.current = null
+        onConfirm()
+      }, delay)
     }
   }
 

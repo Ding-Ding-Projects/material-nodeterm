@@ -129,6 +129,38 @@ describe('SharedRecordWatcher', () => {
     watcher.dispose()
   })
 
+  it('marks an ancestor watch unhealthy when promotion becomes inaccessible', () => {
+    const fake = fakeFs(recordFile)
+    const changed = vi.fn()
+    const health = vi.fn()
+    let targetExists = false
+    let denied = false
+    const createWatcher: WatchDirectory = (directory, listener) => {
+      if (directory === fake.target && targetExists && denied) throw fsError('EACCES')
+      return fake.createWatcher(directory, listener)
+    }
+    const watcher = new SharedRecordWatcher(recordFile, changed, createWatcher, health)
+
+    watcher.start()
+    expect(fake.opened.at(-1)?.directory).toBe(fake.home)
+    expect(health).toHaveBeenLastCalledWith(true)
+
+    // The directory can have appeared with an ON record while becoming unreadable. Retaining the
+    // ancestor handle is useful for recovery, but it must no longer make OFF authoritative.
+    targetExists = true
+    denied = true
+    fake.opened.at(-1)!.emit('rename', '.nodeterm')
+    expect(health).toHaveBeenLastCalledWith(false)
+    expect(changed).toHaveBeenCalledOnce()
+
+    denied = false
+    fake.available.add(fake.target)
+    watcher.recordWritten()
+    expect(fake.opened.at(-1)?.directory).toBe(fake.target)
+    expect(health).toHaveBeenLastCalledWith(true)
+    watcher.dispose()
+  })
+
   it('promotes immediately after a local write without waiting for an ancestor event', () => {
     const fake = fakeFs(recordFile)
     const changed = vi.fn()

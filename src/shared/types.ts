@@ -1829,8 +1829,22 @@ export interface GitFileChange {
   deleted: number
 }
 
+/** Core-measured exact checkout generation/content proof used only for forced worktree removal. */
+export interface GitWorktreeRemovalProof {
+  /** HEAD object id at measurement time. */
+  headOid: string
+  /** Filesystem generation of the checkout root and its per-worktree git administrative dir. */
+  generation: string
+  /** Hash of HEAD, index, tracked diffs, untracked bytes, and exact porcelain state. */
+  fingerprint: string
+}
+
 export interface GitStatus {
   hasRepo: boolean
+  /** True only when every command/read needed for a destructive content proof succeeded. */
+  authoritative?: boolean
+  /** Present only with `authoritative:true`; compare inside core immediately before forced removal. */
+  removalProof?: GitWorktreeRemovalProof
   /** "owner/repo" from the origin remote, else the folder name. */
   repoName: string
   branch: string

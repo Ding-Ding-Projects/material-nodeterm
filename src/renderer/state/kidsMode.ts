@@ -54,6 +54,7 @@ export const useKidsMode = create<KidsModeState>((set) => ({
   init: async () => {
     if (initStarted) return
     initStarted = true
+    let liveGeneration = 0
     try {
       window.nodeTerminal.kidsMode.onChanged((record) => {
         if (record.generation < latestGeneration) return

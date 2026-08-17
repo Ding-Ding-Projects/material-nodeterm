@@ -188,6 +188,7 @@ export class SharedRecordWatcher {
         this.handleGeneration = nextGeneration
         this.watcher = nextWatcher
         this.watchedDirectory = candidate
+        this.setHealthy(true)
         previous?.close()
         // Deliberately do not set healthy here. The caller requests a strict read for this epoch;
         // acknowledge() is the only transition back to healthy.
@@ -242,6 +243,7 @@ export class SharedRecordWatcher {
     this.invalidateSync()
     this.watcher = null
     this.watchedDirectory = null
+    this.setHealthy(false)
     failed?.close()
 
     // ENOENT means the watched directory disappeared, so fall back to its nearest ancestor.
