@@ -702,20 +702,9 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
             kind: 'error',
             message: `Could not close the active login session for “${account.label}”. The account was not removed.`
           }
-        },
-        upgradeToTwoKey: (current) => {
-          setRemovingAccountId((value) => (value === current.id ? null : value))
-          requestRemove(current, null)
-        },
-        refuse: () => {
-          setRemovingAccountId((current) => (current === account.id ? null : current))
-          setRemoveError(
-            'That account or its affected nodes changed before removal could commit. Nothing was removed; review it and try again.'
-          )
-        }
-      })
-      finalCommit()
-    })()
+        })
+      )
+    }
   }
 
   const requestRemove = (account: ClaudeAccount, anchorEl: HTMLElement | null): boolean => {
@@ -769,7 +758,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                 }
               : null
           },
-          perform: (current) => beginApprovedRemove(current, authorization, disclosedIdentity),
+          perform: (current) => beginApprovedRemove(current, authorization),
           upgradeToTwoKey: (current) => {
             requestRemove(current, null)
           },
@@ -783,7 +772,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
       barrier()
     }
     return dispatchAccountRemoval(plan, {
-      perform: (authorization) => beginApprovedRemove(account, authorization),
+      perform: (authorization) => commit(authorization),
       openGate: (request) =>
         openDestructiveGate({
           ...request,
