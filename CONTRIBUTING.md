@@ -132,6 +132,16 @@ on the host too: we shipped the hook bearer that way and any other account on th
 it and open a terminal running an arbitrary command. Pass secrets by 0600 file or by **stdin**
 (`curl --config -`), and never add an argv fallback. See `docs/node-identity.md`.
 
+**The Server Edition image has two native addons, not one.** Both `node-pty` and `smart-whisper`
+must be rebuilt for Node's ABI in the Docker deps stage; the normal postinstall targets Electron's
+ABI and cannot be used there. The image's entrypoint always enters as root, limits that phase to
+migrating root-owned entries in `/data`, then must exec Node as uid 1000 so Node remains PID 1 and receives
+SIGTERM directly. The wrappers' generated `.env` and temporary credential files must stay out of
+both Git and the Docker build context. Wrapper launches must pin the Compose file/project/profiles,
+export the exact bind/port/password values they validated, and reject inherited Compose controls;
+otherwise Compose's richer dotenv syntax can bypass a hand-written safety parser. Run
+`node scripts/test-docker-host.mjs` after changing the image or host wrappers.
+
 **Both raw listeners change together** — `src/main/index.ts` and `src/server/agent-status.ts`. A new
 field on a hook event that reaches only the desktop leaves the Server Edition quietly without the
 feature, and the boundary tests can only tell you an import is wrong, never that a field is missing.

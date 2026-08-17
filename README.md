@@ -87,10 +87,10 @@ the app. See [Windows](#windows) for its two honest caveats.
 Point a project at a folder on a remote host and every terminal, file operation, git command
 and even the kanban board for that project run there while the canvas stays local — session
 continuity applies remotely too. Or run nodeterm's **Server Edition**: the exact same renderer,
-served headless over plain HTTP/WebSocket from a Linux (or macOS) box you own, reached from any
-browser, with passkey or password auth. One command (`./host.sh`) builds and starts it in a
-container. Phone pairing — so a browser on your phone can reach the terminals on your desktop
-too — is a Core feature, not a paywalled one.
+served headless over plain HTTP/WebSocket from a Linux, macOS, or Windows host you own, reached from any
+browser, with passkey or password auth. One command (`./host.sh` on macOS/Linux or `host.bat` on
+Windows) builds and starts it in a container. Phone pairing — so a browser on your phone can reach
+the terminals on your desktop too — is a Core feature, not a paywalled one.
 
 ### Source control and git worktrees
 

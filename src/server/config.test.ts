@@ -13,12 +13,12 @@ describe('resolveConfig', () => {
   })
   it('env overrides defaults; argv overrides env', () => {
     const c = resolveConfig(
-      { NODETERM_PORT: '9000', NODETERM_DATA_DIR: '/data', NODETERM_SERVER_PASSWORD: 'p' },
+      { NODETERM_PORT: '9000', NODETERM_DATA_DIR: '/data', NODETERM_SERVER_PASSWORD: 'password-seed' },
       ['--port', '9100', '--insecure-http']
     )
     expect(c.port).toBe(9100)
     expect(c.dataDir).toBe('/data')
-    expect(c.passwordSeed).toBe('p')
+    expect(c.passwordSeed).toBe('password-seed')
     expect(c.insecureHttp).toBe(true)
   })
   it('refuses a non-loopback bind without --insecure-http', () => {

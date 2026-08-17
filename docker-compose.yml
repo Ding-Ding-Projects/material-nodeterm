@@ -19,8 +19,8 @@
 #     ssh -N -L 8443:127.0.0.1:8443 you@your-host       then open http://127.0.0.1:8443
 #
 # To expose it publicly, do NOT change that binding to 0.0.0.0 — start the `tls` profile
-# instead, which puts Caddy in front with a real certificate and stops publishing the app port
-# at all:
+# instead, which puts Caddy in front with a real certificate. The app port remains available on
+# loopback for local health/debugging but is never the public listener:
 #
 #     NODETERM_DOMAIN=nodeterm.example.com docker compose --profile tls up -d --build
 #
@@ -50,13 +50,13 @@ services:
       NODETERM_HOST: 0.0.0.0
       NODETERM_PORT: "8443"
     volumes:
-      # Auth, the canvas, settings and scrollback snapshots. Without this every restart forgets
-      # the password and the workspace. A NAMED volume, not a bind mount: the container writes as
-      # its own user and a host-path mount invites permission mismatches on Linux.
+      # Auth, the canvas, settings and scrollback snapshots. Without a deliberately reused volume,
+      # a replacement/redeploy loses the password and workspace. A NAMED volume, not a bind mount:
+      # the container writes as its own user and a host-path mount invites permission mismatches.
       - nodeterm-data:/data
     ports:
-      # Loopback-only on purpose — see the note at the top. Override the host side with
-      # NODETERM_BIND if you know what you are doing (e.g. a private VPN address).
+      # Loopback-only on purpose — see the note at the top. Direct Compose users can override the
+      # host side, but the safety-focused host wrappers refuse any NODETERM_BIND other than this.
       - "${NODETERM_BIND:-127.0.0.1}:${NODETERM_PUBLISH_PORT:-8443}:8443"
     # The image already declares a HEALTHCHECK against /login (served without auth), so the
     # wrappers can wait for "healthy" rather than sleeping and hoping.

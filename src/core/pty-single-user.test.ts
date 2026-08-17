@@ -263,6 +263,19 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     fs.rmSync(cwd, { recursive: true, force: true })
   })
 
+  it('does not pass the Server Edition bootstrap password into a terminal', async () => {
+    const previousPassword = process.env.NODETERM_SERVER_PASSWORD
+    process.env.NODETERM_SERVER_PASSWORD = 'test-only-seed'
+    try {
+      await tmuxManager()
+      await create(80, 24)
+      expect(spawnArgs[0].env.NODETERM_SERVER_PASSWORD).toBeUndefined()
+    } finally {
+      if (previousPassword === undefined) delete process.env.NODETERM_SERVER_PASSWORD
+      else process.env.NODETERM_SERVER_PASSWORD = previousPassword
+    }
+  })
+
   // ── `fresh` drives scrollback replay + agent resume: it must still be computed from tmux ──
   it('fresh:false on a WARM reattach (tmux session already exists) — no cold restore', async () => {
     await tmuxManager()

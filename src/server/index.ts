@@ -588,6 +588,7 @@ export async function startServer(
       port: 0, // nothing bound
       async close() {
         // Detach PTY clients — tmux sessions keep running (Phase 1 contract).
+        scheduledSettingsService.stop()
         sessionReaper.stop()
         pressure.stop()
         ptyPressure.stop()
