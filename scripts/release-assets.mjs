@@ -409,6 +409,21 @@ export async function collectReleaseAssets(directory, expectedVersion, expectedP
     fail(`expected exactly one full Squirrel package named ${expectedFullName}`)
   }
 
+  if (setup.name !== expectedSetupName) {
+    fail(`Setup identity/version mismatch: expected ${expectedSetupName}, got ${setup.name}`)
+  }
+  for (const asset of packages) {
+    if (!allowedPackageNames.has(asset.name)) {
+      fail(
+        `unexpected Squirrel package name: expected ${expectedFullName}` +
+          ` and optional ${expectedDeltaName}, got ${asset.name}`,
+      )
+    }
+  }
+  if (!packages.some((asset) => asset.name === expectedFullName)) {
+    fail(`expected exactly one full Squirrel package named ${expectedFullName}`)
+  }
+
   const releaseRows = parseReleases(await readFile(releases.path, 'utf8'))
   const rowsByName = new Map(releaseRows.map((row) => [row.name, row]))
   const packagesByName = new Map(packages.map((asset) => [asset.name, asset]))
@@ -428,6 +443,8 @@ export async function collectReleaseAssets(directory, expectedVersion, expectedP
   for (const asset of packages) {
     if (!rowsByName.has(asset.name)) fail(`package is not listed in RELEASES: ${asset.name}`)
   }
+
+  await requireFullPackageIdentity(packagesByName.get(expectedFullName), expected)
 
   const assets = sorted([setup, releases, ...packages], (asset) => asset.name)
   const manifestAssets = []
