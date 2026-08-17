@@ -191,7 +191,13 @@ ordinary-mode product contract.
 
 Not only by tests. On 2026-08-15 the mode was driven through a real packaged build over CDP, and
 `docs/assets/shots/app-settings-kids-mode.png` is the capture — maintained by `npm run shots`
-rather than taken by hand, so it goes stale loudly instead of quietly.
+rather than taken by hand, so it goes stale loudly instead of quietly. The capture launcher now
+runs its built app inside a disposable home and Electron profile, asks the live preload bridge to
+confirm the expected `userData` path before any interaction, and removes only its owned process and
+sandbox afterward. The real-home sentinel also covers the Kids and School mode records and their
+credential files, so a future isolation regression fails instead of silently changing either
+PIN-protected mode. The lock contract itself is unchanged: leaving Kids mode still requires the
+grown-up PIN.
 
 What was observed, through the real IPC and the real UI:
 

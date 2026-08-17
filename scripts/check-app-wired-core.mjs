@@ -107,6 +107,7 @@ export function managedConfigTargets({
   const grok = env.GROK_HOME?.trim()
   const grokHome = grok && path.isAbsolute(grok) ? grok : join(home, '.grok')
   const hookDir = join(home, '.nodeterm', 'agent-hooks')
+  const sharedModeDir = join(home, '.nodeterm', 'shared')
 
   return [...new Set([
     join(home, '.claude', 'settings.json'),
@@ -120,6 +121,12 @@ export function managedConfigTargets({
     join(grokHome, 'hooks', 'nodeterm-status.json'),
     join(xdgConfig, 'opencode', 'plugins', 'nodeterm-status.js'),
     join(xdgConfig, 'opencode', 'AGENTS.md'),
+    ...[
+      'kids-mode.json',
+      'kids-mode.credential.json',
+      'school-mode.json',
+      'school-mode.credential.json',
+    ].map((name) => join(sharedModeDir, name)),
     ...['claude.sh', 'codex.sh', 'gemini.sh', 'grok.sh'].map((name) =>
       join(hookDir, name),
     ),
