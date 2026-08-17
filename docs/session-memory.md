@@ -507,6 +507,9 @@ macOS (the ps path never runs on Linux)
     darwin-only behavioural test above is what pins the current no-byte-pressure default. The same
     experiment exposed fractional configuration handling; that issue is fixed and documented in
     §1, with focused tests covering fractional grace and integer-cap fallback.
+    The run deliberately renamed `TMUX_SOCKET` to an isolated verify socket, so no real session was
+    at risk. At measurement time no shipped build contained both fixes; releases v0.2.46 and v0.2.47
+    were the first to carry them, closing the field bug for users updating off v0.2.43.
  7. Open an SSH project: the panel must list THAT host's sessions and no local ones, and its header
     scope + the pill's title must read `user@host`.
  8. Open an SSH project BEFORE its ControlMaster is up. The pill must end on a NUMBER, not a

@@ -451,7 +451,8 @@ export async function startServer(
   await hookServer.start()
   // Canvas control does not exist on this edition, and saying so BY NAME is the whole point: the
   // null handler answered `control unavailable`, which reads to an agent like a transient outage,
-  // and an agent retries an outage. See `control-unsupported.ts`.
+  // and an agent retries an outage. Keep the shared installer here so the refusal contract stays
+  // identical for boot and for the focused hook-server tests. See `control-unsupported.ts`.
   installServerEditionControlHandler(hookServer)
 
   // ---- Node identity (src/core/agents/node-auth-secret.ts) ------------------------------------

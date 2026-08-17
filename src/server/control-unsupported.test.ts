@@ -139,6 +139,12 @@ describe('the Server Edition wires it at boot', () => {
       message: controlUnsupportedMessage('browser')
     })
   })
+
+  it('server boot calls the installer helper after starting the hook server', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, 'index.ts'), 'utf8')
+    // Keep boot coupled to the helper so the refusal cannot silently drift from the direct seam.
+    expect(src).toContain('installServerEditionControlHandler(hookServer)')
+  })
 })
 
 /**

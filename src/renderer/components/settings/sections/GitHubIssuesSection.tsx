@@ -15,6 +15,7 @@ import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { Switch } from '@renderer/ui/Switch'
+import { describeGitHubAuth, tokenFieldIsPrimary } from '../../../lib/githubAuthView'
 
 const ROWS = {
   enable: {
@@ -185,7 +186,6 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   const completionReady = !!githubConfig?.completionColumnId &&
     mappings.has(githubConfig.completionColumnId)
   const ready = approved && authenticated && completionReady
-
   // What actually authenticates a request is `activeProvider` — the RESULT of the selected provider
   // meeting the credentials that exist. `ghAuthenticated` alone lies in both directions: pinned to
   // token-only it can be true while nothing authenticates, and pinned to gh-only a saved token is
@@ -193,9 +193,20 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   const activeProvider = auth?.activeProvider ?? null
   const selectedProvider = auth?.selectedProvider ?? view?.control.authProvider ?? 'auto'
   const ghActive = activeProvider === 'gh'
+  // `authBlockFor` resolves the project-independent auth block before repository approval, so an
+  // available block is enough to let the pure decision helper classify the credential state. This
+  // preserves the neutral UNKNOWN branch when that extra read fails without throwing away useful
+  // pre-approval credential evidence when it succeeds.
+  const authView = describeGitHubAuth({
+    approved: !!auth,
+    provider: selectedProvider,
+    activeProvider,
+    tokenPresent: !!auth?.tokenPresent,
+    ...(auth?.login ? { login: auth.login } : {})
+  })
   /** The token control is noise wherever a token cannot be what signs the user in: the CLI already
    *  does it, or the user pinned authentication to the CLI. It moves into Advanced, never away. */
-  const tokenIsAside = !auth || ghActive || selectedProvider === 'gh'
+  const tokenIsAside = !tokenFieldIsPrimary(authView)
   // A control the user searched for must not be hidden behind a collapsed disclosure.
   const searching = searchQuery.trim() !== ''
 

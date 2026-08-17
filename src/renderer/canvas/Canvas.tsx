@@ -158,13 +158,11 @@ import { kidsDestructiveGateRequired, useKidsMode } from '../state/kidsMode'
 import {
   createNodeDeletionCommitBarrier,
   dispatchNodeDeletion,
-  createNodeDeletionCommitBarrier,
   initialWorktreeDeleteFromDisk,
   managedDeletionRoots,
   nodeDeletionTargetIncarnation,
   orphanSessionRuntimeIdentity,
   planNodeDeletion,
-  type NodeDeletionTarget,
   worktreeDeleteFromDiskAfterModeChange,
   type NodeDeletionTarget,
   type NodeDeleteSurface

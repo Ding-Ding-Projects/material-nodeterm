@@ -393,7 +393,7 @@ describe('canvas convergence (async bus)', () => {
       expect(a.persisted()).toEqual(b.persisted())
     })
 
-    it('keeps unrelated bridge and rope lists separate', () => {
+    it('bridges and ropes are two lists, and a mutation only touches its own kind', () => {
       a.edit([node('n1', 0), node('n2', 0)])
       a.editEdges({ ropes: [{ id: 'ctrl-1', source: 'n1', target: 'n2' }] })
       bus.settle()
@@ -417,7 +417,6 @@ describe('canvas convergence (async bus)', () => {
       expect(a.ropes).toEqual([{ id: 'shared', source: 'n2', target: 'n1' }])
       expect(a.persisted()).toEqual(b.persisted())
     })
-
     it('a peer edge is applied once and re-published NEVER (the adopt loop guard covers edges)', () => {
       a.edit([node('n1', 0), node('n2', 0)])
       bus.settle()

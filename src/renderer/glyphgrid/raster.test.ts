@@ -75,9 +75,14 @@ function stubCanvas(
    *  behavioural assertion, not a detail. */
   fire: (type: 'contextlost' | 'contextrestored') => boolean
   listenerCount: () => number
+  /** The 2D context options the rasterizer requested. */
+  contextOptions: () => Record<string, unknown> | null
   restore: () => void
 } {
   const ops: Op[] = []
+  /** The options the rasterizer asked its 2D context for — `willReadFrequently` decides which
+   *  rasterizer draws the text, so it is part of the contract, not a hint. */
+  let ctxOptions: Record<string, unknown> | null = null
   const px: string[] = new Array(sizePx * sizePx).fill('')
   let selfCanvas: unknown = null
   let clip: Clip = null
@@ -219,7 +224,8 @@ function stubCanvas(
     ) {
       selfCanvas = this
     }
-    getContext(): unknown {
+    getContext(_type: string, options?: Record<string, unknown>): unknown {
+      ctxOptions = options ?? null
       return ctx
     }
     addEventListener(type: string, fn: (e: { preventDefault(): void }) => void): void {
@@ -254,6 +260,9 @@ function stubCanvas(
       let n = 0
       for (const set of listeners.values()) n += set.size
       return n
+    },
+    contextOptions() {
+      return ctxOptions
     },
     restore() {
       ;(globalThis as Record<string, unknown>).OffscreenCanvas = prev
@@ -1295,5 +1304,38 @@ describe('atlas page health', () => {
     expect(stub.listenerCount()).toBe(0)
     stub.fire('contextlost')
     expect(seen).toEqual([])
+  })
+})
+
+/**
+ * The atlas context is created on the SOFTWARE raster path, matching xterm's own TextureAtlas.
+ *
+ * `willReadFrequently` reads like a performance hint about pixel reads and is not one here: it
+ * decides WHICH rasterizer draws the text, and on macOS the accelerated and software paths lay
+ * down different stroke weights. Measured on a matched screenshot pair (same content, same scale,
+ * no resampling), the shared renderer put down 17% more ink than xterm's per-terminal WebGL —
+ * which is what the 2026-08-09 "not crisp" report actually was. xterm has been on the software
+ * path all along; this is parity, not a new idea.
+ *
+ * Pinned because the flag is exactly the kind of thing a later reader deletes as a stale
+ * performance hint, and the regression would be invisible in every test that does not compare
+ * against another renderer on a real Mac.
+ */
+describe('the atlas rasterizer context', () => {
+  it('asks for the software raster path, like xterm does', () => {
+    const stub = stubCanvas()
+    active = stub
+    createCanvasRasterizer(FONT, 256)
+    expect(stub.contextOptions()).toMatchObject({ willReadFrequently: true })
+  })
+
+  it('keeps its ALPHA channel — the page ground and slot 0 must stay transparent', () => {
+    // xterm's tmp canvas is opaque (`alpha: allowTransparency`, false by default); ours cannot be.
+    // Slot 0 is what every space samples and every never-allocated pitch cell shows, and the mip
+    // argument rests on the page ground being transparent-black rather than a colour.
+    const stub = stubCanvas()
+    active = stub
+    createCanvasRasterizer(FONT, 256)
+    expect(stub.contextOptions()).toMatchObject({ alpha: true })
   })
 })

@@ -415,7 +415,25 @@ export function createCanvasRasterizer(
 ): (GlyphRasterizer & AtlasPageHealth) | null {
   if (typeof OffscreenCanvas === 'undefined') return null
   const canvas = new OffscreenCanvas(atlasSizePx, atlasSizePx)
-  const ctx = canvas.getContext('2d', { alpha: true })
+  // `willReadFrequently` is NOT about reading — it is about WHICH RASTERIZER draws the text.
+  //
+  // The flag asks Chromium to keep the canvas on the CPU (Skia software) instead of the GPU, and
+  // on macOS the two paths do not lay down the same stroke. Measured on a matched screenshot pair
+  // (same content, same scale, no resampling): the shared renderer put down **17% more ink** than
+  // xterm's per-terminal WebGL — 0.203 of ink pixels fully on against 0.141, with edges that were
+  // if anything STEEPER. The 2026-08-09 "text isn't so crisp" report is that weight difference,
+  // not blur: a heavier stroke with hard edges reads as chunky next to macOS's own thin text.
+  //
+  // xterm's own TextureAtlas draws every glyph into a canvas created with `willReadFrequently:
+  // true`, so its per-terminal renderer has been on the software path all along and ours was on
+  // the accelerated one. This is the difference, adopted rather than invented: matching the
+  // renderer the user is comparing against is the whole point.
+  //
+  // COST TO WATCH: a software canvas makes `texImage2D` a CPU→GPU upload rather than a GPU-side
+  // copy. It happens once per atlas change, not per frame, and xterm pays it per terminal while we
+  // pay it once for the canvas — but it is the thing to measure if atlas churn ever shows up in a
+  // profile.
+  const ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: true })
   if (!ctx) return null
   ctx.textBaseline = 'alphabetic'
   /** One texel, in the one place nothing samples — see `ATLAS_SENTINEL_RGBA`. Unclipped and

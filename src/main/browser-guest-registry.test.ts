@@ -2,6 +2,8 @@
 // case below is a renderer-supplied value, because the renderer is the attackable half of this
 // boundary — a compromised or merely buggy one must not be able to nominate the app's own window.
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   browserDiscardedMessage,
   registerBrowserGuest,
@@ -176,5 +178,14 @@ describe('registerBrowserGuestRequest', () => {
     ).toBe(false)
     expect(guests.size).toBe(0)
     expect(refused).toEqual([{ webContentsId: 22, nodeId: 'browser-2', surface: 'CANVAS' }])
+  })
+})
+
+/** The Electron IPC callback must use the validation adapter; direct map writes bypass the guard. */
+describe('the IPC handler is wired through it', () => {
+  it('main never writes to browserGuests directly', () => {
+    const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
+    expect(src).toContain('registerBrowserGuestRequest(\n        browserGuests')
+    expect(src).not.toContain('browserGuests.set(')
   })
 })
