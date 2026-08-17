@@ -826,6 +826,13 @@ export interface PtyApi {
    *  node persistKey. null when it is unknown — no session, no tmux, or the query failed — which
    *  callers must read as "not observed", never as evidence of a particular command. */
   paneCommand(persistKey: string): Promise<string | null>
+  /** Correct a node's tmux "lead" pane width after Claude Code's agent-team backend has narrowed
+   *  it (`settings.agentTeamLeadPaneWidthEnabled` — see shared/agents/team-pane-layout.ts). Counts
+   *  the node's panes and, when the setting calls for it, resizes pane 0; resolves `true` only
+   *  when it actually resized something, `false` for every other outcome (feature off, no team
+   *  panes yet, no live/local tmux session, a failed tmux call). Never rejects. Tmux-backed local
+   *  sessions only — a no-op on the Windows session-host fallback and on an SSH-project node. */
+  correctTeamLeadPaneWidth(persistKey: string): Promise<boolean>
   /** The agent session's display name (`/rename` name, else auto name) read from the agent's own
    *  session store, resolved strictly by sessionId; null if unknown. Keeps a node title in sync with
    *  the `/resume` name (e.g. after resume) without cross-contaminating same-folder sessions.
@@ -1400,6 +1407,19 @@ export interface Settings {
    *  performance choice the user makes, never a payment one — locking takes nothing away
    *  permanently and unlocking never costs anything. Settings → Features. */
   proFeaturesEnabled: boolean
+  /** Sub-gate under `proFeaturesEnabled` (same pattern as `mobilePushEnabled`'s sub-gates below).
+   *  Default ON. Covers remote-access hosting (a standing connection to the relay while it waits
+   *  for a peer) AND the larger local dictation models — Base/Small/Large v3 Turbo, several
+   *  hundred MB of memory once loaded — because both currently ride the app's one legacy
+   *  `isPremium` signal (see renderer/state/entitlement.ts). Turning the MASTER switch off forces
+   *  this off too, without touching the value stored here — turning the master back on restores
+   *  exactly what this was set to. Settings → Features. */
+  proFeatureRemoteAccessEnabled: boolean
+  /** Sub-gate under `proFeaturesEnabled` AND `proFeatureRemoteAccessEnabled` — a seat is a feature
+   *  OF remote access, so it can never be effectively on while remote access itself is off. Caps
+   *  `useEntitlement().seats` at 0 when off, so extra teammates can't join the standing connection
+   *  above even while remote access itself stays on. Default ON. Settings → Features. */
+  proFeatureTeamSeatsEnabled: boolean
   /** Keep a standing relay host connection so a paired phone can reach this Mac from anywhere
    *  (end-to-end encrypted). Default on — the host only admits SAS-approved, pinned devices, so
    *  an un-paired install just keeps an idle listener. Toggle in Settings → Phone. */
@@ -1547,6 +1567,8 @@ export const DEFAULT_SETTINGS: Settings = {
   seenOnboarding: false,
   notifyOnClaudeDone: true,
   proFeaturesEnabled: true,
+  proFeatureRemoteAccessEnabled: true,
+  proFeatureTeamSeatsEnabled: true,
   gitAutoFetch: true,
   notifyConsentAsked: false,
   soundEffects: true,

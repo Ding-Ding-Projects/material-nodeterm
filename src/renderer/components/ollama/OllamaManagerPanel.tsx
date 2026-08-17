@@ -477,7 +477,7 @@ function HealthTab({
             <strong>Get Ollama running:</strong>
           </p>
           <ol>
-            {troubleshootSteps(hardware?.platform ?? 'linux').map((step, i) => (
+            {troubleshootSteps(hardware?.platform ?? 'linux', status?.health).map((step, i) => (
               <li key={i}>
                 {step.label}
                 {step.command && <pre>{step.command}</pre>}

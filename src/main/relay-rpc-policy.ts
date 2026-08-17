@@ -26,6 +26,10 @@ const RELAY_REQUEST_METHODS = new Set<string>([
   IPC.ptySendText,
   IPC.ptyTmuxStatus,
   IPC.ptyPaneCommand,
+  // Corrects the lead pane's width on the HOST's own tmux (settings.agentTeamLeadPaneWidthEnabled
+  // is a viewer-local setting; the session it acts on lives on the host, same as paneCommand
+  // above). No destructive effect beyond a cosmetic resize-pane.
+  IPC.ptyCorrectTeamPaneWidth,
 
   // The shared canvas/project and its filesystem.
   IPC.workspaceLoad,

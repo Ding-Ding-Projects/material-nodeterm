@@ -9,7 +9,19 @@ import { OLLAMA_DEFAULT_ENDPOINT } from '../../shared/ollama'
 const HEALTH_TIMEOUT_MS = 2500
 const REQUEST_TIMEOUT_MS = 8000
 
-export class OllamaUnreachableError extends Error {}
+export class OllamaUnreachableError extends Error {
+  constructor(
+    message: string,
+    /** The underlying OS/DOM error code when one is known (e.g. "ECONNREFUSED") — null when the
+     *  runtime didn't attach one. This matters because Node's `fetch` collapses EVERY network
+     *  failure's `.message` to the generic string "fetch failed"; the real code lives one level
+     *  down on `.cause.code`. See installation.ts's classifyOllamaHealth for why this is the one
+     *  signal that actually distinguishes "Ollama was never installed" from "it's just stopped". */
+    public readonly code: string | null = null
+  ) {
+    super(message)
+  }
+}
 export class OllamaHttpError extends Error {
   constructor(
     message: string,
@@ -23,6 +35,24 @@ function withTimeout(ms: number): { signal: AbortSignal; cancel: () => void } {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), ms)
   return { signal: ctrl.signal, cancel: () => clearTimeout(t) }
+}
+
+/** Unwraps a fetch rejection into an OllamaUnreachableError that actually carries the underlying
+ *  error code, instead of the generic "fetch failed" Node hands back at the top level. Node's
+ *  `fetch` (undici) nests the real system error on `.cause` — e.g. a refused connection is
+ *  `TypeError: fetch failed` with `.cause` = `Error: connect ECONNREFUSED 127.0.0.1:11434` /
+ *  `.cause.code === 'ECONNREFUSED'`. An AbortController timeout has no `.cause` at all (it's a
+ *  DOMException with a numeric, non-string `.code`), which this deliberately does not treat as a
+ *  usable code — callers still classify that case from the message text ("aborted"), which does
+ *  work. Used by every fetch call site here (req(), pull(), chatStream()) so none of them silently
+ *  drops the one piece of information that lets the caller tell "never installed" from "stopped". */
+function toUnreachableError(e: unknown): OllamaUnreachableError {
+  const err = e as { message?: string; code?: unknown; cause?: { code?: unknown; message?: unknown } }
+  const causeCode = typeof err.cause?.code === 'string' ? err.cause.code : null
+  const topCode = typeof err.code === 'string' ? err.code : null
+  const causeMessage = typeof err.cause?.message === 'string' ? err.cause.message : null
+  const message = causeMessage || err.message || 'Ollama is unreachable'
+  return new OllamaUnreachableError(message, causeCode ?? topCode)
 }
 
 export class OllamaClient {
@@ -44,20 +74,27 @@ export class OllamaClient {
       return res
     } catch (e) {
       if (e instanceof OllamaHttpError) throw e
-      throw new OllamaUnreachableError((e as Error).message || 'Ollama is unreachable')
+      throw toUnreachableError(e)
     } finally {
       cancel()
     }
   }
 
-  /** True/false only — never throws. Used for the health/troubleshooter surface. */
-  async ping(): Promise<{ ok: boolean; version: string | null; detail: string | null }> {
+  /** True/false only — never throws. Used for the health/troubleshooter surface. `code` carries
+   *  the underlying OS error code (e.g. "ECONNREFUSED") when known, so the caller can classify
+   *  *why* Ollama is unreachable without re-parsing the generic "fetch failed" message text. */
+  async ping(): Promise<{ ok: boolean; version: string | null; detail: string | null; code: string | null }> {
     try {
       const res = await this.req('/api/version', {}, HEALTH_TIMEOUT_MS)
       const json = (await res.json()) as { version?: string }
-      return { ok: true, version: json.version ?? null, detail: null }
+      return { ok: true, version: json.version ?? null, detail: null, code: null }
     } catch (e) {
-      return { ok: false, version: null, detail: (e as Error).message }
+      return {
+        ok: false,
+        version: null,
+        detail: (e as Error).message,
+        code: e instanceof OllamaUnreachableError ? e.code : null
+      }
     }
   }
 
@@ -158,7 +195,7 @@ export class OllamaClient {
       body: JSON.stringify({ model, stream: true }),
       signal
     }).catch((e) => {
-      throw new OllamaUnreachableError((e as Error).message)
+      throw toUnreachableError(e)
     })
     if (!res.ok || !res.body) {
       const body = await res.text().catch(() => '')
@@ -206,7 +243,7 @@ export class OllamaClient {
       body: JSON.stringify({ ...body, stream: true }),
       signal
     }).catch((e) => {
-      throw new OllamaUnreachableError((e as Error).message)
+      throw toUnreachableError(e)
     })
     if (!res.ok || !res.body) {
       const errText = await res.text().catch(() => '')

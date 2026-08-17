@@ -116,6 +116,8 @@ const api: NodeTerminalApi = {
     // — not before.
     tmuxStatus: () => ipcRenderer.invoke(IPC.ptyTmuxStatus),
     paneCommand: (persistKey) => ipcRenderer.invoke(IPC.ptyPaneCommand, persistKey),
+    correctTeamLeadPaneWidth: (persistKey) =>
+      ipcRenderer.invoke(IPC.ptyCorrectTeamPaneWidth, persistKey),
     readSessionName: (sessionId, accountId, agentId) =>
       ipcRenderer.invoke(IPC.ptyReadSessionName, sessionId, accountId, agentId),
     onData: (sessionId, listener) => {

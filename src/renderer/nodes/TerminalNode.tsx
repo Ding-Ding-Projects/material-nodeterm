@@ -897,6 +897,14 @@ const WAKE_MOUNT_DELAY_MS = 2000
 /** Bounded retries for a wake that came back `'not-eligible'` — timing, not a standing refusal. */
 const WAKE_ATTEMPTS = 3
 const WAKE_RETRY_MS = 4000
+/** How often a node re-asks `correctTeamLeadPaneWidth` while `settings.agentTeamLeadPaneWidthEnabled`
+ *  is on (default off, so this costs nothing for the common case). Each tick is one IPC call plus a
+ *  small `tmux list-panes` in core — cheap enough to ask often, and it needs to: Claude's own
+ *  agent-team backend can re-narrow the lead pane the instant a new teammate spawns, with no event
+ *  this app can observe instead (see shared/agents/team-pane-layout.ts). 4s matches the session-name
+ *  poll's fast phase above — fast enough that a squeezed pane does not linger, without spawning a
+ *  tmux process on every single frame. */
+const TEAM_LEAD_PANE_POLL_MS = 4000
 
 function setNodeOffscreen(nodeId: string, offscreen: boolean): void {
   if (offscreen) offscreenNodes.add(nodeId)
@@ -4439,6 +4447,41 @@ export function TerminalNode({
       if (timer) clearTimeout(timer)
     }
   }, [id, canReadTitleNode, status?.sessionId, data.titleAuto, updateNodeData])
+
+  // LEAD PANE WIDTH for Claude Code agent teams (`settings.agentTeamLeadPaneWidthEnabled`, opt-in,
+  // default off) — see shared/agents/team-pane-layout.ts for the problem this corrects (Claude's
+  // own tmux team backend narrows the pane the user actually types into to ~30% once a few
+  // teammates are running) and why one correction is not enough: Claude re-applies its own split on
+  // EVERY later teammate, so this re-asks on every tick rather than remembering "already
+  // corrected" — there is no such state to remember, by design.
+  //
+  // A FIXED interval, unlike the session-name poll's backoff just above: pane count is not
+  // monotonic (teammates come and go), so there is no "found the stable answer, slow down" moment —
+  // Claude can re-narrow the lead pane at any time a new teammate spawns, and this has to notice
+  // that as reliably the tenth time as the first. `correctTeamLeadPaneWidth` is the single source
+  // of truth for the decision itself (feature off, single pane, unavailable backend, the percent to
+  // use); this effect only decides WHEN to ask again, and swallows every outcome (the call already
+  // never rejects, but a poller must survive an IPC hiccup regardless).
+  //
+  // `!remoteSession` matches the setting's own promised scope ("tmux-backed local sessions only"):
+  // an SSH-project node's tmux session lives on ANOTHER machine, so asking THIS core to correct it
+  // is a wasted round trip on every tick — core's own guard already refuses it harmlessly, but
+  // there's no reason to pay for that trip for every SSH node on the canvas, every 4 seconds.
+  const leadPaneWidthEnabled = useSettings((s) => s.settings.agentTeamLeadPaneWidthEnabled)
+  useEffect(() => {
+    if (!leadPaneWidthEnabled || remoteSession) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const tick = async () => {
+      await api.pty.correctTeamLeadPaneWidth(id).catch(() => false)
+      if (!cancelled) timer = setTimeout(() => void tick(), TEAM_LEAD_PANE_POLL_MS)
+    }
+    void tick()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [id, leadPaneWidthEnabled, remoteSession, api])
 
   // Cmd/Ctrl+M toggles markdown view of this terminal's output (only when hovered).
   useEffect(() => {

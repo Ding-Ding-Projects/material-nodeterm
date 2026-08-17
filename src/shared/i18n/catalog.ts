@@ -228,6 +228,26 @@ export const CATALOG: Catalog = {
     en: flat('Connect over SSH…'),
     yue: flat('用 SSH 連接…')
   },
+  'welcome.back': {
+    en: flat('Back to your projects'),
+    yue: flat('返去你嘅項目')
+  },
+  'welcome.back.note': {
+    en: [
+      "They're untouched — nothing here changes them.",
+      "They're untouched — nothing here changes them.",
+      'Untouched, promise — nothing on this screen can touch them.',
+      "Not one of them moved. This screen can't get anywhere near your other projects.",
+      "Your other projects are just sitting there, blissfully untouched — this screen couldn't lay a finger on them if it tried."
+    ],
+    yue: [
+      '佢哋原封不動 — 呢度乜都唔會郁到佢哋。',
+      '佢哋原封不動 — 呢度乜都唔會郁到佢哋。',
+      '放心，佢哋原封不動 — 呢個畫面郁佢哋唔到。',
+      '一個都冇郁過，呢個畫面近佢哋都近唔到。',
+      '你啲其他項目照舊喺度嘆世界，原封不動 — 呢度半隻手指都掂唔到佢哋。'
+    ]
+  },
   'welcome.close': {
     en: flat('Close'),
     yue: flat('關閉')

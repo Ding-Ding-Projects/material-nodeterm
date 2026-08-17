@@ -45,6 +45,7 @@ import { REAP_SWEEP_MS, shouldReap } from './pty-reap'
 import { ControlModeClient, type ControlSpawn } from './tmux-control-client'
 import { TMUX_SOCKET, sessionName, isSessionName, localTmuxSendKeysArgs, localTmuxEnterArgs } from './tmux-naming'
 import { encodeSendKeysHex } from './tmux-control'
+import { decideLeadPaneCorrection, resizeLeadPaneArgs } from '../shared/agents/team-pane-layout'
 import { bracketedInjection, sanitizePasteText } from './paste-injection'
 import { releasePty, type ReleasablePty } from './pty-release'
 import { terminateWindowsProcessTree } from '../session-host/windows-process-tree'
@@ -1496,6 +1497,9 @@ export class PtyManager {
     )
     platform().handle(IPC.ptyTmuxStatus, () => this.tmuxStatus())
     platform().handle(IPC.ptyPaneCommand, (persistKey: string) => this.paneCommand(persistKey))
+    platform().handle(IPC.ptyCorrectTeamPaneWidth, (persistKey: string) =>
+      this.correctTeamLeadPaneWidth(persistKey)
+    )
   }
 
   /** Feeds the renderer's "tmux not found" banner. Without tmux the app silently degrades to a
@@ -3665,6 +3669,58 @@ export class PtyManager {
       return stdout.trim() || null
     } catch {
       return null
+    }
+  }
+
+  /**
+   * Correct a node's tmux "lead" pane width after Claude Code's own agent-team backend has
+   * narrowed it (`settings.agentTeamLeadPaneWidthEnabled` — see `shared/agents/team-pane-layout.ts`
+   * for the problem this fixes and why it must be RE-asked on every call rather than applied once).
+   *
+   * Counts the node's panes and, when `decideLeadPaneCorrection` says to, resizes pane 0 — both in
+   * one call, so a caller polling this pays one round-trip per tick instead of two. Resolves `true`
+   * only when it actually resized something; every other outcome (feature off, a plain single-pane
+   * terminal, no live/local tmux session, a failed tmux call) resolves `false`. Never throws:
+   * correcting cosmetic pane width must never be allowed to disturb, or appear to disturb, whatever
+   * is actually running in the session.
+   *
+   * TMUX-ONLY and LOCAL-ONLY, matching the setting's own description ("tmux-backed local sessions
+   * only"). No sessionHost branch — the Windows session-host fallback has no split-window/
+   * resize-pane primitive at all, so there is nothing to observe or correct there (the module doc
+   * on `decideLeadPaneCorrection` covers this). No sshRemote branch either: an SSH-project node's
+   * tmux session lives on the REMOTE host, not this machine's socket, so querying the local socket
+   * for it would read nothing and (harmlessly) never act — this guard just skips that round-trip.
+   * Mirrors `paneCommand`'s dispatch shape (checked via `liveSessionForPersistKey`), minus the
+   * sshRemote leg that method has and this one deliberately does not.
+   */
+  async correctTeamLeadPaneWidth(persistKey: string): Promise<boolean> {
+    const settings = this.getSettings()
+    const cfg = {
+      enabled: settings.agentTeamLeadPaneWidthEnabled,
+      percent: settings.agentTeamLeadPaneWidthPercent
+    }
+    // Fail fast, before touching tmux at all: the setting defaults OFF, so this must cost nothing
+    // for the common case of a caller that polls regardless of the setting's state.
+    if (!cfg.enabled) return false
+    const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.sessionHost || live?.sshRemote || !this.tmuxPath) return false
+    const target = sessionName(persistKey)
+    try {
+      // Default (non-`-F`) output is one line per pane in the node's WINDOW — exactly the "how many
+      // panes does this node's tmux window currently report" count `decideLeadPaneCorrection`
+      // wants. No `-a` (that would list every session on the socket) and no `-F` (a bare count needs
+      // no fields): see the module doc on `decideLeadPaneCorrection` for why this is window-scoped.
+      const { stdout } = await runAsync(this.tmuxPath, ['-L', TMUX_SOCKET, 'list-panes', '-t', target])
+      const paneCount = stdout.split('\n').filter((line) => line.trim().length > 0).length
+      // Every OTHER rule (single-pane refusal, percent validation) lives in the pure decision — this
+      // wiring never re-derives them, it only supplies the fact (the pane count) and acts on the
+      // verdict.
+      const decision = decideLeadPaneCorrection(paneCount, cfg)
+      if (!decision.act || !decision.widthArg) return false
+      await runAsync(this.tmuxPath, resizeLeadPaneArgs(TMUX_SOCKET, target, decision.widthArg))
+      return true
+    } catch {
+      return false
     }
   }
 

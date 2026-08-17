@@ -9,18 +9,27 @@ import {
 } from '../../shared/ollama'
 import { OllamaClient, OllamaUnreachableError } from './client'
 import { detectHardware } from './hardware'
+import { classifyOllamaHealth, detectOllamaInstalled, type OllamaInstallEvidence } from './installation'
 import { OllamaPullQueue } from './pull-queue'
 import { OllamaChatStore } from './chat-store'
 
+export interface RegisterOllamaIpcDeps {
+  /** Override for detectOllamaInstalled — real fs/PATH detection by default. Exists so tests can
+   *  make the 'stopped' vs 'not-installed' verdict deterministic instead of depending on whether
+   *  Ollama happens to be installed on the machine running the suite. */
+  checkInstalled?: () => OllamaInstallEvidence
+}
+
 /** Registers the ollama:* RPC surface on a CorePlatform. Every call here reaches only Ollama's own
  *  local HTTP API (OllamaClient) — see docs/ollama-manager.md for the full contract. */
-export function registerOllamaIpc(platform: CorePlatform): { client: OllamaClient } {
+export function registerOllamaIpc(platform: CorePlatform, deps: RegisterOllamaIpcDeps = {}): { client: OllamaClient } {
   const client = new OllamaClient()
+  const checkInstalled = deps.checkInstalled ?? detectOllamaInstalled
 
   platform.handle(IPC.ollamaStatus, async (): Promise<OllamaStatus> => {
     const ping = await client.ping()
     return {
-      health: ping.ok ? 'ok' : classifyFailure(ping.detail),
+      health: ping.ok ? 'ok' : classifyOllamaHealth(ping.code, ping.detail, checkInstalled),
       endpoint: client.endpoint,
       version: ping.version,
       detail: ping.detail,
@@ -95,14 +104,6 @@ export function registerOllamaIpc(platform: CorePlatform): { client: OllamaClien
   platform.handle(IPC.ollamaChatStop, (id: string) => chats.stop(id))
 
   return { client }
-}
-
-function classifyFailure(detail: string | null): OllamaStatus['health'] {
-  if (!detail) return 'unreachable'
-  const d = detail.toLowerCase()
-  if (d.includes('econnrefused')) return 'stopped'
-  if (d.includes('abort') || d.includes('timeout')) return 'unreachable'
-  return 'unhealthy'
 }
 
 export { OllamaUnreachableError }

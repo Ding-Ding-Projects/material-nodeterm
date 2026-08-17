@@ -25,6 +25,12 @@ export const IPC = {
   /** The foreground command of a node's tmux pane (`#{pane_current_command}`) — how the in-place
    *  agent restart sees that the CLI has exited and a shell owns the pane again. */
   ptyPaneCommand: 'pty:pane-command',
+  /** Correct a node's tmux "lead" pane width after Claude Code's own agent-team backend has
+   *  narrowed it (`settings.agentTeamLeadPaneWidthEnabled` — see
+   *  shared/agents/team-pane-layout.ts). Counts the node's panes and, when the setting calls for
+   *  it, resizes pane 0 — both in one call so a poller pays one round-trip per tick. Resolves
+   *  `true` only when it actually resized something; tmux-backed local sessions only. */
+  ptyCorrectTeamPaneWidth: 'pty:correct-team-pane-width',
   ptyReadSessionName: 'pty:read-session-name',
   /** Shell → renderer: this MACHINE's pty-device pressure band changed (core/pty-pressure.ts).
    *  Payload: `PtyPressure` — `{ level, usage, ceiling }`. Sent on band CHANGES only, and re-sent
