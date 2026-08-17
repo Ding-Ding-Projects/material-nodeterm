@@ -960,9 +960,6 @@ export function Canvas() {
   // Flow's own lock convention. Transient by design: a lock that survives restart reads as
   // "the app is frozen" to whoever opens it next.
   const [canvasLocked, setCanvasLocked] = useState(false)
-  // Paste is a canvas action only after the user's last pointer interaction landed on the real
-  // React Flow pane. Prevents a global paste listener from hijacking Welcome/Usage/sidebar UI.
-  const canvasImagePasteArmedRef = useRef(false)
   /** SPACE is held: a left-drag pans instead of box-selecting, Figma-style (issue #86). */
   const [spacePan, setSpacePan] = useState(false)
 
@@ -10367,67 +10364,7 @@ export function Canvas() {
             }
           )
         }
-        const row = memory.rows.find((candidate) => candidate.nodeId === nodeId)
-        return row
-          ? [
-              {
-                id: nodeId,
-                projectId: activeProjectIdAtDisclosure ?? undefined,
-                type: 'orphan-session',
-                title: orphanTitle,
-                runtimeIdentity: orphanSessionRuntimeIdentity(row)
-              }
-            ]
-          : null
-      }
-      const disclosedOrphanTarget = readOrphanTarget()
-      if (!disclosedOrphanTarget) {
-        setNotice({
-          kind: 'error',
-          text: 'That session could not be re-read. Nothing was ended; refresh and try again.'
-        })
-        return
-      }
-      const orphanOptions: RequestDeleteNodesOptions = {
-        surface: 'sessions-sidebar',
-        titles: [orphanTitle],
-        removesNode: false,
-        readCurrentTarget: readOrphanTarget,
-        onStale: () => {
-          setNotice({
-            kind: 'error',
-            text: 'That session changed or could not be re-read. Nothing was ended; refresh and try again.'
-          })
-        },
-        perform: (authorization) => {
-          void useSessionMemory
-            .getState()
-            .refreshFull(disclosedScope!, activeProjectIdAtDisclosure ?? undefined)
-            .then(() => {
-              const finalCommit = createNodeDeletionCommitBarrier({
-                disclosedTargets: disclosedOrphanTarget,
-                authorization,
-                readCurrent: readOrphanTarget,
-                kidsGateRequired: kidsDestructiveGateRequired,
-                perform: () => {
-                  transport.destroy(nodeId, { everySocket: true })
-                  remoteKill?.()
-                  // Nothing else to clean up: with no node anywhere, there is no canvas entry to
-                  // remove and no parked terminal to dispose. Persisted agent status is dropped
-                  // anyway, since a session id can outlive the node it belonged to.
-                  useAgentStatus.getState().remove(nodeId)
-                },
-                upgradeToTwoKey: () => {
-                  requestDeleteNodes([nodeId], orphanOptions)
-                },
-                refuse: orphanOptions.onStale
-              })
-              finalCommit()
-            })
-            .catch(() => orphanOptions.onStale?.())
-        }
-      }
-      requestDeleteNodes([nodeId], orphanOptions)
+      })
     },
     [closeSession, requestDeleteNodes, setNotice]
   )
