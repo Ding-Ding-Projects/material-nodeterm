@@ -471,7 +471,7 @@ export function ModalTerminal({
     const term = termRef.current
     if (!term || !files.length) return
     // Clipboard bytes must be written before they have a path, which is not instant either.
-    const needsWrite = files.some((f) => !window.nodeTerminal.getPathForFile(f))
+    const needsWrite = files.some((f) => !api.getPathForFile(f))
     let paths: string[]
     if (spawn.sshRemoteTmux) {
       // Uploads go over the master this card's PTY runs on — its scope, not the project's.
@@ -480,14 +480,14 @@ export function ModalTerminal({
         : useProjects.getState().activeProjectId
       setUploading(true)
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: true, projectId })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: true, projectId })
       } finally {
         setUploading(false)
       }
     } else if (needsWrite) {
       setUploading(true)
       try {
-        paths = await droppedPaths(files, {
+        paths = await droppedPaths(api, files, {
           sshRemoteTmux: false,
           projectId: ''
         })
@@ -495,7 +495,7 @@ export function ModalTerminal({
         setUploading(false)
       }
     } else {
-      paths = await droppedPaths(files, {
+      paths = await droppedPaths(api, files, {
         sshRemoteTmux: false,
         projectId: ''
       })

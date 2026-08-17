@@ -9,6 +9,7 @@ import type {
   RelayPtyCreateDecision,
   RelayPtyCreateSource
 } from './relay-pty-create'
+import { relayCastAllowed, relayEventAllowed, relayRequestAllowed } from './relay-rpc-policy'
 
 type Handler = { fn: (...args: any[]) => unknown; withSender: boolean }
 type Listener = { fn: (...args: any[]) => void; withSender: boolean }
@@ -77,13 +78,19 @@ export interface ElectronPlatformOptions {
  * is empty — and the webContents path below is the code it replaced, byte for byte.
  */
 export function electronPlatform(options: ElectronPlatformOptions = {}): ElectronPlatform {
-  // THE INVARIANT (4c): a channel is REACHABLE BY A REMOTE PEER if, and only if, it is registered
-  // through platform().handle/on. A raw `ipcMain.handle` is invisible to a peer — a peer has no
-  // webContents, so its request never travels through ipcMain at all; it is answered from THIS
-  // table by dispatch() below. When you add an IPC handler, that is the choice you are making:
-  //   - core-bound / acts on THIS machine's state (fs, git, pty, workspace, transcripts) → platform
-  //   - acts on the USER's own machine or is host-security-sensitive (dialogs, shell, notifications,
-  //     updater, pairing/relay control plane) → raw ipcMain, on purpose. See src/main/index.ts.
+  // THE INVARIANT (4c + the raw-RPC security boundary): platform().handle/on records a channel so
+  // the Server Edition and local renderer can use the shared core implementation, but registration
+  // alone NEVER grants a relay peer access. dispatch/cast also require the exact method to appear in
+  // relay-rpc-policy.ts's allowlist. This matters for services such as the authenticator: they are
+  // correctly registered through CorePlatform for the Server Edition, while relay-api.ts correctly
+  // keeps them local to the viewing desktop. Without the second gate, a raw peer frame could skip
+  // the renderer's confirmation UI and ask the host core to unseal every secret.
+  //
+  // A raw `ipcMain.handle` remains invisible to a peer — a peer has no webContents, so its request
+  // never travels through ipcMain at all. When adding an intended relay method, update BOTH the
+  // relay API builder and the exact allowlist; a newly registered service otherwise fails closed.
+  // Relay pty:create has a second boundary below: even after the method is allowed, the host
+  // reconstructs its launch options from host-owned authority before the handler can see them.
   // handle/handleWithSender are ONE handler per channel (last wins, like ipcMain.handle);
   // on/onWithSender are an ordered set of listeners. Mirrors ServerPlatform exactly — a divergence
   // here would be a behavior difference between the two remote surfaces.
@@ -152,6 +159,15 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
           }
         }
       }
+      if (!relayRequestAllowed(req.method)) {
+        return {
+          t: 'res', id: req.id, ok: false,
+          error: {
+            code: 'E_FORBIDDEN',
+            message: 'method is not available to relay peers'
+          }
+        }
+      }
       const h = handlers.get(req.method)
       if (!h) {
         return {
@@ -208,6 +224,10 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       // sending a forged CAST for a machine-local channel must remain inert even if a future
       // refactor accidentally registers a listener with the same name.
       if (RELAY_LOCAL_ONLY_METHODS.has(method) || method.startsWith('githubControl:')) return
+      // Casts have no reply channel, so a forbidden raw cast is dropped. Apply the same default-deny
+      // rule as dispatch before even looking up a listener: registering a future machine-global
+      // listener must not silently create a peer-reachable mutation path.
+      if (!relayCastAllowed(method)) return
       const set = listeners.get(method)
       if (!set) return
       for (const l of set) {
@@ -230,6 +250,10 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       // registry's WS backpressure). Everything else is a webContents, dispatched natively.
       const peers = peerRegistry()
       if (peers.has(id)) {
+        // CorePlatform is shared by session-scoped and machine-global services. A direct event to a
+        // peer must pass the same exact surface review as an inbound method; registration or client
+        // attribution alone is not authorization to expose host-global state.
+        if (!relayEventAllowed(ch)) return
         peers.sendTo(id, ch, ...relayEventArgs(ch, args))
         return
       }
@@ -242,6 +266,9 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       // fan out via broadcast, so a peer that only received sendTo would still see nothing.
       const peers = peerRegistry()
       if (peers.size === 0) return // solo desktop: no ids() array, no loop — allocation-free
+      // The local renderer always receives its own machine's event above. Only the peer fan-out is
+      // filtered, so adding the boundary cannot disable host UI updates.
+      if (!relayEventAllowed(ch)) return
       for (const id of peers.ids()) {
         // One peer must never break the fan-out. UiSinkRegistry.sendTo already contains a throwing
         // SINK (and evicts a dead one), so this only catches the rest of the path — the flow

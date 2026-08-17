@@ -50,11 +50,9 @@ export interface CanvasImageTarget {
  * None of these is an error, so none refuses: the image is saved, it just cannot travel with the
  * project. The caller is told which happened via `inProject`.
  *
- * A RELAY TAB is deliberately NOT in that list — it is refused before it reaches here (see
- * `canvasImportRefusal` in renderer/canvas/canvas-image-import.ts). The reasoning above turns on
- * the node reading through the same fs this wrote to, and for a relay tab that is FALSE: the write
- * is the local preload's while `EditorNode` reads through the session api, i.e. the PEER's core.
- * Saving here would produce a node that asks another machine for a path only this one has.
+ * A relay tab reaches THIS core through its session API. Its viewer-held bytes are never treated
+ * as a direct OS path; the relay API makes `getPathForFile` answer empty, then `files.saveCanvasImage`
+ * carries the bytes here. The write and the later EditorNode read therefore land on this same host.
  */
 export function canvasImageTarget(
   projectCwd: string | undefined,

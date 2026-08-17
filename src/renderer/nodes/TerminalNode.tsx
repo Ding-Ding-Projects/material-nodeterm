@@ -4148,7 +4148,7 @@ export function TerminalNode({
     // Clipboard bytes (a screenshot) have never been a file anywhere, so something has to write
     // one before there is a path to paste — worth the same "this is going somewhere" overlay the
     // SSH upload gets, since neither is instant and both paste nothing until they finish.
-    const needsWrite = files.some((f) => !window.nodeTerminal.getPathForFile(f))
+    const needsWrite = files.some((f) => !api.getPathForFile(f))
 
     let paths: string[]
     if (data.sshRemoteTmux) {
@@ -4166,7 +4166,7 @@ export function TerminalNode({
         text: `Uploading ${files.length === 1 ? files[0].name : `${files.length} files`}…`
       })
       try {
-        paths = await droppedPaths(files, { sshRemoteTmux: true, projectId })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: true, projectId })
       } finally {
         setUploadNote(null)
       }
@@ -4178,10 +4178,7 @@ export function TerminalNode({
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
       setUploadNote({ text: 'Saving pasted file…' })
       try {
-        paths = await droppedPaths(files, {
-          sshRemoteTmux: false,
-          projectId: ''
-        })
+        paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
       } finally {
         setUploadNote(null)
       }
@@ -4190,10 +4187,7 @@ export function TerminalNode({
         uploadNoteTimer.current = setTimeout(() => setUploadNote(null), 2500)
       }
     } else {
-      paths = await droppedPaths(files, {
-        sshRemoteTmux: false,
-        projectId: ''
-      })
+      paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
     }
     if (!paths.length) return
     // Enter the terminal and paste the path(s) like a real drop (trailing space to continue).
