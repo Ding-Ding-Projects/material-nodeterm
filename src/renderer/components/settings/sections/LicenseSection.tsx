@@ -1,4 +1,6 @@
 import { useSettings } from '../../../state/settings'
+import { useEntitlement } from '../../../state/entitlement'
+import { PRO_FEATURES, proFeatureSettingsKey, type ProFeatureId } from '../../../lib/proFeatureAccess'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
@@ -47,13 +49,43 @@ const ROWS = {
       'pro',
       'premium'
     ]
+  },
+  // One SearchableRow per individual toggle, keyed by feature id, so each is independently
+  // findable in Settings search (and in the command palette, which shares the same search index).
+  remoteAccess: {
+    title: 'Remote access & Pro dictation models',
+    keywords: [
+      'remote',
+      'remote access',
+      'host',
+      'hosting',
+      'relay',
+      'dictation',
+      'speech',
+      'whisper',
+      'voice',
+      'model',
+      'performance',
+      'speed',
+      'memory',
+      'battery'
+    ]
+  },
+  teamSeats: {
+    title: 'Team seats',
+    keywords: ['team', 'seat', 'seats', 'invite', 'collaborate', 'share', 'performance', 'connections']
   }
 }
 const ENTRIES = Object.values(ROWS)
 
 export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.Element {
-  const proFeaturesEnabled = useSettings((s) => s.settings.proFeaturesEnabled)
+  const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
+  // The store's already-resolved effective states (master AND each feature's own choice) — reused
+  // here rather than re-deriving them, so this section can never disagree with what actually gates
+  // `isPremium`/`seats` for RemoteSection, RemoteAccessDialog, OnboardingFlow and TeamAccessSection.
+  const features = useEntitlement((s) => s.features)
+  const proFeaturesEnabled = settings.proFeaturesEnabled !== false
 
   return (
     <SettingsSection
@@ -88,7 +120,7 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
       <SearchableRow {...ROWS.features}>
         <FieldRow
           label="Unlock all features"
-          description="Unlocked is the default and is free. The only reason to lock it is speed: a locked app runs fewer features and does less work in the background, so it lags less on an older or busy machine and uses less battery. Locking takes nothing away permanently and unlocking never costs anything — flip it whenever you like."
+          description="Unlocked is the default and is free. The only reason to lock it is speed: a locked app runs fewer features and does less work in the background, so it lags less on an older or busy machine and uses less battery. Turning this off locks every feature below it; turning it back on restores whatever you had chosen for each one below — nothing is reset. Want to keep just one or two and shed the rest? Leave this on and use the individual switches below instead."
           control={
             <Switch
               checked={proFeaturesEnabled}
@@ -98,6 +130,52 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
           }
         />
       </SearchableRow>
+
+      {PRO_FEATURES.map((feature) => {
+        const key = proFeatureSettingsKey(feature.id)
+        // The switch always reflects and edits this feature's OWN stored choice — never the
+        // master-gated effective value. Binding it to the effective value would make the switch
+        // look stuck (or silently do nothing) whenever a parent gate is off, which is exactly the
+        // kind of control that looks usable and isn't.
+        const own = settings[key] !== false
+        const note = noteFor(feature.id, own, proFeaturesEnabled, features)
+        return (
+          <SearchableRow key={feature.id} {...ROWS[feature.id]}>
+            <FieldRow
+              label={feature.title}
+              description={feature.description}
+              note={note}
+              control={
+                <Switch
+                  checked={own}
+                  onChange={(v) => update({ [key]: v })}
+                  ariaLabel={feature.title}
+                />
+              }
+            />
+          </SearchableRow>
+        )
+      })}
     </SettingsSection>
   )
+}
+
+/** A caveat explaining why a feature you've left ON (your own stored choice) isn't actually doing
+ *  anything right now — either the master switch is off, or (for `teamSeats`) `remoteAccess`,
+ *  which it rides, is off. Undefined when the feature is genuinely off by your own choice, or when
+ *  nothing above it is holding it back — the switch already tells that story on its own. */
+function noteFor(
+  id: ProFeatureId,
+  ownChoiceOn: boolean,
+  masterOn: boolean,
+  features: Record<ProFeatureId, boolean>
+): string | undefined {
+  if (!ownChoiceOn) return undefined
+  if (!masterOn) {
+    return '"Unlock all features" above is off, so this is off right now too. Turn it back on to restore this choice.'
+  }
+  if (id === 'teamSeats' && !features.remoteAccess) {
+    return '"Remote access & Pro dictation models" above is off, so this has no effect right now.'
+  }
+  return undefined
 }
