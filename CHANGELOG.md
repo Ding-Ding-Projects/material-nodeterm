@@ -67,7 +67,7 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
   A provisional or rejected attach is torn down, stays non-persistent, and reports its real reason
   instead of being indexed as a working persistent terminal or replaced by a throwaway shell.
 
-- The lazy Squirrel bootstrap no longer lets Vite move the main application graph under
+ - The lazy Squirrel bootstrap no longer lets Vite move the main application graph under
   `out/main/chunks`, where its relative preload, renderer, HUD, and unpackaged icon paths pointed
   at files that do not exist. Main-process chunks now retain the `out/main` runtime boundary, and
   startup rejects a future nested layout explicitly instead of opening a blank window.
