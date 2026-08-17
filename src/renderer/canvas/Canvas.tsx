@@ -10956,11 +10956,11 @@ export function Canvas() {
         if (attached) return connectHostAttachment(scopeId, attached, sshConnect, sshDisconnect)
         const projectId = scopeId
         const project = useProjects.getState().getProject(projectId)
-        const attached = useSshConn.getState().byProject[projectId]
+        const projectAttachment = useSshConn.getState().byProject[projectId]
         const ssh =
           project?.ssh ??
-          (attached?.conn
-            ? { server: attached.conn, remoteCwd: attached.remoteCwd || '~' }
+          (projectAttachment?.conn
+            ? { server: projectAttachment.conn, remoteCwd: projectAttachment.remoteCwd || '~' }
             : undefined)
         if (!ssh) return false
         // Same post-connect sequence as the active-project effect: arm remote git routing first
@@ -10973,7 +10973,7 @@ export function Canvas() {
         if (project?.ssh && useProjects.getState().activeProjectId === projectId) {
           await api.git.setActiveRemote(projectId)
         }
-        useSshConn.getState().setConn(projectId, { ...attached, ...info })
+        useSshConn.getState().setConn(projectId, { ...projectAttachment, ...info })
         return true
       },
       respawn: (scopeId, nodeIds) => {
