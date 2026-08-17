@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import fs from 'fs'
 import net from 'net'
 import os from 'os'
@@ -40,7 +41,37 @@ function within<T>(promise: Promise<T>, ms = 1_000): Promise<T> {
   })
 }
 
-function createUserData(token = 'test-token'): {
+/**
+ * The hardened reader requires exactly 64 lowercase hex characters, so a readable placeholder like
+ * `'test-token'` is now rejected as corruption before any connection is even attempted.
+ *
+ * Callers still pass a readable LABEL (`'test-token-kept-off-argv'`) because that is what makes a
+ * failure legible; this turns the label into a valid token deterministically, and `createUserData`
+ * returns the real one. Tests assert against that returned value, so distinctness per label is
+ * preserved and nothing has to know the encoding.
+ */
+function tokenFor(label: string): string {
+  // An empty or whitespace label is passed through UNCHANGED and deliberately: those tests assert
+  // the reader's own corruption refusals ("token is empty or whitespace"), so hashing them into a
+  // valid token would quietly delete the case being tested.
+  if (label.trim().length === 0) return label
+  return createHash('sha256').update(label).digest('hex')
+}
+
+/**
+ * `protocolVersion` must match what the served fake host answers in its hello:
+ *   `acceptedHello`       -> 2  (advertises a version, so the handshake negotiates 2)
+ *   `acceptedLegacyHello` -> 1  (omits it, so the handshake negotiates 1)
+ *
+ * The client refuses a state file that disagrees with the negotiated version, and it is right to:
+ * a host that publishes 2 while speaking 1 is not a legacy host, it is an inconsistent one. Real
+ * legacy hosts publish 1, which is what a legacy test must simulate to reach the OPERATION-level
+ * `SessionHostProtocolCompatibilityError` those tests actually assert.
+ */
+function createUserData(
+  label = 'default-test-token',
+  protocolVersion: 1 | 2 = SESSION_HOST_PROTOCOL_VERSION
+): {
   userDataDir: string
   paths: ReturnType<typeof sessionHostPaths>
   token: string
@@ -48,7 +79,29 @@ function createUserData(token = 'test-token'): {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-session-client-'))
   tempDirs.add(userDataDir)
   const paths = sessionHostPaths(userDataDir)
+  const token = tokenFor(label)
   fs.writeFileSync(paths.tokenPath, token)
+  // Publish the ownership state too, not just the token.
+  //
+  // `12a1f9ac` ("reconcile shared terminal ownership") made discovery fail closed: the client now
+  // finds a running host ONLY through a fully valid state file, because a socket that merely
+  // answers is not proof of who owns the name lane. These fixtures predate that and wrote a token
+  // alone, so every one of them looked like "no host is running" — the client then tried to LAUNCH
+  // one and failed on the bundle, reporting `session-host bundle not found` for tests that are not
+  // about launching at all. That misleading symptom is why this looked like a protocol defect.
+  //
+  // `pid` is this process deliberately: the reader treats a live pid as an owner, and the test
+  // host really is served from here.
+  fs.writeFileSync(
+    paths.statePath,
+    JSON.stringify({
+      pid: process.pid,
+      endpoint: paths.endpoint,
+      tokenPath: paths.tokenPath,
+      startedAt: 1,
+      protocolVersion
+    })
+  )
   return { userDataDir, paths, token }
 }
 
@@ -317,7 +370,7 @@ async function listen(server: net.Server, endpoint: string): Promise<void> {
 
 describe('SessionHostClient legacy host continuity', () => {
   it('warm-attaches, captures, writes, and receives output without sending a selected spawn plan', async () => {
-    const { userDataDir, paths } = createUserData()
+    const { userDataDir, paths } = createUserData('legacy-host', 1)
     const onData = vi.fn()
     let warmRequest: Extract<SessionHostRequest, { cmd: 'attach' }> | undefined
     let hostSocket: net.Socket | undefined
@@ -383,7 +436,7 @@ describe('SessionHostClient legacy host continuity', () => {
   })
 
   it('uses only the sentinel and fails closed when a warm v1 session disappears before attach', async () => {
-    const { userDataDir, paths } = createUserData()
+    const { userDataDir, paths } = createUserData('legacy-host', 1)
     const onData = vi.fn()
     let warmRequest: Extract<SessionHostRequest, { cmd: 'attach' }> | undefined
 
@@ -423,7 +476,7 @@ describe('SessionHostClient legacy host continuity', () => {
   })
 
   it('never sends a selected cold spawn plan to a live legacy host', async () => {
-    const { userDataDir, paths } = createUserData()
+    const { userDataDir, paths } = createUserData('legacy-host', 1)
     const commands: string[] = []
     await serve(paths.endpoint, (request, socket) => {
       commands.push(request.cmd)
@@ -447,7 +500,7 @@ describe('SessionHostClient legacy host continuity', () => {
   })
 
   it('never sends a replacement-reservation kill to a live legacy host', async () => {
-    const { userDataDir, paths } = createUserData()
+    const { userDataDir, paths } = createUserData('legacy-host', 1)
     let killRequests = 0
     await serve(paths.endpoint, (request, socket) => {
       if (request.cmd === 'hello') socket.write(acceptedLegacyHello(request.id))
@@ -463,7 +516,7 @@ describe('SessionHostClient legacy host continuity', () => {
   })
 
   it('never sends a direct-target confirmed recycle kill to a live legacy host', async () => {
-    const { userDataDir, paths } = createUserData()
+    const { userDataDir, paths } = createUserData('legacy-host', 1)
     let killRequests = 0
     await serve(paths.endpoint, (request, socket) => {
       if (request.cmd === 'hello') socket.write(acceptedLegacyHello(request.id))
@@ -1023,7 +1076,7 @@ describe('SessionHostClient persistent launch requests', () => {
   })
 
   it('fails closed before sending an opaque launch to a legacy host', async () => {
-    const { userDataDir, paths } = createUserData()
+    const { userDataDir, paths } = createUserData('legacy-host', 1)
     let launchRequests = 0
     await serve(paths.endpoint, (request, socket) => {
       if (request.cmd === 'hello') socket.write(acceptedLegacyHello(request.id))
