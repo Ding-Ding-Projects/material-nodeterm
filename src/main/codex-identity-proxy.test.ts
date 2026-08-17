@@ -52,7 +52,7 @@ describe('NodeTerm Codex remote launcher', () => {
     const bindB = path.join(root, 'bind-b.txt')
     const headersA = path.join(root, 'headers-a.txt')
     const headersB = path.join(root, 'headers-b.txt')
-    await run('/bin/mkdir', ['-p', bin])
+    mkdirSync(bin, { recursive: true })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', {
       mode: 0o600
     })
@@ -108,7 +108,7 @@ describe('NodeTerm Codex remote launcher', () => {
     const endpoint = path.join(root, 'hook-endpoint.env')
     const outA = path.join(root, 'a.json')
     const outB = path.join(root, 'b.json')
-    await run('/bin/mkdir', ['-p', bin])
+    mkdirSync(bin, { recursive: true })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', {
       mode: 0o600
     })
@@ -166,7 +166,7 @@ describe('NodeTerm Codex remote launcher', () => {
     const exposeCapture = path.join(root, 'expose.txt')
     const runtime = path.join(root, 'relay-runtime')
     const script = path.join(root, 'codex-relay.js')
-    await run('/bin/mkdir', ['-p', bin])
+    mkdirSync(bin, { recursive: true })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
     writeFileSync(
       path.join(bin, 'curl'),
@@ -217,7 +217,7 @@ describe('NodeTerm Codex remote launcher', () => {
     const capture = path.join(root, 'args.json')
     const runtime = path.join(root, 'relay-runtime')
     const script = path.join(root, 'codex-relay.js')
-    await run('/bin/mkdir', ['-p', bin])
+    mkdirSync(bin, { recursive: true })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
     writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 22\n', { mode: 0o700 })
     writeFileSync(
@@ -260,7 +260,7 @@ describe('NodeTerm Codex remote launcher', () => {
     const runtime = path.join(root, 'relay-runtime')
     const script = path.join(root, 'codex-relay.js')
     const codexCapture = path.join(root, 'codex-args')
-    await run('/bin/mkdir', ['-p', bin])
+    mkdirSync(bin, { recursive: true })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
     writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 0\n', { mode: 0o700 })
     writeFileSync(path.join(bin, 'codex'), `#!/bin/sh\nprintf '%s\\n' "$*" >> ${codexCapture}\n`, { mode: 0o700 })
@@ -287,7 +287,7 @@ describe('NodeTerm Codex remote launcher', () => {
   it('fails closed before launch for a missing or invalid resume-thread mapping key', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-invalid-'))
     const bin = path.join(root, 'bin')
-    await run('/bin/mkdir', ['-p', bin])
+    mkdirSync(bin, { recursive: true })
     writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\nexit 99\n', { mode: 0o700 })
     vi.stubEnv('HOME', root)
     const launcher = requireLauncher(installCodexLauncher())
