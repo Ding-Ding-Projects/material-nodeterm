@@ -1124,7 +1124,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
             const cancel = pendingRemove.request.onCancel
             setPendingRemove(null)
             cancel?.()
-          }
+          }}
         />
       ) : null}
       {pendingCodexRemove ? (
