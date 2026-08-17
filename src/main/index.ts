@@ -111,6 +111,7 @@ import { createPtyPressureMonitor } from '../core/pty-pressure'
 import { registerPtmxLimitHandler } from './ptmx-limit'
 import { getDeviceId } from '../core/device-id'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
+import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
 import { retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
@@ -1129,6 +1130,11 @@ app.whenReady().then(async () => {
   // hook POST dies against a dead port with zero symptoms beyond "statuses stay idle". The
   // listeners (setListener/setRawListener/setControlHandler) attach later, which the server
   // tolerates — early hook POSTs are simply dropped, never mis-routed.
+  // Network-git relay for the mobile companion: over SSH the macOS Keychain refuses a
+  // non-interactive session (-25308), so the phone's whitelisted push/pull/fetch operation runs
+  // here in the GUI session instead. Desktop-only: the Server Edition process has the same
+  // credential environment as an SSH exec channel, so a proxy there would change nothing.
+  hookServer.setGitRemoteHandler((req) => runGitRemoteOp(req))
   await hookServer.start()
   // ---- Node identity (src/core/agents/node-auth-secret.ts) ------------------------------------
   // One secret does two jobs: it arms the hook server's per-node capability (closing the "shared

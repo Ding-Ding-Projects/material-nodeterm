@@ -199,6 +199,16 @@ class HookServer {
     | ((req: { nodeId: string; threadId: string; hookEndpoint: string }) => Promise<void>)
     | null = null
   private codexIdentityListener: ((e: CodexIdentityEvent) => void) | null = null
+  /** `/git/remote-op` executor (git-remote-proxy.ts), registered by the desktop shell — the
+   *  route 404s when absent, which the phone reads as "proxy unavailable". */
+  private gitRemoteHandler:
+    | ((req: { cwd?: string; op?: string; branch?: string }) => Promise<{
+        ok: boolean
+        exitCode: number
+        stdout: string
+        stderr: string
+      }>)
+    | null = null
   private endpointPath = ''
   private nodeAuthSecret: Buffer | null = null
   /**
@@ -391,6 +401,10 @@ class HookServer {
     this.identityNow = now
   }
 
+  setGitRemoteHandler(cb: NonNullable<HookServer['gitRemoteHandler']>): void {
+    this.gitRemoteHandler = cb
+  }
+
   async start(): Promise<void> {
     if (this.server) return
     this.token = randomUUID()
@@ -547,6 +561,27 @@ class HookServer {
             : 'Context link is unavailable in this session.'
           res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
           res.end(`${text}\n`)
+          return
+        }
+        if (reqUrl.pathname === '/git/remote-op') {
+          // The mobile companion's network-git relay (see git-remote-proxy.ts). Contract with
+          // the phone: 200 + JSON result (ok:false carries git's own stderr) = the op RAN here;
+          // any other status (404 no handler, older builds' fail-open 204) = proxy unavailable,
+          // so the phone falls back to its direct-git error + advice.
+          if (!this.gitRemoteHandler) {
+            res.writeHead(404)
+            res.end()
+            return
+          }
+          let parsed: { cwd?: string; op?: string; branch?: string } = {}
+          try {
+            parsed = JSON.parse(await readBody(req))
+          } catch {
+            parsed = {}
+          }
+          const result = await this.gitRemoteHandler(parsed)
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify(result))
           return
         }
         const agentId = decodeURIComponent(reqUrl.pathname.replace(/^\/hook\//, ''))
