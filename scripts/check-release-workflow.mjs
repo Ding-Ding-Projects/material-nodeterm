@@ -301,12 +301,19 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   }
   const sourceAt = stepIndex(steps, 'source')
   const sourceCommands = logicalCommands(steps[sourceAt]?.run)
+  const checkedOutAt = sourceCommands.indexOf('checked_out="$(git rev-parse HEAD)"')
+  const sourceShaGuardAt = sourceCommands.indexOf('if [[ "$checked_out" != "$GITHUB_SHA" ]]; then')
+  const sourceShaGuardExitAt = sourceCommands.findIndex(
+    (command, index) => index > sourceShaGuardAt && command === 'exit 1',
+  )
   if (
     sourceAt !== checkoutAt + 1 ||
-    sourceCommands.indexOf('checked_out="$(git rev-parse HEAD)"') < 0 ||
-    !sourceCommands.includes('node scripts/release-assets.mjs assert-target "$checked_out" "$GITHUB_SHA"')
+    checkedOutAt < 0 ||
+    sourceShaGuardAt <= checkedOutAt ||
+    sourceShaGuardExitAt <= sourceShaGuardAt ||
+    sourceCommands.some((command) => /^(?:env\s+)?node(?:\s|$)/.test(command))
   ) {
-    issues.push('checked-out HEAD must be proven equal to GITHUB_SHA immediately after checkout')
+    issues.push('checked-out HEAD must be proven equal to GITHUB_SHA with a dependency-free shell check immediately after checkout')
   }
 
   const tagAt = stepIndex(steps, 'tag')

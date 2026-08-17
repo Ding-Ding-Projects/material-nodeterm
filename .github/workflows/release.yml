@@ -55,7 +55,10 @@ jobs:
         shell: bash
         run: |
           checked_out="$(git rev-parse HEAD)"
-          node scripts/release-assets.mjs assert-target "$checked_out" "$GITHUB_SHA"
+          if [[ "$checked_out" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked-out commit ${checked_out} does not match GITHUB_SHA ${GITHUB_SHA}."
+            exit 1
+          fi
 
       - name: Record workflow start time
         id: timing
