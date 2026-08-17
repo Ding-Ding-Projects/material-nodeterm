@@ -1,6 +1,31 @@
 import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
 
+
+/**
+ * Strip a leading `#!` shebang before Vite's transform sees a source `.mjs`.
+ *
+ * Every executable script under scripts/ opens with `#!/usr/bin/env node` so a POSIX host can run
+ * it directly. Node parses that fine — it is specified — but Vite's transform does not, and a test
+ * that IMPORTS one of those modules dies during collection with a bare
+ * `SyntaxError: Invalid or unexpected token` carrying no frame and no mention of the shebang. It
+ * reads as a broken test file rather than a toolchain limitation, which is how three suites sat
+ * unloadable while reporting "no tests" — a state that scans as a pass.
+ *
+ * Deliberately narrow: only `.mjs`, only a `#!` at the very start of the file, and the shebang is
+ * blanked IN PLACE rather than removed so every stack frame keeps its real line number. The file on
+ * disk is untouched, so the scripts stay directly executable.
+ */
+const stripShebang = {
+  name: 'nodeterm:strip-mjs-shebang',
+  enforce: 'pre' as const,
+  transform(code: string, id: string) {
+    if (!id.split('?')[0].endsWith('.mjs') || !code.startsWith('#!')) return null
+    const lineEnd = code.search(/[\r\n]/)
+    return { code: lineEnd === -1 ? '' : code.slice(lineEnd), map: null }
+  }
+}
+
 export default defineConfig({
   test: {
     include: [
@@ -30,6 +55,7 @@ export default defineConfig({
     ],
     environment: 'node'
   },
+  plugins: [stripShebang],
   resolve: {
     alias: {
       '@shared': resolve(__dirname, 'src/shared'),

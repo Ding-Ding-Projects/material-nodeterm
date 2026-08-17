@@ -183,10 +183,16 @@ describe('release workflow semantic contract', () => {
 
   it('proves the checked-out commit and stable version advancement before building', () => {
     const uncheckedHead = check(
+      // Neuter the guard the workflow ACTUALLY uses. This mutation used to target an
+      // `assert-target "$checked_out"` call that no longer exists: the workflow moved the
+      // checked-out-commit proof to a dependency-free inline shell test immediately after
+      // checkout, and repurposed assert-target for tag verification. A mutation aimed at a
+      // string that is gone throws "mutation target not found" instead of proving anything,
+      // so this guard had stopped guarding while still looking like a test.
       replaceOnce(
         WORKFLOW,
-        '          node scripts/release-assets.mjs assert-target "$checked_out" "$GITHUB_SHA"',
-        '          echo "unchecked checkout: $checked_out"',
+        '          if [[ "$checked_out" != "$GITHUB_SHA" ]]; then',
+        '          if false; then',
       ),
     )
     expect(uncheckedHead.status).toBe(1)
