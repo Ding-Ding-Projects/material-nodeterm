@@ -14,7 +14,41 @@ import { AskpassServer } from './ssh-askpass'
 import { AppSshAgent } from './ssh-agent'
 import { controlPathFor } from '../../core/remote-ssh/control-master'
 import { remoteCodexHome } from '../../core/codex-accounts-core'
+import {
+  REAL_POSIX_SHELL,
+  environmentForPosixShell,
+  pathForPosixShell
+} from '../../core/testing/posix-shell'
 import type { SshConnection } from '@shared/ssh'
+
+/**
+ * These three fixtures spawn a real `/bin/sh` against a REAL local temp directory standing in for
+ * a "remote home" (see the class comment on `remoteCodexHome`, which requires a POSIX-absolute
+ * path). On Windows that directory is a native `C:\...` path, so it is kept separate from the
+ * POSIX-spelled path the generated shell script and `remoteCodexHome`/`remoteCodexAccountSetupCommand`
+ * consume — same split as `codex-launcher-sh.test.ts`. `nativeUnderRoot` converts a POSIX path this
+ * project returned (always rooted at `remoteRoot`) back to the matching native path for local `fs`
+ * verification, without re-deriving `remoteCodexHome`'s own suffix logic.
+ */
+function nativeUnderRoot(posixPath: string, remoteRoot: string, nativeRoot: string): string {
+  const suffix = posixPath.slice(remoteRoot.length).replace(/^\/+/, '')
+  return suffix ? path.join(nativeRoot, ...suffix.split('/')) : nativeRoot
+}
+
+/**
+ * The generated setup script's whole job here is `ln -s`. Git for Windows' default `ln -s` falls
+ * back to COPYING the target's bytes instead of creating a real symlink (no admin/Developer-Mode
+ * privilege check — it just silently degrades), which would make the "read through the symlink"
+ * assertions below pass for the wrong reason. `MSYS=winsymlinks:nativestrict` makes MSYS syscalls
+ * (this `sh.exe` process only, never the outer environment) create real Windows symlinks, matching
+ * what the same command does against the real remote (Linux) host it's written for. A no-op on
+ * POSIX, where `ln -s` is already a real symlink.
+ */
+function envForRemoteCodexShell(): NodeJS.ProcessEnv {
+  const env = environmentForPosixShell()
+  if (process.platform === 'win32') env.MSYS = 'winsymlinks:nativestrict'
+  return env
+}
 
 const conn: SshConnection = { host: 'h', user: 'u' }
 
@@ -611,90 +645,112 @@ describe('SshProjectManager', () => {
   })
 
   it('builds executable POSIX shell for remote Codex account provisioning', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-codex-account-'))
+    const nativeRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-codex-account-'))
+    const remoteRoot = pathForPosixShell(nativeRoot)
     try {
-      const system = remoteCodexHome(root)
-      await fs.mkdir(system, { recursive: true })
-      await fs.writeFile(path.join(system, 'config.toml'), 'model = "test"\n')
-      const command = remoteCodexAccountSetupCommand(root, 'account-1')
+      const systemRemote = remoteCodexHome(remoteRoot)
+      const nativeSystem = nativeUnderRoot(systemRemote, remoteRoot, nativeRoot)
+      await fs.mkdir(nativeSystem, { recursive: true })
+      await fs.writeFile(path.join(nativeSystem, 'config.toml'), 'model = "test"\n')
+      const command = remoteCodexAccountSetupCommand(remoteRoot, 'account-1')
+      const env = envForRemoteCodexShell()
 
-      execFileSync('/bin/sh', ['-n', '-c', command])
-      execFileSync('/bin/sh', ['-c', command])
+      execFileSync(REAL_POSIX_SHELL, ['-n', '-c', command], { env })
+      execFileSync(REAL_POSIX_SHELL, ['-c', command], { env })
 
-      const accountHome = remoteCodexHome(root, 'account-1')
-      expect((await fs.stat(accountHome)).mode & 0o777).toBe(0o700)
-      expect(await fs.realpath(path.join(accountHome, 'config.toml'))).toBe(
-        await fs.realpath(path.join(system, 'config.toml'))
+      const accountHomeRemote = remoteCodexHome(remoteRoot, 'account-1')
+      const nativeAccountHome = nativeUnderRoot(accountHomeRemote, remoteRoot, nativeRoot)
+      // Windows has no POSIX permission bits — Git Bash's `chmod 700` is a real, meaningful op
+      // only where the OS honors owner-only mode, same guard as codex-identity-proxy.test.ts /
+      // node-token-files.test.ts.
+      if (process.platform !== 'win32') {
+        expect((await fs.stat(nativeAccountHome)).mode & 0o777).toBe(0o700)
+      }
+      expect(await fs.realpath(path.join(nativeAccountHome, 'config.toml'))).toBe(
+        await fs.realpath(path.join(nativeSystem, 'config.toml'))
       )
     } finally {
-      await fs.rm(root, { recursive: true, force: true })
+      await fs.rm(nativeRoot, { recursive: true, force: true })
     }
   })
 
   it('reports a stable phase marker when remote Codex account linking fails', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-codex-account-fail-'))
+    const nativeRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-codex-account-fail-'))
+    const remoteRoot = pathForPosixShell(nativeRoot)
     try {
-      const system = remoteCodexHome(root)
-      const accountHome = remoteCodexHome(root, 'account-1')
-      await fs.mkdir(system, { recursive: true })
-      await fs.mkdir(accountHome, { recursive: true })
-      await fs.writeFile(path.join(system, 'config.toml'), 'model = "test"\n')
-      await fs.symlink('/missing/nodeterm-test-target', path.join(accountHome, 'config.toml'))
+      const systemRemote = remoteCodexHome(remoteRoot)
+      const accountHomeRemote = remoteCodexHome(remoteRoot, 'account-1')
+      const nativeSystem = nativeUnderRoot(systemRemote, remoteRoot, nativeRoot)
+      const nativeAccountHome = nativeUnderRoot(accountHomeRemote, remoteRoot, nativeRoot)
+      await fs.mkdir(nativeSystem, { recursive: true })
+      await fs.mkdir(nativeAccountHome, { recursive: true })
+      await fs.writeFile(path.join(nativeSystem, 'config.toml'), 'model = "test"\n')
+      await fs.symlink('/missing/nodeterm-test-target', path.join(nativeAccountHome, 'config.toml'))
 
       const result = spawnSync(
-        '/bin/sh',
-        ['-c', remoteCodexAccountSetupCommand(root, 'account-1')],
-        { encoding: 'utf8' }
+        REAL_POSIX_SHELL,
+        ['-c', remoteCodexAccountSetupCommand(remoteRoot, 'account-1')],
+        { encoding: 'utf8', env: envForRemoteCodexShell() }
       )
 
       expect(result.status).toBe(71)
       expect(result.stdout).toBe('NODETERM_CODEX_ACCOUNT_SETUP:link:config.toml\n')
     } finally {
-      await fs.rm(root, { recursive: true, force: true })
+      await fs.rm(nativeRoot, { recursive: true, force: true })
     }
   })
 
-  it('starts and reuses one direct app-server when the remote npm CLI has no daemon install', async () => {
-    // Keep the Unix socket below macOS SUN_LEN; production remote homes are deliberately short too.
-    const root = await fs.mkdtemp('/tmp/nt-cx-server-')
-    const fakeCodex = path.join(root, 'fake-codex.cjs')
-    try {
-      await fs.writeFile(
-        fakeCodex,
-        `const net = require('net')\n` +
-          `const args = process.argv.slice(2)\n` +
-          `if (args[0] === 'app-server' && args[1] === 'daemon') process.exit(1)\n` +
-          `const listen = args[args.indexOf('--listen') + 1]\n` +
-          `const socket = listen.slice('unix://'.length)\n` +
-          `net.createServer(() => {}).listen(socket)\n`
-      )
-      const command = remoteCodexAppServerStartCommand(process.execPath, fakeCodex)
-      const env = { ...process.env, CODEX_HOME: root }
-
-      execFileSync('/bin/sh', ['-c', command], { env })
-      const pidFile = path.join(root, 'app-server-control', 'nodeterm-direct.pid')
-      const firstPid = Number((await fs.readFile(pidFile, 'utf8')).trim())
-      expect(firstPid).toBeGreaterThan(0)
-      expect(
-        (await fs.stat(path.join(root, 'app-server-control', 'app-server-control.sock'))).isSocket()
-      ).toBe(true)
-
-      execFileSync('/bin/sh', ['-c', command], { env })
-      expect(Number((await fs.readFile(pidFile, 'utf8')).trim())).toBe(firstPid)
-    } finally {
+  // Needs a real AF_UNIX socket for `--listen unix://...` — refused with EACCES in this sandboxed
+  // Windows environment (verified directly: a bare `net.Server.listen(path)` fails identically with
+  // no shell/shim involved at all). Same platform gap and same skip as context-link.cli.test.ts /
+  // canvas-control-shim.test.ts.
+  it.skipIf(process.platform === 'win32')(
+    'starts and reuses one direct app-server when the remote npm CLI has no daemon install',
+    async () => {
+      // Keep the Unix socket below macOS SUN_LEN; production remote homes are deliberately short too.
+      const root = await fs.mkdtemp('/tmp/nt-cx-server-')
+      const fakeCodex = path.join(root, 'fake-codex.cjs')
       try {
-        const pid = Number(
-          (
-            await fs.readFile(path.join(root, 'app-server-control', 'nodeterm-direct.pid'), 'utf8')
-          ).trim()
+        await fs.writeFile(
+          fakeCodex,
+          `const net = require('net')\n` +
+            `const args = process.argv.slice(2)\n` +
+            `if (args[0] === 'app-server' && args[1] === 'daemon') process.exit(1)\n` +
+            `const listen = args[args.indexOf('--listen') + 1]\n` +
+            `const socket = listen.slice('unix://'.length)\n` +
+            `net.createServer(() => {}).listen(socket)\n`
         )
-        if (pid > 0) process.kill(pid, 'SIGTERM')
-      } catch {
-        // No server reached the pid-write stage.
+        const command = remoteCodexAppServerStartCommand(process.execPath, fakeCodex)
+        const env = { ...process.env, CODEX_HOME: root }
+
+        execFileSync('/bin/sh', ['-c', command], { env })
+        const pidFile = path.join(root, 'app-server-control', 'nodeterm-direct.pid')
+        const firstPid = Number((await fs.readFile(pidFile, 'utf8')).trim())
+        expect(firstPid).toBeGreaterThan(0)
+        expect(
+          (
+            await fs.stat(path.join(root, 'app-server-control', 'app-server-control.sock'))
+          ).isSocket()
+        ).toBe(true)
+
+        execFileSync('/bin/sh', ['-c', command], { env })
+        expect(Number((await fs.readFile(pidFile, 'utf8')).trim())).toBe(firstPid)
+      } finally {
+        try {
+          const pid = Number(
+            (
+              await fs.readFile(path.join(root, 'app-server-control', 'nodeterm-direct.pid'), 'utf8')
+            ).trim()
+          )
+          if (pid > 0) process.kill(pid, 'SIGTERM')
+        } catch {
+          // No server reached the pid-write stage.
+        }
+        await fs.rm(root, { recursive: true, force: true })
       }
-      await fs.rm(root, { recursive: true, force: true })
-    }
-  }, 15_000)
+    },
+    15_000
+  )
 
   // --- downloadFile (remote → this machine) -------------------------------------------------
   // These run against a REAL temp directory: collision resolution, the `.part` staging file and

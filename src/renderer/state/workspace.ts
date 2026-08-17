@@ -1246,11 +1246,59 @@ export function groupSelectedNodes(
 }
 
 /**
+ * Every `NodeKind`, as a table rather than a list, so adding a kind to the union is a typecheck
+ * error here until somebody classifies it. `duplicateKind` needs a RUNTIME check: `node.type` is
+ * a plain string once it has been through a hand-editable project.json (a legacy `chat` record,
+ * a kind written by a newer build), so the compile-time union cannot validate it on its own.
+ */
+const NODE_KIND_TABLE: Record<NodeKind, true> = {
+  terminal: true,
+  sticky: true,
+  group: true,
+  editor: true,
+  diff: true,
+  video: true,
+  web: true,
+  browser: true,
+  subagent: true,
+  loop: true,
+  scheduler: true,
+  dino: true,
+  annotation: true
+}
+
+/** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
+ *  `'toString'` would both pass as node kinds. */
+const NODE_KINDS = new Set<string>(Object.keys(NODE_KIND_TABLE))
+
+/**
+ * The kind a duplicate should carry: the source's own, falling back to `terminal` only for a type
+ * that is genuinely not a kind (absent, or a legacy/hand-edited string like the removed `chat`).
+ */
+function duplicateKind(type: string | undefined): NodeKind {
+  return type && NODE_KINDS.has(type) ? (type as NodeKind) : 'terminal'
+}
+
+/**
  * Returns a copy of a node with a fresh id, offset position, and top-level placement.
  *
  * A duplicate is a new execution identity, not a second view of the source conversation. Never
  * carry one-shot launch state, an armed launch, or the provider session id: doing so can make the
  * copy resume the source conversation or execute work the source already consumed.
+ *
+ * It KEEPS the source's kind. This used to enumerate sticky/group (and later annotation) and send
+ * every other kind to `terminal`, so duplicating an editor, diff, video, web, browser, dino or
+ * Loop node produced a `terminal`-typed copy still carrying `filePath`/`url`/loop config in its
+ * data: an empty terminal with no session. `flowToNodeStates` and `projects.duplicateNode` (the
+ * inactive-project path) both already preserved the kind, so the live canvas was the odd one out —
+ * duplicating an editor from the sessions sidebar gave you an editor in an inactive project and a
+ * broken terminal in the active one.
+ *
+ * What it does NOT keep is anything that would give the copy an identity or authority of its own:
+ * see the cleared fields below. Content identity — `filePath`, `url`, `cwd`, `diffStaged`,
+ * `commitOid`, `text`, `highScore`, `annotationVariant` — is exactly what a duplicate is FOR and
+ * is kept. `fileMissing` is kept too: it is a fact about the filesystem, not about the source
+ * node, so clearing it would only make the copy claim a deleted file is there and try to read it.
  */
 export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
   const kind = duplicateKind(node.type)

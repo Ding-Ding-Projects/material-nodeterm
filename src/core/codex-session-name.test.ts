@@ -179,7 +179,14 @@ describe('codexUnixWebSocketUrl', () => {
   })
 })
 
-describe('Codex shared app-server session names', () => {
+// Same environment limitation the file header and the three describe blocks above document: this
+// suite drives the app-server protocol client against a real AF_UNIX socket, and binding an
+// arbitrary filesystem path as one is refused with EACCES in this sandboxed environment. This
+// block was added after the win32 skip pass (99dfb2db) that guarded `codexThreadExistsAt`,
+// `waitForCodexAppServer` and `readCodexSessionNameAt`, so it never picked up the same guard —
+// a fixture that fell behind, not a different case. `codexUnixWebSocketUrl` needs no socket at
+// all, so its own describe block above stays unguarded, same as before.
+describe.skipIf(process.platform === 'win32')('Codex shared app-server session names', () => {
   let server: Server
   let wss: WebSocketServer
   let socket: string

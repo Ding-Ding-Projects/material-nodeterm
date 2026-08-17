@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import zlib from 'node:zlib'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
 
@@ -19,6 +20,7 @@ const core = require('../../scripts/windows-profile-packaged-acceptance-core.cjs
     promote: (value: T) => R | Promise<R>
   ) => Promise<R>
   selectHeadlessWindow: (payload: unknown, pid: number) => any
+  sha256File: (file: string) => string
   validateCandidateProvenance: (options: Record<string, unknown>) => any
   validateCdpTargets: (targets: unknown[], options?: Record<string, unknown>) => any
   validateContinuity: (before: unknown, after: unknown) => any
@@ -346,23 +348,43 @@ describe('task ownership and dynamic UI identity', () => {
   })
 })
 
+// A real, decodable PNG — validateEvidenceRecords re-parses IHDR/IDAT/IEND with real per-chunk
+// CRC-32 verification, an inflate of the pixel data, and a "not a uniform/blank surface" check
+// (see decodeAcceptancePng), so a signature-only stub with zeroed CRC bytes and non-deflated
+// filler no longer passes. Minimum accepted size is exactly 1000x700 (below that is "blank");
+// every scanline uses PNG filter type 0 ("None") over an RGBA (color type 6) gradient keyed by
+// `fill` so distinct calls decode to genuinely distinct, non-uniform pixel data.
 function png(fill: number) {
+  const width = 1_000
+  const height = 700
+  const bytesPerPixel = 4
+  const stride = width * bytesPerPixel
+  const raw = Buffer.alloc((stride + 1) * height)
+  for (let row = 0; row < height; row += 1) {
+    const rowStart = row * (stride + 1)
+    raw[rowStart] = 0 // filter type "None"
+    for (let column = 0; column < stride; column += 1) {
+      raw[rowStart + 1 + column] = (fill + row + column) & 0xff
+    }
+  }
+  const idat = zlib.deflateSync(raw)
   const chunk = (type: string, data: Buffer) => {
     const value = Buffer.alloc(12 + data.length)
     value.writeUInt32BE(data.length, 0)
     value.write(type, 4, 'ascii')
     data.copy(value, 8)
+    value.writeUInt32BE(zlib.crc32(value.subarray(4, 8 + data.length)), 8 + data.length)
     return value
   }
   const header = Buffer.alloc(13)
-  header.writeUInt32BE(1600, 0)
-  header.writeUInt32BE(1000, 4)
-  header[8] = 8
-  header[9] = 6
+  header.writeUInt32BE(width, 0)
+  header.writeUInt32BE(height, 4)
+  header[8] = 8 // bit depth
+  header[9] = 6 // color type: truecolor with alpha (RGBA)
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', header),
-    chunk('IDAT', Buffer.alloc(6_100, fill)),
+    chunk('IDAT', idat),
     chunk('IEND', Buffer.alloc(0))
   ])
 }
@@ -371,14 +393,23 @@ describe('evidence promotion guards', () => {
   it('requires every exact id and distinct PNG bytes', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-profile-evidence-'))
     tempRoots.push(root)
+    // A record's `bytes`/`sha256` are the CAPTURER's claim, verified against the file's real bytes
+    // by validateEvidenceRecords — they are not derived by the function itself. Compute them the
+    // same way a real capture harness would, or the very first (honest, distinct) fixture trips
+    // the "changed after capture" guard before the byte-identical check under test ever runs.
     const records = core.REQUIRED_EVIDENCE_IDS.map((id, index) => {
       const file = path.join(root, `${id}.png`)
       write(file, png(index + 1))
-      return { id, file }
+      return { id, file, bytes: fs.statSync(file).size, sha256: core.sha256File(file) }
     })
     expect(core.validateEvidenceRecords(records, root)).toHaveLength(core.REQUIRED_EVIDENCE_IDS.length)
 
+    // Overwriting the bytes on disk without updating the claim would report "changed after
+    // capture" instead of the byte-identical collision this asserts — refresh the claim to match
+    // the (now duplicate) real content so the collision check is what actually fires.
     write(records[1].file, fs.readFileSync(records[0].file))
+    records[1].bytes = fs.statSync(records[1].file).size
+    records[1].sha256 = core.sha256File(records[1].file)
     expect(() => core.validateEvidenceRecords(records, root)).toThrow(/byte-identical/)
   })
 
@@ -388,7 +419,7 @@ describe('evidence promotion guards', () => {
     const records = core.REQUIRED_EVIDENCE_IDS.map((id, index) => {
       const file = path.join(root, `${id}.png`)
       write(file, png(index + 1))
-      return { id, file }
+      return { id, file, bytes: fs.statSync(file).size, sha256: core.sha256File(file) }
     })
     expect(() => core.validateEvidenceRecords([...records, records[0]], root)).toThrow(/Duplicate evidence id/)
     expect(() => core.validateEvidenceRecords(records.slice(1), root)).toThrow(/Missing required evidence id/)
@@ -399,23 +430,37 @@ describe('profile probe literal encoding', () => {
   const hostileId = "wsl:Distro space &|<>^%!'$`"
   const hostile = { id: hostileId, label: 'Hostile fixture', kind: 'wsl', available: true }
 
-  it('keeps WSL metacharacters inside POSIX single-quoted literals', () => {
+  // buildProfileProbe never interpolates the raw profile id into generated command text at
+  // all — only a SHA-256 tag derived from it (`profileTag`) reaches the marker/parse-tag
+  // strings, and the whole POSIX probe script is base64-encoded and piped through `sh` rather
+  // than embedded with `sh -lc` + escaping. That is a stronger guarantee than quoting the id
+  // (there is nothing for &|<>^%!'$` to break out of, because the id is never shell syntax or
+  // parse-tag text in the first place) — see the "Profile IDs deliberately support WSL
+  // distribution names…" comment on buildProfileProbe. Assert the real mechanism.
+  it('keeps hostile WSL profile-id metacharacters out of the generated command entirely', () => {
     const probe = core.buildProfileProbe(hostile, [hostile], { token: 'safe-token' })
     expect(probe.dialect).toBe('wsl')
-    expect(probe.command).toContain(`'"'"'`)
-    expect(probe.command).toContain('sh -lc ')
-    expect(probe.marker).toContain(hostileId)
+    const match = probe.command.match(/^printf '%s' '([A-Za-z0-9+/=]+)' \| base64 -d \| sh\r$/)
+    expect(match).not.toBeNull()
+    expect(probe.command).not.toContain(hostileId)
+    expect(probe.marker).not.toContain(hostileId)
+    const decoded = Buffer.from(match![1], 'base64').toString('utf8')
+    expect(decoded).not.toContain(hostileId)
+    expect(decoded).toContain('wslpath -w "$PWD"')
+    expect(decoded).toContain(`'${probe.marker}'`)
+    expect(decoded).toContain(`'${probe.unicode}'`)
   })
 
-  it('uses a base64-only cmd command and preserves apostrophes via PowerShell literal encoding', () => {
+  it('keeps a hostile cmd profile id out of its base64-encoded PowerShell child', () => {
     const cmdProfile = { ...hostile, id: `cmd:${hostileId}`, kind: 'cmd' }
     const probe = core.buildProfileProbe(cmdProfile, [cmdProfile], { token: 'safe-token' })
     const match = probe.command.match(/-EncodedCommand ([A-Za-z0-9+/=]+)\r$/)
     expect(match).not.toBeNull()
     expect(probe.command).not.toContain(cmdProfile.id)
     const decoded = Buffer.from(match![1], 'base64').toString('utf16le')
-    expect(decoded).toContain(cmdProfile.id.replaceAll("'", "''"))
+    expect(decoded).not.toContain(cmdProfile.id)
     expect(decoded).toContain('[Console]::OutputEncoding')
+    expect(decoded).toContain(`'${probe.marker}'`)
   })
 
   it('rejects private spawn material or duplicate public ids in the renderer catalog', () => {

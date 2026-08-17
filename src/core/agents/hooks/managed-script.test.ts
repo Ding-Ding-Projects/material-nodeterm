@@ -22,7 +22,8 @@ const SHELL_PATH_ENV_KEYS = [
   'HOME',
   'NODETERM_HOOK_ENDPOINT',
   'NODETERM_HOOK_SOCK',
-  'NODETERM_NODE_TOKEN_DIR'
+  'NODETERM_NODE_TOKEN_DIR',
+  'CAPTURE'
 ] as const
 
 describe('buildManagedScript', () => {
@@ -54,23 +55,24 @@ describe('buildManagedScript', () => {
     const endpoint = join(root, 'hook.env')
     const capture = join(root, 'curl-args')
     const script = join(root, 'hook.sh')
-    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    mkdirSync(bin, { recursive: true })
+    mkdirSync(maps, { recursive: true })
     writeFileSync(
       join(bin, 'curl'),
       '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n',
       { mode: 0o700 }
     )
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
-    writeFileSync(join(maps, 'thread-a'), `nodeId=node-a\nendpoint=${endpoint}\n`)
+    writeFileSync(join(maps, 'thread-a'), `nodeId=node-a\nendpoint=${pathForPosixShell(endpoint)}\n`)
     writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
-    const result = spawnSync('/bin/sh', [script], {
+    const result = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: root,
         CODEX_THREAD_ID: 'thread-a',
         CAPTURE: capture
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(result.status).toBe(0)
     expect(readFileSync(capture, 'utf8')).toContain('nodeId=node-a')
@@ -83,23 +85,24 @@ describe('buildManagedScript', () => {
     const endpoint = join(root, 'hook.env')
     const capture = join(root, 'curl-args')
     const script = join(root, 'hook.sh')
-    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    mkdirSync(bin, { recursive: true })
+    mkdirSync(maps, { recursive: true })
     writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
     writeFileSync(
       join(maps, 'thread-a'),
-      `accountId=account-a\nnodeId=node-a\nendpoint=${endpoint}\n`
+      `accountId=account-a\nnodeId=node-a\nendpoint=${pathForPosixShell(endpoint)}\n`
     )
     writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
-    const result = spawnSync('/bin/sh', [script], {
+    const result = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: root,
         CODEX_THREAD_ID: 'thread-a',
         NODETERM_CODEX_ACCOUNT_ID: '',
         CAPTURE: capture
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(result.status).toBe(0)
     expect(readFileSync(capture, 'utf8')).toContain('nodeId=node-a')
@@ -112,25 +115,27 @@ describe('buildManagedScript', () => {
     const endpoint = join(root, 'hook.env')
     const capture = join(root, 'curl-args')
     const script = join(root, 'hook.sh')
-    spawnSync('/bin/mkdir', ['-p', bin, join(maps, 'account-a'), join(maps, 'account-b')])
+    mkdirSync(bin, { recursive: true })
+    mkdirSync(join(maps, 'account-a'), { recursive: true })
+    mkdirSync(join(maps, 'account-b'), { recursive: true })
     writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
     for (const account of ['account-a', 'account-b']) {
       writeFileSync(
         join(maps, account, 'thread-a'),
-        `accountId=${account}\nnodeId=node-${account}\nendpoint=${endpoint}\n`
+        `accountId=${account}\nnodeId=node-${account}\nendpoint=${pathForPosixShell(endpoint)}\n`
       )
     }
     writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
-    const result = spawnSync('/bin/sh', [script], {
+    const result = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: root,
         CODEX_THREAD_ID: 'thread-a',
         NODETERM_CODEX_ACCOUNT_ID: '',
         CAPTURE: capture
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(result.status).toBe(0)
     expect(() => readFileSync(capture, 'utf8')).toThrow()
@@ -143,25 +148,27 @@ describe('buildManagedScript', () => {
     const endpoint = join(root, 'hook.env')
     const capture = join(root, 'curl-args')
     const script = join(root, 'hook.sh')
-    spawnSync('/bin/mkdir', ['-p', bin, join(maps, 'system'), join(maps, 'account-a')])
+    mkdirSync(bin, { recursive: true })
+    mkdirSync(join(maps, 'system'), { recursive: true })
+    mkdirSync(join(maps, 'account-a'), { recursive: true })
     writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
     for (const scope of ['system', 'account-a']) {
       writeFileSync(
         join(maps, scope, 'thread-a'),
-        `accountId=${scope}\nnodeId=node-${scope}\nendpoint=${endpoint}\n`
+        `accountId=${scope}\nnodeId=node-${scope}\nendpoint=${pathForPosixShell(endpoint)}\n`
       )
     }
     writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
-    const result = spawnSync('/bin/sh', [script], {
+    const result = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: root,
         CODEX_THREAD_ID: 'thread-a',
         NODETERM_CODEX_ACCOUNT_ID: '',
         CAPTURE: capture
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(result.status).toBe(0)
     expect(() => readFileSync(capture, 'utf8')).toThrow()
@@ -174,23 +181,24 @@ describe('buildManagedScript', () => {
     const endpoint = join(root, 'hook.env')
     const capture = join(root, 'curl-args')
     const script = join(root, 'hook.sh')
-    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    mkdirSync(bin, { recursive: true })
+    mkdirSync(maps, { recursive: true })
     writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
     writeFileSync(
       join(maps, 'thread-a'),
-      `accountId=account-b\nnodeId=node-b\nendpoint=${endpoint}\n`
+      `accountId=account-b\nnodeId=node-b\nendpoint=${pathForPosixShell(endpoint)}\n`
     )
     writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
-    const result = spawnSync('/bin/sh', [script], {
+    const result = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: root,
         CODEX_THREAD_ID: 'thread-a',
         NODETERM_CODEX_ACCOUNT_ID: 'account-a',
         CAPTURE: capture
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(result.status).toBe(0)
     expect(() => readFileSync(capture, 'utf8')).toThrow()
@@ -203,22 +211,23 @@ describe('buildManagedScript', () => {
     const endpoint = join(root, 'hook.env')
     const capture = join(root, 'curl-args')
     const script = join(root, 'hook.sh')
-    spawnSync('/bin/mkdir', ['-p', bin, maps])
+    mkdirSync(bin, { recursive: true })
+    mkdirSync(maps, { recursive: true })
     writeFileSync(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n', { mode: 0o700 })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=7777\nNODETERM_HOOK_TOKEN=test\n')
     writeFileSync(
       join(maps, 'thread-a'),
-      `accountId=bad scope\nnodeId=node-a\nendpoint=${endpoint}\n`
+      `accountId=bad scope\nnodeId=node-a\nendpoint=${pathForPosixShell(endpoint)}\n`
     )
     writeFileSync(script, buildManagedScript('codex'), { mode: 0o700 })
-    const result = spawnSync('/bin/sh', [script], {
+    const result = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       input: '{"hook_event_name":"SessionStart","session_id":"thread-a"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: root,
         CODEX_THREAD_ID: 'thread-a',
         CAPTURE: capture
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(result.status).toBe(0)
     expect(() => readFileSync(capture, 'utf8')).toThrow()

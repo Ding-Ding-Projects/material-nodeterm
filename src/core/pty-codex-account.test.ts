@@ -14,6 +14,13 @@ import { fakePlatform, type FakePlatform } from './platform-fake'
 
 const spawned: Array<{ args: string[]; env: Record<string, string> }> = []
 
+// Pin the persistence backend: without this the suite silently tests whichever backend this
+// machine has built, not the plain-shell path it was written for. See the fixture for the full
+// explanation and the 78-pass -> 73-fail incident that prompted it.
+vi.mock('./session-host-backend', async () =>
+  (await import('./__fixtures__/no-session-host')).noSessionHost()
+)
+
 vi.mock('node-pty', () => ({
   spawn: (_file: string, args: string[], options: { env: Record<string, string> }) => {
     spawned.push({ args, env: options.env })
