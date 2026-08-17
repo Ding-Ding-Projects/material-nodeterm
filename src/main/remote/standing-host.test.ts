@@ -35,13 +35,33 @@ vi.mock('./host-canvas-hub', () => ({
   currentCanvas: () => null,
   subscribeCanvas: () => () => {}
 }))
+
+let approvedPubkeys: string[] = []
+let approvedReadError: Error | null = null
 vi.mock('./approved-devices', () => ({
-  loadApprovedDevices: async () => ({ pubkeys: [] as string[] }),
-  saveApprovedDevices: async () => {}
+  loadApprovedDevices: async () => {
+    if (approvedReadError) throw approvedReadError
+    return { pubkeys: [...approvedPubkeys] }
+  },
+  mutateApprovedDevices: async (
+    mutation: (store: { readonly pubkeys: readonly string[] }) => {
+      readonly pubkeys: readonly string[]
+    }
+  ) => {
+    if (approvedReadError) throw approvedReadError
+    const next = mutation({ pubkeys: [...approvedPubkeys] })
+    approvedPubkeys = [...next.pubkeys]
+    return next
+  }
 }))
 vi.mock('./e2ee', () => ({ publicKeyToB64: () => 'host-pub' }))
 
-const sessions: Array<{ opts: HostSessionOptions; session: HostSession; closed: number }> = []
+const sessions: Array<{
+  opts: HostSessionOptions
+  session: HostSession
+  approved: number
+  closed: number
+}> = []
 
 // Swappable: a locked OS keyring makes the host key unreadable, and loading it REJECTS rather than
 // rotating the pinned identity (host-identity.ts). The standing host must handle that, loudly.
@@ -56,9 +76,11 @@ vi.mock('./host-service', () => ({
     return { publicKey: new Uint8Array(), secretKey: new Uint8Array() }
   },
   connectHostSession: (opts: HostSessionOptions): HostSession => {
-    const entry = { opts, closed: 0, session: null as unknown as HostSession }
+    const entry = { opts, approved: 0, closed: 0, session: null as unknown as HostSession }
     entry.session = {
-      approve: () => {},
+      approve: () => {
+        entry.approved += 1
+      },
       isApproved: () => false,
       sas: () => '12345',
       // A real relay socket close() is "intentional" and does NOT fire onClose — modelled here.
@@ -108,6 +130,8 @@ beforeEach(() => {
   sentToWin.length = 0
   errorBoxes.length = 0
   keyError = null
+  approvedPubkeys = []
+  approvedReadError = null
   for (const key of Object.keys(ipc)) delete ipc[key]
   vi.stubGlobal(
     'fetch',
@@ -125,6 +149,32 @@ afterEach(() => {
 })
 
 describe('standing host presence peers', () => {
+  it('a failed approved-device read requires explicit consent and never becomes an empty store', async () => {
+    const readFault = new Error('corrupt trust store')
+    approvedReadError = readFault
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const host = makeHost()
+    host.setEnabled(true)
+    await settle()
+
+    sessions[0].opts.onPeerReady(sessions[0].session)
+    await settle()
+    expect(sessions[0].approved).toBe(0) // no silent auto-approval on an unreadable trust file
+    expect(pendingApprovalId()).toBeTruthy() // the conservative explicit-SAS path remains usable
+
+    approvedReadError = null // model a transient read fault recovering before the human confirms
+    ipc[IPC.remoteHostApprove](null, { id: pendingApprovalId() })
+    await settle()
+    expect(sessions[0].approved).toBe(1)
+    expect(approvedPubkeys).toEqual(['phone-pub']) // approval went through the mutation funnel
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('could not read approved devices'),
+      readFault
+    )
+
+    host.stop()
+  })
+
   it('a bridged relay client joins as a cursorless phone peer and leaves when the socket drops', async () => {
     const host = makeHost()
     host.setEnabled(true)

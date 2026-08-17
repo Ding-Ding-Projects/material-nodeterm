@@ -17,10 +17,10 @@ describe('createRevoker: unpins AND fires the kill hook', () => {
     const order: string[] = []
     const killed: string[] = []
     const deps: RevocationDeps = {
-      load: async () => store,
-      save: async (s) => {
+      mutate: async (mutation) => {
         order.push('save')
-        store = s
+        store = mutation(store)
+        return store
       },
       // Fake teardown standing in for 4c's "close relay conn + PtyManager.dropClient + presenceHub.leave".
       onRevoke: (peerId) => {
@@ -43,8 +43,7 @@ describe('createRevoker: unpins AND fires the kill hook', () => {
   it('still fires the kill hook even if the key was never pinned (defensive)', async () => {
     const killed: string[] = []
     const revoker = createRevoker({
-      load: async () => ({ pubkeys: [] }),
-      save: async () => {},
+      mutate: async (mutation) => mutation({ pubkeys: [] }),
       onRevoke: (id) => { killed.push(id) }
     })
     const result = await revoker.revoke('ghost')
@@ -57,8 +56,7 @@ describe('createRevoker: unpins AND fires the kill hook', () => {
     // so the revoked peer could reconnect and auto-approve. The caller must see persisted:false and retry.
     const killed: string[] = []
     const revoker = createRevoker({
-      load: async () => pinDevice({ pubkeys: [] }, 'peerKey'),
-      save: async () => {
+      mutate: async () => {
         throw new Error('disk full')
       },
       onRevoke: (id) => { killed.push(id) }
@@ -68,15 +66,14 @@ describe('createRevoker: unpins AND fires the kill hook', () => {
     expect(result).toEqual({ persisted: false, killed: true }) // ... but the failure is REPORTED, not swallowed
   })
 
-  it('surfaces persisted:false when load() throws (pin never removed), and still fires the kill', async () => {
-    // Finding 3: a throwing load is swallowed by the same catch today. If it throws, the pin was never
-    // even read, so it certainly survives — this must be persisted:false, not a silent success.
+  it('surfaces persisted:false when the mutation read throws (pin never removed), and still fires the kill', async () => {
+    // If the mutation cannot read, the pin certainly survives — this must be persisted:false, not a
+    // silent success or an empty-list overwrite.
     const killed: string[] = []
     const revoker = createRevoker({
-      load: async () => {
+      mutate: async () => {
         throw new Error('read fault')
       },
-      save: async () => {},
       onRevoke: (id) => { killed.push(id) }
     })
     const result = await revoker.revoke('peerKey')
@@ -89,9 +86,9 @@ describe('createRevoker: unpins AND fires the kill hook', () => {
     // observable via killed:false, not dropped as an unhandled rejection with a half-torn-down socket.
     let store: ApprovedDevices = pinDevice({ pubkeys: [] }, 'peerKey')
     const revoker = createRevoker({
-      load: async () => store,
-      save: async (s) => {
-        store = s
+      mutate: async (mutation) => {
+        store = mutation(store)
+        return store
       },
       onRevoke: async () => {
         throw new Error('relay close failed')
@@ -106,10 +103,10 @@ describe('createRevoker: unpins AND fires the kill hook', () => {
     const order: string[] = []
     let store: ApprovedDevices = pinDevice({ pubkeys: [] }, 'peerKey')
     const revoker = createRevoker({
-      load: async () => store,
-      save: async (s) => {
+      mutate: async (mutation) => {
         order.push('save')
-        store = s
+        store = mutation(store)
+        return store
       },
       onRevoke: async () => {
         // Defer so a non-awaiting revoke() would resolve before the teardown completed.

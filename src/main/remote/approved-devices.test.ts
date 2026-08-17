@@ -1,10 +1,9 @@
 // Atomic-write behaviour of <userData>/remote-approved-devices.json.
 //
-// Three writers reach `saveApprovedDevices` from the main process with nothing queueing them:
-// the standing host's fire-and-forget pin (standing-host.ts, `void loadApprovedDevices().then(...)`),
-// relay-trust's un-awaited settle pin (relay-trust.ts's `settle()`), and the revoke IPC
-// (src/main/index.ts → revocation.ts). A phone approved on one path while another is settling is
-// exactly two overlapping saves.
+// Three writers reach the store from the main process: the standing host's fire-and-forget pin,
+// relay-trust's un-awaited settle pin, and the revoke IPC. Each used to load + modify + save its own
+// snapshot. Atomic files prevented torn JSON but not a complete stale approval write from landing
+// after a revoke and resurrecting the revoked key. The mutation funnel serializes the DECISION.
 //
 // The list is PUBLIC keys, not credentials, so there is no orphan sweep here — unlike the PAT stores
 // (src/main/github-control.ts, src/server/github-control.ts) or agent.json (src/main/pairing-service.ts),
@@ -15,8 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, promises as fs, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
-import { loadApprovedDevices, saveApprovedDevices } from './approved-devices'
-import type { ApprovedDevices } from './approved-devices-core'
+import { loadApprovedDevices, mutateApprovedDevices } from './approved-devices'
+import { pinDevice, unpinDevice, type ApprovedDevices } from './approved-devices-core'
 
 // `file()` resolves <userData> through `app.getPath` on every call, so a mutable dir set in
 // beforeEach is enough here — the factory only reads it when the getter is invoked.
@@ -39,54 +38,96 @@ describe('approved-devices atomic write', () => {
   const tmpsLeft = async (): Promise<string[]> =>
     (await fs.readdir(userData)).filter((f) => f.endsWith('.tmp'))
 
-  it('two overlapping saves never share a tmp file (no torn write, no leftovers)', async () => {
-    // Payloads that differ in LENGTH and in every byte: a spliced result then keeps a tail of the
-    // longer write and fails JSON.parse, instead of quietly parsing as the shorter one.
-    const many: ApprovedDevices = { pubkeys: Array.from({ length: 64 }, (_, i) => `A${'a'.repeat(42)}${i}`) }
-    const one: ApprovedDevices = { pubkeys: ['B'] }
-    // Hold every writer between its tmp write and its rename, so BOTH tmp files are on disk
-    // before either rename runs — the overlap window a real crash tears open.
-    const tmps: string[] = []
-    let open!: () => void
-    let timer!: ReturnType<typeof setTimeout>
-    // If a future change serializes the writers, the second write never arrives and the barrier
-    // would hang to an opaque 5s vitest timeout. Fail loudly, naming what this test pins.
-    const bothWritten = Promise.race([
-      new Promise<void>((r) => (open = r)),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error('second concurrent tmp write never arrived — writers appear ' +
-            'serialized; this test pins the unique-tmp-name design')),
-          2000
-        )
-        timer.unref?.()
-      })
-    ])
-    bothWritten.catch(() => {}) // the writers below surface it; this only keeps it "handled"
+  it('a concurrent approval cannot resurrect a key revoked after the approval began', async () => {
+    writeFileSync(target, JSON.stringify({ pubkeys: ['revoked-phone'] }), { mode: 0o600 })
+
+    // Hold the approval after its temp contains the stale `[revoked-phone, new-phone]` snapshot but
+    // before rename. The revoke is invoked while that write is suspended. Without store-level
+    // serialization it publishes `[]`, then the released approval renames its stale snapshot last
+    // and resurrects revoked-phone. With the funnel, revoke cannot even read until approval lands.
     const realWriteFile = fs.writeFile
+    const realReadFile = fs.readFile
+    let writes = 0
+    let reads = 0
+    let approvalWritten!: () => void
+    let releaseApproval!: () => void
+    let secondReadStarted!: () => void
+    const approvalAtRename = new Promise<void>((resolve) => (approvalWritten = resolve))
+    const approvalMayRename = new Promise<void>((resolve) => (releaseApproval = resolve))
+    const secondMutationRead = new Promise<void>((resolve) => (secondReadStarted = resolve))
+    vi.spyOn(fs, 'readFile').mockImplementation((async (...args: any[]) => {
+      reads += 1
+      if (reads === 2) secondReadStarted()
+      return (realReadFile as any)(...args)
+    }) as any)
     vi.spyOn(fs, 'writeFile').mockImplementation((async (p: any, ...rest: any[]) => {
       const out = await (realWriteFile as any)(p, ...rest)
       if (String(p).startsWith(target)) {
-        tmps.push(String(p))
-        if (tmps.length >= 2) {
-          clearTimeout(timer)
-          open()
+        writes += 1
+        if (writes === 1) {
+          approvalWritten()
+          await approvalMayRename
         }
-        await bothWritten
       }
       return out
     }) as any)
 
-    await Promise.all([saveApprovedDevices(many), saveApprovedDevices(one)])
+    const approval = mutateApprovedDevices((store) => pinDevice(store, 'new-phone'))
+    await approvalAtRename
+    const revocation = mutateApprovedDevices((store) => unpinDevice(store, 'revoked-phone'))
+    const readBeforeRelease = await Promise.race([
+      secondMutationRead.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 50))
+    ])
+    const writesBeforeRelease = writes
+    releaseApproval()
+    await Promise.all([approval, revocation])
     vi.restoreAllMocks()
 
-    expect(new Set(tmps).size).toBe(2) // each writer owned its own tmp file
-    // One COMPLETE list won — parsing at all proves it is not a prefix of the other, and the deep
-    // compare proves it is not a splice that happens to parse.
-    const final = JSON.parse(await fs.readFile(target, 'utf-8')) as ApprovedDevices
-    expect([many.pubkeys, one.pubkeys]).toContainEqual(final.pubkeys)
-    // …and nothing is left for the next writer to inherit.
+    expect(readBeforeRelease).toBe(false)
+    expect(writesBeforeRelease).toBe(1) // revoke could not read/write until approval fully published
+    expect(await loadApprovedDevices()).toEqual({ pubkeys: ['new-phone'] })
     expect(await tmpsLeft()).toEqual([])
+  })
+
+  it('only ENOENT means an empty approved-device list', async () => {
+    await expect(loadApprovedDevices()).resolves.toEqual({ pubkeys: [] })
+
+    writeFileSync(target, '{not-json', { mode: 0o600 })
+    const corruptBytes = await fs.readFile(target, 'utf-8')
+    await expect(loadApprovedDevices()).rejects.toThrow()
+    await expect(
+      mutateApprovedDevices((store) => pinDevice(store, 'must-not-overwrite-corruption'))
+    ).rejects.toThrow()
+    expect(await fs.readFile(target, 'utf-8')).toBe(corruptBytes)
+
+    writeFileSync(target, JSON.stringify({ wrong: [] }), { mode: 0o600 })
+    await expect(loadApprovedDevices()).rejects.toThrow(/valid store/i)
+  })
+
+  it('propagates an unreadable-file result and lets later queued reads recover', async () => {
+    const denied = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+    vi.spyOn(fs, 'readFile').mockRejectedValueOnce(denied)
+    await expect(loadApprovedDevices()).rejects.toMatchObject({ code: 'EACCES' })
+    vi.restoreAllMocks()
+
+    writeFileSync(target, JSON.stringify({ pubkeys: ['still-here'] }), { mode: 0o600 })
+    await expect(loadApprovedDevices()).resolves.toEqual({ pubkeys: ['still-here'] })
+  })
+
+  it('rejects an in-place mutation and keeps the queue usable', async () => {
+    await expect(
+      mutateApprovedDevices((store) => {
+        const mutable = store.pubkeys as string[]
+        mutable.push('silently-lost-without-the-freeze')
+        return store
+      })
+    ).rejects.toThrow()
+
+    await expect(
+      mutateApprovedDevices((store) => pinDevice(store, 'pure-update'))
+    ).resolves.toEqual({ pubkeys: ['pure-update'] })
+    await expect(loadApprovedDevices()).resolves.toEqual({ pubkeys: ['pure-update'] })
   })
 
   it('a failed rename removes its own temp, rejects, and leaves the OLD pinned list intact', async () => {
@@ -98,7 +139,9 @@ describe('approved-devices atomic write', () => {
       Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' })
     )
 
-    await expect(saveApprovedDevices({ pubkeys: [] })).rejects.toThrow(/EXDEV/)
+    await expect(
+      mutateApprovedDevices((store) => unpinDevice(store, 'already-approved-phone'))
+    ).rejects.toThrow(/EXDEV/)
 
     // revocation.ts's RevokeResult.persisted documents exactly this: a failed write leaves the OLD
     // still-pinned file byte-for-byte intact, so the caller must report persisted:false and retry.

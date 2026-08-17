@@ -48,13 +48,14 @@ vi.mock('../main-window', () => ({
   mainWindowClientIds: () => h.clientIds
 }))
 
-// The on-disk pin store, in memory (relay-trust's default load/save path).
+// The on-disk pin store, in memory (relay-trust's default mutation path).
 import { emptyApprovedDevices, type ApprovedDevices } from './approved-devices-core'
 let disk: ApprovedDevices = emptyApprovedDevices()
 vi.mock('./approved-devices', () => ({
   loadApprovedDevices: async () => disk,
-  saveApprovedDevices: async (s: ApprovedDevices) => {
-    disk = s
+  mutateApprovedDevices: async (mutation: (store: ApprovedDevices) => ApprovedDevices) => {
+    disk = mutation(disk)
+    return disk
   }
 }))
 
@@ -201,9 +202,9 @@ function openHostAgainstFakeRelay(opts?: {
     sas: () => peerSocket.sas(),
     sendConfirm: (json) => peerSocket.sendTunnelText(json),
     onOpen: () => {},
-    load: async () => peerStore,
-    save: async (s) => {
-      peerStore = s
+    mutate: async (mutation) => {
+      peerStore = mutation(peerStore)
+      return peerStore
     }
   })
 

@@ -179,7 +179,7 @@ import { initStandingHost } from './remote/standing-host'
 import { killRelayHostsByPeerKey } from './remote/relay-host'
 import { initRelayHost } from './remote/relay-host-service'
 import { createRevoker } from './remote/revocation'
-import { loadApprovedDevices, saveApprovedDevices } from './remote/approved-devices'
+import { loadApprovedDevices, mutateApprovedDevices } from './remote/approved-devices'
 import { publicKeyToB64 } from './remote/e2ee'
 import { connectRelayClient, type RelayClientSession } from './remote/relay-client'
 import { serializeProjectsListWorkspace } from './remote/projects-list-output'
@@ -948,8 +948,7 @@ app.whenReady().then(async () => {
   // PtyManager.dropClient → sink prune). Host-security control plane, so it stays on raw ipcMain:
   // a remote peer must never be able to revoke anyone.
   const peerRevoker = createRevoker({
-    load: loadApprovedDevices,
-    save: saveApprovedDevices,
+    mutate: mutateApprovedDevices,
     onRevoke: (peerKeyB64) => killRelayHostsByPeerKey(peerKeyB64)
   })
   ipcMain.handle(IPC.remoteRevokePeer, (_e, peerKeyB64: string) =>
@@ -1277,7 +1276,9 @@ app.whenReady().then(async () => {
     try {
       pushHasPairedPhone = (await loadApprovedDevices()).pubkeys.length > 0
     } catch {
-      pushHasPairedPhone = false
+      // A failed trust-store read says nothing about whether a phone is paired. Preserve the
+      // last-known state; replacing it with false would misroute a transient read failure into the
+      // fallback push-grant path and could make two channels speak for one destination.
     }
     // No paired destination means no host-mode push can be sent. Avoid touching macOS
     // Safe Storage at boot in that state: locally signed development builds otherwise trigger

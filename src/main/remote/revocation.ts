@@ -14,7 +14,11 @@
 //
 // (peerId is the peer's stable box public key, base64 — the same identity the pin store and 4c's
 // live-session registry key on.)
-import { unpinDevice, type ApprovedDevices } from './approved-devices-core'
+import {
+  unpinDevice,
+  type ApprovedDevices,
+  type MutateApprovedDevices
+} from './approved-devices-core'
 
 /** Pure: return a store with the peer's pin removed. Idempotent. */
 export function revoke(store: ApprovedDevices, peerKeyB64: string): ApprovedDevices {
@@ -30,8 +34,7 @@ export function revoke(store: ApprovedDevices, peerKeyB64: string): ApprovedDevi
 export type OnRevoke = (peerId: string) => void | Promise<void>
 
 export interface RevocationDeps {
-  load(): Promise<ApprovedDevices>
-  save(store: ApprovedDevices): Promise<void>
+  mutate: MutateApprovedDevices
   onRevoke: OnRevoke
 }
 
@@ -41,10 +44,11 @@ export interface RevocationDeps {
  */
 export interface RevokeResult {
   /**
-   * `true` iff the unpin was loaded and written to disk. `false` means the pin may SURVIVE — the
-   * real adapter's `saveApprovedDevices` does temp+rename, so a failed write leaves the OLD still-
-   * pinned file byte-for-byte intact — so the revoked peer could reconnect and auto-approve with no
-   * SAS. The caller MUST retry and MUST NOT show a "Removed" success.
+   * `true` iff the store was read and the unpin decision is durable (an already-absent key needs no
+   * rewrite). `false` means the pin may SURVIVE — the real adapter's atomic mutation does
+   * temp+rename, so a failed write leaves the OLD still-pinned file byte-for-byte intact — and the
+   * revoked peer could reconnect and auto-approve with no SAS. The caller MUST retry and MUST NOT
+   * show a "Removed" success.
    */
   persisted: boolean
   /**
@@ -55,7 +59,7 @@ export interface RevokeResult {
 }
 
 /**
- * Build the revoke controller. `revoke(peerKeyB64)` unpins the device on disk FIRST (so a crash
+ * Build the revoke controller. `revoke(peerKeyB64)` mutates the device store FIRST (so a crash
  * between the two steps, or a reconnect racing the teardown, still leaves the peer refused by the
  * pin check), THEN fires `onRevoke` to cut the open socket. The kill hook fires even when the key
  * was not pinned — a live, never-pinned session must still be killable — and even when the disk
@@ -75,11 +79,12 @@ export function createRevoker(deps: RevocationDeps): {
     async revoke(peerKeyB64) {
       let persisted = false
       try {
-        const store = await deps.load()
-        await deps.save(revoke(store, peerKeyB64))
+        // The mutation runs inside the approved-device store's one queue. A concurrently settling
+        // approval can no longer save an older snapshot after this unpin and resurrect the peer.
+        await deps.mutate((store) => revoke(store, peerKeyB64))
         persisted = true
       } catch {
-        // load() or save() threw. Do NOT swallow silently: the on-disk pin may be intact, so the
+        // The read or write failed. Do NOT swallow silently: the on-disk pin may be intact, so the
         // revoked peer could reconnect and auto-approve. Report persisted:false so the caller retries
         // and the UI cannot show "Removed". We STILL fire the kill below — the live socket must drop
         // regardless of the disk.

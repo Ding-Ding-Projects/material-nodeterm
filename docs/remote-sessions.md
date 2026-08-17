@@ -249,7 +249,8 @@ the peer's key (each end pins the other's; idempotent). One state per pairing at
 ```ts
 function revoke(store: ApprovedDevices, peerKeyB64: string): ApprovedDevices   // pure unpin, idempotent
 type OnRevoke = (peerId: string) => void | Promise<void>
-interface RevocationDeps { load(): Promise<ApprovedDevices>; save(s: ApprovedDevices): Promise<void>; onRevoke: OnRevoke }
+type MutateApprovedDevices = (change: (current: ApprovedDevices) => ApprovedDevices) => Promise<ApprovedDevices>
+interface RevocationDeps { mutate: MutateApprovedDevices; onRevoke: OnRevoke }
 interface RevokeResult { persisted: boolean; killed: boolean }
 function createRevoker(deps: RevocationDeps): { revoke(peerKeyB64: string): Promise<RevokeResult> }
 ```
@@ -260,6 +261,13 @@ function createRevoker(deps: RevocationDeps): { revoke(peerKeyB64: string): Prom
 the hook. `persisted:false` ⇒ pin may survive, the UI must NOT show "Removed" and must
 retry; `killed:false` ⇒ the cut is unconfirmed. `peerId` is the peer's stable box public
 key (base64).
+
+All three pin-list writers (standing-phone approval, mutual approval, revoke) go through the same
+`mutateApprovedDevices` queue. Atomic rename alone is insufficient: a complete approval snapshot
+loaded before a revoke can otherwise land afterward and restore the revoked key. Only `ENOENT`
+decodes as an empty list; corrupt or unreadable storage rejects, so a later mutation cannot erase
+the evidence by treating a failed read as absence. The queue is process-local, matching packaged
+single-instance operation; `NT_MULTI` acceptance runs use separate `NT_USER_DATA` directories.
 
 **Key-file codec** (pure, `src/main/remote/key-file-codec.ts` — no electron; `safeStorage`
 injected as `SafeStorageLike`):
