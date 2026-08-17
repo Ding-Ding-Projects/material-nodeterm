@@ -683,28 +683,75 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
 
   const beginApprovedRemove = (
     account: ClaudeAccount,
-    authorization: import('../../../lib/destructiveAuthorization').DestructiveAuthorization
+    authorization: DestructiveAuthorization,
+    disclosedIdentity: string
   ): void => {
-    // This dispatch is synchronous. Canvas must accept the already-authorized live-node teardown
-    // and close/reconcile the account's active login terminals BEFORE it calls continueRemoval.
-    // If Canvas is not mounted (or refuses), credentials and account state remain untouched.
-    const handled = requestAccountRemovalTeardown(
-      account.id,
-      authorization,
-      () => void performRemove(account),
-      (detail: AccountRemovalTeardownDetail) =>
-        window.dispatchEvent(new CustomEvent(ACCOUNT_REMOVAL_TEARDOWN_EVENT, { detail }))
-    )
-    if (!handled) {
-      window.dispatchEvent(
-        new CustomEvent('nodeterm:toast', {
-          detail: {
-            kind: 'error',
-            message: `Could not close the active login session for “${account.label}”. The account was not removed.`
+    setPendingRemove(null)
+    setRemovingAccountId(account.id)
+    setRemoveError(null)
+    void (async () => {
+      try {
+        // Stop the pending poll before the final authorization boundary. No login node, credential,
+        // account record, or binding is removed during this await.
+        if (account.pending) await window.nodeTerminal.claudeAccounts.cancelWaitLogin(account.id)
+      } catch {
+        setRemoveError(`Could not prepare “${account.label}” for removal. Nothing was removed.`)
+        setRemovingAccountId((current) => (current === account.id ? null : current))
+        return
+      }
+
+      const finalCommit = createDestructiveCommitBarrier({
+        disclosedIdentity,
+        authorization,
+        readCurrent: () => {
+          const current = useSettings
+            .getState()
+            .settings.claudeAccounts.find((candidate) => candidate.id === account.id)
+          const affected = current ? affectedNodesUsing(current.id) : null
+          return current && affected
+            ? {
+                identity: accountRemovalTargetIdentity(current, affected),
+                target: current,
+                kidsGateRequired: kidsDestructiveGateRequired()
+              }
+            : null
+        },
+        perform: (current) => {
+          // This dispatch is synchronous. Canvas closes/reconciles login nodes and invokes the
+          // continuation before the credential removal call begins, leaving no awaited gap after
+          // this final live target + policy check.
+          const handled = requestAccountRemovalTeardown(
+            current.id,
+            authorization,
+            () => void performRemove(current),
+            (detail: AccountRemovalTeardownDetail) =>
+              window.dispatchEvent(new CustomEvent(ACCOUNT_REMOVAL_TEARDOWN_EVENT, { detail }))
+          )
+          if (!handled) {
+            setRemovingAccountId((value) => (value === current.id ? null : value))
+            window.dispatchEvent(
+              new CustomEvent('nodeterm:toast', {
+                detail: {
+                  kind: 'error',
+                  message: `Could not close the active login session for “${current.label}”. The account was not removed.`
+                }
+              })
+            )
           }
-        })
-      )
-    }
+        },
+        upgradeToTwoKey: (current) => {
+          setRemovingAccountId((value) => (value === current.id ? null : value))
+          requestRemove(current, null)
+        },
+        refuse: () => {
+          setRemovingAccountId((current) => (current === account.id ? null : current))
+          setRemoveError(
+            'That account or its affected nodes changed before removal could commit. Nothing was removed; review it and try again.'
+          )
+        }
+      })
+      finalCommit()
+    })()
   }
 
   const requestRemove = (account: ClaudeAccount, anchorEl: HTMLElement | null): boolean => {
@@ -758,7 +805,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                 }
               : null
           },
-          perform: (current) => beginApprovedRemove(current, authorization),
+          perform: (current) => beginApprovedRemove(current, authorization, disclosedIdentity),
           upgradeToTwoKey: (current) => {
             requestRemove(current, null)
           },
@@ -859,6 +906,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                   <Button
                     variant="ghost"
                     aria-label="Remove account"
+                    disabled={removingAccountId === account.id}
                     onClick={(event) => requestRemove(account, event.currentTarget)}
                   >
                     ×
@@ -988,6 +1036,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                       <Button
                         variant="ghost"
                         aria-label="Remove account"
+                        disabled={removingAccountId === account.id}
                         onClick={(event) => requestRemove(account, event.currentTarget)}
                       >
                         ×

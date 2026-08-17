@@ -122,6 +122,11 @@ describe('AccountsSection account-removal transaction', () => {
     save = vi.fn(async () => undefined)
     ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
       claudeAccounts: { cancelWaitLogin, remove },
+      // Mounting also fires the system-Codex-account and SSH-server-list effects (merged in from
+      // the multi-account/SSH branch after this file's mock was written); mirror their real
+      // preload shape (src/preload/index.ts) so the component doesn't crash on mount.
+      codexAccounts: { systemIdentity: vi.fn(async () => null) },
+      ssh: { list: vi.fn(async () => []) },
       settings: { save },
       usage: { fetch: vi.fn(async () => null) }
     }

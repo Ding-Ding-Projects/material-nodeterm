@@ -2,6 +2,20 @@ import { useEffect } from 'react'
 import { useI18n } from '@renderer/lib/i18n'
 import { Localized } from '@renderer/ui/Localized'
 
+/**
+ * Whether the start screen may be dismissed back to whatever is behind it. `hasOpenProjects` is
+ * deliberately the ONLY input — a workspace holding only CLOSED projects still returns false,
+ * i.e. no dismiss control. That is a considered choice, not an oversight (issue #128): dismissing
+ * with zero open projects would reveal an empty canvas with no active tab, and this screen is the
+ * ONLY place "Recently closed" is browsable and reopenable (see Canvas.tsx — no sidebar, palette
+ * command, or tab-bar entry lists closed projects). Hiding the dismiss control there keeps the one
+ * useful action — reopen a closed project — in view instead of one click behind a blank canvas.
+ * Pure so Canvas.tsx's choice is unit-testable without pulling in the whole Canvas module.
+ */
+export function canDismissWelcomeScreen(hasOpenProjects: boolean): boolean {
+  return hasOpenProjects
+}
+
 interface WelcomeScreenProps {
   onNewProject: () => void
   onOpenFolder: () => void
@@ -19,8 +33,11 @@ interface WelcomeScreenProps {
    */
   onDeleteClosed?: (id: string, name: string, anchorEl: HTMLElement) => void
   /**
-   * When provided, the screen is dismissable (opened on demand via "+", over existing projects)
-   * — adds a close button, Escape, and click-outside. Omitted for the permanent no-projects screen.
+   * When provided, the screen is dismissable (opened on demand via "+", over existing projects):
+   * a labeled "Back to your projects" button (the primary, always-visible way out — see
+   * canDismissWelcomeScreen above), a small corner "×" for anyone who reaches for that instead,
+   * plus Escape and click-outside as bonus shortcuts. Omitted for the permanent no-projects
+   * screen, where there is genuinely nothing behind it to return to.
    */
   onClose?: () => void
   /**
@@ -59,24 +76,84 @@ export function WelcomeScreen({
       onClick={onClose ? (e) => e.target === e.currentTarget && onClose() : undefined}
     >
       {onClose && (
-        <button
-          onClick={onClose}
-          title={ts('welcome.close', 'Close')}
-          aria-label={ts('welcome.close', 'Close')}
-          style={{
-            position: 'absolute',
-            top: 16,
-            right: 20,
-            background: 'transparent',
-            border: 'none',
-            color: 'rgba(235,235,245,0.6)',
-            fontSize: 26,
-            lineHeight: 1,
-            cursor: 'pointer'
-          }}
-        >
-          ×
-        </button>
+        <>
+          {/* PRIMARY, obvious way out — a labeled button, not just Escape or click-outside (both
+              are invisible affordances a distracted or worried user won't find). Reported in #128:
+              a user who started a new project, changed their mind mid-picker, and could not find a
+              way back to the 4 projects they still had — the only exit at the time was a faint
+              corner "×" and the keyboard/click-outside paths nobody could see. This button, plus
+              the reassurance line beside it, is the fix: always visible, always labeled, and says
+              plainly that nothing here touches the other projects. */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 14,
+              left: 20,
+              right: 64,
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 10
+            }}
+          >
+            <button
+              onClick={onClose}
+              title={ts('welcome.back', 'Back to your projects')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                background: 'rgba(235,235,245,0.08)',
+                border: '1px solid rgba(235,235,245,0.24)',
+                borderRadius: 999,
+                color: 'rgba(235,235,245,0.92)',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                flex: 'none'
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+              <span>{ts('welcome.back', 'Back to your projects')}</span>
+            </button>
+            <span style={{ fontSize: 11.5, color: 'rgba(235,235,245,0.5)' }}>
+              {ts('welcome.back.note', "They're untouched — nothing here changes them.")}
+            </span>
+          </div>
+          {/* Secondary, conventional corner close — kept for anyone who already reaches for it by
+              habit. The button above is the one this screen relies on being found. */}
+          <button
+            onClick={onClose}
+            title={ts('welcome.close', 'Close')}
+            aria-label={ts('welcome.close', 'Close')}
+            style={{
+              position: 'absolute',
+              top: 16,
+              right: 20,
+              background: 'transparent',
+              border: 'none',
+              color: 'rgba(235,235,245,0.6)',
+              fontSize: 26,
+              lineHeight: 1,
+              cursor: 'pointer'
+            }}
+          >
+            ×
+          </button>
+        </>
       )}
       <div className="welcome__brand">
         <svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true">

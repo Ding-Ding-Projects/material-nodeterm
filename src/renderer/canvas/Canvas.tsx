@@ -149,7 +149,7 @@ import {
   FileConverterPanel,
   OllamaManagerPanel
 } from '../components/lazyPanels'
-import { WelcomeScreen } from '../components/WelcomeScreen'
+import { WelcomeScreen, canDismissWelcomeScreen } from '../components/WelcomeScreen'
 import { CloneRepoDialog } from '../components/CloneRepoDialog'
 import type { DictationTarget } from '../components/DictationOverlay'
 import { describeOs, REPO_URL } from '../lib/bugReport'
@@ -1430,7 +1430,9 @@ export function Canvas() {
   const activeSession = sessionForProject(activeProjectId || '')
   const activePresence = presenceForProject(activeProjectId || '')
   // "Has projects" = at least one OPEN (non-closed) tab. With only closed projects left, the
-  // welcome screen shows (and lists them under "Recently closed" for reopening).
+  // welcome screen shows (and lists them under "Recently closed" for reopening) — and, per
+  // canDismissWelcomeScreen, stays UNdismissable in that state: there is no active tab behind it
+  // to reveal, and this screen is the only place those closed projects can be reopened from.
   const hasProjects = useProjects((s) => s.projects.some((p) => !p.closed))
   // Exclude UNAVAILABLE closed projects (folder missing): reopenProject would activate them
   // unconditionally → a silent-discard empty canvas (the same case the palette guard blocks).
@@ -12129,7 +12131,7 @@ export function Canvas() {
             closedProjects={closedProjects.map((p) => ({ id: p.id, name: p.name, cwd: p.cwd }))}
             onReopen={reopenProject}
             onDeleteClosed={requestDeleteProject}
-            onClose={hasProjects ? () => setWelcomeOpen(false) : undefined}
+            onClose={canDismissWelcomeScreen(hasProjects) ? () => setWelcomeOpen(false) : undefined}
             overBoard={kanbanOpen}
           />
         )}

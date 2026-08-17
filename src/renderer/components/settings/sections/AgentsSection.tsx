@@ -92,6 +92,22 @@ const ROWS = {
       'minutes',
       'sleep'
     ]
+  },
+  leadPaneWidth: {
+    title: 'Lead pane width for agent teams',
+    keywords: [
+      'lead pane',
+      'team',
+      'teammate',
+      'agent team',
+      'split',
+      'tmux',
+      'width',
+      'resize',
+      'pane',
+      'layout',
+      'claude'
+    ]
   }
 }
 const ENTRIES = Object.values(ROWS)
@@ -308,6 +324,34 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
                 onChange={(v) => update({ agentHibernationIdleMinutes: v || 30 })}
               />
               <span className="text-[13px] text-muted">min</span>
+            </div>
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.leadPaneWidth}>
+        <FieldRow
+          label="Lead pane width for agent teams"
+          description="Claude Code's own tmux backend for agent teams narrows the pane you actually type into to about 30% of the window once a few teammates are running — there's no Claude Code setting for it. When on, nodeterm widens that lead pane back out to the width below, and re-applies it every time Claude adds another teammate (Claude re-narrows it on each new one, so a single correction wouldn't stick). Only affects a session once it actually has teammate panes — a plain single-pane terminal is never touched. Tmux-backed local sessions only; unaffected on the Windows session-host fallback."
+          control={
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={settings.agentTeamLeadPaneWidthEnabled}
+                ariaLabel="Widen the lead pane in agent teams"
+                onChange={(on) => update({ agentTeamLeadPaneWidthEnabled: on })}
+              />
+              <NumberField
+                value={settings.agentTeamLeadPaneWidthPercent}
+                ariaLabel="Lead pane width percent"
+                disabled={!settings.agentTeamLeadPaneWidthEnabled}
+                min={10}
+                max={90}
+                step={5}
+                // A cleared/invalid field falls back to the default rather than 0 (which would
+                // leave the lead pane no width at all). No per-keystroke clamp for the same reason
+                // as the hibernation field above: it would make in-between values untypable.
+                onChange={(v) => update({ agentTeamLeadPaneWidthPercent: v || 60 })}
+              />
+              <span className="text-[13px] text-muted">%</span>
             </div>
           }
         />

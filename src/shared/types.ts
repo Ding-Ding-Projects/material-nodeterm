@@ -1370,6 +1370,23 @@ export interface Settings {
   agentHibernationEnabled: boolean
   /** How long a session must be idle + offscreen before "Eco" hibernates it (minutes). */
   agentHibernationIdleMinutes: number
+  /** Opt-in (default OFF — nothing changes unless this is turned on). Claude Code's own tmux
+   *  backend for agent teams hardcodes the geometry of the pane the user actually types into: it
+   *  runs `split-window -h -l 70%` for the first teammate, then `select-layout main-vertical` +
+   *  `resize-pane -t <leadPane> -x 30%` for every later one — so with several teammates the pane
+   *  you type in is squeezed down to 30% while narrower and narrower teammate panes take the rest.
+   *  There is no Claude Code setting for this; nodeterm never calls `split-window`,
+   *  `select-layout` or `resize-pane` itself, so any pane split in a session's tmux window came
+   *  from Claude's own team backend (or, rarely, the user's own manual `tmux split-window`).
+   *  When on, nodeterm widens that lead pane (tmux pane index 0 — see
+   *  `shared/agents/team-pane-layout.ts`) back to `agentTeamLeadPaneWidthPercent`.
+   *  Claude re-applies its own 30% split on EVERY later teammate spawn, so the correction is
+   *  re-applied the same way — every time a new teammate pane is observed, not once — rather than
+   *  being undone by the next one. Tmux-backed local sessions only: the Windows session-host
+   *  fallback has no split-window/resize-pane primitive, so a node running on it is unaffected. */
+  agentTeamLeadPaneWidthEnabled: boolean
+  /** Percentage width to give the lead pane when `agentTeamLeadPaneWidthEnabled` is on. */
+  agentTeamLeadPaneWidthPercent: number
   /** Send anonymous usage data (version/OS) to the telemetry backend. Opt-OUT (default on):
    *  version/OS only, nothing personal, client IP never stored. Turn it off in Settings → Privacy
    *  (or hard-disable with DO_NOT_TRACK / NODETERM_TELEMETRY_DISABLED). Note: a lighter anonymous
@@ -1557,6 +1574,10 @@ export const DEFAULT_SETTINGS: Settings = {
   // is deliberately long — shorter windows exit sessions the user is between turns on.
   agentHibernationEnabled: false,
   agentHibernationIdleMinutes: 30,
+  // Opt-in: nobody's terminal geometry changes unless they ask for it. 60% keeps the lead pane a
+  // clear majority of the window without crowding out a single teammate pane entirely.
+  agentTeamLeadPaneWidthEnabled: false,
+  agentTeamLeadPaneWidthPercent: 60,
   // Opt-out (default on). Existing users pick this up on hydrate ONLY if their settings.json has
   // no telemetryEnabled key yet; anyone who already saved settings keeps their stored value.
   telemetryEnabled: true,
