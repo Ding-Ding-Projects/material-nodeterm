@@ -1220,7 +1220,7 @@ class HookServer {
       NODETERM_NODE_ID: nodeId,
       NODETERM_AGENT_ID: agentId,
       ...(permWaitSecs > 0 ? { NODETERM_PERM_WAIT_SECS: String(permWaitSecs) } : {}),
-      ...(canControlCanvas(agentId) ? { NODETERM_CANVAS_CONTROL: '1' } : {})
+      ...(canControlCanvas(agentId) ? { NODETERM_CANVAS_CONTROL: '1' } : {}),
       // NO NODETERM_CODEX_NODE_TOKEN either. The per-node capability is the same class of leak as
       // the app-wide bearer above, and a worse one to reason about: it is the credential that
       // proves WHICH node is calling, so a sibling uid reading it off /proc/<pid>/cmdline could
