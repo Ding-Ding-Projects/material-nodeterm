@@ -60,6 +60,14 @@ Anything reachable from `window.nodeTerminal` needs a **real** implementation in
 `src/renderer/bridge/`, or a deliberate, documented degrade. The `satisfies NodeTerminalApi` gate
 forces you to *declare* every member, but a no-op stub compiles fine while doing nothing.
 
+**A globally mounted panel does not inherit the active project's session.** Drawers mounted above
+the project-keyed `SessionProvider` see the root/local API, and `window.nodeTerminal` is likewise
+the viewer's local preload. Any panel action that operates on a core-owned machine — files,
+converter queues, Ollama models, and similar namespaces — must resolve the active project through
+`useActiveSessionApi()` / `sessionForProject(activeProjectId)`. If that session does not implement
+the capability, show its `E_UNSUPPORTED` refusal; never fall back to mutating the viewer's machine.
+App-global capabilities such as the clipboard intentionally remain local.
+
 The **canvas and the kanban board are two views of the same nodes.** When you add something to a
 canvas node — a header action, a badge, a menu item — ask whether the board's card and card modal
 need it too, and wire it in the same change.

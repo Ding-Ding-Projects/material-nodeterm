@@ -12,7 +12,7 @@ import type {
 } from '../shared/types'
 
 const h = vi.hoisted(() => ({
-  invoke: vi.fn(async () => undefined),
+  invoke: vi.fn(async (..._args: unknown[]): Promise<unknown> => undefined),
   send: vi.fn(),
   on: vi.fn(),
   removeListener: vi.fn(),
@@ -52,7 +52,7 @@ async function loadPreloadForPlatform(platform: NodeJS.Platform): Promise<NodeTe
   }
 }
 
-describe('preload sshProject passphrase wiring', () => {
+describe('preload IPC wiring', () => {
   it('exposes Windows terminal profile detection on its exact channels', async () => {
     if (process.platform === 'win32') {
       expect(api.terminalProfiles).toBeDefined()
@@ -107,6 +107,23 @@ describe('preload sshProject passphrase wiring', () => {
 
     api.pty.recycle('node-worktree-move')
     expect(h.send).toHaveBeenCalledWith(IPC.ptyRecycle, 'node-worktree-move')
+  })
+
+  it('awaits the main-process clipboard acknowledgement on the request-response channel', async () => {
+    h.invoke.mockResolvedValueOnce(false)
+
+    await expect(
+      api.clipboard.writeText('colour value', { reportFailure: false })
+    ).resolves.toBe(false)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.clipboardWrite, 'colour value')
+    expect(h.send).not.toHaveBeenCalledWith(IPC.clipboardWrite, 'colour value')
+  })
+
+  it('resolves false instead of leaking a rejected clipboard invocation', async () => {
+    h.invoke.mockRejectedValueOnce(new Error('main process unavailable'))
+
+    await expect(api.clipboard.writeText('safe fallback')).resolves.toBe(false)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.clipboardWrite, 'safe fallback')
   })
 
   it('exposes GitHub issue data and host-control namespaces on their exact channels', async () => {

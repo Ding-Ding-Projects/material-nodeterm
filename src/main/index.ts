@@ -830,9 +830,16 @@ app.whenReady().then(async () => {
   })
 
   // System-clipboard write from the MAIN process. Renderer/preload `clipboard` access is deprecated
-  // in Electron (logs a warning per call); the renderer sends this instead. Text only, fire-and-forget.
-  ipcMain.on(IPC.clipboardWrite, (_e, text: string) => {
-    if (typeof text === 'string') clipboard.writeText(text)
+  // in Electron (logs a warning per call). Return a truthful acknowledgement so UI feedback never
+  // claims success when the OS clipboard rejects the write.
+  ipcMain.handle(IPC.clipboardWrite, (_e, text: unknown) => {
+    if (typeof text !== 'string') return false
+    try {
+      clipboard.writeText(text)
+      return true
+    } catch {
+      return false
+    }
   })
   ipcMain.handle(IPC.clipboardWriteFiles, (_e, paths: unknown) =>
     writeFilesToClipboard(paths, {

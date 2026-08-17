@@ -5,7 +5,7 @@ controls cluster, the command palette ("Ollama manager"), or `⌘K`. It talks **
 own documented local HTTP API (`http://127.0.0.1:11434` by default, or `$OLLAMA_HOST`) — never an
 unofficial proxy, never a cloud model service, and it never claims Ollama can launch arbitrary
 programs. Every HTTP call is made by the privileged shell (Electron main / the Server Edition
-process), never the renderer directly — the renderer only ever talks to `window.nodeTerminal.ollama`.
+process), never the renderer directly — the panel talks to the active project's session API.
 
 ## Architecture
 
@@ -25,6 +25,22 @@ src/renderer/components/ollama/
   OllamaManagerPanel.tsx        the whole user-facing panel (Health / Installed / Model store / Chat)
   troubleshoot.ts               bundled, offline per-platform install/start guidance
 ```
+
+## Session routing and shipped surfaces
+
+The manager is a global drawer, outside the canvas' project-keyed `SessionProvider`. It therefore
+resolves the **active project's** API explicitly; using the root context or
+`window.nodeTerminal.ollama` here would manage the viewing computer when a relay tab is selected.
+The same routing applies to reads, pulls, chats, and destructive operations such as model deletion.
+
+- **Desktop:** manages the Ollama service on the active local project's machine.
+- **Server Edition:** manages the Ollama service on the machine running nodeterm-server, not the
+  browser's computer. Hardware and troubleshooting guidance describe that server.
+- **Relay project:** Ollama RPC is not carried to the host in this release. The relay namespace
+  returns `E_UNSUPPORTED`; the manager shows that refusal and explicitly does not fall back to the
+  viewer's Ollama installation.
+- **Mobile companion:** not applicable. *nodeterm mobile* is a separate app with no local-process
+  management surface, and this feature adds no mobile protocol messages.
 
 ## Guided, never a dead end
 
@@ -92,7 +108,14 @@ editable system prompt, and three documented, validated parameters (temperature,
 window — `OLLAMA_CHAT_DEFAULT_PARAMS`). Responses stream token-by-token over `/api/chat`'s NDJSON
 stream; **Stop** aborts the underlying fetch. Sessions persist as one JSON file per session under
 `<userData>/ollama/chats/<id>.json`; the list surface, rename, delete (behind a confirm dialog), and
-a redacted Markdown/JSON export are all real. **Attachment controls are gated by real, verified
+a redacted Markdown/JSON export are all real. Whole-document mutations for one session are
+serialized: a send appends its user message, streams outside that short persistence queue, then
+re-reads the newest session and merges the assistant reply so a rename made during generation is
+not overwritten. A second send for the same session is refused immediately while its generation is
+live rather than queued behind it; different sessions may stream concurrently. Delete aborts the
+owned generation before its queued unlink, and a late completion cannot resurrect the file. This
+ordering is process-local; deployments must not run two server processes against the same data
+directory without an external single-writer/locking boundary. **Attachment controls are gated by real, verified
 model capability** (`/api/show`'s `capabilities` array — e.g. `"vision"` — where the installed
 Ollama build reports one) and stay **visibly disabled**, naming the exact unmet condition: not yet
 verified, no verified vision capability, or — honestly — "not implemented in this build yet" once
@@ -130,7 +153,5 @@ empty spinner or a generic "try again" that erases which of these it actually wa
   destructive-action super-confirmation slider.
 - **Copying a model** (`ollama.copyModel`) is wired end-to-end in the core/IPC/bridge layer but has
   no dedicated UI control yet in the panel.
-- **Relay (remote-desktop) tabs do not route the manager to the host** — same reasoning and same
-  `E_UNSUPPORTED` degrade as the file converter.
-- **Mobile companion**: not applicable — *nodeterm mobile* has no local-process management surface;
-  this is a desktop/Server-Edition feature.
+- **Relay (remote-desktop) tabs do not route the manager to the host.** The visible
+  `E_UNSUPPORTED` refusal is intentional until the Ollama core namespace is carried over the relay.

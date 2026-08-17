@@ -34,6 +34,7 @@ import {
   type RGBA
 } from '@renderer/lib/color/convert'
 import { cn } from '@renderer/ui/cn'
+import { copyColorText } from './color-clipboard'
 
 type Format = 'hex' | 'rgb' | 'hsl' | 'hsv' | 'hwb' | 'lab' | 'lch' | 'oklab' | 'oklch' | 'cmyk'
 
@@ -203,12 +204,12 @@ export function ColorPicker({
     commit(parsed, 'hex')
   }
 
-  function copyCurrent(): void {
+  async function copyCurrent(): Promise<void> {
+    const copiedFormat = format
     const text = formatFor(format, rgba)
-    void navigator.clipboard?.writeText(text).then(() => {
-      setCopied(format)
-      window.setTimeout(() => setCopied((f) => (f === format ? null : f)), 1200)
-    })
+    if (!(await copyColorText(text))) return
+    setCopied(copiedFormat)
+    window.setTimeout(() => setCopied((f) => (f === copiedFormat ? null : f)), 1200)
   }
 
   async function useEyeDropper(): Promise<void> {
@@ -347,7 +348,7 @@ export function ColorPicker({
             onCommit={(next, clipped) => commit(next, format, clipped)}
           />
         )}
-        <button type="button" className="color-picker__copy" onClick={copyCurrent}>
+        <button type="button" className="color-picker__copy" onClick={() => void copyCurrent()}>
           {copied === format ? 'Copied' : 'Copy'}
         </button>
       </div>
