@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { WhisperModelStore } from './whisper-models'
+import { WHISPER_PART_STALE_MS, WhisperModelStore } from './whisper-models'
 
 function fakeFetch(body: Uint8Array, opts: { delayMs?: number; chunks?: number } = {}) {
   const { delayMs = 0, chunks = 2 } = opts
@@ -24,6 +24,14 @@ function fakeFetch(body: Uint8Array, opts: { delayMs?: number; chunks?: number }
       body: stream,
     } as unknown as Response
   }) as typeof fetch
+}
+
+async function waitUntil(check: () => boolean, timeoutMs = 3_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!check()) {
+    if (Date.now() >= deadline) throw new Error('timed out waiting for a model part file')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
 }
 
 describe('WhisperModelStore', () => {
@@ -58,6 +66,27 @@ describe('WhisperModelStore', () => {
     await a
   })
 
+  it('does not sweep a live part owned by another store sharing the model directory', async () => {
+    const firstStore = new WhisperModelStore({
+      dir,
+      fetchFn: fakeFetch(new Uint8Array(512), { delayMs: 30, chunks: 16 }),
+    })
+    const secondStore = new WhisperModelStore({
+      dir,
+      fetchFn: fakeFetch(new Uint8Array(512), { delayMs: 30, chunks: 16 }),
+    })
+
+    const first = firstStore.download('tiny')
+    await waitUntil(() => readdirSync(dir).some((entry) => entry.startsWith('ggml-tiny.bin.part.')))
+    const livePart = join(dir, readdirSync(dir).find((entry) => entry.startsWith('ggml-tiny.bin.part.'))!)
+
+    const second = secondStore.download('tiny')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(existsSync(livePart), 'a second process must not unlink a live foreign download').toBe(true)
+
+    await expect(Promise.all([first, second])).resolves.toEqual([undefined, undefined])
+  })
+
   it('delete mid-download cancels — no file, no resurrection', async () => {
     const store = new WhisperModelStore({ dir, fetchFn: fakeFetch(new Uint8Array(1024), { delayMs: 30, chunks: 8 }) })
     const dl = store.download('tiny')
@@ -66,7 +95,7 @@ describe('WhisperModelStore', () => {
     await expect(dl).rejects.toThrow()
     await new Promise((r) => setTimeout(r, 120)) // late chunks must not revive anything
     expect(await store.has('tiny')).toBe(false)
-    expect(existsSync(store.modelPath('tiny') + '.part')).toBe(false)
+    expect(readdirSync(dir).some((entry) => entry.startsWith('ggml-tiny.bin.part.'))).toBe(false)
   })
 
   it('delete followed by immediate re-download does not kill the new download', async () => {
@@ -80,17 +109,47 @@ describe('WhisperModelStore', () => {
     expect(await store.has('tiny')).toBe(true)
   })
 
-  it('sweeps orphaned .part.<genId> files on download', async () => {
-    const store = new WhisperModelStore({ dir, fetchFn: fakeFetch(new Uint8Array(64)) })
-    // Pre-create a fake orphan from a previous crash
-    writeFileSync(join(dir, 'ggml-tiny.bin.part.deadbeef'), 'junk')
-    expect(existsSync(join(dir, 'ggml-tiny.bin.part.deadbeef'))).toBe(true)
+  it('sweeps an aged foreign/legacy part on download', async () => {
+    const now = 2_000_000_000_000
+    const store = new WhisperModelStore({ dir, fetchFn: fakeFetch(new Uint8Array(64)), now: () => now })
+    const orphan = join(dir, 'ggml-tiny.bin.part.deadbeef')
+    const legacyOrphan = join(dir, 'ggml-tiny.bin.part')
+    writeFileSync(orphan, 'junk')
+    writeFileSync(legacyOrphan, 'older junk')
+    const staleAt = new Date(now - WHISPER_PART_STALE_MS - 1_000)
+    utimesSync(orphan, staleAt, staleAt)
+    utimesSync(legacyOrphan, staleAt, staleAt)
+    expect(existsSync(orphan)).toBe(true)
 
     await store.download('tiny')
 
-    // Orphan should be gone, model should exist
-    expect(existsSync(join(dir, 'ggml-tiny.bin.part.deadbeef'))).toBe(false)
+    expect(existsSync(orphan)).toBe(false)
+    expect(existsSync(legacyOrphan)).toBe(false)
     expect(await store.has('tiny')).toBe(true)
+  })
+
+  it('reserves a collision-proof part name instead of truncating an existing fragment', async () => {
+    const owner = 'store-owner'
+    const collision = join(dir, `ggml-tiny.bin.part.${owner}.collision`)
+    const ids = ['collision', 'unique']
+    const baseFetch = fakeFetch(new Uint8Array(64).fill(9))
+    const fetchFn = (async (url: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      // run() already swept before fetch. Make the colliding name appear in the remaining gap so
+      // only exclusive reservation — not cleanup ordering — can prevent truncation.
+      writeFileSync(collision, 'leave this fragment intact')
+      return baseFetch(url, init)
+    }) as typeof fetch
+    const store = new WhisperModelStore({
+      dir,
+      fetchFn,
+      partOwnerId: owner,
+      nextPartId: () => ids.shift() ?? 'unexpected-extra-id',
+    })
+
+    await store.download('tiny')
+
+    expect(readFileSync(collision, 'utf8')).toBe('leave this fragment intact')
+    expect(readFileSync(store.modelPath('tiny'))).toEqual(Buffer.alloc(64, 9))
   })
 
   it('delete() rejects an unknown model id', async () => {
@@ -111,17 +170,21 @@ describe('WhisperModelStore', () => {
     }
   })
 
-  it('delete() removes orphaned .part.<genId> files when nothing is in flight', async () => {
-    const store = new WhisperModelStore({ dir, fetchFn: fakeFetch(new Uint8Array(64)) })
-    // Pre-create the model and an orphan
+  it('delete() removes a recent inactive part owned by this store', async () => {
+    const owner = 'delete-owner'
+    const store = new WhisperModelStore({
+      dir,
+      fetchFn: fakeFetch(new Uint8Array(64)),
+      partOwnerId: owner,
+    })
     writeFileSync(store.modelPath('tiny'), 'model')
-    writeFileSync(store.modelPath('tiny') + '.part.orphan123', 'junk')
+    const ownOrphan = `${store.modelPath('tiny')}.part.${owner}.orphan123`
+    writeFileSync(ownOrphan, 'junk')
     expect(await store.has('tiny')).toBe(true)
 
     await store.delete('tiny')
 
-    // Both should be gone
     expect(await store.has('tiny')).toBe(false)
-    expect(existsSync(store.modelPath('tiny') + '.part.orphan123')).toBe(false)
+    expect(existsSync(ownOrphan)).toBe(false)
   })
 })

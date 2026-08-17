@@ -1,25 +1,57 @@
+import { randomUUID } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { Writable } from 'node:stream'
 import { WHISPER_DOWNLOAD_BASE, WHISPER_MODELS, whisperModel } from '../../shared/speech'
 import { renameAtomic } from '../fs-atomic'
 
+/** A foreign fragment must be untouched while another desktop/server/container may still own it.
+ * Ongoing downloads refresh their part's mtime as they write; a full day without modification
+ * makes an ownerless/crashed fragment eligible without turning the directory into an orphan
+ * archive. */
+export const WHISPER_PART_STALE_MS = 24 * 60 * 60 * 1_000
+const PART_RESERVATION_ATTEMPTS = 8
+
+function isAlreadyExists(error: unknown): boolean {
+  return !!error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'
+}
+
+export interface WhisperModelStoreOptions {
+  dir: string
+  fetchFn?: typeof fetch
+  onProgress?: (id: string, pct: number) => void
+  /** Test seams. Production uses independent cryptographic ids for every store and part. */
+  partOwnerId?: string
+  nextPartId?: () => string
+  now?: () => number
+}
+
 /** Downloads and manages the local ggml whisper models. The fences here are
- * lessons already paid for on iOS: a download streams to a per-download `<file>.part.<genId>`
+ * lessons already paid for on iOS: a download streams to a per-download
+ * `<file>.part.<storeId>.<partId>`
  * and renames only on completion; delete() aborts an in-flight download and a
  * late chunk can never resurrect a deleted model; concurrent download() of
- * the same id joins the same promise instead of racing two writers. */
+ * the same id in this store joins the same promise instead of racing two writers. A second
+ * desktop, Server Edition, or container may share the directory, so cleanup removes this store's
+ * inactive fragments immediately but preserves foreign fragments until they are stale. */
 export class WhisperModelStore {
   private readonly dir: string
   private readonly fetchFn: typeof fetch
   private readonly onProgress?: (id: string, pct: number) => void
+  private readonly partOwnerId: string
+  private readonly nextPartId: () => string
+  private readonly now: () => number
+  private readonly activeParts = new Set<string>()
   private readonly inFlight = new Map<string, { promise: Promise<void>; abort: AbortController }>()
 
-  constructor(opts: { dir: string; fetchFn?: typeof fetch; onProgress?: (id: string, pct: number) => void }) {
+  constructor(opts: WhisperModelStoreOptions) {
     this.dir = opts.dir
     this.fetchFn = opts.fetchFn ?? fetch
     this.onProgress = opts.onProgress
+    this.partOwnerId = opts.partOwnerId ?? randomUUID()
+    this.nextPartId = opts.nextPartId ?? randomUUID
+    this.now = opts.now ?? Date.now
   }
 
   modelPath(id: string): string {
@@ -50,9 +82,7 @@ export class WhisperModelStore {
     const info = whisperModel(id)
     if (!info) return Promise.reject(new Error(`unknown whisper model: ${id}`))
     const abort = new AbortController()
-    // Math.random suffices: not a security boundary, just a scratch-name de-collider.
-    const genId = Math.random().toString(36).slice(2)
-    const promise = this.run(id, info.file, abort, genId).finally(() => {
+    const promise = this.run(id, info.file, abort).finally(() => {
       // Only clear our own slot — a delete already removed it.
       if (this.inFlight.get(id)?.abort === abort) this.inFlight.delete(id)
     })
@@ -60,36 +90,67 @@ export class WhisperModelStore {
     return promise
   }
 
-  /** Remove every .part.<genId> variant for this id. Part names are
-   * per-download (see run()), so a hard crash can strand orphans that no
-   * deterministic rm would ever find — sweep by prefix instead. */
+  /** Remove inactive fragments owned by this store and foreign fragments old enough to have
+   * outlived a crashed owner. A recent foreign fragment may be a live writer in another process. */
   private async removeParts(id: string): Promise<void> {
     const base = this.modelPath(id)
     // basename(), not base.split('/').pop(): modelPath() is built with node:path's `join`,
     // which on win32 joins with `\`, so a `.split('/')` on a path with no `/` in it at all
     // returns the WHOLE absolute path — readdir() entries are bare filenames and none of them
     // ever start with a full path, so this swept exactly zero orphaned .part files on Windows.
-    const prefix = `${basename(base)}.part`
+    const legacyPart = `${basename(base)}.part`
+    const prefix = `${legacyPart}.`
     const entries = await readdir(this.dir).catch(() => [] as string[])
     await Promise.all(
-      entries.filter((e) => e.startsWith(prefix)).map((e) => rm(join(this.dir, e), { force: true })),
+      entries.filter((entry) => entry === legacyPart || entry.startsWith(prefix)).map(async (entry) => {
+        const partPath = join(this.dir, entry)
+        if (this.activeParts.has(partPath)) return
+
+        const ownerId = entry === legacyPart ? '' : entry.slice(prefix.length).split('.', 1)[0]
+        if (ownerId === this.partOwnerId) {
+          await rm(partPath, { force: true }).catch(() => {})
+          return
+        }
+
+        // A failed stat is not evidence that a foreign writer is dead. Preserve it and let a
+        // later sweep retry; only a measured age may authorize cross-owner cleanup.
+        const partStat = await stat(partPath).catch(() => null)
+        if (!partStat?.isFile() || this.now() - partStat.mtimeMs < WHISPER_PART_STALE_MS) return
+        await rm(partPath, { force: true }).catch(() => {})
+      }),
     )
   }
 
-  private async run(id: string, file: string, abort: AbortController, genId: string): Promise<void> {
+  /** Reserve rather than merely invent the name: UUIDs make collisions negligible, while `wx`
+   * makes overwriting an existing fragment impossible even if an id source repeats. */
+  private async reservePart(id: string): Promise<string> {
+    for (let attempt = 0; attempt < PART_RESERVATION_ATTEMPTS; attempt += 1) {
+      const partPath = `${this.modelPath(id)}.part.${this.partOwnerId}.${this.nextPartId()}`
+      try {
+        const reservation = await open(partPath, 'wx', 0o600)
+        await reservation.close()
+        this.activeParts.add(partPath)
+        return partPath
+      } catch (error) {
+        if (!isAlreadyExists(error)) throw error
+      }
+    }
+    throw new Error(`could not reserve a unique part file for whisper model ${id}`)
+  }
+
+  private async run(id: string, file: string, abort: AbortController): Promise<void> {
     await mkdir(this.dir, { recursive: true })
-    // Sweep stale .part.<*> orphans before creating the new part file. The
-    // in-flight dedupe guarantees no OTHER live writer for this id exists, so
-    // we can only ever remove abandoned fragments from prior hard crashes.
+    // Dedupe covers this store only. removeParts() must still preserve a second process's recent
+    // fragment while clearing inactive fragments carrying this store's owner id and aged orphans.
     if (this.inFlight.get(id)?.abort === abort) {
       await this.removeParts(id)
     }
-    const partPath = this.modelPath(id) + '.part.' + genId
     const res = await this.fetchFn(WHISPER_DOWNLOAD_BASE + file, { signal: abort.signal })
     if (!res.ok || !res.body) throw new Error(`model download failed (${res.status})`)
+    const partPath = await this.reservePart(id)
     const total = Number(res.headers.get('content-length')) || 0
     let received = 0
-    const sink = createWriteStream(partPath)
+    const sink = createWriteStream(partPath, { flags: 'r+' })
     try {
       const reader = res.body.getReader()
       const writer = Writable.toWeb(sink).getWriter()
@@ -109,6 +170,8 @@ export class WhisperModelStore {
       sink.destroy()
       await rm(partPath, { force: true })
       throw err
+    } finally {
+      this.activeParts.delete(partPath)
     }
   }
 
