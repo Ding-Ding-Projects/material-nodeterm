@@ -53,7 +53,31 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
           label={enabled ? `${name} is on` : `${name} is off`}
           description={`A self-imposed focus switch, not a security lock: while on, this app presents in plain English and behaves as if the Cantonese/bilingual, funny-level, and dim-sum-surprise capabilities were not installed. It affects every app that reads this machine's shared ${name} record, not just this one. Turning it OFF needs the PIN below; turning it ON never does.`}
           control={
-            enabled ? (
+            enabled && !hasCredential ? (
+              // On with no PIN ever set on this machine. Asking for one here would demand a key
+              // that does not exist — see the note on `disable` in core/school-mode.ts.
+              <div className="flex flex-col items-end gap-2">
+                <Button
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true)
+                    const result = await disable('')
+                    setBusy(false)
+                    if (!result.ok) {
+                      setError(result.error)
+                      return
+                    }
+                    setError(null)
+                  }}
+                >
+                  Turn off
+                </Button>
+                <p className="max-w-[22rem] text-right text-[12px] text-muted">
+                  No PIN was ever set on this machine, so none is needed to turn {name} off. Set
+                  one when you turn it back on if you want it to stay on.
+                </p>
+              </div>
+            ) : enabled ? (
               <div className="flex items-center gap-2">
                 <Input
                   type="password"

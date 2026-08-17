@@ -60,7 +60,33 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
           label={enabled ? `${name} is on` : `${name} is off`}
           description={`Keeps everything playful — dim sum, the funny levels and the language modes all stay — and adds limits instead: agents cannot start in a mode that acts without asking, and deleting a session asks twice. It does not sandbox the terminal (see below). It affects every app reading this machine's shared record, not just this one. Turning it OFF needs the grown-up PIN; turning it ON never does.`}
           control={
-            enabled ? (
+            enabled && !hasCredential ? (
+              // On with no PIN ever set. The record is shared across every app on this machine and
+              // the credential is a separate file, so another app can turn the mode on, and a
+              // restore can bring the record back without the credential. Asking for a PIN here
+              // would demand a key that does not exist and lock the user out of their own app.
+              <div className="flex flex-col items-end gap-2">
+                <Button
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true)
+                    const result = await disable('')
+                    setBusy(false)
+                    if (!result.ok) {
+                      setError(result.error)
+                      return
+                    }
+                    setError(null)
+                  }}
+                >
+                  Turn off
+                </Button>
+                <p className="max-w-[22rem] text-right text-[12px] text-muted">
+                  No grown-up PIN was ever set on this machine, so none is needed to turn {name}{' '}
+                  off. Set one when you turn it back on if you want it to stay on.
+                </p>
+              </div>
+            ) : enabled ? (
               <div className="flex items-center gap-2">
                 <Input
                   type="password"

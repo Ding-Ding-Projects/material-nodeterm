@@ -336,16 +336,41 @@ export class KidsModeStore {
     return run
   }
 
-  /** Turn it OFF. Requires the grown-up PIN — this is the whole point of the mode. */
+  /**
+   * Turn it OFF. Requires the grown-up PIN — this is the whole point of the mode.
+   *
+   * EXCEPT when there is no PIN to require. The mode lives in a record SHARED across every app on
+   * this machine, and the credential is a separate file: another app can turn the mode on, and a
+   * restore or a partial reset can bring the record back without the credential beside it. So
+   * "enabled, with no credential" is a reachable state, and in it every PIN is wrong forever —
+   * the user is locked out of a mode they never set a key for, with no way back short of deleting
+   * application data.
+   *
+   * A lock nobody can open is not a lock, it is a lockout, and this one is a self-imposed
+   * speed bump rather than a security boundary. So an absent credential disables freely.
+   *
+   * This does NOT weaken a real lock: `hasCredential` reports false only for ENOENT. An
+   * unreadable or unsealable credential still throws, still lands in the catch below, and still
+   * keeps the mode locked — deliberately, because "cannot verify" must never read as "no key".
+   */
   disable(pin: string): Promise<{ ok: true; record: KidsModeSnapshot } | { ok: false; error: string }> {
     const run = this.chain.then(async () => {
+      if (!(await this.hasCredential())) {
+        return {
+          ok: true as const,
+          record: await this.mutateRecord((current) => ({ ...current, enabled: false }))
+        }
+      }
       if (!(await checkPin(credentialFile(), pin))) return { ok: false as const, error: 'incorrect PIN' }
       return {
         ok: true as const,
         record: await this.mutateRecord((current) => ({ ...current, enabled: false }))
       }
     })
-    this.chain = run.catch(() => ({ ok: false as const, error: 'incorrect PIN' }))
+    this.chain = run.catch(() => ({
+      ok: false as const,
+      error: 'the grown-up PIN could not be checked on this machine'
+    }))
     return run
   }
 

@@ -197,11 +197,24 @@ export class SchoolModeStore {
   /** Turn the mode OFF. Requires the correct PIN. */
   disable(pin: string): Promise<{ ok: true; record: SchoolModeRecord } | { ok: false; error: string }> {
     const run = this.chain.then(async () => {
+      // No credential means no key, and demanding one would lock the user out of a mode they
+      // never set a PIN for. The record is SHARED across every app on this machine while the
+      // credential is a separate file, so another app can turn the mode on — and a restore can
+      // bring the record back without the credential beside it. `hasCredential` reports false
+      // only for ENOENT; an unreadable credential still throws, lands in the catch below and
+      // keeps the mode locked, because "cannot verify" must never read as "no key".
+      if (!(await this.hasCredential())) {
+        const opened = await this.writeRecord({ ...this.cache, enabled: false })
+        return { ok: true as const, record: opened }
+      }
       if (!(await this.verifyPin(pin))) return { ok: false as const, error: 'incorrect PIN' }
       const record = await this.writeRecord({ ...this.cache, enabled: false })
       return { ok: true as const, record }
     })
-    this.chain = run.catch(() => ({ ok: false as const, error: 'incorrect PIN' }))
+    this.chain = run.catch(() => ({
+      ok: false as const,
+      error: 'the unlock PIN could not be checked on this machine'
+    }))
     return run
   }
 
