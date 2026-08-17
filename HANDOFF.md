@@ -351,3 +351,48 @@ Three deliberate exclusions, with reasons — do not "finish" these without revi
   subagent cards are unimplemented, not broken. #78 is a contributor's own roadmap — reply only.
 - A design-comparison app for the Material Design overhaul was started at
   `C:/Users/cntow/Documents/GitHub/nodeterm-design-compare` and is incomplete.
+
+### Full suite — RUN, and it is not green
+
+Run at `7fc7ab9b`, serially (`npm test -- --no-file-parallelism`), 597 s:
+
+| | |
+|---|---|
+| Test files | **42 failed**, 595 passed, 6 skipped (643) |
+| Tests | **141 failed**, 7,842 passed, 182 skipped (8,165) |
+
+This is the run that had been missing all session. Typecheck was clean throughout; it proved
+nothing about these.
+
+**Two causes account for most of it, and only one is a code defect.**
+
+1. **A missing build artifact, not a regression.** Many failures were simply
+   `session-host bundle not found (out/session-host/host.cjs is missing)`. Running
+   `npm run host:build` produces it in 20 ms. Anyone reading a red suite here should build first
+   and re-measure before diagnosing — but note this did NOT clear them all.
+
+2. **A real protocol-compatibility defect, ~58 failures across five session-host files.**
+   `session-host-client.ts` rejects a handshake with
+   `session-host protocol publication disagrees with hello: state=2, hello=1`.
+
+   The check is `identity.state.protocolVersion !== negotiated`, and those two values are not the
+   same kind of thing:
+   - `identity.state.protocolVersion` is what the HOST SUPPORTS — the host always publishes
+     `currentProtocolVersion()` (2) into its state file.
+   - `negotiated` is what THIS CONNECTION settled on — 1 whenever the hello reply omits
+     `result.protocolVersion`, which is precisely the host's deliberate legacy path
+     (`clientProtocolVersion === 1` for a client that requested 1 or nothing).
+
+   So a current client meeting a host behaving as v1 legitimately yields `state=2, hello=1`, and
+   strict equality refuses a combination the design explicitly supports. The failing tests assert
+   that backward-compatibility path works. Comparing compatibility (state must be >= negotiated)
+   rather than equality is the likely correct fix, but it was NOT applied here: changing handshake
+   logic in the Windows persistence path deserves a careful, verified change rather than a
+   plausible-looking one, and this session had no capacity left to verify it properly.
+
+   `src/core/session-host-client.ts` was last touched by the convergence merge (`ba819a66`) and by
+   the type-error repair (`3730b49f`); the convergence is the prime suspect, since it merged two
+   protocol lineages.
+
+**Do not treat 141 as 141 broken behaviours.** Failures cluster hard: 34 in
+`session-host-client.test.ts` alone, and the counts above are per-assertion, not per-defect.
