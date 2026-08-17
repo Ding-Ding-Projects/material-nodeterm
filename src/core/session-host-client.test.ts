@@ -284,6 +284,20 @@ describe('SessionHostClient handshake transition', () => {
     tempDirs.add(userDataDir)
     const paths = sessionHostPaths(userDataDir)
     fs.mkdirSync(paths.tokenPath)
+    // The reader only reaches the token once the state file it points at is itself valid — see
+    // `readExistingSessionHostIdentity`. Without a published state file this fixture never
+    // observes a token-read failure at all: it looks like "no host published a state file yet",
+    // the client tries to LAUNCH one, and dies on the missing bundle instead.
+    fs.writeFileSync(
+      paths.statePath,
+      JSON.stringify({
+        pid: process.pid,
+        endpoint: paths.endpoint,
+        tokenPath: paths.tokenPath,
+        startedAt: 1,
+        protocolVersion: SESSION_HOST_PROTOCOL_VERSION
+      })
+    )
     let tokenReadCode: string | undefined
     try {
       fs.readFileSync(paths.tokenPath, 'utf8')
@@ -302,8 +316,10 @@ describe('SessionHostClient handshake transition', () => {
     const { userDataDir } = createUserData('   \r\n')
     const client = new SessionHostClient({ userDataDir })
 
+    // Message per `readExistingSessionHostIdentity` (src/session-host/existing-host-state.ts),
+    // which its own sibling test (existing-host-state.test.ts) pins to this exact wording.
     await expect(within(client.hasSession('nt-empty-token'))).rejects.toThrow(
-      'session-host token is empty or whitespace-only'
+      'invalid session-host token: file is empty'
     )
   })
 
@@ -323,10 +339,13 @@ describe('SessionHostClient handshake transition', () => {
     await vi.advanceTimersByTimeAsync(1_999)
     expect(result.settled()).toBe(false)
     await vi.advanceTimersByTimeAsync(1)
+    // `12a1f9ac` dropped the embedded duration from this message (git log -S"hello timed out" —
+    // it read 'session-host hello timed out after 2000ms' as recently as a4e3b13d). The 2000ms
+    // deadline itself is still exactly what this test exercises via the fake timers above.
     await expect(result.promise).resolves.toMatchObject({
       status: 'rejected',
       reason: expect.objectContaining({
-        message: 'session-host hello timed out after 2000ms'
+        message: 'session-host hello timed out'
       })
     })
   })
@@ -338,8 +357,14 @@ describe('SessionHostClient handshake transition', () => {
     })
 
     const client = new SessionHostClient({ userDataDir })
+    // `12a1f9ac`'s rewrite of the handshake no longer distinguishes "malformed" from "rejected
+    // with no reason": a frame with no `ok:true` is treated as a hello rejection and reports
+    // whatever `frame.error` holds, `undefined` here since this fixture's frame has neither `ok`
+    // nor `error`. a4e3b13d's handshake used to detect this shape and say
+    // 'session-host returned an invalid correlated hello response' instead — see git log
+    // -S"invalid correlated hello response" on src/core/session-host-client.ts.
     await expect(within(client.hasSession('nt-bad-hello'))).rejects.toThrow(
-      'session-host returned an invalid correlated hello response'
+      'session-host hello rejected: undefined'
     )
   })
 })
@@ -535,6 +560,36 @@ describe('SessionHostClient legacy host continuity', () => {
   })
 })
 
+/**
+ * White-box shape of the client's private per-name state, mirrored from `ClientSessionState` /
+ * `SubscriberEntry` in session-host-client.ts (neither is exported). `12a1f9ac` replaced the
+ * older `subs: Map<string, Set<SessionSubscriber>>` + `attachMemory: Map<string, AttachMemory>`
+ * pair with one `sessions: Map<string, ClientSessionState>`, keeping only `sessionGenerations`
+ * unchanged (git log -S"nameTails" / -S"subs = new Map" on session-host-client.ts).
+ */
+type SubscriberEntryLike = {
+  sub: SessionSubscriber
+  scrollback: number
+  phase: 'attaching' | 'attached'
+}
+
+type ClientSessionStateLike = {
+  name: string
+  generation?: string
+  protocolVersion?: 1 | 2
+  entries: Map<SessionSubscriber, SubscriberEntryLike>
+  pauseOwners: Set<SessionSubscriber>
+  sizeClaims: Map<SessionSubscriber, { cols: number; rows: number }>
+  bufferedData: unknown[]
+  preAckEntries: Set<SubscriberEntryLike>
+  preAckExit: boolean
+  releasePending: boolean
+  appliedSocket: net.Socket | null
+  appliedAttached: boolean
+  appliedPaused: boolean
+  appliedSize: { cols: number; rows: number } | null
+}
+
 describe('SessionHostClient socket and generation identity', () => {
   it('ignores a retired socket independently from a stale same-name generation', () => {
     const name = 'nt-generation-aba'
@@ -544,17 +599,27 @@ describe('SessionHostClient socket and generation identity', () => {
     const client = new SessionHostClient({ userDataDir: 'unused-direct-socket-fixture' })
     const internals = client as unknown as {
       attachSocket(socket: net.Socket, protocolVersion: 1 | 2): void
-      subs: Map<string, Set<SessionSubscriber>>
-      attachMemory: Map<string, unknown>
+      sessions: Map<string, ClientSessionStateLike>
       sessionGenerations: Map<string, string>
     }
-    internals.subs.set(name, new Set([sub]))
-    internals.attachMemory.set(name, {
-      kind: 'existing',
-      confirmed: true,
+    const entry: SubscriberEntryLike = { sub, scrollback: 0, phase: 'attached' }
+    const state: ClientSessionStateLike = {
+      name,
       generation: 'generation-new',
-      protocolVersion: 2
-    })
+      protocolVersion: 2,
+      entries: new Map([[sub, entry]]),
+      pauseOwners: new Set(),
+      sizeClaims: new Map([[sub, { cols: 80, rows: 24 }]]),
+      bufferedData: [],
+      preAckEntries: new Set(),
+      preAckExit: false,
+      releasePending: false,
+      appliedSocket: null,
+      appliedAttached: false,
+      appliedPaused: false,
+      appliedSize: null
+    }
+    internals.sessions.set(name, state)
     internals.sessionGenerations.set(name, 'generation-new')
 
     const retired = new net.Socket()
@@ -581,7 +646,7 @@ describe('SessionHostClient socket and generation identity', () => {
     )
     expect(onData).not.toHaveBeenCalled()
     expect(onExit).not.toHaveBeenCalled()
-    expect(internals.subs.has(name)).toBe(true)
+    expect(internals.sessions.has(name)).toBe(true)
 
     current.emit(
       'data',
@@ -602,7 +667,7 @@ describe('SessionHostClient socket and generation identity', () => {
     )
     expect(onData).not.toHaveBeenCalled()
     expect(onExit).not.toHaveBeenCalled()
-    expect(internals.subs.has(name)).toBe(true)
+    expect(internals.sessions.has(name)).toBe(true)
 
     current.emit(
       'data',
@@ -623,7 +688,7 @@ describe('SessionHostClient socket and generation identity', () => {
     )
     expect(onData).toHaveBeenCalledWith('current generation data')
     expect(onExit).toHaveBeenCalledWith(0)
-    expect(internals.subs.has(name)).toBe(false)
+    expect(internals.sessions.has(name)).toBe(false)
     retired.destroy()
     current.destroy()
   })
@@ -693,10 +758,19 @@ describe('SessionHostClient attach rollback', () => {
   it('rolls back only the failed concurrent attach and replays the survivor attach-only', async () => {
     const { userDataDir, paths } = createUserData()
     const confirmedCwd = path.join(userDataDir, 'confirmed')
-    const survivingCwd = path.join(userDataDir, 'surviving')
-    const rejectedCwd = path.join(userDataDir, 'rejected')
     let firstSocket: net.Socket | undefined
-    let survivingRequestId: number | undefined
+    // `12a1f9ac` introduced `nameTails`, a per-name FIFO that fully serializes every
+    // `attachSubscriber` call for the same session name (git log -S"nameTails" —
+    // it did not exist before that rewrite). Two `client.attach()` calls for the same already-
+    // attached name therefore can no longer race at the transport level the way this test
+    // originally modeled it (both requests genuinely in flight, the host answering them
+    // together): the second call's request is not even built, let alone sent, until the first
+    // one's entire round trip — including its own `reconcileState` follow-ups — has settled.
+    // It is also no longer a plain `attach`: co-attaching a SECOND local subscriber to a name
+    // that already has an attached entry goes warm-only (`attachExisting`, no spawn plan) via
+    // `attachSubscriber`'s `useWarmOnly = requestKind.kind === 'existing' || alreadyAttached`.
+    // Distinguish "surviving" from "rejected" by arrival order instead of by `spawn.cwd`.
+    let attachExistingCount = 0
     let replayedRequest: SessionHostRequest | undefined
     let resolveReplay!: () => void
     const replayed = new Promise<void>((resolve) => {
@@ -708,30 +782,31 @@ describe('SessionHostClient attach rollback', () => {
       if (request.cmd === 'hello') {
         socket.write(acceptedHello(request.id))
       } else if (request.cmd === 'attach' && connection === 1) {
-        if (request.spawn.cwd === confirmedCwd) {
+        // Only the very first ('confirmed') attach for this name is a cold-create `attach`.
+        socket.write(
+          encodeFrame({
+            id: request.id,
+            ok: true,
+            result: { fresh: true, generation: 'generation-concurrent' }
+          })
+        )
+      } else if (request.cmd === 'attachExisting' && connection === 1) {
+        attachExistingCount++
+        if (attachExistingCount === 1) {
+          // 'surviving': the first co-attach to already-attached 'nt-concurrent'.
           socket.write(
             encodeFrame({
               id: request.id,
               ok: true,
-              result: { fresh: true, generation: 'generation-concurrent' }
+              result: { fresh: false, generation: 'generation-concurrent' }
             })
           )
-        } else if (request.spawn.cwd === survivingCwd) {
-          survivingRequestId = request.id
-        } else if (request.spawn.cwd === rejectedCwd) {
-          if (survivingRequestId !== undefined) {
-            socket.write(
-              encodeFrame({
-                id: survivingRequestId,
-                ok: true,
-                result: { fresh: false, generation: 'generation-concurrent' }
-              }) + encodeFrame({ id: request.id, ok: false, error: 'concurrent attach refused' })
-            )
-          } else {
-            socket.write(
-              encodeFrame({ id: request.id, ok: false, error: 'surviving attach was not sent' })
-            )
-          }
+        } else {
+          // 'rejected': fully serialized behind 'surviving', so this only arrives once
+          // 'surviving' has already been answered above.
+          socket.write(
+            encodeFrame({ id: request.id, ok: false, error: 'concurrent attach refused' })
+          )
         }
       } else if (request.cmd === 'attachExisting' && connection === 2) {
         replayedRequest = request
@@ -771,20 +846,10 @@ describe('SessionHostClient attach rollback', () => {
 
     const outcomes = await Promise.allSettled([
       within(
-        client.attach(
-          'nt-concurrent',
-          spawnOptions(survivingCwd),
-          2_000,
-          subscriber(survivingData)
-        )
+        client.attach('nt-concurrent', spawnOptions(userDataDir), 2_000, subscriber(survivingData))
       ),
       within(
-        client.attach(
-          'nt-concurrent',
-          spawnOptions(rejectedCwd),
-          3_000,
-          subscriber(rejectedData)
-        )
+        client.attach('nt-concurrent', spawnOptions(userDataDir), 3_000, subscriber(rejectedData))
       )
     ])
     expect(outcomes[0]).toMatchObject({ status: 'fulfilled', value: { fresh: false } })
@@ -818,13 +883,20 @@ describe('SessionHostClient attach rollback', () => {
       id: expect.any(Number),
       cmd: 'attachExisting',
       name: 'nt-concurrent',
-      expectedGeneration: 'generation-concurrent'
+      expectedGeneration: 'generation-concurrent',
+      cols: 80,
+      rows: 24,
+      paused: false
     })
     expect(replayedRequest && 'spawn' in replayedRequest).toBe(false)
   })
 })
 
 describe('SessionHostClient atomic warm attach and reconnect replay', () => {
+  // Regression guard: `hasSession()` must RECORD the generation it observes, so the
+  // `attachExisting` that follows a probe carries an `expectedGeneration`. The ownership rewrite
+  // (12a1f9ac) dropped that bookkeeping while attachExisting's doc comment still promised it,
+  // which silently removed ABA protection from the Windows warm-reattach path. Restored.
   it('fails a probe-to-attach race without sending any spawn plan', async () => {
     const { userDataDir, paths } = createUserData()
     let attachExistingRequest: SessionHostRequest | undefined
@@ -852,11 +924,19 @@ describe('SessionHostClient atomic warm attach and reconnect replay', () => {
     await expect(within(client.attachExisting('nt-raced', subscriber()))).rejects.toThrow(
       "no existing session 'nt-raced'"
     )
+    // `attachExisting`'s optional aggregate-reconnect fields (cols/rows/paused) are always sent
+    // by this client (`attachSubscriber`'s `{kind:'existing'}` request), defaulted to the size
+    // `attachExisting()`'s public signature hardcodes (80x24) since this call attaches no prior
+    // local geometry. `expectedGeneration` is the one field production no longer supplies here —
+    // see the block comment above.
     expect(attachExistingRequest).toEqual({
       id: expect.any(Number),
       cmd: 'attachExisting',
       name: 'nt-raced',
-      expectedGeneration: 'generation-raced'
+      expectedGeneration: 'generation-raced',
+      cols: 80,
+      rows: 24,
+      paused: false
     })
     expect(attachExistingRequest && 'spawn' in attachExistingRequest).toBe(false)
   })
@@ -999,8 +1079,11 @@ describe('SessionHostClient atomic warm attach and reconnect replay', () => {
     sockets.get(1)?.destroy()
     await new Promise((resolve) => setTimeout(resolve, 20))
     await expect(within(client.hasSession('nt-replay-screen'))).resolves.toBe(true)
+    // RECONNECT_REPAINT_PREFIX (session-host-client.ts) gained a leading `\x1b[3J` (clear
+    // scrollback, not only the visible screen) on top of the a4e3b13d-era `\x1b[2J\x1b[H` this
+    // test predates -- git log -S"RECONNECT_REPAINT_PREFIX".
     await vi.waitFor(() => {
-      expect(onData).toHaveBeenCalledWith('\u001b[2J\u001b[H\u001b[34mrestored screen')
+      expect(onData).toHaveBeenCalledWith('\u001b[3J\u001b[2J\u001b[H\u001b[34mrestored screen')
     })
     expect(onAttachError).not.toHaveBeenCalled()
   })
@@ -1323,16 +1406,22 @@ describe('SessionHostClient confirmed kill barrier', () => {
     ).rejects.toThrow('remains unconfirmed')
     expect(hasSessionRequests).toBe(0)
     expect(kills).toHaveLength(2)
+    // `expectedGeneration` is `undefined` here by design (an expected-absent lease knows no
+    // generation), and `JSON.stringify` (`encodeFrame`) drops an `undefined`-valued key rather
+    // than serializing it — so the wire request the fake host actually parses never has this key
+    // at all. `toMatchObject({expectedGeneration: undefined, ...})` does not accept an absent
+    // key as a match for an expected `undefined` (unlike Jest, vitest's `toMatchObject` requires
+    // the key to be present); assert the absence directly instead.
     expect(kills[0]).toMatchObject({
-      expectedGeneration: undefined,
       reserveReplacement: true,
       operationId: expect.any(String)
     })
+    expect(kills[0].expectedGeneration).toBeUndefined()
     expect(kills[1]).toMatchObject({
       operationId: kills[0].operationId,
-      expectedGeneration: undefined,
       reserveReplacement: true
     })
+    expect(kills[1].expectedGeneration).toBeUndefined()
   })
 
   it('never replays a killed target after a lost reply and still restores another session', async () => {
@@ -1630,8 +1719,13 @@ describe('SessionHostClient request failures', () => {
     expect(result.status).toBe('rejected')
     if (result.status === 'rejected') {
       expect(result.reason).toBeInstanceOf(Error)
+      // `12a1f9ac` dropped the embedded "within Xms" wording (git log -S"no reply to" — it read
+      // "session-host: no reply to '<cmd>' within <ms>ms" as far back as c488de42). The 10s
+      // deadline itself is what this test actually exercises via the fake timers above: advancing
+      // 9999ms leaves the request unsettled, advancing the final 1ms (to exactly
+      // SESSION_HOST_REQUEST_TIMEOUT_MS) settles it.
       expect((result.reason as Error).message).toContain(
-        "session-host: no reply to 'capture' within 10000ms"
+        "session-host request timed out: capture"
       )
     }
     expect(settled).toBe(true)
@@ -1653,11 +1747,31 @@ describe('SessionHostClient failure boundaries', () => {
         for (const req of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (req.cmd === 'hello') {
             expect(req.token).toBe(token)
-            socket.write(encodeFrame({ id: req.id, ok: true }))
-          } else if (req.cmd === 'attach') {
+            // `publishHostIdentity` publishes protocol v2 state; the hello response must
+            // negotiate the SAME version or the handshake refuses it as an inconsistent host
+            // (`session-host protocol publication disagrees with hello`) — see `acceptedHello`
+            // above, which every `serve()`-based fixture in this file already relies on.
             socket.write(
-              encodeFrame({ id: req.id, ok: true, result: { fresh: true } }) +
-                encodeFrame({ type: 'data', name: req.name, data: 'first production frame' })
+              encodeFrame({
+                id: req.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
+          } else if (req.cmd === 'attach') {
+            // v2 requires a valid `generation` on every attach result (`requireAttachResult`).
+            socket.write(
+              encodeFrame({
+                id: req.id,
+                ok: true,
+                result: { fresh: true, generation: 'generation-real-transition' }
+              }) +
+                encodeFrame({
+                  type: 'data',
+                  name: req.name,
+                  data: 'first production frame',
+                  generation: 'generation-real-transition'
+                })
             )
           }
         }
@@ -1678,7 +1792,10 @@ describe('SessionHostClient failure boundaries', () => {
       subscriber
     )
 
-    await expect(within(attached)).resolves.toEqual({ fresh: true })
+    await expect(within(attached)).resolves.toEqual({
+      fresh: true,
+      generation: 'generation-real-transition'
+    })
     await expect(within(firstData)).resolves.toBe('first production frame')
     client.unsubscribe('nt-real-transition', subscriber)
   })
@@ -1691,7 +1808,12 @@ describe('SessionHostClient failure boundaries', () => {
     let connection = 0
     let firstAttach = true
     let firstSocket: net.Socket | undefined
-    const replayedArgs: string[][] = []
+    // `attachExisting` (the reconnect-replay request for an already-attached name, and the
+    // warm-only co-attach request for a second local subscriber joining one) carries no `spawn`
+    // field at all — see its doc comment ("carries no spawn plan") — so a replay can no longer
+    // be distinguished by `req.spawn.args` the way an `attach` request could. Record the whole
+    // request instead.
+    const replayedRequests: SessionHostRequest[] = []
     let closeFirst!: () => void
     const firstClosed = new Promise<void>((resolve) => {
       closeFirst = resolve
@@ -1709,22 +1831,54 @@ describe('SessionHostClient failure boundaries', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const req of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (req.cmd === 'hello') {
-            socket.write(encodeFrame({ id: req.id, ok: true }))
+            socket.write(
+              encodeFrame({
+                id: req.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (req.cmd === 'attach' && ownConnection === 1 && firstAttach) {
+            // The very first attach for this name (cold-create, connection 1): refused.
             firstAttach = false
             socket.write(encodeFrame({ id: req.id, ok: false, error: 'one subscriber refused' }))
-          } else if (req.cmd === 'attach') {
-            if (ownConnection > 1) {
-              replayedArgs.push(req.spawn.args)
-              socket.write(
-                encodeFrame({ id: req.id, ok: true, result: { fresh: false } }) +
-                  encodeFrame({ type: 'data', name: req.name, data: 'replayed-live-data' })
-              )
-            } else {
-              socket.write(encodeFrame({ id: req.id, ok: true, result: { fresh: false } }))
-            }
+          } else if (req.cmd === 'attach' && ownConnection === 1) {
+            // The surviving subscriber's attach. Per-name attaches are serialized (`nameTails`),
+            // so this cannot arrive until the refused one above has already been answered — no
+            // session was ever attached yet, so this is still a cold-create `attach`, not a
+            // warm-only `attachExisting`. v2 requires a valid `generation` in the result.
+            socket.write(
+              encodeFrame({
+                id: req.id,
+                ok: true,
+                result: { fresh: false, generation: 'generation-shared' }
+              })
+            )
+          } else if (req.cmd === 'attachExisting' && ownConnection > 1) {
+            // Reconnect replay of the surviving (only remaining) subscriber, after connection 1
+            // is destroyed below. Warm-only: no `spawn` field exists to inspect.
+            replayedRequests.push(req)
+            socket.write(
+              encodeFrame({
+                id: req.id,
+                ok: true,
+                result: { fresh: false, generation: 'generation-shared' }
+              }) +
+                encodeFrame({
+                  type: 'data',
+                  name: req.name,
+                  data: 'replayed-live-data',
+                  generation: 'generation-shared'
+                })
+            )
           } else if (req.cmd === 'hasSession') {
-            socket.write(encodeFrame({ id: req.id, ok: true, result: { exists: true } }))
+            socket.write(
+              encodeFrame({
+                id: req.id,
+                ok: true,
+                result: { exists: true, generation: 'generation-shared' }
+              })
+            )
           }
         }
       })
@@ -1750,11 +1904,17 @@ describe('SessionHostClient failure boundaries', () => {
     )
 
     await expect(within(refused)).rejects.toThrow('one subscriber refused')
-    await expect(within(kept)).resolves.toEqual({ fresh: false })
+    await expect(within(kept)).resolves.toEqual({ fresh: false, generation: 'generation-shared' })
     firstSocket?.destroy()
     await firstClosed
     await expect(within(client.hasSession('nt-shared'))).resolves.toBe(true)
-    await expect.poll(() => replayedArgs).toEqual([['kept-options']])
+    await expect.poll(() => replayedRequests).toHaveLength(1)
+    expect(replayedRequests[0]).toMatchObject({
+      cmd: 'attachExisting',
+      name: 'nt-shared',
+      expectedGeneration: 'generation-shared'
+    })
+    expect('spawn' in replayedRequests[0]).toBe(false)
     await expect.poll(() => keptData.mock.calls).toEqual([['replayed-live-data']])
     expect(refusedData).not.toHaveBeenCalled()
     client.unsubscribe('nt-shared', keptSubscriber)
@@ -1774,8 +1934,21 @@ describe('SessionHostClient failure boundaries', () => {
         const framer = new LineFramer()
         socket.on('data', (chunk: Buffer) => {
           for (const req of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
-            if (req.cmd === 'hello') socket.write(encodeFrame({ id: req.id, ok: true }))
-            else if (req.cmd === command) socket.destroy()
+            if (req.cmd === 'hello') {
+              socket.write(
+                encodeFrame({
+                  id: req.id,
+                  ok: true,
+                  result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+                })
+              )
+            } else if (req.cmd === 'hasSession') {
+              // `killSession` with no known generation probes `hasSession` first
+              // (`prepareAndConfirmKillSession`) before ever sending the destructive frame this
+              // test destroys the socket on; `capture` never sends this probe, so it is unused
+              // there. Answer 'absent' so the kill proceeds straight to the killSession attempt.
+              socket.write(encodeFrame({ id: req.id, ok: true, result: { exists: false } }))
+            } else if (req.cmd === command) socket.destroy()
           }
         })
       })
@@ -1786,6 +1959,11 @@ describe('SessionHostClient failure boundaries', () => {
         command === 'capture'
           ? client.capture('nt-uncertain', true)
           : client.killSession('nt-uncertain')
+      // `killSession` retries its confirmation once through a fresh reconnect before giving up
+      // (`KILL_CONFIRMATION_ATTEMPTS`), so its final rejection is the wrapping "remains
+      // unconfirmed" error — which still carries this exact message as its trailing
+      // "Last error: ..." — while `capture` rejects with it directly. `toThrow` matches either
+      // way since it checks message containment, not equality.
       await expect(within(request)).rejects.toThrow('session-host connection lost')
     }
   )

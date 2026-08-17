@@ -6911,10 +6911,10 @@ export function Canvas() {
           e.preventDefault()
           switchProject(targetId)
         }
-      } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'c') {
-        // Native text selection wins (markdown, editor and terminal keep their normal copy path).
       } else if (matchesShortcut(e, shortcuts.copySelection, isMac)) {
-        // Copy the current page selection (e.g. markdown view) to the clipboard.
+        // Copy the current page selection (e.g. markdown view) to the clipboard. Native text
+        // selection wins first (markdown, editor and terminal keep their normal copy path) — the
+        // early return below is what lets it.
         const tag = (document.activeElement?.tagName || '').toLowerCase()
         if (
           tag === 'input' ||

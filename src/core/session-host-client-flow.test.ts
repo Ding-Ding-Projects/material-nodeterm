@@ -175,6 +175,10 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
             )
           } else if (request.cmd === 'attach') {
             socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
+          } else if (request.cmd === 'attachExisting') {
+            // The second local subscriber co-attaches to the same already-live generation, so the
+            // client sends `attachExisting` (warm, no spawn plan) rather than a second `attach`.
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: false, generation: 'flow-generation' } }))
           } else if (request.cmd === 'pause') {
             flowCommands.push('pause')
             socket.write(encodeFrame({ id: request.id, ok: true }))
@@ -254,6 +258,10 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
             )
           } else if (request.cmd === 'attach') {
             socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
+          } else if (request.cmd === 'attachExisting') {
+            // The second local subscriber co-attaches to the same already-live generation, so the
+            // client sends `attachExisting` (warm, no spawn plan) rather than a second `attach`.
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: false, generation: 'flow-generation' } }))
           } else if (request.cmd === 'pause') {
             flowCommands.push('pause')
             // Resolve in this same server callback after writing the acknowledgement. The test's
@@ -323,12 +331,12 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
               })
             )
           } else if (request.cmd === 'attach') {
-            if (request.spawn.args[0] === 'surviving-owner') {
-              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
-            } else {
-              commands.push('attach:rejected-neighbor')
-              rejectedAttach.resolve({ socket, id: request.id })
-            }
+            // The owner is the only fresh create for this name; the neighbor co-attaches to the
+            // already-live generation and therefore sends `attachExisting` instead (below).
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
+          } else if (request.cmd === 'attachExisting') {
+            commands.push('attach:rejected-neighbor')
+            rejectedAttach.resolve({ socket, id: request.id })
           } else if (request.cmd === 'pause') {
             commands.push('pause')
             socket.write(encodeFrame({ id: request.id, ok: true }))
@@ -404,14 +412,27 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
             )
           } else if (request.cmd === 'attach') {
             attachHeld.resolve({ socket, id: request.id })
+            // A v2 event frame is dropped by the client unless it carries a valid `generation`
+            // (session-host-client.ts's `handleFrame`); a pre-ack frame with no expected generation
+            // yet is what the client adopts as this session's generation, so it must match the
+            // generation the held attach acknowledgement below eventually confirms.
             socket.write(
-              encodeFrame({ type: 'data', name: request.name, data: 'COLD-PRE-ACK' }),
+              encodeFrame({
+                type: 'data',
+                name: request.name,
+                data: 'COLD-PRE-ACK',
+                generation: 'flow-generation'
+              }),
               () => preAckFrameWritten.resolve()
             )
           } else if (request.cmd === 'hasSession') {
             socket.write(
-              encodeFrame({ type: 'data', name: request.name, data: 'POST-ACK' }) +
-                encodeFrame({ id: request.id, ok: true, result: { exists: true } })
+              encodeFrame({
+                type: 'data',
+                name: request.name,
+                data: 'POST-ACK',
+                generation: 'flow-generation'
+              }) + encodeFrame({ id: request.id, ok: true, result: { exists: true, generation: 'flow-generation' } })
             )
           } else if (request.cmd === 'detach' || request.cmd === 'resize') {
             socket.write(encodeFrame({ id: request.id, ok: true }))
@@ -455,7 +476,11 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
 
   it('uses componentwise local geometry, normalizes invalid axes, and grows when the limiting view leaves', async () => {
     const { userDataDir, endpoint } = fixture('nodeterm-session-flow-geometry-')
-    const attachClaims: Array<{ args: string[]; cols: number; rows: number }> = []
+    // `narrow`'s attach co-attaches to the already-live generation `wide` created, so it reaches
+    // the host as `attachExisting` rather than a second `attach` — and `attachExisting` deliberately
+    // carries no spawn plan (session-host-client.ts's `SubscriberEntry.spawn` doc comment), so only
+    // cols/rows are checkable for it, not `args`.
+    const attachClaims: Array<{ cmd: 'attach' | 'attachExisting'; cols: number; rows: number }> = []
     const resizeRequests: Array<{ cols: number; rows: number }> = []
     const normalizedFirst = deferred<void>()
     const normalizedSecond = deferred<void>()
@@ -476,11 +501,18 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
             )
           } else if (request.cmd === 'attach') {
             attachClaims.push({
-              args: request.spawn.args,
+              cmd: 'attach',
               cols: request.spawn.cols,
               rows: request.spawn.rows
             })
             socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
+          } else if (request.cmd === 'attachExisting') {
+            attachClaims.push({
+              cmd: 'attachExisting',
+              cols: request.cols ?? -1,
+              rows: request.rows ?? -1
+            })
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: false, generation: 'flow-generation' } }))
           } else if (request.cmd === 'resize') {
             resizeRequests.push({ cols: request.cols, rows: request.rows })
             socket.write(encodeFrame({ id: request.id, ok: true }))
@@ -511,8 +543,8 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     )
     await within(narrow.ready, 'narrow geometry attach')
     expect(attachClaims).toEqual([
-      { args: ['wide-short'], cols: 120, rows: 30 },
-      { args: ['narrow-tall'], cols: 80, rows: 30 }
+      { cmd: 'attach', cols: 120, rows: 30 },
+      { cmd: 'attachExisting', cols: 80, rows: 30 }
     ])
 
     wide.resize(Number.NaN, -5)
@@ -533,7 +565,9 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     const { userDataDir, endpoint } = fixture('nodeterm-session-flow-replay-')
     const firstClosed = deferred<void>()
     const initialPause = deferred<void>()
-    const replayAttach = deferred<Extract<SessionHostRequest, { cmd: 'attach' }>>()
+    // v2 reconnect restoration warm-replays via `attachExisting`, not a second `attach` — see
+    // `restoreSocket` in session-host-client.ts, which never sends a spawn plan on reattach.
+    const replayAttach = deferred<Extract<SessionHostRequest, { cmd: 'attachExisting' }>>()
     const bothNormalRequests = deferred<void>()
     const replayResume = deferred<{ socket: net.Socket; id: number }>()
     const replayBufferFlushed = deferred<void>()
@@ -565,9 +599,16 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
               })
             )
           } else if (request.cmd === 'attach') {
+            // Only the initial cold create (`larger`) arrives here — `smaller` co-attaches below,
+            // and the reconnect below that, both via `attachExisting`.
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
+          } else if (request.cmd === 'attachExisting') {
             if (ownConnection === 1) {
-              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
+              // `smaller` co-attaches to the already-live generation `larger` just created.
+              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: false, generation: 'flow-generation' } }))
             } else {
+              // The label stays `request:attach` — it names the attach-family step in the test's
+              // own sequence, not the literal wire command.
               sequence.push('request:attach')
               replaySocket = socket
               replayRequestId = request.id
@@ -583,7 +624,7 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
             sequence.push('request:hasSession')
             secondNormalCommands.push(request.cmd)
             socket.write(
-              encodeFrame({ id: request.id, ok: true, result: { exists: true } })
+              encodeFrame({ id: request.id, ok: true, result: { exists: true, generation: 'flow-generation' } })
             )
             if (++normalCount === 2) bothNormalRequests.resolve()
           } else if (request.cmd === 'write') {
@@ -650,15 +691,33 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     expect(largerDelivered).toEqual([])
     expect(smallerDelivered).toEqual([])
     expect(replay.paused).toBe(true)
-    expect(replay.spawn.cols).toBe(80)
-    expect(replay.spawn.rows).toBe(24)
+    expect(replay.cols).toBe(80)
+    expect(replay.rows).toBe(24)
 
+    // Written as two SEPARATE socket writes, the second only once the first's bytes have flushed:
+    // the repaint screen the response carries is delivered through `restoreSocket`'s own awaited
+    // continuation (a microtask, scheduled once the response frame is parsed), while a raw `data`
+    // event frame is delivered synchronously the instant it is parsed. Concatenating both frames
+    // into one write lets the client parse them in the same synchronous pass, which would hand the
+    // live marker to `deliverData` before the repaint's continuation has even run — reversing the
+    // very ordering this test exists to prove. A real flush boundary between the two writes is what
+    // gives the response's continuation a chance to run first.
     replaySocket!.write(
       encodeFrame({
         id: replayRequestId!,
         ok: true,
-        result: { fresh: false, screen: 'REPLAY-SCREEN' }
-      }) + encodeFrame({ type: 'data', name: 'nt-replay-barrier', data: 'LIVE-WHILE-PAUSED' })
+        result: { fresh: false, screen: 'REPLAY-SCREEN', generation: 'flow-generation' }
+      }),
+      () => {
+        replaySocket!.write(
+          encodeFrame({
+            type: 'data',
+            name: 'nt-replay-barrier',
+            data: 'LIVE-WHILE-PAUSED',
+            generation: 'flow-generation'
+          })
+        )
+      }
     )
     await expect(within(hasSession, 'post-replay hasSession')).resolves.toBe(true)
     await within(bothNormalRequests.promise, 'both requests held behind replay')
@@ -710,13 +769,20 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
               })
             )
           } else if (request.cmd === 'attach') {
-            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: ownConnection === 1 } }))
-            if (ownConnection > 1) {
-              idleReplay.resolve()
-              socket.write(
-                encodeFrame({ type: 'data', name: request.name, data: 'IDLE-RECONNECT-MARKER' })
-              )
-            }
+            // Only the initial cold create arrives here; v2 reconnect replay warm-reattaches via
+            // `attachExisting` (below), never a second `attach`.
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
+          } else if (request.cmd === 'attachExisting') {
+            socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: false, generation: 'flow-generation' } }))
+            idleReplay.resolve()
+            socket.write(
+              encodeFrame({
+                type: 'data',
+                name: request.name,
+                data: 'IDLE-RECONNECT-MARKER',
+                generation: 'flow-generation'
+              })
+            )
           } else if (request.cmd === 'detach' || request.cmd === 'resize') {
             socket.write(encodeFrame({ id: request.id, ok: true }))
           }
@@ -797,7 +863,7 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
             } else {
               reconnectCommands.push(request.cmd)
               socket.write(
-                encodeFrame({ id: request.id, ok: true, result: { exists: true } })
+                encodeFrame({ id: request.id, ok: true, result: { exists: true, generation: 'flow-generation' } })
               )
             }
           } else if (request.cmd === 'listSessions') {
@@ -848,7 +914,6 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     const replacementAttachReachedHost = deferred<void>()
     const afterInitial: string[] = []
     let killCount = 0
-    let killed = false
 
     const server = net.createServer((socket) => {
       trackSocket(socket)
@@ -873,9 +938,7 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
                 encodeFrame({
                   id: request.id,
                   ok: true,
-                  result: killed
-                    ? { fresh: true, generation: 'flow-generation' }
-                    : { fresh: false, screen: 'PRE-KILL-GENERATION' }
+                  result: { fresh: true, generation: 'replacement-generation-id' }
                 })
               )
             }
@@ -888,8 +951,7 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
           } else if (request.cmd === 'killSession') {
             afterInitial.push('kill')
             killCount++
-            killed = true
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            socket.write(encodeFrame({ id: request.id, ok: true, result: {} }))
             killReachedHost.resolve()
           } else if (request.cmd === 'detach' || request.cmd === 'resize') {
             socket.write(encodeFrame({ id: request.id, ok: true }))
@@ -912,21 +974,29 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
 
     const killedOld = client.killSession('nt-kill-name-lane')
     old.destroy()
+    await eventLoopTurn()
+    expect(afterInitial).toEqual(['write:old'])
+
+    releaseOldWrite.resolve()
+    await within(killReachedHost.promise, 'old generation kill')
+    // The kill barrier (`killReplayBarriers` in session-host-client.ts) refuses ANY attach for
+    // this name — cold create included, not just reconnect replay — until the kill is confirmed;
+    // see session-host-client.test.ts's "rejects a concurrent attach while kill confirmation is
+    // in progress" for the same contract asserted directly. The replacement therefore only
+    // attaches once the kill has actually settled, which is what keeps its wire request ordered
+    // strictly behind the kill's rather than racing it.
+    await expect(within(killedOld, 'old generation kill acknowledgement')).resolves.toBeUndefined()
+
     const replacement = sessionPty(
       client,
       'nt-kill-name-lane',
       spawnOptions(userDataDir, 80, 24, ['replacement-generation']),
       500
     )
-    await eventLoopTurn()
-    expect(afterInitial).toEqual(['write:old'])
-
-    releaseOldWrite.resolve()
-    await within(killReachedHost.promise, 'old generation kill')
     await within(replacementAttachReachedHost.promise, 'post-kill replacement attach')
-    await expect(within(killedOld, 'old generation kill acknowledgement')).resolves.toBeUndefined()
     await expect(within(replacement.ready, 'replacement generation attach')).resolves.toEqual({
-      fresh: true
+      fresh: true,
+      generation: 'replacement-generation-id'
     })
     expect(afterInitial).toEqual(['write:old', 'kill', 'attach:replacement'])
     expect(killCount).toBe(1)
@@ -939,11 +1009,15 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     const replacementCreated = deferred<SessionHostPty>()
     const replacementData = deferred<string>()
     const firstClosed = deferred<void>()
-    const replayAttach = deferred<Extract<SessionHostRequest, { cmd: 'attach' }>>()
+    // v2 reconnect restoration warm-replays via `attachExisting`, not a second `attach` — see
+    // `restoreSocket` in session-host-client.ts, which never sends a spawn plan on reattach.
+    const replayAttach = deferred<Extract<SessionHostRequest, { cmd: 'attachExisting' }>>()
     let connection = 0
     let firstSocket: net.Socket | undefined
     const firstConnectionAttachArgs: string[][] = []
-    const reconnectAttachArgs: string[][] = []
+    // `attachExisting` deliberately carries no spawn plan, so the reconnect is identified by the
+    // exact generation it expects rather than by `spawn.args`.
+    const reconnectExpectedGenerations: Array<string | undefined> = []
 
     const server = net.createServer((socket) => {
       const ownConnection = ++connection
@@ -964,24 +1038,43 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
               })
             )
           } else if (request.cmd === 'attach') {
-            if (ownConnection === 1) {
+            // Both `old` and its replacement are cold creates (the replacement attaches only after
+            // `old`'s state has fully retired, so there is nothing local to co-attach onto) — both
+            // therefore arrive here as plain `attach`, distinguished by generation below.
+            if (request.spawn.args[0] === 'old-generation') {
               firstConnectionAttachArgs.push(request.spawn.args)
-              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'flow-generation' } }))
+              socket.write(encodeFrame({ id: request.id, ok: true, result: { fresh: true, generation: 'old-generation-id' } }))
             } else {
-              reconnectAttachArgs.push(request.spawn.args)
-              replayAttach.resolve(request)
+              firstConnectionAttachArgs.push(request.spawn.args)
               socket.write(
-                encodeFrame({ id: request.id, ok: true, result: { fresh: false } }) +
-                  encodeFrame({
-                    type: 'data',
-                    name: request.name,
-                    data: 'REPLACEMENT-REPLAY-MARKER'
-                  })
+                encodeFrame({
+                  id: request.id,
+                  ok: true,
+                  result: { fresh: true, generation: 'replacement-generation-id' }
+                })
               )
             }
+          } else if (request.cmd === 'attachExisting') {
+            // The automatic reconnect warm-replays whichever generation is still locally attached —
+            // proven below to be the replacement's, never the retired old one.
+            reconnectExpectedGenerations.push(request.expectedGeneration)
+            replayAttach.resolve(request)
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { fresh: false, generation: 'replacement-generation-id' }
+              }) +
+                encodeFrame({
+                  type: 'data',
+                  name: request.name,
+                  data: 'REPLACEMENT-REPLAY-MARKER',
+                  generation: 'replacement-generation-id'
+                })
+            )
           } else if (request.cmd === 'hasSession') {
             socket.write(
-              encodeFrame({ id: request.id, ok: true, result: { exists: true } })
+              encodeFrame({ id: request.id, ok: true, result: { exists: true, generation: 'flow-generation' } })
             )
           } else if (request.cmd === 'detach' || request.cmd === 'resize') {
             socket.write(encodeFrame({ id: request.id, ok: true }))
@@ -1015,7 +1108,7 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     await within(old.ready, 'old generation attach')
 
     firstSocket!.write(
-      encodeFrame({ type: 'exit', name: 'nt-generation-replace', exitCode: 17 })
+      encodeFrame({ type: 'exit', name: 'nt-generation-replace', exitCode: 17, generation: 'old-generation-id' })
     )
     const replacement = await within(replacementCreated.promise, 'synchronous replacement creation')
     await within(replacement.ready, 'replacement attach')
@@ -1027,14 +1120,14 @@ describe('SessionHostClient subscriber flow and reconnect barriers', () => {
     firstSocket?.destroy()
     await within(firstClosed.promise, 'replacement socket close')
     const replay = await within(replayAttach.promise, 'replacement automatic replay', 4_000)
-    expect(replay.spawn.args).toEqual(['replacement-generation'])
+    expect(replay.expectedGeneration).toBe('replacement-generation-id')
     await expect(
       within(replacementData.promise, 'replacement replay data', 4_000)
     ).resolves.toContain('REPLACEMENT-REPLAY-MARKER')
     await expect(
       within(client.hasSession('nt-generation-replace'), 'replacement replay request barrier')
     ).resolves.toBe(true)
-    expect(reconnectAttachArgs).toEqual([['replacement-generation']])
+    expect(reconnectExpectedGenerations).toEqual(['replacement-generation-id'])
     expect(replacementExit).not.toHaveBeenCalled()
   })
 })

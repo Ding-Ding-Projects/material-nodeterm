@@ -86,7 +86,11 @@ vi.mock('./codex-identity-proxy', () => ({
     ensureNode: async (nodeId: string) => `/isolated/${nodeId}.sock`,
     socketForNode: (nodeId: string) => `/isolated/${nodeId}.sock`,
     stop: () => undefined
-  })
+  }),
+  // `runEndSession` calls this best-effort sweep on every delete/recycle (see pty-manager.ts).
+  // This suite is not about Codex thread-identity cleanup, so a no-op is the correct stand-in —
+  // same pattern as the other members of this mock.
+  forgetCodexThreadIdentitiesForNode: () => undefined
 }))
 
 /**

@@ -1185,8 +1185,41 @@ export class SessionHostClient {
     void this.enqueueState(state, () => this.teardownRetiredState(state))
   }
 
+  /**
+   * Probe for a live session AND remember the generation it reports.
+   *
+   * The bookkeeping is not incidental. `attachExisting` sends
+   * `state.generation ?? this.sessionGenerations.get(name)` as its `expectedGeneration`, and the
+   * Windows warm-reattach path in pty-manager reaches it through exactly this sequence: probe with
+   * `sessionHostHasSession(name)`, then `attachExisting(name, sub)` with no generation of its own.
+   * With nothing recorded here that attach carries no expectation, and the ABA protection the kill
+   * machinery treats as load-bearing elsewhere is silently absent — a replacement process created
+   * under the same name between the probe and the attach would be adopted as the original.
+   *
+   * This was dropped in the ownership rewrite (`12a1f9ac`) while `attachExisting`'s own doc comment
+   * continued to promise it, and is restored here from `a4e3b13d`. A v2 host must supply a
+   * well-formed generation; v1 has none, so the entry is cleared rather than left stale.
+   */
   async hasSession(name: string): Promise<boolean> {
     const result = await this.request<HasSessionResult>({ cmd: 'hasSession', name })
+    // Read the negotiated version AFTER the request: `request()` is what establishes the
+    // connection on a cold client, so reading it first sees `null` on the very first probe — the
+    // exact call the warm-reattach path makes — and would silently take the "no generation" branch.
+    const protocolVersion = this.negotiatedProtocolVersion
+    if (!result || typeof result.exists !== 'boolean') {
+      throw new Error(`session-host returned an invalid existence result for '${name}'`)
+    }
+    if (result.exists && protocolVersion === 2) {
+      const generation = result.generation
+      if (typeof generation !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(generation)) {
+        throw new Error(`session-host returned no generation for existing session '${name}'`)
+      }
+      this.sessionGenerations.set(name, generation)
+    } else {
+      // Absent, or a v1 host that cannot name a generation: never leave a stale one behind, or a
+      // later attach would assert an expectation about a process this probe did not observe.
+      this.sessionGenerations.delete(name)
+    }
     return result.exists
   }
 

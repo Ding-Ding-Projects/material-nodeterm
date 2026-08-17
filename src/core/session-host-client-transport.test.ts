@@ -168,7 +168,16 @@ function successSocket(
   socket = new FakeSocket((request, callback) => {
     if (request.cmd === "hello") {
       callback?.();
-      socket.respond({ id: request.id, ok: true });
+      // `readyIdentity()` (the identity every caller of this helper publishes) defaults to
+      // SESSION_HOST_PROTOCOL_VERSION, and the client refuses a state file that disagrees with
+      // what hello actually negotiates ("session-host protocol publication disagrees with
+      // hello"). Advertising it here — not omitting it, which negotiates legacy v1 — is what
+      // keeps this fake host internally consistent with the identity these tests publish.
+      socket.respond({
+        id: request.id,
+        ok: true,
+        result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION },
+      });
       return;
     }
     onRequest(request, socket, callback);
@@ -282,7 +291,15 @@ describe("SessionHostClient transport boundaries", () => {
         )) {
           if (request.cmd === "hello") {
             expect(request.token).toBe("b".repeat(64));
-            socket.write(encodeFrame({ id: request.id, ok: true }));
+            // `readyIdentity()` publishes SESSION_HOST_PROTOCOL_VERSION; the hello answer must
+            // advertise the same version or the client refuses it as an inconsistent host.
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION },
+              }),
+            );
           } else if (request.cmd === "listSessions") {
             socket.write(
               encodeFrame({
@@ -349,12 +366,21 @@ describe("SessionHostClient transport boundaries", () => {
     expect(launcherMocks.spawnSessionHost).not.toHaveBeenCalled();
   });
 
-  it("rejects a v1 host while the client expects v2 without connecting or launching", async () => {
+  // `1` is NOT the incompatible case: session-host-client.ts keeps protocol-v1 hosts connectable
+  // on purpose, for warm terminal continuity across an app upgrade — only a specific v2-only
+  // OPERATION (one that needs atomic generation semantics) refuses a v1 host, with
+  // SessionHostProtocolCompatibilityError, and that refusal happens after a successful connect
+  // (see session-host-client.test.ts, which documents and exercises exactly that split). The
+  // pre-connect guard this test is actually about fires only for a state.protocolVersion that is
+  // neither 1 nor SESSION_HOST_PROTOCOL_VERSION — a host from neither a supported legacy nor the
+  // current release.
+  it("rejects a host publishing an unsupported protocol version without connecting or launching", async () => {
     const userDataDir = makeTempDir();
     const identity = readyIdentity(userDataDir);
+    const unsupportedVersion = 3;
     identityMocks.readExistingSessionHostIdentity.mockReturnValue({
       ...identity,
-      state: { ...identity.state, protocolVersion: 1 },
+      state: { ...identity.state, protocolVersion: unsupportedVersion },
     });
     launcherMocks.resolveSessionHostScript.mockReturnValue(
       "fake-session-host.cjs",
@@ -366,7 +392,7 @@ describe("SessionHostClient transport boundaries", () => {
     expect(SESSION_HOST_PROTOCOL_VERSION).toBe(2);
     const client = new SessionHostClient({ userDataDir });
     await expect(within(client.listSessions())).rejects.toThrow(
-      "incompatible session-host protocol: host=1, client=2",
+      `incompatible session-host protocol: host=${unsupportedVersion}, client=2`,
     );
     expect(connectSpy).not.toHaveBeenCalled();
     expect(launcherMocks.spawnSessionHost).not.toHaveBeenCalled();
@@ -475,7 +501,9 @@ describe("SessionHostClient transport boundaries", () => {
         ownSocket.respond({
           id: request.id,
           ok: true,
-          result: { exists: true },
+          // A v2 host names the generation of a live session; the client records it so the
+          // following attachExisting can assert it (ABA protection on the warm-reattach path).
+          result: { exists: true, generation: 'prewarm-generation' },
         });
       }
       // listSessions deliberately receives neither a write error nor a response.
