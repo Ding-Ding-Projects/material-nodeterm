@@ -31,6 +31,11 @@ interface LaunchLedgerEntry {
   outcome: Promise<{ ok: true } | { ok: false }>
 }
 
+interface HostSessionOverrides {
+  proc?: pty.IPty
+  term?: TerminalEmulator
+}
+
 function launchFingerprint(command: string, stdinAfterStart: string | undefined): string {
   const hash = createHash('sha256')
   hash.update(command, 'utf8')
@@ -73,7 +78,17 @@ export class HostSession {
   readonly createdByReplacementToken?: string
   private readonly replacementFingerprint: string
   readonly proc: pty.IPty
-  readonly term: TerminalEmulator
+  private readonly term: TerminalEmulator
+  /** The tail of every xterm write accepted so far. `@xterm/headless` applies writes
+   *  asynchronously, so every screen read must cross this barrier or a warm attach/capture can
+   *  serialize a prefix of output whose data frame has already left the host. The rejection
+   *  handler keeps one anomalous write from wedging every later snapshot forever; the individual
+   *  caller still receives the rejection and can log it. */
+  private outputTail: Promise<void> = Promise.resolve()
+  /** The underlying node-pty pause actuator is session-global, but the reasons for holding it are
+   *  connection-scoped. A socket may return only its own ticket, and a vanished socket's ticket
+   *  is released by `detach` so it cannot leave every remaining viewer frozen. */
+  private readonly pauseOwners = new Set<Socket>()
   /** Sockets currently receiving `data`/`exit` push frames for this session — the same "N
    *  subscribers, one underlying process" shape `pty-manager.ts` already implements for tmux
    *  co-attach, one level further down the stack. */
@@ -95,25 +110,94 @@ export class HostSession {
     return this.privateLaunchOutput
   }
 
+  /** Shared completion for the natural-exit / explicit-kill race. A second caller waits for the
+   *  first caller's output drain instead of acknowledging while teardown is still in flight. */
+  ending: Promise<void> | null = null
+
   constructor(
     name: string,
     spawn: SessionHostSpawnOptions,
     scrollback: number,
-    createdByReplacementToken?: string
+    createdByReplacementTokenOrOverrides?: string | HostSessionOverrides,
+    injectedOverrides?: HostSessionOverrides
   ) {
+    const createdByReplacementToken =
+      typeof createdByReplacementTokenOrOverrides === 'string'
+        ? createdByReplacementTokenOrOverrides
+        : undefined
+    const overrides =
+      typeof createdByReplacementTokenOrOverrides === 'string'
+        ? injectedOverrides
+        : (createdByReplacementTokenOrOverrides ?? injectedOverrides)
     this.name = name
     this.launchDialect = spawn.launchDialect
     this.shellExecutableName = (spawn.shell.replace(/\\/g, '/').split('/').pop() ?? '').toLowerCase()
     this.createdByReplacementToken = createdByReplacementToken
     this.replacementFingerprint = replacementAttachFingerprint(spawn, scrollback)
-    this.proc = pty.spawn(spawn.shell, spawn.args, {
-      name: 'xterm-256color',
-      cols: Math.max(1, spawn.cols),
-      rows: Math.max(1, spawn.rows),
-      cwd: spawn.cwd,
-      env: spawn.env
-    })
-    this.term = new TerminalEmulator({ cols: spawn.cols, rows: spawn.rows, scrollback })
+    this.proc =
+      overrides?.proc ??
+      pty.spawn(spawn.shell, spawn.args, {
+        name: 'xterm-256color',
+        cols: Math.max(1, spawn.cols),
+        rows: Math.max(1, spawn.rows),
+        cwd: spawn.cwd,
+        env: spawn.env
+      })
+    this.term =
+      overrides?.term ??
+      new TerminalEmulator({ cols: spawn.cols, rows: spawn.rows, scrollback })
+  }
+
+  /** Queue one PTY-output chunk into the headless emulator, preserving arrival order. */
+  recordOutput(data: string): Promise<void> {
+    const applied = this.outputTail.then(() => this.term.write(data))
+    this.outputTail = applied.catch(() => {})
+    return applied
+  }
+
+  /** Wait until every PTY-output chunk observed before this call has reached xterm. */
+  settleOutput(): Promise<void> {
+    return this.outputTail
+  }
+
+  /** Serialize only after prior asynchronous writes have landed. The barrier is inside this
+   *  method so a caller cannot accidentally reproduce the stale warm-attach race. */
+  async serialize(scrollback?: number): Promise<string> {
+    await this.outputTail
+    return this.term.serialize(scrollback)
+  }
+
+  /** Keep a resize ordered after output already accepted by the old terminal geometry. */
+  async resize(cols: number, rows: number): Promise<void> {
+    await this.outputTail
+    this.term.resize(cols, rows)
+  }
+
+  pauseFor(socket: Socket): void {
+    const wasPaused = this.pauseOwners.size > 0
+    this.pauseOwners.add(socket)
+    if (wasPaused) return
+    try {
+      this.proc.pause()
+    } catch {
+      /* pty may have exited between the session lookup and the actuator call */
+    }
+  }
+
+  resumeFor(socket: Socket): void {
+    if (!this.pauseOwners.delete(socket) || this.pauseOwners.size > 0) return
+    try {
+      this.proc.resume()
+    } catch {
+      /* pty may already have exited */
+    }
+  }
+
+  /** A protocol detach and a transport close mean the same thing for flow control: this socket
+   *  can never send its matching resume now, so return only its ticket before forgetting it. */
+  detach(socket: Socket): void {
+    this.subscribers.delete(socket)
+    this.resumeFor(socket)
   }
 
   async executeInitialLaunch(
@@ -135,6 +219,7 @@ export class HostSession {
   }
 
   dispose(): void {
+    this.pauseOwners.clear()
     this.term.dispose()
   }
 

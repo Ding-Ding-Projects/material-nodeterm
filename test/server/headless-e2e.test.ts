@@ -26,7 +26,9 @@ describe('server headless mode: boots core services, binds no public listener', 
           resolve()
         })
       })
-      const occupiedPort = (sentinel.address() as net.AddressInfo).port
+      const address = sentinel.address()
+      if (!address || typeof address === 'string') throw new Error('test port did not bind')
+      const occupiedPort = address.port
       srv = await startServer({
         port: occupiedPort,
         host: '127.0.0.1',
@@ -63,9 +65,9 @@ describe('server headless mode: boots core services, binds no public listener', 
       expect(listening).toBe(false)
       await srv.close()
       srv = undefined
-      // Headless starts the same scheduled-settings interval as the serving shell. Its separate
-      // early return must stop that interval too; otherwise repeated in-process starts leak one
-      // timer + store subscription each even though close() appears to resolve successfully.
+      // Headless returns before the normal HTTP/WS close implementation. Its independent close
+      // path must stop the scheduled-settings poller or `docker stop`/SIGTERM and repeated
+      // in-process starts leave a live timer + store subscription behind.
       expect(scheduledStop).toHaveBeenCalledTimes(1)
     } finally {
       await srv?.close()

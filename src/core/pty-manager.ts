@@ -357,7 +357,9 @@ function resolveWindowsShell(): string {
  * One legacy local-shell resolver for BOTH direct node-pty and the persistent session-host
  * backend. Windows desktop profile launches bypass this helper with a trusted resolved plan, but
  * Server Edition and older callers without the optional profile service keep the same fallback.
- * Injectable platform leaves make that compatibility behavior testable on every CI host.
+ * Keeping the fallback here prevents the two paths from drifting: the session host previously
+ * hardcoded `bash` even on Windows, while the direct path already knew how to find PowerShell or
+ * COMSPEC. Injectable platform leaves make that compatibility behavior testable on every CI host.
  */
 export function resolveLocalSessionShell(
   program: string | undefined,

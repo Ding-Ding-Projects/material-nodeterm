@@ -151,7 +151,11 @@ Everything boots **exactly as usual** — the loopback hook server, the agent-st
 usage poll, the granted push senders (push-notify + Live-Activity), and the pending-approvals
 sweep — **except** the public HTTP/WS listener, which is **never bound**. There is no renderer
 serving and no auth surface. `NODETERM_HOST` / `NODETERM_PORT` are ignored (nothing binds), and
-`platform.broadcast` is a no-op while no browser UI is attached.
+`platform.broadcast` is a no-op while no browser UI is attached. Its shutdown owns the same core
+service lifecycle as the serving path: in particular the scheduled-settings poller is stopped
+before PTY/hook teardown. This matters in a container too — `node` is PID 1, `docker stop` delivers
+SIGTERM, and `NODETERM_HEADLESS=1` must not leave that interval/store listener running while close
+is in flight.
 
 ### Security rationale: zero open ports
 

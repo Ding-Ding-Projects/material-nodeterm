@@ -279,6 +279,27 @@ and rejects every coalesced creator with the real reason. Reconnect may replay o
 subscriptions. Capture/kill transport uncertainty is an error, not evidence the host or session is
 absent, and attach failure never falls through to another shell.
 
+Two session-host invariants are easy to lose in an innocent refactor. First,
+`@xterm/headless`'s `Terminal.write()` is asynchronous: `HostSession` serializes writes through an
+output tail, and warm attach/capture/resize/exit must await it before reading or disposing the
+screen. A fire-and-forget write races a stale or duplicated relay snapshot. Second, node-pty's
+pause actuator is global but its ownership is not: `PtyManager.pausedBy` arbitrates views inside
+one app process, and the host keeps a per-socket ledger across processes; `detach`/socket close
+returns only that connection's ticket and the final owner resumes. Also keep the backend parity
+leaves in `sessionExists`/`captureSnapshot`: relay and mobile attach use them before
+`attachDetached`, so a tmux-only implementation reports a live Windows session as fresh and blank.
+The host also keeps an exited generation in its session map until that output tail, exit broadcast
+and disposal finish. Protocol events carry only the session name, so reusing it earlier lets a
+delayed old-generation exit arrive after the same socket has attached to its replacement. The
+retirement wait and replacement claim are serialized per name: two attach requests waking from one
+`ending` promise must not both create. Grace-exit cancellation happens inside that claim *after*
+the wait, because retirement can schedule a fresh empty-host timer before the waiter resumes.
+Startup is not successful merely because the socket bound: token and atomic state publication must
+both complete. A publication exception is caught inside the listen callback, all pre-publication
+sockets are destroyed, the listener and owned token/state/endpoint are closed or removed, and the
+host exits nonzero. Do not rely on an uncaught exception here; the daemon's diagnostic handler logs
+those and intentionally prevents Node's default fatal exit.
+
 `src/core/pty-manager.ts` runs each terminal inside a persistent tmux session
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
 a generated config (`-f <userData>/tmux.conf`, so the user's `~/.tmux.conf` never
