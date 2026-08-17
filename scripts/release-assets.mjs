@@ -335,6 +335,12 @@ async function inspectPackageIdentity(asset, expected) {
   }
 }
 
+/** Re-check the required full package through the shared identity validator. */
+async function requireFullPackageIdentity(asset, expected) {
+  if (!asset) fail(`expected exactly one full Squirrel package named ${expected.packageId}-${expected.version}-full.nupkg`)
+  await inspectPackageIdentity(asset, expected)
+}
+
 async function regularFile(directory, entry) {
   if (!entry.isFile()) fail(`release asset must be a regular file: ${entry.name}`)
   const file = path.resolve(directory, entry.name)
