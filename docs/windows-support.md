@@ -336,6 +336,12 @@ outside that branding gate because the pinned builder has no supported resource-
    first; the python.org fallback runs only after its manifest SHA-256 matches. The verified exact
    interpreter is passed process-locally in `PYTHON`, `NODE_GYP_FORCE_PYTHON`, and
    `npm_config_python`; no launcher or persistent `PATH` is changed.
+
+   Discovery keeps an explicit absolute, non-Store `PYTHON` first, then checks the exact
+   manifest-derived `%LOCALAPPDATA%\\Programs\\Python\\PythonXY\\python.exe`, then the pinned
+   alternate toolchain target. The canonical per-user candidate must already exist and pass the
+   bounded exact-version and architecture probe before installer fallback begins; this avoids
+   mistaking winget maintenance-mode exit zero for a new alternate-target installation.
 4. **`NoDefaultCurrentDirectoryInExePath=1`** makes `cmd /c GetCommitHash.bat` fail with "is not
    recognized" inside node-pty's vendored winpty build, even though the file is right there. This
    one is **not** a user-facing problem — it was set in an agent harness's process environment, not

@@ -158,18 +158,19 @@ function supportedPython(program, prefixArgs, run, arch, expectedVersion = '', e
   return answer.executable
 }
 
-function findSupportedPython(candidates, run, arch, environment) {
+function findSupportedPython(candidates, run, arch, environment, fs) {
   const seen = new Set()
   for (const candidate of candidates) {
     const key = `${candidate.program.toLowerCase()}\0${candidate.prefixArgs.join('\0')}`
     if (seen.has(key)) continue
     seen.add(key)
+    if (candidate.requirePresent && !pathPresent(candidate.program, fs)) continue
     const executable = supportedPython(
       candidate.program,
       candidate.prefixArgs,
       run,
       arch,
-      '',
+      candidate.expectedVersion ?? '',
       environment
     )
     if (executable) return executable
@@ -278,18 +279,42 @@ export function ensureWindowsPython(options = {}) {
 
   const target = join(localAppData, 'nodeterm', 'toolchain', `python-${config.version}-${arch}`)
   const targetPython = join(target, 'python.exe')
+  const [pythonMajor, pythonMinor] = config.version.split('.')
+  const canonicalPerUserPython = join(
+    localAppData,
+    'Programs',
+    'Python',
+    `Python${pythonMajor}${pythonMinor}`,
+    'python.exe'
+  )
   // Never launch bare py.exe/python.exe while probing. Current Windows aliases can install a
   // runtime or open Store UI, so a read-only probe would violate /s before the pinned path gets
-  // control. Reuse only an explicit absolute interpreter outside WindowsApps or our pinned target.
+  // control. Reuse only an explicit absolute interpreter outside WindowsApps, the manifest-derived
+  // canonical per-user install, or our pinned target.
   const explicitPython = environment.PYTHON ?? ''
   const defaultCandidates = [
     ...(win32.isAbsolute(explicitPython) && !/[\\/]WindowsApps[\\/]/i.test(explicitPython)
       ? [{ program: explicitPython, prefixArgs: [] }]
       : []),
+    {
+      program: canonicalPerUserPython,
+      prefixArgs: [],
+      expectedVersion: config.version,
+      requirePresent: true
+    },
     { program: targetPython, prefixArgs: [] }
   ]
   const candidates = options.pythonCandidates ?? defaultCandidates
-  const existing = findSupportedPython(candidates, run, arch, environment)
+  let existing
+  try {
+    existing = findSupportedPython(candidates, run, arch, environment, fs)
+  } catch (error) {
+    emitFailure(report, [
+      'Dependency : supported 64-bit Python for node-gyp',
+      `Error      : ${error.message}`
+    ])
+    return { code: 1, changed: false, pythonPath: '' }
+  }
   if (existing) {
     report.log(`  Found supported Python at ${existing} - nothing to install.`)
     return { code: 0, changed: false, pythonPath: existing }

@@ -67,6 +67,10 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Fixed
 
+- **Windows Python discovery now reuses the exact manifest-selected per-user installation before
+  invoking an installer.** An explicit trusted `PYTHON` remains first, followed by
+  `%LOCALAPPDATA%\\Programs\\Python\\PythonXY\\python.exe` and the pinned alternate toolchain
+  target; candidates must pass the existing bounded version and architecture probe.
 - Built-app screenshot launches now use a disposable home and Electron profile, verify the live
   `userData` path before interacting, and clean up only their own process and sandbox. Real-home
   sentinels now include both Kids and School mode records and credentials, preventing capture work
