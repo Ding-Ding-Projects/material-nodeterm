@@ -1888,8 +1888,21 @@ export interface GitFileChange {
   deleted: number
 }
 
-/** Core-measured exact checkout generation/content proof used only for forced worktree removal. */
-export interface GitWorktreeRemovalProof {
+/**
+ * Core-measured exact checkout generation/content proof used only for forced worktree removal.
+ *
+ * NAMED APART FROM `GitWorktreeRemovalProof` DELIBERATELY. Two independent subsystems arrived at
+ * the same name from different branches — this one, produced by `git-removal-proof.ts` beside the
+ * status read, and the one-shot removal authorization produced by `worktree-removal-proof.ts`.
+ * A bulk merge kept both declarations, and because TypeScript MERGES same-named interfaces rather
+ * than rejecting them, the effective type silently became the union of the two. Every producer of
+ * either shape then failed to satisfy it, in three files at once, with errors that pointed at the
+ * producers rather than at the duplicate that caused them.
+ *
+ * They are different facts: this is a measurement, that is an authorization. They must not share
+ * a name again.
+ */
+export interface GitWorktreeRemovalMeasurement {
   /** HEAD object id at measurement time. */
   headOid: string
   /** Filesystem generation of the checkout root and its per-worktree git administrative dir. */
@@ -1903,7 +1916,7 @@ export interface GitStatus {
   /** True only when every command/read needed for a destructive content proof succeeded. */
   authoritative?: boolean
   /** Present only with `authoritative:true`; compare inside core immediately before forced removal. */
-  removalProof?: GitWorktreeRemovalProof
+  removalProof?: GitWorktreeRemovalMeasurement
   /** "owner/repo" from the origin remote, else the folder name. */
   repoName: string
   branch: string

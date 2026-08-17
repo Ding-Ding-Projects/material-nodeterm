@@ -1643,7 +1643,10 @@ export class SshProjectManager {
 
     const target = `${remoteCodexHome(c.remoteHome, accountId)}/${sessionsRelativePath}`
     const targetDir = target.slice(0, target.lastIndexOf('/'))
-    const token = `${Date.now().toString(36)}${(this.uploadSeq++).toString(36)}`
+    // Unique across PROCESSES, not merely calls on this manager — see uploadFile's identical
+    // reasoning: a timestamp + per-instance counter could let two app instances' scp writes
+    // collide on one staging inode.
+    const token = randomUUID()
     const stagingDir = `${c.remoteHome}/.nodeterm/codex-imports`
     const staging = `${stagingDir}/${token}.part`
     const prepared = await this.r.run(

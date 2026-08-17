@@ -68,6 +68,7 @@ function renderDock(
         terminalProfileChoices={choices}
         onAddTerminalWithProfile={onAddTerminalWithProfile}
         onAddSticky={() => {}}
+        onAddLoop={() => {}}
         onAddDino={() => {}}
         onAddAgent={() => {}}
         onOpenFile={() => {}}

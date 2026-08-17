@@ -23,6 +23,7 @@ import {
   type ListSessionsResult
 } from '../session-host/protocol'
 import { resolveSessionHostScript, spawnSessionHost } from './session-host-launcher'
+import type { PreparedAgentLaunch } from './agent-launch'
 
 export interface SessionSubscriber {
   onData(data: string): void
@@ -63,6 +64,18 @@ type BufferedFrame = {
 }
 
 type TerminalSize = { cols: number; rows: number }
+
+/** Identity of one in-flight/retried `killSession` operation, keyed by name in `killOperations`.
+ *  `prepared` marks the point past which a failure must preserve (never roll back) the barrier
+ *  and identity, because a destructive frame may already be in flight or answered. */
+type KillOperationIdentity = {
+  operationId: string
+  expectedGeneration?: string
+  reserveReplacement: boolean
+  requireV2: boolean
+  expectedAbsent: boolean
+  prepared?: boolean
+}
 
 type ClientSessionState = {
   name: string
@@ -183,17 +196,7 @@ export class SessionHostClient {
    * old generation whose kill reply may have been lost. */
   private readonly killReplayBarriers = new Set<string>()
   private readonly killsInFlight = new Map<string, Promise<void>>()
-  private readonly killOperations = new Map<
-    string,
-    {
-      operationId: string
-      expectedGeneration?: string
-      reserveReplacement: boolean
-      requireV2: boolean
-      expectedAbsent: boolean
-      prepared?: boolean
-    }
-  >()
+  private readonly killOperations = new Map<string, KillOperationIdentity>()
   private readonly replacementTokens = new Map<string, string>()
   private connecting: Promise<void> | null = null
   private everConnected = false
@@ -1253,36 +1256,252 @@ export class SessionHostClient {
     return result.text
   }
 
-  async killSession(name: string): Promise<void> {
-    const state = this.sessions.get(name)
-    if (!state) {
-      await this.enqueueName(name, () => this.request({ cmd: 'killSession', name }))
-      return
+  /** Execute already-rendered trusted input through the persistent generation's exactly-once
+   *  launch ledger. Retrying with the SAME `launchId` after a lost reply is safe: the host answers
+   *  `already-executed` rather than typing the command a second time. Never retries internally —
+   *  the caller (session-host-backend.ts's `sessionHostExecuteLaunch`) owns that decision, exactly
+   *  as it owns the `launchId` that makes a retry idempotent. */
+  async executeLaunch(
+    name: string,
+    launchId: string,
+    plan: PreparedAgentLaunch
+  ): Promise<ExecuteLaunchResult> {
+    await this.ensureConnected()
+    const protocolVersion = this.negotiatedProtocolVersion
+    if (protocolVersion !== 2) {
+      throw new SessionHostProtocolCompatibilityError(`launch an agent in terminal '${name}'`)
     }
-    // New attaches queued after this call are a new desired generation and must survive the kill.
-    const cutoff = new Set(state.entries.values())
-    await this.enqueueState(state, async () => {
-      // Always send the idempotent kill at this exact lane position. A natural old exit may have
-      // replaced the local state already, but every post-invocation attach is still queued behind
-      // this operation and therefore cannot be mistaken for the generation being killed.
-      await this.request({ cmd: 'killSession', name })
-      if (this.sessions.get(name) !== state) return
-      for (const entry of cutoff) {
-        if (state.entries.get(entry.sub) !== entry) continue
-        state.entries.delete(entry.sub)
-        state.preAckEntries.delete(entry)
-        state.pauseOwners.delete(entry.sub)
-        state.sizeClaims.delete(entry.sub)
-      }
-      state.bufferedData = []
-      state.releasePending = false
-      state.appliedSocket = null
-      state.appliedAttached = false
-      state.appliedPaused = false
-      state.appliedSize = null
-      if (state.entries.size === 0) this.sessions.delete(name)
-      this.stopReconnectIfIdle()
+    const state = this.sessions.get(name)
+    const generation = state?.generation ?? this.sessionGenerations.get(name)
+    if (!generation) throw new Error(`session-host has no confirmed generation for '${name}'`)
+    const result = await this.request<ExecuteLaunchResult>({
+      cmd: 'executeLaunch',
+      name,
+      generation,
+      launchId,
+      command: plan.command,
+      ...(plan.stdinAfterStart !== undefined ? { stdinAfterStart: plan.stdinAfterStart } : {})
     })
+    if (!result || (result.status !== 'executed' && result.status !== 'already-executed')) {
+      throw new Error(`session-host returned an invalid launch result for '${name}'`)
+    }
+    return result
+  }
+
+  /** The one call that actually ENDS a session. `reserveReplacement` atomically reserves the
+   *  now-vacated name for THIS operation (`replacementTokens`) so only the client that confirmed
+   *  the kill can spawn the replacement — other authenticated app clients cannot steal it.
+   *  `expectedAbsent` skips the generation probe entirely for a lease acquired before any local
+   *  attach ever observed a generation (e.g. "restart a session I never attached"), so the lease
+   *  can never silently adopt a generation created by someone else after this call started.
+   *  `requireV2` demands the same atomic guarantees on a legacy (v1) host, which cannot provide
+   *  them — protocol-incompatible rather than silently degraded.
+   *
+   *  Retrying with the SAME options reuses the SAME `operationId` (`killOperations`), so a lost
+   *  reply can be retried without risking a second, different destructive operation (host-side
+   *  ABA safety). A confirmed kill installs `killReplayBarriers` for `name` BEFORE the first
+   *  destructive write and only clears it on confirmation — see `attachSubscriber`'s barrier
+   *  check and `restoreSocket`'s reconnect-replay skip, both of which already depend on this. */
+  async killSession(
+    name: string,
+    options: {
+      reserveReplacement?: boolean
+      requireV2?: boolean
+      expectedAbsent?: boolean
+    } = {}
+  ): Promise<void> {
+    const reserveReplacement = options.reserveReplacement === true
+    const requireV2 = options.requireV2 === true
+    const expectedAbsent = options.expectedAbsent === true
+    if (expectedAbsent && !reserveReplacement) {
+      throw new Error('session-host expected-absent mode requires a replacement reservation')
+    }
+    const knownIdentity = this.killOperations.get(name)
+    if (
+      knownIdentity &&
+      (knownIdentity.reserveReplacement !== reserveReplacement ||
+        knownIdentity.requireV2 !== requireV2 ||
+        knownIdentity.expectedAbsent !== expectedAbsent)
+    ) {
+      throw new Error(
+        `session-host: kill retry mode changed for '${name}'; retry with ` +
+          `reserveReplacement=${String(knownIdentity.reserveReplacement)} and ` +
+          `requireV2=${String(knownIdentity.requireV2)} and ` +
+          `expectedAbsent=${String(knownIdentity.expectedAbsent)}`
+      )
+    }
+    const active = this.killsInFlight.get(name)
+    if (active) return active
+
+    // Install the barrier before the first write. The host may complete the kill and lose its
+    // reply; without this ordering, reconnect's attach-or-create replay resurrects the old shell.
+    this.killReplayBarriers.add(name)
+    const state = this.sessions.get(name)
+    const identity: KillOperationIdentity = knownIdentity ?? {
+      operationId: randomUUID(),
+      expectedGeneration: state?.generation ?? this.sessionGenerations.get(name),
+      reserveReplacement,
+      requireV2,
+      expectedAbsent
+    }
+    this.killOperations.set(name, identity)
+    let operation!: Promise<void>
+    operation = this.prepareAndConfirmKillSession(name, identity)
+      .catch((error) => {
+        // Compatibility/probe failures happen before a destructive frame exists. Roll the local
+        // barrier back so a live attachment is not stranded behind an operation the host never
+        // saw. Once confirmKillSession starts, it deliberately retains identity/barrier on doubt.
+        if (this.killOperations.get(name) === identity && identity.prepared !== true) {
+          this.killOperations.delete(name)
+          this.killReplayBarriers.delete(name)
+        }
+        throw error
+      })
+      .finally(() => {
+        if (this.killsInFlight.get(name) === operation) this.killsInFlight.delete(name)
+      })
+    this.killsInFlight.set(name, operation)
+    return operation
+  }
+
+  private async prepareAndConfirmKillSession(
+    name: string,
+    identity: KillOperationIdentity
+  ): Promise<void> {
+    await this.ensureConnected()
+    const protocolVersion = this.negotiatedProtocolVersion
+    if (!protocolVersion) throw new Error('session-host: not connected')
+    if (protocolVersion === 1 && (identity.reserveReplacement || identity.requireV2)) {
+      throw new SessionHostProtocolCompatibilityError(`restart terminal '${name}'`)
+    }
+
+    // With no live authoritative attachment, determine the exact current generation immediately
+    // before creating this destructive operation. An uncertain prior operation skips this probe
+    // because its original operationId/generation is precisely what makes retry ABA-safe.
+    if (protocolVersion === 2 && !identity.expectedGeneration && !identity.expectedAbsent) {
+      const result = await this.request<HasSessionResult>({ cmd: 'hasSession', name })
+      if (!result || typeof result.exists !== 'boolean') {
+        throw new Error(`session-host returned an invalid existence result for '${name}'`)
+      }
+      if (result.exists) {
+        const generation = result.generation
+        if (typeof generation !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(generation)) {
+          throw new Error(`session-host returned no generation for existing session '${name}'`)
+        }
+        identity.expectedGeneration = generation
+        this.sessionGenerations.set(name, generation)
+      }
+    }
+
+    identity.prepared = true
+    await this.confirmKillSession(
+      name,
+      identity.operationId,
+      identity.expectedGeneration,
+      identity.reserveReplacement,
+      identity.requireV2
+    )
+  }
+
+  private async confirmKillSession(
+    name: string,
+    operationId: string,
+    expectedGeneration: string | undefined,
+    reserveReplacement: boolean,
+    requireV2: boolean
+  ): Promise<void> {
+    let lastError = new Error('session-host kill did not run')
+    for (let attempt = 0; attempt < KILL_CONFIRMATION_ATTEMPTS; attempt++) {
+      try {
+        await this.ensureConnected()
+        const protocolVersion = this.negotiatedProtocolVersion
+        if (!protocolVersion) throw new Error('session-host: not connected')
+        if (protocolVersion === 1 && (reserveReplacement || requireV2)) {
+          throw new SessionHostProtocolCompatibilityError(`restart terminal '${name}'`)
+        }
+        // The host defines missing as success and coalesces an in-progress kill by name. Resending
+        // after reconnect is therefore the confirmation operation for both "reply lost after
+        // kill" and "first write never reached the host".
+        const result = await this.request<KillSessionResult>({
+          cmd: 'killSession',
+          name,
+          operationId,
+          expectedGeneration,
+          reserveReplacement
+        })
+        if (protocolVersion === 2 && (!result || typeof result !== 'object')) {
+          throw new Error(`session-host returned an invalid kill result for '${name}'`)
+        }
+        if (reserveReplacement) {
+          if (result?.replacementToken !== operationId) {
+            throw new Error(
+              `session-host did not confirm the replacement reservation for '${name}'`
+            )
+          }
+          this.replacementTokens.set(name, result.replacementToken)
+        } else {
+          if (result?.replacementToken) {
+            throw new Error(
+              `session-host returned an unexpected replacement reservation for '${name}'`
+            )
+          }
+          this.replacementTokens.delete(name)
+        }
+        this.clearLocalSessionState(name)
+        this.sessionGenerations.delete(name)
+        this.killReplayBarriers.delete(name)
+        if (!reserveReplacement && this.killOperations.get(name)?.operationId === operationId) {
+          this.killOperations.delete(name)
+        }
+        return
+      } catch (error) {
+        lastError = asError(error)
+        if (attempt + 1 < KILL_CONFIRMATION_ATTEMPTS) {
+          // A timeout or explicit error can leave an apparently-live socket behind. Force the
+          // retry through a fresh authenticated connection; target replay remains barred while
+          // unrelated attachments are eligible for ordinary reconnect replay.
+          const socket = this.socket
+          if (socket) {
+            this.dropSocket(
+              socket,
+              new Error(`session-host connection reset to retry kill '${name}'`),
+              true
+            )
+          }
+        }
+      }
+    }
+
+    // Preserve subscribers/memory as evidence of the uncertain generation, but never replay it.
+    // A later explicit killSession(name) starts a fresh bounded confirmation pass and can clear
+    // this barrier once the idempotent host operation answers.
+    throw new Error(
+      `session-host: kill of '${name}' remains unconfirmed after ` +
+        `${KILL_CONFIRMATION_ATTEMPTS} attempts; attach replay is suspended to prevent recreating ` +
+        `the old process. Retry the kill before starting a replacement. Last error: ${lastError.message}`
+    )
+  }
+
+  /** Drop every locally attached subscriber for a confirmed-killed `name` without notifying them
+   *  (the caller of `killSession` already knows the session ended; an explicit kill is not a
+   *  surprise `onExit`, exactly as the pre-recovery implementation this replaces never fired one
+   *  either). Mirrors `unsubscribe`'s teardown fields so no stale flow-control/applied-state
+   *  survives into whatever reuses this name next. */
+  private clearLocalSessionState(name: string): void {
+    const state = this.sessions.get(name)
+    if (!state) return
+    if (this.sessions.get(name) === state) this.sessions.delete(name)
+    state.entries.clear()
+    state.preAckEntries.clear()
+    state.pauseOwners.clear()
+    state.sizeClaims.clear()
+    state.bufferedData = []
+    state.releasePending = false
+    state.appliedSocket = null
+    state.appliedAttached = false
+    state.appliedPaused = false
+    state.appliedSize = null
+    this.stopReconnectIfIdle()
   }
 
   async listSessions(): Promise<string[]> {

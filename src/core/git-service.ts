@@ -9,6 +9,7 @@ import type {
   GitFileChange,
   GitResult,
   GitStatus,
+  GitWorktreeRemovalMeasurement,
   GitWorktreeRemovalProofResult,
   GitWorktreeRemovalRequest
 } from '../shared/types'
@@ -18,6 +19,7 @@ import type { WorktreeListResult } from '../shared/worktree'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import { resolveGitRemote, runRemoteGit } from './remote-ssh/remote-git'
 import { platform } from './platform'
+import { gitRemovalFingerprint } from './git-removal-proof'
 import { withCrossProcessLock } from './fs-transaction-lock'
 import { WorktreeOwnershipStore } from './worktree-ownership'
 import {
@@ -670,7 +672,7 @@ export class GitService {
       !!gitDirGeneration &&
       untrackedFingerprint !== null
     const generation = authoritative ? `${rootGeneration}\0${gitDirGeneration}` : ''
-    const removalProof: GitWorktreeRemovalProof | undefined = authoritative
+    const removalProof: GitWorktreeRemovalMeasurement | undefined = authoritative
       ? {
           headOid: headR.out.trim(),
           generation,

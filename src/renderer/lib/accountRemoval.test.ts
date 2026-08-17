@@ -71,6 +71,15 @@ describe('account-removal transaction gate', () => {
     let accountPresent = true
     let loginSessionOpen = true
     const secondGate = vi.fn(() => true)
+    const loginTarget: NodeDeletionTarget[] = [
+      {
+        id: 'login',
+        projectId: 'project',
+        type: 'terminal',
+        title: 'Account login',
+        runtimeIdentity: 'login-session'
+      }
+    ]
     const perform = vi.fn((authorization: 'ordinary' | 'two-key') => {
       accountPresent = false
       dispatchNodeDeletion(

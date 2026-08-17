@@ -357,7 +357,7 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
           if (mutation.op === 'remove') {
             introducedNodes.delete(mutation.id)
             retiredNodeIds.add(mutation.id)
-          } else {
+          } else if (mutation.op === 'upsert') {
             const nodeId = mutation.node.id
             const prior = introducedNodes.get(nodeId)
             if (retiredNodeIds.has(nodeId) || (prior && prior.projectId !== projectId)) {
@@ -371,6 +371,8 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
               node: sanitizeInboundNode(mutation.node)
             })
           }
+          // Edge mutations (edge-upsert / edge-remove) carry no node identity of their own — they
+          // fall straight through to the generic reflector below untouched by this bookkeeping.
         }
         // Board-log subscribe/unsubscribe: scope-jail out-of-scope projects, and track this
         // connection's net per-project count so a dropped guest's watch is released in detach().

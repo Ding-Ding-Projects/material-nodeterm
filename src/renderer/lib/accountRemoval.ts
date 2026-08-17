@@ -1,5 +1,9 @@
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
-import type { DestructiveAuthorization } from './destructiveAuthorization'
+import {
+  destructiveTargetIdentity,
+  type DestructiveAuthorization
+} from './destructiveAuthorization'
+import type { ClaudeAccount } from '@shared/types'
 
 export type AccountRemovalConfirmation = 'destructive-gate' | 'plain-confirm'
 

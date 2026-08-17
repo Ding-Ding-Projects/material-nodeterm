@@ -254,6 +254,7 @@ import {
 import { RemoteAccessDialog } from '../components/RemoteAccessDialog'
 import { SshProjectDialog } from '../components/SshProjectDialog'
 import { SshPassphrasePrompt } from '../components/SshPassphrasePrompt'
+import { transport } from '../terminal/local-transport'
 import { sshFs } from '../terminal/ssh-fs'
 import {
   agentHibernateFns,
@@ -460,6 +461,7 @@ import {
   createCodexAccountLoginNode,
   isAccountLoginNode,
   isCodexAccountLoginNode,
+  claudeLaunchCommand,
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
@@ -4848,28 +4850,6 @@ export function Canvas() {
       if (plan.confirmation !== 'immediate' && confirmBusy()) {
         options.onRejected?.()
         return false
-      }
-
-      const barriers: Partial<Record<DestructiveAuthorization, () => unknown>> = {}
-      const commit = (authorization: DestructiveAuthorization): void => {
-        const barrier =
-          barriers[authorization] ??
-          createNodeDeletionCommitBarrier({
-            disclosedTargets,
-            authorization,
-            readCurrent: readCurrentTarget,
-            kidsGateRequired: kidsDestructiveGateRequired,
-            perform: () =>
-              options.perform ? options.perform(authorization) : deleteNodes(ids),
-            upgradeToTwoKey: () => {
-              // The ordinary dialog has already closed. Start over from a fresh target snapshot so
-              // the gate describes current facts rather than inheriting the stale disclosure.
-              requestDeleteNodes(ids, options)
-            },
-            refuse: () => options.onStale?.()
-          })
-        barriers[authorization] = barrier
-        barrier()
       }
 
       const accepted = dispatchNodeDeletion(plan, {
@@ -9985,111 +9965,10 @@ export function Canvas() {
             })
             return
           }
-          case 'write': {
-            if (!args.node) {
-              reply({ ok: false, error: 'write requires --node' })
-              return
-            }
-            // One confirm dialog at a time: setConfirm would replace a pending one, orphaning its
-            // reply and hanging that earlier request to its 120s timeout — and a second dialog
-            // mounted on top of a destructive one (the worktree-removal confirm) turned an Enter
-            // aimed at THIS harmless prompt into a deletion. `confirmBusy` covers every confirm
-            // state, not just `confirm`. Reject instead.
-            //
-            // `destructiveControlBlocked` reads the shared verb registry rather than restating it.
-            // It owns only the collision refusal; this case still owns the dialog and callback, so
-            // adding a verb to the registry does not manufacture a confirmation for a new case.
-            if (destructiveControlBlocked(verb, confirmBusy())) {
-              reply({ ok: false, error: 'a confirmation is already pending — try again' })
-              return
-            }
-            // Destructive → confirm. Replies on confirm AND cancel.
-            setConfirm({
-              message: `Agent "${srcTitle}" wants to send to ${args.node}:\n\n${args.text ?? ''}`,
-              confirmLabel: 'Send',
-              requestedBy: srcTitle,
-              onConfirm: async () => {
-                setConfirm(null)
-                // The SAME per-node lock the restart, hibernate-exit and wake-resume runs take.
-                // Its doc comment spells out why they take it: a second write arriving while a
-                // line sits un-submitted in the pane is spliced into that line. Every other
-                // `api.pty.sendText` caller was outside the lock, this one included, so a
-                // confirmed `write` could land in the middle of a hibernate exit's blind
-                // KILL_LINE + `/exit` (agent-restart.ts) or into an echo-verified launch line
-                // still waiting on its verification (command-delivery.ts). The dialog makes that
-                // rare, not impossible — the human confirms on their own clock, not the pane's.
-                let thrown: string | null = null
-                const outcome = await guardConcurrentRestart(args.node, async () => {
-                  try {
-                    const ok = await api.pty.sendText(args.node, args.text ?? '')
-                    return ok ? ('sent' as const) : ('failed' as const)
-                  } catch (e) {
-                    thrown = String(e)
-                    return 'failed' as const
-                  }
-                })()
-                if (outcome === 'not-eligible') {
-                  // A distinct, retryable refusal rather than a corrupted pane. `not-eligible` is
-                  // the guard's own word for "that node is mid-run"; the run holding it will
-                  // finish and the agent can send again.
-                  reply({ ok: false, error: 'target is busy with a restart or wake — try again' })
-                  return
-                }
-                reply({
-                  ok: outcome === 'sent',
-                  message: outcome === 'sent' ? 'sent' : 'failed',
-                  error: outcome === 'sent' ? undefined : (thrown ?? 'sendText failed')
-                })
-              },
-              onCancel: () => reply({ ok: false, error: 'denied by user' })
-            })
-            return
-          }
-          case 'close': {
-            if (!args.node) {
-              reply({ ok: false, error: 'close requires --node' })
-              return
-            }
-            const nodeId = args.node
-            // One confirm dialog at a time (see `write`): reject rather than orphan a pending one —
-            // or stack this one over a destructive dialog the user then cannot see. Gated on the
-            // shared set for the same reason `write` is.
-            if (destructiveControlBlocked(verb, confirmBusy())) {
-              reply({ ok: false, error: 'a confirmation is already pending — try again' })
-              return
-            }
-            // All close surfaces share the same runtime funnel. In ordinary mode this remains an
-            // explicit, non-Enter agent confirm; in Kids mode the planner upgrades it to the
-            // two-key gate. Both cancellation and a refused second dialog answer the agent.
-            requestDeleteNodes([nodeId], {
-              surface: 'agent-control',
-              titles: [
-                (nodesRef.current.find((n) => n.id === nodeId)?.data.title as string) ?? nodeId
-              ],
-              requestedBy: srcTitle,
-              perform: (epoch) => {
-                // Canonical teardown: deleteNodes() destroys the local tmux session (remote-guarded),
-                // drops persisted agentStatus, and reparents any group children. Don't hand-roll it.
-                void deleteNodes([nodeId], epoch).then((outcome) => {
-                  if (!outcome.confirmed.includes(nodeId)) {
-                    const failure = outcome.failed.find((item) => item.nodeId === nodeId)
-                    reply({ ok: false, error: failure?.message ?? 'session close was not acknowledged' })
-                    return
-                  }
-                  setControlEdges((es) =>
-                    es.filter((e) => e.source !== nodeId && e.target !== nodeId)
-                  )
-                  reply({ ok: true, message: `closed ${nodeId}` })
-                })
-              },
-              onCancel: () => reply({ ok: false, error: 'denied by user' }),
-              onRejected: () =>
-                reply({ ok: false, error: 'a confirmation is already pending — try again' }),
-              onStale: () =>
-                reply({ ok: false, error: 'the target or destructive policy changed — try again' })
-            })
-            return
-          }
+          // `write` and `close` are the closed DESTRUCTIVE_VERBS set (@shared/control-verbs).
+          // `dispatchDestructiveControl` above owns both entirely — confirmation, busy refusal,
+          // and the effect closures — and always returns `true` (and thus already returned from
+          // this handler) for either verb, so neither belongs in this ordinary switch.
           case 'board': {
             // Read-only snapshot of the CURRENTLY OPEN project's kanban board: columns + the
             // session cards filed in each, plus the virtual Ungrouped column. The board's cards
@@ -10215,7 +10094,10 @@ export function Canvas() {
       alsoOnSuccess?: () => void,
       terminationScope: SessionTerminationScope = 'node'
     ) => {
-      const project = useProjects.getState().getProject(projectId)
+      const projectsState = useProjects.getState()
+      const project = projectsState.getProject(projectId)
+      const liveCanvasOwnsProject =
+        projectsState.activeProjectId === projectId && nodesProjectIdRef.current === projectId
       const title =
         (liveCanvasOwnsProject
           ? nodesRef.current.find((n) => n.id === id)?.data.title

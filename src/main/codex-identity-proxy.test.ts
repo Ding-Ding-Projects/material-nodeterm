@@ -16,6 +16,17 @@ import {
 
 const run = promisify(execFile)
 
+// installCodexLauncher() legitimately returns `string | null` (null = could not be installed,
+// e.g. a read-only home). In the test sandbox the temp HOME is always writable, so a null here
+// is a real test-environment failure, not an expected outcome — fail loudly instead of silencing
+// the type with a cast or a non-null assertion.
+function requireLauncher(launcher: string | null): string {
+  if (launcher === null) {
+    throw new Error('installCodexLauncher() unexpectedly returned null in the test sandbox')
+  }
+  return launcher
+}
+
 describe('NodeTerm Codex remote launcher', () => {
   const oldHome = process.env.HOME
   const nodeTokenA = 'A'.repeat(43)
@@ -56,7 +67,7 @@ describe('NodeTerm Codex remote launcher', () => {
       { mode: 0o700 }
     )
     vi.stubEnv('HOME', root)
-    const launcher = installCodexLauncher()
+    const launcher = requireLauncher(installCodexLauncher())
     const base = {
       PATH: `${bin}:${process.env.PATH ?? ''}`,
       NODETERM_CANVAS_CONTROL: '1',
@@ -112,7 +123,7 @@ describe('NodeTerm Codex remote launcher', () => {
       { mode: 0o700 }
     )
     vi.stubEnv('HOME', root)
-    const launcher = installCodexLauncher()
+    const launcher = requireLauncher(installCodexLauncher())
     const base = {
       ...process.env,
       PATH: `${bin}:${process.env.PATH ?? ''}`,
@@ -170,7 +181,7 @@ describe('NodeTerm Codex remote launcher', () => {
     writeFileSync(runtime, '#!/bin/sh\nprintf "ws://127.0.0.1:4321\\nroute-token-a\\n"\n', { mode: 0o700 })
     writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
     vi.stubEnv('HOME', root)
-    const launcher = installCodexLauncher()
+    const launcher = requireLauncher(installCodexLauncher())
     await run(launcher, ['resume', 'thread-a'], {
       env: {
         ...process.env,
@@ -217,7 +228,7 @@ describe('NodeTerm Codex remote launcher', () => {
     writeFileSync(runtime, '#!/bin/sh\nprintf "ws://127.0.0.1:4321\\nroute-token-a\\n"\n', { mode: 0o700 })
     writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
     vi.stubEnv('HOME', root)
-    const launcher = installCodexLauncher()
+    const launcher = requireLauncher(installCodexLauncher())
 
     await run(launcher, ['new prompt'], {
       cwd: '/tmp',
@@ -256,7 +267,7 @@ describe('NodeTerm Codex remote launcher', () => {
     writeFileSync(runtime, '#!/bin/sh\nexit 1\n', { mode: 0o700 })
     writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
     vi.stubEnv('HOME', root)
-    const launcher = installCodexLauncher()
+    const launcher = requireLauncher(installCodexLauncher())
 
     await expect(run(launcher, ['resume', 'thread-a'], {
       env: {
@@ -279,7 +290,7 @@ describe('NodeTerm Codex remote launcher', () => {
     await run('/bin/mkdir', ['-p', bin])
     writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\nexit 99\n', { mode: 0o700 })
     vi.stubEnv('HOME', root)
-    const launcher = installCodexLauncher()
+    const launcher = requireLauncher(installCodexLauncher())
     const env = {
       ...process.env,
       PATH: `${bin}:${process.env.PATH ?? ''}`,

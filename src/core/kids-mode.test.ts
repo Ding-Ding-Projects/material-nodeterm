@@ -133,13 +133,14 @@ describe('the lock', () => {
   })
 
   it('does not flip the authoritative cache when a durable disable write fails', async () => {
-    const s = new KidsModeStore(async (file, data) => {
-      if ((JSON.parse(data) as { enabled: boolean }).enabled === false) {
+    const writeCompared = vi.fn(async (...args: Parameters<typeof writeAtomicFileCompared>) => {
+      const [, data] = args
+      if ((JSON.parse(data.toString()) as { enabled: boolean }).enabled === false) {
         throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
       }
-      await persistFile(file, data)
+      await writeAtomicFileCompared(...args)
     })
-    await s.init()
+    const s = await fresh({ writeCompared })
     await s.enable('1234')
     expect(s.snapshot()).toMatchObject({ enabled: true, authoritative: true })
 

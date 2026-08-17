@@ -59,7 +59,8 @@ describe('every GuardedAction is actually wired to something', () => {
     digits: 6,
     period: 30,
     createdAt: 1,
-    updatedAt: 1
+    updatedAt: 1,
+    revision: 'a'.repeat(64)
   }
   const plans: Record<GuardedAction, () => boolean> = {
     'delete-project': () => requiresDestructiveGate('delete-project', true).required,

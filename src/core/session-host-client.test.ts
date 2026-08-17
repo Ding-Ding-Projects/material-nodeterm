@@ -352,12 +352,13 @@ describe('SessionHostClient legacy host continuity', () => {
     })
 
     const client = new SessionHostClient({ userDataDir })
+    const warmSub = subscriber(onData)
     await expect(within(client.hasSession('nt-legacy-warm'))).resolves.toBe(true)
     await expect(
-      within(client.attachExisting('nt-legacy-warm', subscriber(onData)))
+      within(client.attachExisting('nt-legacy-warm', warmSub))
     ).resolves.toEqual({ fresh: false, screen: 'legacy screen' })
     await expect(within(client.capture('nt-legacy-warm', true))).resolves.toBe('legacy capture')
-    client.write('nt-legacy-warm', 'dir\r')
+    client.write('nt-legacy-warm', warmSub, 'dir\r')
     await within(writeSeen)
 
     hostSocket?.write(
