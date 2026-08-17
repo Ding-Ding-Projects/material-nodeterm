@@ -6,38 +6,29 @@ import net from 'net'
 import { startServer } from '../../src/server/index'
 import { ScheduledSettingsService } from '../../src/core/scheduled-settings-service'
 
-// A port THIS TEST has just proved is free, not a hard-coded one.
-//
-// It used to assert that 8443 was not listening, which is a claim about the whole machine
-// rather than about the server under test. It failed here because Docker Desktop binds 8443 —
-// and it would fail the same way for anyone running anything else on it, reporting a headless
-// regression that does not exist. Asking the OS for a free port and then asserting THAT port
-// stays closed tests the same property and depends on nothing outside this process.
-async function unusedLoopbackPort(): Promise<number> {
-  const server = net.createServer()
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', resolve)
-  })
-  const address = server.address()
-  if (!address || typeof address === 'string') throw new Error('could not allocate a TCP sentinel port')
-  await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())))
-  return address.port
-}
-
 // Headless notification-host boot smoke: every core service (incl. the loopback hook server) boots,
 // but NO public HTTP/WS listener is bound. Follows the same startServer harness as server-e2e, minus
 // tmux/pty (nothing is spawned here), so it runs everywhere.
 describe('server headless mode: boots core services, binds no public listener', () => {
   it('startServer with headless:true returns port 0 and closes cleanly', async () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-headless-'))
+    const sentinel = net.createServer()
     const scheduledStop = vi.spyOn(ScheduledSettingsService.prototype, 'stop')
+    let srv: Awaited<ReturnType<typeof startServer>> | undefined
     try {
-      // A fixed port makes this test lie when a real Server Edition host is already using it.
-      // Allocate a currently-free sentinel; headless must leave that exact port untouched.
-      const sentinelPort = await unusedLoopbackPort()
-      const srv = await startServer({
-        port: sentinelPort,
+      // Hold the configured port open for the whole boot. If headless mode ever tries to bind its
+      // public listener, startServer fails with EADDRINUSE. A fixed "probably unused" port can be
+      // owned by Docker or another local service and falsely attribute that listener to nodeterm.
+      await new Promise<void>((resolve, reject) => {
+        sentinel.once('error', reject)
+        sentinel.listen(0, '127.0.0.1', () => {
+          sentinel.off('error', reject)
+          resolve()
+        })
+      })
+      const occupiedPort = (sentinel.address() as net.AddressInfo).port
+      srv = await startServer({
+        port: occupiedPort,
         host: '127.0.0.1',
         dataDir,
         rendererDir: path.join(dataDir, 'no-renderer'),
@@ -47,12 +38,19 @@ describe('server headless mode: boots core services, binds no public listener', 
         // which the teardown removes, leaving a dangling hook that breaks agent sessions.
         installHooks: false
       })
-      // Nothing bound: the sentinel port is 0.
+      // Nothing public was bound: headless returns its documented port-0 sentinel.
       expect(srv.port).toBe(0)
-      // And the configured port is NOT listening — a connect attempt is refused.
+      expect(sentinel.listening).toBe(true)
+
+      // Release the sentinel after boot, while the headless server is still alive, so the
+      // configured port can be probed without confusing the sentinel for a public listener.
+      await new Promise<void>((resolve, reject) => {
+        sentinel.close((error) => (error ? reject(error) : resolve()))
+      })
+      // The configured port is NOT listening — a connect attempt is refused.
       const listening = await new Promise<boolean>((resolve) => {
         const sock = net
-          .connect({ host: '127.0.0.1', port: sentinelPort }, () => {
+          .connect({ host: '127.0.0.1', port: occupiedPort }, () => {
             sock.destroy()
             resolve(true)
           })
@@ -64,11 +62,16 @@ describe('server headless mode: boots core services, binds no public listener', 
       })
       expect(listening).toBe(false)
       await srv.close()
+      srv = undefined
       // Headless starts the same scheduled-settings interval as the serving shell. Its separate
       // early return must stop that interval too; otherwise repeated in-process starts leak one
       // timer + store subscription each even though close() appears to resolve successfully.
       expect(scheduledStop).toHaveBeenCalledTimes(1)
     } finally {
+      await srv?.close()
+      if (sentinel.listening) {
+        await new Promise<void>((resolve) => sentinel.close(() => resolve()))
+      }
       scheduledStop.mockRestore()
       fs.rmSync(dataDir, { recursive: true, force: true })
     }

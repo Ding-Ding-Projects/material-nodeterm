@@ -24,21 +24,31 @@ import {
 } from './agents/node-token-files'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
-import { POSIX_TEST_SHELL, posixTestEnvPath, posixTestScriptArgs } from './test-posix-shell'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS,
+  pathForPosixShell,
+  pathsForPosixShellEnv,
+  posixShellScriptArgs,
+  quotePathForPosixShell
+} from './testing/posix-shell'
 
 const run = promisify(execFile)
 
-/** A real POSIX shell to exec the generated launcher with. There is no literal `/bin/sh` path on
- *  win32, so the shared test helper locates Git for Windows' MSYS sh from PATH or its standard
- *  install locations. A no-op on POSIX, where the literal path is correct as written. */
-const SH = POSIX_TEST_SHELL
+const SHELL_PATH_ENV_KEYS = [
+  'CODEX_HOME',
+  'HOME',
+  'NODETERM_HOOK_ENDPOINT',
+  'NODETERM_HOOK_SOCK',
+  'NODETERM_NODE_TOKEN_DIR'
+] as const
 
 /**
- * The launcher's own `cwd=$PWD` (codex-identity-proxy.ts) is read by a REAL MSYS shell on win32,
- * whose `$PWD` — MEASURED directly, not assumed — is the native drive path with slashes flipped
- * (`C:/Users/x`, original drive-letter case, no `/c/` mount-style rewrite; that fuller conversion
- * is what interactive `pwd` does, but reading the already-initialized `$PWD` variable is a plainer
- * transform). A no-op on POSIX, where `fs.realpathSync` is already forward-slash-shaped.
+ * The launcher reads `cwd=$PWD` from a real MSYS shell, where `$PWD` uses `/c/...`. When that value
+ * crosses into Git's native curl executable, MSYS argv conversion rewrites it to `C:/...`; that is
+ * the value the Node hook server receives and the assertion must compare. A no-op on POSIX, where
+ * `fs.realpathSync` is already forward-slash-shaped.
  */
 function shCwd(nativePath: string): string {
   if (process.platform !== 'win32') return nativePath
@@ -64,7 +74,7 @@ let bindAnswer: (() => void) | null = null
 function writeFakeCodex(): void {
   fs.writeFileSync(
     path.join(binDir, 'codex'),
-    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(argvLog)}\nexit 0\n`,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${quotePathForPosixShell(argvLog)}\nexit 0\n`,
     { mode: 0o755 }
   )
 }
@@ -129,7 +139,7 @@ beforeEach(() => {
  */
 function baseEnv(): Record<string, string> {
   return {
-    PATH: posixTestEnvPath([binDir]),
+    PATH: process.env.PATH ?? '',
     HOME: dir,
     NODETERM_NODE_ID: 'node-1',
     NODETERM_HOOK_ENDPOINT: hookServer.endpointFilePath(),
@@ -148,7 +158,10 @@ function callLauncher(
 ): Promise<{ stdout: string; stderr: string }> {
   const merged = { ...baseEnv(), ...env }
   for (const [k, v] of Object.entries(merged)) if (v === '') delete (merged as any)[k]
-  return run(SH, posixTestScriptArgs(script, args, [binDir]), { env: merged, cwd: dir })
+  return run(REAL_POSIX_SHELL, posixShellScriptArgs(script, args, binDir), {
+    env: environmentForPosixShell(pathsForPosixShellEnv(merged, SHELL_PATH_ENV_KEYS)),
+    cwd: dir
+  })
 }
 
 /** What the fake `codex` was exec'd with, one line per invocation. */
@@ -156,9 +169,13 @@ function codexArgv(): string[] {
   return fs.readFileSync(argvLog, 'utf8').split('\n').slice(0, -1)
 }
 
-describe('generated Codex launcher', () => {
+describe('generated Codex launcher', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('is valid POSIX sh', async () => {
-    await expect(run(SH, ['-n', launcher])).resolves.toBeTruthy()
+    await expect(
+      run(REAL_POSIX_SHELL, ['-n', pathForPosixShell(launcher)], {
+        env: environmentForPosixShell()
+      })
+    ).resolves.toBeTruthy()
   })
 
   it('starts a thread for a fresh node and resumes it on the shared app-server', async () => {
@@ -186,7 +203,7 @@ describe('generated Codex launcher', () => {
 // Each case below is a way the managed identity can be unavailable on a real machine. The
 // assertion is always the same pair: plain `codex` ran WITH THE ORIGINAL ARGUMENTS, and the
 // desktop was told why. Upstream, every one of these exited 69 — a dead node.
-describe('falls back to plain codex', () => {
+describe('falls back to plain codex', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const cases: Array<[string, Record<string, string>, string]> = [
     ['no node id (a session nodeterm did not spawn)', { NODETERM_NODE_ID: '' }, 'node-id-unavailable'],
     [
@@ -274,7 +291,7 @@ describe('falls back to plain codex', () => {
   })
 })
 
-describe('a start handler that takes real time', () => {
+describe('a start handler that takes real time', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   // REGRESSION. `/codex-thread/start` mints a thread through a five-step conversation with an
   // app-server that is typically COLD — the first codex node after boot. The route inherited the
   // 2s slowloris guard (a RECEIVE-phase guard), so the socket was destroyed while the handler was
@@ -294,7 +311,7 @@ describe('a start handler that takes real time', () => {
 // shared derivation with /hook/*) and it arrives in a 0600 FILE, not in the tmux argv. Between the
 // two changes the feature was INERT — the launcher read an env var nothing set any more, reported
 // `node-token-unavailable` and ran plain codex. These are the tests that say it is not.
-describe('the per-node capability, over the file channel', () => {
+describe('the per-node capability, over the file channel', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('accepts the kid.mac wire shape — the dot is part of the token, not a charset violation', async () => {
     // THE TRAP. The old gate was `*[!A-Za-z0-9_-]*`, minted from HMAC(secret, nodeId) with no
     // separator in it. The shared derivation puts a `.` between kid and mac, so that gate rejects
@@ -364,7 +381,7 @@ describe('the per-node capability, over the file channel', () => {
   })
 })
 
-describe('per-node capability (the authorization the shared bearer cannot give)', () => {
+describe('per-node capability (the authorization the shared bearer cannot give)', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const post = (verb: string, body: string, headers: Record<string, string>) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/${verb}`, {
       method: 'POST',

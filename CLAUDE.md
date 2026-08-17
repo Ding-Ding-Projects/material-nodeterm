@@ -2098,6 +2098,23 @@ Windows blocks DELETE on a mapped image and a same-directory rename does not nee
 Wired into `dist:win` and `rebuild`, deliberately **not** into `postinstall` — that runs
 automatically in contexts a hard stop would be more disruptive than the underlying failure.
 
+## Real POSIX-shell tests on Windows
+
+Generated remote shell still needs to run under a real POSIX shell on Windows; skipping every
+`/bin/sh` suite removes the only behavioral proof for quoting, fallback and credential transport.
+The test adapter is `src/core/testing/posix-shell.ts`. It resolves Git for Windows' `usr/bin/sh.exe`
+from `git --exec-path` (no assumed install directory), supplies that installation's `usr/bin` and
+`mingw64/bin`, converts native paths to MSYS `/c/...` paths, and can place a fixture bin first only
+after the shell has initialized.
+
+The last point is load-bearing. Measured on this host, exposing only `Git\cmd` left 66 tests unable
+to spawn `sh`; adding `Git\bin` made the shell available but its startup put `/mingw64/bin` ahead of
+the fixture, so 16 tests called Git's real `curl` instead of the recorder. A native PATH prefix did
+not prove fixture precedence. `posixShellScriptArgs` performs the prefix inside the running shell,
+and its live collision test is deliberately named `curl`; changing it to an invented command would
+let the original defect pass. AF_UNIX-only cases remain explicit Windows skips, while TCP, parsing,
+fallback, credential-stdin and syntax cases all run through real Git Bash.
+
 ## Atomic writes (never a bare `fs.rename`)
 
 Every store persists temp-file-then-rename. That is correct on POSIX and **silently lossy on
