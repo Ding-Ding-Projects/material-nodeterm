@@ -18,6 +18,9 @@ src/core/ollama/
                                 /api/chat
   hardware.ts                  best-effort local hardware detection (RAM always; VRAM via
                                 nvidia-smi when present; disk via the shared freeDiskBytes helper)
+  installation.ts              detectOllamaInstalled (PATH + well-known per-platform install
+                                locations, no subprocess) and classifyOllamaHealth — the two pieces
+                                that turn a refused connection into 'stopped' vs 'not-installed'
   pull-queue.ts                the batch-pull "cart" — durable, bounded-concurrency, resumable
   chat-store.ts                local chat session persistence + streaming orchestration
   register-ipc.ts              the ollama:* RPC surface, shared by both shells
@@ -129,6 +132,37 @@ Ollama not installed, the service stopped (`ECONNREFUSED`), the API unreachable 
 API answering but unhealthy (a non-2xx response with a body), a stale/offline model catalog, and —
 separately — a pull failure or a hardware-fit gap for one specific model. Nothing here shows an
 empty spinner or a generic "try again" that erases which of these it actually was.
+
+**"Not installed" and "stopped" both start life as the same refused TCP connection, so telling
+them apart needs a second signal.** `client.ts`'s `ping()` reports a `code` alongside the free-text
+`detail`; `installation.ts`'s `classifyOllamaHealth(code, detail, checkInstalled)` only calls
+`checkInstalled` — `detectOllamaInstalled()`, a synchronous, subprocess-free walk of PATH plus
+well-known per-platform install locations (the same reasoning `tmux-hint.ts`'s
+`findCommand`/`findFixedTmux` use for tmux: a packaged GUI app's PATH is routinely narrower than an
+interactive shell's) — on an actual connection refusal. Found ⇒ `'stopped'`; not found in any
+inspected location ⇒ `'not-installed'` (the Health tab's copy says "does not appear to be
+installed", never a flat "is not installed", because absence-from-a-few-checked-locations is not
+certainty). A timeout/abort never calls the installed-check at all — Ollama is plainly there in
+that case, just slow.
+
+**The one Node-specific trap worth recording, because it silently defeated the previous version of
+this classifier:** Node's `fetch` collapses every network-level failure's top-level `.message` to
+the generic string `"fetch failed"` — the real OS error code (`ECONNREFUSED`) lives one level down,
+on `.cause.code`. Text-matching `detail` alone for `"econnrefused"` (what this classifier used to
+do) therefore never fired against a real Node 24 fetch to a refused port, and every stopped-or-
+never-installed Ollama silently fell through to `'unhealthy'` ("Ollama answered but reported a
+problem: fetch failed") — actively wrong, since Ollama never answered at all. `client.ts` now reads
+`e.cause.code`/`e.cause.message` (via `toUnreachableError`, used by every fetch call site: `req()`,
+`pull()`, `chatStream()`) and carries the real code forward as `OllamaUnreachableError.code`, so
+`classifyOllamaHealth` can key off the structured code and only falls back to text-matching as a
+second, redundant signal. `client.test.ts` proves this against a genuinely refused loopback
+connection rather than a mock, specifically because a mock can only prove the mock matches what its
+author believed — which is exactly the belief that was wrong here.
+
+The Health tab's troubleshooter (`troubleshoot.ts`) reads this distinction too: `'stopped'` (real
+evidence the binary is already on disk) skips the install step and shows only "start it" +
+"verify"; every other non-ok health shows the full install-then-start-then-verify sequence, since a
+timeout or a bad response genuinely doesn't tell us whether the binary is there.
 
 ## Known gaps (deliberately out of scope this pass)
 
