@@ -411,6 +411,70 @@ node scripts/test-docker-host.mjs --cleanup-run <run-uuid>
 Recovery still requires the recorded daemon identity, immutable resource identities, and ownership
 labels to match. Cleanup residue is a failed smoke result, not a warning.
 
+### Tailscale (reach it without publishing a port)
+
+`docker-compose.yml` also ships a `tailscale` Compose profile — off by default, exactly like
+`tls` — that joins the `nodeterm` container directly to your own [Tailscale](https://tailscale.com)
+network (a "tailnet"). Once it's running, any device on that tailnet can open the app at this
+container's tailnet address on port `8443`, **with nothing published to the Docker host and
+nothing exposed to the public internet.** `docker compose up` with no `--profile` flag is
+completely unaffected — the service doesn't exist until you ask for it.
+
+**What this does and does not protect.** It turns "no exposure at all" into "reachable from your
+tailnet only" — a real reduction in attack surface, and for a lot of self-hosted setups that's all
+you need instead of a public domain and a certificate. **It is not authentication.** The app is
+served over plain HTTP inside the container, exactly as it is for the `tls` profile's Caddy leg,
+and every request still has to pass the server's own sign-in (see [Security
+model](#security-model) above) — anyone who can reach the tailnet can reach the login page; they
+still need the password (or a passkey) to get past it. If you also want Tailscale's own identity
+on each request, layer `NODETERM_TRUST_PROXY_HEADER=Tailscale-User-Login` in front of `tailscale
+serve` (see [Reverse-proxy SSO](#reverse-proxy-sso-header-trust)) — that's a separate, opt-in
+decision from simply joining the tailnet.
+
+**Setup:**
+
+1. Create a Tailscale auth key at <https://login.tailscale.com/admin/settings/keys>. A reusable,
+   tagged key is easiest for a long-running host you'll redeploy; an ephemeral key is fine for a
+   one-off test.
+2. Start the stack with that key and the `tailscale` profile:
+
+   ```bash
+   TS_AUTHKEY=tskey-auth-xxxx docker compose --profile tailscale up -d --build
+   ```
+
+   `TS_AUTHKEY` is a **secret**: set it as a real environment variable or in an owner-only
+   `--env-file`, the same way you'd hand the host wrappers a password. It is never baked into the
+   image, never committed, and the compose file's own default for it is empty, so a plain
+   `docker compose up` never reads it.
+3. Confirm the node actually joined:
+
+   ```bash
+   docker compose logs tailscale | grep -i "success\|machine name"
+   # or, once it's up:
+   docker compose exec tailscale tailscale status
+   ```
+
+   The node registers under the container's hostname (`nodeterm` by default — change the
+   `hostname:` field on the `tailscale` service if you want a different tailnet name). From
+   another device on the same tailnet, open `http://nodeterm:8443` (MagicDNS) or the `100.x.y.z`
+   address `tailscale status` prints.
+4. **Turn it off again**: `docker compose --profile tailscale down` stops and removes the sidecar
+   container; `nodeterm` itself keeps running loopback-only, unaffected. The node's Tailscale
+   identity is kept in the `tailscale-state` named volume, so restarting the profile later
+   reconnects as the *same* device instead of registering a new one and piling up duplicates in
+   your tailnet's device list. To deregister for good, either remove that volume (its name is
+   prefixed with the Compose project name, e.g. `docker volume rm
+   material-nodeterm_tailscale-state`) or remove the machine directly from
+   <https://login.tailscale.com/admin/machines>.
+
+**How it works:** the `tailscale` service is a sidecar that shares the `nodeterm` container's
+network namespace (`network_mode: service:nodeterm`) instead of getting its own, so once
+Tailscale brings up its `tailscale0` interface there, the app — already listening on
+`0.0.0.0:8443` inside the container, the same bind the `tls` profile relies on — is reachable
+through it with no `ports:` entry of its own. It needs the capabilities Tailscale documents for
+that kernel-networking mode (`NET_ADMIN` + `NET_RAW`, plus a `/dev/net/tun` device) and nothing
+broader: no `--privileged`, no host networking, no other devices.
+
 ### CSP
 
 The inline login/setup pages carry a strict CSP. The built `index.html` ships with a

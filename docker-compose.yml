@@ -24,6 +24,16 @@
 #
 #     NODETERM_DOMAIN=nodeterm.example.com docker compose --profile tls up -d --build
 #
+# For PRIVATE reach instead — only from devices on your own Tailscale network, with NO port
+# published to the host at all and no certificate to manage — start the `tailscale` profile
+# instead. It joins this container directly to your tailnet; see the Tailscale section of
+# docs/SERVER.md for the full walkthrough:
+#
+#     TS_AUTHKEY=tskey-auth-xxxx docker compose --profile tailscale up -d --build
+#
+# `tls` and `tailscale` serve different audiences (the public internet vs. your own private
+# network) and can be run independently or together.
+#
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -88,7 +98,62 @@ services:
       - caddy-data:/data
       - caddy-config:/config
 
+  # Private network access, opt-in: `TS_AUTHKEY=... docker compose --profile tailscale up -d`.
+  # Joins THIS container's network namespace to a Tailscale sidecar (network_mode:
+  # service:nodeterm), so the app becomes reachable at this node's tailnet address on its own
+  # port (8443) from any device on your tailnet — no port published to the Docker host, and no
+  # public exposure at all. This is a network-reachability decision, not authentication: traffic
+  # still has to pass the app's own sign-in (see the Security model in docs/SERVER.md). Tailscale
+  # is the trust boundary for WHO can reach the port; the app's password/passkey is still what
+  # decides who can use it once they do.
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: nodeterm-tailscale
+    profiles: ["tailscale"]
+    restart: unless-stopped
+    hostname: nodeterm
+    depends_on:
+      - nodeterm
+    environment:
+      # REQUIRED for this profile, and a SECRET: an auth key from
+      # https://login.tailscale.com/admin/settings/keys (a reusable, tagged key is easiest for a
+      # long-running host). Supply it via a real environment variable or an owner-only --env-file
+      # — never hardcode one here, never commit one, and it is never logged or printed by this
+      # compose file.
+      #
+      # Plain default, NOT `${TS_AUTHKEY:?...}` — same reason NODETERM_DOMAIN above avoids one:
+      # Compose interpolates and validates EVERY service in this file before it decides which
+      # profiles are active, so a required-variable marker here would abort a plain
+      # `docker compose up` (no profile, this service never even starts) too. Leaving it unset
+      # just starts an unauthenticated tailscaled that logs it needs a key — see the Tailscale
+      # section of docs/SERVER.md for how to confirm the node actually joined.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      # Kernel networking (a real tailscale0 interface in the shared netns below), not the
+      # userspace/SOCKS5 mode — that's what makes the app reachable by its own address, and it's
+      # why this service needs the capabilities/device just below.
+      TS_USERSPACE: "false"
+    volumes:
+      # Persists this node's Tailscale identity (its machine key) so a restart reconnects as the
+      # SAME device instead of re-registering as a new one and piling up duplicates in your
+      # tailnet's device list.
+      - tailscale-state:/var/lib/tailscale
+    # The minimum Tailscale documents for kernel-mode networking in a container: a TUN device to
+    # create the tailscale0 interface, and NET_ADMIN/NET_RAW to configure it and probe
+    # connectivity. Nothing broader (no --privileged, no host networking, no other devices).
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    # Shares nodeterm's network namespace instead of getting its own: nodeterm keeps listening on
+    # 0.0.0.0:8443 inside that namespace (already true today, for the loopback publish above), so
+    # once tailscale0 exists there the app is reachable at the tailnet address on the same port —
+    # with no `ports:` entry of its own and nothing new published to the Docker host.
+    network_mode: "service:nodeterm"
+
 volumes:
   nodeterm-data:
   caddy-data:
   caddy-config:
+  tailscale-state:

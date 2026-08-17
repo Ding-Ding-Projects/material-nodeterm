@@ -1,9 +1,30 @@
 # Personal vocabulary
 
-A local, private, opt-in text-substitution layer: upload a small JSON file of your own
-`term → replacement` pairs, and the app's own prose (Settings labels and descriptions today —
-see "Coverage" below) shows your wording instead of the shipped one. Settings → Personal
-vocabulary carries the control, visible even before any file has ever been uploaded.
+Somebody who does not work here decided that a button should say "Settings." Nobody asked you.
+This feature is the appeal process, and the ruling is final in your favor.
+
+Upload a small local JSON file mapping any word the app currently shows you to a word you'd
+rather see — `"Settings": "Control Room"`, `"Notifications": "The Nag List"`, whatever you like —
+and from that point on the app makes the swap on its own prose (Settings labels and descriptions
+today — see "Coverage" below), quietly, indefinitely, and without ever asking why. It has no
+opinion about your choices. It will not raise an eyebrow, question your judgment, or notice that
+it has just rendered your own settings screen unreadable to your future self, your co-worker
+leaning over your shoulder, or the poor soul writing your support ticket. It just does the swap,
+forever, with the flat loyalty of a machine that has never once been asked to have taste.
+
+Settings → Personal vocabulary carries the control, and it is there before you have ever uploaded
+anything — there is no starter dictionary tucked inside the app, no sample file, nothing
+pre-loaded that could hint at what anyone else typed into theirs. Until you supply a valid file,
+every label reads exactly as shipped. Supply one, and the substitution takes over. Delete it, and
+the app forgets your vocabulary ever existed, as if it had never had an opinion to override in the
+first place.
+
+None of this leaves your machine. The file is read, checked, and applied entirely where it sits —
+never uploaded, logged, exported, or synced, not even alongside the rest of your app settings. If
+your private dictionary is a joke, a translation, a coping mechanism, or a small act of rebellion
+against whoever wrote the original label, it stays exactly that: yours, private, and none of this
+project's business. See "Local-only, no network, ever" below for precisely what that promise
+covers.
 
 ## The data exists only after you supply it
 
