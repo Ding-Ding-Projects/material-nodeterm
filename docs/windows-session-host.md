@@ -133,7 +133,7 @@ long-lived connection (no positional-FIFO fragility, unlike this app's tmux cont
 **Not implemented — deliberately out of scope for this pass:**
 
 - `paneOwner` / bracketed-paste detection (`bracket_paste_flag`) / `#{cursor_x} #{cursor_y}
-  #{cursor_flag}` as a *separate* query. These are real tmux features this app also uses
+#{cursor_flag}` as a _separate_ query. These are real tmux features this app also uses
   (`pty-manager.ts`'s `paneOwner`, `bracketPasteRequested`, `paneCursor`), but none of them are in
   the task's minimum verb list, and cursor position is already carried for free inside `capture`'s
   output (`SerializeAddon` repositions the cursor as part of its own serialization — see below), so
@@ -180,7 +180,7 @@ new source:
   renderer. Racing creates wait behind that result instead of joining the provisional index entry;
   a detached relay receives a non-zero sink exit because its legacy API cannot return a promise.
 - **The renderer needed zero changes.** `seedPaint()` (`src/renderer/terminal/terminal-config.ts`)
-  already treats *any* non-empty `screen` on a `warm-attach` replay as paintable
+  already treats _any_ non-empty `screen` on a `warm-attach` replay as paintable
   (`create-screen`), regardless of whether it arrived via a co-attach join or a plain reattach —
   that generality already existed, unused by anything but `join()`, before this task. Verified by
   reading `seedPaint`'s body rather than assumed.
@@ -210,8 +210,8 @@ mode state:
   ANSI escape sequences.
 - **The one known gap:** `SerializeAddon` does not emit `CSI ?1006h` (SGR extended mouse
   coordinates) even when mouse tracking is active — there is no separate field on the public
-  `IModes` API for it to read (`mouseTrackingMode` only says which tracking *protocol* is on:
-  none/x10/vt200/drag/any, not the coordinate *encoding*). Filled in explicitly by
+  `IModes` API for it to read (`mouseTrackingMode` only says which tracking _protocol_ is on:
+  none/x10/vt200/drag/any, not the coordinate _encoding_). Filled in explicitly by
   `TerminalEmulator.serialize()` in `src/session-host/terminal-emulator.ts`: whenever
   `mouseTrackingMode !== 'none'`, `\x1b[?1006h` is appended by hand.
 
@@ -227,7 +227,7 @@ those promises in arrival order, and every warm attach, capture, resize and fina
 same tail before it reads or disposes the emulator. Do not replace that with a fire-and-forget
 `void term.write(data)`: a relay/phone can then receive a warm snapshot missing output the host has
 already observed, and an attach racing a pending write can get the same chunk once live and once in
-its seed. The new socket joins the subscriber set only *after* the barrier and snapshot, which is
+its seed. The new socket joins the subscriber set only _after_ the barrier and snapshot, which is
 the other half of avoiding that duplicate.
 
 That promise tail is also a memory boundary. Bytes accepted but not yet applied to xterm are
@@ -316,6 +316,21 @@ This is deliberately fail-closed. A non-persistent fallback carrying the same no
 look healthy while losing the one property this backend promises, and could run a local command in
 the wrong shell or directory.
 
+The `hello` hand-off has an equally strict ownership boundary. The handshake installs named
+`connect`/`data`/`error`/`close` listeners, accepts only the response carrying its captured hello
+request id, removes only those listeners, and then installs the production frame listener before
+resolving the connection promise. Never restore broad `removeAllListeners('data')` cleanup here:
+the original order installed the production listener and immediately deleted it, so the first
+`attach` response and every later frame disappeared while the socket still looked connected.
+
+An initial `attach` registers its local subscriber before sending because startup output may race
+the response. If the request rejects, it rolls back only that subscriber and its own remembered
+attach options; a concurrent co-attach's state is left intact. Capture and kill preserve the same
+failure distinction across reconnects: an empty capture and an idempotently absent kill are both
+confirmed `{ok:true}` host responses, while a transport/request rejection remains unknown and is
+propagated. That propagation is what lets the periodic snapshot keep its dirty bit for a retry and
+what prevents a delete from claiming a persistent process is gone when the host never confirmed it.
+
 ## Lifetime
 
 Mirrors tmux's server lifetime rule as closely as a different OS allows:
@@ -346,7 +361,7 @@ Mirrors tmux's server lifetime rule as closely as a different OS allows:
   quietly. A state file that resolves to nothing alive within that window is treated as stale
   (a previous host crashed mid-startup) and reclaimed. The same "connect first, only spawn if that
   fails" shape is what `SessionHostClient.doConnect()` does from the app side, so a host from a
-  *previous* app run is found and reused rather than duplicated.
+  _previous_ app run is found and reused rather than duplicated.
   The winning state publication uses a PID+counter temp path and a bounded retrying atomic rename
   (`session-host/state-file.ts`, kept local so the standalone bundle does not import `src/core`). A
   fixed `<state>.tmp` lets a stale-lock reclaim collide with another publisher, and a bare rename

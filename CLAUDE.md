@@ -4,7 +4,7 @@ This is the deep-reference for working in this repo: the invariants, why each ex
 measurements behind them. It is loaded automatically by Claude Code.
 
 **Contributors: start with `CONTRIBUTING.md`** — the short version (setup, boundaries, house rules,
-testing habits). This file is what you reach for when you need to know *why* a rule is the way it
+testing habits). This file is what you reach for when you need to know _why_ a rule is the way it
 is, or you are changing a subsystem it describes. A change that other developers must know about
 belongs in BOTH (see Conventions).
 
@@ -40,7 +40,9 @@ upgrade that silently drops the patch fails loudly. **If that test is red, your 
 unpatched, not your code** — run `npm run rebuild`. It deliberately does not measure descriptors
 (that is environment-dependent); it checks the source the native module is built from. Upstream:
 microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring and that test.
+
 ```
+
 ```
 
 `npm test` runs the vitest suite (unit + integration; the remote e2e suites skip when the
@@ -112,7 +114,7 @@ The codebase is split by Electron process boundary — keep code on the correct 
 - **`src/preload/`** — the only bridge. `index.ts` uses `contextBridge` to expose a
   narrow API on `window.nodeTerminal` (typed in `index.d.ts`). `contextIsolation` is on,
   `nodeIntegration` off.
-- **`src/renderer/`** — React UI. Talks to main *only* through `window.nodeTerminal`.
+- **`src/renderer/`** — React UI. Talks to main _only_ through `window.nodeTerminal`.
 - **`src/shared/`** — types and IPC channel names imported by all three sides. `ipc.ts`
   is the single source of truth for channel strings; never hardcode a channel elsewhere.
 
@@ -238,8 +240,8 @@ canonical read succeeds.
 ## Projects (tabs)
 
 Each project is one canvas/page; terminals and notes belong to a project. The `projects`
-zustand store (`renderer/state/projects.ts`) holds project metadata + the *serialized* nodes
-of all projects. **React Flow remains the single live source of truth for the *active*
+zustand store (`renderer/state/projects.ts`) holds project metadata + the _serialized_ nodes
+of all projects. **React Flow remains the single live source of truth for the _active_
 project's nodes only.** The contract:
 
 - The active-project effect in `Canvas.tsx` (keyed on `activeProjectId`) loads that project's
@@ -332,7 +334,7 @@ The host also keeps an exited generation in its session map until that output ta
 and disposal finish. Protocol events carry only the session name, so reusing it earlier lets a
 delayed old-generation exit arrive after the same socket has attached to its replacement. The
 retirement wait and replacement claim are serialized per name: two attach requests waking from one
-`ending` promise must not both create. Grace-exit cancellation happens inside that claim *after*
+`ending` promise must not both create. Grace-exit cancellation happens inside that claim _after_
 the wait, because retirement can schedule a fresh empty-host timer before the waiter resumes.
 Startup is not successful merely because the socket bound: token and atomic state publication must
 both complete. A publication exception is caught inside the listen callback, all pre-publication
@@ -362,20 +364,21 @@ the node available for retry.
 (`tmux new-session -A -D -s nt-<nodeId>`) on a dedicated socket (`-L node-terminal`) with
 a generated config (`-f <userData>/tmux.conf`, so the user's `~/.tmux.conf` never
 interferes; status bar off, **mouse on**, 50k history, `set-clipboard on` + `terminal-features
-",*:clipboard"`, and the copy-mode mouse bindings). Because the tmux *server* outlives the app,
+",*:clipboard"`, and the copy-mode mouse bindings). Because the tmux _server_ outlives the app,
 sessions survive when no client is attached. `src/shared/ssh.ts`'s `remoteTmuxConf` is the same
 config for an SSH project's remote tmux.
 
 **tmux owns the mouse — scrolling, selection, and the alternate screen are all its job.** This is
 the native behavior, and it is deliberate:
+
 - **The wheel scrolls tmux's own history** (`history-limit`), not the emulator's buffer.
 - **The pane is on the alternate screen** (`\e[?1049h`) — capabilities are NOT blanked — which is
-  what keeps a full-screen TUI's input box *put* instead of scrolling away with the text.
+  what keeps a full-screen TUI's input box _put_ instead of scrolling away with the text.
 - **Selection is tmux copy-mode.** A drag copies; apps that request mouse tracking themselves
   (vim, htop) still get their own mouse events — tmux forwards those regardless.
 
 **Do not take scrolling away from tmux again.** A previous design did exactly that (`mouse off` +
-`terminal-overrides ',*:smcup@:rmcup@:indn@'` to keep tmux on the *normal* screen, so its output
+`terminal-overrides ',*:smcup@:rmcup@:indn@'` to keep tmux on the _normal_ screen, so its output
 flowed into xterm's scrollback, which was then hydrated from `tmux capture-pane` on reattach). It
 failed structurally: **tmux is a screen PAINTER, not a stream.** Every redraw (attach, resize,
 refresh) erases and repaints, so blank and duplicated rows leaked into the emulator's scrollback —
@@ -386,11 +389,12 @@ natively. The hydration that design needed is gone (see the reattach seeding bel
 ",*:clipboard"`: on copy, tmux emits OSC 52 to the attached client, and the renderer's OSC 52
 handler (`TerminalNode.tsx`, `parseOsc52`) writes the system clipboard. Two traps, both measured on
 tmux 3.4:
+
 - **The `terminal-overrides ',xterm*:Ms=…'` entry does NOT work on tmux 3.2+** — with it, a copy
   emitted **zero** OSC 52 to the client. `terminal-features` is what actually enables the sequence.
   Do not "fix" the `Ms=` override back; it is why copying from SSH sessions never worked.
 - **No `pbcopy` pipe.** The copy-mode bindings are bare `copy-pipe-and-cancel` (no command): piping
-  to `pbcopy` was macOS-only, and over SSH it would have copied on the *remote* host anyway. OSC 52
+  to `pbcopy` was macOS-only, and over SSH it would have copied on the _remote_ host anyway. OSC 52
   is cross-platform and works over SSH.
 
 **A tmux client is not necessarily a watcher.** `SessionInfo.clients` is a COUNT
@@ -407,6 +411,7 @@ client belongs to. **Any future reader of `list-clients` / `session_attached` ow
 subtraction.**
 
 Lifecycle, by intent:
+
 - **Offscreen release (in place, 2026-08-11)** → a mounted node fully offscreen past
   `settings.offscreenTerminalMinutes` detaches its PTY client and disposes its xterm without
   unmounting (plate shown; tmux keeps running; reattach-redraw on approach, measured <500 ms).
@@ -499,7 +504,7 @@ Lifecycle, by intent:
   still correct. An offline node reports itself to `SshReconnector`, so the canvas heals itself;
   `retryNow` (banner Reconnect / node Reconnect) skips the backoff and clears the refuse window.
 - **"Restart agent (resume)"** → deliberately NOT a session lifecycle event: `terminal/
-  agent-restart.ts` restarts the agent CLI *inside* the pane and leaves the PTY, the tmux session
+agent-restart.ts` restarts the agent CLI _inside_ the pane and leaves the PTY, the tmux session
   and its scrollback untouched. It exists for **new-model pickup** — a freshly released model only
   shows up in a CLI's model list on a fresh launch, and doing that by hand means closing and
   re-resuming every agent node on the canvas. Choreography: write the CLI's own exit line (`/exit`
@@ -563,6 +568,7 @@ cases `fresh=false` means a warm reattach and `fresh=true` means a cold start (f
 post-reboot). On a
 cold start the renderer (`TerminalNode.tsx`) reconstructs state instead of relying on the dead
 session (you can't keep a live OS process across a reboot):
+
 - **Scrollback replay** — `main/scrollback-store.ts` keeps a byte-capped (`256 KB`) snapshot of
   each tmux session's recent output under `<userData>/terminal-scrollback/`, refreshed on a
   timer (`SCROLLBACK_SNAPSHOT_MS`) + on detach/quit (`tmux capture-pane -e`). On a cold start the
@@ -572,13 +578,14 @@ session (you can't keep a live OS process across a reboot):
 - **Agent resume** — on a cold start of a node whose `agentId` is in `RESUMABLE_AGENTS`, the
   renderer re-launches the agent CLI: `resumeCommand(agentId, sessionId)` (from the session id
   persisted in `agentStatus` localStorage — `claude --resume`, `codex resume`, `gemini
-  --resume`) when known, else the bare `launchCmd`. The one-shot `data.initialCommand` still wins
+--resume`) when known, else the bare `launchCmd`. The one-shot `data.initialCommand` still wins
   on the very first open, so the agent is never double-launched.
 
 ### Seeding a fresh xterm (`attachReplay` / `seedPaint` in `terminal/terminal-config.ts`)
 
 A newly mounted xterm is empty. Since tmux paints its own client, there is usually **nothing to
 seed** — the cases are:
+
 - **`none`** — the terminal was **parked** (its buffer is still live and correct), or it is a
   brand-new node with an `initialCommand`. Seeding either would duplicate content.
 - **`cold-snapshot`** (`fresh` — reboot/first open) — the tmux session is genuinely gone, so replay
@@ -601,7 +608,7 @@ seed** — the cases are:
   "can't scroll the kanban card-modal terminal until you press a key" bug.
 
 xterm's own `scrollback` (`xtermScrollback(settings.tmuxScrollback)`, floored at 1000, capped at
-`XTERM_SCROLLBACK_MAX` = 10000) is kept for the sessions tmux does *not* back (a plain shell when
+`XTERM_SCROLLBACK_MAX` = 10000) is kept for the sessions tmux does _not_ back (a plain shell when
 tmux is unavailable) and for the cold-snapshot replay — it is not what the user scrolls in a tmux
 session.
 
@@ -610,7 +617,7 @@ session.
 `src/renderer/nodes/TerminalNode.tsx` is the trickiest file:
 
 - The xterm instance + PTY session are created once in a `useEffect(…, [data.respawnNonce,
-  offscreenEpoch])` and torn down on unmount. The component persists across re-renders because
+offscreenEpoch])` and torn down on unmount. The component persists across re-renders because
   React Flow keys nodes by `id` — never change a node's id, or you'll respawn its terminal.
   **Third in-place state — "released" (2026-08-11, offscreen dispose):** a node fully offscreen
   in the canvas viewport for `settings.offscreenTerminalMinutes` (default 10, `0` = never;
@@ -633,7 +640,7 @@ session.
   until you dwell `settings.panHoverDelay` (so quick drag = move node, scroll = pan). After
   the dwell the guard is removed and xterm takes input. The header stays draggable.
 - A `ResizeObserver` drives `FitAddon.fit()` + `transport.resize`. Canvas zoom is a CSS
-  transform, so it does *not* change `clientWidth` — cols/rows stay stable across zoom.
+  transform, so it does _not_ change `clientWidth` — cols/rows stay stable across zoom.
   `scale-fix.ts` patches xterm's mouse coords so text selection stays aligned when zoomed.
 
 ## Node kinds (all rendered by React Flow custom nodes)
@@ -645,11 +652,11 @@ session.
   render of the captured output. Tag chips via `NodeTags`.
   **Selection + copy is tmux's** (its mouse is on — see the tmux section): drag to select, wheel to
   scroll tmux's history. A drag copies via copy-mode, and tmux emits **OSC 52** to the client, whose
-  handler writes the **system clipboard** — the one copy path on every platform *and* over SSH (no
+  handler writes the **system clipboard** — the one copy path on every platform _and_ over SSH (no
   `pbcopy`). OSC 52 writes an app emits itself (vim `"+y`, gh, yazi) reach the clipboard through the
   same handler (write-only — a read query is refused). The emulator's own copy chords stay for a
-  selection xterm *does* own (`copyKeyAction`/`isCopyShortcut`): **Cmd+C** (mac), **Ctrl+Shift+C**
-  and **Ctrl+Insert** (Linux/Windows) — matched on `e.key` *or* the physical `KeyC`, so non-Latin
+  selection xterm _does_ own (`copyKeyAction`/`isCopyShortcut`): **Cmd+C** (mac), **Ctrl+Shift+C**
+  and **Ctrl+Insert** (Linux/Windows) — matched on `e.key` _or_ the physical `KeyC`, so non-Latin
   layouts still copy. A copy chord is **always swallowed**, selection or not: letting Ctrl+Shift+C
   fall through would reach the pty as `\x03` (SIGINT). Ctrl+Insert exists because Chromium reserves
   Ctrl+Shift+C for the inspector and a page cannot `preventDefault()` it — which is where Server
@@ -746,7 +753,7 @@ session.
   node is migrated by `nodeStatesToFlow` into a **sticky tombstone** in place, carrying a
   `claude --resume <chatSessionId>` hint so the conversation continues in any terminal (a chat was an
   ordinary resumable Claude session). `CHAT_CAPABLE` / `canChat` survive but now gate **only** the
-  ⌘M **ChatPanel** transcript view on a Claude *terminal* node (see the terminal bullet's Cmd/Ctrl+M),
+  ⌘M **ChatPanel** transcript view on a Claude _terminal_ node (see the terminal bullet's Cmd/Ctrl+M),
   not any SDK chat node.
 
 Monaco is wired in `renderer/editor/monaco-setup.ts` (language workers bundled via Vite
@@ -778,7 +785,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `config.ts`, 2026-08-09): the per-node **context meter** is `USAGE_CAPABLE = claude/codex/gemini`;
   the **permission mode** is `PERMISSION_MODE_CAPABLE = claude/grok/gemini/codex`; the session-name
   sync is **split in two** — `TITLE_READ_CAPABLE = claude/grok/gemini` (read) ⊇ `RENAME_CAPABLE =
-  claude/grok` (write), because gemini names its own sessions but has no rename command;
+claude/grok` (write), because gemini names its own sessions but has no rename command;
   **Context Link** spans four builtins
   (`CONTEXT_LINK_CAPABLE = claude/codex/gemini/opencode`, NOT grok). UI gates
   on these helpers — no hardcoded `=== 'claude'`. **Custom agents** (user-defined in Settings, `customAgents`) are in
@@ -792,7 +799,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   logged-in grok session — the context meter, context links and subagent cards are **not implemented**
   for grok). Its hook config is a **directory** (`$GROK_HOME/hooks/*.json`, all merged), so nodeterm
   **owns one file outright** (`nodeterm-status.json`) instead of merging into a shared settings file —
-  which is also why a malformed copy of it is *healed* rather than preserved, locally and on an SSH
+  which is also why a malformed copy of it is _healed_ rather than preserved, locally and on an SSH
   host (`RemoteHooks.installGrokRemote`, under the host's own `$GROK_HOME`). Its dialect is
   **camelCase keys with snake_case event VALUES** (`{"hookEventName":"pre_tool_use"}`) — the SDK path
   flips the keys to snake_case, so `normalizeGrok` canonicalizes the event name and reads every field
@@ -807,7 +814,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   cross-fire (`normalizeClaude` finds neither grok's camelCase keys nor, in the SDK dialect, its
   lowercase event values), pinned by tests; canonicalizing claude's event-name compare would make it
   harmful. The `auto` permission-mode **version gate is claude's alone** (it is fed by a `claude
-  --version` probe), and grok's mode flag must go **BEFORE** its `--` separator, which is
+--version` probe), and grok's mode flag must go **BEFORE** its `--` separator, which is
   end-of-options. Full picture, dialect traps and the device checklist: **`docs/grok-agent.md`**.
 - **Gemini + codex parity** (2026-08-09) — brought both up to grok's level in the lists above. Unlike
   grok, **both CLIs are installed** and gemini **ships its own hook reference**
@@ -832,13 +839,13 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
     answer instead of a confident wrong denominator. Codex: `last_token_usage.input_tokens` and its own
     stated `model_context_window`. Two traps: `total_token_usage` is **CUMULATIVE** (would render a
     13%-full session at 79%), and `cached` is **INSIDE** `input` for both — while claude's input
-    *excludes* cache reads, which is why claude sums them. **The formulas must not be unified.**
+    _excludes_ cache reads, which is why claude sums them. **The formulas must not be unified.**
     The transcript jail is widened **per root** (`~/.gemini/tmp`, `<codexHome>/sessions`), never to
     `$HOME` — that predicate exists so a forged hook POST cannot aim a read at `~/.ssh/id_rsa`.
   - **`hasUsage` gated THREE features, not one.** Joining `USAGE_CAPABLE` also switched on
     `context.ensure` and the find bar's transcript index, both of which go through claude's
-    `resolveTranscript` — whose **cwd fallback** then handed a codex node *the newest claude transcript
-    for that cwd*: a stranger's session as its meter and its search hits. Now gated by the pure
+    `resolveTranscript` — whose **cwd fallback** then handed a codex node _the newest claude transcript
+    for that cwd_: a stranger's session as its meter and its search hits. Now gated by the pure
     `readsClaudeTranscript` (`renderer/lib/transcriptGates.ts`), which reuses `CHAT_CAPABLE` rather than
     adding a fourth list. Non-claude agents lose only the mount-time head start.
   - **`TITLE_READ_CAPABLE` was created here**: gemini names its own sessions through its `update_topic`
@@ -847,16 +854,16 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
     (injected as `AgentSessionNameDeps.geminiPathFor`, held in a `let` in `src/main/index.ts` to avoid a
     TDZ throw that would kill a node's whole poll chain).
   - **In-place restart** works for gemini: `EXIT_SEQUENCES.gemini = '/quit'` — and it must stay **bare**,
-    because `/quit --delete` exits *and permanently deletes* the session history, i.e. exactly what the
+    because `/quit --delete` exits _and permanently deletes_ the session history, i.e. exactly what the
     restart exists to resume (pinned by its own test).
-  Full picture, measurements, gaps and a device checklist: **`docs/gemini-agent.md`**.
+    Full picture, measurements, gaps and a device checklist: **`docs/gemini-agent.md`**.
 - **Permission mode** (agents in `PERMISSION_MODE_CAPABLE` — claude, grok, **gemini**, **codex**) —
   the mode a session **starts** in (`claude --permission-mode <mode>`; Shift+Tab still cycles it at
   runtime). Membership no longer implies claude's flag spelling: **the per-agent translation lives in
   `src/shared/agents/approval-mode.ts`** (`approvalFlags` / `modeSupported`), which is also where
   `withPermissionMode` now lives — it moved one layer up out of `config.ts` to break a cycle.
   gemini = `--approval-mode default|auto_edit|yolo|plan`, codex = `--ask-for-approval
-  untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the CLI **cannot
+untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the CLI **cannot
   express emits NO flag**, never a substituted nearest match (codex has no `plan` and no
   edit-specific mode; **gemini has no `auto`** — nothing in its vocabulary means "approve most things
   but not edits", and since `auto` is the DEFAULT mode, mapping it to `auto_edit` would have switched
@@ -868,7 +875,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   UI copy is DERIVED from the mapping (`permissionModeAgentIds` / `permissionModeAgentsLabel` /
   `unsupportedModesNote` / `bypassSandboxCaveat`) so a sentence cannot drift from what the table
   does — so the note now reads "Auto has no Gemini equivalent…" beside codex's two gaps, and the
-  residual wart is only that `auto` and `manual` land on the same gemini policy (the *prompting* one).
+  residual wart is only that `auto` and `manual` land on the same gemini policy (the _prompting_ one).
   `--sandbox` is a separate axis and deliberately untouched (`--ask-for-approval never`
   still sandboxes).
   `settings.claudePermissionMode` (global, default **`auto`** — a behavior change for existing
@@ -903,7 +910,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `auto`**, and only to `manual` = **no flag** = the bare pre-feature command. Everything **fails
   open**: unknown/unreadable version, a probe that failed or hasn't answered yet ⇒ bare command,
   never a blocked launch; the other four modes are never touched by the gate, and the user's
-  *setting* stays `auto` (only the emitted command line changes). **SSH projects** are gated on the
+  _setting_ stays `auto` (only the emitted command line changes). **SSH projects** are gated on the
   **remote** host's CLI, never the local one: `SshProjectManager.connect` probes `claude --version`
   on the host (through a login shell — an ssh exec channel's rc file usually bails out early — with
   `$HOME/.local/bin` + `$HOME/.claude/local` prepended to PATH: the official installer targets
@@ -936,7 +943,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   hooks, **not** output parsing. `src/shared/agents/normalize.ts` has per-agent normalizers
   (`normalizeClaude`/`normalizeCodex`/`normalizeGemini`/`normalizeOpencode`/`normalizeGrok`) that map each agent's native hook
   events to a `NormalizedAgentEvent` over the shared `AgentState` (`working | waiting | blocked
-  | done`) plus subagent/recurring/session kinds. Canvas's listener consumes
+| done`) plus subagent/recurring/session kinds. Canvas's listener consumes
   `NormalizedAgentEvent` from `agent:status`, drives the `agentStatus` store, fires throttled
   (5s/node) background notifications, and records the session id. Header shows a pulsing
   **RUNNING** (working) / **NEEDS YOU** (waiting/blocked) badge.
@@ -964,7 +971,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   (`codex-trust.ts` — the hash gates whether codex runs the hook); **grok → our OWN file
   `$GROK_HOME/hooks/nodeterm-status.json`** (its hook config is a directory whose files are all
   merged, so there is nothing of the user's inside ours — which is also why a malformed copy is
-  *healed*, not preserved, on both the local and the SSH path). The per-event **`matcher`** the grok
+  _healed_, not preserved, on both the local and the SSH path). The per-event **`matcher`** the grok
   installer needs is why events are typed `ManagedHookEvent` (`string | {event, matcher}`): grok's
   tool matcher is a REGEX and must be `.*` — a bare `*` is invalid and silently stops tool events
   firing. Plain-string events keep their byte-identical output for every other agent.
@@ -977,7 +984,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   syntax in a cleanup command.
 - **Per-node hook identity** (`src/core/agents/node-auth-*.ts`, `node-token-*.ts`,
   `node-identity-policy.ts` — full write-up in **`docs/node-identity.md`**) — the shared bearer proves
-  "a session on this machine", never *which* session, so every node also gets a capability derived
+  "a session on this machine", never _which_ session, so every node also gets a capability derived
   from one restart-stable secret (`kid.mac`, domain-separated HMAC over the node id), handed to the
   client as a 0600 file and verified three ways: `verified` / `legacy` / `forged`. `legacy` is "we
   cannot judge this", not a failure. Two invariants come out of this series and both cost real
@@ -993,7 +1000,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   - **Both raw listeners change together** — `src/main/index.ts` and `src/server/agent-status.ts`.
     A new field on the hook event (the `verified` flag was one) that reaches only the desktop leaves
     the Server Edition silently without the feature; the boundary tests cannot tell you a field is
-    *missing*. `hook-verified-parity.test.ts` asserts it at source level because this repo has
+    _missing_. `hook-verified-parity.test.ts` asserts it at source level because this repo has
     shipped a one-shell hook-server change three times.
 
   Enforcement is dated (`NODE_IDENTITY_STRICT_AFTER`, 2026-10-13, read through `isStrictInstant` so a
@@ -1002,6 +1009,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   refuses TODAY, not on the cutoff** — which is why every token sweep must also call
   `hookServer.forgetProvenNode`. `/hook/*` never 403s a missing token: the phone, the cross-instance
   failover and every pre-token session legitimately have none.
+
 - **Fullscreen TUI (Claude)** — through the SAME `settings.json` seam the hook installer uses,
   nodeterm ensures Claude's `"tui": "fullscreen"` so a session takes the alternate screen + mouse
   and behaves natively in tmux (else a drag falls into copy-mode). Two guardrails: **write-if-absent**
@@ -1032,7 +1040,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   Grok's read leg is `core/grok-session.ts` over `summary.json` in the session dir a hook told us
   about; gemini's is `pickGeminiTitle` (`core/gemini-session.ts`) over the transcript path its context
   tail already tracks — including the `$set` history a **resume** replays, which is exactly the case the
-  read leg exists for. Routing is not cosmetic — claude's resolver *scans* `~/.claude/projects` on a
+  read leg exists for. Routing is not cosmetic — claude's resolver _scans_ `~/.claude/projects` on a
   cache miss, so an unrouted grok/gemini node paid that scan every 60 s for a guaranteed null.
   **The sweep's gate lives in core, not in the shells:** `startSessionNameSweep` defaults `supports` to
   `supportsTitleRead` (`core/session-name-sweep.ts`) and neither shell passes it — the duplicated copies
@@ -1060,7 +1068,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   on palette open, cached ~3s); content matches show "found in output".
 - **⌘M transcript view (`ChatPanel`) — resolution is three-legged, and each leg fails differently.**
   `chat.readTranscript(sessionId, cwd, accountId, nodeId)` returns `ChatTranscriptResult
-  {messages, found}`, NOT a bare array: an empty thread and an unresolvable transcript are
+{messages, found}`, NOT a bare array: an empty thread and an unresolvable transcript are
   different facts, and rendering both as "No conversation yet." is what made every failure below
   look like an empty session. (1) **Remote (SSH) nodes** — `remoteTranscriptBySession` is fed
   ONLY by hook POSTs, and a tmux session outlives the app, so after a restart an idle remote node
@@ -1149,7 +1157,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   `canvas-control-shim.test.ts` runs it for real (/bin/sh against a real hook server, port AND
   unix-socket transports) — keep it that way.
   **Flag syntax**: `--flag value`, `--flag=value`, or a valueless flag anywhere on the line. The
-  shim used to consume the next token after any `--flag` *unconditionally*, so `--read --node b1`
+  shim used to consume the next token after any `--flag` _unconditionally_, so `--read --node b1`
   became `arg.read=--node` with `b1` silently dropped and the server answering about the wrong
   flag; it now peeks. The trade: a value that itself starts with `--` must use the `=` form
   (`--cmd=--version`), which was previously unexpressible in either direction. Two parsers are in
@@ -1162,7 +1170,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   objects — nodes or frames — into a new frame in their shared container (a mixed-container set, or
   an ancestor plus its descendant, is refused with that reason); `ungroup --group <id>` dissolves a
   frame, promoting its direct children into the frame's own parent (nodes kept); `move
-  --nodes <id,id> [--group <id>]` reparents nodes OR whole frame subtrees INTO a frame (or
+--nodes <id,id> [--group <id>]` reparents nodes OR whole frame subtrees INTO a frame (or
   `top`/`none`/omit → out to top level) via `reparentNode` — the ONE way to move a node between
   frames, which `group` won't do; a cycle (a frame into itself or its own descendant) is refused.
   `arrange`/`align` now run in ONE coordinate space: all top-level, OR all children of one frame
@@ -1172,8 +1180,8 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   wide". `move` also re-fits the source + destination frames. All pure + tested in
   `state/workspace.test.ts` + `workspace.layout.test.ts`.
   **Fan-in (`link`, 2026-07):** a spawned fan-out was previously write-only — nodes an agent
-  opened were joined to it by a **rope** (`project.ropes`, explicitly *"Display-only — never
-  context links"*), so an orchestrator could not read back what its own team produced and the
+  opened were joined to it by a **rope** (`project.ropes`, explicitly _"Display-only — never
+  context links"_), so an orchestrator could not read back what its own team produced and the
   skill told it to have the USER relay results. Now `open-claude`/`open-agent`/`spawn-team` also
   draw a real **context bridge** (`project.bridges`) to each agent session they open, and the
   `link --to <id,id> [--from <id>]` verb links nodes the agent did not open (or two other nodes).
@@ -1208,7 +1216,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   edges are **derived, never persisted** (a pending dependency is a state that ends when the launch
   fires — the durable relation is the context bridge `--after` also draws).
   **Review panel (`verify`, 2026-07):** `verify --node <id> [--lenses …] [--focus …] [--agent …]
-  [--synthesis off]` opens one reviewer per LENS, each armed behind the target (`--after`) and
+[--synthesis off]` opens one reviewer per LENS, each armed behind the target (`--after`) and
   bridged to it, wrapped in a `Verify: <title>` group, plus a judge armed behind the whole panel.
   It is **composition, not new machinery** — the two primitives above are the whole implementation.
   Prompt/lens logic is the pure, unit-tested `renderer/lib/verifyPanel.ts`; two wordings there are
@@ -1220,7 +1228,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   only accepts what it already knows would be useless for the review nobody anticipated. Reviewers
   inherit the TARGET's `accountId` (its transcript resolves inside that account dir), not the
   caller's. The judge is armed on ids that exist only in that tick, which is why `armAfter` takes
-  `extraLive` — without it the reviewers would look *deleted*, deletion counts as satisfied, and
+  `extraLive` — without it the reviewers would look _deleted_, deletion counts as satisfied, and
   the judge would fire before a single review existed.
 - **Context Link** — a node action gated by `CONTEXT_LINK_CAPABLE` (claude/codex/gemini/opencode;
   **grok**, custom agents + plain terminals excluded — grok's `updates.jsonl` parser is unbuilt): drawing an edge between two builtin-agent nodes lets each
@@ -1260,7 +1268,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   edge/push/map logic in `renderer/lib/noteLink.ts`.
 - **Managed Claude accounts** (Claude-only) — run several logged-in Claude identities side by
   side by giving each its own config dir. `settings.claudeAccounts` is a list of `ClaudeAccount
-  {id, label, email?, host?, pending?, createdAt}` (in `settings.json`; the account **list** is
+{id, label, email?, host?, pending?, createdAt}` (in `settings.json`; the account **list** is
   config, not credentials). Isolation is **config-dir**, not token storage: a local account's dir
   is `{userData}/claude-accounts/<id>` (`claudeConfigDirFor` / pure `localAccountConfigDir`),
   a **remote** account's is `~/.nodeterm/claude-accounts/<id>` on its `host` (keyed by
@@ -1270,7 +1278,7 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   credentials. On macOS this works because Claude Code **≥ 2.1** scopes its Keychain service per
   config dir (`Claude Code-credentials-<sha256(configDir)[:8]>`, `claudeKeychainService`); on
   < 2.1 one unscoped service is shared → accounts collide, so add-account **warns** (`claude
-  --version`, `isSupportedClaudeVersion`).
+--version`, `isSupportedClaudeVersion`).
   - **`data.accountId` (terminal nodes)** — resolved **once at node creation**
     (`resolveNewNodeAccount`: explicit submenu pick → `project.defaultAccountId` → system default
     `~/.claude`), then **immutable** and **persisted** (serializers). `undefined` = system default
@@ -1346,19 +1354,19 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
      `$HOME` + fake `curl`, the same discipline as the canvas-control shim.
   3. **A read that could not run is `error`, never `unavailable`** — a dead master says nothing
      about whether the account has a subscription, and 'unavailable' silently drops the row.
-  Shape: `remoteUsageTargets` (pure) elects ONE connected project per host (several projects share
-  a host's `$HOME`) and offers its system `~/.claude` plus every managed account pinned to that
-  host. The service (`usage:remote`) caches per target under the usual debounce, evicts targets
-  whose host disconnected, and coalesces concurrent reads. **On demand, never polled** — each row
-  is an ssh exec plus an HTTPS request on someone else's machine; the renderer asks on mount, on
-  popover open, on ⟳, and when the active project's connection comes up (an SSH project is opened
-  before its master is ready). Deps are injected exactly like
-  Context Link's (`src/main` supplies the ControlMaster; **Server Edition passes none** ⇒ `[]`, so
-  the UI needs no capability check). Own Settings switch (`claude-remote`), because hiding local
-  Claude usage must not silently take the hosts down with it. **Mobile: N/A** — the
-  slice pushed to a host still drops `usage` (a host reading its own numbers back off us is
-  pointless), and no keychain leg exists remotely (a headless macOS host would hang on the prompt,
-  so a mac host reports nothing).
+     Shape: `remoteUsageTargets` (pure) elects ONE connected project per host (several projects share
+     a host's `$HOME`) and offers its system `~/.claude` plus every managed account pinned to that
+     host. The service (`usage:remote`) caches per target under the usual debounce, evicts targets
+     whose host disconnected, and coalesces concurrent reads. **On demand, never polled** — each row
+     is an ssh exec plus an HTTPS request on someone else's machine; the renderer asks on mount, on
+     popover open, on ⟳, and when the active project's connection comes up (an SSH project is opened
+     before its master is ready). Deps are injected exactly like
+     Context Link's (`src/main` supplies the ControlMaster; **Server Edition passes none** ⇒ `[]`, so
+     the UI needs no capability check). Own Settings switch (`claude-remote`), because hiding local
+     Claude usage must not silently take the hosts down with it. **Mobile: N/A** — the
+     slice pushed to a host still drops `usage` (a host reading its own numbers back off us is
+     pointless), and no keychain leg exists remotely (a headless macOS host would hang on the prompt,
+     so a mac host reports nothing).
 
 ### Adding a new agent (or a new model) — what to watch out for
 
@@ -1374,9 +1382,9 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
    never do is fork behavior at a call site with `=== 'claude'`; ask through the helper.
 2. **Ask what ELSE the list gates before joining it.** `hasUsage` gated **three** features, not one.
    Joining `USAGE_CAPABLE` for the context meter also switched on `context.ensure` and the find bar's
-   transcript index, both of which resolve through *claude's* `resolveTranscript` — whose **cwd
+   transcript index, both of which resolve through _claude's_ `resolveTranscript` — whose **cwd
    fallback** then handed a codex node **the newest claude transcript for that cwd**: a stranger's
-   session as its meter (wrong numerator *and* denominator, flapping against the correct tail) and that
+   session as its meter (wrong numerator _and_ denominator, flapping against the correct tail) and that
    session's messages as its search hits. Preconditions were default-true, so it would have shipped.
    The fix was a new pure predicate (`readsClaudeTranscript`) reusing an existing list, not a fourth
    list meaning the same thing. **Grep every consumer of the helper before you add an id to its list.**
@@ -1395,7 +1403,7 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
 **Measuring the CLI**
 
 5. **Measure the CLI; do not assume claude's shape.** Three real bugs, all from assuming:
-   - grok's `--` is **end-of-options**, so a flag appended *after* the prompt separator is a
+   - grok's `--` is **end-of-options**, so a flag appended _after_ the prompt separator is a
      positional — silently swallowed into the prompt, or a clap usage error that kills the launch.
      Where the flag lands is decided at the **composed** layer (`createAgentNode`); a
      `withPermissionMode` unit test passes while the composed line is wrong.
@@ -1408,12 +1416,12 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
 6. **Prefer the agent's own stated number over one you infer.** Codex prints
    `model_context_window` right beside its usage — use it. When there is none, mirror the CLI's own
    resolver rather than building a per-model allowlist: gemini's `tokenLimit()` is a family rule with
-   a **1M catch-all default**, so an unreleased model gets the *right* answer where an allowlist would
+   a **1M catch-all default**, so an unreleased model gets the _right_ answer where an allowlist would
    be confidently wrong, silently. **And if you cannot establish a trustworthy denominator, ship no
    meter** — a percentage over a guessed window is a wrong number presented as a fact (this is exactly
    why grok has no meter).
 7. **A closed set beats a substring, for notification/event types.** Grok's
-   `type.includes('permission')` matched a notification grok fires before *every* tool call, so a
+   `type.includes('permission')` matched a notification grok fires before _every_ tool call, so a
    working node strobed NEEDS YOU: unread dot + chime + OS notification + phone inbox card, per tool
    call. Gemini is matched `=== 'ToolPermission'` and stays quiet on an unknown type. A badge stuck on
    a finished node has no later hook to clear it, so widening "to be safe" is the unsafe direction.
@@ -1421,7 +1429,7 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
    while emitting **no flag** — but its built-in default is `OnRequest` ("the model decides when to
    ask"), so two dropdown entries collapsed onto one behavior under a label that promised otherwise.
    Rule: a mode the CLI cannot express emits **no flag** (never a substituted nearest match), and a
-   mode it *can* express must actually emit it. Derive the UI copy from the mapping
+   mode it _can_ express must actually emit it. Derive the UI copy from the mapping
    (`unsupportedModesNote`, `permissionModeAgentIds`) so a sentence cannot drift from the table.
    **The nearest match is most dangerous on the DEFAULT mode:** gemini has no value for `auto`, and
    `auto` is `DEFAULT_PERMISSION_MODE`, so translating it to `auto_edit` ("auto-approve edit tools")
@@ -1430,14 +1438,14 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
    you accept any mapping.
 9. **A capability gate that is fed by a version probe belongs to the agent it probes.** Claude's
    `auto` gate is fed by `claude --version`; applying it to any other agent downgrades that agent's
-   sessions on a machine whose *claude* is old or absent. `activePermissionMode` gates only
+   sessions on a machine whose _claude_ is old or absent. `activePermissionMode` gates only
    `'claude'`, and every hint string names Claude for the same reason. An agent needing its own gate
    adds one beside claude's.
 
 **Not writing the same rule twice**
 
 10. **A duplicated rule drifts, and this branch was bitten three times.** The remote installer's hook
-    event lists (it subscribed gemini to *claude's* event names, so remote gemini reported nothing at
+    event lists (it subscribed gemini to _claude's_ event names, so remote gemini reported nothing at
     all), grok's raw-listener field decoding, and the two shells' session-name sweep gates (reverting
     both to `canRename` left the entire suite **green** while silently skipping every gemini node).
     The fix each time was **one definition in `src/core`** consumed by both shells — a default inside
@@ -1461,11 +1469,11 @@ principle. Per-agent write-ups: `docs/grok-agent.md`, `docs/gemini-agent.md`.
 
 14. **A guess must degrade to nothing, never to something wrong.** A title reader that cannot resolve
     returns `null` (the node keeps its own name); an unknown notification type is a no-op; a failed
-    probe means the bare command, never a blocked launch. Say in the code which facts are *composed*
+    probe means the bare command, never a blocked launch. Say in the code which facts are _composed_
     rather than captured (gemini's resumed-transcript shape is) and what the wrong-guess cost is.
 15. **Kill the "in place" actions carefully.** An exit sequence must be the CLI's documented primary
-    and **bare**: gemini's `/quit` also takes `--delete`, which exits *and permanently deletes the
-    session history* — the very conversation the restart exists to resume. It has its own test.
+    and **bare**: gemini's `/quit` also takes `--delete`, which exits _and permanently deletes the
+    session history_ — the very conversation the restart exists to resume. It has its own test.
     Refuse the restart while the node is `working` **or** `blocked`: an exit line typed into a
     permission prompt **answers** it.
 16. **Write the device checklist for what you could not run.** Every unverified claim becomes a
@@ -1502,12 +1510,12 @@ about which machine they describe. Reading + parsing is `core/session-memory.ts`
 - **`ok:false` is not `ok:true` with no rows** — the rule the whole feature exists to honour, and
   every layer preserves it. A sweep fails (no tmux, unreadable process table, **no socket answered**,
   a missing or out-of-order marker in the SSH reply, a rejected call) ⇒ `ok:false` and no rows; the
-  panel then says "Could not measure sessions on this machine", and the grand total and the "*n*
+  panel then says "Could not measure sessions on this machine", and the grand total and the "_n_
   sessions" count are gated on a `measured` flag so a failure can never render as `0 B / 0 sessions`.
   "We looked and there is nothing" is its own sentence. A socket with **no tmux server** is an
   ANSWER, not a failure (`isNoServerError`), and that classifier is **anchored to tmux's own connect
   message**: `promisify(execFile)` folds stderr into `err.message`, and a bare `no such file or
-  directory` also matches a tmux client missing a shared library (exit 127 on *every* socket) and a
+directory` also matches a tmux client missing a shared library (exit 127 on _every_ socket) and a
   dead ssh ControlMaster — laundering either into "no sessions here" prints an empty panel over 20
   live ones. **The SSH leg applies the SAME classifier to the same rule**: each socket is fenced in
   the reply with its tmux exit status and its stderr (`##SOCK <name>` … `##SOCKRC <n>`, `2>&1`), and
@@ -1608,8 +1616,8 @@ about which machine they describe. Reading + parsing is `core/session-memory.ts`
   still has to clear the sessions sidebar (z 12), which is the separate
   `.sysres-indicator:has(.sessmem-panel) { z-index: 13 }` — both `:has()` rules work only because
   the pill cluster is mounted OUTSIDE `<ReactFlow>`, whose wrapper's inline `z-index: 0` would trap
-  any value inside it. **Mobile**: **N/A for v1** — *nodeterm
-  mobile* attaches to tmux sessions over the transport protocol and has no per-session host-memory
+  any value inside it. **Mobile**: **N/A for v1** — _nodeterm
+  mobile_ attaches to tmux sessions over the transport protocol and has no per-session host-memory
   concept; adding one means extending that protocol (follow-up in the iOS repo).
 
 **Offscreen release makes the macOS reaper bug far more visible, and the two shipped days apart.**
@@ -1619,7 +1627,6 @@ watermark was permanently tripped, so those sessions were culled on the next swe
 detaching + an always-true pressure signal is why the symptom read as "my sessions keep
 disappearing" rather than as an occasional cull. The `vm_stat` reader is what makes the pool safe
 again; the grace window was never the thing that was wrong.
-
 
 ## Canvas interaction & panels (`Canvas.tsx` is the hub)
 
@@ -1753,19 +1760,19 @@ multiply-linked inode whose other name may be outside the staging tree.
 - **Worktrees** (bound to **group frames**) — a git worktree binds to a group node
   (`data.worktree: GroupWorktree {repoPath, branch, baseRef, path, createdByApp}`, persisted), and
   every node created inside that frame inherits the worktree path as its `cwd`
-  (`cwdForNewNodeIn`) — the frame *is* the binding, so an agent per branch is just a group per
+  (`cwdForNewNodeIn`) — the frame _is_ the binding, so an agent per branch is just a group per
   branch. Creation is **one step** — **"New worktree…"** from the pane menu / command palette /
   Source Control — with the repo resolved from the project cwd via `git.repoRoot()` and existing
   worktrees listed for adoption. (Both git IPCs existed before this feature and had **zero**
   renderer callers, which is why it was unusable: the dialog's repo field was always empty and had
   to be typed by hand. Don't re-strand them.)
   - **One store, one poller** — `renderer/state/worktrees.ts` is the **only** caller of the worktree
-    /status *read* IPCs (`git.repoRoot`, `git.worktreeList`, `git.status`); the group chip, the
+    /status _read_ IPCs (`git.repoRoot`, `git.worktreeList`, `git.status`); the group chip, the
     creation dialog and the Source Control panel all read that store. Three independent pollers would
     triple the `git` subprocess load and drift out of sync. It is **epoch-guarded** (a project switch
     bumps the epoch, so a stale in-flight refresh can never overwrite the newer project's
-    `repoRoot`/orphans — worktrees are *created* under `repoRoot` and orphans are offered for
-    *deletion*) and **fails open**. Exactly **two** direct `git.status` reads live outside it, both in
+    `repoRoot`/orphans — worktrees are _created_ under `repoRoot` and orphans are offered for
+    _deletion_) and **fails open**. Exactly **two** direct `git.status` reads live outside it, both in
     `Canvas.tsx` and both deliberate: the one-shot probes on the **Remove** confirm (the dirty-file
     count in the warning) and on **↪ Move into worktree** (staleness only arrives by poll, so the
     directory is re-checked immediately before an irreversible session kill). Anything recurring
@@ -1778,7 +1785,7 @@ multiply-linked inode whose other name may be outside the staging tree.
     `onOpenCommitDiff`, `onExplainCommit`, `onRunInTerminal`) must take the **scope's** cwd, never
     the project's.
   - **Reconciliation** (`shared/worktree-reconcile.ts`) — bindings are reconciled against `git
-    worktree list`: a worktree deleted outside the app makes its group **stale** (chip reads
+worktree list`: a worktree deleted outside the app makes its group **stale** (chip reads
     "· missing", Merge/Remove hide, ↪ hides, and nothing spawns into the dead path — Unbind is the
     only action, and it takes the dead cwd off the children with it); a worktree bound to no group
     is an **orphan**, recoverable from the creation dialog.
@@ -1800,7 +1807,7 @@ multiply-linked inode whose other name may be outside the staging tree.
     explicit opt-in that **defaults to off** (its branch is kept either way).
     `isDangerousWorktreeRemovalPath` refuses a path that is the repo, `$HOME`, `/`, or an ancestor
     of any of them, on **every** removal path. **Merge** always confirms — it merges into the base's
-    *working tree* (`decideMergeStrategy`: merge in the base's checkout when it is clean, else a
+    _working tree_ (`decideMergeStrategy`: merge in the base's checkout when it is clean, else a
     `fetch . branch:base` when the base is checked out nowhere, else blocked) — and its push to
     `origin/<base>` is disclosed in that dialog and **opt-in, default off**: a push to origin cannot
     be politely undone.
@@ -1808,23 +1815,23 @@ multiply-linked inode whose other name may be outside the staging tree.
     **Delete** all route through `releaseWorktreeBinding`, the one place that knows what a dropped
     binding owes: `displacedByWorktree`'s descendants (terminals whose cwd sits inside the
     worktree) get that cwd taken off them, and git's registration gets a `pruneOnly` prune. Ungroup
-    and group-delete *keep* the children, so skipping this left a **dead cwd persisted in
+    and group-delete _keep_ the children, so skipping this left a **dead cwd persisted in
     `project.json`** — invisible until a reboot cold-starts the terminal into a directory that is not
     there — and left a stale registration that makes a later `worktree add` at the same path fail.
   - **SSH projects: not supported in v1** — every affordance is shown **disabled with that reason**
     (a silently-missing row teaches nothing). The gate asks whether the node is a **remote session**
     (`data.ssh` / `data.sshRemoteTmux`) or the project is an SSH project — **not** `data.remote`,
-    which only *relay* nodes carry: guarding the wrong field let a live remote tmux session be
+    which only _relay_ nodes carry: guarding the wrong field let a live remote tmux session be
     killed into a local path that does not exist on the host (`isRemoteSessionNode` asks about all
     three). The ops themselves **refuse** a remote repo (`git-service.isRemoteRepo`, via
     `resolveGitRemote`) rather than guess: the `git` executor routes over the project's ControlMaster
     while `pathExists` is a **local** `fs.existsSync`, so answering would stat the wrong machine and
-    report *everything is gone* — a refusal is a plain failed op and, crucially, never `worktreeGone`,
+    report _everything is gone_ — a refusal is a plain failed op and, crucially, never `worktreeGone`,
     so nothing is destroyed on a bad guess. Real support needs the worktree path to derive from the
     connection's cached `remoteHome` and `pathExists` to stat the **remote** fs (a `test -e` over the
     ControlMaster).
   - **Mobile companion: not applicable in v1** (the three-surfaces call, made deliberately). A
-    worktree binds to a **group frame** on the canvas, and *nodeterm mobile* (separate repo, `nodeterm-ios`)
+    worktree binds to a **group frame** on the canvas, and _nodeterm mobile_ (separate repo, `nodeterm-ios`)
     has no canvas — it attaches to tmux sessions over the `TerminalTransport` protocol, which carries
     no group/binding concept at all. So there is nothing to degrade gracefully: a worktree's terminals
     are ordinary tmux sessions and mobile already reaches them, it simply cannot see that they belong
@@ -2150,8 +2157,8 @@ running app must pick up without a restart.
 
 **Surfaces:** Server Edition only, and that is a decision rather than a gap — the desktop app has no
 password gate, and the Pages site's toy locks (`site/app/shared/locks-state.js`) have no lockout at
-all (a wrong password returns `false`, unlimited retries), so there is no wait to skip. *If a
-lockout is ever added to either, it owes the ladder.* Guarded by an `unlock-ladder` row in
+all (a wrong password returns `false`, unlimited retries), so there is no wait to skip. _If a
+lockout is ever added to either, it owes the ladder._ Guarded by an `unlock-ladder` row in
 `scripts/check-app-contract.mjs` whose needles all carry a delimiter — a bare `clearLockoutByLadder`
 matches inside `clearLockoutByLadderRENAMED` and `LADDER_BUDGET` matches inside
 `LADDER_BUDGET_WINDOW_MS`, and both stayed green through a deliberate rename before that was fixed.
@@ -2619,9 +2626,8 @@ the overlap tests exercise the resulting race.
   costs an hour to diagnose, a habit that catches a class of bug — **add it to `CONTRIBUTING.md`
   too, not only here.** An invariant that lives only in this file (or worse, only in a commit
   message) is one refactor away from being violated by a contributor who never opened it. Keep the
-  split by audience, not by topic: the *why it must be this way* stays here, the *what you need to
-  know before your first PR* goes there.
-
+  split by audience, not by topic: the _why it must be this way_ stays here, the _what you need to
+  know before your first PR_ goes there.
 
 - Code comments, UI strings, and identifiers are all in **English**. Match this when editing.
 - Path aliases: `@shared/*`, `@renderer/*` (see the tsconfig files / vite config).
@@ -2635,7 +2641,7 @@ the overlap tests exercise the resulting race.
   1. **Desktop** (Electron) — the primary app (`src/main` + `src/renderer` via the preload).
   2. **Server Edition** (Linux, browser) — `src/server` + the `src/renderer/bridge` shim (see
      the `src/server/` bullet above and docs/SERVER.md).
-  3. **Mobile companion** — *nodeterm mobile*, a **separate PRIVATE repo** (`nodeterm-ios`)
+  3. **Mobile companion** — _nodeterm mobile_, a **separate PRIVATE repo** (`nodeterm-ios`)
      — outside contributors cannot see or PR it, so a mobile implication is raised in the
      desktop PR and **@eneskirca** is mentioned to carry it over
      (SwiftUI + SwiftTerm/Citadel, tmux-integrated, talks the `TerminalTransport`/RemoteTransport
@@ -2658,14 +2664,14 @@ the overlap tests exercise the resulting race.
   - **Put new service/main-process logic in `src/core` behind `CorePlatform`, never inline in
     `src/main`.** That is the seam the Server Edition boots from — logic left in `src/main`
     silently doesn't exist on the server (the `no-electron` tests enforce the boundary, but
-    they can't tell you a feature is *missing* server-side).
+    they can't tell you a feature is _missing_ server-side).
   - **A feature that touches `window.nodeTerminal` needs a real `src/renderer/bridge`
     implementation, not just a stub** — or a deliberate, documented graceful degrade
     (`E_UNSUPPORTED` + the affordance hidden, like the Electron-only `shell.reveal`). The
-    bridge's `satisfies NodeTerminalApi` gate forces you to *declare* every member, but a
+    bridge's `satisfies NodeTerminalApi` gate forces you to _declare_ every member, but a
     `noopUnsub`/`unsupported` stub compiles fine while doing nothing — decide per member.
   - **Consider whether the mobile companion should surface the feature** over its
     transport/protocol. It's a different repo and stack (Swift), so this is usually a
     follow-up note rather than same-PR work — but flag it so it isn't forgotten.
-  When a change is genuinely desktop-only (native menus, auto-update, Keychain), say so; the
-  point is to make the call consciously, not to leave the other surfaces to rot.
+    When a change is genuinely desktop-only (native menus, auto-update, Keychain), say so; the
+    point is to make the call consciously, not to leave the other surfaces to rot.

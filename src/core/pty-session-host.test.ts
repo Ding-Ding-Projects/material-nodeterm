@@ -134,13 +134,13 @@ describe('PtyManager session-host contracts', () => {
 
   it('passes the platform-resolved local shell into a session-host spawn', async () => {
     const m = await makeManager()
-    m.createDetached(
-      { cols: 80, rows: 24, persistKey: 'node-shell' },
-      { onData: () => {}, onExit: () => {} }
-    )
+    m.createDetached({ cols: 80, rows: 24, persistKey: 'node-shell' }, { onData: () => {}, onExit: () => {} })
 
     expect(backend.create).toHaveBeenCalledTimes(1)
-    const spawn = backend.create.mock.calls[0][1] as { shell: string; args: string[] }
+    const spawn = backend.create.mock.calls[0][1] as {
+      shell: string
+      args: string[]
+    }
     if (process.platform === 'win32') {
       expect(spawn.shell).not.toBe('bash')
       expect(spawn.shell.toLowerCase()).toMatch(/(?:pwsh|powershell|cmd)(?:\.exe)?$/)
