@@ -201,7 +201,7 @@ describe('worktree removal proof', () => {
     expect(branch.ok).toBe(true)
   })
 
-  it('keeps an adopted jer but CAS-deletes a locally created jer at its exact tip', async () => {
+  it('keeps an adopted branch but CAS-deletes a locally created branch at its exact tip', async () => {
     const fixture = await createFixture()
     const userDataDir = path.join(fixture.root, 'user-data')
     await fs.mkdir(userDataDir)
