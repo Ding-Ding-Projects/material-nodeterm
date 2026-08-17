@@ -270,3 +270,84 @@ description, but it is not a replacement for the newer commit-bound record here.
 5. Resolve or explicitly retain the external-companion blocker.
 6. Refresh this document again after integration and verification; remeasure every worktree,
    branch, and ancestry claim before any cleanup.
+
+---
+
+## Post-convergence session (main `51bd89c5`)
+
+Everything below was measured at that commit, after the branch convergence recorded above. `main`
+is clean, identical to the remote, and typechecks on both `tsconfig.web.json` and
+`tsconfig.node.json`.
+
+### The convergence dropped working code — three shapes, all found after it landed
+
+A bulk merge of long-diverged branches produced commits that are textually clean and had silently
+discarded code. It is worth knowing the shapes, because each looked like success:
+
+1. **Dropped symbols.** `transport`, `claudeLaunchCommand`, `liveCanvasOwnsProject`,
+   `gitRemovalFingerprint` and others existed in parent commits and were simply gone. `main` failed
+   `tsc` with **77 errors**. Each was recovered from history with `git log -S`, not reinvented.
+2. **Duplicate same-named interfaces.** Two branches each added a `GitWorktreeRemovalProof`.
+   TypeScript *merges* same-named interfaces rather than rejecting them, so the effective type
+   became the union of both and every producer of either shape failed at once — with errors pointing
+   at the producers, not the duplicate. They were different facts and are now
+   `GitWorktreeRemovalMeasurement` (a measurement) and `GitWorktreeRemovalProof` (an authorization).
+   `AuthenticatorEntry.revision` had the identical collision.
+3. **A destructive safety barrier, gutted.** `beginApprovedRemove` (removing a Claude account) lost
+   its `cancelWaitLogin` await and the `finalCommit` barrier that re-reads live state and re-checks
+   Kids-mode policy **after** that await. Two branches rewrote it from one parent; the
+   reconciliation kept the hardened version's outer scaffolding and the shallow version's inner
+   body, so the guard read as present and was not. Its own tests were failing and had been dismissed
+   once as environment noise. Restored from `11c2e5a7`; 9/9 pass.
+
+**Typecheck passing is not evidence tests pass.** All three survived a green typecheck.
+
+### Fixed this session
+
+- Blank packaged window (`effb73a3`), Windows terminal typing + agent launch (`1c305ec2`).
+- Kids **and** School mode could be ON with no PIN ever set and then never turned off — the mode
+  record is shared across apps while the credential is a separate file, so "enabled with no
+  credential" is reachable. Both now disable freely when no credential exists; an *unreadable*
+  credential still keeps the mode locked, and now says it could not be checked rather than claiming
+  the PIN was wrong.
+- All formerly paid features are free; the remaining switch is a performance control with
+  per-feature sub-switches. Master off → back on restores each feature's own choice.
+- Client-side refusal of solicitation announcements (stars/donation/upgrade), which a server-side
+  feed edit cannot undo. Security, breaking-change and mandatory-update messages are never filtered,
+  including messages carrying both.
+- Ollama's `not-installed` state was unreachable: the classifier text-matched `econnrefused` against
+  an error message, but Node's fetch collapses these to `"fetch failed"` and the real code lives on
+  `.cause.code`. Every "not running" case rendered "Ollama answered but reported a problem" when it
+  had never answered.
+- Tailscale sidecar behind its own compose profile, off by default, no published ports.
+- Issue #128 (welcome screen could strand you) and #119 (lead-pane width, wired end to end).
+
+### Upstream PR status
+
+Already present via convergence or the concurrent session: **#112 #189 #113 #156 #175 #177 #275
+#274 #273**. Integrated here: **#267** focus mode (`7fef4719`), and from **#111** only
+`a60371d9` (PSReadLine Ctrl-C abort, `51bd89c5`).
+
+Three deliberate exclusions, with reasons — do not "finish" these without revisiting the reasoning:
+
+- **#111 psmux — skipped.** This fork already has its own Windows persistence backend (the session
+  host: ~4,000 lines, protocol v2, ConPTY, process-tree termination; `sessionHost` appears 62 times
+  in `pty-manager.ts`). psmux is a competing implementation of the same job. Its **NSIS packaging
+  commit `daecb26e` is excluded permanently** — Squirrel is the only Windows installer path here.
+- **#98 — skipped, superseded.** `main` has `send`/`reply`/`status` persistent inter-agent messaging
+  with authenticated routes and safe-turn-boundary delivery; #98's `notify` is a weaker fixed-prompt
+  predecessor of it.
+- **#149 configurable shortcuts — NOT DONE.** A 9-file architectural change replacing the hardcoded
+  shortcut rows with a registry driven from `settings.shortcuts`, colliding with the focus-mode
+  binding added in `7fef4719`. Cherry-pick aborted cleanly rather than half-merged. This is the
+  largest outstanding piece of work.
+
+### Still outstanding
+
+- **The full suite has not been run this session.** Typecheck is clean; that is all. Given what the
+  convergence dropped, a real run belongs before any release.
+- #149 above; issue #145 (annotation tools).
+- Issue #42 needs an honest reply rather than a fix: `SUBAGENT_CAPABLE` is claude-only, so opencode
+  subagent cards are unimplemented, not broken. #78 is a contributor's own roadmap — reply only.
+- A design-comparison app for the Material Design overhaul was started at
+  `C:/Users/cntow/Documents/GitHub/nodeterm-design-compare` and is incomplete.
