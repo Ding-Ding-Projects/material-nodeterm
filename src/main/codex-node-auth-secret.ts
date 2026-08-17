@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { app, safeStorage } from 'electron'
+import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 
 type StoredSecret = { version: 1; secretKeyEnc: string }
 
@@ -36,7 +37,7 @@ async function persist(file: string, secret: Buffer): Promise<void> {
     version: 1,
     secretKeyEnc: safeStorage.encryptString(secret.toString('base64')).toString('base64')
   }
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+  const tmp = tempNameFor(file)
   await fs.mkdir(path.dirname(file), { recursive: true })
   try {
     await fs.writeFile(tmp, `${JSON.stringify(body)}\n`, {
@@ -44,7 +45,7 @@ async function persist(file: string, secret: Buffer): Promise<void> {
       mode: 0o600,
       flag: 'wx'
     })
-    await fs.rename(tmp, file)
+    await renameAtomic(tmp, file)
     await fs.chmod(file, 0o600)
   } finally {
     await fs.unlink(tmp).catch(() => {})

@@ -19,6 +19,7 @@ const packageLock = JSON.parse(
   readFileSync(path.join(root, 'package-lock.json'), 'utf8')
 ) as PackageLockMetadata
 
+describe('packaged application version contract', () => {
   // Deliberately an ORDERING assertion, not an equality one. This began as
   // `expect(version).toBe('0.4.0')`, which can pass for exactly one release and then fails
   // forever — so the second person to see it red just bumps the literal, and the check has

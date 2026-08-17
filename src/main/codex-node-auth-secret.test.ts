@@ -37,7 +37,13 @@ describe('Codex node-auth secret', () => {
     expect(first).toHaveLength(32)
     expect(stored).toEqual({ version: 1, secretKeyEnc: expect.any(String) })
     expect(JSON.stringify(stored)).not.toContain(first.toString('base64'))
-    expect((await fs.stat(file())).mode & 0o777).toBe(0o600)
+    // NTFS has no POSIX rwx triad, and node's fs mode support on Windows only ever toggles the
+    // read-only attribute, so an owner-only 0o600 write always reads back as 0o666 there. Same
+    // branch the settings store already carries; asserting the POSIX value on win32 only ever
+    // proves which platform the suite ran on.
+    const mode = (await fs.stat(file())).mode & 0o777
+    if (process.platform === 'win32') expect(mode & 0o200).not.toBe(0)
+    else expect(mode).toBe(0o600)
     resetCodexNodeAuthSecretForTests()
     expect(await loadOrCreateCodexNodeAuthSecret()).toEqual(first)
   })

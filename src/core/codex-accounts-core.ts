@@ -12,6 +12,7 @@ import {
 } from 'fs'
 import os from 'os'
 import path from 'path'
+import { renameAtomicSync } from './fs-atomic'
 
 const ACCOUNT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
@@ -54,7 +55,12 @@ export function migrateLegacyCodexAccountHome(
   const target = codexAccountHome(userDataDir, accountId, shortRoot)
   if (legacy === target || !existsSync(legacy) || existsSync(target)) return target
   mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 })
-  renameSync(legacy, target)
+  // A directory rename is refused with EPERM on Windows for the same reason a file publication is
+  // — anything holding a handle INSIDE the tree (Defender scanning a credential file it just saw
+  // appear, the indexer, a sync client over the user profile) blocks the move. Losing this one
+  // silently strands an account's whole home at the legacy path, so it retries like every other
+  // publication here rather than giving up on the first scanner tick.
+  renameAtomicSync(legacy, target)
   return target
 }
 
