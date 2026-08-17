@@ -63,6 +63,10 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Fixed
 
+- Built-app screenshot launches now use a disposable home and Electron profile, verify the live
+  `userData` path before interacting, and clean up only their own process and sandbox. Real-home
+  sentinels now include both Kids and School mode records and credentials, preventing capture work
+  from silently changing a PIN-protected mode.
 - Windows terminals now retain session-host continuity across an app close, crash, and relaunch.
   A provisional or rejected attach is torn down, stays non-persistent, and reports its real reason
   instead of being indexed as a working persistent terminal or replaced by a throwaway shell.

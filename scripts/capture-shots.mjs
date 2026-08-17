@@ -32,9 +32,15 @@
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, readdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync, readdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  assertManagedConfigUnchanged,
+  captureManagedConfigSentinel,
+  createAppSandbox
+} from './check-app-wired-core.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'docs/assets/shots')
@@ -182,7 +188,36 @@ async function cdp(port) {
       ws.send(JSON.stringify({ id: n, method, params }))
       setTimeout(() => pending.has(n) && (pending.delete(n), rej(new Error(`${method} timed out`))), 30000)
     })
-  return { send, close: () => ws.close() }
+  const close = async () => {
+    if (ws.readyState === WebSocket.CLOSED) return
+    await new Promise((resolveClose, rejectClose) => {
+      let settled = false
+      let timer = null
+      const finish = (error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        ws.off('close', onClose)
+        error ? rejectClose(error) : resolveClose()
+      }
+      const onClose = () => finish()
+      timer = setTimeout(() => {
+        try {
+          ws.terminate()
+          finish()
+        } catch (error) {
+          finish(error)
+        }
+      }, 2000)
+      ws.once('close', onClose)
+      try {
+        ws.close()
+      } catch (error) {
+        finish(error)
+      }
+    })
+  }
+  return { send, close }
 }
 
 /** Rule 3 — a capture is read back, never trusted. */
@@ -194,40 +229,144 @@ function looksBlank(pngBuffer) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+function waitForChildExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true)
+  return new Promise((resolveExit) => {
+    let timer = null
+    const finish = (exited) => {
+      if (timer) clearTimeout(timer)
+      child.off('exit', onExit)
+      resolveExit(exited)
+    }
+    const onExit = () => finish(true)
+    child.once('exit', onExit)
+    if (child.exitCode !== null || child.signalCode !== null) return finish(true)
+    timer = setTimeout(() => finish(false), timeoutMs)
+  })
+}
+
+/** Stop only the exact Electron child this run spawned, with no repository-wide process sweep. */
+async function terminateSpawnedChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return
+  child.kill()
+  if (await waitForChildExit(child, 3000)) return
+  child.kill('SIGKILL')
+  if (!(await waitForChildExit(child, 3000))) {
+    throw new Error(`spawned Electron child ${child.pid} did not exit within the cleanup deadline`)
+  }
+}
+
 // ---------------------------------------------------------------------
 
 assertBuildIsCurrent()
 mkdirSync(OUT, { recursive: true })
 
 let child = null
-let port = attachPort
-if (!port) {
-  if (!doLaunch) {
-    console.error('Pass --attach <port> to attach, or --launch to start the app here.')
-    process.exit(2)
-  }
-  port = '9222'
-  const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
-  child = spawn(electron, [join(ROOT, 'out', 'main', 'index.js'), `--remote-debugging-port=${port}`], {
-    cwd: ROOT,
-    stdio: 'ignore',
-    detached: false
-  })
-  await sleep(6000)
-}
-
-const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim()
-const { send, close } = await cdp(port)
-
-await send('Page.enable')
-await send('Runtime.enable')
-await send('Emulation.setDeviceMetricsOverride', {
-  width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false
-})
-
+let connection = null
+let sandbox = null
+let realHomeBefore = null
+let runError = null
+let cleanupError = null
 const captured = []
 const skipped = []
 const failures = []
+
+try {
+let port = attachPort
+if (!port) {
+  if (!doLaunch) {
+    throw new Error('Pass --attach <port> to attach, or --launch to start the app here.')
+  }
+  port = '9222'
+  const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
+  realHomeBefore = captureManagedConfigSentinel({ home: homedir(), env: process.env })
+  sandbox = createAppSandbox()
+  child = spawn(electron, [join(ROOT, 'out', 'main', 'index.js'), `--remote-debugging-port=${port}`], {
+    cwd: ROOT,
+    stdio: 'ignore',
+    detached: false,
+    env: sandbox.env
+  })
+  await new Promise((resolveLaunch, rejectLaunch) => {
+    const cleanupListeners = () => {
+      clearTimeout(timer)
+      child.off('error', onError)
+      child.off('exit', onExit)
+    }
+    const onError = (error) => {
+      cleanupListeners()
+      rejectLaunch(error)
+    }
+    const onExit = (code, signal) => {
+      cleanupListeners()
+      rejectLaunch(new Error(`Electron exited during launch (code ${code}, signal ${signal})`))
+    }
+    const timer = setTimeout(() => {
+      cleanupListeners()
+      resolveLaunch()
+    }, 6000)
+    child.once('error', onError)
+    child.once('exit', onExit)
+  })
+}
+
+const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim()
+connection = await cdp(port)
+const { send } = connection
+
+await send('Runtime.enable')
+
+/** Evaluate in the renderer and return the value while preserving live-app exceptions. */
+async function evaluate(expression) {
+  const result = await send('Runtime.evaluate', { expression, returnByValue: true })
+  if (result.exceptionDetails) {
+    throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text)
+  }
+  return result.result.value
+}
+
+/** Poll a synchronous expression until it returns a truthy value, or the deadline expires. */
+async function until(expression, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const value = await evaluate(expression)
+    if (value) return value
+    if (Date.now() > deadline) return null
+    await sleep(150)
+  }
+}
+
+if (sandbox) {
+  // Passing NT_USER_DATA is not proof Electron honoured it. Ask the running main process through
+  // the real preload bridge before the harness clicks anything or invokes a mutating app API.
+  await evaluate(`(function(){
+    window.__shotsUserData = 'pending';
+    try {
+      window.nodeTerminal.userDataDir().then(
+        function(v){ window.__shotsUserData = v },
+        function(e){ window.__shotsUserData = 'rejected: ' + e }
+      );
+    } catch (e) { window.__shotsUserData = 'threw: ' + e }
+    return true;
+  })()`)
+  const actualUserData = await until(
+    `window.__shotsUserData !== 'pending' ? window.__shotsUserData : null`,
+    8000
+  )
+  const actualPath = typeof actualUserData === 'string' ? resolve(actualUserData) : ''
+  const expectedPath = resolve(sandbox.userData)
+  const samePath = process.platform === 'win32'
+    ? actualPath.toLowerCase() === expectedPath.toLowerCase()
+    : actualPath === expectedPath
+  if (!samePath) {
+    throw new Error(`app reported userData ${JSON.stringify(actualUserData)}; expected ${expectedPath}`)
+  }
+}
+
+await send('Page.enable')
+await send('Emulation.setDeviceMetricsOverride', {
+  width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false
+})
 
 // Dismiss the first-run setup tour before anything else. A fresh Electron profile opens on it,
 // and every subsequent chord is swallowed by the overlay — which is how the first run of this
@@ -367,9 +506,6 @@ for (const s of SURFACES) {
   }
 }
 
-close()
-if (child) child.kill()
-
 // Rule 4 — provenance, written next to the images.
 writeFileSync(
   join(OUT, 'capture-manifest.json'),
@@ -424,7 +560,45 @@ for (const f of failures) console.error(`  ! FAILED ${f.id}: ${f.why}`)
 // Rule 2 — a required surface that could not be reached fails the run.
 if (failures.length) {
   console.error('\nRequired surfaces failed to capture. That is a defect, not a gap.')
-  process.exit(1)
 }
+} catch (error) {
+  runError = error
+} finally {
+  try {
+    await connection?.close()
+  } catch (error) {
+    cleanupError ??= error
+  }
+  try {
+    await terminateSpawnedChild(child)
+  } catch (error) {
+    cleanupError ??= error
+  }
+  if (realHomeBefore) {
+    try {
+      const realHomeAfter = captureManagedConfigSentinel({ home: homedir(), env: process.env })
+      assertManagedConfigUnchanged(realHomeBefore, realHomeAfter)
+    } catch (error) {
+      cleanupError ??= error
+    }
+  }
+  if (sandbox) {
+    try {
+      rmSync(sandbox.root, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 })
+    } catch (error) {
+      cleanupError ??= new Error(`could not remove capture sandbox ${sandbox.root}: ${error.message}`, {
+        cause: error
+      })
+    }
+  }
+}
+
+if (runError && cleanupError) {
+  throw new AggregateError([runError, cleanupError], 'capture failed and cleanup did not complete')
+}
+if (runError) throw runError
+if (cleanupError) throw cleanupError
+if (failures.length) process.exit(1)
+
 console.log('\nRemember: docs/assets/social-card.png is generated FROM app-04-canvas.png, and its')
 console.log('crop is tuned to that shot. Re-run `npm run make-social-card` after replacing it.')
