@@ -16,7 +16,8 @@ import {
   powerMonitor,
   safeStorage,
   shell,
-  systemPreferences
+  systemPreferences,
+  webContents
 } from 'electron'
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
@@ -28,6 +29,11 @@ import { LocalHistoryStore } from '../core/local-history'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
 import type { Settings } from '../shared/types'
+import {
+  registerBrowserGuest,
+  type BrowserGuest,
+  type BrowserSurfaceKind
+} from './browser-guest-registry'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
@@ -410,8 +416,10 @@ let activeRemote: { cwd: string; ref: GitRemoteRef } | null = null
 // True from the first before-quit on: lets window close-events through (see hide-on-close).
 let quitting = false
 
-// Browser <webview> guest webContents id → its browser node id (for new-window capture).
-const browserGuests = new Map<number, string>()
+// Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
+// belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
+// lands here — see `registerBrowserGuest`.
+const browserGuests = new Map<number, BrowserGuest>()
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
 // Without this, a node closed mid-run never emits SessionEnd/PostToolUse, so context-tail (1s
@@ -632,7 +640,7 @@ app.whenReady().then(async () => {
     // (never a real popup). Only http(s); other schemes are dropped. The map is consulted
     // live at call time, so a guest registered later (on dom-ready) is seen when a popup fires.
     contents.setWindowOpenHandler(({ url }) => {
-      const sourceNodeId = browserGuests.get(contents.id)
+      const sourceNodeId = browserGuests.get(contents.id)?.nodeId
       if (sourceNodeId && /^https?:\/\//i.test(url)) {
         sendToMain(IPC.browserNewWindow, { url, sourceNodeId })
       }
@@ -756,9 +764,24 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.mediaAllow, (_e, absPath: string) => allowMediaPath(absPath))
   ipcMain.handle(IPC.mediaWriteHtml, (_e, html: string) => writeAgentHtml(html))
 
-  ipcMain.on(IPC.browserRegister, (_e, webContentsId: number, nodeId: string) => {
-    browserGuests.set(webContentsId, nodeId)
-  })
+  ipcMain.on(
+    IPC.browserRegister,
+    (_e, webContentsId: number, nodeId: string, surface?: BrowserSurfaceKind) => {
+      // `surface` is optional ON THE WIRE only: both mount sites still send two arguments, so an
+      // absent value means "the canvas one", which is what every registration was taken to be
+      // before the field existed. A value that is present and wrong is refused, not defaulted.
+      const kind = surface === undefined ? 'canvas' : surface
+      if (
+        !registerBrowserGuest(browserGuests, webContentsId, nodeId, kind, (id) =>
+          webContents.fromId(id) ?? null
+        )
+      ) {
+        // Loud, because the symptom otherwise is "popups from this node stopped opening" with
+        // nothing anywhere to explain it.
+        console.warn('[browser] refused guest registration', { webContentsId, nodeId, surface })
+      }
+    }
+  )
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
     browserGuests.delete(webContentsId)
   })
