@@ -66,6 +66,13 @@ it at the operator's real profile, weaken cleanup failure into success, or prove
 element the probe invented itself. Settings persistence crosses a renderer reload; the appearance
 probe changes a production Switch's computed background, then restores it.
 
+The Squirrel bootstrap imports the normal application graph lazily. That graph is therefore a
+Rollup dynamic chunk, but it must remain beside `out/main/index.js`: the main window, Notch HUD,
+and unpackaged icon resolve their built files from that `out/main` boundary. Electron Vite's
+default `chunks/` directory changes `__dirname` and produces a blank window with no preload bridge.
+Keep `main.build.rollupOptions.output.chunkFileNames` flat and keep the executable path guard in
+`desktop-build-paths.ts`; `npm run build && npm run check:wired` is the final artifact proof.
+
 ## Process model (Electron, three contexts)
 
 The codebase is split by Electron process boundary — keep code on the correct side:

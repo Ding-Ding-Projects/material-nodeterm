@@ -50,6 +50,10 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Fixed
 
+- The lazy Squirrel bootstrap no longer lets Vite move the main application graph under
+  `out/main/chunks`, where its relative preload, renderer, HUD, and unpackaged icon paths pointed
+  at files that do not exist. Main-process chunks now retain the `out/main` runtime boundary, and
+  startup rejects a future nested layout explicitly instead of opening a blank window.
 - Windows' previous updater expected NSIS metadata at a generic feed that did not carry the
   Squirrel artifacts produced by the release pipeline. Squirrel startup events are now handled
   before the main application graph loads, first-run checks wait for Squirrel's package lock,
