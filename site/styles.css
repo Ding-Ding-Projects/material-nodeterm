@@ -585,44 +585,23 @@ textarea.mono-area {
 /* horizontal-scroll containers never leak past the viewport */
 .mono-area, .export-preview { max-width: 100%; }
 
-/* ---- Pair a device (app/features/pair-device.js) ---------------------------------------- */
+/* ---- Remote access routes (app/features/pair-device.js) -------------------------------- */
 .pair-room { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
 .pair-room h2 { margin: 0; }
-.pair-warn {
-  margin: 0; padding: 10px 12px; border: 3px solid var(--line); border-radius: var(--round-sm);
-  background: var(--sunk); color: var(--ink);
-}
 .pair-note { margin: 0; color: var(--ink2); font-size: 14px; }
-.pair-label { font-weight: 700; font-size: 14px; }
-.pair-paste {
-  width: 100%; padding: 10px; border: 3px solid var(--line); border-radius: var(--round-sm);
-  background: var(--paper2); color: var(--ink); font-family: var(--mono); font-size: 13px;
-  resize: vertical;
+.pair-route-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pair-route {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px;
+  border: 3px solid var(--line); border-radius: var(--round-sm); background: var(--sunk);
 }
+.pair-route h3, .pair-route p { margin: 0; }
 .pair-btn {
-  align-self: flex-start; min-height: 48px; padding: 0 18px; cursor: pointer;
+  display: inline-flex; align-items: center; align-self: flex-start; min-height: 48px;
+  padding: 0 18px; cursor: pointer; text-decoration: none;
   border: 4px solid var(--line); border-radius: var(--round); background: var(--yellow);
   color: var(--ink); font-family: var(--fun); font-weight: 700; font-size: 15px;
   box-shadow: var(--shadow-sm);
 }
 .pair-btn:hover { background: var(--orange); }
 .pair-btn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
-/* Type-the-code path, for a browser with no QR reader (Safari) or a camera that will not focus. */
-.pair-manual {
-  display: flex; flex-direction: column; gap: 8px; margin: 0;
-  padding: 12px 14px 14px; border: 3px solid var(--line); border-radius: var(--round-sm);
-  background: var(--sunk);
-}
-.pair-manual legend { padding: 0 6px; font-family: var(--fun); font-weight: 700; font-size: 15px; }
-.pair-input {
-  width: 100%; padding: 10px; border: 3px solid var(--line); border-radius: var(--round-sm);
-  background: var(--paper2); color: var(--ink); font-family: var(--mono); font-size: 15px;
-}
-/* Six digits, spaced out so a transcription error is visible before it is submitted. */
-.pair-input--code {
-  max-width: 12ch; font-size: 24px; letter-spacing: .3em; text-align: center;
-}
-.pair-input:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
-
-/* aria-live, so the result is announced rather than only seen. */
-.pair-status { margin: 0; min-height: 1.2em; color: var(--ink2); font-size: 14px; }
+@media (max-width: 620px) { .pair-route-grid { grid-template-columns: 1fr; } }

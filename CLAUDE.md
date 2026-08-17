@@ -836,6 +836,13 @@ persisted — only `unread`/`session`/`sessionId` go to localStorage under
   installer needs is why events are typed `ManagedHookEvent` (`string | {event, matcher}`): grok's
   tool matcher is a REGEX and must be `.*` — a bare `*` is invalid and silently stops tool events
   firing. Plain-string events keep their byte-identical output for every other agent.
+  A live desktop harness therefore must isolate the **home as well as Electron userData**:
+  `scripts/check-app-wired-core.mjs` redirects USERPROFILE/HOME, AppData, temp, XDG and every
+  agent-specific config root before spawn, then fingerprints the exact real-home hook/config
+  targets before and after. `NT_USER_DATA` alone is not a sandbox, and `HOME` alone is a no-op for
+  Node's `os.homedir()` on Windows. The same harness passes its repo path to PowerShell as env data
+  and uses a literal, separator-bounded match; `[?*` in a checkout name must never become wildcard
+  syntax in a cleanup command.
 - **Per-node hook identity** (`src/core/agents/node-auth-*.ts`, `node-token-*.ts`,
   `node-identity-policy.ts` — full write-up in **`docs/node-identity.md`**) — the shared bearer proves
   "a session on this machine", never *which* session, so every node also gets a capability derived

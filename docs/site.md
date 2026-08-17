@@ -233,7 +233,9 @@ a translator across HEX/HEX8/RGB(A)/HSL(A)/HSV/HWB/CIELAB/LCH/OKLab/OKLCH/
 CMYK, a live WCAG contrast readout, and an out-of-gamut warning; and
 append-only local version history for every settings change, including
 resets, surfaced in its own history browser under Settings → Data &
-privacy.
+privacy; and an honest remote-access room that routes a browser to the real
+Server Edition/Docker client or to nodeterm mobile without performing a
+partial credential exchange inside the static tour.
 
 Deliberately simplified, stated here rather than left silent: nested tab
 *grouping* (see above); drag-reorder is mouse/HTML5-DnD only — there's no
