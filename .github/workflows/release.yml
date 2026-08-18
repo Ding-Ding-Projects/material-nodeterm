@@ -324,6 +324,11 @@ jobs:
           # no second author to disagree with. The version proof below is what still guarantees the
           # number was never used for anything else.
           if tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha 2>"$RUNNER_TEMP/tag-ref-error.txt"); then
+            # Deliberately nothing to assert here any more, but the branch must still EXIST: an
+            # empty `then` body is a bash syntax error, and dropping the branch entirely would
+            # collapse the three-way answer (tag exists / confirmed 404 / unreadable) into two,
+            # which is how "the API was unreachable" starts being read as "no tag".
+            echo "Tag ${RELEASE_TAG} already exists at ${tag_sha}."
           elif grep -Eq '\(HTTP 404\)$' "$RUNNER_TEMP/tag-ref-error.txt"; then
             echo "Tag does not exist yet; GitHub will create it from the verified draft target."
           else

@@ -8,6 +8,7 @@
  * a package script that quietly gained `vitest`; the normalized workflow below catches those
  * behavioural changes instead.
  */
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -188,6 +189,33 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   )
   if (gitWriteCommands.length) {
     issues.push(`release workflow must never commit or push (found: ${gitWriteCommands.join(' | ')})`)
+  }
+
+  // Every bash step must PARSE. This exists because removing a now-redundant assertion from inside
+  // an `if …; then` left the branch with an empty body, which is a bash syntax error, and nothing
+  // caught it: the contract guard was happy, the YAML was valid, and the run got all the way to
+  // building the installer, uploading three assets to a draft release, and dying on
+  // `syntax error near unexpected token 'elif'` at the publish step. Twenty-odd minutes of
+  // packaging to find a mistake `bash -n` reports instantly.
+  //
+  // Skips non-bash steps rather than guessing: the signature step is pwsh, and running that
+  // through bash would report nonsense. Skips entirely when bash is unavailable — a missing
+  // parser is not evidence of a syntax error.
+  let bashParser = true
+  try {
+    execFileSync('bash', ['-n'], { input: ':', stdio: ['pipe', 'pipe', 'pipe'] })
+  } catch {
+    bashParser = false
+  }
+  if (bashParser) {
+    for (const step of steps) {
+      if (typeof step?.run !== 'string' || (step.shell ?? 'bash') !== 'bash') continue
+      try {
+        execFileSync('bash', ['-n'], { input: step.run, stdio: ['pipe', 'pipe', 'pipe'] })
+      } catch (error) {
+        issues.push(`step ${step.id ?? step.name ?? '<unknown>'} is not valid bash: ${String(error.stderr).trim()}`)
+      }
+    }
   }
 
   // A runner path must never be pasted INSIDE a quoted JavaScript string. This job runs on
