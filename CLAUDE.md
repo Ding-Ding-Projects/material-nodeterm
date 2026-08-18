@@ -1709,11 +1709,26 @@ multiply-linked inode whose other name may be outside the staging tree.
   `type`, so both the always-built menu literals here and ContextMenu's live filter below share ONE
   definition of "this rule would dangle"). The group-frame menu's colors strip answers to the same
   `colors` id; builders run through `tidySeparators` so a hidden row leaves no dangling rule. The
-  canvas **pane menu is grouped into named sections** (2026-08 — `label` rows: Terminals, Agents,
-  Canvas objects, Worktree, Drawing, Canvas) instead of unlabeled rules, because a flat ~17-row list
-  read as an endless list; "Agents" is built and only spliced in when at least one agent row
-  survives (every builtin agent can be individually disabled in Settings, and Kids mode can reach
-  zero) — an empty heading would claim a group that isn't there.
+  canvas **pane menu groups its rows through ONE decision, `canvas/paneMenuGroup.ts`** (2026-08-18).
+  Named `label` sections (2026-08 — Terminals, Agents, Canvas objects, Worktree, Drawing, Canvas)
+  had replaced unlabeled rules because a flat ~17-row list read as an endless list, but headings
+  alone are still one long list, so a group now collapses to a **submenu with its own icon** —
+  except where that is the worse trade, which the helper decides per group: an **empty** group emits
+  NOTHING (every builtin agent can be disabled in Settings and Kids mode can reach zero, so "Agents"
+  really does hit zero rows; an empty trigger/heading claims a group that isn't there); a group of
+  **ONE** row emits that bare row with no heading and no submenu (a hover to reach exactly one
+  self-describing thing — "New worktree…" — is pure cost); and a group **already containing a
+  submenu** falls back to the previous labelled flat section, because `ContextMenu` renders no
+  second-level flyout (`child.type === 'submenu'` → `null`) and nesting it would DELETE the Claude/
+  Codex account pickers rather than indent them. Today: Canvas objects ▸ (`IconShapes`) and
+  Drawing ▸ (`IconPencil`) are submenus, Agents ▸ (`IconAgent`) is one whenever no agent row is an
+  account picker, Worktree is one bare row, Canvas keeps a heading (Fit view / Select all are
+  frequent — burying them behind a hover is the regression this change undoes), and the terminal
+  rows stay flat and headless at the top: "New terminal" owns ⌘T and is what the menu is opened for,
+  and "New terminal with profile…" is itself a submenu. Each group's rows still ride the same
+  `tidySeparators` wrapper. **The row count is load-bearing**: the smallest pane menu now has 7
+  actionable rows against `FILTER_THRESHOLD` 6, so grouping one more block silently removes the
+  filter field — `canvas/paneMenuGroup.test.ts` pins that.
 - **Sectioned menus are filterable, not just flat ones** (2026-08). `isFilterableMenu`
   (`components/menu/menuVisibility.ts`) counts only ACTIONABLE rows — plain items and submenu
   triggers, not separators/labels — against `FILTER_THRESHOLD` (6), so structural padding can't
@@ -2416,7 +2431,7 @@ loopback bind and port they validated. Do not replace that with a partial dotenv
 accepts whitespace, quotes, colon delimiters and predefined control variables that can otherwise
 redirect the stack or bypass the loopback decision.
 
-**Backend check feed** (`src/main/check.ts`, successor to the static `announcements.json`): the
+**Backend check feed** (`src/core/check.ts`, successor to the static `announcements.json`): the
 **main process** calls `GET https://api.nodeterm.dev/v1/check?version=&os=&channel=stable` (so the
 renderer CSP stays `'self'`) on launch + every 6h, cached 5 min, returning `{ messages, update }`.
 Exposed split over two IPC handlers: `announcements.fetch()` → `messages`, `appUpdatePolicy` →
@@ -2425,7 +2440,22 @@ Exposed split over two IPC handlers: `announcements.fetch()` → `messages`, `ap
 in `localStorage`); `update.mandatory`/`minSupported` flips `UpdateCard` into a blocking required-
 update state. The call no-ops under `DO_NOT_TRACK`/`NODETERM_TELEMETRY_DISABLED` or in unpackaged
 builds (unless `NODETERM_API_BASE` targets a local server). Schema example:
-`docs/announcements.example.json`. **Telemetry** (`src/main/telemetry.ts`) is a separate opt-out
+`docs/announcements.example.json`.
+
+**The banner is fail-closed by KIND, not blocklisted** (`renderer/lib/announcementPolicy.ts`,
+pure + unit-tested). `classifyAnnouncement` reads title, body AND `url` and returns
+`operational | promotional | unknown`; `shouldShowAnnouncement` renders ONLY `operational`.
+Promotional beats operational, and `unknown` never renders. The previous filter was allow-by-
+default — it hid a list of known nag phrasings and showed everything else — and a feed entry
+announcing an iOS app on the App Store ("we'd really appreciate it if you could subscribe …")
+walked straight through it, because that wording was in no list. **An unclassified message is
+exactly how the next promo gets in**, so silence is the safe failure. Do not "fix" this back
+into a blocklist, and do not let the feed self-declare its kind: `level` is a remote-supplied
+COLOR, and a `kind` field the untrusted publisher fills in hands the bypass right back. The
+cost is bounded on purpose — a forced update rides `update.mandatory` to `UpdateCard` and never
+passes through this predicate, so refusing a mixed message here cannot strand anyone on an
+unsupported build. Applies to Desktop and Server Edition alike (one renderer); the mobile
+companion is a separate private repo and owes its own gate. **Telemetry** (`src/main/telemetry.ts`) is a separate opt-out
 ping to `api.nodeterm.dev/v1/telemetry` (version/OS on launch + daily), gated on
 `settings.telemetryEnabled` + the same build/DNT guards; toggle in Settings → Privacy.
 
@@ -2588,6 +2618,24 @@ The crash test holds the real transaction in one live process (proving the peer 
 aborts the owner without JS cleanup, and proves that same peer immediately acquires and publishes.
 This orders peers running the generation-aware build; an already-running older binary does not know
 the lock or field and must not share the directory during a rolling upgrade.
+
+**A serializing FIFO must not double as a fuse, and a background save must not be `void`-ed.**
+`AtomicJsonArrayStore` (`core/atomic-json-store.ts`, shared by the converter queue and the Ollama
+pull queue) orders whole-document publications behind one promise. Written as
+`this.writing = this.writing.then(() => write(items)); return this.writing` it fails twice on a
+single rejected write, and both failures are silent. `rejected.then(onFulfilled)` never calls
+`onFulfilled`, so the chain stays rejected forever and **every later save is skipped without
+touching the disk** — one transient Windows `EPERM` (the exact case `renameAtomic` exists for)
+disables that queue's persistence for the life of the process while the in-memory queue looks
+healthy. The same rejected chain is also what fire-and-forget callers received, so it resurfaced
+later as an unhandled rejection attributed to an unrelated save. `save()` therefore keeps the
+internal chain SETTLED (a failed write only ORDERS the next one, it never cancels it) and returns a
+separate promise that still carries this write's real error; do not collapse the two values back
+into one. Callers that cannot await — `ConverterService.persistInBackground` — attach a handler
+rather than `void`, because an unhandled rejection terminates the process by default on every
+supported Node, which would turn a failed advisory snapshot into a dead main process. Pinned by
+`core/atomic-json-store.test.ts` and `core/converter/service.background-persist.test.ts`; both go
+red on the one-liner and on `void`.
 
 **Credential documents hold a separate cross-process transaction across the strict read.** A
 save-only queue cannot close load → mutate → save lost updates, and a process-local FIFO does not

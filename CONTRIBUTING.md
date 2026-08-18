@@ -204,6 +204,16 @@ need it too, and wire it in the same change.
   network validation so a later Clear cannot be overtaken. Keep the supported runtime floor and
   lazy SQLite capability loading in package metadata, installers, containers, and both shells.
 
+- **A serializing promise chain must never stay rejected, and a background write must never be
+  `void`-ed.** `p = p.then(() => write(next))` looks like a FIFO and is also a fuse: a rejected
+  promise's `then(onFulfilled)` skips `onFulfilled`, so ONE failed write disables every later write
+  for the life of the process, silently. Keep the chain settled and hand the caller a separate
+  promise that still carries the real error (`AtomicJsonArrayStore.save`). And an unhandled
+  rejection terminates the process by default on every supported Node, so a fire-and-forget
+  `void store.save(...)` turns a failed advisory snapshot into a dead main process — attach a
+  handler that reports the loss instead. Both are reachable on the delivery platform: `renameAtomic`
+  exists because Windows fails a publish with `EPERM` while a scanner holds the target.
+
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.
 
@@ -245,6 +255,16 @@ object-directory and namespace redirects; only the private index override is all
 calls/retries are bounded and hooks disabled. An unborn repository is a readable empty history. A
 settings restore is not complete until the awaited history recorder settles, the renderer
 cancels/epochs coalesced saves, joins dispatched saves, and rehydrates live state.
+
+**The app shows no unsolicited marketing, and the gate for it fails closed.** Messages from the
+remote `/v1/check` feed reach `AnnouncementBanner` only if
+`renderer/lib/announcementPolicy.ts` positively classifies them as *operational* (security,
+mandatory update, broken release, outage). *Promotional* and *unknown* both render nothing —
+promotional wins over operational so a campaign cannot buy a render by saying "critical", and an
+unclassified message is exactly how a promo sneaks back in. This was allow-by-default once, and an
+App Store cross-sell shipped through it. Never reintroduce a blocklist, and never trust a
+feed-supplied kind/severity field: the publisher is the untrusted party. A forced update is
+`UpdateCard`'s job (`update.mandatory`), not the banner's.
 
 **Degrade to nothing, never to something wrong.** A probe that fails means the bare, safe command —
 never a substituted nearest match. A hand-editable value that is unrecognised must yield the safe
@@ -429,9 +449,14 @@ under it survived, and settling `separator` visibility last through the same `ti
 (`lib/ui-visibility.ts`) the unfiltered menu builders use. `useMenuFilter` no longer decides
 matching itself — pass it your own `useRegexSearchField()` instance and an already-filtered
 candidate list; it only tracks keyboard `activeIndex`. See CLAUDE.md's Context menus section for
-the full reasoning. The canvas pane menu is grouped into named `label` sections (Terminals, Agents,
-Canvas objects, Worktree, Drawing, Canvas) instead of bare rules — keep a section's heading
-conditional on it actually having a row underneath before adding a new empty-able group.
+the full reasoning. The canvas pane menu's groups all go through ONE decision —
+`canvas/paneMenuGroup.ts` — which turns a group into a submenu with an icon, into a bare row (a
+group of one), or into the older labelled flat section, and emits nothing for an empty group. Add a
+new pane-menu group through it rather than hand-writing a heading or a `submenu` literal, and note
+two traps it exists for: **a submenu cannot contain a submenu** (`ContextMenu` renders no
+second-level flyout — a nested trigger is skipped, so the rows vanish silently), and every group you
+collapse removes a top-level row, which can drop the menu under `FILTER_THRESHOLD` and take the
+filter field away with it.
 
 ## Testing
 
