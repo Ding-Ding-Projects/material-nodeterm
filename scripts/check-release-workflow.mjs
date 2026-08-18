@@ -190,6 +190,29 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     issues.push(`release workflow must never commit or push (found: ${gitWriteCommands.join(' | ')})`)
   }
 
+  // A runner path must never be pasted INSIDE a quoted JavaScript string. This job runs on
+  // windows-latest, where RUNNER_TEMP is `D:\a\_temp`, so `node -p "require('$RUNNER_TEMP/x.json')"`
+  // hands JS a literal containing \a and \_ — escape sequences, not separators — and it resolved to
+  // `D:a_temp/x.json` and killed the first automatic release. Passing the same path as a shell
+  // ARGUMENT is fine and is what every other line here does; only interpolation into a quoted
+  // language is the defect. Read it from `process.env` instead.
+  // Matched as the exact defect shape — a SINGLE quote immediately followed by the variable —
+  // rather than by trying to find the boundaries of a `node -p` argument. A first attempt did the
+  // latter and its `[^']*` happily escaped the argument it was meant to stay inside, flagging the
+  // healthy neighbouring line (which passes the same variable as a normal double-quoted shell
+  // argument). The narrow form also catches the shell-side version of the same mistake: inside
+  // single quotes the variable is not expanded at all.
+  const pastedRunnerPaths = steps.flatMap((step) =>
+    logicalCommands(step?.run).filter((command) =>
+      /'\$\{?(?:RUNNER_TEMP|RUNNER_WORKSPACE|GITHUB_WORKSPACE)\b/.test(command),
+    ),
+  )
+  if (pastedRunnerPaths.length) {
+    issues.push(
+      `a runner path must reach node through process.env, not inside a JS string literal (found: ${pastedRunnerPaths.join(' | ')})`,
+    )
+  }
+
   const stepById = (id) => steps.find((step) => step?.id === id)
   const criticalShells = new Map([
     ['guard', 'bash'],

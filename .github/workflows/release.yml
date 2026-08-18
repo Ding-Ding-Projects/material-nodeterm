@@ -134,7 +134,13 @@ jobs:
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-for-plan.json"
           head_sha="$(git rev-parse HEAD)"
           node scripts/release-assets.mjs plan-version "$(node -p "require('./package.json').version")" "$RUNNER_TEMP/tags-for-plan.json" "$RUNNER_TEMP/releases-for-plan.json" "$head_sha" "$RUNNER_TEMP/version-plan.json"
-          planned="$(node -p "require('$RUNNER_TEMP/version-plan.json').version")"
+          # Read the path from the ENVIRONMENT, never by interpolating it into the JS source.
+          # RUNNER_TEMP on the Windows runner is `D:\a\_temp`, so `require('$RUNNER_TEMP/…')`
+          # hands JavaScript a string literal containing \a and \_ — escape sequences, not
+          # separators — and the first attempt at this died on `Cannot find module
+          # 'D:a_temp/version-plan.json'`. Every other RUNNER_TEMP use here is a shell ARGUMENT,
+          # which never had this problem; only a path pasted INTO a quoted language does.
+          planned="$(VERSION_PLAN_FILE="$RUNNER_TEMP/version-plan.json" node -p "require(process.env.VERSION_PLAN_FILE).version")"
           npm version "$planned" --no-git-tag-version --allow-same-version
 
       - name: Compute stable release tag
