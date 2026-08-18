@@ -34,8 +34,9 @@ checking it.
 
 ## Where the migration actually stands
 
-Of the 38, **24 have a `var()` consumer in the stylesheet** and 14 do not. The 18 are the foreground
-roles — the ones that decide what text and strokes look like:
+Of the 38, **24 have a `var()` consumer in the stylesheet** and 14 do not. They are the foreground
+roles — the ones that decide what text and strokes look like — plus the six surface-ramp roles that
+the components moved onto:
 
 | token | references |
 |---|---:|
