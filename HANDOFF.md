@@ -509,47 +509,34 @@ Two deliberate non-fixes, both recorded rather than papered over:
   file the client reads v2 facts from, including the generation bookkeeping. The strict equality
   stays. **No change was needed; what was needed was reading the host's own publication path.**
 
-## Open: a fixture directory outlives the Server Edition shutdown test
+## Solved: the fixture directory that outlived the Server Edition shutdown test
 
 `test/server/server-e2e.test.ts` intermittently could not remove its own temp directory on Windows,
-failing the run with `EPERM` on the directory itself — in teardown, after every assertion about
-shutdown ordering had already passed.
-
-Measured rather than assumed, because the obvious fix is the wrong one:
+failing with `EPERM` on the directory itself — in teardown, after every assertion about shutdown
+ordering had already passed. The measurements taken at the time are still the interesting part,
+because they ruled out the obvious fix:
 
 | bounded retry | failure rate |
 |---|---|
 | 1 s (20 x 50 ms) — what was there | ~1 run in 4 |
-| 5 s (100 x 50 ms) | ~1 run in 6 |
+| 5 s | ~1 run in 6 |
 
-A holder that survives **five seconds** of retries is not the transient post-close lag the original
-comment assumed, so buying more time is not the fix and the 5 s change was reverted. Something still
-owns a handle to that directory when the test ends. `EPERM` naming the directory (not a file inside
-it) points at a directory handle or a process whose working directory it is — the same class as the
-`EBUSY` that a shell sitting inside `node_modules/node-pty/deps/winpty/src` caused during this
-session's installer build.
+The conclusion drawn from that was right — a holder surviving five seconds is not transient lag, so
+buying more time is the wrong fix — and the longer wait was reverted, with the failure downgraded to
+a warning so teardown could not decide a passing test's verdict.
 
-Teardown no longer decides the verdict: the retry stays bounded and short, and exhausting it now
-logs a warning naming the directory instead of turning "a temp directory outlived the run" into
-"shutdown ordering is broken". Eight consecutive runs pass.
+**The missing step was WHY more time could never work.** `fs.rmSync`'s retries are SYNCHRONOUS:
+they block the event loop, so they cannot let in-flight async work in the same process finish and
+release what it holds. The retry loop was waiting for the thing it was itself preventing. The
+holder is a mirror publication that opens `agent-status.json.publication.sqlite3` under this very
+dataDir inside a `BEGIN IMMEDIATE` transaction, with nothing awaiting the flush.
 
-**Answered.** `startServer` brings up SchoolModeStore and KidsModeStore, both of which own an
-`fs.watch` DIRECTORY handle and both of which ship a purpose-built `dispose()` that closes it.
-`close()` disposed nine things and neither of them; a repo-wide search found no non-test caller of
-either. Every shutdown leaked two watcher handles, and an open directory handle is exactly what
-makes Windows answer `EPERM` on the DIRECTORY rather than a file inside it.
+Same options, same retry count, one keyword — `await fs.promises.rm`. Four consecutive runs, four
+fixtures created and all four removed, zero warnings, and the leftover count in TEMP flat rather
+than climbing. The warning stays as a net; it should now be silent.
 
-Fixed by disposing both in `close()`. The teardown warning fired roughly one run in five before, and
-**0 times in 18 consecutive runs** after — at that prior rate, 18 clean runs by chance is about
-1.8%, so this is strong evidence rather than proof, and the teardown warning stays in place so a
-recurrence is visible rather than silent. The desktop is materially different and was not changed:
-it holds the stores for the process lifetime and the process exits.
-
-One process note, since it cost a mangled commit: the paragraph above was first written through a
-double-quoted `node -e`, and bash command-substituted every backticked identifier out of it before
-node ever saw the string — `startServer`, `fs.watch`, `dispose()` and `close()` all vanished, and
-the result was committed and pushed in that state. CLAUDE.md already warns about backticks in a
-double-quoted `node -e`; the reliable route is a quoted heredoc into a file, then read the file.
+Two further leaks in the same file's neighbourhood turned out to be production bugs and are written
+up under the temp-directory leak section below.
 
 ## Open: eight commits on `main` carry a placeholder identity
 
