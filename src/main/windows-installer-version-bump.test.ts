@@ -11,7 +11,6 @@
  * a changed appId, target list or signing flag on a build claiming a public commit's provenance.
  */
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error -- plain .mjs build script, no type declarations by design
 import {
   changedSourcePaths,
   isVersionOnlyManifestChange,

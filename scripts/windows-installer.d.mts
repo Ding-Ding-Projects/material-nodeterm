@@ -63,7 +63,19 @@ export function inspectUnsignedPe(executableBytes: Uint8Array, description?: str
 export function parseGitHubRepository(value: unknown): string
 export function immutableIconUrl(repository: string, sourceSha: string): string
 export function validateImmutableIconUrl(value: string, repository: string, sourceSha: string): string
-export function requireCleanSourceStatus(status: string): void
+/** The changed paths in `git status --porcelain=v1` output, or null when the tree is clean. */
+export function changedSourcePaths(status: string): string[] | null
+/** True when two package manifests are byte-identical apart from their `version`. */
+export function isVersionOnlyManifestChange(committedText: string, workingText: string): boolean
+/**
+ * `readPair` is required to tolerate a dirty package.json/package-lock.json: without it, ANY dirty
+ * path refuses. It supplies the committed and working text so the difference can be proven to be
+ * the release version bump and nothing else.
+ */
+export function requireCleanSourceStatus(
+  status: string,
+  readPair?: (relativePath: string) => { committed: string; working: string },
+): void
 export function resolveSourceIdentity(root?: string, env?: NodeJS.ProcessEnv): WindowsSourceIdentity
 export function downloadMatchingIcon(
   iconUrl: string,
