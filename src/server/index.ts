@@ -381,12 +381,18 @@ export async function startServer(
   // (mirror resolve + phone Live-Activity dismiss) + broadcast `agent:unread-clear` so the browser
   // canvas drops the node's unread flag WITHOUT re-acking. Local fs only — the Server Edition has no
   // SSH projects (v1); a host it hosts writes its own acks here. See core/ack-sweep.ts.
-  createAckSweeper({
+  // The handle is CAPTURED, not discarded. `createAckSweeper(...).start()` reads fine and is a
+  // leak here in a way it is not on the desktop: this close() is a real repeated operation, and a
+  // sweeper nobody can stop keeps its 15 s interval running against a platform that has closed —
+  // still sweeping the directory, still calling `platform.broadcast` into a dead listener set. The
+  // desktop already captures it (src/main/index.ts) and only this side threw it away.
+  const ackSweeper = createAckSweeper({
     handlers: {
       ackDone,
       onUnreadClear: (nodeId) => platform.broadcast(IPC.agentUnreadClear, nodeId)
     }
-  }).start()
+  })
+  ackSweeper.start()
   // Sweep stale ~/.nodeterm/pending files on boot + hourly (orphans from killed sessions).
   startPendingSweep(os.homedir())
   // Phone push via SSH-possession GRANTS (spec: nodeterm-server/docs/specs/2026-07-21-push-grants.md).
@@ -603,6 +609,7 @@ export async function startServer(
         // scheduled-settings poller here. Missing this one line leaves its 30s interval and store
         // listener live after SIGTERM-driven teardown (including NODETERM_HEADLESS containers).
         await scheduledSettingsRuntime.stop()
+        ackSweeper.stop()
         sessionReaper.stop()
         pressure.stop()
         ptyPressure.stop()
@@ -657,6 +664,7 @@ export async function startServer(
     async close() {
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
       await scheduledSettingsRuntime.stop()
+      ackSweeper.stop()
       sessionReaper.stop()
       pressure.stop()
       ptyPressure.stop()
