@@ -1136,6 +1136,20 @@ class HookServer {
     this.server = null
     this.port = 0
     this.token = ''
+    // `endpointPath` is per-run exactly like the port and the token above, and was the one field
+    // that did not get cleared. It is resolved lazily from `platform().userDataDir` and then
+    // CACHED, and this class is a module singleton — so a server started after a stop kept
+    // advertising into the PREVIOUS run's data directory, having never re-read the new one.
+    //
+    // Benign in the desktop app, which runs one hook server for the life of the process. Not
+    // benign for the Server Edition, whose `close()` is a real repeated operation: a restarted
+    // server wrote its live endpoint and token where nothing would look for them, while the
+    // directory it should have written to had none.
+    //
+    // Found through a test that kept leaking exactly one temp directory per run: the first test's
+    // dataDir was deleted correctly and then REAPPEARED, because the second test's server wrote
+    // this file into it.
+    this.endpointPath = ''
   }
 }
 

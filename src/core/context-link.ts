@@ -43,10 +43,21 @@ import { opencodeConfigDir } from './agents/hooks/opencode'
 
 export { setNodeTranscript } from './context-link-core'
 
-let dir = ''
+// Resolved fresh every call, deliberately NOT cached. It used to memoize into a module-level
+// `dir`, which is wrong for the same reason the hook server's `endpointPath` was: this module is a
+// singleton, `platform().userDataDir` can change when a server closes and another starts in the
+// same process, and a cached answer means the SECOND server writes its link files into the FIRST
+// server's data directory.
+//
+// The comment on `initServerContextLink` already named this exact symptom — "a close that does not
+// wait for it lets link files reappear behind a shutting-down server" — and the awaited stop it
+// describes is correct and was working. The reappearance came from the path, not the timing: the
+// write was properly awaited, into a directory that had been deleted, because the cache still
+// pointed there.
+//
+// Caching bought one `path.join` across five call sites, none of them hot.
 export function contextLinkDir(): string {
-  if (!dir) dir = path.join(platform().userDataDir, 'context-links')
-  return dir
+  return path.join(platform().userDataDir, 'context-links')
 }
 function cliShimPath(): string {
   return path.join(contextLinkDir(), 'context.sh')

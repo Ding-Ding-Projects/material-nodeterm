@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
+import fsp from 'fs/promises'
 import path from 'path'
 
 // Guard for a bug that bit a developer for real: `startServer` merges the managed agent hooks
@@ -42,12 +43,18 @@ describe('startServer: managed hook install is opt-out-able', () => {
   afterEach(async () => {
     await close?.()
     close = undefined
-    // Windows releases handles asynchronously and the real-time scanner opens files it has just
-    // seen written, so a directory can refuse to delete for a moment after everything using it
-    // has closed. rmSync retries EPERM/EBUSY/ENOTEMPTY when asked; without that this cleanup
-    // fails the test it is only tidying up after.
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
-    fs.rmSync(testHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    // AWAITED, and that is the load-bearing word. An earlier fix here added `maxRetries` to the
+    // synchronous `fs.rmSync`, which made this pass — but for the wrong reason, and it would have
+    // come back. Synchronous retries BLOCK the event loop, so they cannot let in-flight async work
+    // in this same process finish and release what it holds; the loop waits for what it prevents.
+    //
+    // The holder is real and was found: a mirror publication opens
+    // `agent-status.json.publication.sqlite3` under `dataDir` inside a BEGIN IMMEDIATE
+    // transaction, and nothing awaits that flush. Four of this fixture's leftover directories in
+    // TEMP still carry that database, which is what says the sync retry was luck rather than a
+    // fix. Diagnosed in src/server/handlers/index.test.ts.
+    await fsp.rm(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await fsp.rm(testHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const boot = (installHooks?: boolean) =>
