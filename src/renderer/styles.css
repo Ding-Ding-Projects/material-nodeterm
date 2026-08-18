@@ -3080,7 +3080,10 @@ body,
 
 .ctx-colors {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* 8, not 7: the presets plus the custom-colour chip. `auto-fit` would let the row reflow to a
+     different count on a narrow menu and split the chip onto its own line, away from the swatches
+     it belongs with. */
+  grid-template-columns: repeat(8, 1fr);
   gap: 5px;
   padding: 6px 8px;
 }
@@ -3091,6 +3094,42 @@ body,
   border-radius: 50%;
   border: 1px solid rgba(var(--tint-rgb), 0.15);
   cursor: pointer;
+}
+
+/* The gateway to the full picker. A colour wheel rather than a "+" because the row it sits in is
+   made of colours, and a glyph reads as "add a swatch" instead of "choose any colour". */
+.ctx-colors__custom {
+  background: conic-gradient(
+    from 0deg,
+    #ff453a,
+    #ff9f0a,
+    #ffd60a,
+    #32d74b,
+    #6ac4dc,
+    #0a84ff,
+    #bf5af2,
+    #ff453a
+  );
+  position: relative;
+}
+.ctx-colors__custom::after {
+  /* A hole in the middle keeps it visibly a CONTROL beside seven solid swatches. */
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--md-surface-container-high, var(--panel));
+}
+.ctx-colors__custom.is-open {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.ctx-colors__picker {
+  padding: 0 8px 8px;
+  /* The menu is sized to its rows; the picker is far wider than a swatch strip, so it sets the
+     menu's width while it is open rather than overflowing it. */
+  width: 248px;
 }
 
 /* ---- Filterable menu head (useMenuFilter / FilterableMenuHeader) ---- */

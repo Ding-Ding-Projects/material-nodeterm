@@ -7055,7 +7055,7 @@ export function Canvas() {
       })(),
       ...(isHidden('colors', hidden)
         ? []
-        : ([{ type: 'colors', onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
+        : ([{ type: 'colors', value: nodesRef.current.find((n) => n.id === ids[0])?.data.color as string | undefined, onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
       { type: 'separator' },
       ...(isHidden('duplicate', hidden)
         ? []
@@ -7686,7 +7686,7 @@ export function Canvas() {
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
-          : ([{ type: 'colors', onPick: (c) => setNodesColor([groupId], c) }] as MenuItem[])),
+          : ([{ type: 'colors', value: nodesRef.current.find((n) => n.id === groupId)?.data.color as string | undefined, onPick: (c) => setNodesColor([groupId], c) }] as MenuItem[])),
         { type: 'separator' },
         ...(groupHasWorktree(groupId)
           ? []

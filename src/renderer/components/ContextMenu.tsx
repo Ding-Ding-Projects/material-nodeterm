@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { NODE_COLORS } from '../state/workspace'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { fitFlyout, type FlyoutFit } from '../ui/flyoutFit'
+import { ColorPicker } from './color/ColorPicker'
 import { useMenuFilter, type MenuFilterItem } from './menu/useMenuFilter'
 import { FilterableMenuHeader } from './menu/FilterableMenu'
 import { isFilterableMenu, menuRowVisibility } from './menu/menuVisibility'
@@ -41,7 +42,14 @@ export type MenuItem =
     } & AccountMenuPresentation)
   | { type: 'separator' }
   | { type: 'label'; label: string }
-  | { type: 'colors'; onPick: (color: string) => void }
+  | {
+      type: 'colors'
+      onPick: (color: string) => void
+      /** The target's CURRENT colour, so the custom picker opens on it instead of on an arbitrary
+       *  default. Optional: callers that cannot cheaply resolve one (a mixed multi-node selection)
+       *  omit it and the picker starts from the first preset. */
+      value?: string
+    }
   | ({
       type: 'submenu'
       label: string
@@ -116,6 +124,10 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
   const [openSub, setOpenSub] = useState<number | null>(null)
   const menuId = useId()
   const keyboardOpenedSub = useRef<number | null>(null)
+  // Custom-colour state lives on the MENU, not the row, so a re-render of the items array (the
+  // live filter rebuilds it on every keystroke) cannot collapse an open picker mid-drag.
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customColor, setCustomColor] = useState<string | null>(null)
 
   // The parent menu has flipped away from the viewport edges for a long time; the FLYOUT never
   // did. `.ctx-submenu` is `position: absolute` off its row, so a list long enough — the Windows
@@ -237,17 +249,45 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
           if (item.type === 'label') return <div key={i} className="ctx-label">{item.label}</div>
           if (item.type === 'colors') {
             return (
-              <div key={i} className="ctx-colors">
-                {NODE_COLORS.map((c) => (
+              <div key={i} className="ctx-colors-block">
+                <div className="ctx-colors">
+                  {NODE_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      style={{ background: c }}
+                      aria-label={`Colour ${c}`}
+                      onClick={() => {
+                        item.onPick(c)
+                        onClose()
+                      }}
+                    />
+                  ))}
+                  {/* The seven presets are the fast path, not the whole vocabulary. This opens the
+                      full picker in place — the same component Settings uses, so every format it
+                      understands works here too. */}
                   <button
-                    key={c}
-                    style={{ background: c }}
-                    onClick={() => {
-                      item.onPick(c)
-                      onClose()
+                    className={`ctx-colors__custom${customOpen ? ' is-open' : ''}`}
+                    aria-expanded={customOpen}
+                    aria-label="Custom colour"
+                    title="Custom colour…"
+                    onClick={() => setCustomOpen((o) => !o)}
+                  />
+                </div>
+                {customOpen && (
+                  <ColorPicker
+                    className="ctx-colors__picker"
+                    label="Node colour"
+                    allowAlpha={false}
+                    value={customColor ?? item.value ?? NODE_COLORS[0]}
+                    // Applied live on every drag, and the menu deliberately stays open: a colour is
+                    // chosen by SEEING it on the node, and a picker that dismissed itself on the
+                    // first change would make that impossible. Dismiss via the backdrop or Escape.
+                    onChange={(next) => {
+                      setCustomColor(next)
+                      item.onPick(next)
                     }}
                   />
-                ))}
+                )}
               </div>
             )
           }
