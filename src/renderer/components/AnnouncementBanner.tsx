@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
 import type { Announcement } from '@shared/types'
 import { useI18n } from '@renderer/lib/i18n'
-import { isSolicitationAnnouncement } from '@renderer/lib/announcementPolicy'
+import { shouldShowAnnouncement } from '@renderer/lib/announcementPolicy'
 
 // Polls the remote announcements feed (via the main process) and shows the newest
 // item the user hasn't dismissed. Dismissed ids are remembered in localStorage so a
 // given announcement is shown only once. Separate from the update banner.
 //
 // The feed is served by a remote backend, so a message this renders is not fully under this
-// repository's control. Every item is filtered through `isSolicitationAnnouncement` first: this
-// app never nags users for stars, ratings, reviews, donations, sponsorship, or a paid upgrade,
-// even if a future feed entry asks for one. Genuinely useful messages (security notices,
-// breaking changes, outages, mandatory updates, ...) are never affected by that filter.
+// repository's control. Every item must therefore be POSITIVELY classified as operational by
+// `shouldShowAnnouncement` before it can render — promotional items and items that match
+// nothing are both dropped. This app shows no unsolicited marketing, ever, and a filter that
+// merely blocklisted known nag phrasings already let an app-store/"subscribe" promo through
+// once (see announcementPolicy.ts). Operational messages — security notices, mandatory
+// updates, "this release is broken" — still render, and the blocking required-update state is
+// `UpdateCard`'s job anyway (`update.mandatory` from the same feed, which never passes here).
 const SEEN_KEY = 'nodeterm.seenAnnouncements'
 const SIX_HOURS = 6 * 60 * 60 * 1000
 
@@ -43,9 +46,9 @@ export function AnnouncementBanner(): JSX.Element | null {
       const items = await window.nodeTerminal.announcements.fetch()
       if (cancelled || !items.length) return
       const seen = loadSeen()
-      // Feed is newest-first; show the first one not yet dismissed, skipping anything the
-      // backend sends that solicits stars/ratings/reviews/donations/sponsorship/a paid upgrade.
-      const next = items.find((a) => !seen.has(a.id) && !isSolicitationAnnouncement(a))
+      // Feed is newest-first; show the first undismissed item that is operational. Anything
+      // promotional or unclassifiable is skipped, not queued — it must never reach the DOM.
+      const next = items.find((a) => !seen.has(a.id) && shouldShowAnnouncement(a))
       if (next) setCurrent(next)
     }
 
