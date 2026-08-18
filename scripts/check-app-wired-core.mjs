@@ -153,6 +153,43 @@ function fingerprint(target) {
   }
 }
 
+
+/**
+ * The subset of `managedConfigTargets` that a real boot is expected to CREATE.
+ *
+ * These are two different questions and they were being answered by one list. `managedConfigTargets`
+ * is an allowlist — "files app bootstrap is ALLOWED to merge or replace" — and the capture harness
+ * fingerprints it to prove the operator's real home came back unchanged, where `absent` is a
+ * perfectly good fingerprint. The wiring gate reads the same list as "files boot MUST have written"
+ * and fails on `absent`.
+ *
+ * That held until `ad3354e0` added the four shared School/Kids records to the allowlist for the
+ * capture harness. Boot does not write those, by design: `core/shared-record-watch.ts` exists
+ * precisely because the shared directory may be ABSENT at boot and has to become watchable as it
+ * appears, and a record is written when a mode is first set. So the addition was correct for the
+ * question it was asked and silently made the other question wrong — the wiring gate went red on
+ * four files that are supposed to be missing.
+ *
+ * Anything a boot genuinely must produce belongs here. Anything boot may merely touch belongs in
+ * `managedConfigTargets` and nowhere else.
+ */
+export function bootCreatedConfigTargets(options = {}) {
+  const home = options.home ?? homedir()
+  // Built with the same `join` managedConfigTargets uses, so the comparison is exact. Do NOT
+  // rebuild these with a platform-selected path module: managedConfigTargets accepts a `platform`
+  // option but only consults it for isAbsolute, joining with the default separator regardless — so
+  // a posix-joined needle never matches a win32-joined haystack, and the filter silently drops
+  // nothing while looking correct.
+  const sharedModeRecords = new Set(
+    [
+      'kids-mode.json',
+      'kids-mode.credential.json',
+      'school-mode.json',
+      'school-mode.credential.json',
+    ].map((name) => join(home, '.nodeterm', 'shared', name)),
+  )
+  return managedConfigTargets(options).filter((target) => !sharedModeRecords.has(target))
+}
 export function captureManagedConfigSentinel(options = {}) {
   return Object.fromEntries(
     managedConfigTargets(options).map((target) => [target, fingerprint(target)]),

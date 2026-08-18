@@ -40,6 +40,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   assertManagedConfigUnchanged,
+  bootCreatedConfigTargets,
   captureManagedConfigSentinel,
   createAppSandbox,
   repoElectronPids,
@@ -225,10 +226,12 @@ if (sandbox) {
   // These are consequences of the real boot installers. Checking all of them proves HOME,
   // USERPROFILE, XDG_CONFIG_HOME, and GROK_HOME converged on the disposable root; a test that
   // only inspected the env object could stay green while Electron ignored it.
-  const installed = captureManagedConfigSentinel({ home: sandbox.home, env: sandbox.env })
-  const missing = Object.entries(installed)
-    .filter(([, value]) => value === 'absent')
-    .map(([target]) => target)
+  // bootCreatedConfigTargets, NOT the full managed-config allowlist. The allowlist answers
+  // "what may bootstrap touch in the real home" and legitimately contains files boot never
+  // writes; deriving "must exist" from it made this gate red on the four shared School/Kids
+  // records, which are absent by design until a mode is first set.
+  const missing = bootCreatedConfigTargets({ home: sandbox.home, env: sandbox.env })
+    .filter((target) => !existsSync(target))
   for (const target of [
     join(sandbox.userData, 'hook-endpoint.env'),
     join(sandbox.userData, 'context-links', 'context.sh'),
