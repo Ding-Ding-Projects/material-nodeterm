@@ -92,8 +92,29 @@ function requireLauncher(launcher: string | null): string {
 
 describe('NodeTerm Codex remote launcher', () => {
   const oldHome = process.env.HOME
-  const nodeTokenA = 'A'.repeat(43)
-  const nodeTokenB = 'B'.repeat(43)
+  // `kid.mac`, the shape the launcher's own gate describes ("The '.' IS the token"). These were
+  // 43 dotless characters, which is the OLD derivation the current verifier reads as a foreign kid.
+  const nodeTokenA = `${'k'.repeat(8)}.${'A'.repeat(43)}`
+  const nodeTokenB = `${'k'.repeat(8)}.${'B'.repeat(43)}`
+
+  /**
+   * Deliver the per-node capability the way production does: a file under NODETERM_NODE_TOKEN_DIR,
+   * named for the node id.
+   *
+   * These tests used to set $NODETERM_CODEX_NODE_TOKEN. That channel was deliberately removed —
+   * the launcher says so at length — because it put the credential on the tmux `-e` argv, which is
+   * world-readable on a stock Linux, and the credential's whole job is to prove WHICH node is
+   * calling. The launcher ignores the variable entirely, so every one of these tests was watching
+   * the launcher fail closed to plain codex and asserting the remote arguments anyway.
+   */
+  const tokenEnv = (root: string, entries: Record<string, string>): Record<string, string> => {
+    const dir = path.join(root, 'node-tokens')
+    mkdirSync(dir, { recursive: true })
+    for (const [nodeId, token] of Object.entries(entries)) {
+      writeFileSync(path.join(dir, nodeId), `${token}\n`, { mode: 0o600 })
+    }
+    return { NODETERM_NODE_TOKEN_DIR: dir }
+  }
 
   beforeEach(() => setCodexThreadIdentityAuthSecret(Buffer.alloc(32, 9)))
 
@@ -142,17 +163,18 @@ describe('NodeTerm Codex remote launcher', () => {
     const base = {
       PATH: `${bin}:${process.env.PATH ?? ''}`,
       NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_HOOK_ENDPOINT: endpoint
+      NODETERM_HOOK_ENDPOINT: endpoint,
+      ...tokenEnv(root, { 'node-a': nodeTokenA, 'node-b': nodeTokenB })
     }
     await Promise.all([
       runLauncher(launcher, ['resume', 'thread-a'], {
         ...process.env, ...base, CAPTURE: outA,
-        NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
+        NODETERM_NODE_ID: 'node-a',
         NODETERM_CODEX_ACCOUNT_ID: 'account-a', CAPTURE_BIND: bindA, CAPTURE_HEADERS: headersA
       }),
       runLauncher(launcher, ['resume', 'thread-b'], {
         ...process.env, ...base, CAPTURE: outB,
-        NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_NODE_TOKEN: nodeTokenB,
+        NODETERM_NODE_ID: 'node-b',
         NODETERM_CODEX_ACCOUNT_ID: 'account-b', CAPTURE_BIND: bindB, CAPTURE_HEADERS: headersB
       })
     ])
@@ -199,20 +221,21 @@ describe('NodeTerm Codex remote launcher', () => {
       ...process.env,
       PATH: `${bin}:${process.env.PATH ?? ''}`,
       NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_HOOK_ENDPOINT: endpoint
+      NODETERM_HOOK_ENDPOINT: endpoint,
+      ...tokenEnv(root, { 'node-a': nodeTokenA, 'node-b': nodeTokenB })
     }
 
     await Promise.all([
       runLauncher(
         launcher,
         ['prompt a'],
-        { ...base, CAPTURE: outA, NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_NODE_TOKEN: nodeTokenA },
+        { ...base, CAPTURE: outA, NODETERM_NODE_ID: 'node-a' },
         root
       ),
       runLauncher(
         launcher,
         ['prompt b'],
-        { ...base, CAPTURE: outB, NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_NODE_TOKEN: nodeTokenB },
+        { ...base, CAPTURE: outB, NODETERM_NODE_ID: 'node-b' },
         root
       )
     ])
@@ -263,9 +286,7 @@ describe('NodeTerm Codex remote launcher', () => {
       CAPTURE: capture,
       CAPTURE_EXPOSE: exposeCapture,
       NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_NODE_ID: 'node-a',
-      NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
-      NODETERM_HOOK_ENDPOINT: endpoint,
+      NODETERM_NODE_ID: 'node-a',      NODETERM_HOOK_ENDPOINT: endpoint,
       NODETERM_CODEX_RELAY_RUNTIME: runtime,
       NODETERM_CODEX_RELAY_SCRIPT: script
     })
@@ -311,9 +332,7 @@ describe('NodeTerm Codex remote launcher', () => {
         PATH: `${bin}:${process.env.PATH ?? ''}`,
         CAPTURE: capture,
         NODETERM_CANVAS_CONTROL: '1',
-        NODETERM_NODE_ID: 'node-a',
-        NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
-        NODETERM_HOOK_ENDPOINT: endpoint,
+        NODETERM_NODE_ID: 'node-a',        NODETERM_HOOK_ENDPOINT: endpoint,
         NODETERM_CODEX_RELAY_RUNTIME: runtime,
         NODETERM_CODEX_RELAY_SCRIPT: script
       },
@@ -352,9 +371,7 @@ describe('NodeTerm Codex remote launcher', () => {
       ...process.env,
       PATH: `${bin}:${process.env.PATH ?? ''}`,
       NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_NODE_ID: 'node-a',
-      NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
-      NODETERM_HOOK_ENDPOINT: endpoint,
+      NODETERM_NODE_ID: 'node-a',      NODETERM_HOOK_ENDPOINT: endpoint,
       NODETERM_CODEX_RELAY_RUNTIME: runtime,
       NODETERM_CODEX_RELAY_SCRIPT: script
     })).rejects.toMatchObject({ code: 69 })
@@ -372,9 +389,7 @@ describe('NodeTerm Codex remote launcher', () => {
       ...process.env,
       PATH: `${bin}:${process.env.PATH ?? ''}`,
       NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_NODE_ID: 'node-a',
-      NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
-      NODETERM_HOOK_ENDPOINT: '/isolated/node-a/hook.env'
+      NODETERM_NODE_ID: 'node-a',      NODETERM_HOOK_ENDPOINT: '/isolated/node-a/hook.env'
     }
     await expect(runLauncher(launcher, ['resume'], env)).rejects.toMatchObject({ code: 64 })
     await expect(runLauncher(launcher, ['resume', '../other'], env)).rejects.toMatchObject({ code: 64 })
