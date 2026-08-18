@@ -4,6 +4,8 @@ import { NODE_COLORS } from '../state/workspace'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { useMenuFilter, type MenuFilterItem } from './menu/useMenuFilter'
 import { FilterableMenuHeader } from './menu/FilterableMenu'
+import { isFilterableMenu, menuRowVisibility } from './menu/menuVisibility'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { keyLabel } from '@shared/platform-utils'
 import type { AccountPresentation } from '../lib/accountPresentation'
 import { AccountIdentityPills } from './AccountIdentityPills'
@@ -94,18 +96,6 @@ interface ContextMenuProps {
   scroll?: boolean
 }
 
-/** Below this count a filter field costs more space than it saves — see the CLAUDE.md note on
- *  this exact trade-off. Menus at or under this size render exactly as before. */
-const FILTER_THRESHOLD = 6
-
-/** Only a fully flat menu (every entry is a plain clickable item — no submenu/colors/separator/
- *  label mixed in) is filterable. Filtering a menu with sections would mean deciding what happens
- *  to a group's label/separator once every row under it is filtered out — real UI work this lane
- *  didn't attempt; those menus render exactly as they did before this change. */
-function isFilterable(items: MenuItem[]): boolean {
-  return items.length > FILTER_THRESHOLD && items.every((it) => !it.type || it.type === 'item')
-}
-
 /**
  * A right-click menu rendered in a body portal at fixed coordinates, so it is never
  * clipped or hidden behind the canvas. Closes on backdrop click.
@@ -138,29 +128,44 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
       ?.focus()
   }, [menuId, openSub])
 
-  const filterable = isFilterable(items)
-  // Hooks run every render regardless of `filterable` — only the array CONTENT differs — so the
-  // rules of hooks hold even though filtering is conditionally rendered below.
-  const filterItems: MenuFilterItem[] = filterable
-    ? items.map((it, i) => ({
-        id: String(i),
-        label: it.type === 'item' || !it.type ? it.label : '',
-        disabled: it.type === 'item' || !it.type ? it.disabled : false
-      }))
-    : []
-  const menuFilter = useMenuFilter(filterItems, {
+  const filterable = isFilterableMenu(items)
+  // Hooks run every render regardless of `filterable` — only what we DO with the results differs —
+  // so the rules of hooks hold even though filtering is conditionally rendered below.
+  const search = useRegexSearchField()
+  // The full per-row visibility (items, submenus, colors, labels, separators) — the single source
+  // of truth `menuRowVisibility` computes; see its doc for the section/dangling-separator rules.
+  const rowVisible = filterable ? menuRowVisibility(items, search.test, search.active) : []
+  // The KEYBOARD-navigable subset: only rows with their own activation (plain items and submenu
+  // triggers) — a label/separator/colors row has no "activate" semantic for Enter/arrow nav.
+  // Built with an explicit loop (not filter+map) so TypeScript narrows `it` per branch instead of
+  // losing the union across the chain.
+  const filterItems: MenuFilterItem[] = []
+  if (filterable) {
+    items.forEach((it, i) => {
+      if (!rowVisible[i]) return
+      if (it.type === 'item' || !it.type) {
+        filterItems.push({ id: String(i), label: it.label, disabled: it.disabled })
+      } else if (it.type === 'submenu') {
+        filterItems.push({ id: String(i), label: it.label, disabled: false })
+      }
+    })
+  }
+  const menuFilter = useMenuFilter(filterItems, search, {
     onActivate: (fi) => {
       const item = items[Number(fi.id)]
-      if (item && (item.type === 'item' || !item.type)) {
+      if (!item) return
+      if (item.type === 'item' || !item.type) {
         item.onClick()
         onClose()
+      } else if (item.type === 'submenu') {
+        // Enter on a filtered submenu row opens its flyout — the same target ArrowRight already
+        // reaches — instead of silently no-op'ing now that submenu rows are keyboard-reachable.
+        keyboardOpenedSub.current = Number(fi.id)
+        setOpenSub(Number(fi.id))
       }
     },
     onEmptyEscape: onClose
   })
-  const visibleIndices = filterable
-    ? new Set(menuFilter.filtered.map((fi) => Number(fi.id)))
-    : null
 
   return createPortal(
     <>
@@ -190,7 +195,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
           <div className="ctx-empty">No matches</div>
         )}
         {items.map((item, i) => {
-          if (visibleIndices && !visibleIndices.has(i)) return null
+          if (filterable && !rowVisible[i]) return null
           if (item.type === 'separator') return <div key={i} className="ctx-sep" role="separator" />
           if (item.type === 'label') return <div key={i} className="ctx-label">{item.label}</div>
           if (item.type === 'colors') {
@@ -217,14 +222,20 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                 key={i}
                 className="ctx-submenu-host"
                 role="none"
-                onMouseEnter={() => setOpenSub(i)}
+                onMouseEnter={() => {
+                  setOpenSub(i)
+                  if (filterable)
+                    menuFilter.setActiveIndex(
+                      menuFilter.filtered.findIndex((fi) => fi.id === String(i))
+                    )
+                }}
                 onMouseLeave={() => setOpenSub((cur) => (cur === i ? null : cur))}
               >
                 <button
                   id={triggerId}
                   type="button"
                   role="menuitem"
-                  className="ctx-item ctx-item--submenu"
+                  className={`ctx-item ctx-item--submenu${filterable && menuFilter.filtered[menuFilter.activeIndex]?.id === String(i) ? ' kbd-active' : ''}`}
                   aria-haspopup="menu"
                   aria-expanded={openSub === i}
                   aria-controls={submenuId}

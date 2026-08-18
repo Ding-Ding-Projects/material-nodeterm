@@ -1,17 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRegexSearchField, type RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
+import { useEffect, useRef, useState } from 'react'
+import type { RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
 
 export interface MenuFilterItem {
   /** Stable identity for keyboard tracking (index survives a re-filter better with this). */
   id: string
-  /** What the filter matches against — plain text substring, or the regex pattern in regex mode. */
+  /** Display/debug label — NOT used to decide matching. Whether an item belongs in `items` is the
+   *  caller's decision (see the hook doc below), because only the caller knows the matching rule
+   *  for its own menu shape (a flat menu matches an item's own label; a sectioned menu also
+   *  matches a submenu on a child's label — one hardcoded `search.test(it.label)` here couldn't
+   *  serve both). */
   label: string
   disabled?: boolean
 }
 
 export interface UseMenuFilterResult<T extends MenuFilterItem> {
   search: RegexSearchFieldState
-  /** Items whose label currently matches (plain text or regex — an empty query matches all). */
+  /** Exactly the `items` passed in, unchanged — kept under this name because `FilterableMenuHeader`
+   *  and every render site already read `.filtered`. */
   filtered: T[]
   activeIndex: number
   setActiveIndex: (i: number) => void
@@ -22,25 +27,30 @@ export interface UseMenuFilterResult<T extends MenuFilterItem> {
 }
 
 /**
- * Backs every filterable menu/dropdown in the app — a keyboard-focusable filter field at the head
- * of a list of items, filtering LOCALLY without changing what any item does. See FilterableMenu.md
- * (docs/regex-builder.md) for the full contract this hook exists to satisfy.
+ * Keyboard bookkeeping for a filterable list: which row is "active" (arrow keys move it, Enter
+ * activates it via `onActivate`), kept in range as `items` shrinks/grows every keystroke.
+ *
+ * `items` must already be the CALLER's filtered candidate list for the current query — this hook
+ * does not call `search.test` itself. It used to (`items.filter(it => search.test(it.label))`),
+ * but that hardcoded "match on this exact field" is wrong once a caller's matching rule is more
+ * than one field (ContextMenu.tsx's sectioned menus match a submenu row on a CHILD's label too,
+ * via `menuRowVisibility`) — a single `label` string can't encode an OR-of-several-fields test.
+ * Own your `search` state (`useRegexSearchField`) and your matching decision; hand this hook only
+ * the result plus that same `search` object (`FilterableMenuHeader` binds directly to it).
  */
 export function useMenuFilter<T extends MenuFilterItem>(
   items: T[],
+  search: RegexSearchFieldState,
   opts?: { onActivate?: (item: T) => void; onEmptyEscape?: () => void }
 ): UseMenuFilterResult<T> {
-  const search = useRegexSearchField()
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const filtered = useMemo(() => items.filter((it) => search.test(it.label)), [items, search])
-
-  // Keep the active row in range as the filtered set shrinks/grows (typing narrows it every
-  // keystroke) rather than pointing at an index that no longer exists.
+  // Keep the active row in range as the caller's filtered set shrinks/grows (typing narrows it
+  // every keystroke) rather than pointing at an index that no longer exists.
   useEffect(() => {
-    setActiveIndex((i) => Math.min(i, Math.max(0, filtered.length - 1)))
-  }, [filtered.length])
+    setActiveIndex((i) => Math.min(i, Math.max(0, items.length - 1)))
+  }, [items.length])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -49,13 +59,13 @@ export function useMenuFilter<T extends MenuFilterItem>(
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1))
+      setActiveIndex((i) => Math.min(i + 1, items.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setActiveIndex((i) => Math.max(i - 1, 0))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      const item = filtered[activeIndex]
+      const item = items[activeIndex]
       if (item && !item.disabled) opts?.onActivate?.(item)
     } else if (e.key === 'Escape') {
       if (search.active) {
@@ -68,5 +78,5 @@ export function useMenuFilter<T extends MenuFilterItem>(
     }
   }
 
-  return { search, filtered, activeIndex, setActiveIndex, inputRef, onInputKeyDown }
+  return { search, filtered: items, activeIndex, setActiveIndex, inputRef, onInputKeyDown }
 }

@@ -49,3 +49,22 @@ const HIDEABLE_IDS = new Set<string>(
 export function isHidden(id: string, hidden: readonly string[]): boolean {
   return HIDEABLE_IDS.has(id) && hidden.includes(id)
 }
+
+/**
+ * Drop the separators a hidden/filtered row leaves dangling: a menu's rules are written between
+ * blocks, so removing every row of a block would otherwise emit two rules in a row (or one
+ * hanging at the top/bottom). Also drops a rule directly under a section label — reads as a
+ * double line. Cheap and total, so a caller can stay a plain array literal (Canvas.tsx's menu
+ * builders) or a filtered view of one (ContextMenu.tsx's live filter) instead of tracking what's
+ * left as it builds/filters. Generic over the row shape so both share ONE definition of "this
+ * separator would dangle" rather than two that can drift apart.
+ */
+export function tidySeparators<T extends { type?: string }>(items: T[]): T[] {
+  return items
+    .filter((item, i, all) => {
+      if (item.type !== 'separator') return true
+      const prev = all[i - 1]
+      return !!prev && prev.type !== 'separator' && prev.type !== 'label'
+    })
+    .filter((item, i, all) => item.type !== 'separator' || i < all.length - 1)
+}

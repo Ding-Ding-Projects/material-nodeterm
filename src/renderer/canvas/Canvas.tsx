@@ -435,7 +435,7 @@ import { modalSpawnFromNodeData } from '../components/kanban/modal-spawn'
 import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTags, resolveColumnRef, unassigned } from '../lib/kanban'
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
 import { canClearDirty, commitActiveCanvas } from '../state/persistGuards'
-import { isHidden } from '../lib/ui-visibility'
+import { isHidden, tidySeparators } from '../lib/ui-visibility'
 import { presentAccount, type AccountPresentation } from '../lib/accountPresentation'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
@@ -811,19 +811,6 @@ function terminalCreationOptionsFor(
     ...(terminalProfileId ? { terminalProfileId } : {})
   }
 }
-
-/** Drop the separators a hidden row leaves dangling: the menu's rules are written between blocks,
- *  so hiding every row of a block would otherwise emit two rules in a row (or one hanging at the
- *  top / bottom). Also drops a rule directly under a section label, which reads as a double line.
- *  Cheap and total, so the builders can stay plain array literals instead of tracking what is left. */
-const tidySeparators = (items: MenuItem[]): MenuItem[] =>
-  items
-    .filter((item, i, all) => {
-      if (item.type !== 'separator') return true
-      const prev = all[i - 1]
-      return !!prev && prev.type !== 'separator' && prev.type !== 'label'
-    })
-    .filter((item, i, all) => item.type !== 'separator' || i < all.length - 1)
 
 // The minimap subscribes to agent status HERE, in its own tiny component — not in Canvas.
 // Canvas must not subscribe to the whole status map (every working/waiting flip would re-render
@@ -7001,7 +6988,7 @@ export function Canvas() {
     // Destructive/recovery rows (Delete, Restart agent, Branch/Transfer) are not hideable at all:
     // `isHidden` only answers for ids in its own inventory.
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
-    return tidySeparators([
+    return tidySeparators<MenuItem>([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
       ...((): MenuItem[] => {
         // "Group …" wraps objects that share ONE container — existing frames are valid members
@@ -7659,7 +7646,7 @@ export function Canvas() {
       const groupHidden = isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
       // The group frame has its own colors strip; it answers to the same "Colors" toggle as the
       // node menu, so hiding it in Settings hides it everywhere a right-click can reach it.
-      return tidySeparators([
+      return tidySeparators<MenuItem>([
         { type: 'label', label: 'Group' },
         ...(canAddSelection && !groupHidden
           ? [
@@ -7783,11 +7770,19 @@ export function Canvas() {
       // "New file…" needs a project folder to create into — hidden when the project has no cwd.
       const project = useProjects.getState().getProject(activeProjectId)
       const hasCwd = !!(project?.ssh?.remoteCwd ?? project?.cwd)
+      // Computed once: the "Agents" section heading only appears when there is at least one row
+      // under it (every builtin agent can be individually disabled in Settings, and a Kids-mode
+      // canvas can reach zero) — an empty heading would claim a group that isn't there.
+      const agentItems = agentCreationItems(at)
       setMenu({
         x: e.clientX,
         y: e.clientY,
-        items: [
-          // Sessions: local terminal, agent CLIs, remote host.
+        // Named sections (2026-08): a flat ~17-row list read as an endless list with only
+        // unlabeled rules between blocks. tidySeparators is still run over the result — a no-op
+        // today since every rule below was replaced by a label, but it stays cheap insurance if a
+        // future edit reintroduces a bare separator.
+        items: tidySeparators<MenuItem>([
+          { type: 'label', label: 'Terminals' },
           {
             label: 'New terminal',
             icon: <IconTerminal />,
@@ -7795,14 +7790,15 @@ export function Canvas() {
             onClick: defaultTerminalCreationHandler(addTerminal, { center: at })
           },
           ...terminalProfileCreationItems(at),
-          ...agentCreationItems(at),
           {
             label: 'New remote…',
             icon: <IconTerminal />,
             onClick: () => openRemotePicker({ x: e.clientX, y: e.clientY })
           },
-          { type: 'separator' },
-          // Content nodes.
+          ...(agentItems.length > 0
+            ? [{ type: 'label', label: 'Agents' } as MenuItem, ...agentItems]
+            : []),
+          { type: 'label', label: 'Canvas objects' },
           {
             label: 'New browser',
             icon: <IconRemote />,
@@ -7831,7 +7827,7 @@ export function Canvas() {
           ...(hasCwd
             ? [{ label: 'New file…', icon: <IconEditor />, onClick: () => void newProjectFile(at) }]
             : []),
-          { type: 'separator' },
+          { type: 'label', label: 'Worktree' },
           // A worktree lands as a group frame bound to it; nodes created inside inherit its path.
           // Disabled (with the reason) on an SSH project — see WORKTREE_SSH_HINT.
           {
@@ -7841,7 +7837,7 @@ export function Canvas() {
             hint: isSshProject ? WORKTREE_SSH_HINT : undefined,
             onClick: () => openWorktreeDialog(null, at)
           },
-          { type: 'separator' },
+          { type: 'label', label: 'Drawing' },
           // Draw tools (issue #145): arm one, then drag on the canvas — Esc cancels. "Draw colored
           // area" is an empty group frame (the SAME coloured frame `groupSelectedNodes` already
           // builds around a selection); "Draw line"/"Draw arrow" are standalone annotation nodes
@@ -7861,8 +7857,7 @@ export function Canvas() {
             icon: <IconAnnotationArrow />,
             onClick: () => drawTool.startTool('arrow')
           },
-          { type: 'separator' },
-          // Canvas actions.
+          { type: 'label', label: 'Canvas' },
           { label: 'Select all', icon: <IconSelectAll />, onClick: selectAll },
           // fitAll, NOT the raw fitView: fitAll frames against the CURRENT chrome layout (the same
           // wrapper the command palette's Fit view uses). #227 swapped this to bare fitView, which
@@ -7885,7 +7880,7 @@ export function Canvas() {
                 } as MenuItem
               ]
             : [])
-        ]
+        ])
       })
     },
     [
