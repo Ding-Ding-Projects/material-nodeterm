@@ -488,3 +488,32 @@ Two deliberate non-fixes, both recorded rather than papered over:
   compatibility (`state >= negotiated`) rather than equality remains the likely fix and was again
   NOT applied: changing handshake logic in the Windows persistence path deserves a verified change,
   not a plausible one.
+
+## Open: a fixture directory outlives the Server Edition shutdown test
+
+`test/server/server-e2e.test.ts` intermittently could not remove its own temp directory on Windows,
+failing the run with `EPERM` on the directory itself — in teardown, after every assertion about
+shutdown ordering had already passed.
+
+Measured rather than assumed, because the obvious fix is the wrong one:
+
+| bounded retry | failure rate |
+|---|---|
+| 1 s (20 x 50 ms) — what was there | ~1 run in 4 |
+| 5 s (100 x 50 ms) | ~1 run in 6 |
+
+A holder that survives **five seconds** of retries is not the transient post-close lag the original
+comment assumed, so buying more time is not the fix and the 5 s change was reverted. Something still
+owns a handle to that directory when the test ends. `EPERM` naming the directory (not a file inside
+it) points at a directory handle or a process whose working directory it is — the same class as the
+`EBUSY` that a shell sitting inside `node_modules/node-pty/deps/winpty/src` caused during this
+session's installer build.
+
+Teardown no longer decides the verdict: the retry stays bounded and short, and exhausting it now
+logs a warning naming the directory instead of turning "a temp directory outlived the run" into
+"shutdown ordering is broken". Eight consecutive runs pass.
+
+**Still open**, and deliberately not guessed at: WHO holds it. The candidates worth checking first
+are a SQLite-backed service, and any child process spawned with that directory as its working
+directory that outlives `close()`. If it is a child outliving shutdown, that is a product defect
+rather than a test one, and the warning is what will keep it visible.
