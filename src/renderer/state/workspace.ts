@@ -687,9 +687,21 @@ export function createCodexAccountLoginNode(
     // Account login has no relationship to the active project. In particular, keeping the
     // project's cwd here makes macOS evaluate Documents/Desktop TCC before Codex can even show
     // its device-flow URL. A denied project directory then looks like a broken account home.
-    // Move to the user's neutral home first; the selected CODEX_HOME still comes from the node's
-    // codexAccountId and remains fully isolated.
-    initialCommand: `cd \"$HOME\" && codex -c cli_auth_credentials_store=\"file\" login --device-auth`
+    // So this must start in the user's neutral home; the selected CODEX_HOME still comes from the
+    // node's codexAccountId and remains fully isolated either way.
+    //
+    // HOW it gets there is split, because `&&` is not a statement separator in Windows PowerShell
+    // 5.1 — the stock shell on a machine without pwsh 7. The chained form parsed as far as `&&`
+    // and died with "The token '&&' is not a valid statement separator in this version", so the
+    // login never ran and the node just showed a red parser error. Locally there is nothing to
+    // chain: this factory passes NO cwd, and core resolves an unset cwd to os.homedir() already
+    // (pty-manager), so the bare command starts in home on every platform. Only the SSH leg needs
+    // the `cd`, because there data.cwd is the project's remoteCwd — and that leg is always a POSIX
+    // remote shell, where `&&` is fine. Do not "unify" these back into one line: there is no
+    // separator that means and-then in POSIX sh, PowerShell 5.1 and cmd alike.
+    initialCommand: ssh
+      ? `cd \"$HOME\" && codex -c cli_auth_credentials_store=\"file\" login --device-auth`
+      : `codex -c cli_auth_credentials_store=\"file\" login --device-auth`
   }
   return node
 }

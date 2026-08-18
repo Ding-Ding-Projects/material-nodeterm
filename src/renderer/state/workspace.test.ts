@@ -635,7 +635,19 @@ describe('Codex account node factories', () => {
       title: 'Codex login',
       codexAccountId: 'codex-a'
     })
-    expect(node.data.initialCommand).toMatch(/^cd \"\$HOME\" && codex /)
+    // No `cd &&` chain locally: `&&` is a parse error in Windows PowerShell 5.1, and core already
+    // starts an unset cwd in os.homedir(), so the bare command lands in home on every platform.
+    expect(node.data.initialCommand).toMatch(/^codex /)
+    expect(node.data.initialCommand).not.toContain('&&')
+    expect(node.data.initialCommand).toContain('login --device-auth')
+  })
+
+  it('keeps the cd chain on SSH, where the cwd is the remote project dir and the shell is POSIX', () => {
+    const node = createCodexAccountLoginNode('codex-a', 0, undefined, {
+      server: { host: 'h', user: 'u' },
+      remoteCwd: '/srv/app'
+    } as Parameters<typeof createCodexAccountLoginNode>[3])
+    expect(node.data.initialCommand).toMatch(/^cd "\$HOME" && codex /)
     expect(node.data.initialCommand).toContain('login --device-auth')
   })
 })
