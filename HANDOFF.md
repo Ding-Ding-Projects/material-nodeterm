@@ -551,29 +551,48 @@ node ever saw the string — `startServer`, `fs.watch`, `dispose()` and `close()
 the result was committed and pushed in that state. CLAUDE.md already warns about backticks in a
 double-quoted `node -e`; the reliable route is a quoted heredoc into a file, then read the file.
 
-## Open: four commits on `main` carry a placeholder identity
+## Open: eight commits on `main` carry a placeholder identity
 
-`4ff914b1`, `5802bf16`, `e28e4321` and `fadb0843` (2026-08-17) are authored **and** committed by
-`Smoke User <smoke@example.invalid>`, with no `Co-Authored-By` trailer. A harness left an identity
-configured and pushed real work under it: 104 insertions across 16 files, including
-`src/renderer/state/workspace.ts`, `src/core/speech/speech-service.ts`, `CONTRIBUTING.md` and
-`AGENTS.md`.
+`4ff914b1`, `5802bf16`, `e28e4321`, `fadb0843`, then `a3d28e75`, `1693b82a`, `69d2db23` and
+`4a5596f6` (2026-08-17) are authored **and** committed by `Smoke User <smoke@example.invalid>`
+with no `Co-Authored-By` trailer. A harness left an identity configured and pushed real work under
+it, including `src/renderer/state/workspace.ts`, `src/core/speech/speech-service.ts`,
+`src/renderer/components/ContextMenu.tsx`, `.github/workflows/release.yml`, `CLAUDE.md`,
+`CONTRIBUTING.md` and `AGENTS.md`.
 
-It is not cosmetic. `scripts/count-lines.mjs` attributes a surviving line to an agent when the
-author matches a known automation identity **or** the body carries such a trailer, and to a
-**person** otherwise. These match neither, so those lines are counted as person-written in every
-future release, and `git blame` answers with an address that by definition cannot receive mail.
+It is not cosmetic, and the size is measured rather than estimated: at `4a5596f6`, **1,256
+surviving lines** were being credited to a person who does not exist. `scripts/count-lines.mjs`
+attributed a line to an agent when the author matched a known automation identity **or** the body
+carried such a trailer, and to a **person** otherwise — and a placeholder matches neither. `git
+blame` also answers with an address that by definition cannot receive mail.
 
-**Not fixed here, deliberately.** The commits are published; correcting the identity means
-rewriting them, which is a force-push, which needs the branch owner's explicit say-so and is never
-an agent's call — least of all to tidy something up.
+**The miscount is fixed; the history is not.** The counter now routes a line whose author sits on
+a reserved, un-routable domain to `unknown` — the bucket that already means "nobody can be
+credited for this" — instead of to a person. Proved by an A/B at one ref rather than asserted:
+person 57,297 -> 56,041, unknown 0 -> 1,256, agent unchanged at 339,078. The arithmetic agrees
+with itself. The published `rule:` sentence was updated in the same change, because a rule that
+describes behaviour the code no longer has is worse than no rule.
 
-**Recurrence is now blocked.** `scripts/check-commit-identity.mjs`, wired into the pre-push hook,
-refuses a push carrying an author or committer at a domain RFC 2606 / RFC 6761 reserve so it can
-never resolve (`.invalid`, `.test`, `.example`, `.localhost`, and the `example.*` documentation
-names). It checks only the commits actually being sent, so what is already published is not its
-business. Verified both ways: it flags exactly those four and nothing else across 200 commits that
-include five real contributors' addresses, and an ordinary push with nothing new to send passes.
+Correcting the commits themselves means rewriting published history, which is a force-push, which
+needs the branch owner’s explicit say-so and is never an agent’s call — least of all to tidy
+something up.
 
-It deliberately does NOT enforce "one identity". This history legitimately carries several real
-people, and a check that demanded a single name would refuse their work.
+**Recurrence is reduced, NOT blocked — do not read the guard as more than it is.**
+`scripts/check-commit-identity.mjs` is wired into `.githooks/pre-push` and refuses a push carrying
+an author or committer at a domain RFC 2606 / RFC 6761 reserve so it can never resolve. It checks
+only the commits actually being sent, so what is already published is not its business, and it
+deliberately does not enforce "one identity" — this history legitimately carries several real
+people, and a check demanding a single name would refuse their work.
+
+What it cannot do was demonstrated 31 seconds after it landed: four more placeholder commits
+reached `main` from a parallel session, rebased onto the guard commit itself. A pre-push hook
+binds one checkout that has opted into `core.hooksPath`; it binds no separate clone, and
+`--no-verify` walks past it. The enforcement point that would actually hold is a server-side
+check, and this project deliberately runs no gating checks in Actions (see
+`docs/ci-and-releases.md`), so that is a decision for the repository owner rather than something
+to quietly add. Until then the guard is a good local habit, not a boundary.
+
+Verified in both directions rather than assumed: it flags exactly those eight and nothing else
+across 300 commits containing five real contributors’ addresses, it refuses a simulated push that
+would carry them, an ordinary push with nothing new to send passes, and breaking the matcher turns
+`scripts/reserved-identity.test.mjs` red (3 of 7) before restoring it turns it green.
