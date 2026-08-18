@@ -3,7 +3,7 @@
 // tab/node/setting…"); this section is where they're all reviewed and taken off again. See
 // docs/toy-locks.md.
 import { useEffect, useMemo, useState } from 'react'
-import type { ToyLockRecord } from '@shared/toylock'
+import type { ToyLockCredentialKind, ToyLockRecord } from '@shared/toylock'
 import { useToyLocks } from '../../../state/toylocks'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
@@ -18,6 +18,28 @@ function targetKindLabel(kind: ToyLockRecord['target']['kind']): string {
   if (kind === 'tab') return 'Tab'
   if (kind === 'node') return 'Node'
   return 'Setting'
+}
+
+/**
+ * What this lock actually asks for, one honest phrase per credential kind.
+ *
+ * A `Record` keyed on the whole union — deliberately NOT the
+ * `kind === 'password' ? 'Password' : 'Authenticator code'` it replaces — for exactly the reason
+ * toylock-service.ts's `verify()` is an exhaustive `switch`: a two-branch shape claims every kind
+ * it has never heard of. That is not hypothetical here, it had already happened twice over: a
+ * `password-totp` lock (which needs BOTH factors) and a `windows-pin` lock (which needs neither a
+ * TOTP app nor anything else) both printed "Authenticator code" in the one list that is supposed
+ * to be the honest inventory of what is locked on this machine. A fifth credential kind now fails
+ * to COMPILE here instead of silently mislabelling itself.
+ *
+ * Copy note: "Windows PIN", never "Windows Hello". It is a numeric password hashed like any other
+ * — nodeterm has no Windows Hello prompt to call into and must not imply one (docs/toy-locks.md).
+ */
+const CREDENTIAL_KIND_LABELS: Record<ToyLockCredentialKind, string> = {
+  password: 'Password',
+  totp: 'Authenticator code',
+  'password-totp': 'Password + authenticator code (both required)',
+  'windows-pin': 'Windows PIN'
 }
 
 function durationLabel(record: ToyLockRecord): string {
@@ -125,7 +147,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
                       <span className="font-normal text-muted">({targetKindLabel(r.target.kind)})</span>
                     </div>
                     <div className="text-[12px] text-muted">
-                      {r.credentialKind === 'password' ? 'Password' : 'Authenticator code'} ·{' '}
+                      {CREDENTIAL_KIND_LABELS[r.credentialKind]} ·{' '}
                       {durationLabel(r)} · {r.lockedOnLaunch ? 'locked on launch' : 'stays as unlocked as you left it'}
                     </div>
                   </div>

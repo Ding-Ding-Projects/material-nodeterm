@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { type CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
 import { useActiveSessionPresence } from '../session/session'
+import { alphaTint } from '../components/color/tint'
 import { createDinoGame } from './dino/dino-game'
 import { shouldSpectate } from './dino/dino-authority'
 
@@ -94,7 +95,12 @@ export function DinoNode({ id, data, selected }: NodeProps<CanvasNode>) {
     <div className={`dino-node${selected ? ' selected' : ''}`} style={{ borderColor: data.color }}>
       <NodeResizer minWidth={400} minHeight={160} isVisible={selected} color={data.color} />
 
-      <div className="dino-node__header" style={{ background: `${data.color}33` }}>
+      {/* alphaTint, NOT `${data.color}33`: appending hex alpha only yields a colour when the string
+          is 6-digit hex, and `data.color` is a plain string a node menu's full picker can set to
+          `rgb(…)` / `oklch(…)` — `"rgb(10, 132, 255)33"` is not a colour, so CSS drops the whole
+          declaration and the header tint silently disappears (the same failure StickyNode and
+          GroupNode already fixed). 51/255 is exactly what the `33` suffix meant. */}
+      <div className="dino-node__header" style={{ background: alphaTint(data.color, 51 / 255) }}>
         <span className="term-node__color" style={{ background: data.color }} />
         <input
           className="term-node__title nodrag"

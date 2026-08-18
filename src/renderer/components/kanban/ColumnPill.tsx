@@ -1,4 +1,5 @@
 import { columnForNode } from '../../lib/kanban'
+import { alphaTint } from '../color/tint'
 import { useProjects } from '../../state/projects'
 import { useViewMode } from '../../state/viewMode'
 
@@ -13,7 +14,13 @@ export function ColumnPill({ nodeId }: { nodeId: string }) {
   return (
     <button
       className="kanban-node-pill nodrag"
-      style={{ background: `${column.color}2e`, borderColor: column.color, color: column.color }}
+      // alphaTint, NOT `${column.color}2e`: a hex-alpha suffix is only a colour for 6-digit hex,
+      // so the moment the column recolour strip offers anything the picker can emit
+      // (`rgb(…)`, `oklch(…)`) the pill's fill silently vanishes while its border stays right —
+      // CSS drops the unparsable declaration and says nothing. Latent today only because
+      // KanbanColumn's swatches are NODE_COLORS presets; fixed so widening them stays safe.
+      // 46/255 is exactly what the `2e` suffix meant.
+      style={{ background: alphaTint(column.color, 46 / 255), borderColor: column.color, color: column.color }}
       title={`Kanban: ${column.title} — open the board`}
       onClick={(e) => {
         e.stopPropagation() // don't select/drag the node under the pill

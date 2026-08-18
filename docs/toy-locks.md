@@ -238,10 +238,6 @@ handler for the Server Edition does not, by itself, make it relay-callable.
 
 This shipped in a few focused passes and is honest about what didn't make it in:
 
-- **The Settings → Toy locks list still shows a two-way credential label** (`ToyLocksSection.tsx`:
-  `credentialKind === 'password' ? 'Password' : 'Authenticator code'`) — a combo or Windows-PIN
-  lock displays as "Authenticator code" there even though it isn't one. That file was outside this
-  pass's editable surface; the label needs a fourth branch.
 - **No command-palette "(locked)" label on search results yet.** Locked surfaces are honest in
   their own native search/UI (the tab strip, the Toy locks list), but a locked tab/node doesn't
   currently show a distinct "(locked)" badge inside the ⌘K command palette's own results.

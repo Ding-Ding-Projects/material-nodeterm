@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { loadIdentity, selectFaces, usePresence } from '../../state/presence'
 import { useBoardLog } from '../../state/boardLog'
 import { useProjects } from '../../state/projects'
+import { alphaTint } from '../color/tint'
 
 const initialOf = (name: string): string => (name.trim()[0] ?? '?').toUpperCase()
 
@@ -155,7 +156,16 @@ export function CardMetaBar({ nodeId, board, onChange }: CardMetaBarProps) {
             <button
               key={pr.id}
               className={`kanban-prio${priority === pr.id ? ' kanban-prio--on' : ''}`}
-              style={priority === pr.id ? { background: `${pr.color}2e`, borderColor: pr.color, color: pr.color } : undefined}
+              // alphaTint, NOT `${pr.color}2e`: appending hex alpha is only a colour for 6-digit
+              // hex, so a PRIORITIES entry given any picker-shaped colour (`rgb(…)`, `oklch(…)`)
+              // would leave the selected chip with a correct border and NO fill — CSS drops the
+              // unparsable declaration silently. Latent while PRIORITIES stays hex presets; fixed
+              // so it cannot become a real defect. 46/255 is exactly what `2e` meant.
+              style={
+                priority === pr.id
+                  ? { background: alphaTint(pr.color, 46 / 255), borderColor: pr.color, color: pr.color }
+                  : undefined
+              }
               title={priority === pr.id ? `${pr.label} — click to clear` : pr.label}
               onClick={() => onChange(setCardPriority(board, nodeId, priority === pr.id ? null : pr.id))}
             >
