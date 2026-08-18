@@ -1,21 +1,41 @@
 # Material Design 3 migration — measured status
 
-Written because "the GUI is not fully Material yet" is true but not actionable, and because two
-plausible readings of the gap are both wrong. These are counts taken from the tree, not estimates.
+Written because "the GUI is not fully Material yet" is true but not actionable. These are counts
+taken from the tree, and the document has already been wrong once — see the correction at the end,
+which is kept because the way it was wrong is the interesting part.
 
-## What is actually there
+## What is there
 
-`src/renderer/styles.css` defines **89 custom properties**, referenced **1,954 times**. Of those,
-**38 carry the `--md-` prefix** and are Material colour/shape roles.
+`src/renderer/styles.css` defines **89 custom properties**, of which **38 carry the `--md-` prefix**
+and are Material colour and shape roles.
 
 The prefix matters when you go looking: they are `--md-primary`, not `--md-sys-color-primary`. A
 search for the canonical `--md-sys-` spelling returns **nothing**, which reads as "no Material
 tokens exist" and is wrong.
 
-## The half that is real
+**Thirty of the 38 are defined as aliases onto the app's existing palette**, not as new colours:
 
-Eighteen `--md-` tokens have readers, and they are the FOREGROUND roles — the ones that decide what
-text and strokes look like:
+```css
+--md-surface:                   var(--bg);
+--md-surface-container-lowest:  var(--surface-black);
+--md-surface-container-low:     var(--surface-deep);
+--md-surface-container-high:    var(--surface-raised);
+--md-surface-container-highest: var(--surface-overlay);
+```
+
+That is the design of the thing, and it is a good one. The Material vocabulary exists and resolves
+to what the application already renders, so a component can be moved onto `--md-surface` in one
+commit **without changing a pixel** — and the day the palette itself is re-derived from the design's
+scheme, every component already speaking Material moves with it. It is a bridge, deliberately built.
+
+`src/renderer/styles.theme.test.ts` guards all 38 with a hand-written inventory, and says why it is
+hand-written: a scan cannot notice a role that disappeared entirely, it would just quietly stop
+checking it.
+
+## Where the migration actually stands
+
+Of the 38, **18 have a `var()` consumer in the stylesheet** and 20 do not. The 18 are the foreground
+roles — the ones that decide what text and strokes look like:
 
 | token | references |
 |---|---:|
@@ -27,65 +47,48 @@ text and strokes look like:
 | `--md-error` | 9 |
 | `--md-on-primary` | 5 |
 | `--md-shape-*` (5 tokens) | 13 combined |
-| `--md-primary-container`, `--md-on-primary-container` | 5 combined |
-| `--md-success`, `--md-error-container`, `--md-warning`, `--md-success-container` | 8 combined |
+| remaining container/status roles | 18 combined |
 
-## The half that is declared and inert
+The 20 without a consumer are the surface ramp and the secondary/tertiary families. Nothing renders
+*through* them yet; chrome still names `--bg`, `--panel`, `--surface-sunken` and friends directly.
+The four `--md-primary*` roles are additionally set at runtime from TypeScript
+(`renderer/lib/accentTokens.ts`), so a custom accent moves the Material primary family with it.
 
-**Twenty `--md-` tokens are defined and referenced nowhere.** They are not a random scattering —
-they are precisely the surface system and the secondary/tertiary families:
-
-```
---md-surface            --md-surface-dim           --md-scrim
---md-surface-container-lowest / -low / -high / -highest
---md-secondary          --md-secondary-container   --md-on-secondary-container
---md-tertiary           --md-tertiary-container    --md-on-tertiary-container
---md-on-error-container --md-on-success-container
---md-warning-container  --md-on-warning-container
---md-shadow             --md-shape-none
-```
-
-Surfaces are still drawn from the original macOS HIG palette — `--bg`, `--panel`, `--panel-header`,
-`--surface-sunken`, `--surface-raised`, `--surface-overlay` — which is a coherent, carefully
-documented elevation ramp in its own right, not sloppiness. It simply is not Material's.
-
-**This is the state CLAUDE.md warns about by name.** A token with no reader is the same defect as a
-density control that swapped five properties of which four nothing consumed: the value is stored,
-the migration looks under way, and nothing renders differently. Twenty inert tokens will also
-silently answer "yes, we have Material surfaces" to anyone who greps for one.
-
-## What the design actually asks for
+## What the design asks for
 
 The design export (`Nodeterm MD3.dc.html`) carries **30 colour roles, each with a light and a dark
-value** — a canonical M3 scheme (its `--primary` pair is `#AAC7FF` / `#005AC1`, Material's baseline
-blue). It uses short names: `--primary`, `--sc` / `--sc-low` / `--sc-high`, `--outline-var`.
+value** — a canonical scheme, its `--primary` pair `#AAC7FF` / `#005AC1`, Material's baseline blue.
+It uses short names: `--primary`, `--sc` / `--sc-low` / `--sc-high`, `--outline-var`.
 
-Mapping its names onto the app's:
+So the remaining work is not "add Material tokens". It is two separable things:
 
-| design | app | state |
-|---|---|---|
-| `--surface`, `--sc*` ramp | `--md-surface*` | defined, **inert** — app draws from `--bg` / `--panel*` |
-| `--on-surface`, `--on-surface-var` | `--md-on-surface`, `--md-on-surface-variant` | **live** (65 refs) |
-| `--outline`, `--outline-var` | `--md-outline`, `--md-outline-variant` | **live** (42 refs) |
-| `--primary` family | `--md-primary` family | **live** (22 refs) |
-| `--secondary`, `--tertiary` families | defined | **inert** |
-| `--error`, `--success`, `--warning` families | partly live | containers mostly inert |
-| `--scrim`, `--shadow` | defined | **inert** |
-| `--canvas-dot` | no equivalent | missing |
+1. **Point components at the Material names** they already have — mechanical, appearance-neutral
+   while the aliases hold, and reviewable component by component.
+2. **Re-derive the palette itself** from the design's 30 roles — the step that actually changes how
+   the application looks, and the one that wants the compare tool and a capture baseline.
 
-## Why this is not finished here
+Doing (2) before (1) changes everything at once with nothing to diff against. Doing (1) first is
+safe precisely *because* of the aliasing.
 
-Completing it means moving the surface ramp, and the surface ramp is what `--tint-rgb` (434
-references — the single most-used token in the sheet) exists to serve: nearly 300 rules lighten a
-dark surface with `rgba(var(--tint-rgb), α)` and darken on light. Repointing surfaces at Material's
-containers without deciding what happens to that overlay system would change the appearance of most
-of the application in one commit, with no screenshot baseline to compare against.
+The instrument for (2) already exists: the side-by-side compare tool (`nodeterm-design-compare`,
+private) puts this design next to real captures and edits CSS live.
 
-The tooling for that decision already exists and is the right next step: the side-by-side compare
-tool (`nodeterm-design-compare`, private) puts this design next to real captures and edits CSS live.
+## Correction
+
+An earlier version of this document said twenty `--md-` tokens were "defined and referenced
+nowhere", called that the defect CLAUDE.md warns about, and reported the inert set as 20.
+
+That was measured by scanning **only `styles.css`**. Across the real corpus — 1,427 CSS, TS and TSX
+files — the count of tokens referenced nowhere at all is **9, and none of them is a `--md-` token**
+(they are `--git-graph-*` and `--radius-xs`). The Material roles are all defined, aliased, and
+guarded.
+
+The distinction that was collapsed: *"has no `var()` consumer in a stylesheet"* is not *"is dead
+code"*. The first is a migration that has not reached that component yet; the second is a defect.
+Calling a deliberate bridging layer the second was wrong, and wrong about somebody's design work.
 
 ## Verifying these numbers
 
 ```bash
-node -e "const c=require('fs').readFileSync('src/renderer/styles.css','utf8');const d=[];for(const l of c.split(/\r?\n/)){const m=/^\s+(--[a-z][a-z0-9-]*)\s*:/.exec(l);if(m&&!d.includes(m[1]))d.push(m[1])}const u=d.map(t=>[t,c.split('var('+t).length-1]);console.log('defined',d.length,'| md-',d.filter(t=>t.startsWith('--md-')).length,'| inert md-',u.filter(([t,n])=>t.startsWith('--md-')&&n===0).length)"
+node -e "const fs=require('fs'),p=require('path');const w=(d,o=[])=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory()){if(e.name!=='node_modules')w(f,o)}else if(/[.](css|ts|tsx)$/.test(e.name))o.push(f)}return o};const c=w('src').map(f=>fs.readFileSync(f,'utf8')).join('\n');const d=[];for(const l of fs.readFileSync('src/renderer/styles.css','utf8').split(/\r?\n/)){const m=/^\s+(--[a-z][a-z0-9-]*)\s*:/.exec(l);if(m&&!d.includes(m[1]))d.push(m[1])}const ref=t=>c.split('var('+t).length-1+c.split(String.fromCharCode(39)+t+String.fromCharCode(39)).length-1;console.log('defined',d.length,'| md-',d.filter(t=>t.startsWith('--md-')).length,'| unreferenced anywhere',d.filter(t=>ref(t)===0).length)"
 ```
