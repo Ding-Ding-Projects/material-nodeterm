@@ -14479,3 +14479,15 @@ body.focus-mode .dock:hover {
   outline: 2px solid var(--md-primary, #0a84ff);
   outline-offset: 2px;
 }
+
+/* The rainbow swatch sits in the preset row, so it matches those buttons rather than inventing its
+ * own size. `.nt-rainbow-swatch` supplies the animation; this supplies the shape. */
+.ctx-colors__rainbow {
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  cursor: pointer;
+}
+
+.ctx-colors__rainbow.is-active {
+  outline: 2px solid var(--md-primary, #0a84ff);
+  outline-offset: 2px;
+}

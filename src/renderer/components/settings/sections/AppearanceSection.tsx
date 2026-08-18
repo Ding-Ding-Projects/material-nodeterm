@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSettings } from '../../../state/settings'
+import { RAINBOW_SPEED_MAX, RAINBOW_SPEED_MIN, rainbowDurationSeconds } from '../../../lib/nodeColor'
 import { NODE_COLORS } from '../../../state/workspace'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
@@ -25,6 +26,10 @@ const ROWS = {
     keywords: ['appearance', 'theme', 'light', 'dark', 'mode', 'colour', 'color', 'chrome']
   },
   accent: { title: 'Accent', keywords: ['accent', 'color', 'theme', 'appearance'] },
+  rainbowSpeed: {
+    title: 'Rainbow speed',
+    keywords: ['rainbow', 'colour', 'color', 'animation', 'speed', 'cycle', 'motion']
+  },
   menuItems: {
     title: 'Node menu items',
     keywords: ['menu', 'context', 'right click', 'items', 'hide']
@@ -92,6 +97,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
   const accent = useSettings((s) => s.base.accent)
   const hiddenNodeMenuItems = useSettings((s) => s.base.hiddenNodeMenuItems)
   const hiddenHeaderButtons = useSettings((s) => s.base.hiddenHeaderButtons)
+  const rainbowSpeed = useSettings((s) => s.base.rainbowSpeed)
   const update = useSettings((s) => s.update)
 
   const lockRecords = useToyLocks((s) => s.records)
@@ -137,6 +143,30 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
             />
           }
         />
+      </SearchableRow>
+      <SearchableRow {...ROWS.rainbowSpeed}>
+        <div className="flex items-center justify-between gap-4 py-2.5">
+          <span className="text-[13px] text-text">
+            Rainbow speed
+            {/* Says what the control governs AND what overrides it. A user who has reduced
+                motion on would otherwise drag this and see nothing change, and conclude the
+                setting is broken rather than deferring to them. */}
+            <span className="block text-[11px] text-text-secondary">
+              How fast a rainbow node colour cycles. Held at one colour while the system asks for
+              reduced motion.
+            </span>
+          </span>
+          <input
+            type="range"
+            min={RAINBOW_SPEED_MIN}
+            max={RAINBOW_SPEED_MAX}
+            step={1}
+            value={rainbowSpeed}
+            aria-label="Rainbow speed"
+            aria-valuetext={`Level ${rainbowSpeed} of ${RAINBOW_SPEED_MAX}, one cycle every ${rainbowDurationSeconds(rainbowSpeed)} seconds`}
+            onChange={(e) => update({ rainbowSpeed: Number(e.target.value) })}
+          />
+        </div>
       </SearchableRow>
       <SearchableRow {...ROWS.accent}>
         <div className="flex items-center justify-between gap-4 py-2.5">
