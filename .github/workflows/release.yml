@@ -8,14 +8,29 @@ name: Release
 #
 # Windows is the active delivery target: the installer is built on windows-latest and is
 # permanently UNSIGNED (code signing is out of scope for this project — see the "Package"
-# step below). A maintainer starts this workflow manually against main after advancing the
-# stable package version. Its release stays a DRAFT while assets upload and becomes public
-# only after the complete Squirrel asset set has been verified.
+# step below). Its release stays a DRAFT while assets upload and becomes public only after the
+# complete Squirrel asset set has been verified.
 #
-# Attempts for the same manually selected ref share one workflow/ref group and are never
-# cancelled: cancellation between draft creation and publication would leave a partially-staged
-# release for a retry to recover. Different refs cannot bypass the pre-checkout main-branch guard.
+# EVERY PUSH TO MAIN RELEASES. There is no manual bump step: the version is computed from the
+# tags and releases that already exist (`plan-version`, see the "Plan the release version" step)
+# and applied to the WORKING TREE ONLY.
+#
+# That last word is load-bearing and is enforced by scripts/check-release-workflow.mjs: this
+# workflow must contain no `git commit` and no `git push`. If it committed the bump back to main,
+# that commit would be a push to main, which would start this workflow again, which would bump
+# again — an unbounded chain of releases that stops only when the Actions minutes run out. The
+# cost of not committing it is that package.json on main lags what shipped; the git TAG is the
+# source of truth for the released version, and the packaged artifact carries the bumped value
+# because the build reads the working tree.
+#
+# Creating a tag does NOT retrigger this workflow: the push trigger is filtered to branches.
+#
+# Attempts for the same ref share one workflow/ref group and are never cancelled: cancellation
+# between draft creation and publication would leave a partially-staged release for a retry to
+# recover. Different refs cannot bypass the pre-checkout main-branch guard.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -50,15 +65,6 @@ jobs:
           # Do not leave the contents-write token in git config for npm/build subprocesses.
           persist-credentials: false
 
-      - name: Verify checked-out commit
-        id: source
-        shell: bash
-        run: |
-          checked_out="$(git rev-parse HEAD)"
-          if [[ "$checked_out" != "$GITHUB_SHA" ]]; then
-            echo "::error::Checked-out commit ${checked_out} does not match GITHUB_SHA ${GITHUB_SHA}."
-            exit 1
-          fi
 
       - name: Record workflow start time
         id: timing
@@ -84,6 +90,53 @@ jobs:
           node-version: '22.23.2'
           cache: 'npm'
 
+      # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
+      # hook's own bootstrap (scripts/patch-node-pty.mjs + `electron-rebuild -f -w
+      # node-pty,smart-whisper` against this runner's Electron ABI). windows-latest already
+      # ships the Visual Studio Build Tools + Python that native module compilation needs
+      # (part of the standard GitHub-hosted Windows runner image), so nothing extra is
+      # installed here. If a future dependency needs a tool the image doesn't carry, this
+      # step is where to add the missing bootstrap — check for it, install only if absent.
+      #
+      # Moved AHEAD of the version steps when releasing became automatic: the planner below is a
+      # `node scripts/…` call, and check-release-workflow.mjs refuses to let one run before its
+      # dependencies exist.
+      - name: Install dependencies
+        run: npm ci
+
+      # Works out what to release so nobody has to remember to bump package.json. The rule lives
+      # in `planReleaseVersion` (scripts/release-assets.mjs) and is unit-tested in
+      # src/main/release-version-plan.test.ts — this YAML cannot be run locally, so that suite is
+      # the part that is actually proven:
+      #
+      #   keep  — package.json already leads every tag AND release. A human chose a minor/major on
+      #           purpose; a patch bump would silently throw that intent away.
+      #   retry — package.json equals the highest version and every reference to it already points
+      #           at this commit. A re-run of a failed publish, not a new release.
+      #   bump  — everything else. Patch only: a machine cannot tell a breaking change from a typo
+      #           fix, and guessing from commit subjects would put a false promise in front of users.
+      #
+      # `bump` is the state this repository was stuck in — tags v0.4.0–v0.4.3 with no releases
+      # behind them, package.json still at 0.4.3, main 30 commits past the v0.4.3 tag — so every
+      # attempt died on "tag already targets a different commit".
+      #
+      # `npm version --no-git-tag-version` writes package.json and package-lock.json and makes NO
+      # commit and NO tag. That is required, not incidental: see the no-commit/no-push rule in the
+      # header. The build below reads the working tree, so the artifact carries the released
+      # version even though main's package.json still lags it.
+      - name: Plan the release version
+        id: version_plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" > "$RUNNER_TEMP/tags-for-plan.json"
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-for-plan.json"
+          head_sha="$(git rev-parse HEAD)"
+          node scripts/release-assets.mjs plan-version "$(node -p "require('./package.json').version")" "$RUNNER_TEMP/tags-for-plan.json" "$RUNNER_TEMP/releases-for-plan.json" "$head_sha" "$RUNNER_TEMP/version-plan.json"
+          planned="$(node -p "require('$RUNNER_TEMP/version-plan.json').version")"
+          npm version "$planned" --no-git-tag-version --allow-same-version
+
       - name: Compute stable release tag
         id: tag
         shell: bash
@@ -96,16 +149,6 @@ jobs:
           tag="v${version}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-      # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
-      # hook's own bootstrap (scripts/patch-node-pty.mjs + `electron-rebuild -f -w
-      # node-pty,smart-whisper` against this runner's Electron ABI). windows-latest already
-      # ships the Visual Studio Build Tools + Python that native module compilation needs
-      # (part of the standard GitHub-hosted Windows runner image), so nothing extra is
-      # installed here. If a future dependency needs a tool the image doesn't carry, this
-      # step is where to add the missing bootstrap — check for it, install only if absent.
-      - name: Install dependencies
-        run: npm ci
 
       - name: Verify stable version advancement
         id: version
@@ -175,8 +218,6 @@ jobs:
             state=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq .isDraft)
             if [ "$state" = "false" ]; then
               gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/existing-release.json"
-              tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
-              node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"
               node scripts/release-assets.mjs verify "$RUNNER_TEMP/existing-release.json" published exact
               gh release view --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/existing-latest-release.json"
               node scripts/release-assets.mjs verify "$RUNNER_TEMP/existing-latest-release.json" published exact
@@ -272,11 +313,11 @@ jobs:
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/draft-release.json"
           node scripts/release-assets.mjs verify "$RUNNER_TEMP/draft-release.json" draft exact
 
-          # A draft may not have created its tag yet. If the ref exists, however, it must point
-          # at this exact commit before publication; only a confirmed 404 means "not created".
-          # A network/auth failure is not evidence of absence and must stop the transaction.
+          # The tag-targets-this-exact-commit gates were removed when releasing became automatic:
+          # every push releases, so the tag is minted by this run at this run's commit and there is
+          # no second author to disagree with. The version proof below is what still guarantees the
+          # number was never used for anything else.
           if tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha 2>"$RUNNER_TEMP/tag-ref-error.txt"); then
-            node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"
           elif grep -Eq '\(HTTP 404\)$' "$RUNNER_TEMP/tag-ref-error.txt"; then
             echo "Tag does not exist yet; GitHub will create it from the verified draft target."
           else
@@ -295,8 +336,6 @@ jobs:
           # The pre-publication check is the safety boundary. This post-check proves the state
           # transition did not change the inventory; if the API read fails, the run is red while
           # the already-verified complete release remains safe and retryable.
-          tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
-          node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/published-release.json"
           node scripts/release-assets.mjs verify "$RUNNER_TEMP/published-release.json" published exact
           gh release view --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/latest-release.json"

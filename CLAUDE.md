@@ -1703,10 +1703,45 @@ multiply-linked inode whose other name may be outside the staging tree.
   in `Canvas.tsx`, operate on `targetIds`. The non-destructive rows are user-hideable from
   **Settings → Appearance** ("Node menu items" / "Terminal header buttons"), stored as HIDDEN
   lists in `settings.hiddenNodeMenuItems` / `settings.hiddenHeaderButtons` (empty = everything
-  shows). `lib/ui-visibility.ts` owns the two inventories and `isHidden`, which only answers for
-  ids it knows — so Delete, restart-agent, branch/transfer, terminal Search and Close can never
-  be hidden, whatever settings.json says. The group-frame menu's colors strip answers to the same
-  `colors` id; builders run through `tidySeparators` so a hidden row leaves no dangling rule.
+  shows). `lib/ui-visibility.ts` owns the two inventories, `isHidden` (only answers for ids it
+  knows — so Delete, restart-agent, branch/transfer, terminal Search and Close can never be hidden,
+  whatever settings.json says), and `tidySeparators` (generic over any row with an optional
+  `type`, so both the always-built menu literals here and ContextMenu's live filter below share ONE
+  definition of "this rule would dangle"). The group-frame menu's colors strip answers to the same
+  `colors` id; builders run through `tidySeparators` so a hidden row leaves no dangling rule. The
+  canvas **pane menu is grouped into named sections** (2026-08 — `label` rows: Terminals, Agents,
+  Canvas objects, Worktree, Drawing, Canvas) instead of unlabeled rules, because a flat ~17-row list
+  read as an endless list; "Agents" is built and only spliced in when at least one agent row
+  survives (every builtin agent can be individually disabled in Settings, and Kids mode can reach
+  zero) — an empty heading would claim a group that isn't there.
+- **Sectioned menus are filterable, not just flat ones** (2026-08). `isFilterableMenu`
+  (`components/menu/menuVisibility.ts`) counts only ACTIONABLE rows — plain items and submenu
+  triggers, not separators/labels — against `FILTER_THRESHOLD` (6), so structural padding can't
+  push a small menu over the line or hide a large one under it. Once a menu qualifies,
+  `menuRowVisibility` (same file) is the single pure decision for which rows a query leaves
+  visible, index-for-index with the input array — this used to be impossible because filtering
+  required a FULLY FLAT menu (no separator/label/submenu/colors mixed in); nobody had decided what
+  a group's label/separator does once every row under it filters away. The decisions it encodes:
+  a plain item matches its own label; a **submenu matches on its own label OR any child's label**
+  (typing a terminal-profile or account name must not hide the one row that reaches it — the
+  submenu's children are never individually filtered, only whether the trigger row shows); a
+  **`colors` row has no label, so it hides once a query is active** and reappears with an empty
+  query (a swatch strip with nothing left in its section reads worse than briefly losing
+  color-picking mid-search); a **`label` (section heading) survives only when some row in its own
+  section — up to the next label or the menu's end — survived** (an empty heading would lie about
+  what's below it); **`separator` visibility is decided last**, against the already-decided rows,
+  by the SAME `tidySeparators` the unfiltered builders use, so there is one definition of "this
+  rule would dangle." `ContextMenu.tsx` wires this in: it computes the full per-row visibility once
+  (`rowVisible`), derives a KEYBOARD-navigable subset from it (only items/submenu triggers — a
+  label/separator/colors row has no "activate" semantic), and hands that subset to
+  `useMenuFilter`. That hook no longer owns the matching rule itself — it used to hardcode
+  `items.filter(it => search.test(it.label))`, which cannot express "match on this OR a child's
+  label" with one string field — so it now takes the caller's own `useRegexSearchField()` instance
+  plus an ALREADY-FILTERED candidate list, and only tracks `activeIndex`/keyboard nav over
+  whatever it's given. `onActivate` still maps a filtered row back to `items[Number(fi.id)]` by
+  index (unchanged contract), but now also handles a `submenu` row: **Enter on a filtered submenu
+  opens its flyout** (the same target `ArrowRight` already reaches) instead of silently no-op'ing,
+  since submenu rows are keyboard-reachable through the filter for the first time.
 - **Add menu** = bottom dock (`Dock.tsx`) `+`, mirrored by the pane menu and command palette.
 - **Undo/redo**: debounced snapshot of the nodes array on settle (drag/edit), `pastRef`/
   `futureRef` stacks, ⌘Z / ⌘⇧Z + dock buttons. History resets per project load; skipped

@@ -136,9 +136,20 @@ function transitivePackageCommands(initial, scripts) {
 /** Return every contract violation. An empty array is a publishable workflow. */
 export function validateReleaseWorkflow(workflow, packageJson) {
   const issues = []
+  // Every push to main releases, and a maintainer may still start one by hand. Nothing else may
+  // trigger a publication: a `pull_request` or a tag trigger would let an unreviewed ref become
+  // the stable latest release, which is the same hole the pre-checkout main guard exists to close.
   const trigger = workflow?.on
-  if (!trigger || !hasOwn(trigger, 'workflow_dispatch') || Object.keys(trigger).length !== 1) {
-    issues.push('stable publication must be workflow_dispatch-only')
+  const triggerKeys = Object.keys(trigger ?? {}).sort()
+  const pushBranches = trigger?.push?.branches
+  if (
+    !trigger ||
+    triggerKeys.join(',') !== 'push,workflow_dispatch' ||
+    !Array.isArray(pushBranches) ||
+    pushBranches.length !== 1 ||
+    pushBranches[0] !== 'main'
+  ) {
+    issues.push('stable publication must trigger only on a push to main or a manual dispatch')
   }
 
   const concurrency = workflow?.concurrency
@@ -166,10 +177,22 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   }
 
   const steps = Array.isArray(job.steps) ? job.steps : []
+
+  // The bump this workflow computes must never be written back to the repository. A commit to
+  // main is a push to main, which starts this workflow again, which bumps again: an unbounded
+  // chain of releases that ends when the Actions minutes do. Checked across every step's `run`
+  // rather than by reading the version step alone, because the loop is just as real if a future
+  // step adds the push somewhere else.
+  const gitWriteCommands = steps.flatMap((step) =>
+    logicalCommands(step?.run).filter((command) => /\bgit\s+(?:push|commit)\b/.test(command)),
+  )
+  if (gitWriteCommands.length) {
+    issues.push(`release workflow must never commit or push (found: ${gitWriteCommands.join(' | ')})`)
+  }
+
   const stepById = (id) => steps.find((step) => step?.id === id)
   const criticalShells = new Map([
     ['guard', 'bash'],
-    ['source', 'bash'],
     ['tag', 'bash'],
     ['version', 'bash'],
     ['assets', 'bash'],
@@ -197,6 +220,9 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   }
   const tokenSteps = new Map([
     ['timing', '${{ github.token }}'],
+    // The planner only READS tags/releases; it is deliberately the plain job token, never the
+    // elevated release secret, because nothing in that step may create or modify a release.
+    ['version_plan', '${{ github.token }}'],
     ['version', '${{ github.token }}'],
     ['draft', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
     ['upload', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
@@ -299,22 +325,11 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   if (mainRefGuardAt < 0 || checkoutAt < 0 || mainRefGuardAt >= checkoutAt) {
     issues.push('a failing non-main ref guard must run before checkout')
   }
-  const sourceAt = stepIndex(steps, 'source')
-  const sourceCommands = logicalCommands(steps[sourceAt]?.run)
-  const checkedOutAt = sourceCommands.indexOf('checked_out="$(git rev-parse HEAD)"')
-  const sourceShaGuardAt = sourceCommands.indexOf('if [[ "$checked_out" != "$GITHUB_SHA" ]]; then')
-  const sourceShaGuardExitAt = sourceCommands.findIndex(
-    (command, index) => index > sourceShaGuardAt && command === 'exit 1',
-  )
-  if (
-    sourceAt !== checkoutAt + 1 ||
-    checkedOutAt < 0 ||
-    sourceShaGuardAt <= checkedOutAt ||
-    sourceShaGuardExitAt <= sourceShaGuardAt ||
-    sourceCommands.some((command) => /^(?:env\s+)?node(?:\s|$)/.test(command))
-  ) {
-    issues.push('checked-out HEAD must be proven equal to GITHUB_SHA with a dependency-free shell check immediately after checkout')
-  }
+  // The "checked-out HEAD equals GITHUB_SHA" step was removed along with the other commit-pinning
+  // gates when releasing became automatic. It existed because a MANUAL dispatch can name any ref,
+  // so the thing being built had to be proven to be the thing that was chosen. A push-triggered
+  // run has no such gap — the event and the checkout are the same commit by construction — and the
+  // non-main refusal above still keeps every other ref out.
 
   const installAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm ci'))
   const dependencyBackedScriptSteps = steps.flatMap((step, index) =>
@@ -378,7 +393,9 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   )
   const buildAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm run dist:win'))
   if (
-    versionAt !== installAt + 1 ||
+    // Was `installAt + 1`. The planner and the tag step now sit between them, so what still
+    // matters is that the proof happens with dependencies present and BEFORE anything is built.
+    versionAt <= installAt ||
     versionAt >= buildAt ||
     versionTagsAt < 0 ||
     versionReleasesAt <= versionTagsAt ||
@@ -446,9 +463,13 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const uploadAt = stepIndex(steps, 'upload')
   const notesAt = stepIndex(steps, 'notes')
   const publishAt = stepIndex(steps, 'publish')
-  const ordered = [sourceAt, tagAt, versionAt, packageAt, assetsAt, unsignedAt, draftAt, uploadAt, notesAt, publishAt]
+  // `sourceAt` (the removed checked-out-SHA step) is replaced by the version PLANNER: the bump has
+  // to be applied before the tag is computed, or the release is named after the old version while
+  // the artifact carries the new one.
+  const planAt = stepIndex(steps, 'version_plan')
+  const ordered = [planAt, tagAt, versionAt, packageAt, assetsAt, unsignedAt, draftAt, uploadAt, notesAt, publishAt]
   if (ordered.some((index) => index < 0) || ordered.some((index, i) => i > 0 && index <= ordered[i - 1])) {
-    issues.push('source, version, package, local verification, draft, upload, notes and publication must stay ordered')
+    issues.push('version planning, tag, version proof, package, local verification, draft, upload, notes and publication must stay ordered')
   }
 
   const draftCommands = logicalCommands(steps[draftAt]?.run)
@@ -506,14 +527,10 @@ export function validateReleaseWorkflow(workflow, packageJson) {
       command,
     ),
   )
-  const readExistingTagAt = draftCommands.findIndex((command) =>
-    /^tag_sha=\$\(gh api "repos\/\$\{GITHUB_REPOSITORY\}\/git\/ref\/tags\/\$\{RELEASE_TAG\}" --jq \.object\.sha\)$/.test(
-      command,
-    ),
-  )
-  const assertExistingTagAt = draftCommands.findIndex((command) =>
-    /^node scripts\/release-assets\.mjs assert-target "\$tag_sha" "\$GITHUB_SHA"$/.test(command),
-  )
+  // The tag-targets-this-commit proof was dropped with the other commit-pinning gates: this run
+  // mints the tag itself, at its own commit, so there is no second author to disagree with. The
+  // published-asset proof below is unchanged and is what still stops a retry clobbering a good
+  // release with a different one.
   const verifyExistingAt = draftCommands.findIndex((command) =>
     /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/existing-release\.json" published exact$/.test(command),
   )
@@ -531,9 +548,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const reuseExitAt = draftCommands.findIndex((command, index) => index > reuseExistingAt && command === 'exit 0')
   if (!(
     viewExistingAt >= 0 &&
-    readExistingTagAt > viewExistingAt &&
-    assertExistingTagAt > readExistingTagAt &&
-    verifyExistingAt > assertExistingTagAt &&
+    verifyExistingAt > viewExistingAt &&
     viewExistingLatestAt > verifyExistingAt &&
     verifyExistingLatestAt > viewExistingLatestAt &&
     reuseExistingAt > verifyExistingLatestAt &&
@@ -586,14 +601,13 @@ export function validateReleaseWorkflow(workflow, packageJson) {
       command,
     ),
   )
-  const prepublishTagAssertAt = publishCommands.findIndex(
-    (command, index) =>
-      index > prepublishTagProbeAt &&
-      command === 'node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"',
-  )
+  // The tag-target assertion inside this probe is gone with the other commit-pinning gates, but
+  // the probe's THREE-WAY answer must survive: tag exists / confirmed 404 / unreadable. A failed
+  // API read is not evidence the tag is absent, and treating it as such would publish over an
+  // unknown state.
   const confirmedMissingTagAt = publishCommands.findIndex(
     (command, index) =>
-      index > prepublishTagAssertAt && /^elif grep -Eq .*HTTP 404.*tag-ref-error\.txt"; then$/.test(command),
+      index > prepublishTagProbeAt && /^elif grep -Eq .*HTTP 404.*tag-ref-error\.txt"; then$/.test(command),
   )
   const failedTagReadExitAt = publishCommands.findIndex(
     (command, index) => index > confirmedMissingTagAt && command === 'exit 1',
@@ -617,16 +631,9 @@ export function validateReleaseWorkflow(workflow, packageJson) {
       command,
     ),
   )
-  const readPublishedTagAt = publishCommands.findIndex((command) =>
-    /^tag_sha=\$\(gh api "repos\/\$\{GITHUB_REPOSITORY\}\/git\/ref\/tags\/\$\{RELEASE_TAG\}" --jq \.object\.sha\)$/.test(
-      command,
-    ),
-  )
-  const assertPublishedTagAt = publishCommands.findIndex(
-    (command, index) =>
-      index > readPublishedTagAt &&
-      /^node scripts\/release-assets\.mjs assert-target "\$tag_sha" "\$GITHUB_SHA"$/.test(command),
-  )
+  // The post-publication tag-target assertion went with the other commit-pinning gates. The
+  // asset-inventory proofs below are what actually guarantee the transition did not change the
+  // release, and they are untouched.
   const verifyPublishedAt = publishCommands.findIndex((command) =>
     /^node scripts\/release-assets\.mjs verify "\$RUNNER_TEMP\/published-release\.json" published exact$/.test(command),
   )
@@ -642,16 +649,13 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     viewDraftAt >= 0 &&
     verifyDraftAt > viewDraftAt &&
     prepublishTagProbeAt > verifyDraftAt &&
-    prepublishTagAssertAt > prepublishTagProbeAt &&
-    confirmedMissingTagAt > prepublishTagAssertAt &&
+    confirmedMissingTagAt > prepublishTagProbeAt &&
     failedTagReadExitAt > confirmedMissingTagAt &&
     prepublishTagsAt > failedTagReadExitAt &&
     prepublishReleasesAt > prepublishTagsAt &&
     prepublishVersionAt > prepublishReleasesAt &&
     transitionAt > prepublishVersionAt &&
-    readPublishedTagAt > transitionAt &&
-    assertPublishedTagAt > readPublishedTagAt &&
-    viewPublishedAt > assertPublishedTagAt &&
+    viewPublishedAt > transitionAt &&
     verifyPublishedAt > viewPublishedAt &&
     viewLatestAt > verifyPublishedAt &&
     verifyLatestAt > viewLatestAt

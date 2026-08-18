@@ -421,6 +421,18 @@ the canvas only after the backing session-host kill acknowledges. Focused Chuts 
 must include co-attach, delayed response, socket-drop, and write-backpressure races; a happy-path mock
 does not exercise the contracts that keep persistent processes truthful.
 
+**A context menu with sections is filterable too, not just a flat list.** `isFilterableMenu` /
+`menuRowVisibility` (`components/menu/menuVisibility.ts`) decide which rows survive a query —
+counting only real actionable rows against the threshold, matching a submenu on its own label OR a
+child's, hiding a `colors` strip once a query is typed, hiding a section `label` only when nothing
+under it survived, and settling `separator` visibility last through the same `tidySeparators`
+(`lib/ui-visibility.ts`) the unfiltered menu builders use. `useMenuFilter` no longer decides
+matching itself — pass it your own `useRegexSearchField()` instance and an already-filtered
+candidate list; it only tracks keyboard `activeIndex`. See CLAUDE.md's Context menus section for
+the full reasoning. The canvas pane menu is grouped into named `label` sections (Terminals, Agents,
+Canvas objects, Worktree, Drawing, Canvas) instead of bare rules — keep a section's heading
+conditional on it actually having a row underneath before adding a new empty-able group.
+
 ## Testing
 
 `npm test` must pass, and `npm run typecheck` is the fastest gate.
