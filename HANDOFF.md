@@ -550,3 +550,30 @@ double-quoted `node -e`, and bash command-substituted every backticked identifie
 node ever saw the string — `startServer`, `fs.watch`, `dispose()` and `close()` all vanished, and
 the result was committed and pushed in that state. CLAUDE.md already warns about backticks in a
 double-quoted `node -e`; the reliable route is a quoted heredoc into a file, then read the file.
+
+## Open: four commits on `main` carry a placeholder identity
+
+`4ff914b1`, `5802bf16`, `e28e4321` and `fadb0843` (2026-08-17) are authored **and** committed by
+`Smoke User <smoke@example.invalid>`, with no `Co-Authored-By` trailer. A harness left an identity
+configured and pushed real work under it: 104 insertions across 16 files, including
+`src/renderer/state/workspace.ts`, `src/core/speech/speech-service.ts`, `CONTRIBUTING.md` and
+`AGENTS.md`.
+
+It is not cosmetic. `scripts/count-lines.mjs` attributes a surviving line to an agent when the
+author matches a known automation identity **or** the body carries such a trailer, and to a
+**person** otherwise. These match neither, so those lines are counted as person-written in every
+future release, and `git blame` answers with an address that by definition cannot receive mail.
+
+**Not fixed here, deliberately.** The commits are published; correcting the identity means
+rewriting them, which is a force-push, which needs the branch owner's explicit say-so and is never
+an agent's call — least of all to tidy something up.
+
+**Recurrence is now blocked.** `scripts/check-commit-identity.mjs`, wired into the pre-push hook,
+refuses a push carrying an author or committer at a domain RFC 2606 / RFC 6761 reserve so it can
+never resolve (`.invalid`, `.test`, `.example`, `.localhost`, and the `example.*` documentation
+names). It checks only the commits actually being sent, so what is already published is not its
+business. Verified both ways: it flags exactly those four and nothing else across 200 commits that
+include five real contributors' addresses, and an ordinary push with nothing new to send passes.
+
+It deliberately does NOT enforce "one identity". This history legitimately carries several real
+people, and a check that demanded a single name would refuse their work.

@@ -1,8 +1,25 @@
 #!/bin/sh
-# Refuse a push from a checkout without the current shared working dictionary.
+# Two refusals, both cheap, both about things that are expensive to undo once pushed.
 #
-# Only a SHA-256 lives in the repository — see scripts/check-vocabulary.mjs for why storing the
-# terms themselves in a public repo would defeat the thing they exist for.
+# 1. A checkout without the current shared working dictionary (see scripts/check-vocabulary.mjs
+#    for why only a SHA-256 lives in the repository).
+# 2. A commit carrying a reserved, un-routable author or committer address — a harness placeholder
+#    that git blame and the release line counter would otherwise take at face value.
 #
 # Enable with:  git config core.hooksPath .githooks
-exec node "$(dirname "$0")/../scripts/check-vocabulary.mjs"
+node "$(dirname "$0")/../scripts/check-vocabulary.mjs" || exit $?
+
+# git hands us "<local ref> <local sha> <remote ref> <remote sha>" per ref on stdin. Only the
+# commits actually being sent are checked: what is already on the remote is not this push's to fix,
+# and rewriting it would mean a force-push, which is nobody's hook's decision.
+zero=0000000000000000000000000000000000000000
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue          # a deletion sends nothing
+  if [ "$remote_sha" = "$zero" ]; then
+    range="$local_sha --not --remotes"            # a new branch: everything not already published
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  # shellcheck disable=SC2086
+  node "$(dirname "$0")/../scripts/check-commit-identity.mjs" $range || exit $?
+done
