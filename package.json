@@ -36,7 +36,8 @@
     "dist:linux": "npm run make-icon && npm run build && electron-builder --linux --publish never -c.extraMetadata.nodeTermUpdates=disabled",
     "dist:win": "node scripts/windows-installer.mjs build",
     "release": "npm run make-icon && npm run build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
-    "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper"
+    "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
+    "design:compare": "electron design/compare"
   },
   "build": {
     "appId": "com.nodeterm.app",
