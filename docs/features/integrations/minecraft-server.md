@@ -93,6 +93,19 @@ Recorded rather than guessed, because each one changes a decision:
 - **Observability** — reading TPS and MSPT, entity and chunk counts natively versus needing `spark`.
 - **Backup safety** — whether a hot copy is restorable or requires `save-off` then `save-all`.
 
+## 3b. Two gaps an adversarial pass found in the notes above
+
+Both verified, and both would have shipped as defects:
+
+- **Acquiring the server jar takes TWO fetches, not one.** `version_manifest_v2.json` lists only
+  version **ids**. The download URL and its **sha1** live in a second per-version JSON. A design
+  that stops at the manifest has neither an artifact nor a checksum to verify it against.
+- **Each Minecraft version pins a required Java major version**, in that same per-version JSON. A
+  path that never compares it against the installed Java runs a server against a Java it does not
+  support, and fails in a way that looks like a corrupt download.
+
+See [research-findings.md](research-findings.md) for the rest of the pass.
+
 ## 4. Why this document exists
 
 Four attempts to research this with an agent fleet returned nothing: each died with
