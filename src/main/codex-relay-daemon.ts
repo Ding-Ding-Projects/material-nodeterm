@@ -28,7 +28,9 @@ import { WebSocket, WebSocketServer } from 'ws'
 // Keep earlier versions on their own state files so already-connected nodes may drain safely.
 const VERSION = '6'
 const SAFE = /^[A-Za-z0-9._-]+$/
-const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]{43}$/
+// The canonical wire shape is `kid.mac` (see core/agents/node-auth-token.ts). This pinned the
+// OLD bare-MAC shape with no dot, so every real token failed the check even where one arrived.
+const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]+[.][A-Za-z0-9_-]{43}$/
 const SAFE_ENDPOINT = /^\/[A-Za-z0-9._/ -]+$/
 const INVALID_OWNER = '__invalid__'
 const root = path.join(homedir(), '.nodeterm')
@@ -1440,9 +1442,32 @@ function serve(): void {
   })
 }
 
+/**
+ * Read one line from stdin, bounded.
+ *
+ * The generated launcher's own comment is the contract: "Relay registration receives the per-node
+ * capability on stdin, never argv or the environment." It pipes the token in, and the environment
+ * variable this used to read is one the launcher deliberately never sets — codex-identity-proxy.ts
+ * says so explicitly ("There is deliberately NO $NODETERM_CODEX_NODE_TOKEN fallback"), because a
+ * token in the environment of a long-lived process is readable by anything that can see it. So the
+ * registration could never obtain a token and always threw 'invalid relay registration'.
+ */
+async function readTokenFromStdin(limit = 4096): Promise<string> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of process.stdin) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += buf.length
+    if (size > limit) break
+    chunks.push(buf)
+    if (buf.includes(0x0a)) break
+  }
+  return Buffer.concat(chunks).toString('utf8').split(/\r?\n/, 1)[0] ?? ''
+}
+
 async function register(): Promise<void> {
   const [nodeId, accountRaw, socketPath, hookEndpoint] = process.argv.slice(3)
-  const nodeToken = process.env.NODETERM_CODEX_NODE_TOKEN ?? ''
+  const nodeToken = (await readTokenFromStdin()).trim()
   const accountId = accountRaw || undefined
   if (
     !SAFE.test(nodeId) ||

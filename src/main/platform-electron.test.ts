@@ -122,7 +122,7 @@ describe('electronPlatform + relay peers', () => {
       t: 'req', id: 9, method: 'githubControl:approve', args: []
     })).toEqual({
       t: 'res', id: 9, ok: false,
-      error: { code: 'E_FORBIDDEN', message: 'method is not available to relay peers' }
+      error: { code: 'E_FORBIDDEN', message: 'host-control method is not available to relay peers' }
     })
   })
 

@@ -184,7 +184,10 @@ describe('registerBrowserGuestRequest', () => {
 /** The Electron IPC callback must use the validation adapter; direct map writes bypass the guard. */
 describe('the IPC handler is wired through it', () => {
   it('main never writes to browserGuests directly', () => {
-    const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
+    // index.ts is checked out CRLF on Windows (core.autocrlf), so normalize before matching a
+    // literal '\n' needle against it — otherwise the '\r' between the two lines makes this a
+    // silent no-op on every Windows checkout.
+    const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8').replace(/\r\n/g, '\n')
     expect(src).toContain('registerBrowserGuestRequest(\n        browserGuests')
     expect(src).not.toContain('browserGuests.set(')
   })

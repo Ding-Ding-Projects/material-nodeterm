@@ -327,8 +327,15 @@ describe('scheduled-settings credential clear', () => {
 
       const result = await store.save(defaultScheduledSettingsFile())
 
+      // ScheduledSettingsSaveResult (shared/types.ts) is a three-armed discriminated union: this
+      // is the arm distinguishing "the schedule itself IS durably written" from a genuine write
+      // failure, via `persisted: true` and `warning: 'credential-cleanup-incomplete'` — not merely
+      // an `{ok, error}` pair. The disk assertion right below already proves persistence in
+      // practice; this asserts the store reports it truthfully in its own return value too.
       expect(result).toEqual({
         ok: false,
+        persisted: true,
+        warning: 'credential-cleanup-incomplete',
         error: 'The schedule was saved, but related credentials could not be fully cleared.'
       })
       expect(JSON.parse(await fs.readFile(path.join(dir, 'scheduled-settings.json'), 'utf8')).rules)

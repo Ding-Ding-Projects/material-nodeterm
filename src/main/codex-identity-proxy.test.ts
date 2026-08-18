@@ -13,8 +13,71 @@ import {
   validCodexIdentity,
   writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  pathsForPosixShellEnv,
+  posixShellScriptArgs,
+  quotePathForPosixShell
+} from '../core/testing/posix-shell'
 
 const run = promisify(execFile)
+
+// The identity store and the launcher installer resolve their directories through
+// `platform().userDataDir` and fall back to `homedir()` only when no CorePlatform was
+// initialized — which is exactly this file's situation (it never calls `initPlatform`). On POSIX,
+// `os.homedir()` reads `$HOME`, so `vi.stubEnv('HOME', root)` alone was enough to redirect it.
+// On Windows, `os.homedir()` ignores `HOME` entirely (it reads `USERPROFILE` / the OS profile
+// API), so every write and read in this file silently landed in the REAL `C:\Users\<user>`
+// instead of the isolated temp root.
+//
+// `vi.spyOn(os, 'homedir')` — the pattern `kids-mode.test.ts` / `school-mode.test.ts` /
+// `opencode.test.ts` / `transcript-ipc.test.ts` all use — does NOT reach `codex-identity-proxy.ts`
+// here: those targets call `os.homedir()` off a DEFAULT import, so patching the `os` module's
+// `homedir` property is visible at every call site. `codex-identity-proxy.ts` instead does
+// `import { homedir } from 'os'` and calls the bare name — under this project's esbuild/Vite
+// transform that NAMED import is resolved once at module-evaluation time, decoupled from later
+// mutation of the `os` object's own property (verified directly: `vi.spyOn(os,'homedir')` changed
+// what `os.homedir()` returned but left a sibling module's own `import { homedir } from 'os'; homedir()`
+// completely unaffected). `vi.mock('os', …)` intercepts module RESOLUTION itself instead of a
+// property, so it redirects every import style, including this one.
+// `vi.mock` factories are hoisted above every top-level statement in this file (including plain
+// `const` declarations), so the mock function itself must be created through `vi.hoisted` — a
+// bare `const homedirMock = vi.fn()` above throws "Cannot access 'homedirMock' before
+// initialization" the moment the hoisted factory runs.
+const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('os')>()
+  return { ...actual, default: { ...actual, homedir: homedirMock }, homedir: homedirMock }
+})
+
+const SHELL_PATH_ENV_KEYS = [
+  'HOME',
+  'NODETERM_HOOK_ENDPOINT',
+  'NODETERM_HOOK_SOCK',
+  'NODETERM_NODE_TOKEN_DIR',
+  'NODETERM_CODEX_RELAY_RUNTIME',
+  'NODETERM_CODEX_RELAY_SCRIPT',
+  'CODEX_HOME'
+] as const
+
+/**
+ * The generated launcher is `#!/bin/sh`; Windows cannot exec that directly (no shebang support),
+ * so it must run through a real POSIX shell exactly like `managed-script.test.ts` and
+ * `ssh-project.test.ts` — the shell binary itself, and every path the script will read, both need
+ * the POSIX translation `posix-shell.ts` provides.
+ */
+function runLauncher(
+  launcherPath: string,
+  args: string[],
+  env: Record<string, string>,
+  cwd?: string
+): Promise<{ stdout: string; stderr: string }> {
+  return run(REAL_POSIX_SHELL, posixShellScriptArgs(launcherPath, args), {
+    env: environmentForPosixShell(pathsForPosixShellEnv(env, SHELL_PATH_ENV_KEYS)),
+    cwd
+  })
+}
 
 // installCodexLauncher() legitimately returns `string | null` (null = could not be installed,
 // e.g. a read-only home). In the test sandbox the temp HOME is always writable, so a null here
@@ -36,9 +99,17 @@ describe('NodeTerm Codex remote launcher', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    homedirMock.mockReset()
     if (oldHome === undefined) delete process.env.HOME
     else process.env.HOME = oldHome
   })
+
+  /** `vi.stubEnv('HOME', root)` alone is a no-op for `os.homedir()` on Windows — see the note by
+   *  `SHELL_PATH_ENV_KEYS` above. Every test that stubs HOME calls this right after. */
+  function stubHome(root: string): void {
+    vi.stubEnv('HOME', root)
+    homedirMock.mockReturnValue(root)
+  }
 
   it('keeps two parallel node identities isolated on one shared remote endpoint', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-launcher-'))
@@ -66,7 +137,7 @@ describe('NodeTerm Codex remote launcher', () => {
       '#!/bin/sh\nprintf \'[\' > "$CAPTURE"\nfirst=1\nfor arg in "$@"; do [ "$first" = 1 ] || printf \',\' >> "$CAPTURE"; first=0; node -e \'process.stdout.write(JSON.stringify(process.argv[1]))\' -- "$arg" >> "$CAPTURE"; done\nprintf \']\' >> "$CAPTURE"\n',
       { mode: 0o700 }
     )
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     const launcher = requireLauncher(installCodexLauncher())
     const base = {
       PATH: `${bin}:${process.env.PATH ?? ''}`,
@@ -74,16 +145,16 @@ describe('NodeTerm Codex remote launcher', () => {
       NODETERM_HOOK_ENDPOINT: endpoint
     }
     await Promise.all([
-      run(launcher, ['resume', 'thread-a'], { env: {
+      runLauncher(launcher, ['resume', 'thread-a'], {
         ...process.env, ...base, CAPTURE: outA,
         NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
         NODETERM_CODEX_ACCOUNT_ID: 'account-a', CAPTURE_BIND: bindA, CAPTURE_HEADERS: headersA
-      }}),
-      run(launcher, ['resume', 'thread-b'], { env: {
+      }),
+      runLauncher(launcher, ['resume', 'thread-b'], {
         ...process.env, ...base, CAPTURE: outB,
         NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_NODE_TOKEN: nodeTokenB,
         NODETERM_CODEX_ACCOUNT_ID: 'account-b', CAPTURE_BIND: bindB, CAPTURE_HEADERS: headersB
-      }})
+      })
     ])
     const argsA = JSON.parse(readFileSync(outA, 'utf8'))
     const argsB = JSON.parse(readFileSync(outB, 'utf8'))
@@ -122,7 +193,7 @@ describe('NodeTerm Codex remote launcher', () => {
       '#!/bin/sh\nprintf \'[\' > "$CAPTURE"\nfirst=1\nfor arg in "$@"; do [ "$first" = 1 ] || printf \',\' >> "$CAPTURE"; first=0; node -e \'process.stdout.write(JSON.stringify(process.argv[1]))\' -- "$arg" >> "$CAPTURE"; done\nprintf \']\' >> "$CAPTURE"\n',
       { mode: 0o700 }
     )
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     const launcher = requireLauncher(installCodexLauncher())
     const base = {
       ...process.env,
@@ -132,14 +203,18 @@ describe('NodeTerm Codex remote launcher', () => {
     }
 
     await Promise.all([
-      run(launcher, ['prompt a'], {
-        cwd: '/tmp',
-        env: { ...base, CAPTURE: outA, NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_NODE_TOKEN: nodeTokenA }
-      }),
-      run(launcher, ['prompt b'], {
-        cwd: '/tmp',
-        env: { ...base, CAPTURE: outB, NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_NODE_TOKEN: nodeTokenB }
-      })
+      runLauncher(
+        launcher,
+        ['prompt a'],
+        { ...base, CAPTURE: outA, NODETERM_NODE_ID: 'node-a', NODETERM_CODEX_NODE_TOKEN: nodeTokenA },
+        root
+      ),
+      runLauncher(
+        launcher,
+        ['prompt b'],
+        { ...base, CAPTURE: outB, NODETERM_NODE_ID: 'node-b', NODETERM_CODEX_NODE_TOKEN: nodeTokenB },
+        root
+      )
     ])
 
     expect(JSON.parse(readFileSync(outA, 'utf8'))).toEqual([
@@ -180,21 +255,19 @@ describe('NodeTerm Codex remote launcher', () => {
     )
     writeFileSync(runtime, '#!/bin/sh\nprintf "ws://127.0.0.1:4321\\nroute-token-a\\n"\n', { mode: 0o700 })
     writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     const launcher = requireLauncher(installCodexLauncher())
-    await run(launcher, ['resume', 'thread-a'], {
-      env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
-        CAPTURE: capture,
-        CAPTURE_EXPOSE: exposeCapture,
-        NODETERM_CANVAS_CONTROL: '1',
-        NODETERM_NODE_ID: 'node-a',
-        NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
-        NODETERM_HOOK_ENDPOINT: endpoint,
-        NODETERM_CODEX_RELAY_RUNTIME: runtime,
-        NODETERM_CODEX_RELAY_SCRIPT: script
-      }
+    await runLauncher(launcher, ['resume', 'thread-a'], {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      CAPTURE: capture,
+      CAPTURE_EXPOSE: exposeCapture,
+      NODETERM_CANVAS_CONTROL: '1',
+      NODETERM_NODE_ID: 'node-a',
+      NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
+      NODETERM_HOOK_ENDPOINT: endpoint,
+      NODETERM_CODEX_RELAY_RUNTIME: runtime,
+      NODETERM_CODEX_RELAY_SCRIPT: script
     })
     expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual([
       '--remote',
@@ -227,12 +300,13 @@ describe('NodeTerm Codex remote launcher', () => {
     )
     writeFileSync(runtime, '#!/bin/sh\nprintf "ws://127.0.0.1:4321\\nroute-token-a\\n"\n', { mode: 0o700 })
     writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     const launcher = requireLauncher(installCodexLauncher())
 
-    await run(launcher, ['new prompt'], {
-      cwd: '/tmp',
-      env: {
+    await runLauncher(
+      launcher,
+      ['new prompt'],
+      {
         ...process.env,
         PATH: `${bin}:${process.env.PATH ?? ''}`,
         CAPTURE: capture,
@@ -242,8 +316,9 @@ describe('NodeTerm Codex remote launcher', () => {
         NODETERM_HOOK_ENDPOINT: endpoint,
         NODETERM_CODEX_RELAY_RUNTIME: runtime,
         NODETERM_CODEX_RELAY_SCRIPT: script
-      }
-    })
+      },
+      root
+    )
     expect(JSON.parse(readFileSync(capture, 'utf8'))).toEqual([
       '--remote',
       'ws://127.0.0.1:4321',
@@ -263,23 +338,25 @@ describe('NodeTerm Codex remote launcher', () => {
     mkdirSync(bin, { recursive: true })
     writeFileSync(endpoint, 'NODETERM_HOOK_PORT=12345\nNODETERM_HOOK_TOKEN=test-token\n', { mode: 0o600 })
     writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\ncat >/dev/null\nexit 0\n', { mode: 0o700 })
-    writeFileSync(path.join(bin, 'codex'), `#!/bin/sh\nprintf '%s\\n' "$*" >> ${codexCapture}\n`, { mode: 0o700 })
+    writeFileSync(
+      path.join(bin, 'codex'),
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> ${quotePathForPosixShell(codexCapture)}\n`,
+      { mode: 0o700 }
+    )
     writeFileSync(runtime, '#!/bin/sh\nexit 1\n', { mode: 0o700 })
     writeFileSync(script, '// isolated fixture\n', { mode: 0o600 })
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     const launcher = requireLauncher(installCodexLauncher())
 
-    await expect(run(launcher, ['resume', 'thread-a'], {
-      env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
-        NODETERM_CANVAS_CONTROL: '1',
-        NODETERM_NODE_ID: 'node-a',
-        NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
-        NODETERM_HOOK_ENDPOINT: endpoint,
-        NODETERM_CODEX_RELAY_RUNTIME: runtime,
-        NODETERM_CODEX_RELAY_SCRIPT: script
-      }
+    await expect(runLauncher(launcher, ['resume', 'thread-a'], {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      NODETERM_CANVAS_CONTROL: '1',
+      NODETERM_NODE_ID: 'node-a',
+      NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
+      NODETERM_HOOK_ENDPOINT: endpoint,
+      NODETERM_CODEX_RELAY_RUNTIME: runtime,
+      NODETERM_CODEX_RELAY_SCRIPT: script
     })).rejects.toMatchObject({ code: 69 })
     expect(readFileSync(codexCapture, 'utf8').trim()).toBe('app-server daemon start')
   })
@@ -289,7 +366,7 @@ describe('NodeTerm Codex remote launcher', () => {
     const bin = path.join(root, 'bin')
     mkdirSync(bin, { recursive: true })
     writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\nexit 99\n', { mode: 0o700 })
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     const launcher = requireLauncher(installCodexLauncher())
     const env = {
       ...process.env,
@@ -299,18 +376,16 @@ describe('NodeTerm Codex remote launcher', () => {
       NODETERM_CODEX_NODE_TOKEN: nodeTokenA,
       NODETERM_HOOK_ENDPOINT: '/isolated/node-a/hook.env'
     }
-    await expect(run(launcher, ['resume'], { env })).rejects.toMatchObject({ code: 64 })
-    await expect(run(launcher, ['resume', '../other'], { env })).rejects.toMatchObject({ code: 64 })
+    await expect(runLauncher(launcher, ['resume'], env)).rejects.toMatchObject({ code: 64 })
+    await expect(runLauncher(launcher, ['resume', '../other'], env)).rejects.toMatchObject({ code: 64 })
     await expect(
-      run(launcher, ['resume', 'thread-a'], {
-        env: { ...env, NODETERM_CODEX_ACCOUNT_ID: '..' }
-      })
+      runLauncher(launcher, ['resume', 'thread-a'], { ...env, NODETERM_CODEX_ACCOUNT_ID: '..' })
     ).rejects.toMatchObject({ code: 64 })
   })
 
   it('rejects a live duplicate owner but permits replacing a stale node binding', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-binding-'))
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false)
     expect(() =>
       bindCodexThreadIdentity('thread-a', 'node-b', '/isolated/hook.env', (nodeId) => nodeId === 'node-a')
@@ -332,7 +407,7 @@ describe('NodeTerm Codex remote launcher', () => {
       path.join(mappings, 'legacy-thread'),
       'nodeId=legacy-node\nendpoint=/isolated/hook.env\n'
     )
-    vi.stubEnv('HOME', root)
+    stubHome(root)
 
     expect(() => writeCodexThreadIdentity(
       'managed-thread',
@@ -348,7 +423,7 @@ describe('NodeTerm Codex remote launcher', () => {
 
   it('preflights duplicate ownership without stealing a live thread', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-preflight-'))
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false)
 
     expect(
@@ -361,7 +436,7 @@ describe('NodeTerm Codex remote launcher', () => {
 
   it('treats a malformed account mapping as a fail-closed ownership conflict', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-malformed-binding-'))
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     const dir = path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a')
     mkdirSync(dir, { recursive: true })
     writeFileSync(path.join(dir, 'thread-a'), 'accountId=wrong\nnodeId=../bad\nendpoint=relative\n')
@@ -370,7 +445,7 @@ describe('NodeTerm Codex remote launcher', () => {
 
   it('moves one thread id across accounts but rejects a second live node owner', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-account-binding-'))
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     bindCodexThreadIdentity(
       'same-thread',
       'node-a',
@@ -406,7 +481,7 @@ describe('NodeTerm Codex remote launcher', () => {
 
   it('releases the old owner only after the target account binds successfully', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-release-binding-'))
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false, 'account-a')
     expect(resolveCodexThreadNodeIdentity('thread-a')).toBe('node-a')
     bindCodexThreadIdentity('thread-b', 'node-a', '/isolated/hook.env', () => true, 'account-b')
@@ -418,7 +493,7 @@ describe('NodeTerm Codex remote launcher', () => {
 
   it('restores the source mapping when transfer cleanup cannot validate every mapping', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-transfer-rollback-'))
-    vi.stubEnv('HOME', root)
+    stubHome(root)
     bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false, 'account-a')
     const malformedDir = path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-x')
     mkdirSync(malformedDir, { recursive: true })

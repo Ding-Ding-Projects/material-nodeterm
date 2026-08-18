@@ -30,7 +30,14 @@ describe('PhoneSection revoke failure', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    useKidsMode.setState({ enabled: false })
+    // Both fields matter: `kidsDestructiveGateRequired` (state/kidsMode.ts) is
+    // `enabled || policyStatus !== 'ready'`, and the store's own default `policyStatus` is
+    // 'loading' — a placeholder, not evidence the mode is off (same "displayed OFF is not
+    // authorization" rule School mode's store documents). Leaving policyStatus unset here made
+    // the gate fail closed, routing the click through the Kids-mode destructive gate instead of
+    // the plain ConfirmDialog this test expects. Matches the established precedent in
+    // AccountsSection.test.tsx / AuthenticatorSection.test.tsx.
+    useKidsMode.setState({ enabled: false, policyStatus: 'ready' })
     host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)

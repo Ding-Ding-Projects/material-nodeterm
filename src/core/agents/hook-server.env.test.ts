@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { hookServer } from './hook-server'
-import { nodeAuthToken } from './node-auth-token'
+import { nodeAuthToken, verifyNodeToken } from './node-auth-token'
 import { initPlatform, resetPlatformForTests } from '../platform'
 import { fakePlatform } from '../platform-fake'
 
@@ -89,13 +89,28 @@ describe('hookServer.buildPtyEnv — canvas control gate', () => {
   })
 
   it('gives each Codex node a stable distinct identity capability outside the shared endpoint', () => {
-    const a = hookServer.buildPtyEnv('node-a', 'codex').NODETERM_CODEX_NODE_TOKEN
-    const b = hookServer.buildPtyEnv('node-b', 'codex').NODETERM_CODEX_NODE_TOKEN
-    expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/)
-    expect(b).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    // NOT buildPtyEnv(...).NODETERM_CODEX_NODE_TOKEN: measured 2026-08-13, that field rode the
+    // tmux `-e` argv into a long-lived tmux client whose /proc/<pid>/cmdline is world-readable on
+    // a stock Linux (no hidepid) — buildPtyEnv() deliberately never emits it any more (see its own
+    // "NO NODETERM_CODEX_NODE_TOKEN either" comment, and the regression guard in
+    // codex-launcher-sh.test.ts asserting `baseEnv().NODETERM_CODEX_NODE_TOKEN` is undefined). The
+    // real per-node capability is codexNodeAuthToken(nodeId), delivered to the client through the
+    // 0600 node-token file instead — this test's own title still holds, only the retrieval API does.
+    const a = hookServer.codexNodeAuthToken('node-a')
+    const b = hookServer.codexNodeAuthToken('node-b')
+    // `kid.mac`, the one canonical wire shape. This asserted a bare 43-char MAC with no dot,
+    // which is exactly the derivation that could never match the token a client actually holds —
+    // so the shape assertion was pinning the bug in place. The property that matters is the last
+    // one below: what this mints must verify, which is the check the drift walked straight past.
+    expect(a).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/)
+    expect(b).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/)
     expect(a).not.toBe(b)
-    expect(hookServer.buildPtyEnv('node-a', 'codex').NODETERM_CODEX_NODE_TOKEN).toBe(a)
+    expect(hookServer.codexNodeAuthToken('node-a')).toBe(a)
     expect(fs.readFileSync(path.join(dir, 'hook-endpoint.env'), 'utf8')).not.toContain(a)
+    expect(hookServer.buildPtyEnv('node-a', 'codex')).not.toHaveProperty('NODETERM_CODEX_NODE_TOKEN')
+    // Mint and verify must agree, and must be the SAME derivation the client's token file carries.
+    expect(verifyNodeToken(hookServer.nodeAuthSecretOrNull(), 'node-a', a)).toBe('verified')
+    expect(verifyNodeToken(hookServer.nodeAuthSecretOrNull(), 'node-b', a)).not.toBe('verified')
   })
 })
 

@@ -1516,10 +1516,18 @@ about which machine they describe. Reading + parsing is `core/session-memory.ts`
   rather than re-deriving them.** The user's number was right and their attribution was wrong; what
   the product was missing was not the allocation but the **blindness** — nothing told them 18
   sessions were live, that one was 1.2 GB, or that six belonged to a project they closed weeks ago.
-- **The reaper is deliberately unchanged.** `core/session-budget.ts` reaps only **detached** sessions
-  past a grace window, so on that host its kill list was **EMPTY** — 60 `nt-` sessions, 50 attached,
-  0 eligible — while 31 GB sat there. An open canvas is attached, and attached is untouchable.
-  Retargeting it is a separate change with separate risk; this feature adds **sight**, not policy.
+- **The reaper no longer treats attachment as protection, and this paragraph used to say it did.**
+  When the session-memory panel was built, `core/session-budget.ts` reaped only **detached**
+  sessions past a grace window — which is why its kill list on that host was **EMPTY**: 60 `nt-`
+  sessions, 50 attached, 0 eligible, while 31 GB sat there. That rule has since been removed on
+  purpose (read the module header): measured on the multi-tenant host, **54 of 54** sessions
+  reported `attached=1` and `planReap` returned `[]` on every sweep it had ever run, because tmux
+  "attached" only means a mounted node exists on some canvas — not that anyone is looking. Activity
+  staleness now carries the protection alone, which is why the grace window defaults to a **day**
+  rather than the 6 h that was safe while attachment was also required. So an idle session IS
+  reaped while attached, ours or somebody else's (`session-budget.test.ts`: "reaps an idle session
+  even while attached (attachment is not a signal)"). What this feature adds is still **sight**,
+  not policy — but do not read this paragraph as a promise that an attached session is safe.
 - **`ok:false` is not `ok:true` with no rows** — the rule the whole feature exists to honour, and
   every layer preserves it. A sweep fails (no tmux, unreadable process table, **no socket answered**,
   a missing or out-of-order marker in the SSH reply, a rejected call) ⇒ `ok:false` and no rows; the

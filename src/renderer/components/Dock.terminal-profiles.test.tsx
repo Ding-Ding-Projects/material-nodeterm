@@ -182,6 +182,10 @@ describe('Dock Windows terminal profile creation', () => {
       settings: { ...originalSettings, languageMode: 'yue' },
       base: { ...originalBase, languageMode: 'yue' }
     })
+    // Language mode only applies once a real "School mode is off" record has loaded
+    // (schoolModeAllowsOptionalFeatures fails closed on the pre-hydration default); without this
+    // the resolver silently falls back to English and the Cantonese button is never rendered.
+    useSchoolMode.setState({ enabled: false, hydrated: true })
     renderDock()
 
     openAddMenu()

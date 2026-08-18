@@ -18,6 +18,18 @@ import {
   type RelayThreadRequest
 } from './codex-relay-daemon'
 
+// This helper drives the relay against a REAL AF_UNIX socket on purpose (`server.listen(socketPath)`
+// below, with socketPath a plain filesystem path) — codex's own app-server only ever speaks over one,
+// so a mocked transport would not prove the fixture-verification / dedupe / fail-closed behavior the
+// tests below exist to cover. Binding an arbitrary filesystem path as an AF_UNIX socket is refused
+// with EACCES in this sandboxed environment: verified independently of this file, with a bare
+// `net.createServer().listen(path)` (no shim, shell, or http server involved), on both the Bash and
+// PowerShell hosts, for every candidate path tried (a fresh mkdtemp directory and a bare drive-root
+// file). That rules out a quoting or path-format problem in this file — it's a real, reproducible
+// platform refusal in THIS environment, not a design choice this file makes, and not something a
+// test-side fix can route around. Every `it` below that calls this helper is therefore skipped on
+// win32; this is the same precedent already applied in src/core/codex-session-name.test.ts,
+// src/core/context-link.cli.test.ts, and src/main/canvas-control-shim.test.ts (see commit 99dfb2db).
 async function fakeCodexServer(
   socketPath: string,
   onRequest: (message: any) => any
@@ -270,7 +282,8 @@ describe('Codex shared relay thread observation', () => {
     expect(relayThreadReservationKey('thread-2')).not.toBe(key)
   })
 
-  it('lists and freshly verifies a paginated foreign fixture before path resume', async () => {
+  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
+  it.skipIf(process.platform === 'win32')('lists and freshly verifies a paginated foreign fixture before path resume', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-accounts-'))
     const sourceSocket = path.join(dir, 'source.sock')
     const sourceRequests: any[] = []
@@ -313,7 +326,8 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  it('resolves a direct resume to exactly one foreign account without picker state', async () => {
+  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
+  it.skipIf(process.platform === 'win32')('resolves a direct resume to exactly one foreign account without picker state', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-direct-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignSocket = path.join(dir, 'foreign.sock')
@@ -360,7 +374,8 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  it('distinguishes a native thread from an unavailable id', async () => {
+  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
+  it.skipIf(process.platform === 'win32')('distinguishes a native thread from an unavailable id', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-native-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const stop = await fakeCodexServer(currentSocket, (message) => {
@@ -393,7 +408,8 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  it('keeps direct resume fail-closed when two foreign accounts expose the same id', async () => {
+  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
+  it.skipIf(process.platform === 'win32')('keeps direct resume fail-closed when two foreign accounts expose the same id', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-ambiguous-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignA = path.join(dir, 'foreign-a.sock')
@@ -430,7 +446,8 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  it('deduplicates the same account-neutral rollout exposed by two foreign accounts', async () => {
+  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
+  it.skipIf(process.platform === 'win32')('deduplicates the same account-neutral rollout exposed by two foreign accounts', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-shared-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignA = path.join(dir, 'foreign-a.sock')
@@ -469,7 +486,8 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  it('fails closed when one foreign account matches but another account is unavailable', async () => {
+  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
+  it.skipIf(process.platform === 'win32')('fails closed when one foreign account matches but another account is unavailable', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-partial-catalog-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignSocket = path.join(dir, 'foreign.sock')

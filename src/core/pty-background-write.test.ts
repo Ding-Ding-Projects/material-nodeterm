@@ -451,18 +451,23 @@ describe('background writes into released sessions', () => {
     expect(control.only.writes).toContain('detach-client\n')
   })
 
-  it('is subtracted from the session budget, exactly like a shadow', async () => {
-    // A shared client is a real tmux client on whatever session it attached to, so it flips that
-    // session's `#{session_attached}` — and an attached session is never culled. Without the
-    // subtraction, one background write would exempt a session from the memory-pressure valve for
-    // as long as the client lingered.
+  it('reaps a session behind our shared client exactly like one behind a shadow — attachment is not a signal', async () => {
+    // Session-budget.ts's reaping decision is activity age alone (see its module header and
+    // session-budget.test.ts's own "reaps an idle session even while attached (attachment is not
+    // a signal)"): a real host once measured 54 of 54 sessions reporting attached and a reaper
+    // that never fired a single sweep, so attachment — genuine or ours — no longer buys anyone an
+    // exemption. A shared background-write client is a real tmux client on whatever session it
+    // attached to, exactly like a shadow, and `shadowedTmuxSessions` still feeds the `shadowed`
+    // seam for the reaper's diagnostic client-count normalization — but that normalization no
+    // longer changes which sessions are eligible. An idle session behind our own client is reaped
+    // just the same as one nobody is attached to at all.
     const { createSessionReaper } = await import('./session-budget')
     const m = await tmuxManager()
     await release(ALICE, 'node-1')
     await m.backgroundWrite('node-1', 'ls\n')
 
     const NOW = 1_000_000
-    const OLD = NOW - 100_000 // well past the 6h grace window
+    const OLD = NOW - 100_000 // well past the grace window, whichever client (if any) is attached
     const killed: Array<{ socket: string; target: string }> = []
     const reaper = createSessionReaper({
       tmuxBin: () => m.getTmuxBin(),
@@ -476,8 +481,8 @@ describe('background writes into released sessions', () => {
           })
           return ''
         }
-        // `nt-node-1` reads as attached because our shared client IS one; `nt-node-9` is genuinely
-        // attached (somebody is looking at it) and must survive.
+        // `nt-node-1` is attached because our shared client IS one; `nt-node-9` is attached by
+        // somebody else entirely. Both are idle past grace, so both are eligible either way.
         return `nt-node-1|1|${OLD}\nnt-node-9|1|${OLD}`
       },
       readMem: () => ({ availableMb: 100, totalMb: 8000 }), // under the watermark: real pressure
@@ -485,8 +490,11 @@ describe('background writes into released sessions', () => {
       nowSec: () => NOW
     })
 
-    expect(await reaper.sweep()).toBe(1)
-    expect(killed).toEqual([{ socket: TMUX_SOCKET, target: '=nt-node-1' }])
+    expect(await reaper.sweep()).toBe(2)
+    expect(killed).toEqual([
+      { socket: TMUX_SOCKET, target: '=nt-node-1' },
+      { socket: TMUX_SOCKET, target: '=nt-node-9' }
+    ])
   })
 
   it('does nothing with tmux switched off in settings', async () => {

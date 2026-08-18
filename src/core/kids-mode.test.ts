@@ -142,6 +142,12 @@ describe('the lock', () => {
     })
     const s = await fresh({ writeCompared })
     await s.enable('1234')
+    // A successful write is display-only until the strict re-read `recordWritten()` schedules
+    // has actually landed (another process could theoretically have won a write in the interval
+    // after our lock released) — the same eventual-consistency contract the sibling "returns
+    // unavailable and rereads..." test above waits out. Settle here before asserting so this
+    // test observes the record's steady state, not the transient dip every write passes through.
+    await waitUntil(() => s.snapshot().authoritative)
     expect(s.snapshot()).toMatchObject({ enabled: true, authoritative: true })
 
     await expect(s.disable('1234')).rejects.toThrow(/disk full/i)

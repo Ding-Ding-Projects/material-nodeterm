@@ -9,7 +9,7 @@ import type { CodexIdentityEvent } from '../../shared/types'
 import type { NodeTokenVerdict } from './node-auth-token'
 import { nodeTokenDir } from './node-token-files'
 import { posixQuote } from '../../shared/ssh'
-import { isForeignKidToken, isSafeNodeId, verifyNodeToken } from './node-auth-token'
+import { isForeignKidToken, isSafeNodeId, nodeAuthToken, verifyNodeToken } from './node-auth-token'
 import { isSafeThreadId } from '../codex-identity-proxy'
 import {
   controlPolicy,
@@ -277,9 +277,17 @@ class HookServer {
     if (!/^[A-Za-z0-9._-]+$/.test(nodeId)) return ''
     if (!this.nodeAuthSecret)
       throw new Error('NodeTerm Codex node authentication is unavailable')
-    return createHmac('sha256', this.nodeAuthSecret).update(nodeId).digest('base64url')
+    // The CANONICAL derivation, not a second one. This used to be a bare
+    // `createHmac(secret, nodeId).digest('base64url')`, which disagreed with `nodeAuthToken()`
+    // twice over: no `kid.` prefix, and the MAC taken over the raw node id instead of the
+    // domain-separated `MAC_PREFIX + nodeId`. Nothing in production ever minted with it, so the
+    // only token a Codex client can obtain is the `kid.mac` one written to its token file — and
+    // the two can never be equal, which meant every /codex-thread/* route answered 403 to a
+    // correctly-tokened caller. Same secret on both sides the whole time (setNodeAuthSecret and
+    // setCodexNodeAuthSecret write one field, and main hands both the same buffer), so the
+    // mismatch was purely this derivation.
+    return nodeAuthToken(this.nodeAuthSecret, nodeId)
   }
-
   /** Main injects a keychain-backed, restart-stable secret before any Codex PTY is created. */
   setCodexNodeAuthSecret(secret: Uint8Array): void {
     if (secret.byteLength < 32) throw new Error('Invalid NodeTerm Codex node-auth secret')
@@ -1145,18 +1153,13 @@ class HookServer {
   }
 
   private codexNodeTokenMatches(nodeId: string, provided: string | string[] | undefined): boolean {
-    if (typeof provided !== 'string') return false
-    let expected = ''
-    try {
-      expected = this.codexNodeAuthToken(nodeId)
-    } catch {
-      return false
-    }
-    const a = Buffer.from(provided)
-    const b = Buffer.from(expected)
-    return a.length === b.length && timingSafeEqual(a, b)
+    // Verify through the one canonical verifier rather than a hand-rolled compare, so this gate
+    // cannot drift from the minting side again. STRICT on purpose: these routes are a capability,
+    // not the fail-open identity LABEL, so only 'verified' passes — 'legacy' (no secret, foreign
+    // kid, or not our wire shape) and 'forged' are both refused. That is no stricter in practice
+    // than what shipped, which refused everything.
+    return verifyNodeToken(this.nodeAuthSecret, nodeId, provided) === 'verified'
   }
-
   // The managed script sources this file at invocation to get the LIVE port/token.
   // tmux sessions outlive the app, so env-baked coords go stale after a restart.
   private writeEndpointFile(): void {

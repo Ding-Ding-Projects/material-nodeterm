@@ -233,8 +233,15 @@ describe('every launch resolves its permission mode through the one funnel', () 
 
   it('Canvas builds agent commands from the resolver, at every site', () => {
     const canvas = withoutComments(readFileSync(join(RENDERER, 'canvas', 'Canvas.tsx'), 'utf8'))
-    const calls = (canvas.match(/activePermissionMode\(/g) || []).length
-    // Nine at the time of writing. A floor rather than an exact count: adding a launch site is
+    // A launch site may obtain the decision either directly (`activePermissionMode`) or through
+    // the branded launch-plan funnel (`activeAgentLaunchPlan` / `ensureActiveAgentLaunchPlan`) —
+    // command builders and `createAgentNode` consume that proof rather than a raw mode. Counting
+    // only the direct form went stale the moment most call sites moved to the branded plan.
+    const calls = (
+      canvas.match(/\b(?:activePermissionMode|activeAgentLaunchPlan|ensureActiveAgentLaunchPlan)\(/g) ||
+      []
+    ).length
+    // Ten at the time of writing. A floor rather than an exact count: adding a launch site is
     // normal, removing them all silently is what this guards.
     expect(calls, 'Canvas should resolve the mode at each launch site').toBeGreaterThanOrEqual(5)
     // And every withPermissionMode call must take a resolved mode, never a literal.

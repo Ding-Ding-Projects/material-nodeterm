@@ -17,11 +17,19 @@ const localWindowsDesktop = (
 })
 
 describe('windowsTerminalProfileId', () => {
-  it('uses a node snapshot, or the current default for a legacy node without one', () => {
+  it('uses a node snapshot, or the current default once it has moved off the shipped auto default', () => {
     expect(
       windowsTerminalProfileId(localWindowsDesktop({ terminalProfileId: 'wsl:Ubuntu Dev' }))
     ).toBe('wsl:Ubuntu Dev')
-    expect(windowsTerminalProfileId(localWindowsDesktop())).toBe('auto')
+    // The shipped default is 'auto', and that is not a choice anybody made: a legacy node with no
+    // snapshot and a still-default machine must stay on the direct spawn path, not be silently
+    // routed into profile resolution and the session-host backend (commit 1c305ec2).
+    expect(windowsTerminalProfileId(localWindowsDesktop())).toBeUndefined()
+    // Once the user has actually moved the machine default off 'auto', a legacy node without its
+    // own snapshot picks up that real choice.
+    expect(
+      windowsTerminalProfileId(localWindowsDesktop({ defaultTerminalProfileId: 'pwsh' }))
+    ).toBe('pwsh')
   })
 
   it('keeps malformed machine-local ids intact so trusted core validation fails closed', () => {

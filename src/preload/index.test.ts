@@ -5,11 +5,7 @@
 // the exact invoke/on wiring the real contextBridge would expose.
 import { describe, expect, it, vi } from 'vitest'
 import { IPC } from '../shared/ipc'
-import type {
-  NodeTerminalApi,
-  SshPassphraseRequest,
-  TerminalLaunchIntent
-} from '../shared/types'
+import type { NodeTerminalApi, SshPassphraseRequest } from '../shared/types'
 
 const h = vi.hoisted(() => ({
   invoke: vi.fn(async (..._args: unknown[]): Promise<unknown> => undefined),
@@ -71,25 +67,18 @@ describe('preload IPC wiring', () => {
     expect(h.invoke).toHaveBeenCalledWith(IPC.ptyCreate, options)
   })
 
-  it('exposes delayed launch intent only on Windows and forwards the exact opaque IPC arguments', async () => {
+  // `executeLaunchIntent` is deliberately NOT exposed on any platform (commit 1c305ec2, "fix(windows):
+  // restore typing in ordinary terminals"). Preload used to advertise it on win32, so the renderer's
+  // `supportsStructuredLaunch` check (which asks only whether the function exists) answered yes on
+  // every Windows install — while `registerLaunchIntentIpc` is never called from the main process and
+  // `PtyManager` has no `executeLaunchIntent` method at all, so every launch down that route rejected
+  // with "No handler registered for 'pty:execute-launch-intent'". A bridge member is a capability
+  // CLAIM, and one main cannot answer is worse than a missing one — restore this only alongside the
+  // manager method and the registered handler, never before.
+  it('never advertises the unimplemented delayed launch intent, on any platform', async () => {
     const windowsApi = await loadPreloadForPlatform('win32')
-    const intent: TerminalLaunchIntent = {
-      kind: 'agent',
-      action: 'resume',
-      agentId: 'codex',
-      sessionId: 'thread-fixture-1'
-    }
-    const sessionId = 'live-session-fixture-1'
-    const launchId = '123e4567-e89b-42d3-a456-426614174000'
-
-    expect(windowsApi.pty.executeLaunchIntent).toBeTypeOf('function')
-    await windowsApi.pty.executeLaunchIntent!(sessionId, launchId, intent)
-    expect(h.invoke).toHaveBeenCalledWith(
-      IPC.ptyExecuteLaunchIntent,
-      sessionId,
-      launchId,
-      intent
-    )
+    expect(windowsApi.pty.executeLaunchIntent).toBeUndefined()
+    expect('executeLaunchIntent' in windowsApi.pty).toBe(false)
 
     const nonWindowsApi = await loadPreloadForPlatform('linux')
     expect(nonWindowsApi.pty.executeLaunchIntent).toBeUndefined()

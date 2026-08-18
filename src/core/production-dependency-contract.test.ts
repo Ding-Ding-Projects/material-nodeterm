@@ -54,7 +54,10 @@ describe('production dependency contract', () => {
   it('locks the requested Monaco and WebSocket releases without changing application identity', () => {
     expect(packageMetadata).toMatchObject({
       name: 'node-terminal',
-      version: '0.4.0',
+      // Tracks the currently released stable version (release commits: 0.4.0 -> 0.4.1 -> 0.4.2 ->
+      // 0.4.3). This contract only pins identity/dependency shape, not a frozen release number, so
+      // bump this alongside every release commit rather than letting it silently drift.
+      version: '0.4.3',
       engines: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
       dependencies: {
         'monaco-editor': '^0.56.0',

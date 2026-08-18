@@ -408,9 +408,12 @@ describe('PtyManager session-host contracts', () => {
       rows: 24,
       persistKey: 'node-exited-during-attach'
     }) as Promise<unknown>
-    const failure = expect(result).rejects.toThrow(
-      'session-host session exited before its attach completed'
-    )
+    // This suite mocks './session-host-backend', so the create path exercised here is
+    // pty-manager.ts's own ready-vs-exit race (the message below is its literal text, line
+    // ~1998) — not session-host-client.ts's SessionHostPty class, which is a different,
+    // unmocked implementation this harness never reaches. Matches the sibling test "rejects a
+    // create whose provisional generation exits before ready resolves" below.
+    const failure = expect(result).rejects.toThrow('exited before it became ready')
     await vi.waitFor(() => expect(backend.create).toHaveBeenCalledTimes(1))
     resolveReady({ fresh: true })
     exited.emitExit(0)

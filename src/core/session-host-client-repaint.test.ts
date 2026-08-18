@@ -132,6 +132,11 @@ describe('SessionHostClient reconnect repaint', () => {
       })
     )
 
+    // Protocol v2 requires attach/attachExisting/hasSession(exists:true) results to all carry a
+    // matching generation (session-host-client.ts requireAttachResult / hasSession) — the exact
+    // identity the reconnect path (restoreSocket -> 'attachExisting') cross-checks against what
+    // the original 'attach' reported, refusing the warm replay otherwise.
+    const generation = 'fixturegen01'
     let connection = 0
     let firstSocket: net.Socket | undefined
     let firstClosed!: () => void
@@ -150,17 +155,41 @@ describe('SessionHostClient reconnect repaint', () => {
       socket.on('data', (chunk: Buffer) => {
         for (const request of framer.push<SessionHostRequest>(chunk.toString('utf8'))) {
           if (request.cmd === 'hello') {
-            socket.write(encodeFrame({ id: request.id, ok: true }))
+            // A real host (src/session-host/host.ts) always advertises its protocol version in
+            // the hello result; the client negotiates against that, then cross-checks it against
+            // the version this same fixture published in state.json. Omitting it here negotiates
+            // the legacy (pre-v2) protocol while the state file claims v2, which the client
+            // correctly refuses as an inconsistent host.
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { protocolVersion: SESSION_HOST_PROTOCOL_VERSION }
+              })
+            )
           } else if (request.cmd === 'attach') {
             socket.write(
               encodeFrame({
                 id: request.id,
                 ok: true,
-                result: { fresh: false, screen }
+                result: { fresh: false, generation, screen }
+              })
+            )
+          } else if (request.cmd === 'attachExisting') {
+            // The reconnect path (restoreSocket) sends this on the second connection instead of
+            // 'attach'. It must report the SAME generation the first 'attach' did, and the
+            // serialized screen the client repaints the local xterm buffer with.
+            socket.write(
+              encodeFrame({
+                id: request.id,
+                ok: true,
+                result: { fresh: false, generation, screen }
               })
             )
           } else if (request.cmd === 'hasSession') {
-            socket.write(encodeFrame({ id: request.id, ok: true, result: { exists: true } }))
+            socket.write(
+              encodeFrame({ id: request.id, ok: true, result: { exists: true, generation } })
+            )
           }
         }
       })
