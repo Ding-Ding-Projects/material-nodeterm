@@ -34,7 +34,7 @@ checking it.
 
 ## Where the migration actually stands
 
-Of the 38, **18 have a `var()` consumer in the stylesheet** and 20 do not. The 18 are the foreground
+Of the 38, **24 have a `var()` consumer in the stylesheet** and 14 do not. The 18 are the foreground
 roles — the ones that decide what text and strokes look like:
 
 | token | references |
@@ -49,8 +49,12 @@ roles — the ones that decide what text and strokes look like:
 | `--md-shape-*` (5 tokens) | 13 combined |
 | remaining container/status roles | 18 combined |
 
-The 20 without a consumer are the surface ramp and the secondary/tertiary families. Nothing renders
-*through* them yet; chrome still names `--bg`, `--panel`, `--surface-sunken` and friends directly.
+The 14 without a consumer are the secondary and tertiary families and a few status containers.
+The SURFACE ramp is now consumed directly: 86 call sites moved off `--bg`, `--surface-sunken`,
+`--surface-deep`, `--surface-raised`, `--surface-overlay` and `--surface-black` onto their Material
+names, leaving each base token consumed only by its own alias. That step was appearance-neutral by
+construction — the aliases are identities and no scope overrides a surface token locally, which was
+checked rather than assumed (0 re-declarations outside `:root`).
 The four `--md-primary*` roles are additionally set at runtime from TypeScript
 (`renderer/lib/accentTokens.ts`), so a custom accent moves the Material primary family with it.
 
