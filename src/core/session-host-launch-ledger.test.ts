@@ -121,9 +121,15 @@ describe('HostSession generation-scoped launch ledger', () => {
   it('caches a sanitized failed outcome and never writes the same id again', async () => {
     const { host, proc } = session()
     proc.echoWrites = false
+    // Attach the rejection handler BEFORE advancing timers. The launch rejects during the timer
+    // advance, so creating the promise and only asserting on it afterwards leaves a window with
+    // no handler attached — Vitest reports that as an unhandled rejection and warns it "might
+    // cause false positive tests". It was the only thing making an otherwise all-passing suite
+    // exit non-zero.
     const first = host.executeLaunch(LAUNCH_ID, COMMAND)
+    const firstSettled = expect(first).rejects.toThrow('session-host launch delivery failed')
     await vi.advanceTimersByTimeAsync(8_000)
-    await expect(first).rejects.toThrow('session-host launch delivery failed')
+    await firstSettled
     const writesAfterFailure = [...proc.writes]
     await expect(host.executeLaunch(LAUNCH_ID, COMMAND)).rejects.toThrow(
       'session-host launch delivery previously failed'
@@ -149,9 +155,15 @@ describe('HostSession generation-scoped launch ledger', () => {
   it('never types stdin-after-start when the agent readiness probe stays false', async () => {
     const { host, proc } = session()
     const prompt = 'private Gemini prompt'
+    // Attach the rejection handler BEFORE advancing timers. The launch rejects during the timer
+    // advance, so creating the promise and only asserting on it afterwards leaves a window with
+    // no handler attached — Vitest reports that as an unhandled rejection and warns it "might
+    // cause false positive tests". It was the only thing making an otherwise all-passing suite
+    // exit non-zero.
     const launched = host.executeLaunch(LAUNCH_ID, COMMAND, prompt, async () => false)
+    const settled = expect(launched).rejects.toThrow('session-host launch delivery failed')
     await vi.advanceTimersByTimeAsync(7_000)
-    await expect(launched).rejects.toThrow('session-host launch delivery failed')
+    await settled
     expect(proc.writes).not.toContain(prompt)
     expect(proc.writes.filter((value) => value === COMMAND)).toHaveLength(1)
   })
