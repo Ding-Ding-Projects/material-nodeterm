@@ -31,17 +31,17 @@ beforeEach(() => {
 })
 afterEach(() => {
   resetPlatformForTests()
-  // KNOWN FLAKE, and retries do NOT fix it — measured, not assumed: the pristine file fails 2 of
-  // 3 isolated runs, and 30 attempts over 3 s fail exactly the same way with EPERM on the
-  // directory. So the handle is held for longer than any budget worth waiting, which points at
-  // an owner rather than a timing lag: `repo` is BOTH the git repository and the platform’s
-  // userDataDir, several tests below construct a SECOND ServerPlatform against it, and
-  // `resetPlatformForTests` only nulls a reference — it disposes nothing. Whatever those
-  // platforms opened inside this directory is still open when it is deleted.
+  // KNOWN FLAKE, pre-existing, and NOT diagnosed — see HANDOFF.md for what has been ruled out.
+  // Measured: the pristine file fails intermittently on its own (between 1-in-4 and 4-in-6 within
+  // one hour on the same tree), always EPERM on the directory rather than a wrong value. Retries
+  // do not help — 30 attempts over 3 s fail identically. Git background maintenance is not the
+  // holder either; disabling it still failed 4 of 6. And a probe running this exact cycle ten
+  // times — including a real git:status dispatch and a second platform against the same
+  // directory — failed 0 of 10, so the obvious “the platform never gets disposed” story is NOT
+  // supported by a reproduction and must not be written down as the cause.
   //
-  // Left at the ordinary budget rather than inflated, because a longer wait buys nothing here and
-  // would only slow every run down on the way to the same failure. The fix is a real disposal
-  // path on the platform; recorded in HANDOFF.md instead of guessed at here.
+  // Left at the ordinary budget rather than inflated, because a longer wait demonstrably buys
+  // nothing and would only slow every run on the way to the same failure.
   fs.rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 

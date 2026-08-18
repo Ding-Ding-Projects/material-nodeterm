@@ -676,6 +676,32 @@ It is NOT caused by the retry sweep in the same commit: the pristine file fails 
 is why the measurement above was taken against `git checkout`-clean source rather than against the
 edited file.
 
+### What has been ruled OUT for that flake (so nobody repeats it)
+
+Three hypotheses were tested and none survived. Recording them because the eliminated ones are the
+expensive part — each looked obviously right beforehand.
+
+- **Retries do not fix it.** 30 attempts over 3 s fail identically to no retries at all. The
+  directory is not slow to release; something owns it.
+- **Git background maintenance is not the holder.** Running the fixture's git with
+  `-c gc.auto=0 -c maintenance.auto=false` still failed 4 of 6 runs. This was the strongest guess —
+  `git commit` can fork background maintenance that holds `.git`, and it is a known Windows flake
+  cause — and it is simply not what is happening here.
+- **The platform is not obviously the holder either, which contradicts the note above.** A probe
+  that ran the exact cycle — mkdtemp, git init/commit, `new ServerPlatform({ userDataDir: repo })`,
+  `registerCoreHandlers`, `attach`, a real `git:status` dispatch, `resetPlatformForTests`, remove —
+  ten times in a row failed **0 of 10**, with and without a second platform against the same
+  directory. So "the platform holds a handle" is a plausible story that the reproduction does not
+  support, and it should not be treated as diagnosed.
+
+What IS established: it is pre-existing (the pristine file fails too, so it is not the retry sweep),
+it is intermittent at a rate that moves with machine state (measured between 1-in-4 and 4-in-6 on
+the same tree within an hour), and it is always `EPERM` on the directory rather than a wrong value.
+
+The next useful step is not another guess. It is to make the failure SAY what is holding the
+directory — on Windows that means asking the OS for the open handles on that path at the moment
+`rmSync` throws, rather than inferring an owner from what the test happens to construct.
+
 ## Open: the suite leaks temp directories
 
 After four full runs, `%TEMP%` held **352** `nt-*` directories. Each is a repository, a data dir or
