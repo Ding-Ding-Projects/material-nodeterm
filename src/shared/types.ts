@@ -1544,7 +1544,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   fontSize: 13,
-  fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+  fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace',
   cursorBlink: true,
   // Every appearance default below reproduces the pre-feature look bit-for-bit: the default theme
   // carries the old hardcoded background/foreground, and block/outline/1/0 are xterm's own

@@ -99,6 +99,7 @@ import { withNodeBoundary } from '../components/NodeBoundary'
 import { Dock } from '../components/Dock'
 import { TabBar } from '../components/TabBar'
 import { type MenuItem } from '../components/ContextMenu'
+import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
 import { seedColor } from '../components/color/seedColor'
 import { appearanceId } from '../lib/appearance/registry'
@@ -8075,6 +8076,25 @@ export function Canvas() {
 
   const zoomRafRef = useRef<number | null>(null)
   const gestureSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // PHASE de-blur (measured 2026-08-18, device-pixel-fit.test.ts carries the numbers): at a
+  // fractional Windows dpr (1.25/1.5) a viewport translate with arbitrary CSS fractions lands the
+  // whole fixed-resolution terminal canvas between device pixels, and bilinear resampling smears
+  // every glyph (-39% fully-on ink at dpr 1.5 vs an aligned origin, at IDENTICAL zoom). Snapping
+  // happens on gesture END, not per-frame: fighting d3-zoom mid-drag stutters the pan, while a
+  // rest-time nudge of at most half a device pixel is imperceptible as motion and restores
+  // crispness exactly when someone can look. Loop-safe by construction: a snapped viewport
+  // computes a zero delta on the re-entrant onMoveEnd and returns.
+  const onMoveEnd = useCallback(
+    (_e: unknown, vp: Viewport) => {
+      const dpr = window.devicePixelRatio || 1
+      const dx = devicePixelSnapOffset(vp.x, dpr)
+      const dy = devicePixelSnapOffset(vp.y, dpr)
+      if (dx === 0 && dy === 0) return
+      void setViewport({ x: vp.x + dx, y: vp.y + dy, zoom: vp.zoom })
+    },
+    [setViewport]
+  )
+
   const onMove = useCallback(
     (_e: unknown, vp: Viewport) => {
       viewportRef.current = vp
@@ -12268,6 +12288,7 @@ export function Canvas() {
           onConnect={onConnect}
           onEdgeDoubleClick={onEdgeDoubleClick}
           onMove={onMove}
+          onMoveEnd={onMoveEnd}
           onNodeDragStart={() => (draggingRef.current = true)}
           onNodeDragStop={() => {
             draggingRef.current = false

@@ -487,18 +487,22 @@ Lifecycle, by intent:
   off-screen so it holds no context. Permanent-delete paths call `disposeTerminalOnUnmount(id)` so a
   deleted node disposes instead of parking.
   **Which renderer a terminal uses** is `settings.terminalGpuRendering`, resolved by the single
-  resolver `resolveTerminalRenderer(value, isMac)` (`src/shared/webgl.ts`) to `dom | webgl | shared`:
+  resolver `resolveTerminalRenderer(value)` (`src/shared/webgl.ts`) to `dom | webgl | shared`:
   `'off'` = xterm's DOM renderer, `'on'` = one budgeted WebGL context per terminal (everything the
   paragraph above describes), `'shared'` = **glyphgrid**, ONE canvas-wide WebGL2 context every
   terminal paints into (`src/renderer/glyphgrid/`, reached through `terminal/glyphgrid-attach.ts`;
   the per-terminal budget is OFF in this mode). `'auto'` (the default, and what legacy/unknown values
-  fall back to) = **`shared` on macOS, `webgl` everywhere else**. macOS used to resolve to `dom`
-  because many simultaneous WebGL canvases made its compositor flicker the window or composite
-  terminals black with no JS-visible error; one context does not create that pressure, and the
-  shared renderer was promoted on 2026-08-05 after the full device checklist plus a ≥30-minute soak
-  (`docs/superpowers/plans/2026-08-03-phase1b-device-checklist.md`) — it is **no longer experimental**,
-  and it falls back to the DOM renderer on failure. Non-macOS is deliberately not promoted (no such
-  reports there, so no evidence to move it). The four-way setting stays as the escape hatch.
+  fall back to) = **`webgl` on EVERY platform, macOS included** — the resolver takes no platform
+  argument at all any more. **This line said "`shared` on macOS" until 2026-08-18 and it was stale
+  by then**, which is worse than vague: a research pass sent to find a macOS-only shared-renderer
+  default reads the doc, believes it, and never opens the eleven-line resolver that disagrees. Read
+  `resolveTerminalRenderer` before trusting this sentence again. The history behind the collapse is
+  in that function's own doc comment: macOS resolved to `dom`, then to `shared` (2026-08-05, after
+  the device checklist in `docs/superpowers/plans/2026-08-03-phase1b-device-checklist.md`), and then
+  to `webgl` once the blackout it was avoiding was root-caused to the addon-webgl 0.19 dispose
+  crash rather than to the compositor. `shared` is no longer experimental and still falls back to
+  the DOM renderer on failure; the four-way setting stays as the escape hatch, and `'shared'` is
+  where the macOS branch goes back to if a field report contradicts the promotion.
 - **Window close / app quit** → clients detach (`PtyManager.killAll()`); tmux or the standalone
   Windows host keeps the session running. `killAll()` deliberately does NOT kill sessions.
 - **Node reopen / app relaunch** (nothing parked) → a new PTY attaches to the same
@@ -663,6 +667,26 @@ offscreenEpoch])` and torn down on unmount. The component persists across re-ren
 - A `ResizeObserver` drives `FitAddon.fit()` + `transport.resize`. Canvas zoom is a CSS
   transform, so it does _not_ change `clientWidth` — cols/rows stay stable across zoom.
   `scale-fix.ts` patches xterm's mouse coords so text selection stays aligned when zoomed.
+  **That same CSS transform is why terminal text is soft, and there are TWO terms, not one**
+  (measured 2026-08-18 on Windows 11 at 150% scaling, dpr 1.5, with the repo's own Electron 42 +
+  xterm 5.5 + addon-webgl 0.18 and `quantizeCharSize` applied; metric = share of ink pixels fully
+  on, the same one `glyphgrid/raster.ts` quotes, aligned zoom-1 baseline **0.552**):
+  **SCALE** — a terminal's raster is built at `devicePixelRatio` and displayed at `dpr × zoom`, so
+  every zoom ≠ 1 resamples it (zoom 0.83 → **0.311**, −44%); and **PHASE** — React Flow's viewport
+  `translate(x, y)` carries arbitrary CSS fractions, and at a fractional dpr a whole-CSS-pixel pan
+  is still a fractional DEVICE offset, so the raster is smeared across two device columns *at zoom
+  1* (a 0.37/0.61 px offset → **0.335**, −39%). Phase is the term the "blurry at default zoom"
+  report is about, and it is a Windows problem specifically because mac dprs are integers: at dpr
+  1.5 a CSS offset is device-aligned only on multiples of ⅔. The DOM renderer measured the same as
+  WebGL when aligned (0.566 vs 0.552), so **the renderer choice is not the cause** — the transform
+  is. The pure rule (what raster scale a given dpr × zoom wants, and the ≤ half-device-pixel nudge
+  that aligns a coordinate) is `terminal/device-pixel-fit.ts`, unit-tested on dpr 1 / 1.25 / 1.5 / 2.
+  **It is not wired to anything yet**: both wiring sites are the viewport transform in `Canvas.tsx`
+  and the renderer default, and neither change may ship without a device eyeball. Note the shared
+  glyphgrid layer is already immune to PHASE — it is a `<ReactFlow>` sibling of the viewport rather
+  than a child of it, and `glyphgrid/camera.ts`'s `snapPanToDevicePx` snaps its camera — which makes
+  `'shared'` the ready-made escape hatch to point a Windows user at, and the leading candidate if
+  the default is ever revisited.
 
 ## Node kinds (all rendered by React Flow custom nodes)
 
