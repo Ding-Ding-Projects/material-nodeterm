@@ -693,11 +693,39 @@ same process, which is what this file had. Converting those call sites to awaite
 would require making each `afterEach` async and is a larger, separate change; the ones that matter
 are the tests whose subject writes under a directory the test then deletes.
 
-## Open: the suite leaks temp directories
+## Solved: the temp-directory leak, and the bug class behind it
 
-After four full runs, `%TEMP%` held **352** `nt-*` directories. Each is a repository, a data dir or
-a session-host fixture that a test created and did not remove — sometimes because cleanup threw
-(see above), sometimes because nothing ever tried. It is not breaking anything today, and it is
-worth knowing before somebody debugs a "disk filling up" report: a crowded temp directory also
-gives the real-time scanner more to walk, which is one of the things that makes the cleanup races
-above more likely the longer a machine goes between reboots.
+A full suite run used to leave dozens of `nt-*` directories in TEMP — 387 had accumulated. A full
+run now leaks **one**, and that one is `nt-tui-`, which is out of scope by standing instruction.
+
+The leak was not untidy tests. It was two production paths caching a PER-RUN directory in a module
+singleton and never clearing it, so a server started after a close wrote its files into the
+PREVIOUS run's data directory — recreating a directory the test had correctly deleted:
+
+- `hook-server.ts` — `endpointPath` is resolved lazily from `platform().userDataDir` and memoized.
+  `stop()` cleared `server`, `port` and `token`, every other per-run field, and missed this one. A
+  restarted server advertised its live endpoint and token into a stale path, while the directory
+  that should have held them had none.
+- `context-link.ts` — `contextLinkDir()` memoized the same way, so a second server's link files
+  landed in the first server's directory. The cache is removed rather than cleared on stop: it
+  saved one `path.join` across five call sites, none hot, and a value that must be invalidated is a
+  value better not stored.
+
+Benign on the desktop, which runs one of each for the life of the process. Not benign for the
+Server Edition, whose `close()` is a real repeated operation.
+
+**A third candidate was checked and is fine.** `agent-status-mirror.ts` has the same lazy shape in
+`resolveFile()`, but `initAgentStatusMirror()` is called from each shell on start and assigns
+unconditionally, so a second server re-points it correctly. Written down because the pattern looks
+identical and the next person will find it and want to "fix" it too.
+
+### How it was found, which is the reusable part
+
+Not by reading. The test leaked exactly one directory per run, and the first test's `dataDir` was
+deleted correctly — `existsSync` said false — and then reappeared. From there it was subtraction:
+fix one writer, look at what the survivor still contains. `hook-endpoint.env` disappeared and
+`context-links/context.sh` remained, which named the second cache without any guessing.
+
+Ask what is IN the leftover, then remove writers one at a time. Both of tonight's directory
+mysteries — this one and the EPERM flake — gave themselves up to that same question, after five
+hypotheses between them had failed.
