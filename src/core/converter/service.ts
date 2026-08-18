@@ -76,10 +76,30 @@ export class ConverterService {
     await this.loaded
   }
 
+  /**
+   * Persist the queue snapshot without making the caller wait for the disk.
+   *
+   * `void promise` is NOT enough here, and the failure it causes is not local: an unhandled
+   * rejection terminates the process by default on every supported Node, so a single failed
+   * background queue write would take down the whole Electron main process (or the Server
+   * Edition) for a purely advisory save. The write can genuinely fail — `renameAtomic` gives up
+   * after its bounded retries when something on Windows keeps holding `queue.json`, and a
+   * userData directory can disappear underneath a long-running app.
+   *
+   * A queue snapshot is best effort by design: the in-memory queue is authoritative for this run
+   * and the store only makes it survive a restart. So report the loss and carry on; do not
+   * escalate it into "the app is gone".
+   */
+  private persistInBackground(): void {
+    this.store.save(this.items).catch((e) => {
+      console.warn('[converter] queue snapshot write failed; queue is still live in memory', e)
+    })
+  }
+
   private touch(item: ConvertQueueItem): void {
     item.updatedAt = Date.now()
     this.deps.onItemChange?.(item)
-    void this.store.save(this.items)
+    this.persistInBackground()
   }
 
   private emitSummary(): void {
@@ -356,7 +376,7 @@ export class ConverterService {
     if (!item || item.status === 'running' || item.status === 'queued') return
     this.items = this.items.filter((i) => i.id !== id)
     this.byId.delete(id)
-    void this.store.save(this.items)
+    this.persistInBackground()
     this.emitSummary()
   }
 
@@ -367,7 +387,7 @@ export class ConverterService {
     )
     for (const i of [...this.byId.values()]) if (!this.items.includes(i)) this.byId.delete(i.id)
     if (this.items.length !== before) {
-      void this.store.save(this.items)
+      this.persistInBackground()
       this.emitSummary()
     }
   }

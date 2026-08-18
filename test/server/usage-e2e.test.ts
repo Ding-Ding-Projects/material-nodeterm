@@ -47,7 +47,27 @@ describe('server e2e: usage over WS-RPC', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    // `fs.rmSync`'s retries are SYNCHRONOUS: they block the event loop, so they can never let
+    // in-flight async work in THIS process finish and release what it holds — the retry loop
+    // waits for the thing it is itself preventing. The holder here is the agent-status mirror
+    // publication, which opens `agent-status.json.publication.sqlite3` under this very dataDir
+    // inside a BEGIN IMMEDIATE transaction with nothing awaiting the flush. The symptom was
+    // `EPERM` on the directory itself, in teardown, after the usage assertion had already passed
+    // — i.e. a suite reported red for a behaviour that was green. Same fix and same reasoning as
+    // `server-e2e.test.ts` and `src/server/handlers/index.test.ts`: await, same options, same
+    // retry count, one keyword.
+    //
+    // The warning stays as a net, because a teardown must never decide a passing test's verdict.
+    try {
+      await fs.promises.rm(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })
+    } catch (error) {
+      console.warn(
+        `[usage-e2e] fixture directory outlived the run and could not be removed: ${dataDir}\n` +
+          `  ${String(error)}\n` +
+          '  The usage assertions above still passed; this is a resource-release signal, not a ' +
+          'failure of the behaviour under test.'
+      )
+    }
   })
 
   it('serves usage:fetch as a real handler returning a well-formed snapshot', async () => {

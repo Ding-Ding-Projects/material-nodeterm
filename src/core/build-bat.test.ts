@@ -881,16 +881,31 @@ describeWindows('fresh-machine Windows batch entry points', () => {
     expect(result.stdout).not.toContain('=== Installer built and verified. ===')
   }, 30_000)
 
-  it('accepts only exact Authenticode NotSigned through the real cmd verifier', () => {
-    const { fakeSystemTools, stub } = installPortablePowerShellStub()
-    const systemRoot = process.env.SystemRoot ?? 'C:\\Windows'
-    const pathValue = [
-      fakeSystemTools,
-      join(systemRoot, 'System32'),
-      systemRoot,
-      join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0')
-    ].join(';')
-    for (const status of ['Valid', 'HashMismatch', 'UnknownError', '']) {
+  // One case per Authenticode status, deliberately NOT one test looping over four.
+  //
+  // Every case is a real cmd.exe + BAT + PowerShell-stub round trip, measured here at ~11 s each,
+  // so four of them inside one 30 s budget is ~46 s of work — the test timed out while every
+  // assertion in it was still correct. The workspace timeout is not the thing to change (it is
+  // already six times vitest's default, and raising it hides the next genuine hang); what was
+  // wrong is one budget carrying four independent subprocess runs. Split, each case gets its own
+  // budget, and a failure now names the exact status instead of "somewhere in the loop" — the
+  // same `it.each` shape the packaged-inventory cases above already use.
+  it.each([
+    ['Valid', 'a signed installer'],
+    ['HashMismatch', 'a tampered signature'],
+    ['UnknownError', 'an inconclusive probe'],
+    ['', 'no status at all']
+  ])(
+    'accepts only exact Authenticode NotSigned through the real cmd verifier: rejects %s (%s)',
+    (status) => {
+      const { fakeSystemTools, stub } = installPortablePowerShellStub()
+      const systemRoot = process.env.SystemRoot ?? 'C:\\Windows'
+      const pathValue = [
+        fakeSystemTools,
+        join(systemRoot, 'System32'),
+        systemRoot,
+        join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0')
+      ].join(';')
       const result = run('build-installer.bat', {
         PATH: pathValue,
         BAT_TEST_REAL_NODE: process.execPath,
@@ -899,8 +914,9 @@ describeWindows('fresh-machine Windows batch entry points', () => {
       })
       expect(result.status, `${status}\n${result.stdout}\n${result.stderr}`).toBe(1)
       expect(result.stderr).toContain('expected an unsigned installer')
-    }
-  }, 30_000)
+    },
+    30_000
+  )
 
   it('preserves a nonzero hash-process status even if that process wrote a valid digest', () => {
     const { fakeSystemTools, stub } = installPortablePowerShellStub()
