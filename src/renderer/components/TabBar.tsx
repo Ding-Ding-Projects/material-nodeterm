@@ -25,6 +25,7 @@ import {
   type AgentPermissionMode
 } from '@shared/agents/config'
 import { bypassSandboxCaveat, permissionModeAgentsLabel } from '@shared/agents/approval-mode'
+import { ColorMenu } from './color/ColorMenu'
 import { useToyLocks } from '../state/toylocks'
 import { LockWizard } from './toylocks/LockWizard'
 import { UnlockPrompt } from './toylocks/UnlockPrompt'
@@ -49,6 +50,9 @@ interface TabBarProps {
   onSetDefaultAccount: (id: string, accountId: string | undefined) => void
   /** Set (or clear, with undefined = use the global setting) the project's default permission mode. */
   onSetDefaultPermissionMode: (id: string, mode: AgentPermissionMode | undefined) => void
+  /** Set the project's colour — the tab text/dot, the kanban header dot, the sidebar monogram.
+   *  Called LIVE while the picker is dragged, so it must be a cheap, coalescing writer. */
+  onSetColor: (id: string, color: string) => void
 }
 
 /**
@@ -83,7 +87,8 @@ export function TabBar({
   onCloseProject,
   onRemoteAccess,
   onSetDefaultAccount,
-  onSetDefaultPermissionMode
+  onSetDefaultPermissionMode,
+  onSetColor
 }: TabBarProps) {
   // Select the raw array and filter in a memo, a `.filter()` inside the selector returns a
   // fresh array every store snapshot, which re-rendered the TabBar on EVERY projects change.
@@ -117,6 +122,21 @@ export function TabBar({
   const [acctOpen, setAcctOpen] = useState(false)
   // Whether the caret menu's "Default permission mode" group is expanded (same idiom as acctOpen).
   const [modeOpen, setModeOpen] = useState(false)
+  /**
+   * The open tab-colour surface (project id + viewport anchor), or null.
+   *
+   * It is NOT an inline group like the two above, and not a swatch strip: `.tab-menu button` is a
+   * full-width padded row, so a ColorPicker rendered inside this menu would have every one of its
+   * format tabs, swatches and its Copy button stretched into menu rows. `ColorMenu` is the shared
+   * portal surface — the same presets, wheel chip and inline full picker the node context menu
+   * has, at no cost in new CSS. Opening it CLOSES the caret menu (same idiom as "Lock this tab…"),
+   * so there is never a menu behind a menu.
+   */
+  const [colorMenu, setColorMenu] = useState<{
+    projectId: string
+    x: number
+    y: number
+  } | null>(null)
   // Per-tab DOM refs, so the caret menu's "Edit tab appearance…" row can anchor the (non-modal)
   // appearance editor to the actual tab element rather than the caret button that opened the menu.
   const tabElRef = useRef<Record<string, HTMLElement | null>>({})
@@ -498,6 +518,29 @@ export function TabBar({
             </button>
             <button
               onClick={() => {
+                const pos = menuPos
+                const id = menuProject.id
+                closeMenu()
+                if (pos) setColorMenu({ projectId: id, x: pos.left, y: pos.top })
+              }}
+            >
+              {/* Reuses the 16px check slot every other row indents by, so this row lines up;
+                  the dot inside carries its own size because the slot itself has no height. */}
+              <span className="tab-menu__check" aria-hidden>
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    alignSelf: 'center',
+                    background: menuProject.color
+                  }}
+                />
+              </span>
+              Tab colour…
+            </button>
+            <button
+              onClick={() => {
                 onSetFolder(menuProject.id)
                 closeMenu()
               }}
@@ -651,6 +694,20 @@ export function TabBar({
           </div>,
           document.body
         )}
+
+      {colorMenu && (
+        <ColorMenu
+          x={colorMenu.x}
+          y={colorMenu.y}
+          // Seeded from the tab's CURRENT colour, read from the store on every render, so the
+          // picker opens on the colour the tab is actually wearing.
+          value={projects.find((p) => p.id === colorMenu.projectId)?.color}
+          // Live: the tab text, its dot and the sidebar monogram repaint as the picker is dragged.
+          // Dismissal is the backdrop or Escape — there is nothing to confirm.
+          onPick={(color) => onSetColor(colorMenu.projectId, color)}
+          onClose={() => setColorMenu(null)}
+        />
+      )}
 
       {lockWizard && (
         <LockWizard

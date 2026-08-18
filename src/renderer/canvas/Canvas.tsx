@@ -42,6 +42,7 @@ import {
   wakeHibernatedNode
 } from '../nodes/TerminalNode'
 import { solveFitPadding } from './fit-view'
+import { paneMenuGroup } from './paneMenuGroup'
 import { MacWheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
 import { selectedLocalFilePaths } from './canvas-file-copy'
 import { codexAccountSwitchStillEligible } from './codex-account-switch'
@@ -98,10 +99,12 @@ import { withNodeBoundary } from '../components/NodeBoundary'
 import { Dock } from '../components/Dock'
 import { TabBar } from '../components/TabBar'
 import { ContextMenu, type MenuItem } from '../components/ContextMenu'
+import { seedColor } from '../components/color/seedColor'
 import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import {
+  IconAgent,
   IconAnnotationArea,
   IconAnnotationArrow,
   IconCollapse,
@@ -126,12 +129,14 @@ import {
   IconNote,
   IconConvert,
   IconOllama,
+  IconPencil,
   IconPhone,
   IconProject,
   IconRemote,
   IconSave,
   IconSelectAll,
   IconSessions,
+  IconShapes,
   IconSwitch,
   IconTerminal,
   IconTrash,
@@ -7055,7 +7060,11 @@ export function Canvas() {
       })(),
       ...(isHidden('colors', hidden)
         ? []
-        : ([{ type: 'colors', value: nodesRef.current.find((n) => n.id === ids[0])?.data.color as string | undefined, onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
+        // `ids` can be a whole multi-node selection, so the seed goes through seedColor: the
+        // picker opens on the selection's colour only when the selection HAS one. Reading
+        // `ids[0]` alone announced one node's colour as the group's, and the first drag then
+        // moved every other node away from a value it was never on.
+        : ([{ type: 'colors', value: seedColor(ids.map((nid) => nodesRef.current.find((n) => n.id === nid)?.data.color as string | undefined)), onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
       { type: 'separator' },
       ...(isHidden('duplicate', hidden)
         ? []
@@ -7770,19 +7779,22 @@ export function Canvas() {
       // "New file…" needs a project folder to create into — hidden when the project has no cwd.
       const project = useProjects.getState().getProject(activeProjectId)
       const hasCwd = !!(project?.ssh?.remoteCwd ?? project?.cwd)
-      // Computed once: the "Agents" section heading only appears when there is at least one row
-      // under it (every builtin agent can be individually disabled in Settings, and a Kids-mode
-      // canvas can reach zero) — an empty heading would claim a group that isn't there.
       const agentItems = agentCreationItems(at)
       setMenu({
         x: e.clientX,
         y: e.clientY,
-        // Named sections (2026-08): a flat ~17-row list read as an endless list with only
-        // unlabeled rules between blocks. tidySeparators is still run over the result — a no-op
-        // today since every rule below was replaced by a label, but it stays cheap insurance if a
-        // future edit reintroduces a bare separator.
+        // SUBMENUS, not headings (2026-08-18): the named `label` sections introduced earlier were
+        // still one ~17-row list, so each group now collapses to a single row you hover. What each
+        // group ACTUALLY becomes is `paneMenuGroup`'s decision (empty → nothing, one row → that
+        // bare row, a group already containing a submenu → the old labelled flat section, because
+        // ContextMenu renders no second-level flyout and would silently drop those rows).
+        // tidySeparators still wraps the result — a no-op while there are no bare rules here, but
+        // cheap insurance if a future edit reintroduces one.
         items: tidySeparators<MenuItem>([
-          { type: 'label', label: 'Terminals' },
+          // The terminal rows are deliberately NOT a group. "New terminal" is the action this menu
+          // is opened for and owns ⌘T, so it must stay one click away — and "New terminal with
+          // profile…" is itself a submenu, which cannot nest inside another. What was left of a
+          // "Terminals" heading was a heading over two self-describing rows at the top of the menu.
           {
             label: 'New terminal',
             icon: <IconTerminal />,
@@ -7795,68 +7807,82 @@ export function Canvas() {
             icon: <IconTerminal />,
             onClick: () => openRemotePicker({ x: e.clientX, y: e.clientY })
           },
-          ...(agentItems.length > 0
-            ? [{ type: 'label', label: 'Agents' } as MenuItem, ...agentItems]
-            : []),
-          { type: 'label', label: 'Canvas objects' },
-          {
-            label: 'New browser',
-            icon: <IconRemote />,
-            onClick: () => addBrowser(at)
-          },
-          {
-            label: 'New sticky note',
-            icon: <IconNote />,
-            onClick: () => addSticky(at)
-          },
-          {
-            label: 'New Loop',
-            icon: <IconReload />,
-            onClick: () => addNativeLoop(at)
-          },
-          {
-            label: 'New dino game',
-            icon: <IconDino />,
-            onClick: () => addDino(at)
-          },
-          {
-            label: 'Open file…',
-            icon: <IconEditor />,
-            onClick: () => void openFileDialog(at)
-          },
-          ...(hasCwd
-            ? [{ label: 'New file…', icon: <IconEditor />, onClick: () => void newProjectFile(at) }]
-            : []),
-          { type: 'label', label: 'Worktree' },
+          // Stays flat-with-a-heading exactly as before whenever an agent row is an account
+          // picker (Claude/Codex with ≥1 account); one row when a single agent is enabled.
+          ...paneMenuGroup('Agents', <IconAgent />, agentItems),
+          ...paneMenuGroup('Canvas objects', <IconShapes />, [
+            {
+              label: 'New browser',
+              icon: <IconRemote />,
+              onClick: () => addBrowser(at)
+            },
+            {
+              label: 'New sticky note',
+              icon: <IconNote />,
+              onClick: () => addSticky(at)
+            },
+            {
+              label: 'New Loop',
+              icon: <IconReload />,
+              onClick: () => addNativeLoop(at)
+            },
+            {
+              label: 'New dino game',
+              icon: <IconDino />,
+              onClick: () => addDino(at)
+            },
+            {
+              label: 'Open file…',
+              icon: <IconEditor />,
+              onClick: () => void openFileDialog(at)
+            },
+            ...(hasCwd
+              ? [
+                  {
+                    label: 'New file…',
+                    icon: <IconEditor />,
+                    onClick: () => void newProjectFile(at)
+                  } as MenuItem
+                ]
+              : [])
+          ]),
+          // One row, so `paneMenuGroup` keeps it top level: a submenu would add a hover to reach
+          // exactly one thing, and "New worktree…" already says what the group heading said.
           // A worktree lands as a group frame bound to it; nodes created inside inherit its path.
           // Disabled (with the reason) on an SSH project — see WORKTREE_SSH_HINT.
-          {
-            label: 'New worktree…',
-            icon: <IconBranch />,
-            disabled: isSshProject,
-            hint: isSshProject ? WORKTREE_SSH_HINT : undefined,
-            onClick: () => openWorktreeDialog(null, at)
-          },
-          { type: 'label', label: 'Drawing' },
+          ...paneMenuGroup('Worktree', <IconBranch />, [
+            {
+              label: 'New worktree…',
+              icon: <IconBranch />,
+              disabled: isSshProject,
+              hint: isSshProject ? WORKTREE_SSH_HINT : undefined,
+              onClick: () => openWorktreeDialog(null, at)
+            }
+          ]),
           // Draw tools (issue #145): arm one, then drag on the canvas — Esc cancels. "Draw colored
           // area" is an empty group frame (the SAME coloured frame `groupSelectedNodes` already
           // builds around a selection); "Draw line"/"Draw arrow" are standalone annotation nodes
           // with no relationship to any other node — never an edge, never a context link.
-          {
-            label: 'Draw colored area',
-            icon: <IconAnnotationArea />,
-            onClick: () => drawTool.startTool('area')
-          },
-          {
-            label: 'Draw line',
-            icon: <IconAnnotationArrow />,
-            onClick: () => drawTool.startTool('line')
-          },
-          {
-            label: 'Draw arrow',
-            icon: <IconAnnotationArrow />,
-            onClick: () => drawTool.startTool('arrow')
-          },
+          ...paneMenuGroup('Drawing', <IconPencil />, [
+            {
+              label: 'Draw colored area',
+              icon: <IconAnnotationArea />,
+              onClick: () => drawTool.startTool('area')
+            },
+            {
+              label: 'Draw line',
+              icon: <IconAnnotationArrow />,
+              onClick: () => drawTool.startTool('line')
+            },
+            {
+              label: 'Draw arrow',
+              icon: <IconAnnotationArrow />,
+              onClick: () => drawTool.startTool('arrow')
+            }
+          ]),
+          // NOT a submenu: these act on the canvas you are looking at, and Fit view / Select all
+          // are frequent enough that a hover to reach them would be the regression this change is
+          // trying to undo. A heading is free, so this group keeps one.
           { type: 'label', label: 'Canvas' },
           { label: 'Select all', icon: <IconSelectAll />, onClick: selectAll },
           // fitAll, NOT the raw fitView: fitAll frames against the CURRENT chrome layout (the same
@@ -11138,9 +11164,14 @@ export function Canvas() {
   const setProjectColor = useCallback(
     (id: string, color: string) => {
       useProjects.getState().setProjectColor(id, color)
-      void persist()
+      // markDirty, not an immediate persist: this is applied LIVE from the colour picker, so it
+      // fires on every pointermove of a drag. An unconditional `persist()` there is a full
+      // toWorkspace serialize + workspace/project.json write + SSH mirror per frame. The 800 ms
+      // debounced auto-save coalesces them, which is exactly what `setNodesColor` already does
+      // for the identical interaction on a node.
+      markDirty()
     },
-    [persist]
+    [markDirty]
   )
 
   const setProjectFolder = useCallback(
@@ -11223,7 +11254,10 @@ export function Canvas() {
           },
           { label: 'Set folder…', icon: <IconProject />, onClick: () => setProjectFolder(projectId) },
           { type: 'separator' },
-          { type: 'colors', onPick: (color) => setProjectColor(projectId, color) },
+          // Seeded from the project's CURRENT colour: without `value` the full picker opened on
+          // the first preset, so the first drag jumped the tab to a colour nowhere near the one
+          // being adjusted.
+          { type: 'colors', value: project.color, onPick: (color) => setProjectColor(projectId, color) },
           { type: 'separator' },
           {
             label: 'Close project',
@@ -11870,6 +11904,7 @@ export function Canvas() {
         onRemoteAccess={() => setRemoteDialogOpen(true)}
         onSetDefaultAccount={setProjectDefaultAccount}
         onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
+        onSetColor={setProjectColor}
       />
 
       <div className="top-banners">

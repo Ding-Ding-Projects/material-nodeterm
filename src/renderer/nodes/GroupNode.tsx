@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
-import { NODE_COLORS, ungroupNodes, type CanvasNode } from '../state/workspace'
+import { ungroupNodes, type CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
 import { useWorktrees, WORKTREE_STATUS_POLL_MS } from '../state/worktrees'
+import { ColorMenu } from '../components/color/ColorMenu'
+import { alphaTint } from '../components/color/tint'
 
 export type WorktreeAction = 'merge' | 'remove' | 'unbind'
 
@@ -27,7 +29,8 @@ export function setWorktreeActionHandler(
  */
 export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData, setNodes } = useReactFlow()
-  const [showColors, setShowColors] = useState(false)
+  /** Viewport anchor for the colour surface, or null when it is closed (see ColorMenu). */
+  const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   // The frame element, observed for viewport visibility by the worktree-status tick below.
   const frameRef = useRef<HTMLDivElement | null>(null)
 
@@ -134,7 +137,11 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
       className={frameClass}
       style={{
         borderColor: bound && stale ? undefined : data.color,
-        background: bound && stale ? undefined : `${data.color}${bound ? '1c' : '0f'}`,
+        // 28/255 and 15/255 are the `1c` / `0f` hex-alpha suffixes this used to append to the
+        // colour string — same pixels, but a frame coloured from the picker's RGB/HSL/OKLCH tabs
+        // now gets its fill instead of silently losing it. See alphaTint.
+        background:
+          bound && stale ? undefined : alphaTint(data.color, bound ? 28 / 255 : 15 / 255),
         // Rounded selection ring (box-shadow follows border-radius, unlike the resizer line).
         boxShadow: selected ? `0 0 0 1.5px ${data.color}` : undefined
       }}
@@ -152,21 +159,21 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
           className="group-node__dot nodrag"
           style={{ background: data.color }}
           title="Color"
-          onClick={() => setShowColors((v) => !v)}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect()
+            setColorAnchor((cur) => (cur ? null : { x: r.left, y: r.bottom + 4 }))
+          }}
         />
-        {showColors && (
-          <div className="color-popover">
-            {NODE_COLORS.map((c) => (
-              <button
-                key={c}
-                style={{ background: c }}
-                onClick={() => {
-                  updateNodeData(id, { color: c })
-                  setShowColors(false)
-                }}
-              />
-            ))}
-          </div>
+        {colorAnchor && (
+          <ColorMenu
+            x={colorAnchor.x}
+            y={colorAnchor.y}
+            // Seeded from THIS frame's colour; applied live, so the frame (and the tint of every
+            // child it sits behind) repaints while the picker is still open.
+            value={data.color}
+            onPick={(c) => updateNodeData(id, { color: c })}
+            onClose={() => setColorAnchor(null)}
+          />
         )}
         <input
           className="group-node__name nodrag"

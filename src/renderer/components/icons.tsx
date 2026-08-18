@@ -346,6 +346,27 @@ export const IconOllama = () => (
   </svg>
 )
 
+/** The "Canvas objects" group of the pane menu (sticky notes, browsers, loops, files, the dino):
+ *  three plain shapes. Deliberately NOT a note/file glyph — those already label individual rows
+ *  inside the group, and a submenu wearing one of its children's icons reads as that child. */
+export const IconShapes = () => (
+  <svg {...S}>
+    <rect x="3" y="3" width="8" height="8" rx="1.5" />
+    <circle cx="17" cy="7" r="4" />
+    <path d="M7.5 13.5 12 21H3z" />
+  </svg>
+)
+
+/** The "Drawing" group of the pane menu. A pencil, not one of the two annotation-tool glyphs
+ *  below: those name the individual tools inside the group, so reusing either as the group icon
+ *  would claim the group IS that tool. */
+export const IconPencil = () => (
+  <svg {...S}>
+    <path d="M4 20h4L20 8l-4-4L4 16z" />
+    <path d="M14 6l4 4" />
+  </svg>
+)
+
 /** Draw-a-colored-area tool: an empty dashed box, the same shape a group frame renders as. */
 export const IconAnnotationArea = () => (
   <svg {...S}>
