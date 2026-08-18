@@ -217,12 +217,46 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     bashParser = false
   }
   if (bashParser) {
-    for (const step of steps) {
-      if (typeof step?.run !== 'string' || (step.shell ?? 'bash') !== 'bash') continue
+    const bashSteps = steps.filter(
+      (step) => typeof step?.run === 'string' && (step.shell ?? 'bash') === 'bash',
+    )
+    // One parse for the whole workflow in the healthy case, N only when something is actually
+    // wrong. This is not premature: the contract suite calls this checker 23 times, and at one
+    // bash per step that was ~275 process spawns per suite run for a file that passes. Those two
+    // tests became the heaviest in the repository and were the first to time out under load.
+    //
+    // Each step is wrapped in a function body so a defect cannot escape its own step: an
+    // unterminated quote or heredoc would otherwise swallow the following step's text and report
+    // the error against the wrong one. The leading `:` is required, not decorative — a function
+    // body cannot be empty in bash, so a comment-only step would fail a parse it should pass.
+    //
+    // A combined parse cannot report WHICH step is broken, so a failure re-runs per step to
+    // attribute it. The slow path therefore costs one extra spawn over the old behaviour, and
+    // only on a workflow that is already broken.
+    const wrapped = bashSteps
+      .map((step, index) => `__nodeterm_step_${index}() {\n:\n${step.run}\n}`)
+      .join('\n')
+    let combinedParsed = true
+    if (bashSteps.length > 0) {
       try {
-        execFileSync('bash', ['-n'], { input: step.run, stdio: ['pipe', 'pipe', 'pipe'] })
-      } catch (error) {
-        issues.push(`step ${step.id ?? step.name ?? '<unknown>'} is not valid bash: ${String(error.stderr).trim()}`)
+        execFileSync('bash', ['-n'], { input: wrapped, stdio: ['pipe', 'pipe', 'pipe'] })
+      } catch {
+        combinedParsed = false
+      }
+    }
+    if (!combinedParsed) {
+      for (const step of bashSteps) {
+        try {
+          execFileSync('bash', ['-n'], { input: step.run, stdio: ['pipe', 'pipe', 'pipe'] })
+        } catch (error) {
+          issues.push(`step ${step.id ?? step.name ?? '<unknown>'} is not valid bash: ${String(error.stderr).trim()}`)
+        }
+      }
+      // The combined parse failed but no single step did. That means the wrapper itself is at
+      // fault, not the workflow, and staying silent would turn a checker bug into a clean bill of
+      // health for whatever it was meant to catch.
+      if (!issues.some((issue) => issue.includes('is not valid bash'))) {
+        issues.push('bash steps failed a combined parse but no single step did — the parse wrapper is wrong')
       }
     }
   }
