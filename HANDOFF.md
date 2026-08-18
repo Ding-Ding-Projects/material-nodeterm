@@ -482,9 +482,8 @@ limitation and cites precedent `99dfb2db`; none is a blanket platform skip.
 Two deliberate non-fixes, both recorded rather than papered over:
 
 - Six `codex-identity-proxy` tests set `$NODETERM_CODEX_NODE_TOKEN` directly, which
-  `codex-identity-proxy.ts` says explicitly does not exist as a fallback (search its launcher
-script for "deliberately NO"). They test removed
-  behaviour and are platform-independent.
+  `codex-identity-proxy.ts` says explicitly does not exist as a fallback — search its launcher
+  script for "deliberately NO". They test removed behaviour and are platform-independent.
 - The `state=2, hello=1` handshake question the section above raises is **still open**. Comparing
   compatibility (`state >= negotiated`) rather than equality remains the likely fix and was again
   NOT applied: changing handshake logic in the Windows persistence path deserves a verified change,
