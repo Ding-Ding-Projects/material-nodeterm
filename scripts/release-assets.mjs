@@ -65,6 +65,91 @@ function flattenGitHubPages(pages, description) {
   return nested ? pages.flat() : pages
 }
 
+/**
+ * The highest stable version already spoken for, as `{ version, targets }`, or null when the
+ * repository has never had one. `targets` is every commit a tag/release of THAT version points at.
+ *
+ * Split out of `requireStableVersionAdvance` rather than duplicated: the auto-bump needs the same
+ * answer that function decides against, and two scanners drifting apart is how a bump lands on a
+ * version the verifier then rejects. A tag and a release of the same version are BOTH authorities
+ * here — a tag with no release still burns the number (that is exactly the v0.4.0–v0.4.3 state this
+ * repository was in: four tags, no releases, and a manual bump to any of them would have failed).
+ */
+export function highestStableVersion(tagPages, releasePages) {
+  const tags = flattenGitHubPages(tagPages, 'GitHub tags')
+  const releases = flattenGitHubPages(releasePages, 'GitHub releases')
+  let highest = null
+  const targetsByVersion = new Map()
+  const note = (version, target) => {
+    if (!targetsByVersion.has(version)) targetsByVersion.set(version, [])
+    targetsByVersion.get(version).push(target)
+    if (highest == null || compareStableVersions(version, highest) > 0) highest = version
+  }
+
+  for (const [index, tag] of tags.entries()) {
+    if (tag == null || typeof tag !== 'object' || Array.isArray(tag)) {
+      fail(`GitHub tag ${index + 1} must be an object`)
+    }
+    const name = tag.name
+    if (typeof name !== 'string' || !name.startsWith('v') || !STABLE_VERSION_RE.test(name.slice(1))) continue
+    const target = tag.commit?.sha
+    if (typeof target !== 'string') fail(`stable tag ${name} must expose commit.sha`)
+    note(name.slice(1), target)
+  }
+
+  for (const [index, release] of releases.entries()) {
+    if (release == null || typeof release !== 'object' || Array.isArray(release)) {
+      fail(`GitHub release ${index + 1} must be an object`)
+    }
+    const tag = release.tag_name ?? release.tagName
+    if (typeof tag !== 'string' || !tag.startsWith('v') || !STABLE_VERSION_RE.test(tag.slice(1))) continue
+    const target = release.target_commitish ?? release.targetCommitish
+    if (typeof target !== 'string') fail(`stable release ${tag} must expose target_commitish`)
+    note(tag.slice(1), target)
+  }
+
+  return highest == null ? null : { version: highest, targets: targetsByVersion.get(highest) ?? [] }
+}
+
+/**
+ * The version this run should release, given what the repository already has and what
+ * `package.json` currently says. Pure, so the decision is testable without a network.
+ *
+ * Three outcomes, and the middle one is the reason this exists at all:
+ *
+ * - `keep`   — package.json is already ahead of everything published. A maintainer bumped by hand;
+ *              respect it, because they may be doing a deliberate minor/major, and a patch bump
+ *              would silently overwrite that intent.
+ * - `retry`  — package.json equals the highest version AND every tag/release of it already points
+ *              at this exact commit. That is a re-run of a failed publish, not a new release, so
+ *              bumping would strand the half-staged draft under a number nobody can find.
+ * - `bump`   — anything else: patch-bump past the highest. Covers the ordinary case (release again
+ *              from an unchanged package.json) and the one that bit this repository (a tag exists
+ *              for the current version at a DIFFERENT commit, so reusing it is refused).
+ *
+ * Patch only, deliberately. A machine cannot tell a breaking change from a typo fix, and guessing
+ * minor/major from commit subjects would put a wrong promise in front of users; a human who wants
+ * either edits package.json and gets `keep`.
+ */
+export function planReleaseVersion(packageVersion, tagPages, releasePages, headSha) {
+  stableVersionParts(packageVersion, 'package version')
+  if (!/^[0-9a-f]{40}$/i.test(headSha)) fail('head commit must be a full commit SHA')
+  const highest = highestStableVersion(tagPages, releasePages)
+  if (highest == null) return { action: 'keep', version: packageVersion, highest: null }
+  if (compareStableVersions(packageVersion, highest.version) > 0) {
+    return { action: 'keep', version: packageVersion, highest: highest.version }
+  }
+  if (
+    packageVersion === highest.version &&
+    highest.targets.length > 0 &&
+    highest.targets.every((target) => target === headSha)
+  ) {
+    return { action: 'retry', version: packageVersion, highest: highest.version }
+  }
+  const [major, minor, patch] = stableVersionParts(highest.version, 'highest stable version')
+  return { action: 'bump', version: `${major}.${minor}.${patch + 1n}`, highest: highest.version }
+}
+
 /** Require a new stable version, except for an exact same-tag/same-commit retry. */
 export function requireStableVersionAdvance(candidate, tagPages, releasePages, expectedTarget) {
   stableVersionParts(candidate, 'candidate version')
@@ -649,6 +734,39 @@ async function main(argv) {
     return
   }
 
+  if (command === 'plan-version') {
+    if (args.length !== 5) {
+      fail(
+        'usage: release-assets.mjs plan-version <package-version> <tags-json-file> <releases-json-file> <head-sha> <plan-json-out>',
+      )
+    }
+    const [packageVersion, tagsFile, releasesFile, headSha, planOut] = args
+    const tags = parseJson(await readFile(tagsFile, 'utf8'), 'GitHub tags file')
+    const releases = parseJson(await readFile(releasesFile, 'utf8'), 'GitHub releases file')
+    const plan = planReleaseVersion(packageVersion, tags, releases, headSha)
+    // Written to a file the caller names, NOT scraped back out of GITHUB_OUTPUT: that file is
+    // shared with every other `echo key=value` in the same step, so a grep for `version=` there
+    // can pick up an unrelated line and release the wrong number.
+    //
+    // NOT emitGitHubOutputs() either — that helper is shaped for `collect` (it reads
+    // result.paths/.setup) and would throw on this payload.
+    await writeFile(planOut, JSON.stringify(plan), { encoding: 'utf8', flag: 'wx' })
+    const outputFile = process.env.GITHUB_OUTPUT
+    if (outputFile) {
+      // Both values are machine-generated SemVer/enum, so a plain key=value line is safe — there
+      // is nothing here that could carry a newline and forge another output.
+      await appendFile(outputFile, `action=${plan.action}\nversion=${plan.version}\n`, 'utf8')
+    }
+    console.log(
+      plan.action === 'keep'
+        ? `package.json v${plan.version} already leads v${plan.highest ?? 'none'} — releasing it as-is`
+        : plan.action === 'retry'
+          ? `exact retry of v${plan.version} at ${headSha} — version unchanged`
+          : `auto-bumping past v${plan.highest} to v${plan.version}`,
+    )
+    return
+  }
+
   if (command === 'collect') {
     if (args.length < 3 || args.length > 4) {
       fail(
@@ -698,6 +816,7 @@ async function main(argv) {
       '   or: release-assets.mjs assert-unsigned <Authenticode-status>\n' +
       '   or: release-assets.mjs assert-sha256-file <result-file>\n' +
       '   or: release-assets.mjs assert-version <candidate-version> <tags-json-file> <releases-json-file> <expected-sha>\n' +
+      '   or: release-assets.mjs plan-version <package-version> <tags-json-file> <releases-json-file> <head-sha>\n' +
       '   or: release-assets.mjs collect <expected-version> <expected-package-id> <expected-product-name> [squirrel-output-directory]\n' +
       '   or: release-assets.mjs collect-local <squirrel-output-directory> <package-json> <setup-result-file>\n' +
       '   or: release-assets.mjs verify <remote-json-file> <draft|published> exact',
