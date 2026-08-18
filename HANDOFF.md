@@ -599,8 +599,8 @@ would carry them, an ordinary push with nothing new to send passes, and breaking
 
 ## Open: stranded draft releases, and what they cost
 
-`v0.4.4`, `v0.4.5` and `v0.4.7` are drafts left behind by failed release runs on 2026-08-18.
-`v0.4.6` published normally, so nothing is broken — but each stranded draft permanently occupies a
+`v0.4.4` and `v0.4.5` are drafts left behind by failed release runs on 2026-08-18. `v0.4.6` and
+`v0.4.7` published normally, so nothing is broken — but each stranded draft permanently occupies a
 version number, because the planner reads `repos/:owner/:repo/releases`, which includes drafts, and
 a number a draft holds cannot be reused without colliding.
 
@@ -619,7 +619,7 @@ hand-bumped `package.json` is still respected. Anything that cannot be PROVEN to
 as published — the conservative direction mints a new number, the careless one would resume
 something already shipped.
 
-**The three existing drafts are not cleaned up here.** Deleting a release is outward-facing and
+**The two existing drafts are not cleaned up here.** Deleting a release is outward-facing and
 irreversible, and these are not obviously disposable: they are the only record of what those runs
 staged. Removing them would also free their numbers for reuse, which is the one thing the version
 rules exist to prevent. That is a call for whoever owns the repository, and either answer is
