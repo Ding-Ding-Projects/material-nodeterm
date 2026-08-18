@@ -61,12 +61,14 @@ matter here, because unlike a tab or a setting a terminal node has a LIVE proces
 - **No input accepted.** With the xterm disposed there is nothing to focus, type into, paste onto,
   or drop a file onto — the paste/drop handlers also refuse explicitly while locked, and stdin is
   disabled on the outgoing xterm instance synchronously (before the teardown effect even runs) so a
-  keystroke in flight at the exact moment of locking cannot slip through. One gap remains, and it
-  is deliberate to document rather than hide: a few features write into a session by **name**
-  through core (`sendText` — dictation, the header's "push rename to session", context-link/note
-  pushes), bypassing the renderer's client entirely. Those are not gated by this pass; closing that
-  gap needs a guard inside `src/core/pty-manager.ts`'s `sendText` (or the IPC layer above it), which
-  was outside this change's editable surface. The in-component rename push (`pushSessionRename`) IS
+  keystroke in flight at the exact moment of locking cannot slip through. Name-addressed writes are gated too: a few features write into a session by **name** through
+  core (`sendText` — dictation, context-link/note pushes, canvas-control), bypassing the
+  renderer's client entirely, so `pty-manager.sendText` now asks the toy-lock service
+  (`mayWriteToNode`, backed by `node-unlock-registry.ts`) before typing. Core learns "unlocked
+  right now" from its own successful `verify` (no renderer call it could forget, no forged call
+  that could mint an unlock without the credential passing), plus one renderer→core `relock`
+  cast, because only the renderer can see a session-mode surface being LEFT. The registry is
+  in-memory only — persisting it would defeat `lockedOnLaunch`. The in-component rename push (`pushSessionRename`) IS
   gated, since it lives in the same file as the rest of this enforcement.
 - **No stale scrollback on unlock.** Reattaching redraws from the LIVE session, never from a
   buffer that merely sat in memory behind the plate — which is why this does not reuse the ordinary
@@ -236,15 +238,6 @@ handler for the Server Edition does not, by itself, make it relay-callable.
 
 This shipped in a few focused passes and is honest about what didn't make it in:
 
-- **A node lock does not gate `sendText`-style core-addressed writes.** Dictation
-  (`DictationOverlay.tsx` → `api.pty.sendText`), and anything else that writes into a session by
-  NAME through `src/core/pty-manager.ts` rather than through the renderer's own pty client, reaches
-  the pty regardless of a node's lock state — that delivery path is entirely independent of the
-  xterm/client this feature tears down. Closing it needs a guard inside `pty-manager.ts`'s
-  `sendText` (or the IPC layer above it) that consults the toy-lock store before writing; it was
-  outside the editable surface for the pass that wired up the rest of node-lock enforcement. The
-  in-app rename push (`TerminalNode.tsx`'s `pushSessionRename`) IS gated, since it lives in the
-  same file as the rest of the enforcement.
 - **The Settings → Toy locks list still shows a two-way credential label** (`ToyLocksSection.tsx`:
   `credentialKind === 'password' ? 'Password' : 'Authenticator code'`) — a combo or Windows-PIN
   lock displays as "Authenticator code" there even though it isn't one. That file was outside this

@@ -2218,7 +2218,10 @@ app.whenReady().then(async () => {
   // core-bound services — no shell-specific wiring beyond what CorePlatform already offers
   // (userDataDir + Electron's safeStorage seal/unseal). Registered on the Server Edition too, in
   // src/server/index.ts, so a browser tab reaches the exact same service over the WS bridge.
-  startToyLockService()
+  const toyLockService = startToyLockService()
+  // Close the name-addressed write bypass: sendText must ask the lock service before typing into
+  // a node (see pty-manager.sendText). Wired here because the service starts after the manager.
+  ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
   startAuthenticatorService()
 
   const ackSweeper = createAckSweeper({

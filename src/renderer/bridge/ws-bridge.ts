@@ -951,7 +951,8 @@ export function buildToylockApi(client: RpcClient): Pick<NodeTerminalApi, 'toylo
       client.request(IPC.toylockUpdate, input) as Promise<ToyLockRecord | null>,
     remove: (id: string) => client.request(IPC.toylockRemove, id) as Promise<void>,
     verify: (input: ToyLockVerifyInput) =>
-      client.request(IPC.toylockVerify, input) as Promise<ToyLockVerifyResult>
+      client.request(IPC.toylockVerify, input) as Promise<ToyLockVerifyResult>,
+    relock: (lockId: string) => client.request(IPC.toylockRelock, lockId) as Promise<void>
   }
   return { toylock }
 }

@@ -3026,6 +3026,11 @@ export interface ToylockApi {
   update(input: ToyLockUpdateInput): Promise<ToyLockRecord | null>
   remove(id: string): Promise<void>
   verify(input: ToyLockVerifyInput): Promise<ToyLockVerifyResult>
+  /** Renderer-driven relock (a session-mode surface was left, a manual relock). Core marks the
+   *  unlock itself on a successful verify, but only the renderer can see the surface being LEFT —
+   *  without this call core would keep authorizing name-addressed writes (dictation) after the
+   *  lock visibly re-engaged. Fire-and-forget. */
+  relock(lockId: string): Promise<void>
 }
 
 /** The built-in authenticator (docs/authenticator.md) — arbitrary TOTP secrets kept locally,

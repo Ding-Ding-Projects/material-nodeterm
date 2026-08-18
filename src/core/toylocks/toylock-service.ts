@@ -13,6 +13,7 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
 import { platform } from '../platform'
 import { IPC } from '../../shared/ipc'
 import { SecureStore, type SealedEntry } from '../secure-store'
+import { createNodeUnlockRegistry } from './node-unlock-registry'
 import {
   base32Decode,
   base32Encode,
@@ -129,10 +130,15 @@ interface RateState {
   lastFailAt: number
 }
 
-export function startToyLockService(): { dispose(): void } {
+export function startToyLockService(): { dispose(): void; mayWriteToNode(nodeId: string): Promise<boolean> } {
   const store = new SecureStore<ToyLockRecord>('toylocks.json')
   const pending = new Map<string, PendingTotp>()
   const rate = new Map<string, RateState>()
+  // Which node-targeted locks are unlocked RIGHT NOW — the core-side twin of the renderer store,
+  // fed by verify below (core witnesses every successful unlock) plus the renderer relock cast
+  // (only the renderer can see a session-mode surface being left). Exists because sendText
+  // addresses sessions by NAME and never meets the renderer gate — see node-unlock-registry.ts.
+  const nodeUnlocks = createNodeUnlockRegistry()
 
   const sweepPending = (): void => {
     const now = Date.now()
@@ -323,6 +329,15 @@ export function startToyLockService(): { dispose(): void } {
       return { changed: true, result: undefined }
     })
     rate.delete(id)
+    // A deleted lock must not leave a ghost unlock behind for a FUTURE lock on the same node.
+    nodeUnlocks.drop(id)
+  })
+
+  platform().handle(IPC.toylockRelock, async (lockId: string): Promise<void> => {
+    // Renderer-driven: a session-mode surface was left or the user relocked by hand. Losing this
+    // call would leave core authorizing name-addressed writes (dictation) into a visibly locked
+    // terminal — the exact bypass the registry exists to close.
+    nodeUnlocks.relock(lockId)
   })
 
   platform().handle(
@@ -397,6 +412,17 @@ export function startToyLockService(): { dispose(): void } {
       }
       if (ok) {
         rate.delete(input.id)
+        // Core marks the unlock ITSELF for node targets — the renderer needs no extra "I unlocked"
+        // call it could forget, and a forged call could never mint an unlock without the credential
+        // having just passed above. Session/until-close map to Infinity; session-mode re-engages
+        // via the toylockRelock cast (only the renderer can see the surface being left).
+        if (entry.meta.target.kind === 'node') {
+          const until =
+            entry.meta.duration === 'minutes'
+              ? now + Math.max(1, entry.meta.durationMinutes ?? 5) * 60_000
+              : Infinity
+          nodeUnlocks.markUnlocked(entry.meta.id, entry.meta.target.id, until)
+        }
         return { ok: true }
       }
       const next: RateState = { fails: (state?.fails ?? 0) + 1, lastFailAt: now }
@@ -410,6 +436,24 @@ export function startToyLockService(): { dispose(): void } {
       clearInterval(sweepTimer)
       pending.clear()
       rate.clear()
+      nodeUnlocks.clear()
+    },
+    /** May text be written into this node's terminal right now? The pty layer asks this before
+     *  honouring a name-addressed write (sendText — dictation, note pushes, canvas-control). A
+     *  node with no lock record is always writable; a locked one only while a live unlock covers
+     *  it. Store-read failure answers FALSE for a locked node by construction (no record found =
+     *  writable is the one acceptable default, because absence of the record is the common case
+     *  and the sealed store failing entirely surfaces loudly elsewhere). */
+    mayWriteToNode: async (nodeId: string): Promise<boolean> => {
+      let hasLock = false
+      try {
+        const entries = await store.load()
+        hasLock = entries.some((e) => e.meta.target.kind === 'node' && e.meta.target.id === nodeId)
+      } catch {
+        // An unreadable store cannot prove absence — fail LOCKED, same asymmetry as the renderer.
+        return false
+      }
+      return nodeUnlocks.mayWrite(nodeId, () => hasLock)
     }
   }
 }

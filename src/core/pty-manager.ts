@@ -3586,7 +3586,27 @@ export class PtyManager {
    * false there, same as before this change — reaching a currently-unmounted SSH node's remote
    * session is not supported.
    */
+  /** Injected by the shell after the toy-lock service starts (construction order puts the
+   *  PtyManager first). Null = no gate, the pre-lock behavior, byte for byte. */
+  private textWriteGate: ((persistKey: string) => Promise<boolean>) | null = null
+
+  setTextWriteGate(gate: (persistKey: string) => Promise<boolean>): void {
+    this.textWriteGate = gate
+  }
+
   async sendText(persistKey: string, text: string, opts?: { enter?: boolean }): Promise<boolean> {
+    // The renderer refuses input into a locked node, but THIS path addresses the session by name
+    // and never crosses the renderer — dictation, note pushes and canvas-control all arrive here.
+    // Without the gate a locked terminal went dark while dictation kept typing into it. Gate
+    // failure (not just refusal) answers false too: an unanswerable lock question must not
+    // default to writing into a possibly-locked terminal.
+    if (this.textWriteGate) {
+      try {
+        if (!(await this.textWriteGate(persistKey))) return false
+      } catch {
+        return false
+      }
+    }
     const enter = opts?.enter ?? true
     const target = sessionName(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)

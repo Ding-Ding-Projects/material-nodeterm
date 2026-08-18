@@ -592,7 +592,10 @@ export async function startServer(
   // headless/relay-specific behaviour — the plain core-bound service, same as src/main/index.ts.
   // Secrets land as raw 0600 bytes under this server's own userDataDir (CorePlatform.sealSecret is
   // absent here — no OS keychain on a headless Linux box — see core/secure-store.ts).
-  startToyLockService()
+  const toyLockService = startToyLockService()
+  // Same bypass exists in the browser shell — sendText is core, not Electron. Parity rule:
+  // both raw shells change together (CLAUDE.md, agent-support section).
+  ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
   startAuthenticatorService()
 
   // Headless notification host: every core service above (incl. the loopback hook server, which

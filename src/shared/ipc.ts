@@ -543,6 +543,7 @@ export const IPC = {
   toylockUpdate: 'toylock:update',
   toylockRemove: 'toylock:remove',
   toylockVerify: 'toylock:verify',
+  toylockRelock: 'toylock:relock',
   // The built-in authenticator (docs/authenticator.md). Same core-bound registration pattern.
   authenticatorList: 'authenticator:list',
   authenticatorAddManual: 'authenticator:add-manual',

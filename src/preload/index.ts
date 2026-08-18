@@ -516,7 +516,8 @@ const api: NodeTerminalApi = {
     cancelTotp: (lockId) => ipcRenderer.invoke(IPC.toylockCancelTotp, lockId),
     update: (input) => ipcRenderer.invoke(IPC.toylockUpdate, input),
     remove: (id) => ipcRenderer.invoke(IPC.toylockRemove, id),
-    verify: (input) => ipcRenderer.invoke(IPC.toylockVerify, input)
+    verify: (input) => ipcRenderer.invoke(IPC.toylockVerify, input),
+    relock: (lockId) => ipcRenderer.invoke(IPC.toylockRelock, lockId)
   },
   authenticator: {
     list: () => ipcRenderer.invoke(IPC.authenticatorList),

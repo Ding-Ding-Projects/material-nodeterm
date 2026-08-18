@@ -68,6 +68,11 @@ export const useToyLocks = create<ToyLocksState>((set, get) => ({
   },
 
   relock(lockId) {
+    // Tell core too: it authorizes name-addressed writes (dictation and friends) and marked this
+    // lock unlocked when verify succeeded — only the renderer can see the surface being LEFT.
+    // Fire-and-forget: a dropped cast leaves core slightly more permissive until expiry/restart,
+    // and blocking the UI relock on a round trip would be worse.
+    void window.nodeTerminal.toylock.relock(lockId).catch(() => {})
     set((s) => {
       if (!(lockId in s.unlockedUntil)) return s
       const next = { ...s.unlockedUntil }
