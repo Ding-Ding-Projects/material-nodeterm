@@ -308,28 +308,18 @@ candidate instead of letting an ordinary branch or tag event enter the release j
 ## Windows icon provenance
 
 `scripts/make-icon.mjs` contains the original SVG master and deterministically generates the
-committed seven-frame `build/icon.ico`. The Windows packaging wrapper derives a raw-content URL
-from the checkout's full source SHA, refuses a mismatched `GITHUB_SHA` or dirty/uncommitted source,
+committed seven-frame `build/icon.ico`. The Windows packaging wrapper derives a raw GitHub URL from
+the checkout's full source SHA, refuses a mismatched `GITHUB_SHA` or any dirty/uncommitted source,
 requires that commit to be publicly reachable, downloads without credentials or redirects, and
-requires HTTP 200 plus exact bytes/SHA-256. It passes that URL as Squirrel's effective `iconUrl`.
-The post-package gate requires the URL in the full-nupkg semantic nuspec and compares all seven
+requires HTTP 200 plus exact bytes/SHA-256. That URL is passed as Squirrel's effective `iconUrl`;
+the post-package gate requires it in the sole full-nupkg semantic nuspec and compares all seven
 icon-frame hashes plus product/version metadata in Setup, `nodeterm.exe`, and
 `nodeterm_ExecutionStub.exe`. Squirrel's vendor `Update.exe` remains vendor-branded because the
 pinned plugin exposes no supported resource-edit hook; it is explicitly outside this gate.
 
-## Windows icon provenance
-
-`scripts/make-icon.mjs` contains the original SVG master and deterministically generates the committed
-seven-frame `build/icon.ico`. The Windows packaging wrapper derives a raw GitHub URL from the
-checkout's full source SHA, refuses a mismatched `GITHUB_SHA` or any dirty/uncommitted source,
-requires that commit to be publicly reachable, downloads
-without credentials or redirects, and requires HTTP 200 plus exact bytes/SHA-256. That URL is passed
-as Squirrel's effective `iconUrl`; the post-package gate requires it in the sole full-nupkg nuspec
-and compares all seven icon-frame hashes plus product/version metadata in Setup, `nodeterm.exe`,
-and `nodeterm_ExecutionStub.exe`. Squirrel's vendor `Update.exe` remains vendor-branded because
-the pinned plugin exposes no supported resource-edit hook; it is explicitly outside this gate.
-This closes the old mutable `blob/master/...?...` fallback, which
-packaged successfully even though the ignored file returned 404.
+This closes the old mutable `blob/master/...?...` fallback, which packaged successfully even though
+the ignored file returned 404 — the failure mode worth remembering here, because a green package is
+exactly what it produced.
 
 ## What is deliberately out of scope for this lane
 
