@@ -30,6 +30,20 @@ describe('changedSourcePaths', () => {
     expect(changedSourcePaths(' M package.json\n?? scratch.txt')).toEqual(['package.json', 'scratch.txt'])
   })
 
+  it('survives the leading space being trimmed off the first line — the production shape', () => {
+    // runGit() calls .trim() on git's output, which eats porcelain's MEANINGFUL leading space on
+    // the FIRST line only (" M path" = modified but not staged). A fixed slice(3) then ate the
+    // first character of the path, reported `ackage-lock.json`, matched nothing in the allowlist,
+    // and failed a real release with a message nobody could act on. The original clean-check never
+    // noticed because it only asked whether the whole string was empty.
+    expect(changedSourcePaths('M package-lock.json')).toEqual(['package-lock.json'])
+    // First line trimmed, the rest still carrying their leading space — what git actually hands us.
+    expect(changedSourcePaths('M package.json\n M package-lock.json')).toEqual([
+      'package.json',
+      'package-lock.json',
+    ])
+  })
+
   it('takes the NEW path of a rename', () => {
     // `R  old -> new`. Reporting the old path would let a rename INTO a build file slip past the
     // allowlist under the old name.

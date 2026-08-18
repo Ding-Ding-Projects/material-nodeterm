@@ -365,9 +365,16 @@ export function changedSourcePaths(status) {
   const lines = status.split(/\r?\n/).map((line) => line.trimEnd()).filter(Boolean)
   if (!lines.length) return null
   return lines.map((line) => {
-    const path = line.slice(3)
-    const renamed = path.split(' -> ')
-    return (renamed.length > 1 ? renamed[renamed.length - 1] : path).replace(/^"|"$/g, '')
+    // Matched, NOT `slice(3)`. Porcelain's status field is two columns and the first may be a
+    // SPACE (` M path` = modified, not staged) — and the caller hands us output that has already
+    // been through `.trim()`, which eats that leading space on the first line only. A fixed
+    // offset therefore ate the first character of the path and produced `ackage-lock.json`,
+    // which matched nothing in the allowlist and failed a release with a baffling message.
+    // The old clean-check never noticed because it only asked whether the text was empty.
+    const match = /^[ MADRCU?!]{1,2}\s+(.*)$/.exec(line)
+    const raw = match ? match[1] : line
+    const renamed = raw.split(' -> ')
+    return (renamed.length > 1 ? renamed[renamed.length - 1] : raw).replace(/^"|"$/g, '')
   })
 }
 
