@@ -27,6 +27,7 @@ import { stat } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { computeLineCounts } from './count-lines.mjs'
+import { renderCodeNameSection, resolveCodeName } from './dim-sum-code-name.mjs'
 
 function fmtBytes(n) {
   if (n < 1024) return `${n} B`
@@ -231,6 +232,20 @@ async function main() {
   }
   parts.push(renderTimingSection())
   parts.push('')
+  // Resolved before the rest so a slow catalog cannot land halfway down a finished document, and
+  // AWAITED rather than raced: renderCodeNameSection('') simply omits the section, so an
+  // unreachable catalog costs a heading, never a release. RELEASE_PRIOR_BODIES is newline-joined
+  // bodies of earlier releases, so a dish is used once per project; unset just means "nothing used
+  // yet", which is the correct answer for a project publishing its first code name.
+  const codeNameSection = renderCodeNameSection(
+    await resolveCodeName({
+      releaseBodies: (process.env.RELEASE_PRIOR_BODIES ?? '').split('\u0000').filter(Boolean)
+    }).catch(() => null)
+  )
+  if (codeNameSection) {
+    parts.push(codeNameSection)
+    parts.push('')
+  }
   parts.push(renderChecksSection())
   parts.push('')
   parts.push(renderSigningSection())
