@@ -48,6 +48,12 @@ The URL check must print `https://github.com/eneskirca/nodeterm.git`. Review the
 committing the gitlink; do not treat a fetch of either top-level remote as an upstream-pin update,
 and do not commit edits made inside the nested repository.
 
+**Always check the canonical upstream for new commits before starting work in this repo** —
+`git -C upstream/nodeterm fetch origin main && git -C upstream/nodeterm log --oneline HEAD..origin/main`
+(or `git ls-remote https://github.com/eneskirca/nodeterm.git main` if the submodule isn't
+initialized yet). This is a check, not an auto-sync: refreshing the pin is still the deliberate,
+reviewed step above, never a background pull.
+
 The supported Node runtime is **`^22.22.2 || ^24.15.0 || >=26.0.0`**. This is a minor/patch
 boundary, not
 "Node 22" shorthand: the cross-process agent-status mirror uses `node:sqlite`, which was absent in

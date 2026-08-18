@@ -136,7 +136,12 @@ When you're working through a scoped, already-authorized task:
   `https://github.com/eneskirca/nodeterm.git` and follows `main`; it is separate from the top-level
   checkout's `origin` and optional `upstream` remotes. Use the intentional update-and-review
   workflow in [`CONTRIBUTING.md`](./CONTRIBUTING.md), and commit the reviewed gitlink rather than
-  editing the nested source.
+  editing the nested source. **Always check the canonical upstream for new commits before starting
+  work here** — see the fetch/log command in `CONTRIBUTING.md`. Checking is not the same as
+  refreshing the pin; the pin still only moves through the deliberate, reviewed workflow.
+- **Post PR updates as new comments, never by editing an existing one.** A status update, a
+  re-review, or a "here's what changed" note goes on the timeline as its own comment so the
+  history stays readable; editing an old comment in place erases what it originally said.
 - Explain *why* a change was made, not only what changed; if a decision had a real trade-off,
   say what was rejected and why.
 - Say plainly what you did **not** verify. That's more useful to the next person than a
