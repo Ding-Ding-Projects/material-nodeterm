@@ -195,6 +195,10 @@ set -su terminal-overrides
 set -su terminal-features
 set -g set-clipboard on
 set -as terminal-features ",*:clipboard"
+# Truecolor passthrough: tmux clamps 24-bit SGR to the 256 palette unless the OUTER terminal is
+# known to speak RGB. xterm.js does, so declare it — via terminal-features like the clipboard
+# entry above, never terminal-overrides (see the MIGRATION note). Issue #78.
+set -as terminal-features ",*:RGB"
 # Mouse copy: on release tmux copies to its buffer AND (thanks to the two lines above) emits OSC 52,
 # which the client writes to the system clipboard. No pipe-to-a-local-command here, deliberately.
 bind -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel
@@ -2394,7 +2398,11 @@ export class PtyManager {
 
     // Strip TMUX so tmux doesn't refuse to nest if the app itself was launched
     // from inside a tmux session.
-    const env = { ...process.env, TERM: 'xterm-256color' } as Record<string, string>
+    // COLORTERM is the truecolor handshake half the ecosystem checks before emitting 24-bit
+    // SGR (the other half asks tmux/terminfo). xterm.js renders truecolor natively, so
+    // advertise it — without this, zsh themes and TUIs quietly clamp to the 256 palette and
+    // the canvas terminals never match the user's real terminal colors (issue #78).
+    const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } as Record<string, string>
     // The Server Edition may receive a first-boot password through its own environment. That
     // bootstrap credential belongs to the server process, never to the interactive shells and
     // agent CLIs it launches; inheriting it here would expose it to every terminal node.
@@ -2657,6 +2665,9 @@ export class PtyManager {
       // Same reasoning for LANG: force the UTF-8 locale per new session so a session created on a
       // shared/stale tmux server (started before this fix) still gets UTF-8 box-drawing.
       const langEnvArgs = env.LANG ? ['-e', `LANG=${env.LANG}`] : []
+      // And for COLORTERM: panes read the SESSION env, not the client's, so the truecolor
+      // handshake must ride `-e` to reach programs on a shared/stale server (issue #78).
+      const colortermEnvArgs = ['-e', 'COLORTERM=truecolor']
       // The account config dir must ride `-e` like the hook env: the tmux server is shared
       // and long-lived, so session env comes from creation args, not client inheritance.
       const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
@@ -2674,6 +2685,7 @@ export class PtyManager {
           ...hookEnvArgs,
           ...pathEnvArgs,
           ...langEnvArgs,
+          ...colortermEnvArgs,
           ...accountEnvArgs,
           ...codexEnvArgs,
           '-c',
