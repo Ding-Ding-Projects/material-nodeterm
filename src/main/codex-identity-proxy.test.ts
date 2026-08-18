@@ -73,7 +73,15 @@ function runLauncher(
   env: Record<string, string>,
   cwd?: string
 ): Promise<{ stdout: string; stderr: string }> {
-  return run(REAL_POSIX_SHELL, posixShellScriptArgs(launcherPath, args), {
+  // The fixture bin is prefixed INSIDE the running shell, not by handing PATH through the
+  // environment. A native prefix does not prove precedence here: Git Bash's own startup puts
+  // /mingw64/bin ahead of whatever the caller set, so the launcher reached Git's REAL curl instead
+  // of the recorder — every hook POST then failed against a port nothing is listening on, the bind
+  // was refused, and the launcher did what it is built to do and fell back to plain codex. The
+  // tests then asserted the remote arguments against that fallback. posixShellScriptArgs' third
+  // argument is what performs the prefix in-shell; omitting it was the whole failure.
+  const fixtureBin = env.PATH?.split(path.delimiter)[0]
+  return run(REAL_POSIX_SHELL, posixShellScriptArgs(launcherPath, args, fixtureBin), {
     env: environmentForPosixShell(pathsForPosixShellEnv(env, SHELL_PATH_ENV_KEYS)),
     cwd
   })
@@ -286,7 +294,9 @@ describe('NodeTerm Codex remote launcher', () => {
       CAPTURE: capture,
       CAPTURE_EXPOSE: exposeCapture,
       NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_NODE_ID: 'node-a',      NODETERM_HOOK_ENDPOINT: endpoint,
+      NODETERM_NODE_ID: 'node-a',
+      ...tokenEnv(root, { 'node-a': nodeTokenA }),
+      NODETERM_HOOK_ENDPOINT: endpoint,
       NODETERM_CODEX_RELAY_RUNTIME: runtime,
       NODETERM_CODEX_RELAY_SCRIPT: script
     })
@@ -332,7 +342,9 @@ describe('NodeTerm Codex remote launcher', () => {
         PATH: `${bin}:${process.env.PATH ?? ''}`,
         CAPTURE: capture,
         NODETERM_CANVAS_CONTROL: '1',
-        NODETERM_NODE_ID: 'node-a',        NODETERM_HOOK_ENDPOINT: endpoint,
+        NODETERM_NODE_ID: 'node-a',
+        ...tokenEnv(root, { 'node-a': nodeTokenA }),
+        NODETERM_HOOK_ENDPOINT: endpoint,
         NODETERM_CODEX_RELAY_RUNTIME: runtime,
         NODETERM_CODEX_RELAY_SCRIPT: script
       },
@@ -367,15 +379,23 @@ describe('NodeTerm Codex remote launcher', () => {
     stubHome(root)
     const launcher = requireLauncher(installCodexLauncher())
 
-    await expect(runLauncher(launcher, ['resume', 'thread-a'], {
+    // DEGRADES — it does not exit. "EVERY failure path here ends in `exec codex "$@"`", because
+    // the upstream script exited 69 "identity unavailable" and that turns a missing app-server, an
+    // older codex, a stale tmux session or a locked-down $HOME into a DEAD node. These assertions
+    // pinned that removed hard-exit design, so they were testing the behaviour the current script
+    // exists to avoid. What still must hold is that the caller's arguments reach plain codex
+    // untouched, which is what makes the fallback survivable.
+    await runLauncher(launcher, ['resume', 'thread-a'], {
       ...process.env,
       PATH: `${bin}:${process.env.PATH ?? ''}`,
       NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_NODE_ID: 'node-a',      NODETERM_HOOK_ENDPOINT: endpoint,
+      NODETERM_NODE_ID: 'node-a',
+      ...tokenEnv(root, { 'node-a': nodeTokenA }),
+      NODETERM_HOOK_ENDPOINT: endpoint,
       NODETERM_CODEX_RELAY_RUNTIME: runtime,
       NODETERM_CODEX_RELAY_SCRIPT: script
-    })).rejects.toMatchObject({ code: 69 })
-    expect(readFileSync(codexCapture, 'utf8').trim()).toBe('app-server daemon start')
+    })
+    expect(readFileSync(codexCapture, 'utf8').trim().split('\n').at(0)).toBe('app-server daemon start')
   })
 
   it('fails closed before launch for a missing or invalid resume-thread mapping key', async () => {
@@ -391,11 +411,15 @@ describe('NodeTerm Codex remote launcher', () => {
       NODETERM_CANVAS_CONTROL: '1',
       NODETERM_NODE_ID: 'node-a',      NODETERM_HOOK_ENDPOINT: '/isolated/node-a/hook.env'
     }
-    await expect(runLauncher(launcher, ['resume'], env)).rejects.toMatchObject({ code: 64 })
-    await expect(runLauncher(launcher, ['resume', '../other'], env)).rejects.toMatchObject({ code: 64 })
+    // An unusable thread id or account id must not reach the identity path — but it must not kill
+    // the node either. The launcher hands the caller's arguments to plain codex, and this fixture's
+    // codex exits 99, so 99 IS the proof that the hand-off happened rather than a hard exit. These
+    // asserted 64, the removed "invalid input" exit code from the upstream design.
+    await expect(runLauncher(launcher, ['resume'], env)).rejects.toMatchObject({ code: 99 })
+    await expect(runLauncher(launcher, ['resume', '../other'], env)).rejects.toMatchObject({ code: 99 })
     await expect(
       runLauncher(launcher, ['resume', 'thread-a'], { ...env, NODETERM_CODEX_ACCOUNT_ID: '..' })
-    ).rejects.toMatchObject({ code: 64 })
+    ).rejects.toMatchObject({ code: 99 })
   })
 
   it('rejects a live duplicate owner but permits replacing a stale node binding', () => {
