@@ -138,13 +138,53 @@ safe precisely *because* of the aliasing.
 The instrument for (2) already exists: the side-by-side compare tool (`nodeterm-design-compare`,
 private) puts this design next to real captures and edits CSS live.
 
+
+## There is no dead token to remove — and the way that was got wrong twice
+
+An earlier pass reported **9 tokens referenced nowhere** (`--git-graph-*` and `--radius-xs`) and
+treated them as removable. All nine are fine, for two different reasons, and both reasons defeat a
+static scan.
+
+**Eight are consumed by a `var()` built at run time.** `GitHistoryGraphSvg.tsx` line 17:
+
+```ts
+return `var(--${color})`
+```
+
+The component carries colour NAMES as bare strings — `'git-graph-lane-1'`, with no `--` prefix —
+and assembles the reference when it paints. Every one of the eight `--git-graph-*` tokens is live,
+and no grep for `var(--git-graph-lane-1)` or `'--git-graph-lane-1'` will ever find it. Deleting
+them would have removed the git history graph's colours behind a clean-looking diff and a green
+suite. It is the only runtime-constructed `var()` in the codebase, which is exactly what makes it
+easy to forget.
+
+**The ninth is a rung of a scale the Material mapping deliberately skipped.** `--radius-xs` is 4px
+and nothing aliases it, because the shape scale maps Material's names onto the radii the app
+ACTUALLY ships:
+
+```css
+--md-shape-extra-small: var(--radius-sm);  /* 6px, existing */
+--md-shape-small:       var(--radius);     /* 8px, existing */
+--md-shape-medium:      var(--radius-lg);  /* 12px, existing */
+```
+
+Those `existing` comments are the decision: Material's canonical steps were not adopted where the
+app already had its own, and the surrounding comment names the design document's site-derived 20px
+as wrong for this app specifically. `--radius-xs` completes the declared scale; it is the rung
+nobody has needed yet, not litter.
+
+**The rule this yields**, since a dead-token guard would fall into the same hole: a scan that finds
+no references is evidence about the SCAN first and the code second. Before believing one, check
+whether the value can be assembled at run time, and whether the thing sits in a declared set whose
+other members are used.
+
 ## Correction
 
 An earlier version of this document said twenty `--md-` tokens were "defined and referenced
 nowhere", called that the defect CLAUDE.md warns about, and reported the inert set as 20.
 
 That was measured by scanning **only `styles.css`**. Across the real corpus — 1,427 CSS, TS and TSX
-files — the count of tokens referenced nowhere at all is **9, and none of them is a `--md-` token**
+files — the count of tokens with no literal reference is **9, and none of them is a `--md-` token**
 (they are `--git-graph-*` and `--radius-xs`). The Material roles are all defined, aliased, and
 guarded.
 
