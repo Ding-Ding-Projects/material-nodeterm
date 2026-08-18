@@ -18,6 +18,7 @@ the deep architecture reference these articles are distilled from.
 | [Agents](./agents/README.md) | Claude Code, Codex, Gemini, opencode, Grok and custom agent CLIs as nodes. |
 | [Source control](./source-control/README.md) | The git panel, and git worktrees bound to canvas group frames. |
 | [Kanban](./kanban/README.md) | The Trello-style board that mirrors a project's live sessions as cards. |
+| [Appearance](./appearance/README.md) | Design tokens, themes, and the measured state of the Material Design 3 migration. |
 | [Remote & SSH](./remote/README.md) | Opening a project on a remote host, and the self-hosted browser edition. |
 | [Speech](./speech/README.md) | On-device dictation into any terminal. |
 | [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
