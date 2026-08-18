@@ -55,10 +55,10 @@ beforeEach(() => {
 afterEach(() => {
   if (realHome === undefined) delete process.env.HOME
   else process.env.HOME = realHome
-  rmSync(home, { recursive: true, force: true })
+  rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
-afterAll(() => rmSync(dir, { recursive: true, force: true }))
+afterAll(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 describe('deriveLinkMap', () => {
   it('maps a bridge between two agent nodes in BOTH directions', () => {

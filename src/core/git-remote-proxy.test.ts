@@ -108,7 +108,7 @@ describe('runGitRemoteOp', () => {
       expect(r.stdout).toContain('push')
       expect(r.stderr).toContain('boo')
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true })
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -125,7 +125,7 @@ describe('runGitRemoteOp', () => {
       expect(r.exitCode).toBe(128)
       expect(r.stderr).toContain('could not read Username')
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true })
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -141,7 +141,7 @@ describe('runGitRemoteOp', () => {
       const r = await runGitRemoteOp({ cwd: dir, op: 'fetch' }, { gitBin: bin })
       expect(r.stdout).toContain('0|C')
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true })
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 })

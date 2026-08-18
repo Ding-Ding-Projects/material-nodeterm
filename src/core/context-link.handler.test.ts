@@ -43,7 +43,7 @@ function start(deps: ContextLinkDeps = {}): void {
 
 beforeEach(() => start())
 
-afterAll(() => rmSync(dir, { recursive: true, force: true }))
+afterAll(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 const CLAUDE_LINE = JSON.stringify({ type: 'user', message: { content: 'ship it' } })
 

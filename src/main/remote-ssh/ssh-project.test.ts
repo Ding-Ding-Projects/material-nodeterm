@@ -670,7 +670,7 @@ describe('SshProjectManager', () => {
         await fs.realpath(path.join(nativeSystem, 'config.toml'))
       )
     } finally {
-      await fs.rm(nativeRoot, { recursive: true, force: true })
+      await fs.rm(nativeRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -696,7 +696,7 @@ describe('SshProjectManager', () => {
       expect(result.status).toBe(71)
       expect(result.stdout).toBe('NODETERM_CODEX_ACCOUNT_SETUP:link:config.toml\n')
     } finally {
-      await fs.rm(nativeRoot, { recursive: true, force: true })
+      await fs.rm(nativeRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -746,7 +746,7 @@ describe('SshProjectManager', () => {
         } catch {
           // No server reached the pid-write stage.
         }
-        await fs.rm(root, { recursive: true, force: true })
+        await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
       }
     },
     15_000
@@ -763,7 +763,7 @@ describe('SshProjectManager', () => {
       return d
     }
     afterEach(async () => {
-      for (const d of tmpDirs.splice(0)) await fs.rm(d, { recursive: true, force: true })
+      for (const d of tmpDirs.splice(0)) await fs.rm(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     })
 
     /** `isDir` decides what the remote `test -d` probe answers; scp "succeeds" by creating the
@@ -846,7 +846,7 @@ describe('SshProjectManager', () => {
         const vanished = path.join(dir, 'vanished')
         await fs.mkdir(vanished)
         await fs.symlink(vanished, dangling, 'junction')
-        await fs.rm(vanished, { recursive: true })
+        await fs.rm(vanished, { recursive: true, maxRetries: 10, retryDelay: 50 })
       } else {
         await fs.symlink('vanished', dangling)
       }
@@ -2259,7 +2259,7 @@ describe('SshProjectManager', () => {
       await new Promise((r) => setTimeout(r, 200))
       expect(agent.isRunning()).toBe(false) // the scheduled stop survived the doomed attempt
       agent.stop()
-      await fs.rm(sockDir, { recursive: true, force: true }).catch(() => {})
+      await fs.rm(sockDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }).catch(() => {})
     })
 
     it('reports idle ONLY on a user-facing disconnect that leaves nothing connected', async () => {

@@ -62,7 +62,7 @@ describe.skipIf(!shProbe)('POSIX-shell adapter under the real shell', { timeout:
   writeFileSync(script, '#!/bin/sh\ncurl reached\n', 'utf8')
   chmodSync(script, 0o755)
 
-  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  afterAll(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
   it('puts a fake curl ahead of Git Bash system curl, from a temp path containing spaces', () => {
     execFileSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {

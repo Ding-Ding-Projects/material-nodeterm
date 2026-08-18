@@ -28,7 +28,7 @@ describe('Codex node-auth secret', () => {
   })
 
   afterEach(async () => {
-    await fs.rm(userData, { recursive: true, force: true })
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('persists only keychain ciphertext and restores the same secret after restart', async () => {

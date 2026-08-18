@@ -130,7 +130,7 @@ afterAll(() => {
       // already gone
     }
   }
-  if (work) fs.rmSync(work, { recursive: true, force: true })
+  if (work) fs.rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 const suite = TMUX ? describe : describe.skip

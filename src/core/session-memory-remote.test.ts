@@ -239,7 +239,7 @@ describe('remoteSessionMemoryCommand under a real POSIX shell', { timeout: REAL_
   })
 
   afterAll(() => {
-    for (const d of temps) fs.rmSync(d, { recursive: true, force: true })
+    for (const d of temps) fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('produces a parseable report on a host with a tmux server', async () => {

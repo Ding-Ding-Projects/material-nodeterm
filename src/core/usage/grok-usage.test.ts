@@ -148,14 +148,14 @@ describe('fetchGrokUsage', () => {
       status: 'unavailable',
       limits: []
     })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('tolerates a malformed auth.json', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-'))
     fs.writeFileSync(path.join(dir, 'auth.json'), '{{{')
     await expect(readGrokAuth(dir)).resolves.toEqual({ key: null, userId: null })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })
 

@@ -106,7 +106,7 @@ describe('scheduled-settings credential clear', () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     resetPlatformForTests()
-    await fs.rm(dir, { recursive: true, force: true })
+    await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('removes the canonical token but reports a retained credential temp as incomplete', async () => {

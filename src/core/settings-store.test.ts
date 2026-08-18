@@ -18,7 +18,7 @@ describe('SettingsStore nested-default merge', () => {
 
   afterEach(() => {
     resetPlatformForTests()
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('fills a missing nested speech.shortcut from an OLD settings.json (speech present, shortcut absent)', () => {
@@ -191,7 +191,7 @@ describe('settings:save atomic write', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     resetPlatformForTests()
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const tmpsLeft = async (): Promise<string[]> =>

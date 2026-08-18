@@ -109,7 +109,7 @@ describe('onInboxActionable seam (agent-status-mirror)', () => {
   })
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   function ev(p: Partial<NormalizedAgentEvent>): NormalizedAgentEvent {
@@ -1119,7 +1119,7 @@ describe('createLiveUpdatePush', () => {
       })
       afterEach(() => {
         _resetForTest()
-        fs.rmSync(dir, { recursive: true, force: true })
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
       })
 
       function ev(p: Partial<NormalizedAgentEvent>): NormalizedAgentEvent {

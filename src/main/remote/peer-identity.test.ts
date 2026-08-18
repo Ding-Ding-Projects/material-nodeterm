@@ -37,7 +37,7 @@ describe('peer-identity: persistent client keypair', () => {
   })
   afterEach(async () => {
     vi.restoreAllMocks()
-    await fs.rm(userData, { recursive: true, force: true })
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('generates and persists a keypair on first use', async () => {

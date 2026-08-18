@@ -8,7 +8,7 @@ import { GitService } from './git-service'
 let directory = ''
 
 afterEach(async () => {
-  if (directory) await fs.rm(directory, { recursive: true, force: true })
+  if (directory) await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('GitService.originUrl', () => {

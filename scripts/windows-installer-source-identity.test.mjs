@@ -39,7 +39,7 @@ describe('resolveSourceIdentity', () => {
   })
 
   afterAll(() => {
-    if (repo) rmSync(repo, { recursive: true, force: true })
+    if (repo) rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('accepts a clean tree and reports the checked-out commit', () => {

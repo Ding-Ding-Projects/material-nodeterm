@@ -39,7 +39,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   resetPlatformForTests()
-  fs.rmSync(home, { recursive: true, force: true })
+  fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 const writeTranscript = (body: string, name = `${SID}.jsonl`): string => {

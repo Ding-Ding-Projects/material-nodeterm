@@ -15,7 +15,7 @@ const root = mkdtempSync(path.join(tmpdir(), 'agent-session-name-'))
 beforeAll(() => initPlatform(fakePlatform({ userDataDir: root })))
 afterAll(() => {
   resetPlatformForTests()
-  rmSync(root, { recursive: true, force: true })
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('readAgentSessionName', () => {

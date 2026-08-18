@@ -126,13 +126,13 @@ describe('readKimiToken', () => {
       JSON.stringify({ access_token: 'tok' })
     )
     await expect(readKimiToken(dir)).resolves.toBe('tok')
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('returns null for a missing file rather than throwing', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kimi-'))
     await expect(readKimiToken(dir)).resolves.toBeNull()
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })
 
@@ -144,7 +144,7 @@ describe('fetchKimiUsage', () => {
       status: 'unavailable',
       limits: []
     })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })
 

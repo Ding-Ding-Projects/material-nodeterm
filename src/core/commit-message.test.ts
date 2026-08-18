@@ -98,7 +98,7 @@ describe('runAgent — where the agent is actually spawned', () => {
       expect(path.dirname(localDir)).toBe(os.tmpdir())
       expect(await spawnCwdFor(localDir, false)).toBe(localDir)
     } finally {
-      fs.rmSync(localDir, { recursive: true, force: true })
+      fs.rmSync(localDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 

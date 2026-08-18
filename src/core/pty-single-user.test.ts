@@ -285,7 +285,7 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     expect(env.TMUX).toBeUndefined()
     expect(env.TMUX_PANE).toBeUndefined()
     expect(env.PATH).toBe('/usr/bin:/bin')
-    fs.rmSync(cwd, { recursive: true, force: true })
+    fs.rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('does not pass the Server Edition bootstrap password into a terminal', async () => {

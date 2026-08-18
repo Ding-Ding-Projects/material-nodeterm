@@ -47,7 +47,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  await fs.rm(userDataDir, { recursive: true, force: true })
+  await fs.rm(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('GitHubIssueCache', () => {

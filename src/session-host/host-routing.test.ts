@@ -117,7 +117,7 @@ function waitForExit(child: ChildProcess): Promise<void> {
 
 const cleanupPaths: string[] = []
 afterEach(() => {
-  for (const target of cleanupPaths.splice(0)) rmSync(target, { recursive: true, force: true })
+  for (const target of cleanupPaths.splice(0)) rmSync(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('bundled session-host request boundaries', () => {

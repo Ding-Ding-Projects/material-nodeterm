@@ -54,7 +54,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   hookServer.stop()
-  rmSync(dir, { recursive: true, force: true })
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 // Concurrent: the two routes are independent, and each has to sit out the guard in real time.

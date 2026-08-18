@@ -106,7 +106,7 @@ describe('managed Codex account paths', () => {
     expect(target).toBe(codexAccountHome(userData, 'account-a', shortRoot))
     expect(readFileSync(path.join(target, 'auth.json'), 'utf8')).toBe('fixture')
     expect(() => readFileSync(path.join(legacy, 'auth.json'))).toThrow()
-    rmSync(fixture, { recursive: true, force: true })
+    rmSync(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })
 
@@ -160,10 +160,10 @@ describe('cross-account Codex rollout visibility', () => {
     expect(readFileSync(source, 'utf8')).toBe('before\nafter\n')
     const toThird = planCodexRolloutExposure(targetHome, thirdHome, target, threadId)
     commitCodexRolloutExposure(toThird)
-    rmSync(sourceHome, { recursive: true, force: true })
+    rmSync(sourceHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     expect(readFileSync(target, 'utf8')).toBe('before\nafter\n')
     expect(readFileSync(toThird.targetPath, 'utf8')).toBe('before\nafter\n')
-    rmSync(fixture, { recursive: true, force: true })
+    rmSync(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('rejects paths outside the source account and conflicting target rollouts', () => {
@@ -193,7 +193,7 @@ describe('cross-account Codex rollout visibility', () => {
     const plan = planCodexRolloutExposure(sourceHome, targetHome, source, threadId)
     expect(() => commitCodexRolloutExposure(plan)).toThrow('different rollout')
     expect(readFileSync(target, 'utf8')).toBe('different')
-    rmSync(fixture, { recursive: true, force: true })
+    rmSync(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('refuses a target sessions symlink without writing through it', () => {
@@ -211,7 +211,7 @@ describe('cross-account Codex rollout visibility', () => {
     const plan = planCodexRolloutExposure(sourceHome, targetHome, source, threadId)
     expect(() => commitCodexRolloutExposure(plan)).toThrow('unsafe directory')
     expect(existsSync(path.join(outside, `rollout-${threadId}.jsonl`))).toBe(false)
-    rmSync(fixture, { recursive: true, force: true })
+    rmSync(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('removes its temporary link when the source inode changes before link creation', () => {
@@ -237,6 +237,6 @@ describe('cross-account Codex rollout visibility', () => {
     const targetDir = path.dirname(plan.targetPath)
     expect(existsSync(plan.targetPath)).toBe(false)
     expect(readdirSync(targetDir).some((name) => name.endsWith('.nodeterm-link'))).toBe(false)
-    rmSync(fixture, { recursive: true, force: true })
+    rmSync(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })

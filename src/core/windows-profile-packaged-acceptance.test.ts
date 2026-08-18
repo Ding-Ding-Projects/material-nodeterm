@@ -143,7 +143,7 @@ afterEach(() => {
     if (!resolved.startsWith(path.resolve(os.tmpdir()) + path.sep)) {
       throw new Error(`Refusing to remove non-temp test fixture ${resolved}`)
     }
-    fs.rmSync(resolved, { recursive: true, force: true })
+    fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   }
 })
 

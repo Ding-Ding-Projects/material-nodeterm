@@ -482,7 +482,7 @@ describe('PtyManager trusted Windows profile spawn boundary', () => {
       expect(args).not.toContain(String.raw`Z:\removed\legacy-project`)
     } finally {
       process.env.PATH = oldPath
-      fs.rmSync(probeDir, { recursive: true, force: true })
+      fs.rmSync(probeDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 

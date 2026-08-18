@@ -75,7 +75,7 @@ describe('server headless mode: boots core services, binds no public listener', 
         await new Promise<void>((resolve) => sentinel.close(() => resolve()))
       }
       scheduledStop.mockRestore()
-      fs.rmSync(dataDir, { recursive: true, force: true })
+      fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   }, 30_000)
 })

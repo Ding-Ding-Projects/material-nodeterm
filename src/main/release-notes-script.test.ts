@@ -21,7 +21,7 @@ describe('release notes asset verification evidence', () => {
     digest = createHash('sha256').update(bytes).digest('hex')
   })
 
-  afterEach(() => rmSync(root, { recursive: true, force: true }))
+  afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
   function run(manifest: unknown) {
     const moduleURL = pathToFileURL(SCRIPT).href

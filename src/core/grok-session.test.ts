@@ -69,7 +69,7 @@ describe('pickGrokSessionMeta', () => {
 })
 
 const root = mkdtempSync(path.join(tmpdir(), 'grok-session-'))
-afterAll(() => rmSync(root, { recursive: true, force: true }))
+afterAll(() => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 /** A session directory holding `body` as its summary.json. */
 const sessionDir = (name: string, body: string): string => {

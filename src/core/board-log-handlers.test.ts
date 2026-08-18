@@ -31,7 +31,7 @@ describe('registerBoardLogHandlers — routing', () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-boardlog-h-'))
   })
   afterEach(() => {
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('local: append writes and read returns the entry newest-first', async () => {
@@ -85,7 +85,7 @@ describe('registerBoardLogHandlers — change subscription', () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-boardlog-h-'))
   })
   afterEach(() => {
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('local watch: broadcasts boardLogChanged on the project channel after an append', async () => {

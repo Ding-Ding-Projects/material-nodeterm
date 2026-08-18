@@ -72,7 +72,7 @@ afterAll(() => {
   if (!path.basename(tempDir).startsWith('nt-pairing-lock-')) {
     throw new Error(`refusing to remove unexpected lock-test path: ${tempDir}`)
   }
-  rmSync(tempDir, { recursive: true, force: true })
+  rmSync(tempDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('pairing registry cross-process lock', () => {

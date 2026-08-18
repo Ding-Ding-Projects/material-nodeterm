@@ -71,7 +71,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   _resetForTest()
 })
 
@@ -211,7 +211,7 @@ describe('wireAgentStatus — the grok raw-listener branch', () => {
   afterEach(() => {
     if (prevGrokHome === undefined) delete process.env.GROK_HOME
     else process.env.GROK_HOME = prevGrokHome
-    fs.rmSync(grokHome, { recursive: true, force: true })
+    fs.rmSync(grokHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   // Where grok stores a session: $GROK_HOME/sessions/<url-encoded cwd>/<id>/ (core/agents/grok-paths.ts).

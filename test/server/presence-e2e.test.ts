@@ -76,7 +76,7 @@ describe('server e2e: presence with two clients', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true })
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('hello → own id + snapshot; cursor fans out to the other client; disconnect → leave', async () => {

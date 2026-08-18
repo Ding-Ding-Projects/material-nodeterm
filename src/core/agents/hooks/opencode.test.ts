@@ -24,7 +24,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
-  fs.rmSync(tmp, { recursive: true, force: true })
+  fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 const planted = () => path.join(tmp, '.config', 'opencode', 'plugins', 'nodeterm-status.js')
@@ -189,7 +189,7 @@ describe('generated plugin unix-socket transport', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
-    fs.rmSync(sockDir, { recursive: true, force: true })
+    fs.rmSync(sockDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   async function importPlugin(): Promise<Record<string, (input: unknown) => Promise<void>>> {
@@ -302,8 +302,8 @@ describe('generated plugin presents the per-node token', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
-    fs.rmSync(tokenDir, { recursive: true, force: true })
-    fs.rmSync(sockDir, { recursive: true, force: true })
+    fs.rmSync(tokenDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    fs.rmSync(sockDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   async function importPlugin(): Promise<Record<string, (input: unknown) => Promise<void>>> {
@@ -457,7 +457,7 @@ describe('opencodeConfigDir honors XDG_CONFIG_HOME', () => {
       expect(fs.existsSync(path.join(tmp, '.config', 'opencode', 'plugins', 'nodeterm-status.js'))).toBe(false)
     } finally {
       vi.unstubAllEnvs()
-      fs.rmSync(xdg, { recursive: true, force: true })
+      fs.rmSync(xdg, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
   it('falls back to ~/.config/opencode when XDG_CONFIG_HOME is unset', () => {

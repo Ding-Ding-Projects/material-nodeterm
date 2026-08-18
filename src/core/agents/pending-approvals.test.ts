@@ -17,7 +17,7 @@ beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-pending-'))
 })
 afterEach(() => {
-  fs.rmSync(home, { recursive: true, force: true })
+  fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('isValidPendingId', () => {

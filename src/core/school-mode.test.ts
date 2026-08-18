@@ -51,7 +51,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   homeSpy.mockRestore()
-  await fs.rm(home, { recursive: true, force: true })
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 async function fresh(deps: ConstructorParameters<typeof SchoolModeStore>[0] = {}) {

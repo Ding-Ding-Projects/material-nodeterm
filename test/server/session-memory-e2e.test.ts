@@ -76,7 +76,7 @@ describe('server e2e: session memory refuses an SSH scope', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true })
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   /** One WS connection, several RPC calls, results keyed by request id. */

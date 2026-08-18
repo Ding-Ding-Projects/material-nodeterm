@@ -93,7 +93,7 @@ describe('license entitlement refresh', () => {
     vi.useRealTimers()
     const { resetPlatformForTests } = await import('./platform')
     resetPlatformForTests()
-    rmSync(h.userData, { recursive: true, force: true })
+    rmSync(h.userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('launch refresh (device-bound) stores the minted token and broadcasts Pro', async () => {
@@ -276,7 +276,7 @@ describe('license seats entitlement', () => {
     vi.useRealTimers()
     const { resetPlatformForTests } = await import('./platform')
     resetPlatformForTests()
-    rmSync(h.userData, { recursive: true, force: true })
+    rmSync(h.userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   function storeToken(token?: string): void {

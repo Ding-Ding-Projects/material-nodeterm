@@ -45,7 +45,7 @@ describe('ScheduledSettingsStore', () => {
 
   afterEach(async () => {
     resetPlatformForTests()
-    await fs.rm(userData, { recursive: true, force: true })
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('treats only ENOENT as a normal empty schedule and permits its first save', async () => {
@@ -209,7 +209,7 @@ describe('ScheduledSettingsStore', () => {
 
   it('does not mark a disk-write failure as persisted or attach a cleanup warning', async () => {
     const store = new ScheduledSettingsStore()
-    await fs.rm(userData, { recursive: true, force: true })
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 
     const result = await store.save(validFile())
 

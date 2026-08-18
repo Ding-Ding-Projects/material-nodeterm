@@ -249,7 +249,7 @@ describe('Windows installer identity contract', () => {
   })
 
   afterEach(() => {
-    if (root) rmSync(root, { recursive: true, force: true })
+    if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   function writePackage(options: PackageOptions = {}) {
@@ -420,7 +420,7 @@ describe('Windows installer identity contract', () => {
       ['Setup', { setupPe: brandedVendorSetup({ ...RELEASE_IDENTITY, version: '0.3.0' }) }],
     ]
     for (const [field, options] of mutations) {
-      rmSync(squirrel, { recursive: true, force: true })
+      rmSync(squirrel, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
       mkdirSync(squirrel, { recursive: true })
       writePackage(options)
       await expect(assertPackagedIconContract(squirrel, metadataFile, root, {

@@ -113,7 +113,7 @@ afterAll(() => {
   hookServer.clearNodeAuthSecretForTests()
   resetNodeTokenFilesForTests()
   resetPlatformForTests()
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 beforeEach(() => {
@@ -376,7 +376,7 @@ describe('the per-node capability, over the file channel', { timeout: REAL_SHELL
       expect(started).toEqual([])
       expect(fallbacks).toEqual([{ nodeId: 'node-1', reason: 'node-token-unavailable' }])
     } finally {
-      fs.rmSync(file, { recursive: true, force: true })
+      fs.rmSync(file, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 })

@@ -22,7 +22,7 @@ describe('GitService destructive worktree proof (real git)', () => {
     run('commit', '-m', 'fixture')
   })
 
-  afterEach(async () => fs.rm(repo, { recursive: true, force: true }))
+  afterEach(async () => fs.rm(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
   it('changes for nested untracked bytes even when the visible status row is unchanged', async () => {
     const service = new GitService()

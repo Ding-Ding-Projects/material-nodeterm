@@ -18,7 +18,7 @@ beforeEach(async () => {
   projectCwd = join(root, 'project')
   await fs.mkdir(projectCwd, { recursive: true })
 })
-afterEach(() => rm(root, { recursive: true, force: true }))
+afterEach(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 describe('canvasImageTarget', () => {
   it('uses the project folder when it has a local cwd, and a durable app folder when it does not', () => {
@@ -122,7 +122,7 @@ describe('saveCanvasImage', () => {
   })
 
   it('does not resurrect a project folder that has been deleted', async () => {
-    await rm(projectCwd, { recursive: true, force: true })
+    await rm(projectCwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     const path = await saveCanvasImage({
       projectCwd,
       userDataDir,

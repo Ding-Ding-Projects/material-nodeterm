@@ -32,7 +32,7 @@ describe('approved-devices atomic write', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    rmSync(userData, { recursive: true, force: true })
+    rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const tmpsLeft = async (): Promise<string[]> =>

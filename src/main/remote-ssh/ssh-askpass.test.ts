@@ -148,7 +148,7 @@ describe.skipIf(process.platform === 'win32')('the askpass helper keeps its bear
   })
 
   afterAll(async () => {
-    await fsp.rm(dir, { recursive: true, force: true })
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   /** Runs the real script under the real /bin/sh, with the recording curl first on PATH. */

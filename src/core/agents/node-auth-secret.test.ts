@@ -29,7 +29,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   resetPlatformForTests()
   resetNodeAuthSecretForTests()
 })

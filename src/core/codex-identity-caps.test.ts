@@ -37,7 +37,7 @@ afterEach(() => {
   resetCodexThreadIdentityAuthSecret()
   resetCodexIdentityCapsForTests()
   resetPlatformForTests()
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('codexIdentityCaps', () => {

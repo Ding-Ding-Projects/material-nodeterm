@@ -30,7 +30,7 @@ describe('saveUpload', () => {
   })
   afterEach(() => {
     vi.restoreAllMocks()
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('writes the bytes under the uploads root and answers an absolute path', async () => {

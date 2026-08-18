@@ -30,7 +30,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   resetPlatformForTests()
-  await fs.rm(dir, { recursive: true, force: true })
+  await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 async function expectDistinctTempWrites(start: () => [Promise<unknown>, Promise<unknown>]): Promise<void> {

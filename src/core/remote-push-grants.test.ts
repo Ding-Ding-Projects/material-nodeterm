@@ -97,7 +97,7 @@ describe('REMOTE_GRANT_SCAN_CMD, executed under /bin/sh', () => {
   const shAvailable = sh.status === 0 && !sh.error
   const dir = shAvailable ? mkdtempSync(join(tmpdir(), 'nt-remote-grants-')) : ''
   afterAll(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true })
+    if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
   const run = (home: string): { status: number | null; stdout: string } => {
     const r = spawnSync('sh', ['-c', REMOTE_GRANT_SCAN_CMD], {

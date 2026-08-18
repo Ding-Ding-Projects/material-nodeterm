@@ -170,7 +170,7 @@ describe('recordAgentEvent + atomic write', () => {
 
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('records events into memory and flushes valid JSON to disk', async () => {
@@ -315,7 +315,7 @@ describe('settings block', () => {
 
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('buildFile includes the settings block when given one', () => {
@@ -374,7 +374,7 @@ describe('server block', () => {
 
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('buildFile includes the server block when given one', () => {
@@ -1511,7 +1511,7 @@ describe('usage block on flush', () => {
   })
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('writes the usage block from the provider', async () => {
@@ -1780,7 +1780,7 @@ describe('recordAgentEvent — codex request_user_input broadcast conversion', (
 
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('rewrites the held turn-end done to waiting, so every consumer agrees', () => {
@@ -1858,7 +1858,7 @@ describe('a restored entry is never proof', () => {
   })
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('is marked, and carries no proof, however the file was written', () => {

@@ -29,7 +29,7 @@ describeWindows('Windows Python bootstrap for node-gyp', () => {
   })
 
   afterEach(() => {
-    if (root) rmSync(root, { recursive: true, force: true })
+    if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   function probeResult(executable, version = [3, 13, 15]) {

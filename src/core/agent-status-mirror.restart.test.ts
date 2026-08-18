@@ -36,7 +36,7 @@ beforeEach(() => {
 
 afterEach(() => {
   _resetForTest()
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 /** Serialize the live mirror to disk, then simulate a full process restart: drop ALL module state

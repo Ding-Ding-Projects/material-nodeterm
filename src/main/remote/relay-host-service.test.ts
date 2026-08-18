@@ -710,7 +710,7 @@ describe('initRelayHost — board-log bridged to the host', () => {
   })
 
   afterEach(() => {
-    fs.rmSync(tmp, { recursive: true, force: true })
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('routes append to the shared project’s log, preserving the guest’s own author', async () => {

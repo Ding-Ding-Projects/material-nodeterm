@@ -51,7 +51,7 @@ describe('registerOllamaIpc — ollama:status', () => {
   })
 
   afterEach(() => {
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   function harness(checkInstalled: () => { found: boolean; via: 'path' | 'known-location' | null }) {

@@ -136,7 +136,7 @@ describe('readCodexAuth', () => {
       accessToken: 'tok-abc',
       accountId: 'acct-1'
     })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('returns nulls for a missing or malformed file rather than throwing', async () => {
@@ -144,7 +144,7 @@ describe('readCodexAuth', () => {
     await expect(readCodexAuth(dir)).resolves.toEqual({ accessToken: null, accountId: null })
     fs.writeFileSync(path.join(dir, 'auth.json'), 'not json')
     await expect(readCodexAuth(dir)).resolves.toEqual({ accessToken: null, accountId: null })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })
 

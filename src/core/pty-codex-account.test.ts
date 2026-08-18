@@ -53,7 +53,7 @@ describe('PTY Codex account isolation', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     resetPlatformForTests()
-    fs.rmSync(userDataDir, { recursive: true, force: true })
+    fs.rmSync(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const create = (options: Partial<PtyCreateOptions>): Promise<PtyCreateResult> =>

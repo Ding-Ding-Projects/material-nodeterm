@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { makeDir, pathExists } from './fs-ops'
 
 const root = mkdtempSync(join(tmpdir(), 'fs-ops-'))
-afterAll(() => rmSync(root, { recursive: true, force: true }))
+afterAll(() => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 describe('makeDir', () => {
   it('creates nested directories recursively', async () => {

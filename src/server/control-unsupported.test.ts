@@ -54,7 +54,7 @@ afterAll(() => {
   hookServer.clearNodeAuthSecretForTests()
   hookServer.stop()
   resetPlatformForTests()
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('the Server Edition refuses canvas control by name', () => {

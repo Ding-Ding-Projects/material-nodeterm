@@ -78,7 +78,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   resetPlatformForTests()
-  await fs.rm(dir, { recursive: true, force: true })
+  await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('SecureStore transaction ordering', () => {

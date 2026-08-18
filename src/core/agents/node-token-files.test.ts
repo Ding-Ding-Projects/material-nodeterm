@@ -19,7 +19,7 @@ beforeEach(() => {
   resetNodeTokenFilesForTests()
   initPlatform(fakePlatform({ userDataDir: dir }))
 })
-afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
+afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 describe('node token files', () => {
   it('writes 0600 files inside a 0700 dir and records materialisation', () => {

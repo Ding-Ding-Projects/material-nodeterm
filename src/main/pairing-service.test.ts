@@ -302,7 +302,7 @@ afterEach(() => {
 
 afterAll(() => {
   assertTempHome()
-  rmSync(HOME, { recursive: true, force: true })
+  rmSync(HOME, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('revokeDevice', () => {

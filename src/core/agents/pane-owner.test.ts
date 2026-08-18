@@ -202,7 +202,7 @@ afterAll(() => {
   } catch {
     // already gone — the server exits on its own when the last session dies
   }
-  fs.rmSync(TMUX_TMPDIR, { recursive: true, force: true })
+  fs.rmSync(TMUX_TMPDIR, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe.skipIf(!tmuxBin)('against a real tmux pane', () => {

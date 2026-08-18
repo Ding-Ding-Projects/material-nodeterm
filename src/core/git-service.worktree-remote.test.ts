@@ -50,7 +50,7 @@ beforeAll(() => {
   git('commit', '--allow-empty', '-m', 'init')
 })
 
-afterAll(() => fs.rmSync(repo, { recursive: true, force: true }))
+afterAll(() => fs.rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 afterEach(() => setGitRemoteResolver(null))
 
 describe('worktree ops on a LOCAL repo (no remote claims it)', () => {

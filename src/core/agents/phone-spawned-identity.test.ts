@@ -94,7 +94,7 @@ describe('a phone-spawned session presents its per-node token', { timeout: REAL_
 
   afterAll(() => {
     server?.close()
-    if (dir) rmSync(dir, { recursive: true, force: true })
+    if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   beforeEach(() => {

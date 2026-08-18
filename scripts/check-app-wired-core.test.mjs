@@ -14,7 +14,7 @@ import {
 const scratch = []
 
 afterEach(() => {
-  for (const dir of scratch.splice(0)) fs.rmSync(dir, { recursive: true, force: true })
+  for (const dir of scratch.splice(0)) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 function temp(prefix) {

@@ -39,8 +39,8 @@ describe('files/scm e2e: fs.read + git over ws', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true })
-    fs.rmSync(repo, { recursive: true, force: true })
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    fs.rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('reads a file and gets git status over ws', async () => {

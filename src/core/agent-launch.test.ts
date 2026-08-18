@@ -783,7 +783,7 @@ describe.runIf(WINDOWS)("real Windows shell argv behavior", () => {
           expect(executeWindowsPlan(shell, dialect, plan)).toEqual([prompt]);
         }
       } finally {
-        rmSync(directory, { recursive: true, force: true });
+        rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
       }
     },
     30_000,

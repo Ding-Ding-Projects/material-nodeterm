@@ -42,7 +42,7 @@ beforeEach(() => {
 afterEach(() => {
   resetCodexThreadIdentityAuthSecret()
   resetPlatformForTests()
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 // A thread id is a PATH SEGMENT under `codexThreadIdentityRoot()` and a field inside the record
@@ -199,7 +199,7 @@ describe('forgetting a permanently deleted node', () => {
     forgetCodexThreadIdentitiesForNode('node-2', recordsRoot)
     expect(fs.existsSync(file)).toBe(true)
     // A node deletion must never fail on this: no directory at all is simply nothing to forget.
-    fs.rmSync(recordsRoot, { recursive: true, force: true })
+    fs.rmSync(recordsRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     expect(() => forgetCodexThreadIdentitiesForNode('node-1', recordsRoot)).not.toThrow()
   })
 })
@@ -229,7 +229,7 @@ function identity(rootDir: string, scope: string, threadId: string, nodeId: stri
 beforeEach(() => setCodexThreadIdentityAuthSecret(authSecret))
 
 afterEach(() => {
-  for (const value of roots.splice(0)) fs.rmSync(value, { recursive: true, force: true })
+  for (const value of roots.splice(0)) fs.rmSync(value, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('resolveCodexThreadNodeIdentity', () => {

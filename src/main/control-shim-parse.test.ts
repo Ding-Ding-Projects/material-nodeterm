@@ -65,7 +65,7 @@ beforeAll(() => {
   )
 })
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }))
+afterAll(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 describe('the control shim translates flags', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('a --flag followed by another --flag does NOT eat it', () => {

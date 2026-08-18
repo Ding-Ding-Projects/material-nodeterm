@@ -55,7 +55,7 @@ afterEach(async () => {
   await new Promise((r) => server.close(r))
   // Safe now: no socket, so no late callback can reach a torn-out platform.
   resetPlatformForTests()
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 /** Text frames each socket received, recorded from before 'open' so nothing pushed at connect

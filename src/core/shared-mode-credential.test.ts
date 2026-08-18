@@ -32,7 +32,7 @@ beforeEach(async () => {
   await setCredential(file, '1234')
 })
 afterEach(async () => {
-  await fs.rm(dir, { recursive: true, force: true })
+  await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('brute-force throttling', () => {

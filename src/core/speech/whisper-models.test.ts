@@ -37,7 +37,7 @@ async function waitUntil(check: () => boolean, timeoutMs = 3_000): Promise<void>
 describe('WhisperModelStore', () => {
   let dir: string
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'wms-')) })
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+  afterEach(() => { rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }) })
 
   it('downloads a model, reports progress, and lists it', async () => {
     const seen: number[] = []

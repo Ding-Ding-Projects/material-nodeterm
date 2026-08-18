@@ -69,7 +69,7 @@ describe('local Squirrel update fixture server', () => {
 
   afterEach(async () => {
     await Promise.allSettled(running.splice(0).map((fixture) => fixture.close()))
-    for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true })
+    for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true, maxRetries: 10, retryDelay: 50 })
   })
 
   async function start(root = makeFixture(), options) {

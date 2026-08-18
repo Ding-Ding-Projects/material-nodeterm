@@ -83,7 +83,7 @@ beforeAll(() => {
 })
 
 afterAll(() => {
-  if (work) fs.rmSync(work, { recursive: true, force: true })
+  if (work) fs.rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 const marker = (name: string): string => path.join(markerDir, name)

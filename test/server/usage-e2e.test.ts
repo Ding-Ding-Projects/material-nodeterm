@@ -47,7 +47,7 @@ describe('server e2e: usage over WS-RPC', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true })
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('serves usage:fetch as a real handler returning a well-formed snapshot', async () => {

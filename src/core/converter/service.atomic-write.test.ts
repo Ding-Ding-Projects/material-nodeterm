@@ -111,7 +111,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await delay(50)
-  await rm(root, { recursive: true, force: true })
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('ConverterService atomic output publication', () => {

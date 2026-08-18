@@ -87,7 +87,7 @@ afterAll(async () => {
   if (process.platform === 'win32') return
   await new Promise<void>((resolve) => wss.close(() => resolve()))
   await new Promise<void>((resolve) => server.close(() => resolve()))
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe.skipIf(process.platform === 'win32')('codexThreadExistsAt', () => {

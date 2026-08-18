@@ -13,7 +13,7 @@ beforeEach(async () => {
   file = path.join(dir, 'project.json')
   await fs.writeFile(file, '{"v":1}')
 })
-afterEach(() => fs.rm(dir, { recursive: true, force: true }))
+afterEach(() => fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 describe('WorkspaceWatcher', () => {
   it('fires for an outside edit, but not for a self-write', async () => {

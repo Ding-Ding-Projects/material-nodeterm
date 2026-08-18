@@ -81,7 +81,7 @@ afterEach(async () => {
   for (const dir of tempDirs) {
     const endpoint = sessionHostPaths(dir).endpoint
     if (process.platform !== 'win32') fs.rmSync(endpoint, { force: true })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   }
   tempDirs.clear()
 })

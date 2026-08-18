@@ -76,7 +76,7 @@ describe('OllamaChatStore same-session mutation ordering', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks()
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('preserves a rename made while an earlier reply is still streaming', async () => {

@@ -56,7 +56,7 @@ describe('agent-status e2e: hook POST → agent:status over ws', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true })
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('a posted hook event is broadcast to the ws client as agent:status', async () => {

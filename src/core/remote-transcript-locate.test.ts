@@ -53,7 +53,7 @@ beforeAll(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-remote-transcript-'))
 })
 afterAll(() => {
-  fs.rmSync(home, { recursive: true, force: true })
+  fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('remoteTranscriptRoots', () => {
@@ -140,7 +140,7 @@ describe('locateRemoteTranscriptCommand', () => {
       )!
       expect(parseLocatedTranscript(await sh(cmd))).toBe(pathForPosixShell(p))
     } finally {
-      fs.rmSync(spaced, { recursive: true, force: true })
+      fs.rmSync(spaced, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 })

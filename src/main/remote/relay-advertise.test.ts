@@ -57,7 +57,7 @@ describe('relay advertisement temp recovery', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.resetModules()
-    rmSync(home, { recursive: true, force: true })
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('preserves an old UUID temp even when its foreign owner is not visible locally', async () => {

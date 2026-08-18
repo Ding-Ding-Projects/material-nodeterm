@@ -129,20 +129,20 @@ describe('readGeminiCreds', () => {
   it('reads the access token', async () => {
     const dir = mktemp(JSON.stringify({ access_token: 'tok', expiry_date: Date.now() + 60_000 }))
     await expect(readGeminiCreds(dir)).resolves.toEqual({ accessToken: 'tok', expired: false })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('flags an expired token', async () => {
     const dir = mktemp(JSON.stringify({ access_token: 'tok', expiry_date: Date.now() - 1000 }))
     await expect(readGeminiCreds(dir)).resolves.toMatchObject({ expired: true })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('treats a missing expiry_date as not-expired and lets the API decide', async () => {
     // Refusing to try on incomplete local metadata would be a self-inflicted outage.
     const dir = mktemp(JSON.stringify({ access_token: 'tok' }))
     await expect(readGeminiCreds(dir)).resolves.toEqual({ accessToken: 'tok', expired: false })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('returns nulls for a missing or malformed file rather than throwing', async () => {
@@ -150,7 +150,7 @@ describe('readGeminiCreds', () => {
     await expect(readGeminiCreds(dir)).resolves.toEqual({ accessToken: null, expired: false })
     fs.writeFileSync(path.join(dir, 'oauth_creds.json'), 'not json')
     await expect(readGeminiCreds(dir)).resolves.toEqual({ accessToken: null, expired: false })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })
 
@@ -162,7 +162,7 @@ describe('fetchGeminiUsage', () => {
       status: 'unavailable',
       limits: []
     })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('reports unavailable on an expired token instead of calling the API', async () => {
@@ -170,7 +170,7 @@ describe('fetchGeminiUsage', () => {
     // show" rather than an error the user is asked to act on.
     const dir = mktemp(JSON.stringify({ access_token: 'tok', expiry_date: 1 }))
     await expect(fetchGeminiUsage(dir)).resolves.toMatchObject({ status: 'unavailable' })
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })
 

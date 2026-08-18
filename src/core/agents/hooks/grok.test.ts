@@ -20,7 +20,7 @@ describe('grok hook installer', () => {
     delete process.env.GROK_HOME
   })
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true })
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     delete process.env.GROK_HOME
     vi.resetModules()
   })

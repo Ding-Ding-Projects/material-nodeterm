@@ -17,7 +17,7 @@ beforeEach(() => {
   registerFsHandlers(platform, { localProjectCwd: (id) => projectCwds[id] })
   ui = platform.attach({ sendText: () => {}, sendBinary: () => {} })
 })
-afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
+afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 async function call(method: string, ...args: unknown[]) {
   const res = await platform.dispatch(ui, { t: 'req', id: 1, method, args })

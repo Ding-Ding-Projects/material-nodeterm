@@ -238,7 +238,7 @@ describe('Codex shared relay thread observation', () => {
     ], current, {})
     expect(merged.result.data.map((thread) => thread.id)).toEqual(['shared'])
     expect(merged.foreignThreads.get('shared')?.path).toBe(rolloutA)
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('carries a foreign title through the path-resumed response', () => {
@@ -322,7 +322,7 @@ describe('Codex shared relay thread observation', () => {
       )).toEqual([null, 'page-2'])
     } finally {
       await stopSource()
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -370,7 +370,7 @@ describe('Codex shared relay thread observation', () => {
       })
     } finally {
       await Promise.all([stopCurrent(), stopForeign()])
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -404,7 +404,7 @@ describe('Codex shared relay thread observation', () => {
       )).resolves.toEqual({ kind: 'unavailable' })
     } finally {
       await stop()
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -442,7 +442,7 @@ describe('Codex shared relay thread observation', () => {
       )).resolves.toEqual({ kind: 'ambiguous' })
     } finally {
       await Promise.all(stops.map((stop) => stop()))
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -482,7 +482,7 @@ describe('Codex shared relay thread observation', () => {
       )).resolves.toMatchObject({ kind: 'foreign', thread: { path: aliasA } })
     } finally {
       await Promise.all(stops.map((stop) => stop()))
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -514,7 +514,7 @@ describe('Codex shared relay thread observation', () => {
       )).resolves.toEqual({ kind: 'unavailable' })
     } finally {
       await Promise.all([stopCurrent(), stopForeign()])
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 

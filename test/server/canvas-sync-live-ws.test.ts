@@ -305,7 +305,7 @@ afterEach(async () => {
   server = null;
   resetPlatformForTests();
   platform = null;
-  if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+  if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   tempDir = "";
 });
 

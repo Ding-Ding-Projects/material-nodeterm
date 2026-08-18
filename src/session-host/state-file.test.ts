@@ -19,7 +19,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), 'nt-session-host-state-'))
 })
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true })
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('session-host state publication', () => {

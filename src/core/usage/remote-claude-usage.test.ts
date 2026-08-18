@@ -67,7 +67,7 @@ beforeAll(() => {
 })
 
 afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 /** Run the generated command in a sandboxed $HOME, with the fake curl first on PATH. */

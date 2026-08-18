@@ -32,8 +32,8 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   resetPlatformForTests()
-  await fs.rm(userData, { recursive: true, force: true })
-  await fs.rm(projRoot, { recursive: true, force: true })
+  await fs.rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  await fs.rm(projRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('save → load round trip (v3)', () => {
@@ -505,7 +505,7 @@ describe('unavailable & corrupt refs', () => {
   it('marks a ref with a missing folder unavailable (kept, greyed) instead of dropping it', async () => {
     const store = new WorkspaceStore()
     await store.save(ws([project({ cwd: projRoot })]))
-    await fs.rm(projRoot, { recursive: true, force: true })
+    await fs.rm(projRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     const loaded = await new WorkspaceStore().load()
     expect(loaded.projects[0]).toMatchObject({ id: 'p1', name: 'foo', unavailable: true, nodes: [] })
   })
@@ -551,7 +551,7 @@ describe('unavailable projects never overwrite real data on save', () => {
     const p = path.join(projRoot, '.nodeterm/project.json')
     const original = await fs.readFile(p, 'utf-8')
     // Folder goes missing at load → placeholder with nodes: []
-    await fs.rm(projRoot, { recursive: true, force: true })
+    await fs.rm(projRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     const store2 = new WorkspaceStore()
     const loaded = await store2.load()
     expect(loaded.projects[0].unavailable).toBe(true)
@@ -614,7 +614,7 @@ describe('unavailable projects never overwrite real data on save', () => {
 
     // The folder goes away: the next load hands the renderer a grey placeholder, and the renderer
     // hands it straight back to save().
-    await fs.rm(projRoot, { recursive: true, force: true })
+    await fs.rm(projRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     const store2 = new WorkspaceStore()
     const loaded = await store2.load()
     expect(loaded.projects[0].unavailable).toBe(true)
@@ -1478,7 +1478,7 @@ describe('a git-shared project.json must not give two folders one project id', (
     otherRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'nt-proj2-'))
   })
   afterEach(async () => {
-    await fs.rm(otherRoot, { recursive: true, force: true })
+    await fs.rm(otherRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const projectFile = (over: Record<string, unknown> = {}): string =>
@@ -1798,7 +1798,7 @@ describe('a git-shared project.json must not give two folders one project id', (
       // Idempotent at three, too.
       expect((await new WorkspaceStore().load()).projects.map((p) => p.id)).toEqual(ids)
     } finally {
-      await fs.rm(thirdRoot, { recursive: true, force: true })
+      await fs.rm(thirdRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
@@ -1822,7 +1822,7 @@ describe('the shared project file carries content, not machine identity', () => 
     otherRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'nt-proj2-'))
   })
   afterEach(async () => {
-    await fs.rm(otherRoot, { recursive: true, force: true })
+    await fs.rm(otherRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const readFile = async (root: string) =>

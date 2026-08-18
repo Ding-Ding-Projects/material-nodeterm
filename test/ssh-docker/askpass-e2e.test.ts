@@ -150,7 +150,7 @@ describe.skipIf(!ENABLED)('SSH askpass end to end (Docker sshd)', () => {
   afterAll(async () => {
     if (ambientAgentSock !== undefined) process.env.SSH_AUTH_SOCK = ambientAgentSock
     askpass?.stop()
-    await fs.rm(tmp, { recursive: true, force: true }).catch(() => {})
+    await fs.rm(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }).catch(() => {})
   })
 
   /** A connection with NO identityFile: the regression this whole branch exists for. ssh falls

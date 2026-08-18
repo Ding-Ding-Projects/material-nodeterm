@@ -36,7 +36,7 @@ beforeAll(() => {
   )
 })
 
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }))
+afterAll(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
 
 function record(threadId: string, body: string): void {
   fs.writeFileSync(path.join(root, threadId), body)

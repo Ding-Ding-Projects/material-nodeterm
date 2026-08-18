@@ -65,7 +65,7 @@ describe('server e2e: keyboard shortcuts settings round-trip', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true })
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   /** Open a WS with the session cookie; resolve once the socket is live. */

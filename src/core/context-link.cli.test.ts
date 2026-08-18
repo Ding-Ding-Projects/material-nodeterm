@@ -153,7 +153,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   hookServer.stop()
-  rmSync(dir, { recursive: true, force: true })
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 async function shimRun(nodeId: string, args: string[]): Promise<string> {

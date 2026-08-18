@@ -76,7 +76,7 @@ describe('buildManagedScript', () => {
     })
     expect(result.status).toBe(0)
     expect(readFileSync(capture, 'utf8')).toContain('nodeId=node-a')
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
   it('recovers a unique managed mapping when the tool shell carries an empty system scope', () => {
     const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-empty-scope-'))
@@ -106,7 +106,7 @@ describe('buildManagedScript', () => {
     })
     expect(result.status).toBe(0)
     expect(readFileSync(capture, 'utf8')).toContain('nodeId=node-a')
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
   it('keeps an empty asserted scope fail-closed when the thread id exists in two accounts', () => {
     const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-ambiguous-scope-'))
@@ -139,7 +139,7 @@ describe('buildManagedScript', () => {
     })
     expect(result.status).toBe(0)
     expect(() => readFileSync(capture, 'utf8')).toThrow()
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
   it('keeps an empty asserted scope fail-closed when system and managed mappings collide', () => {
     const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-system-managed-collision-'))
@@ -172,7 +172,7 @@ describe('buildManagedScript', () => {
     })
     expect(result.status).toBe(0)
     expect(() => readFileSync(capture, 'utf8')).toThrow()
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
   it('never crosses from an explicit missing account scope into another account', () => {
     const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-explicit-scope-'))
@@ -202,7 +202,7 @@ describe('buildManagedScript', () => {
     })
     expect(result.status).toBe(0)
     expect(() => readFileSync(capture, 'utf8')).toThrow()
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
   it('rejects a uniquely discovered mapping whose account directory is invalid', () => {
     const root = mkdtempSync(join(tmpdir(), 'nodeterm-codex-hook-invalid-discovered-scope-'))
@@ -231,7 +231,7 @@ describe('buildManagedScript', () => {
     })
     expect(result.status).toBe(0)
     expect(() => readFileSync(capture, 'utf8')).toThrow()
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
   it('gates the hook body on the NODE ID only (not the token) so an empty-endpoint session self-heals', () => {
     // A phone-spawned session created before any host process existed has a node id but no token
@@ -471,7 +471,7 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
   const shAvailable = sh.status === 0 && !sh.error
   const dir = shAvailable ? mkdtempSync(join(tmpdir(), 'nt-hook-failover-')) : ''
   afterAll(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true })
+    if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it.skipIf(!shAvailable)(
@@ -664,7 +664,7 @@ describe('managed script presents the per-node token', { timeout: REAL_SHELL_TES
   afterAll(() => {
     hookServer.clearNodeAuthSecretForTests()
     hookServer.stop()
-    if (dir) rmSync(dir, { recursive: true, force: true })
+    if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   beforeEach(() => {
@@ -863,7 +863,7 @@ describe('buildManagedScript generated shell is syntactically valid', { timeout:
   const shAvailable = sh.status === 0 && !sh.error
   const dir = shAvailable ? mkdtempSync(join(tmpdir(), 'nt-managed-script-')) : ''
   afterAll(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true })
+    if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
   for (const agentId of ['claude', 'codex', 'gemini']) {
     it.skipIf(!shAvailable)(`passes \`sh -n\` for ${agentId}`, () => {

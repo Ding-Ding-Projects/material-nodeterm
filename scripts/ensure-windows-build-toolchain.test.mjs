@@ -56,7 +56,7 @@ describeWindows('Windows C++ build-toolchain bootstrap', () => {
   })
 
   afterEach(() => {
-    if (root) rmSync(root, { recursive: true, force: true })
+    if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   function instanceJson() {
@@ -380,7 +380,7 @@ describeWindows('Windows C++ build-toolchain bootstrap', () => {
   it('uses a pinned Microsoft bootstrapper from protected staging on a fresh machine', () => {
     rmSync(vswhere, { force: true })
     rmSync(setup, { force: true })
-    rmSync(installationPath, { recursive: true, force: true })
+    rmSync(installationPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     const output = quietReporter()
     const invocations = []
     let stagedBootstrapper = ''
@@ -447,7 +447,7 @@ describeWindows('Windows C++ build-toolchain bootstrap', () => {
   it('rejects and removes a fresh-machine bootstrapper whose SHA-256 does not match', () => {
     rmSync(vswhere, { force: true })
     rmSync(setup, { force: true })
-    rmSync(installationPath, { recursive: true, force: true })
+    rmSync(installationPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     const output = quietReporter()
     let stagedBootstrapper = ''
     const windowsDirectory = join(root, 'Windows !')

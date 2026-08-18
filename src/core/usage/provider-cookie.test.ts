@@ -19,7 +19,7 @@ describe('provider cookie atomic write', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     resetPlatformForTests()
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const tmpsLeft = async (): Promise<string[]> =>

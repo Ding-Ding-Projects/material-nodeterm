@@ -28,7 +28,7 @@ describe('Desktop + Server scheduled-settings runtime startup', () => {
     await runtime?.stop()
     vi.restoreAllMocks()
     resetPlatformForTests()
-    await fsPromises.rm(userData, { recursive: true, force: true })
+    await fsPromises.rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it.each(['EACCES', 'EIO'] as const)('keeps shell boot alive and publishes a distinct %s read failure', (code) => {

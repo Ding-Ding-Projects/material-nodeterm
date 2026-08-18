@@ -34,7 +34,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await new Promise((r) => server.close(r))
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 /** Drive the real login route until the account locks, exactly as a person would. */

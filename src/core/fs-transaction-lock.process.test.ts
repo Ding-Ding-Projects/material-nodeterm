@@ -172,7 +172,7 @@ afterAll(async () => {
   const resolvedSuite = path.resolve(suiteDir)
   const resolvedSystemTemp = path.resolve(os.tmpdir())
   if (resolvedSuite.startsWith(`${resolvedSystemTemp}${path.sep}`)) {
-    await fs.rm(resolvedSuite, { recursive: true, force: true })
+    await fs.rm(resolvedSuite, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   }
 })
 

@@ -80,7 +80,7 @@ describe('workflow shell steps parse', () => {
     } catch (err) {
       throw new Error(`shell syntax error:\n${err.stderr || err.message}`)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 })

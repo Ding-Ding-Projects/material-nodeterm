@@ -17,7 +17,7 @@ async function sock(): Promise<string> {
 }
 
 afterEach(async () => {
-  if (tmp) await fs.rm(tmp, { recursive: true, force: true }).catch(() => {})
+  if (tmp) await fs.rm(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }).catch(() => {})
   tmp = undefined
 })
 

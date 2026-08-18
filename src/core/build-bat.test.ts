@@ -235,7 +235,7 @@ describeWindows('fresh-machine Windows batch entry points', () => {
   })
 
   afterEach(() => {
-    if (root) rmSync(root, { recursive: true, force: true })
+    if (root) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   function run(script: string, extraEnv: NodeJS.ProcessEnv = {}) {

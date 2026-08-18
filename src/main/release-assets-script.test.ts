@@ -164,9 +164,9 @@ describe('release-assets helper CLI', () => {
   })
 
   afterEach(() => {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     rmSync(output, { force: true })
-    rmSync(`${root}-junction-target`, { recursive: true, force: true })
+    rmSync(`${root}-junction-target`, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   function collect(version = '0.4.0', packageId = 'node-terminal', productName = 'nodeterm') {

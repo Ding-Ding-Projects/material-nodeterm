@@ -42,8 +42,12 @@ describe('startServer: managed hook install is opt-out-able', () => {
   afterEach(async () => {
     await close?.()
     close = undefined
-    fs.rmSync(dataDir, { recursive: true, force: true })
-    fs.rmSync(testHome, { recursive: true, force: true })
+    // Windows releases handles asynchronously and the real-time scanner opens files it has just
+    // seen written, so a directory can refuse to delete for a moment after everything using it
+    // has closed. rmSync retries EPERM/EBUSY/ENOTEMPTY when asked; without that this cleanup
+    // fails the test it is only tidying up after.
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    fs.rmSync(testHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const boot = (installHooks?: boolean) =>

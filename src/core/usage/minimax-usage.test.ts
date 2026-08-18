@@ -158,7 +158,7 @@ describe('minimax cookie storage', () => {
 
   afterEach(() => {
     resetPlatformForTests()
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('round-trips a cookie', async () => {

@@ -652,3 +652,35 @@ inflating it further would only hide the next genuine hang. The right responses 
 suite when the machine is quiet, and — when a suite must run during a busy session — to re-run any
 timeout-shaped failure in isolation before attributing it to anything. A verdict from a contended
 run is a verdict about the machine, not about the code.
+
+## Open: `src/server/handlers/index.test.ts` is a real flake, and retries are not the answer
+
+Measured on 2026-08-18, in isolation on a quiet machine: the file as it stands in git fails **2 of
+3 runs** with `EPERM` on `fs.rmSync(repo, …)`. Adding retries does not help — 30 attempts over 3
+seconds fail identically. So the directory is not merely slow to release; something still owns it.
+
+The likely owner is visible in the test's own setup. `repo` is BOTH the git repository under test
+and the platform's `userDataDir`, four of the ten tests construct a SECOND `ServerPlatform` against
+that same directory, and `resetPlatformForTests()` is three lines that null a reference and dispose
+nothing. Whatever those platforms opened inside the directory — a watcher, a database handle, a
+timer — is still open when `afterEach` deletes it, and Windows refuses to remove a directory with a
+live handle in it.
+
+**Not fixed here.** The honest fix is a disposal path on the platform, which is production code and
+touches every shell; guessing at it at the end of a long session is how a test flake becomes a
+runtime regression. The cleanup is left at the ordinary retry budget rather than inflated, because
+a longer wait demonstrably buys nothing and would only slow every run on the way to the same
+failure.
+
+It is NOT caused by the retry sweep in the same commit: the pristine file fails the same way, which
+is why the measurement above was taken against `git checkout`-clean source rather than against the
+edited file.
+
+## Open: the suite leaks temp directories
+
+After four full runs, `%TEMP%` held **352** `nt-*` directories. Each is a repository, a data dir or
+a session-host fixture that a test created and did not remove — sometimes because cleanup threw
+(see above), sometimes because nothing ever tried. It is not breaking anything today, and it is
+worth knowing before somebody debugs a "disk filling up" report: a crowded temp directory also
+gives the real-time scanner more to walk, which is one of the things that makes the cleanup races
+above more likely the longer a machine goes between reboots.

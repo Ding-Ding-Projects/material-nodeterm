@@ -69,7 +69,7 @@ describe('BoardLogStore (local fs)', () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-log-'))
   })
   afterEach(() => {
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('append writes to <cwd>/.nodeterm/board-log.jsonl and read returns newest-first', async () => {

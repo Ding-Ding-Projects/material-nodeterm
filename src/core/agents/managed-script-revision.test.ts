@@ -77,7 +77,7 @@ describe('the hook server can now tell a stale script from a missing token', () 
     hookServer.clearNodeAuthSecretForTests()
     hookServer.setListener(() => {})
     hookServer.stop()
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   beforeEach(() => {

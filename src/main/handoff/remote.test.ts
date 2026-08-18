@@ -123,6 +123,6 @@ describe('buildHandoff — remote (SSH project) source', () => {
     // never consulted the remote deps.
     expect(res).toEqual({ error: "Couldn't find the source conversation transcript." })
     expect(writes).toHaveLength(0)
-    await fs.rm(dir, { recursive: true, force: true })
+    await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 })

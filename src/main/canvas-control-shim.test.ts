@@ -36,7 +36,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   hookServer.stop()
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 /** Invoke the shim the way an agent does, with the env a nodeterm-spawned session carries. */

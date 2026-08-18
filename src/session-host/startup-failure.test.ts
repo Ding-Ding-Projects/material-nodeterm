@@ -129,7 +129,7 @@ async function buildAndStartHost(
 
 const cleanupPaths: string[] = []
 afterEach(() => {
-  for (const target of cleanupPaths.splice(0)) rmSync(target, { recursive: true, force: true })
+  for (const target of cleanupPaths.splice(0)) rmSync(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('session-host startup publication failure', () => {

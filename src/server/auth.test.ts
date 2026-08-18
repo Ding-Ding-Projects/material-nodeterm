@@ -19,7 +19,7 @@ import { DIM_SUM_NAMES } from '../shared/dimsum-names'
 
 let dir: string
 beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-auth-')) })
-afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); vi.useRealTimers() })
+afterEach(() => { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }); vi.useRealTimers() })
 
 describe('Auth', () => {
   it('refuses short passwords from non-HTTP callers', () => {
