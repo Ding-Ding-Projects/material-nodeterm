@@ -61,22 +61,62 @@ describe('terminateWindowsProcessTree', () => {
     WINDOWS_PROCESS_TREE_TERMINATION_TIMEOUT_MS + 20_000
   )
 
-  // WHAT THIS FILE DOES NOT PROVE, said plainly rather than left to look covered.
-  //
-  // The source claims "success is acknowledged only after the root PID is also observed absent",
-  // implemented as a poll loop after taskkill returns. The test above was written believing it
-  // guarded that. It does not: neutering the loop to `while (false)` leaves all four tests green,
-  // because `taskkill /F` on a plain child is already finished by the time the promise settles, so
-  // the process is absent whether or not anything waited for it.
-  //
-  // The loop only earns its keep in the race where taskkill returns before the kernel has reaped
-  // the tree, and that race cannot be forced from outside the helper — which is why it is recorded
-  // here instead of being covered by a test that would pass either way. Proving it needs
-  // `processExists` injectable, a production change made for testability alone; that is a
-  // deliberate trade, not an oversight. What IS covered is every path reachable without the race:
-  // the platform refusal, the pid guards, a real silent process actually dying, and the refusal to
-  // convert a taskkill failure into success.
+  it.skipIf(process.platform !== 'win32')(
+    'does not report success until the pid is actually observed absent',
+    async () => {
+      // The claim the source makes, now actually held to it. The injected probe reports the
+      // process alive for the first few polls and only then absent, which is the race the loop
+      // exists for and which cannot be produced by killing a real child — taskkill /F has already
+      // finished by the time the promise would settle.
+      const child = spawn('cmd.exe', ['/c', 'ping', '-n', '30', '127.0.0.1'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      })
+      const pid = child.pid as number
+      let polls = 0
+      const laggingProbe = (): boolean => {
+        polls += 1
+        return polls <= 4
+      }
 
+      const started = Date.now()
+      await terminateWindowsProcessTree(pid, laggingProbe)
+      const waited = Date.now() - started
+
+      // It polled until the probe said absent, rather than resolving on taskkill's return.
+      expect(polls).toBeGreaterThan(4)
+      // Four extra polls at the 25 ms cadence cannot have taken no time at all.
+      expect(waited).toBeGreaterThanOrEqual(80)
+    },
+    WINDOWS_PROCESS_TREE_TERMINATION_TIMEOUT_MS + 20_000
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'rejects when the tree never goes away, rather than acknowledging a kill it cannot prove',
+    async () => {
+      // A timeout is always rejection — the other half of the same sentence in the source.
+      const child = spawn('cmd.exe', ['/c', 'ping', '-n', '30', '127.0.0.1'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      })
+      const pid = child.pid as number
+      try {
+        await expect(terminateWindowsProcessTree(pid, () => true)).rejects.toThrow(
+          /is still alive after/
+        )
+      } finally {
+        child.kill()
+      }
+    },
+    WINDOWS_PROCESS_TREE_TERMINATION_TIMEOUT_MS + 30_000
+  )
+
+  // The absence poll is now genuinely guarded: neutering the loop to `while (false)` turns the two
+  // tests above red. It was not, before the `isAlive` seam existed — a test written against a real
+  // child passed either way, because `taskkill /F` has already finished by the time the promise
+  // settles. That is the whole reason the seam is there, and why it was worth a production
+  // parameter that production never passes: without it, this file could only ever have documented
+  // the gap instead of closing it.
   it.skipIf(process.platform !== 'win32')(
     'rejects for a pid that does not exist rather than reporting a kill it never made',
     async () => {
