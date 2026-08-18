@@ -458,13 +458,19 @@ describe('control-mode shadow clients for released sessions', () => {
     await m.shadowAttach('node-1')
 
     const NOW = 1_000_000
-    const OLD = NOW - 100_000 // well past the 6h grace window
+    // 27.8 h — past the grace window, which now defaults to a DAY (NODETERM_SESSION_GRACE_HOURS,
+    // 24) rather than the 6 h that was safe while attachment was also required.
+    const OLD = NOW - 100_000
     const listings: Record<string, string> = {
-      // `nt-node-1` reads as attached because our shadow IS a real tmux client; `nt-node-9` is a
-      // genuinely attached session (somebody is looking at it) and must survive.
+      // Both are attached and both are idle past grace, so both are eligible: planReap filters on
+      // the `nt-` prefix and activity age ONLY — it never reads `clients`. This used to assert that
+      // `nt-node-9` survived because somebody was looking at it; that protection was deliberately
+      // removed (see the session-budget header: 54 of 54 sessions on a real host reported attached,
+      // so the reaper had never once fired). Activity staleness now carries the guard alone.
       'node-terminal': `nt-node-1|1|${OLD}\nnt-node-9|1|${OLD}`,
-      // The SAME NAME on the SSH-remote socket, attached for real. Shadows only ever live on the
-      // local socket, so the exclusion must not follow the name across sockets.
+      // The SAME NAME on the SSH-remote socket. Shadows only ever live on the local socket, so the
+      // shadow bookkeeping must not follow a name across sockets — still true, and still asserted
+      // below by the kill list naming the socket each target was reaped on.
       'nodeterm-rmt': `nt-node-1|1|${OLD}`
     }
     const killed: Array<{ socket: string; target: string }> = []
@@ -484,16 +490,28 @@ describe('control-mode shadow clients for released sessions', () => {
       nowSec: () => NOW
     })
 
-    expect(await reaper.sweep()).toBe(1)
-    expect(killed).toEqual([{ socket: 'node-terminal', target: '=nt-node-1' }])
+    expect(await reaper.sweep()).toBe(3)
+    // Every idle session on every swept socket, each killed on the socket it was observed on.
+    expect(killed).toEqual([
+      { socket: 'node-terminal', target: '=nt-node-1' },
+      { socket: 'node-terminal', target: '=nt-node-9' },
+      { socket: 'nodeterm-rmt', target: '=nt-node-1' }
+    ])
   })
 
-  it('leaves a session somebody is really watching alone — the attached flag is a client COUNT', async () => {
-    // `#{session_attached}` counts clients. Subtracting our shadow by forcing the flag to false
-    // would report a session that has our shadow PLUS a real client — the user's own
-    // `tmux -L node-terminal attach`, or a second nodeterm process on the same socket — as
-    // detached, and the budget would then kill a session out from under a live user, inverting its
-    // one hard rule in the state-destroying direction. The shadow comes off the COUNT.
+  it('spares a session that woke up between planning and killing — the re-verify is on ACTIVITY', async () => {
+    // This test used to assert that a session somebody is watching is never reaped, and that the
+    // shadow comes off the CLIENT COUNT so a session holding our shadow PLUS a real client is not
+    // mistaken for detached. The first half is simply no longer true: planReap filters on the
+    // `nt-` prefix and activity age, and never reads `clients` at all (session-budget header —
+    // 54 of 54 sessions on a real host reported attached, so requiring detachment made the reaper
+    // a structural no-op). The second half survives in the code but is UNOBSERVABLE from here:
+    // the normalization happens inside listSocket and feeds a decision that ignores it, so
+    // asserting it through sweep() would be theatre. It is not asserted rather than faked.
+    //
+    // What IS still a real guard, and what this test now covers, is the kill-time re-verify: a
+    // sweep can take seconds across sockets, so the plan is re-checked against a fresh listing and
+    // only sessions STILL past grace die. It re-checks the same signal that made them eligible.
     const { createSessionReaper } = await import('./session-budget')
     const m = await tmuxManager()
     const a = await create(ALICE, 'node-1')
@@ -504,7 +522,7 @@ describe('control-mode shadow clients for released sessions', () => {
     await m.shadowAttach('node-2')
 
     const NOW = 1_000_000
-    const OLD = NOW - 100_000
+    const OLD = NOW - 100_000 // past the 24 h grace
     const killed: string[] = []
     let listings = 0
     const reaper = createSessionReaper({
@@ -516,19 +534,18 @@ describe('control-mode shadow clients for released sessions', () => {
           killed.push(args[args.indexOf('-t') + 1])
           return ''
         }
-        // nt-node-1 carries the user's own client the whole time (2 = theirs + ours), so the PLAN
-        // must never name it. nt-node-2 is shadow-only when the plan is made and gains a real
-        // client before the kill — precisely what the kill-time re-verify exists for.
-        const nodeTwo = listings++ === 0 ? 1 : 2
-        return `nt-node-1|2|${OLD}\nnt-node-2|${nodeTwo}|${OLD}`
+        // Both look idle when the plan is made. On the RE-VERIFY listing, nt-node-2 has just been
+        // typed into — its activity jumps to now — so it must be spared even though it was planned.
+        const nodeTwoActivity = listings++ === 0 ? OLD : NOW
+        return `nt-node-1|1|${OLD}\nnt-node-2|1|${nodeTwoActivity}`
       },
       readMem: () => ({ availableMb: 100, totalMb: 8000 }), // under the watermark: real pressure
       env: {},
       nowSec: () => NOW
     })
 
-    expect(await reaper.sweep()).toBe(0)
-    expect(killed).toEqual([])
+    expect(await reaper.sweep()).toBe(1)
+    expect(killed).toEqual(['=nt-node-1'])
   })
 
   it('refuses a released REMOTE node — its tmux lives on the far host, not on our socket', async () => {
