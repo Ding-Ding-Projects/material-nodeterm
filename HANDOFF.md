@@ -513,13 +513,20 @@ Teardown no longer decides the verdict: the retry stays bounded and short, and e
 logs a warning naming the directory instead of turning "a temp directory outlived the run" into
 "shutdown ordering is broken". Eight consecutive runs pass.
 
-**Answered.**  brings up SchoolModeStore and KidsModeStore, both of which own an
- DIRECTORY handle and both of which ship a purpose-built  that closes it.
- disposed nine things and neither of them; a repo-wide search found no non-test caller of
+**Answered.** `startServer` brings up SchoolModeStore and KidsModeStore, both of which own an
+`fs.watch` DIRECTORY handle and both of which ship a purpose-built `dispose()` that closes it.
+`close()` disposed nine things and neither of them; a repo-wide search found no non-test caller of
 either. Every shutdown leaked two watcher handles, and an open directory handle is exactly what
-makes Windows answer EPERM on the DIRECTORY rather than a file inside it.
+makes Windows answer `EPERM` on the DIRECTORY rather than a file inside it.
 
-Fixed by disposing both in . The teardown warning fired roughly one run in five before,
-and **0 times in 18 consecutive runs** after — at that prior rate, 18 clean runs by chance is about
-1.8%, so this is strong evidence rather than proof. The desktop is materially different and was not
-changed: it holds the stores for the process lifetime and the process exits.
+Fixed by disposing both in `close()`. The teardown warning fired roughly one run in five before, and
+**0 times in 18 consecutive runs** after — at that prior rate, 18 clean runs by chance is about
+1.8%, so this is strong evidence rather than proof, and the teardown warning stays in place so a
+recurrence is visible rather than silent. The desktop is materially different and was not changed:
+it holds the stores for the process lifetime and the process exits.
+
+One process note, since it cost a mangled commit: the paragraph above was first written through a
+double-quoted `node -e`, and bash command-substituted every backticked identifier out of it before
+node ever saw the string — `startServer`, `fs.watch`, `dispose()` and `close()` all vanished, and
+the result was committed and pushed in that state. CLAUDE.md already warns about backticks in a
+double-quoted `node -e`; the reliable route is a quoted heredoc into a file, then read the file.
