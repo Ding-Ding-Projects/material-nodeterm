@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { NODE_COLORS } from '../state/workspace'
 import { useMenuFlip } from '../ui/useMenuFlip'
+import { fitFlyout, type FlyoutFit } from '../ui/flyoutFit'
 import { useMenuFilter, type MenuFilterItem } from './menu/useMenuFilter'
 import { FilterableMenuHeader } from './menu/FilterableMenu'
 import { isFilterableMenu, menuRowVisibility } from './menu/menuVisibility'
@@ -115,6 +116,42 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
   const [openSub, setOpenSub] = useState<number | null>(null)
   const menuId = useId()
   const keyboardOpenedSub = useRef<number | null>(null)
+
+  // The parent menu has flipped away from the viewport edges for a long time; the FLYOUT never
+  // did. `.ctx-submenu` is `position: absolute` off its row, so a list long enough — the Windows
+  // profile submenu grows with every installed shell and WSL distribution — simply ran off the
+  // bottom of the screen with its last entries unreachable. Measured after mount but before paint
+  // so the correction is never a visible jump, and re-measured on resize because the flyout is
+  // built from an async profile probe and GROWS while it is open.
+  const flyoutRef = useRef<HTMLDivElement>(null)
+  const [flyoutFit, setFlyoutFit] = useState<FlyoutFit>({ shiftY: 0, flipX: false })
+  useLayoutEffect(() => {
+    if (openSub == null) {
+      // Reset when it closes, or the next flyout opens wearing the last one's correction.
+      setFlyoutFit((cur) => (cur.shiftY === 0 && !cur.flipX ? cur : { shiftY: 0, flipX: false }))
+      return
+    }
+    const el = flyoutRef.current
+    const host = el?.parentElement
+    if (!el || !host) return
+    const measure = (): void => {
+      // Measure the UNCORRECTED box: reading a rect we have already shifted would fold the
+      // previous correction into the next one and walk the flyout up the screen a frame at a time.
+      const raw = el.getBoundingClientRect()
+      const next = fitFlyout(
+        { top: raw.top + flyoutFit.shiftY, left: raw.left, width: raw.width, height: raw.height },
+        host.getBoundingClientRect(),
+        { width: window.innerWidth, height: window.innerHeight },
+      )
+      // Identity-guarded, exactly like useMenuFlip: an unguarded set here is an infinite loop,
+      // because applying the correction resizes the element and re-fires the observer.
+      setFlyoutFit((cur) => (cur.shiftY === next.shiftY && cur.flipX === next.flipX ? cur : next))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [openSub, flyoutFit.shiftY])
 
   // A keyboard-opened flyout must move focus into the flyout after React has mounted it.
   // Disabled menu items remain focusable by design, so the first row is a valid target even
@@ -261,10 +298,12 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                 </button>
                 {openSub === i && (
                   <div
+                    ref={flyoutRef}
                     id={submenuId}
                     role="menu"
                     aria-labelledby={triggerId}
-                    className="ctx-menu ctx-submenu"
+                    className={`ctx-menu ctx-submenu${flyoutFit.flipX ? ' ctx-submenu--left' : ''}`}
+                    style={flyoutFit.shiftY ? { marginTop: -flyoutFit.shiftY } : undefined}
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(event) => {
                       if (event.key !== 'ArrowLeft' && event.key !== 'Escape') return

@@ -3050,6 +3050,13 @@ body,
   width: max-content;
   max-width: 320px;
 }
+/* Opened on the row's LEFT because the right side ran out of screen — see fitFlyout. `left: auto`
+   is required: the base rule's `left` would otherwise keep winning and both edges would be set,
+   which stretches the flyout across the whole gap instead of moving it. */
+.ctx-submenu--left {
+  left: auto;
+  right: calc(100% - 4px);
+}
 .ctx-submenu .ctx-item {
   /* Keep the label and its default ✓ on one line (labels ellipsize past max-width). */
   white-space: nowrap;
