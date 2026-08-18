@@ -503,6 +503,22 @@ class HookServer {
         const reqUrl = new URL(req.url ?? '/', 'http://127.0.0.1')
         // The body guard protects only the receive phase. Identity routes may cold-start a shared
         // Codex app-server, so give their handler the same bounded ceiling as control/context-link.
+        //
+        // This line is why `/codex-thread/start` survives a COLD app-server. Minting a thread is a
+        // five-step conversation (initialize, start, a turn, an interrupt, a fork, a delete) and the
+        // first codex node after boot is the common case, not the edge one. At the 2 s receive guard
+        // it would fail every time, and in the worst way: curl gives up, the launcher falls back to
+        // plain codex, and main goes on to create the thread and write a record for it — an orphan
+        // thread plus an orphan record per attempt. The client budget is deliberately set ABOVE the
+        // server's own so the server is always the one that gives up first and can clean up.
+        //
+        // That reasoning used to live on a `handleCodexThread` method which the codex-112
+        // integration merge orphaned: it kept the six inline pathname handlers from one lineage and
+        // the method from the other, dropping the only call site. It was 110 lines that never ran,
+        // and it covered only {start,bind,fallback} — wiring it would have DELETED the observed,
+        // authorize, expose and catalog verbs. Removed rather than revived; its two real concerns
+        // are both live — this ceiling, and the kid.mac gate every verb now takes through
+        // `nodeTokenVerified`.
         req.setTimeout(CONTROL_CEILING_MS, () => req.destroy())
         // THE TUNNEL PROBE. `RemoteHooks.verifyTunnel` curls this through the reverse socket and
         // requires exactly 204 before it will write the remote endpoint file or install a single
@@ -536,7 +552,7 @@ class HookServer {
             res.end()
             return
           }
-          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+          if (!this.nodeTokenVerified(nodeId, req.headers['x-nodeterm-node-token'])) {
             res.writeHead(403)
             res.end()
             return
@@ -576,7 +592,7 @@ class HookServer {
             res.end()
             return
           }
-          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+          if (!this.nodeTokenVerified(nodeId, req.headers['x-nodeterm-node-token'])) {
             res.writeHead(403)
             res.end()
             return
@@ -614,7 +630,7 @@ class HookServer {
             res.end()
             return
           }
-          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+          if (!this.nodeTokenVerified(nodeId, req.headers['x-nodeterm-node-token'])) {
             res.writeHead(403)
             res.end()
             return
@@ -650,7 +666,7 @@ class HookServer {
             res.end()
             return
           }
-          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+          if (!this.nodeTokenVerified(nodeId, req.headers['x-nodeterm-node-token'])) {
             res.writeHead(403)
             res.end()
             return
@@ -684,7 +700,7 @@ class HookServer {
             res.end()
             return
           }
-          if (!this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])) {
+          if (!this.nodeTokenVerified(nodeId, req.headers['x-nodeterm-node-token'])) {
             res.writeHead(403)
             res.end()
             return
@@ -708,7 +724,7 @@ class HookServer {
           const nodeId = String(req.headers['x-nodeterm-node-id'] ?? '')
           if (
             !isSafeNodeId(nodeId) ||
-            !this.codexNodeTokenMatches(nodeId, req.headers['x-nodeterm-node-token'])
+            !this.nodeTokenVerified(nodeId, req.headers['x-nodeterm-node-token'])
           ) {
             res.writeHead(403)
             res.end()
@@ -1033,134 +1049,8 @@ class HookServer {
     }
   }
 
-  /**
-   * `/codex-thread/{start,bind,fallback}`.
-   *
-   * start/bind are the identity spine and require the per-node capability on top of the shared
-   * bearer. `fallback` deliberately does NOT: it is the launcher telling us it gave up and is
-   * running plain codex, it grants nothing, and requiring a token there would silence the report
-   * in exactly the case (no token) it exists to surface.
-   */
-  private async handleCodexThread(
-    pathname: string,
-    req: IncomingMessage,
-    res: ServerResponse
-  ): Promise<void> {
-    const verb = pathname.replace(/^\/codex-thread\//, '')
-    const form = parseForm(await readBody(req))
-    // SAME HAND-OFF as /control/ and /context-link/, and for the same reason — this route needs it
-    // MOST. The receive phase is over, so the 2s slowloris guard has done its job; leaving it armed
-    // destroys the socket while the HANDLER is still working. `/codex-thread/start` mints a thread
-    // through a five-step conversation with the app-server (initialize, start, a turn, an
-    // interrupt, a fork, a delete) against a server that is typically COLD — the first codex node
-    // after boot is the common case, not the edge one. At 2s that fails every time, and it fails in
-    // the worst possible way: curl gives up, the launcher falls back to plain codex, and main goes
-    // on to create the thread and write a record for it — an orphan thread plus an orphan record
-    // per attempt. The client budget is deliberately set ABOVE the server's own (see
-    // CODEX_THREAD_START_TIMEOUT_MS / the launcher's --max-time) so the server is always the one
-    // that gives up first and can clean up after itself.
-    req.setTimeout(CONTROL_CEILING_MS, () => req.destroy())
-    const nodeId = form.nodeId ?? ''
-    // `isSafeNodeId`, not a local regex: the same predicate the token derivation and the token
-    // FILE path use, so an id one of them would refuse can never reach the other two.
-    if (!isSafeNodeId(nodeId)) {
-      res.writeHead(400)
-      res.end()
-      return
-    }
-    if (verb === 'fallback') {
-      // This is the ONE route that may be called without the per-node capability, because the
-      // commonest thing it reports is "there was no capability to present" — requiring one would
-      // silence it in exactly the case it exists for. So only `forged` is refused here, the same
-      // rule /hook/* follows and the one the per-route table documents.
-      //
-      // It used to refuse anything that was not `verified`, which caught the CROSS-INSTANCE
-      // FAILOVER: another instance's token is `legacy`, and invariant 3 says a foreign kid is
-      // never refused anywhere. That check also bought nothing it was meant to buy — a hostile
-      // sibling wanting to flag another node as fallen back simply omits the header, which was
-      // always accepted — so it only ever silenced a legitimate report.
-      if (verifyNodeToken(this.nodeAuthSecretOrNull(), nodeId, req.headers['x-nodeterm-node-token']) === 'forged') {
-        res.writeHead(403)
-        res.end()
-        return
-      }
-      // A reason is free text from a generated script we wrote; bound it and let the UI show it.
-      const reason = (form.reason ?? '').slice(0, 64).replace(/[^A-Za-z0-9._-]/g, '') || 'unknown'
-      this.codexIdentityListener?.({ nodeId, mode: 'plain', reason })
-      res.writeHead(204)
-      res.end()
-      return
-    }
-    if (verb !== 'start' && verb !== 'bind') {
-      res.writeHead(404)
-      res.end()
-      return
-    }
-    if (!this.nodeTokenVerified(nodeId, req.headers['x-nodeterm-node-token'])) {
-      res.writeHead(403)
-      res.end()
-      return
-    }
-    if (verb === 'start') {
-      const cwd = form.cwd ?? ''
-      if (!path.isAbsolute(cwd)) {
-        res.writeHead(400)
-        res.end()
-        return
-      }
-      try {
-        if (!this.codexThreadStartHandler) throw new Error('start handler unavailable')
-        const threadId = await this.codexThreadStartHandler({
-          nodeId,
-          cwd,
-          hookEndpoint: this.endpointFilePath()
-        })
-        // Same predicate the record store gates on, so a thread id the store would refuse can
-        // never be handed back to a launcher that will then `resume` it.
-        if (!isSafeThreadId(threadId)) throw new Error('invalid thread id')
-        this.codexIdentityListener?.({ nodeId, mode: 'shared' })
-        res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
-        res.end(`${threadId}\n`)
-      } catch {
-        res.writeHead(503)
-        res.end()
-      }
-      return
-    }
-    const threadId = form.threadId ?? ''
-    // `isSafeThreadId`, not a local regex — the twin of the `isSafeNodeId` gate above and for the
-    // same reason. This id is caller-supplied and becomes a PATH SEGMENT under the record store;
-    // the bare charset the route used to carry accepts `.` and `..`.
-    if (!isSafeThreadId(threadId)) {
-      res.writeHead(400)
-      res.end()
-      return
-    }
-    try {
-      if (!this.codexThreadBindHandler) throw new Error('bind handler unavailable')
-      await this.codexThreadBindHandler({
-        nodeId,
-        threadId,
-        hookEndpoint: this.endpointFilePath()
-      })
-      this.codexIdentityListener?.({ nodeId, mode: 'shared' })
-      res.writeHead(204)
-      res.end()
-    } catch {
-      res.writeHead(409)
-      res.end()
-    }
-  }
 
-  private codexNodeTokenMatches(nodeId: string, provided: string | string[] | undefined): boolean {
-    // Verify through the one canonical verifier rather than a hand-rolled compare, so this gate
-    // cannot drift from the minting side again. STRICT on purpose: these routes are a capability,
-    // not the fail-open identity LABEL, so only 'verified' passes — 'legacy' (no secret, foreign
-    // kid, or not our wire shape) and 'forged' are both refused. That is no stricter in practice
-    // than what shipped, which refused everything.
-    return verifyNodeToken(this.nodeAuthSecret, nodeId, provided) === 'verified'
-  }
-  // The managed script sources this file at invocation to get the LIVE port/token.
+    // The managed script sources this file at invocation to get the LIVE port/token.
   // tmux sessions outlive the app, so env-baked coords go stale after a restart.
   private writeEndpointFile(): void {
     try {

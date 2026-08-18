@@ -19,7 +19,7 @@ import { createHash } from 'crypto'
 import { readFileSync } from 'fs'
 import { WebSocket } from 'ws'
 // Minting a thread is a multi-step conversation with a typically COLD server, so it needs a real
-// budget — and the hook route serving it must raise its socket guard to match (handleCodexThread).
+// budget — and the hook route serving it must raise its socket guard to match (CONTROL_CEILING_MS in hook-server).
 // Shared with the launcher's client budget so the two cannot drift apart.
 // `isSafeThreadId` comes from the same module, and deliberately: this file used to keep its own
 // copy of the bare charset, which accepted `.` and `..` — harmless over the RPC wire here, but the

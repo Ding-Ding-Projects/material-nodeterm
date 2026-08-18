@@ -84,22 +84,22 @@ describe('/codex-thread/bind refuses a path-unsafe thread id', () => {
     // `nodeAuthToken()` (kid.mac, ./node-auth-token.ts) is "one derivation shared with /hook/*"
     // per codex-identity-proxy.ts's own launcher-script comment, which explicitly says the wire
     // shape a real client presents to /codex-thread/{start,bind} IS kid.mac and that anything else
-    // "rejects every token this app mints". hook-server.ts even has a purpose-built, fully
-    // documented `nodeTokenVerified()` (kid.mac via `verifyNodeToken`) plus a `handleCodexThread`
-    // handler whose doc comment says "start/bind are the identity spine" — but `handleCodexThread`
-    // is never called from anywhere (verified: it has no call site in the file), so the reachable
-    // inline `/codex-thread/bind` handler still gates on the OLDER, separate `codexNodeTokenMatches`
-    // / `codexNodeAuthToken` (bare HMAC, no dot) instead. That is a REAL, currently-shipping
-    // product bug — every genuine client token (kid.mac, exactly what `bind()` above sends) gets
-    // 403'd by every one of `/codex-thread/{start,bind,observed,authorize,expose,catalog}`, and
-    // only a token minted via the dead-end bare-HMAC scheme is accepted. Confirmed empirically:
-    // POSTing with `hookServer.codexNodeAuthToken(NODE)` in the header reaches the bind handler
-    // (409, no handler wired in an ad hoc probe) while `nodeAuthToken(SECRET, NODE)` — this test's
-    // own header, and the only thing a real launcher ever sends — gets 403.
-    // Left asserting the correct contract rather than the current wrong behavior: weakening this
-    // to match the bug would hide it. The fix belongs in src/core/agents/hook-server.ts (route the
-    // six `/codex-thread/*` pathname blocks through `nodeTokenVerified`/`handleCodexThread` instead
-    // of `codexNodeTokenMatches`), which is out of this lane's assigned files.
+    // "rejects every token this app mints".
+    //
+    // This assertion was red for a real reason and was deliberately left asserting the CORRECT
+    // contract rather than the shipped behaviour, because weakening it would have hidden the bug.
+    // What it found: the six inline `/codex-thread/*` handlers gated on a separate bare-HMAC
+    // derivation with no kid, so every genuine client token was 403'd and only a token minted by a
+    // scheme nothing in the codebase produced was accepted. The gate is now the single canonical
+    // `nodeTokenVerified()` (verifyNodeToken === 'verified') at all six, and the duplicate
+    // derivation is gone.
+    //
+    // The `handleCodexThread` method this once pointed at is gone too. The codex-112 integration
+    // merge kept the inline handlers from one lineage and that method from the other, orphaning its
+    // only call site — 110 lines that never ran, covering only {start,bind,fallback}, so wiring it
+    // would have deleted the observed/authorize/expose/catalog verbs. Its two real concerns are
+    // live: the socket ceiling (CONTROL_CEILING_MS, raised unconditionally before dispatch) and
+    // this gate.
     const res = await bind('0199b4b7-8d4e-7a4e-9a2f-3c9d0f1a2b3c')
     expect(res.status).toBe(204)
     expect(bound).toEqual([{ nodeId: NODE, threadId: '0199b4b7-8d4e-7a4e-9a2f-3c9d0f1a2b3c' }])

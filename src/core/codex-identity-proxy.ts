@@ -714,7 +714,7 @@ nt_preflight() {
 # Best effort, and never fatal: tell the desktop this node is running plain codex, so the UI can
 # say so without the user reading a log. Sent WITHOUT the per-node capability on purpose — the
 # commonest thing it reports is that there was no capability to present. The server only trusts a
-# TOKENLESS report on the node it names (see handleCodexThread), so a session that does hold a
+# TOKENLESS report on the node it names (see the /codex-thread/fallback handler), so a session that does hold a
 # token cannot use this route to flag a sibling.
 nt_report_fallback() {
   [ -n "\${NODETERM_HOOK_PORT-}" ] || return 0
