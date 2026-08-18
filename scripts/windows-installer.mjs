@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { createReadStream } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -351,13 +351,79 @@ function runGit(root, args, encoding = 'utf8') {
   return encoding ? result.stdout.trim() : Buffer.from(result.stdout)
 }
 
-export function requireCleanSourceStatus(status) {
+/** Paths the release version bump is allowed to touch — and nothing else. See below. */
+const VERSION_BUMP_PATHS = new Set(['package.json', 'package-lock.json'])
+
+/**
+ * The paths `git status --porcelain=v1` reports as changed, or null when the tree is clean.
+ *
+ * Parses the porcelain v1 shape rather than eyeballing the text: an entry is `XY <path>`, and a
+ * rename is `XY <old> -> <new>`, where the NEW path is the one that matters here.
+ */
+export function changedSourcePaths(status) {
   if (typeof status !== 'string') fail('git source status must be text')
-  if (status.trim() !== '') fail('refusing to package a dirty source tree; commit every tracked and untracked source first')
+  const lines = status.split(/\r?\n/).map((line) => line.trimEnd()).filter(Boolean)
+  if (!lines.length) return null
+  return lines.map((line) => {
+    const path = line.slice(3)
+    const renamed = path.split(' -> ')
+    return (renamed.length > 1 ? renamed[renamed.length - 1] : path).replace(/^"|"$/g, '')
+  })
+}
+
+/**
+ * True when two package manifests differ ONLY in `version`.
+ *
+ * The release workflow computes the version itself and writes it to the WORKING TREE without
+ * committing (committing would be a push to main, which would retrigger the release — see the
+ * header of .github/workflows/release.yml). That leaves package.json and package-lock.json dirty,
+ * and this script used to refuse outright, which is what failed the first automatic release.
+ *
+ * A blanket path exemption would be wrong, though: package.json also holds the entire
+ * electron-builder `build` block, so "package.json is dirty, never mind" would wave through a
+ * changed appId, target list, or signing flag on a build claiming the provenance of a public
+ * commit. Comparing everything EXCEPT `version` is what makes the exemption honest.
+ */
+export function isVersionOnlyManifestChange(committedText, workingText) {
+  let committed
+  let working
+  try {
+    committed = JSON.parse(committedText)
+    working = JSON.parse(workingText)
+  } catch {
+    // Unparsable is not evidence of "only the version changed" — refuse rather than assume.
+    return false
+  }
+  if (committed === null || working === null || typeof committed !== 'object' || typeof working !== 'object') {
+    return false
+  }
+  const strip = (value) => JSON.stringify({ ...value, version: null })
+  return strip(committed) === strip(working)
+}
+
+export function requireCleanSourceStatus(status, readPair) {
+  const changed = changedSourcePaths(status)
+  if (changed === null) return
+  const unexpected = changed.filter((path) => !VERSION_BUMP_PATHS.has(path))
+  if (unexpected.length || typeof readPair !== 'function') {
+    fail('refusing to package a dirty source tree; commit every tracked and untracked source first')
+  }
+  for (const path of changed) {
+    const { committed, working } = readPair(path)
+    if (!isVersionOnlyManifestChange(committed, working)) {
+      fail(`refusing to package: ${path} differs from HEAD by more than its version`)
+    }
+  }
 }
 
 export function resolveSourceIdentity(root = REPO_ROOT, env = process.env) {
-  requireCleanSourceStatus(runGit(root, ['status', '--porcelain=v1', '--untracked-files=all']))
+  requireCleanSourceStatus(
+    runGit(root, ['status', '--porcelain=v1', '--untracked-files=all']),
+    (relative) => ({
+      committed: runGit(root, ['show', `HEAD:${relative}`]),
+      working: readFileSync(path.join(root, relative), 'utf8'),
+    }),
+  )
   const sourceSha = runGit(root, ['rev-parse', '--verify', 'HEAD'])
   if (!FULL_SHA_RE.test(sourceSha)) fail(`git HEAD is not a full lowercase commit SHA: ${sourceSha}`)
   if (env.GITHUB_SHA && env.GITHUB_SHA !== sourceSha) {
