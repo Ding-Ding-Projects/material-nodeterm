@@ -396,3 +396,95 @@ nothing about these.
 
 **Do not treat 141 as 141 broken behaviours.** Failures cluster hard: 34 in
 `session-host-client.test.ts` alone, and the counts above are per-assertion, not per-defect.
+
+---
+
+# Handoff — 2026-08-18, release candidate 0.4.3
+
+Everything above this line is a **dated snapshot of the 2026-08-16 convergence** and several of its
+figures are now stale — the 141-failure count in particular. It is kept because its *reasoning*
+still holds (especially the blank-window mechanism), not because its numbers do. This section
+supersedes its counts.
+
+## The full suite has now actually been run
+
+It had never been run in the convergence session. Serialized, on Windows, at `bfb0ba0f`:
+
+```
+EXIT=1    Test Files  30 failed | 614 passed | 6 skipped (650)
+          Tests       56 failed | 8022 passed | 193 skipped (8271)
+```
+
+Two things about that run are worth carrying forward:
+
+- **The wrapper reported exit 0 while vitest exited 1.** Capture `EXIT=$?` *inside* the log; a
+  wrapper's status is the status of whatever ran last, which is usually `tail`.
+- A concurrent lane mutated `workspace.test.ts` mid-run, so that file's verdict in this run is
+  about a tree that no longer exists. It was re-run alone afterwards: 166/166.
+
+## Blank window: measured, not inferred
+
+`check:wired` passes **6/6 against the real packaged output** at `9facfc5f` — including "the canvas
+renders real nodes, not a picture of nodes", "a terminal actually spawns" (`pty.create`
+round-tripped), and 70 bridge namespaces answering a live main-process call. `out/main/` is flat
+(`index.js` + one hashed chunk, no `chunks/` directory), so the mechanism described above is intact
+in the artifact and not merely in the config.
+
+Getting there needed two unrelated repairs, both worth knowing:
+
+- The gate's "did boot create its managed artefacts?" list was derived from `managedConfigTargets`,
+  which answers a **different question** — it is an allowlist of files bootstrap is *allowed* to
+  touch, fingerprinted elsewhere to prove the real home came back unchanged, where `absent` is a
+  fine answer. `ad3354e0` added the four shared School/Kids records to it for the capture harness;
+  boot does not write those by design (`shared-record-watch.ts` exists precisely because that
+  directory may be absent). Correct for one question, silently wrong for the other. Now split:
+  `bootCreatedConfigTargets`.
+- `node_modules/electron/dist` was empty with no `path.txt`. CLAUDE.md records `install.js` as a
+  dead end that exits 0 having extracted nothing — that was measured on **Node 26.5**. On Node 24 it
+  works. The dead end is version-specific, not absolute.
+
+## Three coupled Codex identity defects, fixed in `7207a9e9`
+
+Found by a seven-lane review, each verified from source before being believed. All three are the
+same drift: the capability moved to the canonical `kid.mac` shape and three consumers stayed on the
+old bare MAC.
+
+1. `hook-server` minted and verified with `HMAC(secret, nodeId)` — no kid, no domain separation —
+   while the only token a client can obtain is the `kid.mac` one in its token file. **Every
+   `/codex-thread/*` route answered 403 to a correctly-tokened caller.** The secret was identical
+   throughout: `setNodeAuthSecret` and `setCodexNodeAuthSecret` write one field.
+2. The relay daemon's `register()` read `$NODETERM_CODEX_NODE_TOKEN`, which the launcher
+   deliberately never sets (it pipes the capability on **stdin** and says so in a comment directly
+   above the call). Now reads stdin, bounded.
+3. `SAFE_NODE_TOKEN` pinned the old 43-char bare MAC with no dot, so even an arriving token failed.
+
+The test that should have caught this asserted a **regex on the shape**, which is exactly how the
+drift survived. It now asserts that what the server mints must verify; reintroducing the old
+derivation turns three tests red, checked rather than assumed.
+
+## Corrections to earlier claims
+
+- **CLAUDE.md was wrong about the session reaper.** It promised only *detached* sessions are reaped.
+  `session-budget.ts` removed that rule on purpose — 54 of 54 sessions on a real host reported
+  attached, so the reaper had never fired — and activity staleness now carries the protection alone
+  (grace defaults to a day). An idle session **is** reaped while attached. Corrected in place.
+- **`package-lock.json` was briefly damaged and reverted.** An `npm install --no-save` dropped
+  monaco's exact-pinned `dompurify@3.4.8`, leaving the hoisted `3.4.13` to satisfy it — silently, in
+  a sanitizer, on every clean `npm ci`. Re-verify the lock after any ad-hoc install, not only at the
+  moment you run one.
+
+## Remaining known failures
+
+Reduced but not zero. The residue is overwhelmingly **fixtures asserting the platform they run on**,
+not application code the packaged app reaches. Each surviving skip names its exact environment
+limitation and cites precedent `99dfb2db`; none is a blanket platform skip.
+
+Two deliberate non-fixes, both recorded rather than papered over:
+
+- Six `codex-identity-proxy` tests set `$NODETERM_CODEX_NODE_TOKEN` directly, which
+  `codex-identity-proxy.ts:675` says explicitly does not exist as a fallback. They test removed
+  behaviour and are platform-independent.
+- The `state=2, hello=1` handshake question the section above raises is **still open**. Comparing
+  compatibility (`state >= negotiated`) rather than equality remains the likely fix and was again
+  NOT applied: changing handshake logic in the Windows persistence path deserves a verified change,
+  not a plausible one.
