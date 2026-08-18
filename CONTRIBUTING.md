@@ -437,6 +437,30 @@ conditional on it actually having a row underneath before adding a new empty-abl
 
 `npm test` must pass, and `npm run typecheck` is the fastest gate.
 
+**A synchronous retry cannot wait for async work in its own process.** `fs.rmSync`'s `maxRetries`
+blocks the event loop, so it can never let an in-flight promise in the same process finish and
+release the file it holds — the loop waits for the thing it is preventing. If a test deletes a
+directory its subject also writes into, `await fs.promises.rm(...)` instead. Measured: one suite
+went from 2-4 failures per 6 runs to 8 of 8 on that one keyword, after 30 synchronous attempts over
+3 seconds had failed identically. The synchronous form is still right for a handle held by ANOTHER
+process (the virus scanner is the usual one), where the event loop is irrelevant.
+
+**When a temp directory refuses to delete, ask what is still IN it before asking who is to blame.**
+Five hypotheses were eliminated by reasoning on one such failure — retries, git background
+maintenance, an undisposed platform, a lingering subprocess, a `gh` spawn — and the answer came from
+listing the two files that survived. Then remove writers one at a time: as each disappeared from the
+leftover, the next one named itself. Note also that a scan which opens files for *append* reports
+"nothing is locked" for a SQLite file, because its byte-range locks do not block that open.
+
+**Do not raise a timeout to make a test green.** It hides the next real hang. The workspace sets 30
+seconds, which is already six times vitest's default and far below any genuine deadlock; a test that
+exceeds it is telling you something.
+
+**Worker count is not free.** Vitest defaults to one worker per CPU, which assumes CPU-bound tests;
+35 files here spawn git, cmd.exe, bash, node and a real sshd. On a 32-CPU machine the default ran
+505 s with 13 failures, and 8 workers ran 217 s with none — oversubscription cost throughput as well
+as determinism. The cap lives in `vitest.config.ts` and is derived from the host.
+
 For renderer controls, `npm run build && npm run check:wired` drives the built app and asserts
 observable consequences over CDP. Keep that harness profile-isolated (`NT_MULTI` + a disposable
 `NT_USER_DATA`) and cleanup in `finally`: a gate must never toggle the operator's real settings or
