@@ -394,7 +394,11 @@ export async function startServer(
   })
   ackSweeper.start()
   // Sweep stale ~/.nodeterm/pending files on boot + hourly (orphans from killed sessions).
-  startPendingSweep(os.homedir())
+  // CAPTURED for exactly the reason the ackSweeper comment above gives, and missed the first time
+  // because it sits two lines under it: a discarded handle is an hourly interval nobody can stop,
+  // one more accumulating per close()+startServer() in the same process. The desktop discards it
+  // too and is fine — that process exits rather than restarting the hook stack in place.
+  const pendingSweeper = startPendingSweep(os.homedir())
   // Phone push via SSH-possession GRANTS (spec: nodeterm-server/docs/specs/2026-07-21-push-grants.md).
   // The Server Edition has no standing relay host identity (no host keypair / approved-devices store /
   // host-token mint — those live in src/main/remote/), so it cannot use the desktop's identity-signed
@@ -613,6 +617,7 @@ export async function startServer(
         // listener live after SIGTERM-driven teardown (including NODETERM_HEADLESS containers).
         await scheduledSettingsRuntime.stop()
         ackSweeper.stop()
+        pendingSweeper.stop()
         sessionReaper.stop()
         pressure.stop()
         ptyPressure.stop()
@@ -668,6 +673,7 @@ export async function startServer(
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
       await scheduledSettingsRuntime.stop()
       ackSweeper.stop()
+      pendingSweeper.stop()
       sessionReaper.stop()
       pressure.stop()
       ptyPressure.stop()

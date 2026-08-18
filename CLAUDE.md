@@ -153,7 +153,15 @@ separate store mirroring node state — earlier dual-source designs caused sync 
 factories (`createTerminalNode`, `createAgentNode(agentId, …)`, `createStickyNode`, `createGroupNode`,
 `createEditorNode`, `createDiffNode`), the group transforms (`groupSelectedNodes`,
 `ungroupNodes`, `duplicateNode`), and the `nodeStatesToFlow` / `flowToNodeStates`
-serializers. Node kinds: `terminal | sticky | group | editor | diff`. A node's `data`
+serializers. Node kinds are the `NodeKind` union in `src/shared/types.ts` — currently `terminal |
+sticky | group | editor | diff | video | web | browser | subagent | loop | scheduler | dino |
+annotation`, so read the union rather than this line, which has been stale before (it listed five
+kinds while thirteen shipped, and a research fleet was handed that as fact). Adding a kind touches
+four places and no more: the union; a component under `src/renderer/nodes/`; the `nodeTypes` map in
+`Canvas.tsx` (~1521, every entry wrapped in `withNodeBoundary`); and a factory plus the
+`nodeStatesToFlow` / `flowToNodeStates` serializers here. `WebNode` and `BrowserNode` are the
+closest templates for a kind that renders remote state, `AnnotationNode` for one that renders only
+itself. A node's `data`
 carries `title, color, group, tags, collapsed, expandedHeight, shell, terminalProfileId, cwd, text,
 initialCommand, filePath, diffStaged`, `agentId` (which agent CLI a terminal node runs —
 persisted), and `accountId` (which managed Claude account a terminal node runs under — immutable,
