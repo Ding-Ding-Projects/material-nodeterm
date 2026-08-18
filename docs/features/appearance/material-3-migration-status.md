@@ -59,6 +59,34 @@ checked rather than assumed (0 re-declarations outside `:root`).
 The four `--md-primary*` roles are additionally set at runtime from TypeScript
 (`renderer/lib/accentTokens.ts`), so a custom accent moves the Material primary family with it.
 
+
+## The site carries the same bridge
+
+CLAUDE.md's scope rule is that every user-facing surface carries these contracts, so the site was
+measured too — 66 files under `site/`.
+
+`site/styles.css` uses the **same aliasing strategy**, arrived at independently:
+
+```css
+--md-on-surface:         var(--ink);
+--md-on-surface-variant: var(--ink2);
+--md-outline-variant:    var(--line);
+--md-shape-lg:           var(--round);
+```
+
+| surface | Material roles declared | with a `var()` consumer | inert |
+|---|---:|---:|---:|
+| app (`src/renderer/styles.css`) | 38 | 24 | 14 |
+| site (`site/styles.css`) | 10 | **10** | **0** |
+
+The site's layer is much smaller and **entirely consumed** — nothing declared-and-unread anywhere on
+it. So the two surfaces are not one migration at two stages; they are two coherent bridges of
+different sizes, and the pattern being reached for twice is the strongest evidence that it was a
+deliberate design decision rather than an accident of one file.
+
+Neither surface has a dead-token problem. The app has 14 roles nothing asks for yet, which is a
+migration frontier; the site has none.
+
 ## What the design asks for
 
 The design export (`Nodeterm MD3.dc.html`) carries **30 colour roles, each with a light and a dark
