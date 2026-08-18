@@ -9,6 +9,13 @@
 > two files first when a rule changes; this one is a summary that gets refreshed from them, not
 > the other way around.**
 
+## Session discipline
+
+[`docs/agent-working-conventions.md`](./docs/agent-working-conventions.md) carries the
+maintainer’s cross-project session discipline — how a work session is finished, verified,
+authorized for cleanup, and reported — in ordinary technical language. Read it alongside this
+file: this one covers repository mechanics, that one covers how sessions are run.
+
 ## What this project is
 
 nodeterm is a node-based terminal manager: multiple real terminal sessions live as draggable
