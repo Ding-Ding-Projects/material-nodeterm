@@ -21,12 +21,12 @@ import type { Settings } from '@shared/types'
 /**
  * One performance-costing capability that can be locked independently of the master switch.
  *
- * `remoteAccess` covers BOTH remote-access hosting and the Pro (non-tiny) local dictation models,
- * stated together on purpose: both currently ride the app's one legacy `isPremium` signal (every
- * existing consumer — RemoteSection, RemoteAccessDialog, TeamAccessSection's gate, and
- * OnboardingFlow's dictation-model lock — reads that single flag), so a toggle claiming to control
- * only ONE of them would be lying about its scope. See PRO_FEATURES below for the full, honest
- * description of what each id actually gates.
+ * `remoteAccess` covers remote-access hosting ONLY. It used to drag the non-tiny dictation models
+ * along with it, because both read the one legacy `isPremium` signal — but the whisper gate was
+ * removed (2026-08-17: the models download once and transcribe on the user's own CPU, so there was
+ * nothing to meter), and dictation no longer consults this flag at all. Do not re-widen the scope
+ * without re-widening the copy; a toggle that quietly switches off more than its label says is the
+ * exact dishonesty this comment exists to prevent.
  */
 export type ProFeatureId = 'remoteAccess' | 'teamSeats'
 
@@ -59,13 +59,11 @@ export interface ProFeatureDescriptor {
 export const PRO_FEATURES: readonly ProFeatureDescriptor[] = [
   {
     id: 'remoteAccess',
-    title: 'Remote access & Pro dictation models',
+    title: 'Remote access hosting',
     description:
-      'Hosting this Mac for another device to connect to keeps a standing connection open to the ' +
-      'relay while it waits for a peer, and the larger local dictation models (Base, Small, Large ' +
-      'v3 Turbo) hold several hundred MB of memory once loaded. Both currently share one lock, so ' +
-      'this turns off remote-access hosting AND the larger dictation models together — the tiny ' +
-      'dictation model stays free and unaffected either way.'
+      'Hosting this machine for another device to connect to keeps a standing connection open to ' +
+      'the relay while it waits for a peer. Dictation is not affected — every Whisper model is ' +
+      'free and runs on this machine, whatever this switch is set to.'
   },
   {
     id: 'teamSeats',

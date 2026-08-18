@@ -337,7 +337,7 @@ const whisperModels = new WhisperModelStore({
   dir: join(app.getPath('userData'), 'speech-models'),
   onProgress: (id, pct) => sendToMain(IPC.speechProgress, { id, pct })
 })
-const speechService = new SpeechService({ models: whisperModels, isPremium })
+const speechService = new SpeechService({ models: whisperModels })
 
 // Relay PEER sinks (docs/remote-sessions.md 4b) — the desktop mirror of src/server/index.ts's
 // setFlowController / setResyncProvider / onClientGone. Wired at boot, BEFORE any peer can register

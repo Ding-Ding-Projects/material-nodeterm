@@ -1,17 +1,22 @@
-/** Downloadable whisper.cpp models (ggml files on HuggingFace). `pro` marks
- * the paid tier — tiny stays free (the desktop mirror of mobile's split). */
+/** Downloadable whisper.cpp models (ggml files on HuggingFace).
+ *
+ * There is no `pro` field and there must not be one again: every model here is downloaded from
+ * HuggingFace and transcribes ON THE USER'S OWN MACHINE via smart-whisper. Nothing is metered,
+ * nothing calls an API, and nobody pays per minute — so a tier gate was charging rent on the
+ * user's own CPU. Removed 2026-08-17 for the same reason the phone-relay gate went (2026-08-01):
+ * self-hosted work is free. The only real cost is the user's disk (`approxMB`), which the UI
+ * shows so they can decide for themselves. */
 export interface WhisperModelInfo {
   id: string
   file: string
   approxMB: number
-  pro: boolean
 }
 
 export const WHISPER_MODELS: WhisperModelInfo[] = [
-  { id: 'tiny', file: 'ggml-tiny.bin', approxMB: 75, pro: false },
-  { id: 'base', file: 'ggml-base.bin', approxMB: 142, pro: true },
-  { id: 'small', file: 'ggml-small.bin', approxMB: 466, pro: true },
-  { id: 'large-v3-turbo', file: 'ggml-large-v3-turbo.bin', approxMB: 1600, pro: true },
+  { id: 'tiny', file: 'ggml-tiny.bin', approxMB: 75 },
+  { id: 'base', file: 'ggml-base.bin', approxMB: 142 },
+  { id: 'small', file: 'ggml-small.bin', approxMB: 466 },
+  { id: 'large-v3-turbo', file: 'ggml-large-v3-turbo.bin', approxMB: 1600 },
 ]
 
 export const WHISPER_DOWNLOAD_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/'

@@ -194,7 +194,7 @@ export async function startServer(
     dir: path.join(config.dataDir, 'speech-models'),
     onProgress: (id, pct) => platform.broadcast(IPC.speechProgress, { id, pct })
   })
-  const speechService = new SpeechService({ models: whisperModels, isPremium })
+  const speechService = new SpeechService({ models: whisperModels })
   registerSpeechIpc({
     handle: (channel, fn) => platform.handle(channel, fn),
     service: speechService,

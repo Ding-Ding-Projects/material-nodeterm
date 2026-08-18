@@ -15,8 +15,9 @@ describe('whisper model catalog', () => {
     expect(WHISPER_MODELS.map((m) => m.file)).toEqual([
       'ggml-tiny.bin', 'ggml-base.bin', 'ggml-small.bin', 'ggml-large-v3-turbo.bin',
     ])
-    // Only tiny is free — the Pro split the spec mandates.
-    expect(WHISPER_MODELS.filter((m) => !m.pro).map((m) => m.id)).toEqual(['tiny'])
+    // No tier field, and no bringing one back: every model runs on the user's own CPU, so
+    // there was never anything to charge for. Fails the moment a `pro` sneaks back in.
+    for (const m of WHISPER_MODELS) expect(m).not.toHaveProperty('pro')
   })
 
   it('looks up by id and rejects unknowns', () => {

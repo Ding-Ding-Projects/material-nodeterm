@@ -10409,9 +10409,6 @@ body,
 .onb-model.is-selected {
   border-color: var(--accent);
 }
-.onb-model.is-locked {
-  opacity: 0.6;
-}
 .onb-model__radio {
   width: 12px;
   height: 12px;
@@ -10430,24 +10427,11 @@ body,
   color: var(--muted);
   font-size: 11.5px;
 }
-.onb-pro {
-  margin-left: auto;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: #e7c46a;
-  border: 1px solid rgba(231, 196, 106, 0.45);
-  border-radius: 5px;
-  padding: 1.5px 5px;
-}
 .onb-model__ok {
   display: inline-flex;
   align-items: center;
   color: var(--success);
-  margin-left: auto; /* right-aligned when it's the only trailing chip… */
-}
-.onb-pro + .onb-model__ok {
-  margin-left: 6px; /* …but sits beside the PRO chip when both are shown */
+  margin-left: auto;
 }
 .onb-model__bar {
   position: absolute;

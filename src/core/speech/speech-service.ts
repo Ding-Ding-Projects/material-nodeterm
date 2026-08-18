@@ -29,12 +29,12 @@ export function isGgmlModelHeader(header: Uint8Array): boolean {
 
 /** Local dictation via whisper.cpp (smart-whisper). One loaded model at a
  * time (they are hundreds of MB of RAM); same-model loads dedupe onto one
- * in-flight promise; transcriptions run FIFO on a promise chain. The Pro
- * rule (non-tiny needs premium) is validated HERE, not only in the UI, so a
- * bypassed renderer lock still can't use a paid model. */
+ * in-flight promise; transcriptions run FIFO on a promise chain.
+ *
+ * No licence check lives here any more. Every model runs on the user's own CPU from a file on
+ * their own disk, so there was nothing to meter — see the note on `WHISPER_MODELS`. */
 export class SpeechService {
   private readonly models: WhisperModelStore
-  private readonly isPremium: () => boolean
   private readonly engineFactory: (modelPath: string) => Promise<WhisperEngineHandle>
   private loaded: { path: string; engine: Promise<WhisperEngineHandle> } | null = null
   private queue: Promise<unknown> = Promise.resolve()
@@ -42,11 +42,9 @@ export class SpeechService {
 
   constructor(opts: {
     models: WhisperModelStore
-    isPremium: () => boolean
     engineFactory?: (modelPath: string) => Promise<WhisperEngineHandle>
   }) {
     this.models = opts.models
-    this.isPremium = opts.isPremium
     this.engineFactory = opts.engineFactory ?? defaultEngineFactory
   }
 
@@ -93,9 +91,6 @@ export class SpeechService {
   private async transcribeNow(pcm: Float32Array, opts: { model: string; language: string }): Promise<string> {
     const info = whisperModel(opts.model)
     if (!info) throw new Error(`Unknown whisper model: ${opts.model}`)
-    if (info.pro && !this.isPremium()) {
-      throw new Error(`The ${info.id} model requires nodeterm Pro — the tiny model is free.`)
-    }
     if (!(await this.models.has(info.id))) {
       throw new Error(`Download the ${info.id} model in Settings → Speech first.`)
     }

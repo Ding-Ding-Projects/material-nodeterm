@@ -53,18 +53,13 @@ const ROWS = {
   // One SearchableRow per individual toggle, keyed by feature id, so each is independently
   // findable in Settings search (and in the command palette, which shares the same search index).
   remoteAccess: {
-    title: 'Remote access & Pro dictation models',
+    title: 'Remote access hosting',
     keywords: [
       'remote',
       'remote access',
       'host',
       'hosting',
       'relay',
-      'dictation',
-      'speech',
-      'whisper',
-      'voice',
-      'model',
       'performance',
       'speed',
       'memory',
@@ -175,7 +170,7 @@ function noteFor(
     return '"Unlock all features" above is off, so this is off right now too. Turn it back on to restore this choice.'
   }
   if (id === 'teamSeats' && !features.remoteAccess) {
-    return '"Remote access & Pro dictation models" above is off, so this has no effect right now.'
+    return '"Remote access hosting" above is off, so this has no effect right now.'
   }
   return undefined
 }
