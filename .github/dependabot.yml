@@ -30,6 +30,20 @@ updates:
       # src/renderer/terminal/webgl-addon-pair.test.ts; upgrade the whole family together
       # (next vehicle: the xterm 6.x major).
       - dependency-name: "@xterm/*"
+      # react / react-dom must move in LOCKSTEP too, and dependabot cannot express that: it
+      # split the 18→19 major into two independent PRs (react+@types/react, react-dom+
+      # @types/react-dom), and each failed CI on its own — @types/react-dom@18.3.7 still
+      # requires @types/react ^18.0.0 while the sibling PR bumped @types/react to 19.x. A
+      # react major is a real migration (hooks/StrictMode/types), not an auto-mergeable bump —
+      # take it by hand, both packages and their @types in one PR.
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/react"
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/react-dom"
+        update-types: [version-update:semver-major]
 
   # Keep the GitHub Actions pinned in the workflows current (security patches to
   # checkout / setup-node / codeql-action land here).
