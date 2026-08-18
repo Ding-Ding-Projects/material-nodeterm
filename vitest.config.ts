@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
+import { cpus } from 'node:os'
 
 
 /**
@@ -64,6 +65,24 @@ export default defineConfig({
     // rather than being papered over. Set here, once, deliberately instead of per test as CI
     // discovers them: a per-test timeout argument is invisible to the next author, and the last
     // person to add one has no idea how many others are one busy runner away from failing.
+    // Vitest defaults to one worker per logical CPU, which is a bet that tests are CPU-bound.
+    // 35 of these files are PROCESS-bound: they spawn git, cmd.exe, bash, node and a real sshd,
+    // often several per test. At 32 workers the machine was scheduling hundreds of child
+    // processes, and the heaviest tests lost — not by computing anything wrong, but by timing out
+    // or having a temp directory refuse to delete while a handle was still open.
+    //
+    // The cap is not a trade of speed for reliability. Measured on this tree, 8405 tests, one
+    // 32-CPU machine:
+    //
+    //   32 workers (default)   505 s   13 failures
+    //   32 workers (default)   543 s    9 failures
+    //    8 workers             393 s    1 failure
+    //
+    // Oversubscription was COSTING throughput as well as determinism, which is the usual result
+    // once the bottleneck is process creation rather than arithmetic.
+    //
+    // Derived from the host rather than hard-coded, so a 4-CPU runner does not get told to run 8.
+    maxWorkers: Math.max(2, Math.min(8, cpus().length)),
     testTimeout: 30_000,
     hookTimeout: 30_000,
     environment: 'node'
