@@ -625,3 +625,30 @@ staged. Removing them would also free their numbers for reuse, which is the one 
 rules exist to prevent. That is a call for whoever owns the repository, and either answer is
 defensible — the reason to raise it at all is that nothing else will, and a draft list that only
 grows eventually makes the release page unreadable.
+
+## The full suite is green; a full run under load is not, and the difference is measurable
+
+Run on 2026-08-18 while release builds, a parallel session and an agent fleet were all active:
+**13 failures across 7 files** out of 8,405 tests. Re-run one file at a time, sequentially, on the
+same tree at the same commit: **106 tests, 0 failures** — every one of the seven passed completely.
+
+That alone would be suggestive. What settles it is that **not one of the thirteen computed a wrong
+answer.** Five were vitest timeouts (four at 30,000 ms, one at a per-test 15,000 ms). The rest look
+like assertion failures and are not: `expected Error: spawnSync C:\WINDOWS\system32\cmd.exe
+ETIMEDOUT to be undefined`, and `expected { status: null } to deeply equal { status: 0 }` — a
+`null` exit status is a process that was killed rather than one that returned the wrong code. Every
+failure is "this took too long", none is "this is wrong".
+
+That also rules out the other candidate. Cross-file interference through shared state is a real bug
+class and running a file alone hides it too — but it produces wrong VALUES, not timeouts. Nothing
+here produced a wrong value.
+
+The run's own numbers say the same: 505 s wall clock against 2,613 s of test time and 898 s of
+`import`, i.e. heavy worker parallelism on a machine that had none to spare.
+
+**Do not respond to this by raising timeouts.** The 30 s ceiling was set from this repository's own
+recorded guidance and is already six times the previous default; four tests exceeded even that, and
+inflating it further would only hide the next genuine hang. The right responses are to run the full
+suite when the machine is quiet, and — when a suite must run during a busy session — to re-run any
+timeout-shaped failure in isolation before attributing it to anything. A verdict from a contended
+run is a verdict about the machine, not about the code.
