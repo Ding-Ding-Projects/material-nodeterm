@@ -18,6 +18,7 @@ import { useSession } from '../session/session'
 import { GitHistoryPanel } from './git-history/GitHistoryPanel'
 import { buildCommitMenuItems } from './git-history/git-history-menu'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { VocabularyContextMenu } from './menu/VocabularyContextMenu'
 import { PublishDialog } from './PublishDialog'
 import { defaultScmScope, type ScmScope } from '@shared/scm-scope'
 import { hintLabel } from '@shared/platform-utils'
@@ -847,7 +848,12 @@ export function SourceControlPanel({
       )}
 
       {moreMenu && status && (
-        <ContextMenu
+        // Personal-vocabulary boundary: this menu's rows are fixed action prose ("Pull", "Merge
+        // Branch…"), so the substitution is safe here. The two menus BELOW deliberately stay on
+        // the plain `ContextMenu`: `branchPick` rows ARE branch names, which are handed straight
+        // to `git.merge/rebase/deleteBranch`, and `commitMenu` rows carry commit identity — a
+        // displayed-and-executed string is never translated.
+        <VocabularyContextMenu
           x={moreMenu.x}
           y={moreMenu.y}
           zIndex={80}

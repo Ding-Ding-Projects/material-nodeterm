@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { confirmKeyAction } from './confirm-key'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
 import { useI18n } from '@renderer/lib/i18n'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 interface ConfirmDialogProps {
   message: string
@@ -49,14 +50,29 @@ export function ConfirmDialog({
   onCancel
 }: ConfirmDialogProps) {
   const { ts, emoji } = useI18n()
+  // Personal-vocabulary boundary: every confirmation in the app funnels through this one
+  // component, so translating here is what makes "are you sure" copy speak the user's words
+  // everywhere instead of only on the Settings page. Applied to prose only — `body` is caller
+  // JSX (it can contain a path or a SAS code) and is passed through untouched.
+  //
+  // Known trade-off, stated so nobody has to rediscover it: several callers interpolate a target's
+  // name into `message` ("Delete the chat \"…\"?"), so a vocabulary term that happens to occur in
+  // that name is rewritten in the DISPLAYED sentence. That is display-only — the irreversible call
+  // still re-reads its target by id through `lib/destructiveAuthorization.ts`, and the two-key
+  // `DestructiveConfirmGate` (which names the exact affected items) is deliberately NOT translated
+  // at all. If a caller must disclose a name byte-exactly, it belongs in that gate, not here.
+  const vocab = useVocabularyMapper()
   // An alert has nothing destructive to warn about and nothing to cancel; anything else keeps the
   // historical destructive defaults ("Delete", danger styling, focus parked on the safe button).
   // Only the component's OWN defaults are localized here — a caller-supplied label (e.g. "Remove
   // worktree") is that caller's copy and passes through untouched.
   const danger = dangerProp ?? !alert
-  const cancelText = cancelLabel ?? ts('dialog.confirm.cancel', 'Cancel')
-  const confirmText =
+  const cancelText = vocab(cancelLabel ?? ts('dialog.confirm.cancel', 'Cancel'))
+  const confirmText = vocab(
     confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete'))
+  )
+  const messageText = vocab(message)
+  const optionLabel = vocab(option?.label)
   // Non-semantic decoration only (Settings → Language → "Show emojis…"): purely visual, never
   // part of the accessible name, and never a substitute for the message's actual words.
   const emojiChar = emoji(alert ? 'ℹ️' : danger ? '🗑️' : '❓')
@@ -107,7 +123,7 @@ export function ConfirmDialog({
               {emojiChar}{' '}
             </span>
           )}
-          {message}
+          {messageText}
         </p>
         {option && (
           <label className="confirm__option">
@@ -116,7 +132,7 @@ export function ConfirmDialog({
               checked={option.checked}
               onChange={(e) => option.onChange(e.target.checked)}
             />
-            {option.label}
+            {optionLabel}
           </label>
         )}
         <div className="confirm__actions">

@@ -32,7 +32,8 @@ import { labelSwatch } from '../../lib/kanbanLabelColors'
 import { CardModal } from './CardModal'
 import { KanbanColumn } from './KanbanColumn'
 import type { ModalSpawn } from './ModalTerminal'
-import { ContextMenu, type MenuItem } from '../ContextMenu'
+import { type MenuItem } from '../ContextMenu'
+import { VocabularyContextMenu } from '../menu/VocabularyContextMenu'
 import {
   IconAgent,
   IconExternal,
@@ -883,7 +884,10 @@ export const KanbanView = memo(function KanbanView({
         </div>
       </div>
       {cardMenu && byId.has(cardMenu.nodeId) && (
-        <ContextMenu
+        // Personal-vocabulary boundary: every row here is prose the user reads — the card actions
+        // and, under "Move to", the board's own column titles. Nothing in this tree is executed or
+        // persisted from its label, so the substitution is display-only.
+        <VocabularyContextMenu
           x={cardMenu.x}
           y={cardMenu.y}
           zIndex={60}

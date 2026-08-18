@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 interface InputDialogProps {
   message: string
@@ -28,6 +29,10 @@ export function InputDialog({
 }: InputDialogProps) {
   const [value, setValue] = useState(initialValue)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Personal-vocabulary boundary: the prompt's own copy only. `initialValue` and the typed value
+  // are deliberately NOT mapped — that string is what the caller receives and usually persists
+  // (a rename, a branch name), and rewriting it would write vocabulary words to disk.
+  const vocab = useVocabularyMapper()
   // Registered in the modal stack so a ConfirmDialog underneath does not ALSO answer the Enter /
   // Escape typed into this input (its own listener is on `window`). The keys here are handled on
   // the input element itself, so nothing else is needed.
@@ -41,12 +46,12 @@ export function InputDialog({
   return createPortal(
     <div className="confirm-overlay" onClick={onCancel}>
       <div className="confirm" onClick={(e) => e.stopPropagation()}>
-        <p className="confirm__msg">{message}</p>
+        <p className="confirm__msg">{vocab(message)}</p>
         <input
           ref={inputRef}
           className="confirm__input"
           value={value}
-          placeholder={placeholder}
+          placeholder={vocab(placeholder)}
           spellCheck={false}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
@@ -61,10 +66,10 @@ export function InputDialog({
         />
         <div className="confirm__actions">
           <button className="confirm__btn" onClick={onCancel}>
-            {cancelLabel}
+            {vocab(cancelLabel)}
           </button>
           <button className="confirm__btn primary" onClick={() => onSubmit(value)}>
-            {confirmLabel}
+            {vocab(confirmLabel)}
           </button>
         </div>
       </div>

@@ -5,8 +5,9 @@ This feature is the appeal process, and the ruling is final in your favor.
 
 Upload a small local JSON file mapping any word the app currently shows you to a word you'd
 rather see — `"Settings": "Control Room"`, `"Notifications": "The Nag List"`, whatever you like —
-and from that point on the app makes the swap on its own prose (Settings labels and descriptions
-today — see "Coverage" below), quietly, indefinitely, and without ever asking why. It has no
+and from that point on the app makes the swap on its own prose — settings, dialogs, tooltips,
+notifications, menus, the command palette (see "Coverage" below) — quietly, indefinitely, and
+without ever asking why. It has no
 opinion about your choices. It will not raise an eyebrow, question your judgment, or notice that
 it has just rendered your own settings screen unreadable to your future self, your co-worker
 leaning over your shoulder, or the poor soul writing your support ticket. It just does the swap,
@@ -116,10 +117,28 @@ Rejected outright, with no partial application:
 Applied **only at the user-facing text boundary** — prose meant to be read, never anything a user
 or another system depends on being exact:
 
+Coverage is deliberately wired at **shared funnels** — the one component or list every caller
+already passes through — rather than at individual call sites, so a new dialog or toast inherits
+the substitution without anyone remembering to opt in:
+
 - ✅ Every Settings section title and description (`SettingsSection.tsx`)
 - ✅ Every Settings field label, description, and note (`FieldRow.tsx` — the shared component
   nearly every Settings row in the app is built from, so wiring it there reaches broadly across
   the Settings surface with one boundary)
+- ✅ Every confirmation dialog's message, option label and button labels (`ConfirmDialog.tsx`)
+- ✅ Every text prompt's message, placeholder and buttons (`InputDialog.tsx`, and therefore
+  `promptDialog()`) — the value the user types is **not** touched; it is what the caller receives
+  and usually persists (a rename, a branch name)
+- ✅ Every tooltip (`Tooltip.tsx`)
+- ✅ Every toast's title, action labels and dismiss control (`NotificationToasts.tsx`)
+- ✅ The project-file conflict bar (`ConflictBar.tsx`)
+- ✅ The command palette's own rows — label, hint, note, section heading, secondary-button label
+  and an inline control's accessible name / option labels (`CommandPalette.tsx`, applied **before**
+  the query filter so a visible row can still be typed for)
+- ✅ Context menus whose rows are prose, through the `VocabularyContextMenu` wrapper: the kanban
+  card menu (including its "Move to" column titles) and the source-control ⋯ menu
+- ✅ Node header chrome, dock, kanban cards/columns and the card modal, via the separate
+  `useLocalizedVocabularyText` helper (shipped catalog prose → vocabulary → dynamic facts last)
 
 **Never** applied — these stay verbatim regardless of any uploaded file, by design:
 
@@ -128,16 +147,36 @@ or another system depends on being exact:
 - code, JSON, configuration values
 - factual external records (an error message from a tool, a git commit subject)
 
-`useVocabularyText` (`renderer/lib/personalVocabulary/useVocabularyText.ts`) is the one hook this
-boundary is meant to be reached through; anything wrapping arbitrary application prose in it is a
-correct future extension, and anything wrapping the categories above in it would be a bug.
+Named exclusions worth knowing, each for a reason above:
 
-**Known gap, honestly stated:** this first pass wires the boundary into the Settings surface
-(where most of the app's static prose actually lives) rather than into every label in the whole
-application — the canvas node chrome, notifications, and the command palette do not go through
-this hook yet. Extending coverage means passing more strings through `useVocabularyText` (or the
-non-hook `applyVocabulary` where a component cannot use hooks); the validation, storage, and
-School-mode suppression contracts below already cover whatever is added.
+- **A notification's `body`.** Push sites hand it raw machine text — `error.message`, a core
+  `assessment.reason`, a git failure line, a clipped agent transcript line. The title and the
+  action labels are ours; the body is quoted output.
+- **`DestructiveConfirmGate`.** Its own contract already says the funny-level/localization rules
+  apply to copy elsewhere and never to that sentence, and its `affected` list names the exact
+  items being destroyed.
+- **The source-control branch picker and commit menu.** A branch row's label IS the branch name
+  handed to `git.merge/rebase/deleteBranch`, and commit rows carry commit identity. A string that
+  is both displayed and executed is never translated.
+- **A command's `id` and `content`**, and a select control's option `value` — an identifier, a
+  searchable output body, and a value that gets written to `settings.json` when the row is cycled.
+- **Menu `shortcut` tokens.** They are re-emitted verbatim through `aria-keyshortcuts`; rewriting
+  one would announce a chord no key listener answers.
+- **The command palette's file results and transcript hits** (`fileCommands` / `extraCommands`) —
+  basenames, directories, and a conversation's own text.
+
+`useVocabularyMapper` (`renderer/lib/personalVocabulary/useVocabularyText.ts`) is the hook this
+boundary is meant to be reached through for loose strings — `useVocabularyText` is the
+single-string form built on it, and `useVocabularyMenuItems` / `useVocabularyCommands`
+(`useVocabularySurfaces.ts`, pure decisions in `surfaces.ts`) are the two structured forms for
+surfaces built as data rather than JSX. Wrapping arbitrary application prose in one of these is a
+correct extension; wrapping any of the categories above would be a bug.
+
+**Known gap, honestly stated:** the canvas's own right-click menus (node and pane) and the canvas
+command palette's *mount point* live in `Canvas.tsx` and `ContextMenu.tsx`. The palette is covered
+because the substitution happens inside `CommandPalette` itself; the canvas context menus are
+**not** — closing that gap is a one-line swap of `ContextMenu` for `VocabularyContextMenu` at
+`Canvas.tsx`'s single render site, deliberately left out of the change that widened the rest.
 
 ## School mode
 
@@ -147,16 +186,25 @@ installed:
 - the Settings upload control is **omitted** from the page entirely (not shown disabled) —
   `PersonalVocabularySection` returns `null` while the mode is enabled,
 - any already-uploaded vocabulary's substitutions are **skipped everywhere**, not deleted —
-  `useVocabularyText` short-circuits to the original text while the mode is on and resumes the
-  moment it is turned off. The cached file is never touched by entering or leaving School mode.
+  `useVocabularyMapper` (and therefore every hook and surface helper built on it) short-circuits to
+  the original text while the mode is on and resumes the moment it is turned off. The cached file
+  is never touched by entering or leaving School mode.
+
+The gate is `schoolModeAllowsOptionalFeatures`, so an **unknown** mode (the pre-hydration
+`enabled: false` placeholder, or a failed read) suppresses the substitution too. Note that
+`useLocalizedVocabularyText` still reads `enabled` alone and does not fail closed on an unhydrated
+record — a pre-existing inconsistency, not something this boundary introduced.
 
 ## Accessibility
 
 The file picker is a real, native `<input type="file">` (with an associated `<label>`/`htmlFor`)
 — keyboard-operable, exposed to assistive technology with its own accessible name, and carrying
 the browser's own adequate touch target. Status is announced through ordinary text, not color
-alone: "No file loaded — original wording is shown everywhere.", "Loaded — *n* terms replaced…",
-or "Rejected: *the exact reason*." Every one of the four states (no file / loaded / invalid /
+alone: "No file loaded — original wording is shown everywhere.", "Loaded — *n* usable pairs
+applied to…", or "Rejected: *the exact reason*." The loaded line counts **usable pairs**, not
+substitution hits: a dictionary export's prose/documentation rows are skipped by the validator, so
+a 41-row file legitimately loads fewer than 41 pairs, and saying "terms replaced" made that read
+like the feature had barely done anything. Every one of the four states (no file / loaded / invalid /
 about to replace) reads as plain text, never an icon-only indicator.
 
 ## Verification
@@ -165,6 +213,9 @@ about to replace) reads as plain text, never an icon-only indicator.
   page's own section title changes to reflect it (careful: only future navigations/re-renders of
   already-mounted text pick it up, per React's normal re-render rules — the hook is reactive, so
   this happens live).
+- With `{"version":1,"entries":{"terminal":"shell box"}}` loaded: ⌘K shows "New shell box" AND
+  finds it when you type "shell box"; a card's right-click menu on the kanban board reads the
+  replacement; a toast's title does and its `body` does not.
 - Upload an oversized file → rejected with the exact byte count and limit.
 - Upload a file with a duplicate key → rejected with `duplicate key "…"`.
 - Upload a file with `"__proto__"` as a key → rejected.

@@ -4,6 +4,7 @@ import { rankQuickOpenFiles, type QuickOpenIndexedFile } from '../lib/quickOpenS
 import { IconEditor } from './icons'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { useVocabularyCommands } from '../lib/personalVocabulary/useVocabularySurfaces'
 
 /**
  * A row's LIVE, inline control — a setting result renders its own switch/select rather than a
@@ -112,10 +113,22 @@ export function CommandPalette({
     return field.mode === 'text' ? matches(label, field.query) : field.test(label)
   }
 
+  // Personal-vocabulary boundary for the palette. Applied HERE — inside the component, to the
+  // `commands` prop only — for two reasons a caller-side wrapper could not give us:
+  //
+  //  1. It must happen BEFORE the query filter. The user searches for the words they can SEE, so
+  //     a palette that renders the replacement but matches the original produces visible rows
+  //     that cannot be typed for.
+  //  2. `fileCommands` and `extraCommands` are deliberately left OUT. A file row's label/hint is
+  //     a basename and a directory, and `extraCommands` are transcript hits whose label is the
+  //     conversation's own text — file paths and quoted output, never app prose. `extraCommands`
+  //     is also documented as pre-filtered and appended verbatim.
+  const vocabCommands = useVocabularyCommands(commands)
+
   const filtered = useMemo(
-    () => commands.filter((c) => labelHit(c) || contentHit(c)).slice(0, 50),
+    () => vocabCommands.filter((c) => labelHit(c) || contentHit(c)).slice(0, 50),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [commands, field.mode, field.query, field.pattern, field.flags]
+    [vocabCommands, field.mode, field.query, field.pattern, field.flags]
   )
 
   const fileCommands = useMemo<Command[]>(() => {

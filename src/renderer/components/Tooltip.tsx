@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 interface TooltipProps {
   label: string
@@ -9,6 +10,9 @@ interface TooltipProps {
 
 /** A custom styled tooltip (portal, fixed-positioned) shown on hover after a short delay. */
 export function Tooltip({ label, children, delay = 350 }: TooltipProps) {
+  // Personal-vocabulary boundary: a tooltip is pure explanatory prose, and every caller of this
+  // component gets the substitution from here rather than wrapping its own label.
+  const vocab = useVocabularyMapper()
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -32,7 +36,7 @@ export function Tooltip({ label, children, delay = 350 }: TooltipProps) {
       {pos &&
         createPortal(
           <div className="tooltip" style={{ left: pos.x, top: pos.y }}>
-            {label}
+            {vocab(label)}
           </div>,
           document.body
         )}

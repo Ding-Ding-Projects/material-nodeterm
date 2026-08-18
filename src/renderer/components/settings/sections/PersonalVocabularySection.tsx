@@ -67,9 +67,15 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
     reader.readAsText(file)
   }
 
+  // The old copy said "across Settings labels", which was true when only FieldRow/SettingsSection
+  // consumed the boundary. It now reaches the app's own wording generally, so the sentence has to
+  // say so — a status line that under-reports the reach is how a user concludes a 41-entry file
+  // "only replaced one thing". It says "usable pairs" rather than "terms replaced" for the same
+  // honesty reason: this is how many rows of the uploaded file became substitutions (a dictionary
+  // export's prose/documentation rows are skipped, see schema.ts), not how many hits occurred.
   const statusLine =
     status === 'loaded'
-      ? `Loaded — ${entryCount} ${entryCount === 1 ? 'term' : 'terms'} replaced across Settings labels.`
+      ? `Loaded — ${entryCount} usable ${entryCount === 1 ? 'pair' : 'pairs'} applied to the app's own wording: Settings, dialogs and prompts, tooltips, notifications, the command palette, and the board and source-control menus.`
       : status === 'invalid'
         ? `Rejected: ${lastError ?? 'the file did not match the expected format.'}`
         : 'No file loaded — original wording is shown everywhere.'
@@ -79,7 +85,7 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
       <SearchableRow {...ROWS.upload}>
         <FieldRow
           label="Local vocabulary file"
-          description={`Upload a small JSON file of your own term → replacement pairs; they apply to Settings labels and descriptions only. Nothing leaves this machine. Up to ${VOCAB_MAX_ENTRIES.toLocaleString()} entries, ${VOCAB_MAX_KEY_LENGTH}/${VOCAB_MAX_VALUE_LENGTH}-character keys/values, ${humanBytes(VOCAB_MAX_FILE_BYTES)} file size. See docs/personal-vocabulary.md for the exact JSON shape.`}
+          description={`Upload a small JSON file of your own term → replacement pairs; they apply to the app's own wording only — never to your file paths, commands, terminal output, branch or commit names, or anything saved to disk. Nothing leaves this machine. Up to ${VOCAB_MAX_ENTRIES.toLocaleString()} entries, ${VOCAB_MAX_KEY_LENGTH}/${VOCAB_MAX_VALUE_LENGTH}-character keys/values, ${humanBytes(VOCAB_MAX_FILE_BYTES)} file size. See docs/personal-vocabulary.md for the exact JSON shape.`}
           note={status === 'invalid' ? statusLine : undefined}
           htmlFor="personal-vocabulary-file"
           control={

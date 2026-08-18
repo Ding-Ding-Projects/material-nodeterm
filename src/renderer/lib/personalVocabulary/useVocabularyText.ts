@@ -1,8 +1,41 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { usePersonalVocabulary } from '../../state/personalVocabulary'
 import { useSchoolMode } from '../../state/schoolMode'
 import { applyVocabulary } from './apply'
 import { schoolModeAllowsOptionalFeatures } from '../schoolModePolicy'
+
+/**
+ * The mapper behind every personal-vocabulary boundary in the renderer: one stable callback that
+ * rewrites a single user-facing string, or returns it untouched when the capability is not in
+ * effect (no file uploaded, or School mode — which must make this behave as if it were not
+ * installed, per the shared School-mode contract; unknown hydration is fail-closed).
+ *
+ * Prefer this over calling `useVocabularyText` once per string: a component with a dozen labels
+ * would otherwise need a dozen hooks in a fixed order, which is exactly the shape that breaks the
+ * moment one of them becomes conditional.
+ *
+ * Never map a command, shell text bound for a pty, URL, file path, identifier, code, log line,
+ * quoted tool output, settings key, or anything about to be written to disk or a public record.
+ * A string that is both DISPLAYED and EXECUTED stays verbatim — the replacement exists to change
+ * what a person reads, never what the machine runs.
+ */
+export function useVocabularyMapper(): <T extends string | undefined | null>(text: T) => T {
+  const entries = usePersonalVocabulary((s) => s.entries)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const vocabularyAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
+  return useCallback(
+    <T extends string | undefined | null>(text: T): T => {
+      if (typeof text !== 'string') return text
+      if (!vocabularyAllowed) return text
+      return applyVocabulary(text, entries) as T
+    },
+    [entries, vocabularyAllowed]
+  )
+}
 
 /**
  * The user-facing text boundary: pass any string the app is ABOUT TO SHOW a user (a label, a
@@ -16,16 +49,6 @@ import { schoolModeAllowsOptionalFeatures } from '../schoolModePolicy'
  * hook exists for prose labels and copy only.
  */
 export function useVocabularyText<T extends string | undefined>(text: T): T {
-  const entries = usePersonalVocabulary((s) => s.entries)
-  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
-  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
-  const vocabularyAllowed = schoolModeAllowsOptionalFeatures({
-    enabled: schoolModeEnabled,
-    hydrated: schoolModeHydrated
-  })
-  return useMemo(() => {
-    if (text === undefined) return text
-    if (!vocabularyAllowed) return text
-    return applyVocabulary(text, entries) as T
-  }, [text, entries, vocabularyAllowed])
+  const map = useVocabularyMapper()
+  return useMemo(() => map(text), [map, text])
 }

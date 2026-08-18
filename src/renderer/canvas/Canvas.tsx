@@ -98,7 +98,8 @@ import {
 import { withNodeBoundary } from '../components/NodeBoundary'
 import { Dock } from '../components/Dock'
 import { TabBar } from '../components/TabBar'
-import { ContextMenu, type MenuItem } from '../components/ContextMenu'
+import { type MenuItem } from '../components/ContextMenu'
+import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
 import { seedColor } from '../components/color/seedColor'
 import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
@@ -12454,7 +12455,7 @@ export function Canvas() {
       )}
 
       {menu && (
-        <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
+        <VocabularyContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
       )}
 
       {/* Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a canvas node. The target's

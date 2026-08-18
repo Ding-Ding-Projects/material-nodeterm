@@ -6,6 +6,7 @@ import {
   type AppNotification,
   type NotificationKind
 } from '../state/notifications'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 const KIND_ICON: Record<NotificationKind, string> = {
   info: 'ℹ',
@@ -26,6 +27,22 @@ const KIND_LABEL: Record<NotificationKind, string> = {
 function Toast({ n }: { n: AppNotification }): React.JSX.Element {
   const dismiss = useNotifications((s) => s.dismiss)
   const markRead = useNotifications((s) => s.markRead)
+  // Personal-vocabulary boundary: a toast is the app talking to the user, and every notification
+  // pushed anywhere in the renderer surfaces through this one component, so translating here is
+  // what reaches all of them.
+  //
+  // `title` and the action labels are OUR prose ("Restart with profile failed", "Retry"). `body`
+  // deliberately is NOT translated: the push sites hand it raw machine text — `error.message`,
+  // an `assessment.reason` from core, a git failure string, a clipped agent transcript line
+  // (Canvas.tsx's notify calls) — i.e. exactly the log lines and quoted output the vocabulary
+  // boundary must never rewrite. Substituting inside one would show the user a "quoted" error
+  // that no tool ever printed, and there is no field here that separates the prose bodies from
+  // the machine ones.
+  const vocab = useVocabularyMapper()
+  const title = vocab(n.title)
+  // One source for the visible × and its accessible name, so a screen reader and the screen never
+  // announce two different words for the same button.
+  const dismissLabel = vocab('Dismiss')
 
   // Auto-dismiss on a per-toast timer. Errors and warnings carry `autoDismissMs: null` and
   // never get one — they persist until the user (or the notification centre) dismisses them.
@@ -55,8 +72,8 @@ function Toast({ n }: { n: AppNotification }): React.JSX.Element {
         {KIND_ICON[n.kind]}
       </span>
       <div className="toast__body">
-        <span className="sr-only">{KIND_LABEL[n.kind]}: </span>
-        <div className="toast__title">{n.title}</div>
+        <span className="sr-only">{vocab(KIND_LABEL[n.kind])}: </span>
+        <div className="toast__title">{title}</div>
         {n.body && <div className="toast__text">{n.body}</div>}
         {n.actions && n.actions.length > 0 && (
           <div className="toast__actions">
@@ -69,7 +86,7 @@ function Toast({ n }: { n: AppNotification }): React.JSX.Element {
                   dismiss(n.id)
                 }}
               >
-                {a.label}
+                {vocab(a.label)}
               </button>
             ))}
           </div>
@@ -77,8 +94,8 @@ function Toast({ n }: { n: AppNotification }): React.JSX.Element {
       </div>
       <button
         className="toast__dismiss"
-        aria-label={`Dismiss: ${n.title}`}
-        title="Dismiss"
+        aria-label={`${dismissLabel}: ${title}`}
+        title={dismissLabel}
         onClick={() => dismiss(n.id)}
       >
         ×
@@ -102,9 +119,12 @@ function Toast({ n }: { n: AppNotification }): React.JSX.Element {
 export function NotificationToasts(): React.JSX.Element | null {
   const items = useNotifications((s) => s.items)
   const active = selectActiveToasts(items)
+  // Resolved before the early return — a hook after `if (... ) return null` would change hook
+  // order the first time the stack empties.
+  const stackLabel = useVocabularyMapper()('Notifications')
   if (active.length === 0) return null
   return createPortal(
-    <div className="toast-stack" aria-label="Notifications">
+    <div className="toast-stack" aria-label={stackLabel}>
       {/* Newest at the bottom (closest to where the corner "grows"), oldest scrolls up and out —
           the stack itself scrolls if it ever grows past the viewport rather than clipping. */}
       {active
