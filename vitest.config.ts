@@ -53,6 +53,19 @@ export default defineConfig({
       // NODETERM_SSH_DOCKER is set, so a machine without Docker still runs a green suite.
       'test/ssh-docker/**/*.test.ts'
     ],
+    // Vitest defaults to 5 s, which is a bet on the hardware rather than a statement about the
+    // code. The tests that lose that bet here are the ones that spawn real subprocesses — a
+    // workflow-contract mutation spawns the checker once per mutation, and a packaging or Git
+    // gate shells out repeatedly — so they pass on an idle machine and fail on a shared runner
+    // or beside a build, which reads as flake rather than as a timeout. Measured on 2026-08-18:
+    // two release-contract tests timed out at exactly 5,000 ms while asserting nothing wrong.
+    //
+    // 30 s is still far below a genuine hang, so a real deadlock is caught in the same run
+    // rather than being papered over. Set here, once, deliberately instead of per test as CI
+    // discovers them: a per-test timeout argument is invisible to the next author, and the last
+    // person to add one has no idea how many others are one busy runner away from failing.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     environment: 'node'
   },
   plugins: [stripShebang],

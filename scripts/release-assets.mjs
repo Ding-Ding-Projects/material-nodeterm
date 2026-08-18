@@ -80,9 +80,14 @@ export function highestStableVersion(tagPages, releasePages) {
   const releases = flattenGitHubPages(releasePages, 'GitHub releases')
   let highest = null
   const targetsByVersion = new Map()
-  const note = (version, target) => {
+  // A version is PUBLISHED once anything durable claims it: a tag, or a release that is not a
+  // draft. Draft-only is the state a failed publish leaves behind, and it is the one case the
+  // caller may safely resume instead of minting a fresh number.
+  const publishedVersions = new Set()
+  const note = (version, target, published) => {
     if (!targetsByVersion.has(version)) targetsByVersion.set(version, [])
     targetsByVersion.get(version).push(target)
+    if (published) publishedVersions.add(version)
     if (highest == null || compareStableVersions(version, highest) > 0) highest = version
   }
 
@@ -94,7 +99,7 @@ export function highestStableVersion(tagPages, releasePages) {
     if (typeof name !== 'string' || !name.startsWith('v') || !STABLE_VERSION_RE.test(name.slice(1))) continue
     const target = tag.commit?.sha
     if (typeof target !== 'string') fail(`stable tag ${name} must expose commit.sha`)
-    note(name.slice(1), target)
+    note(name.slice(1), target, true)
   }
 
   for (const [index, release] of releases.entries()) {
@@ -105,10 +110,20 @@ export function highestStableVersion(tagPages, releasePages) {
     if (typeof tag !== 'string' || !tag.startsWith('v') || !STABLE_VERSION_RE.test(tag.slice(1))) continue
     const target = release.target_commitish ?? release.targetCommitish
     if (typeof target !== 'string') fail(`stable release ${tag} must expose target_commitish`)
-    note(tag.slice(1), target)
+    // REST says `draft`, `gh --json` says `isDraft`. Read both, and treat anything we cannot
+    // PROVE is a draft as published: the conservative direction mints a new number, while the
+    // careless one would resume a release somebody has already shipped.
+    const draftFlag = release.draft ?? release.isDraft
+    note(tag.slice(1), target, draftFlag !== true)
   }
 
-  return highest == null ? null : { version: highest, targets: targetsByVersion.get(highest) ?? [] }
+  return highest == null
+    ? null
+    : {
+        version: highest,
+        targets: targetsByVersion.get(highest) ?? [],
+        published: publishedVersions.has(highest)
+      }
 }
 
 /**
@@ -120,9 +135,17 @@ export function highestStableVersion(tagPages, releasePages) {
  * - `keep`   — package.json is already ahead of everything published. A maintainer bumped by hand;
  *              respect it, because they may be doing a deliberate minor/major, and a patch bump
  *              would silently overwrite that intent.
- * - `retry`  — package.json equals the highest version AND every tag/release of it already points
- *              at this exact commit. That is a re-run of a failed publish, not a new release, so
- *              bumping would strand the half-staged draft under a number nobody can find.
+ * - `retry`  — this commit already owns the highest version, so re-running is finishing a failed
+ *              publish rather than starting a new release, and bumping would strand the
+ *              half-staged draft under a number nobody can find. Two ways to own it: package.json
+ *              equals it (a maintainer bumped by hand, the original flow), or it exists ONLY as a
+ *              draft targeting this exact commit. The second is not a refinement — without it the
+ *              branch is unreachable. Once the version is computed into the working tree and
+ *              deliberately never committed, package.json permanently lags whatever shipped, so
+ *              `packageVersion === highest.version` stops being true after the first release and
+ *              every retry mints a fresh number, stranding one more draft. Measured on 2026-08-18:
+ *              v0.4.3 published, package.json 0.4.3, drafts at v0.4.4 and v0.4.5, and a re-run at
+ *              the same commit planned v0.4.6.
  * - `bump`   — anything else: patch-bump past the highest. Covers the ordinary case (release again
  *              from an unchanged package.json) and the one that bit this repository (a tag exists
  *              for the current version at a DIFFERENT commit, so reusing it is refused).
@@ -139,12 +162,15 @@ export function planReleaseVersion(packageVersion, tagPages, releasePages, headS
   if (compareStableVersions(packageVersion, highest.version) > 0) {
     return { action: 'keep', version: packageVersion, highest: highest.version }
   }
-  if (
-    packageVersion === highest.version &&
-    highest.targets.length > 0 &&
-    highest.targets.every((target) => target === headSha)
-  ) {
+  const ownsHighest =
+    highest.targets.length > 0 && highest.targets.every((target) => target === headSha)
+  if (packageVersion === highest.version && ownsHighest) {
     return { action: 'retry', version: packageVersion, highest: highest.version }
+  }
+  // Draft-only AND pointed at this commit: nothing has shipped under that number, and the thing
+  // holding it is this commit’s own half-staged publish. Resume it rather than abandoning it.
+  if (!highest.published && ownsHighest) {
+    return { action: 'retry', version: highest.version, highest: highest.version }
   }
   const [major, minor, patch] = stableVersionParts(highest.version, 'highest stable version')
   return { action: 'bump', version: `${major}.${minor}.${patch + 1n}`, highest: highest.version }

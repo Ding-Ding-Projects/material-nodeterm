@@ -140,12 +140,21 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   // Every push to main releases, and a maintainer may still start one by hand. Nothing else may
   // trigger a publication: a `pull_request` or a tag trigger would let an unreviewed ref become
   // the stable latest release, which is the same hole the pre-checkout main guard exists to close.
+  //
+  // `push` is checked key by key rather than only for `branches: [main]`. A sibling filter is not
+  // a widening of the branch list, it is a SECOND trigger hiding inside the one legitimate entry:
+  // `push: { branches: [main], tags: ['v*'] }` still has exactly the two expected top-level keys
+  // and exactly the one expected branch, and fires on tag pushes as well. That is the specific
+  // shape this workflow cannot survive, because publishing MINTS a tag — so it would start
+  // itself again, mint another, and only stop when the Actions minutes ran out.
   const trigger = workflow?.on
   const triggerKeys = Object.keys(trigger ?? {}).sort()
   const pushBranches = trigger?.push?.branches
+  const pushKeys = Object.keys(trigger?.push ?? {}).sort()
   if (
     !trigger ||
     triggerKeys.join(',') !== 'push,workflow_dispatch' ||
+    pushKeys.join(',') !== 'branches' ||
     !Array.isArray(pushBranches) ||
     pushBranches.length !== 1 ||
     pushBranches[0] !== 'main'

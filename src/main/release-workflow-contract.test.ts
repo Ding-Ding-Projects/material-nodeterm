@@ -49,32 +49,41 @@ describe('release workflow semantic contract', () => {
     expect(check()).toMatchObject({ status: 0 })
   })
 
-  it('rejects every automatic or additional publication trigger', () => {
-    const branchPush = check(
-      replaceOnce(WORKFLOW, 'on:\n  workflow_dispatch:', "on:\n  push:\n    branches: ['main']\n  workflow_dispatch:"),
-    )
-    expect(branchPush.status).toBe(1)
-    expect(branchPush.output).toMatch(/workflow_dispatch-only/i)
+  // The policy this asserts was REVERSED on 2026-08-18: releasing became automatic, so the
+  // workflow is no longer workflow_dispatch-only and the old mutations here aimed at
+  // `on:` + `  workflow_dispatch:`, a pair that no longer appears together. That threw
+  // "mutation target not found" instead of proving anything — the same way this file already
+  // records the `assert-target "$checked_out"` guard silently ceasing to guard. The intent is
+  // unchanged and is what is re-pinned below: exactly two triggers, and a push only from main.
+  it('rejects every trigger except a push to main and a manual dispatch', () => {
+    const TRIGGER = ['on:', '  push:', '    branches: [main]', '  workflow_dispatch:'].join('\n')
+    const rejected = (...mutatedTrigger: string[]) => {
+      const result = check(replaceOnce(WORKFLOW, TRIGGER, mutatedTrigger.join('\n')))
+      expect(result.status).toBe(1)
+      expect(result.output).toMatch(/trigger only on a push to main/i)
+    }
 
-    const tagPush = check(
-      replaceOnce(WORKFLOW, 'on:\n  workflow_dispatch:', "on:\n  push:\n    tags: ['v*']\n  workflow_dispatch:"),
-    )
-    expect(tagPush.status).toBe(1)
-    expect(tagPush.output).toMatch(/workflow_dispatch-only/i)
+    // A tag trigger is the dangerous one, and for a reason specific to this workflow: it MINTS a
+    // tag when it publishes, so a tag trigger would start it again, which would mint another — an
+    // unbounded chain of releases that stops when the Actions minutes do. The push trigger is
+    // filtered to branches precisely so that cannot happen.
+    rejected('on:', '  push:', '    branches: [main]', "    tags: ['v*']", '  workflow_dispatch:')
 
-    const scheduled = check(
-      replaceOnce(
-        WORKFLOW,
-        '  workflow_dispatch:\n\nconcurrency:',
-        "  workflow_dispatch:\n  schedule:\n    - cron: '0 0 * * *'\n\nconcurrency:",
-      ),
-    )
-    expect(scheduled.status).toBe(1)
-    expect(scheduled.output).toMatch(/workflow_dispatch-only/i)
+    // An unreviewed ref must never publish.
+    rejected('on:', '  push:', '    branches: [main]', '  pull_request:', '  workflow_dispatch:')
+    rejected('on:', '  push:', '    branches: [main]', '  schedule:', "    - cron: '0 0 * * *'", '  workflow_dispatch:')
 
-    const missingManual = check(replaceOnce(WORKFLOW, 'on:\n  workflow_dispatch:', 'on: {}'))
-    expect(missingManual.status).toBe(1)
-    expect(missingManual.output).toMatch(/workflow_dispatch-only/i)
+    // Widening or dropping the branch filter releases from every branch — the same unreviewed-ref
+    // hole, arriving through the one trigger that is legitimately present.
+    rejected('on:', '  push:', '    branches: [main, next]', '  workflow_dispatch:')
+    rejected('on:', '  push:', '  workflow_dispatch:')
+
+    // Both keys are required. Losing the manual one removes the recovery route a maintainer needs
+    // when a push-triggered attempt fails; losing the push one silently stops releasing while
+    // every other part of the pipeline still says it is automatic.
+    rejected('on:', '  push:', '    branches: [main]')
+    rejected('on:', '  workflow_dispatch:')
+    rejected('on: {}')
   })
 
   it('rejects a non-main guard that is weakened, non-failing, or moved after checkout', () => {
@@ -181,23 +190,18 @@ describe('release workflow semantic contract', () => {
     expect(prereleasePackage.output).toMatch(/package\.version must be a stable/i)
   })
 
-  it('proves the checked-out commit and stable version advancement before building', () => {
-    const uncheckedHead = check(
-      // Neuter the guard the workflow ACTUALLY uses. This mutation used to target an
-      // `assert-target "$checked_out"` call that no longer exists: the workflow moved the
-      // checked-out-commit proof to a dependency-free inline shell test immediately after
-      // checkout, and repurposed assert-target for tag verification. A mutation aimed at a
-      // string that is gone throws "mutation target not found" instead of proving anything,
-      // so this guard had stopped guarding while still looking like a test.
-      replaceOnce(
-        WORKFLOW,
-        '          if [[ "$checked_out" != "$GITHUB_SHA" ]]; then',
-        '          if false; then',
-      ),
-    )
-    expect(uncheckedHead.status).toBe(1)
-    expect(uncheckedHead.output).toMatch(/HEAD.*GITHUB_SHA/i)
-
+  // The checked-out-commit half of this test is gone, and where it went matters more than that it
+  // left. It was an inline `if [[ "$checked_out" != "$GITHUB_SHA" ]]` step; when releasing became
+  // automatic on 2026-08-18 the commit-pinning steps were removed and the proof now lives in
+  // `resolveSourceIdentity` in scripts/windows-installer.mjs, which refuses to package when the
+  // checkout disagrees with GITHUB_SHA.
+  //
+  // The mutation stayed behind, aimed at a string that no longer existed, so it threw "mutation
+  // target not found" rather than proving anything — and nothing tested the new home either, so
+  // the property looked covered from both sides and was covered from neither. It is now pinned
+  // where it lives, in scripts/windows-installer-source-identity.test.mjs. What remains here is
+  // the half this file can still see: the workflow's own version-advancement proof.
+  it('proves stable version advancement before building', () => {
     const noInventory = check(
       replaceOnce(
         WORKFLOW,
@@ -311,17 +315,30 @@ describe('release workflow semantic contract', () => {
   })
 
   it('keeps every publication safety step fail-fast', () => {
-    for (const id of ['guard', 'source', 'tag', 'version']) {
-      const shellBoundary =
-        id === 'guard'
-          ? `        id: ${id}\n        if: github.ref != 'refs/heads/main' || github.ref_type != 'branch'\n        shell: bash`
-          : `        id: ${id}\n        shell: bash`
+    // Every step the checker treats as critical, not a hand-picked few. The old list was
+    // ['guard', 'source', 'tag', 'version'] — four of the ten — and `source` had ceased to exist
+    // when the commit-pinning steps were removed, so the loop threw "mutation target not found"
+    // on its second iteration and the two steps after it were never reached. A subset drifts
+    // silently; the full set at least fails loudly when a step is renamed.
+    //
+    // `continue-on-error: true` is inserted directly after the `id:` line rather than before the
+    // step's `shell:` line, because it is valid anywhere among a step's keys and that way one
+    // mutation shape works for a bash step, a pwsh step, and a step with an `if:` between the two.
+    for (const id of [
+      'package',
+      'guard',
+      'tag',
+      'version',
+      'assets',
+      'unsigned',
+      'draft',
+      'upload',
+      'notes',
+      'publish',
+    ]) {
+      const idLine = `        id: ${id}\n`
       const ignoredCriticalFailure = check(
-        replaceOnce(
-          WORKFLOW,
-          shellBoundary,
-          shellBoundary.replace('        shell: bash', '        continue-on-error: true\n        shell: bash'),
-        ),
+        replaceOnce(WORKFLOW, idLine, `${idLine}        continue-on-error: true\n`),
       )
       expect(ignoredCriticalFailure.status, id).toBe(1)
       expect(ignoredCriticalFailure.output).toMatch(new RegExp(`safety step ${id}.*fail the job`, 'i'))
@@ -440,16 +457,16 @@ describe('release workflow semantic contract', () => {
     expect(suppressed.status).toBe(1)
     expect(suppressed.output).toMatch(/exact draft.*publish transition/i)
 
-    const uncheckedExistingTag = check(
-      replaceOnce(
-        WORKFLOW,
-        '          if tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha 2>"$RUNNER_TEMP/tag-ref-error.txt"); then\n            node scripts/release-assets.mjs assert-target "$tag_sha" "$GITHUB_SHA"',
-        '          if tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha 2>"$RUNNER_TEMP/tag-ref-error.txt"); then\n            echo "existing tag target ignored: $tag_sha"',
-      ),
-    )
-    expect(uncheckedExistingTag.status).toBe(1)
-    expect(uncheckedExistingTag.output).toMatch(/exact draft.*publish transition/i)
-
+    // A mutation that neutered `assert-target "$tag_sha" "$GITHUB_SHA"` used to sit here. That
+    // call was deliberately removed on 2026-08-18: once every push releases, the tag is minted by
+    // this run at this run's commit, so there is no second author for it to disagree with. The
+    // guarantee that the NUMBER was never used for anything else moved to the `assert-version`
+    // call against the pre-publish tag/release inventory, and that is mutated further down in
+    // this same test — so the property is still pinned, just not here.
+    //
+    // Left as a comment rather than deleted silently, because the mutation had been throwing
+    // "mutation target not found" and a reader who sees a shorter test has no way to tell a
+    // deliberate retirement from a guard somebody dropped.
     const forgedManifest = check(
       replaceOnce(
         WORKFLOW,
