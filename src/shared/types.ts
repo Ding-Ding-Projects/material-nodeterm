@@ -314,6 +314,50 @@ export type NodeKind =
   | 'scheduler'
   | 'dino'
   | 'annotation'
+  // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
+  // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
+  // because a managed service is a thing you arrange on a canvas beside the terminals working on
+  // it, not a modal you visit.
+  //
+  // Every one of them is a MANAGER, and for `proxmox` that is not a limitation but the only
+  // coherent reading: Proxmox VE is a bare-metal hypervisor distribution, so there is nothing to
+  // install from a right-click and the node drives an instance that already exists.
+  //
+  // What they deliberately do NOT persist is how to reach anything. A node's `data` is written into
+  // `.nodeterm/project.json`, which is git-shared and travels to every machine that clones the
+  // repository, so a host, a username, a container id or an executable path in there would be one
+  // person's machine leaking into everybody else's checkout. Only `serviceLabel` — a display name
+  // the user chose — is persisted here. The connection record is machine-local and belongs beside
+  // `localExec` on the index entry; see `IndexEntryV3` and `projectToFile`.
+  | 'minecraft'
+  | 'dockerhost'
+  | 'proxmox'
+  | 'gitlab'
+  | 'homeassistant'
+  | 'freepbx'
+
+/**
+ * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
+ * component) and any future core service need to agree on the membership, and two copies of a list
+ * like this drift — the failure this repository has recorded more than once.
+ */
+export const SERVICE_NODE_KINDS = [
+  'minecraft',
+  'dockerhost',
+  'proxmox',
+  'gitlab',
+  'homeassistant',
+  'freepbx'
+] as const
+
+export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
+
+/** True when `kind` is one of the service family. A `Set` rather than `in`, for the same reason
+ *  `NODE_KINDS` is: `in` walks the prototype chain and would accept `'constructor'`. */
+const SERVICE_NODE_KIND_SET: ReadonlySet<string> = new Set(SERVICE_NODE_KINDS)
+export function isServiceNodeKind(kind: string | undefined): kind is ServiceNodeKind {
+  return typeof kind === 'string' && SERVICE_NODE_KIND_SET.has(kind)
+}
 
 /** Persisted state of a single canvas node (terminal, sticky note, group frame, or editor). */
 /**
@@ -416,6 +460,15 @@ export interface CanvasNodeState {
   text?: string
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
+  /**
+   * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
+   * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the
+   * record travels in `.nodeterm/project.json` to every machine that clones the repository, so a
+   * host, a username, a container id or a token here would be one person's environment appearing in
+   * everybody else's checkout. The connection itself is machine-local and belongs beside
+   * `localExec` on the index entry, exactly where the shell and Windows profile already live.
+   */
+  serviceLabel?: string
   // editor / diff
   filePath?: string
   /**
@@ -1251,6 +1304,13 @@ export interface Settings {
   defaultProjectView: 'canvas' | 'kanban'
   /** ms to dwell over a terminal before it takes pointer focus (pan-across guard). */
   panHoverDelay: number
+  /**
+   * Rainbow node-colour speed, 1 (slow drift) to 5 (fast). Stored as a level rather than a
+   * duration because seconds are a unit nobody has an intuition for, and because a control where a
+   * bigger number means slower is a control people fight. The level-to-seconds mapping lives in
+   * renderer/lib/nodeColor.ts so the setting and the stylesheet cannot disagree about what 3 means.
+   */
+  rainbowSpeed: number
   doubleClickFocus: boolean
   /**
    * Let a MIDDLE CLICK inside a terminal paste the X PRIMARY selection (Linux only — macOS and
@@ -1571,6 +1631,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarCollapsedItems: {},
   defaultProjectView: 'canvas',
   panHoverDelay: 600,
+  rainbowSpeed: 3,
   doubleClickFocus: true,
   terminalMiddleClickPaste: false,
   wheelZoom: false,

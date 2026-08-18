@@ -83,7 +83,9 @@ import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
+import { SERVICE_NODE_KINDS, type ServiceNodeKind } from '@shared/types'
 import BrowserNode from '../nodes/BrowserNode'
+import { ServiceNode } from '../nodes/ServiceNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
@@ -488,6 +490,8 @@ import {
   createStickyNode,
   createTerminalNode,
   nodeSshFor,
+  createServiceNode,
+  SERVICE_NODE_LABELS,
   createVideoNode,
   createWebNode,
   isVideoFile,
@@ -1539,7 +1543,16 @@ export function Canvas() {
       dino: withNodeBoundary(DinoNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
-      browser: withNodeBoundary(BrowserNode)
+      browser: withNodeBoundary(BrowserNode),
+      // The service family. One component for all six: they differ in what they manage, not in how
+      // they behave as canvas objects, and React Flow hands each its own `type` so the component can
+      // tell them apart without six registrations of six near-identical files.
+      minecraft: withNodeBoundary(ServiceNode),
+      dockerhost: withNodeBoundary(ServiceNode),
+      proxmox: withNodeBoundary(ServiceNode),
+      gitlab: withNodeBoundary(ServiceNode),
+      homeassistant: withNodeBoundary(ServiceNode),
+      freepbx: withNodeBoundary(ServiceNode)
     }),
     []
   )
@@ -4129,6 +4142,21 @@ export function Canvas() {
       void writeDisk()
     },
     [commitActiveToStore, writeDisk]
+  )
+
+  /**
+   * Adds a service-manager node. One handler for all six kinds rather than six copies of the same
+   * three lines — the kind is data, so it is a parameter.
+   */
+  const addService = useCallback(
+    (kind: ServiceNodeKind, center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createServiceNode(kind, ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
   const addSticky = useCallback(
@@ -7812,6 +7840,21 @@ export function Canvas() {
           // Stays flat-with-a-heading exactly as before whenever an agent row is an account
           // picker (Claude/Codex with ≥1 account); one row when a single agent is enabled.
           ...paneMenuGroup('Agents', <IconAgent />, agentItems),
+          // Managers for things outside this app. A group with ONE row that opens a submenu,
+          // rather than six product rows: six names spliced into an already long pane menu is the
+          // clutter the menu filter exists to avoid, and a submenu still matches on its children’s
+          // labels, so typing “prox” reaches Proxmox from the top level anyway.
+          ...paneMenuGroup('Managers', <IconRemote />, [
+            {
+              type: 'submenu' as const,
+              label: 'New manager…',
+              icon: <IconRemote />,
+              children: SERVICE_NODE_KINDS.map((kind) => ({
+                label: SERVICE_NODE_LABELS[kind],
+                onClick: () => addService(kind, at)
+              }))
+            }
+          ]),
           ...paneMenuGroup('Canvas objects', <IconShapes />, [
             {
               label: 'New browser',

@@ -1088,7 +1088,17 @@ describe('duplicateNode across every node kind', () => {
     loop: 'loop',
     scheduler: 'scheduler',
     dino: 'dino',
-    annotation: 'annotation'
+    annotation: 'annotation',
+    // The service family. Each prefix is the kind's own name, and none of them is `term` — that is
+    // the point, not an aesthetic: `SAFE_NODE_ID` in core/project-node-append.ts is /^term-…/ and it
+    // decides whether an incoming id may register as a real terminal session, so a manager wearing
+    // that prefix could be pushed through as a shell by a peer or the mobile append path.
+    minecraft: 'minecraft',
+    dockerhost: 'dockerhost',
+    proxmox: 'proxmox',
+    gitlab: 'gitlab',
+    homeassistant: 'homeassistant',
+    freepbx: 'freepbx'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 

@@ -222,6 +222,7 @@ import { uuid } from '../lib/uuid'
 import { runPendingLaunchOnce } from '../lib/pendingLaunch'
 import { coldAgentLaunchIntent } from '../terminal/agent-launch-intent'
 import { executePendingLaunchForSession } from '../terminal/pending-launch-executor'
+import { ColorMenu } from '../components/color/ColorMenu'
 
 /** How long a remote terminal waits for its project's ControlMaster before giving up and showing
  *  the offline overlay. Sized for the SLOW-but-fine case (a cold app load whose connect is still
@@ -1205,7 +1206,9 @@ export function TerminalNode({
   )
   const boardOpenRef = useRef(boardOpen)
   const dwellRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [showColors, setShowColors] = useState(false)
+  /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
+   *  boolean because ColorMenu is a body portal. */
+  const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   const [armed, setArmed] = useState(true)
   const [dropping, setDropping] = useState(false)
   // Overlay while dropped files upload to an SSH host (scp is seconds-long with zero feedback);
@@ -4826,21 +4829,19 @@ export function TerminalNode({
             className="term-node__color"
             style={{ background: data.color }}
             title="Color"
-            onClick={() => setShowColors((v) => !v)}
+            onClick={(e) => {
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+              setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
+            }}
           />
-          {showColors && (
-            <div className="color-popover">
-              {NODE_COLORS.map((c) => (
-                <button
-                  key={c}
-                  style={{ background: c }}
-                  onClick={() => {
-                    updateNodeData(id, { color: c })
-                    setShowColors(false)
-                  }}
-                />
-              ))}
-            </div>
+          {colorAnchor && (
+            <ColorMenu
+              x={colorAnchor.x}
+              y={colorAnchor.y}
+              value={data.color}
+              onPick={(c: string) => updateNodeData(id, { color: c })}
+              onClose={() => setColorAnchor(null)}
+            />
           )}
           {editingTitle ? (
             <input

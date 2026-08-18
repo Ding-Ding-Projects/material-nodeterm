@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { rainbowDurationSeconds } from './lib/nodeColor'
 import { ReactFlowProvider } from '@xyflow/react'
 import { Canvas } from './canvas/Canvas'
 import { PromptDialogHost } from './components/promptDialog'
@@ -51,6 +52,21 @@ export default function App() {
     const { background } = resolveTerminalTheme(terminalTheme).theme
     if (background) document.documentElement.style.setProperty('--term-bg', background)
   }, [terminalTheme])
+
+  // Publish the rainbow cycle duration once, on the root, rather than per node.
+  //
+  // Every rainbow node reads the same variable, so they all turn together. Setting it per node
+  // would let them drift apart by however long apart they were mounted, and a canvas where six
+  // rainbow nodes are each showing a different hue reads as a rendering fault rather than as a
+  // deliberate colour. The level-to-seconds mapping is in lib/nodeColor.ts so this and the
+  // stylesheet cannot disagree about what a speed of 3 means.
+  const rainbowSpeed = useSettings((s) => s.settings.rainbowSpeed)
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--nt-rainbow-duration',
+      `${rainbowDurationSeconds(rainbowSpeed)}s`
+    )
+  }, [rainbowSpeed])
 
   // Publish the resolved appearance as `data-theme` on <html> — what the light palette in
   // styles.css keys off. Absent, or 'dark', leaves every token at its original value, so this one

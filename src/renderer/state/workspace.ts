@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import type { AgentLaunchIntent, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
+import type { AgentLaunchIntent, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import {
   agentConfig,
@@ -58,6 +58,19 @@ const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
 const ANNOTATION_SIZE = { width: 240, height: 160 }
+/**
+ * Service managers. Two shapes rather than six numbers, because the distinction that matters is how
+ * much a surface has to SHOW, not which product it manages:
+ *
+ * - a console-and-list manager (Minecraft, Docker, Proxmox) needs room for output beside a list, so
+ *   it starts nearer a terminal's footprint;
+ * - a summary manager (GitLab, Home Assistant, FreePBX) opens on counts and status rows and can
+ *   start smaller without immediately needing a resize.
+ *
+ * Both are only STARTING sizes; every one of these nodes resizes like any other.
+ */
+const SERVICE_CONSOLE_SIZE = { width: 720, height: 520 }
+const SERVICE_SUMMARY_SIZE = { width: 520, height: 400 }
 
 /** Height of a node when collapsed (header only). */
 export const COLLAPSED_HEIGHT = 40
@@ -135,6 +148,8 @@ export interface NodeData {
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
   highScore?: number
+  /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
+  serviceLabel?: string
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /**
@@ -876,6 +891,56 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
   }
 }
 
+/**
+ * Human-readable name and default title per service kind. One table, so the menu row, the node
+ * header and any future palette entry cannot disagree about what a kind is called.
+ */
+export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
+  minecraft: 'Minecraft server',
+  dockerhost: 'Docker host',
+  proxmox: 'Proxmox',
+  gitlab: 'GitLab',
+  homeassistant: 'Home Assistant',
+  freepbx: 'FreePBX'
+}
+
+/**
+ * Creates a service-manager node.
+ *
+ * ONE factory with six callers rather than six near-identical factories, because the only thing that
+ * varies is the kind, its starting size and its default title — and this codebase's most repeated
+ * lesson is that a duplicated rule drifts from its copies.
+ *
+ * The id prefix is the kind's own name and is deliberately NOT `term-`. That is not tidiness:
+ * `SAFE_NODE_ID` in `core/project-node-append.ts` is `/^term-…/`, and it is how the relay and the
+ * mobile-companion append path decide an incoming id may register as a real terminal session. A
+ * service node borrowing that prefix would let a peer be persuaded to treat a manager as a shell.
+ *
+ * Nothing identifying is seeded into `data`. See `serviceLabel` on `CanvasNodeState` for why a host
+ * must not live there.
+ */
+export function createServiceNode(
+  kind: ServiceNodeKind,
+  index: number,
+  center?: { x: number; y: number }
+): CanvasNode {
+  const size = NODE_START_SIZE[kind]
+  return {
+    id: nextId(kind),
+    type: kind,
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title: SERVICE_NODE_LABELS[kind],
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      serviceLabel: ''
+    }
+  }
+}
+
 /** Creates a user-owned Loop scheduler. It has no PTY; outgoing schedule handles target agents. */
 export function createNativeLoopNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -1276,7 +1341,50 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   loop: true,
   scheduler: true,
   dino: true,
-  annotation: true
+  annotation: true,
+  minecraft: true,
+  dockerhost: true,
+  proxmox: true,
+  gitlab: true,
+  homeassistant: true,
+  freepbx: true
+}
+
+/**
+ * Every kind's starting size, as a table for exactly the reason `NODE_KIND_TABLE` is one.
+ *
+ * This replaced a hand-written nested ternary that ended in `TERMINAL_SIZE`. That shape had a trap
+ * the compiler could not see: a new kind which simply was not mentioned fell through to the terminal
+ * fallback and persisted at 640x440, with nothing failing and no test noticing. `Record<NodeKind, …>`
+ * turns that silent default into a typecheck error, so the size question has to be answered for
+ * every kind that is ever added — which is the same guarantee, and the same reasoning, as the table
+ * above.
+ *
+ * `terminal` keeps its own entry rather than being a default, because a value nothing names is a
+ * value nobody has decided.
+ */
+const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
+  terminal: TERMINAL_SIZE,
+  sticky: STICKY_SIZE,
+  group: GROUP_SIZE,
+  editor: EDITOR_SIZE,
+  diff: DIFF_SIZE,
+  video: VIDEO_SIZE,
+  web: WEB_SIZE,
+  browser: BROWSER_SIZE,
+  // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
+  // defensive floors rather than values a project.json will ever carry.
+  subagent: TERMINAL_SIZE,
+  loop: NATIVE_LOOP_SIZE,
+  scheduler: NATIVE_LOOP_SIZE,
+  dino: DINO_SIZE,
+  annotation: ANNOTATION_SIZE,
+  minecraft: SERVICE_CONSOLE_SIZE,
+  dockerhost: SERVICE_CONSOLE_SIZE,
+  proxmox: SERVICE_CONSOLE_SIZE,
+  gitlab: SERVICE_SUMMARY_SIZE,
+  homeassistant: SERVICE_SUMMARY_SIZE,
+  freepbx: SERVICE_SUMMARY_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1625,6 +1733,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         cwd: n.cwd,
         text: n.text,
+        serviceLabel: n.serviceLabel,
         filePath: n.filePath,
         fileMissing: n.fileMissing,
         url: n.url,
@@ -1652,28 +1761,10 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
 
 /** Serializes live React Flow nodes back into persisted node states. */
 export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
-  const sizeFor = (kind: NodeKind) =>
-    kind === 'sticky'
-      ? STICKY_SIZE
-      : kind === 'group'
-        ? GROUP_SIZE
-        : kind === 'editor'
-          ? EDITOR_SIZE
-          : kind === 'diff'
-            ? DIFF_SIZE
-            : kind === 'video'
-              ? VIDEO_SIZE
-              : kind === 'browser'
-                ? BROWSER_SIZE
-                : kind === 'web'
-                  ? WEB_SIZE
-                    : kind === 'scheduler'
-                      ? NATIVE_LOOP_SIZE
-                  : kind === 'dino'
-                    ? DINO_SIZE
-                    : kind === 'annotation'
-                      ? ANNOTATION_SIZE
-                      : TERMINAL_SIZE
+  // One lookup, not a ternary chain. The chain this replaced could not fail for a kind it simply
+  // did not mention: it fell through to TERMINAL_SIZE and persisted at 640x440 silently. See
+  // NODE_START_SIZE for why that is now a typecheck error instead.
+  const sizeFor = (kind: NodeKind) => NODE_START_SIZE[kind] ?? TERMINAL_SIZE
   return nodes
     .map((n) => {
       const kind: NodeKind = (n.type as NodeKind) ?? 'terminal'
@@ -1706,6 +1797,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
         cwd: n.data.cwd,
         text: n.data.text,
+        serviceLabel: n.data.serviceLabel,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,

@@ -14219,3 +14219,263 @@ body.focus-mode .dock:hover {
     transition: none;
   }
 }
+
+/* ── Animated rainbow node colour ─────────────────────────────────────────────────────────────
+ * A node colour that cycles the hue instead of holding one. Carried as the sentinel `rainbow`
+ * (see renderer/lib/nodeColor.ts) rather than a colour string, because no colour string can change
+ * over time, and rendered here rather than in React so the cycle costs no re-renders at all.
+ *
+ * Seven stops with linear timing, not two: interpolating straight from red to red is a fade
+ * through grey, because the shortest path between two identical hues is no path. The stops walk
+ * the wheel so the transition stays saturated the whole way round.
+ *
+ * Duration comes from --nt-rainbow-duration, set once on the app root from the user's speed
+ * setting, so every rainbow on the canvas stays in step. Nodes drifting out of phase with each
+ * other reads as a rendering fault rather than a choice.
+ */
+@keyframes nt-rainbow-cycle {
+  0%   { background-color: hsl(0 85% 60% / 0.22); }
+  17%  { background-color: hsl(60 85% 60% / 0.22); }
+  33%  { background-color: hsl(120 85% 60% / 0.22); }
+  50%  { background-color: hsl(180 85% 60% / 0.22); }
+  67%  { background-color: hsl(240 85% 60% / 0.22); }
+  83%  { background-color: hsl(300 85% 60% / 0.22); }
+  100% { background-color: hsl(360 85% 60% / 0.22); }
+}
+
+@keyframes nt-rainbow-cycle-border {
+  0%   { border-color: hsl(0 85% 62%); }
+  17%  { border-color: hsl(60 85% 62%); }
+  33%  { border-color: hsl(120 85% 62%); }
+  50%  { border-color: hsl(180 85% 62%); }
+  67%  { border-color: hsl(240 85% 62%); }
+  83%  { border-color: hsl(300 85% 62%); }
+  100% { border-color: hsl(360 85% 62%); }
+}
+
+@keyframes nt-rainbow-cycle-solid {
+  0%   { background-color: hsl(0 85% 60%); }
+  17%  { background-color: hsl(60 85% 60%); }
+  33%  { background-color: hsl(120 85% 60%); }
+  50%  { background-color: hsl(180 85% 60%); }
+  67%  { background-color: hsl(240 85% 60%); }
+  83%  { background-color: hsl(300 85% 60%); }
+  100% { background-color: hsl(360 85% 60%); }
+}
+
+.nt-rainbow {
+  animation: nt-rainbow-cycle var(--nt-rainbow-duration, 6s) linear infinite;
+}
+
+.nt-rainbow-border {
+  animation: nt-rainbow-cycle-border var(--nt-rainbow-duration, 6s) linear infinite;
+}
+
+/* The swatch in a picker, and any small dot standing for the colour: solid rather than tinted, so
+ * it reads as a colour sample instead of a translucent surface. */
+.nt-rainbow-swatch {
+  animation: nt-rainbow-cycle-solid var(--nt-rainbow-duration, 6s) linear infinite;
+}
+
+/* A continuously cycling background is precisely what this preference exists to stop. Settling on
+ * one hue rather than merely slowing it down: a slow cycle is still motion, and "reduce" is not
+ * "less". The colour still reads as deliberate rather than as a failure to load. */
+@media (prefers-reduced-motion: reduce) {
+  .nt-rainbow,
+  .nt-rainbow-border,
+  .nt-rainbow-swatch {
+    animation: none;
+  }
+  .nt-rainbow { background-color: hsl(200 85% 60% / 0.22); }
+  .nt-rainbow-border { border-color: hsl(200 85% 62%); }
+  .nt-rainbow-swatch { background-color: hsl(200 85% 60%); }
+}
+
+/* ── Infinite node colour picker ──────────────────────────────────────────────────────────────
+ * Replaces five copies of a bare swatch grid. The grid survives as the fast path, but it is now
+ * the convenience layer above a continuous field and numeric entry rather than the whole control.
+ */
+.color-popover--infinite {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+  padding: 10px;
+  background: var(--md-surface-container-high, #1c1c1e);
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: var(--md-shape, 12px);
+}
+
+.color-popover__swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.color-popover__swatches button {
+  /* 28px keeps the pointer target usable without making the grid taller than the fields below it;
+   * the row controls beneath are full-width and carry the larger targets. */
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.color-popover__swatches button[aria-pressed='true'] {
+  outline: 2px solid var(--md-primary, #0a84ff);
+  outline-offset: 2px;
+}
+
+.color-popover__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.color-popover__row-label {
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 12px;
+}
+
+.color-popover__field {
+  width: 56px;
+  height: 30px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.color-popover__hex {
+  width: 96px;
+  padding: 5px 7px;
+  color: var(--md-on-surface, #f2f2f7);
+  background: var(--md-surface-container-highest, #2c2c2e);
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 8px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.color-popover__rainbow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  color: var(--md-on-surface, #f2f2f7);
+  background: var(--md-surface-container-highest, #2c2c2e);
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.color-popover__rainbow.is-active {
+  border-color: var(--md-primary, #0a84ff);
+}
+
+.color-popover__rainbow-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.color-popover__rainbow-hint {
+  margin: 0;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* Focus must stay visible on every control in here — a colour picker is exactly the surface where
+ * a keyboard user loses their place if the ring is styled away. */
+.color-popover--infinite :is(button, input):focus-visible {
+  outline: 2px solid var(--md-primary, #0a84ff);
+  outline-offset: 2px;
+}
+
+/* ── Service manager nodes ──────────────────────────────────────────────────────────────────── */
+.service-node {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: var(--md-on-surface, #f2f2f7);
+  background: var(--md-surface-container, #1c1c1e);
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: var(--md-shape, 12px);
+}
+
+.service-node.selected {
+  box-shadow: 0 0 0 2px var(--md-primary, #0a84ff);
+}
+
+.service-node__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--md-outline-variant, #3a3a3c);
+}
+
+.service-node__product {
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.service-node__label-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 2px 4px;
+  overflow: hidden;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: text;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-node__label-empty {
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-style: italic;
+}
+
+.service-node__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.service-node__state {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.service-node__hint {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.service-node :is(button, input):focus-visible {
+  outline: 2px solid var(--md-primary, #0a84ff);
+  outline-offset: 2px;
+}
