@@ -21,11 +21,16 @@
      indicator (node glow, sidebar dot, project-header badge) so it only has to be edited once. */
   --agent-working: #d97757;
 
-  --panel: #282828; /* bars, panels, node chrome (underPage) — stays an authored literal like
-    --accent below: it sits BETWEEN two ramp steps (high/container) with no single honest role,
-    so unlike the six ramp tokens it is not repointed. */
-  --panel-header: #323232; /* elevated / hover (windowBackground) */
-  --panel-2: #323232;
+  /* bars, panels, node chrome (underPage). It sits BETWEEN two ramp steps, so it has no single
+     honest Material role — but leaving it an authored #282828 made it the ONLY neutral grey
+     (R-B = 0) among surfaces that had all become warm (R-B ~ 8), and node chrome read visibly
+     cooler than the canvas behind it. Invisible to every test: contrast was still fine and the
+     token was still defined. Caught by rendering the palette and looking at it.
+     Tone 16 is the measured L* of the old #282828, so the elevation is unchanged and only the
+     hue joins the ramp. --panel-header/-2 follow it for the same reason. */
+  --panel: var(--md-tone-neutral-16);
+  --panel-header: #35322b; /* elevated / hover (windowBackground) — warm twin of the old #323232 */
+  --panel-2: #35322b;
   /* Surfaces that were spelled as one-off hexes all over the sheet — nine slightly different
      darks, which was already drift before a second theme existed. Named by ELEVATION, so the light
      palette can invert the ramp instead of guessing what each hex meant.
@@ -288,6 +293,9 @@
   --md-tone-neutral-9: #1c1914;
   --md-tone-neutral-11: #201d18;
   --md-tone-neutral-14: #26231e;
+  /* L* 16.1 — the measured lightness of the old --panel #282828, so node chrome keeps its exact
+     elevation while joining the warm ramp. See the --panel note above. */
+  --md-tone-neutral-16: #2a2722;
   --md-tone-neutral-18: #2f2c26;
   --md-tone-neutral-89: #e3dfd8;
   --md-tone-neutral-93: #eeebe4;
