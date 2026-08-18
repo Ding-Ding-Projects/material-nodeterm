@@ -141,8 +141,13 @@ describe('SharedRecordWatcher', () => {
     }
     const watcher = new SharedRecordWatcher(recordFile, changed, createWatcher, health)
 
-    watcher.start()
+    const initial = watcher.start()
     expect(fake.opened.at(-1)?.directory).toBe(fake.home)
+    // Arming is not evidence — acknowledge the strict read for this epoch, exactly as every other
+    // test in this file does. This used to assert health(true) straight after start(), which is
+    // the belief the implementation itself held one line above its own comment forbidding it.
+    expect(initial).not.toBeNull()
+    expect(watcher.acknowledge(initial!)).toBe(true)
     expect(health).toHaveBeenLastCalledWith(true)
 
     // The directory can have appeared with an ON record while becoming unreadable. Retaining the
@@ -157,6 +162,13 @@ describe('SharedRecordWatcher', () => {
     fake.available.add(fake.target)
     watcher.recordWritten()
     expect(fake.opened.at(-1)?.directory).toBe(fake.target)
+    // Recovery is a handshake, not a side effect of rearming: the write promotes the handle and
+    // starts a strict reread, and only acknowledging THAT read restores authority. Asserting
+    // health(true) straight off recordWritten() was the same "arming is evidence" belief the
+    // implementation held.
+    expect(health).toHaveBeenLastCalledWith(false)
+    const recovery = changed.mock.calls.at(-1)![0]
+    expect(watcher.acknowledge(recovery)).toBe(true)
     expect(health).toHaveBeenLastCalledWith(true)
     watcher.dispose()
   })

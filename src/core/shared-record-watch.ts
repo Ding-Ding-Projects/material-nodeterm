@@ -188,10 +188,14 @@ export class SharedRecordWatcher {
         this.handleGeneration = nextGeneration
         this.watcher = nextWatcher
         this.watchedDirectory = candidate
-        this.setHealthy(true)
         previous?.close()
-        // Deliberately do not set healthy here. The caller requests a strict read for this epoch;
-        // acknowledge() is the only transition back to healthy.
+        // Deliberately do not set healthy here — this line used to, one statement above this very
+        // comment. Opening an OS watch handle proves only that a directory can be watched; it says
+        // nothing about whether a write landed in the gap before the handle existed. The caller
+        // requests a strict read for this epoch and acknowledge() is the only transition back to
+        // healthy, because a falsely-healthy watcher lets a stale cached record stand in for the
+        // canonical one — and for the shared School/Kids records that means a live mode can be
+        // served as OFF.
         return true
       } catch (error) {
         // Only a proven absence justifies climbing to an ancestor. Permission/resource errors
@@ -215,7 +219,16 @@ export class SharedRecordWatcher {
 
     if (watchedDirectory !== this.targetDirectory) {
       const before = this.watchedDirectory
-      if (!this.armClosestDirectory(false)) return
+      if (!this.armClosestDirectory(false)) {
+        // Promotion failed on something other than a proven absence — the target directory may
+        // have appeared and be unreadable, which is exactly the case where it can hold an ON
+        // record we cannot see. armClosestDirectory's own comment says the old cache must not stay
+        // authoritative here; this used to return without acting on that, leaving a stale OFF
+        // standing as canonical. The retained handle is a recovery hook, not evidence.
+        this.invalidateSync()
+        this.requestSync()
+        return
+      }
       if (this.watchedDirectory !== before) {
         this.invalidateSync()
         this.requestSync()
