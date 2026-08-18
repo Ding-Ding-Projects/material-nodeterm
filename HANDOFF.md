@@ -702,6 +702,30 @@ The next useful step is not another guess. It is to make the failure SAY what is
 directory — on Windows that means asking the OS for the open handles on that path at the moment
 `rmSync` throws, rather than inferring an owner from what the test happens to construct.
 
+### What the failure now says, and one more hypothesis eliminated
+
+`src/core/testing/locked-path.ts` makes the cleanup report WHICH paths are held instead of only
+that something is. Its first run answered the question that three guesses could not:
+
+> held: no individual file is locked, so the DIRECTORY handle is busy
+
+That is a real narrowing. Not a file handle, not a lock file, not `.git/index` — the directory
+itself. On Windows that means a process whose working directory is inside it, or a watch on it.
+
+**A fourth hypothesis died the same afternoon.** The diagnostic also reported the process's active
+resources, and a failure showed `ProcessWrapx1, PipeWrapx7` — which reads exactly like a subprocess
+still holding the directory, and would have been written down as the cause. It is noise: the same
+tally, character for character, appears on runs where the removal SUCCEEDS. It is vitest's own
+worker plumbing. That half has been removed rather than left in with a caveat, because a
+misleading diagnostic is worse than none.
+
+The step worth copying is the control, not the diagnostic: printing the same tally on a PASSING run
+is what exposed it, and took one command. A signal nobody has compared against a passing run is not
+a signal.
+
+Still unexplained, and the honest next step is unchanged: ask the OS which process holds that
+directory at the moment `rmSync` throws. Everything cheaper has now been tried.
+
 ## Open: the suite leaks temp directories
 
 After four full runs, `%TEMP%` held **352** `nt-*` directories. Each is a repository, a data dir or

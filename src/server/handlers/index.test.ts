@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS, type GitStatus } from '../../shared/types'
 import { initPlatform, resetPlatformForTests } from '../../core/platform'
 import { DownloadTickets } from '../../core/download-tickets'
 import { projectImagesDir } from '../../core/canvas-images'
+import { removeDirReportingHolders } from '../../core/testing/locked-path'
 
 let repo: string, platform: ServerPlatform, ui: number
 beforeEach(() => {
@@ -42,7 +43,7 @@ afterEach(() => {
   //
   // Left at the ordinary budget rather than inflated, because a longer wait demonstrably buys
   // nothing and would only slow every run on the way to the same failure.
-  fs.rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  removeDirReportingHolders(repo)
 })
 
 async function call(method: string, ...args: unknown[]) {
