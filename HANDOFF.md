@@ -653,78 +653,45 @@ suite when the machine is quiet, and — when a suite must run during a busy ses
 timeout-shaped failure in isolation before attributing it to anything. A verdict from a contended
 run is a verdict about the machine, not about the code.
 
-## Open: `src/server/handlers/index.test.ts` is a real flake, and retries are not the answer
+## Solved: the handlers-test flake was a synchronous retry waiting on async work
 
-Measured on 2026-08-18, in isolation on a quiet machine: the file as it stands in git fails **2 of
-3 runs** with `EPERM` on `fs.rmSync(repo, …)`. Adding retries does not help — 30 attempts over 3
-seconds fail identically. So the directory is not merely slow to release; something still owns it.
+`src/server/handlers/index.test.ts` failed intermittently — between 1-in-4 and 4-in-6 on one tree
+within an hour — always `EPERM` on removing its temp directory. It is fixed, and the cause
+generalises well beyond this file.
 
-The likely owner is visible in the test's own setup. `repo` is BOTH the git repository under test
-and the platform's `userDataDir`, four of the ten tests construct a SECOND `ServerPlatform` against
-that same directory, and `resetPlatformForTests()` is three lines that null a reference and dispose
-nothing. Whatever those platforms opened inside the directory — a watcher, a database handle, a
-timer — is still open when `afterEach` deletes it, and Windows refuses to remove a directory with a
-live handle in it.
+**A mirror publication holds a SQLite lock inside the directory, and nothing awaits it.** The test
+points `userDataDir` at the same temp repo it deletes. `withPublicationLock` opens
+`agent-status.json.publication.sqlite3` under that directory inside a `BEGIN IMMEDIATE`
+transaction; the flush is not awaited by the test, so it can still be in flight when `afterEach`
+removes the directory. The `-journal` file sitting beside the database at failure time is what
+proves the transaction was open, not merely that the file existed.
 
-**Not fixed here.** The honest fix is a disposal path on the platform, which is production code and
-touches every shell; guessing at it at the end of a long session is how a test flake becomes a
-runtime regression. The cleanup is left at the ordinary retry budget rather than inflated, because
-a longer wait demonstrably buys nothing and would only slow every run on the way to the same
-failure.
+**`fs.rmSync`'s retries cannot help here, and that is the transferable part.** They are
+SYNCHRONOUS: they block the event loop, so they can never let in-flight async work in the same
+process finish and release what it holds. A synchronous retry loop waits for something it is itself
+preventing. Switching that one cleanup to an awaited `fs.promises.rm` — same options, same retry
+count — took it from 2-to-4 failures per 6 runs to 8 of 8, then 6 of 6 for the whole file.
 
-It is NOT caused by the retry sweep in the same commit: the pristine file fails the same way, which
-is why the measurement above was taken against `git checkout`-clean source rather than against the
-edited file.
+**Two earlier published claims were measurement artifacts, and both are corrected.**
 
-### What has been ruled OUT for that flake (so nobody repeats it)
+- "No individual file is locked, so the directory handle is busy" was a FALSE NEGATIVE. The scan
+  opened each file for append, and SQLite's byte-range locks do not block that open, so the one
+  file that mattered reported clean.
+- "Never released, even after 60 seconds" was caused by the probe. The wait was a busy spin, which
+  blocks the event loop — the same mistake as the retries, made while investigating the retries.
 
-Three hypotheses were tested and none survived. Recording them because the eliminated ones are the
-expensive part — each looked obviously right beforehand.
+Five hypotheses were eliminated before the right question got asked, and the question that finally
+answered it was cheap: *what is still in the directory after the removal fails?* Two filenames.
+Ask what remains before asking who is to blame.
 
-- **Retries do not fix it.** 30 attempts over 3 s fail identically to no retries at all. The
-  directory is not slow to release; something owns it.
-- **Git background maintenance is not the holder.** Running the fixture's git with
-  `-c gc.auto=0 -c maintenance.auto=false` still failed 4 of 6 runs. This was the strongest guess —
-  `git commit` can fork background maintenance that holds `.git`, and it is a known Windows flake
-  cause — and it is simply not what is happening here.
-- **The platform is not obviously the holder either, which contradicts the note above.** A probe
-  that ran the exact cycle — mkdtemp, git init/commit, `new ServerPlatform({ userDataDir: repo })`,
-  `registerCoreHandlers`, `attach`, a real `git:status` dispatch, `resetPlatformForTests`, remove —
-  ten times in a row failed **0 of 10**, with and without a second platform against the same
-  directory. So "the platform holds a handle" is a plausible story that the reproduction does not
-  support, and it should not be treated as diagnosed.
+### Not swept: the 209 synchronous retries added the same day
 
-What IS established: it is pre-existing (the pristine file fails too, so it is not the retry sweep),
-it is intermittent at a rate that moves with machine state (measured between 1-in-4 and 4-in-6 on
-the same tree within an hour), and it is always `EPERM` on the directory rather than a wrong value.
-
-The next useful step is not another guess. It is to make the failure SAY what is holding the
-directory — on Windows that means asking the OS for the open handles on that path at the moment
-`rmSync` throws, rather than inferring an owner from what the test happens to construct.
-
-### What the failure now says, and one more hypothesis eliminated
-
-`src/core/testing/locked-path.ts` makes the cleanup report WHICH paths are held instead of only
-that something is. Its first run answered the question that three guesses could not:
-
-> held: no individual file is locked, so the DIRECTORY handle is busy
-
-That is a real narrowing. Not a file handle, not a lock file, not `.git/index` — the directory
-itself. On Windows that means a process whose working directory is inside it, or a watch on it.
-
-**A fourth hypothesis died the same afternoon.** The diagnostic also reported the process's active
-resources, and a failure showed `ProcessWrapx1, PipeWrapx7` — which reads exactly like a subprocess
-still holding the directory, and would have been written down as the cause. It is noise: the same
-tally, character for character, appears on runs where the removal SUCCEEDS. It is vitest's own
-worker plumbing. That half has been removed rather than left in with a caveat, because a
-misleading diagnostic is worse than none.
-
-The step worth copying is the control, not the diagnostic: printing the same tally on a PASSING run
-is what exposed it, and took one command. A signal nobody has compared against a passing run is not
-a signal.
-
-Still unexplained, and the honest next step is unchanged: ask the OS which process holds that
-directory at the moment `rmSync` throws. Everything cheaper has now been tried.
+The retry sweep added `maxRetries` to synchronous `rmSync` calls across 141 files. That is still
+correct for the case it targets — a handle held by ANOTHER process, such as the virus scanner —
+because the event loop is irrelevant there. It cannot fix a hold owned by pending async work in the
+same process, which is what this file had. Converting those call sites to awaited `fs.promises.rm`
+would require making each `afterEach` async and is a larger, separate change; the ones that matter
+are the tests whose subject writes under a directory the test then deletes.
 
 ## Open: the suite leaks temp directories
 

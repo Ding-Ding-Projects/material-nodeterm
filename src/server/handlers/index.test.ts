@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
+import fsp from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { execFileSync } from 'child_process'
@@ -30,20 +31,22 @@ beforeEach(() => {
   registerCoreHandlers(platform, { getSettings: () => DEFAULT_SETTINGS })
   ui = platform.attach({ sendText: () => {}, sendBinary: () => {} })
 })
-afterEach(() => {
+afterEach(async () => {
   resetPlatformForTests()
-  // KNOWN FLAKE, pre-existing, and NOT diagnosed — see HANDOFF.md for what has been ruled out.
-  // Measured: the pristine file fails intermittently on its own (between 1-in-4 and 4-in-6 within
-  // one hour on the same tree), always EPERM on the directory rather than a wrong value. Retries
-  // do not help — 30 attempts over 3 s fail identically. Git background maintenance is not the
-  // holder either; disabling it still failed 4 of 6. And a probe running this exact cycle ten
-  // times — including a real git:status dispatch and a second platform against the same
-  // directory — failed 0 of 10, so the obvious “the platform never gets disposed” story is NOT
-  // supported by a reproduction and must not be written down as the cause.
+  // ASYNC on purpose, and it is the whole fix. `fs.rmSync`'s retries are SYNCHRONOUS: they block
+  // the event loop, so they can never let in-flight async work in this same process finish and
+  // release what it holds. That is precisely the situation here — a mirror publication opens
+  // `agent-status.json.publication.sqlite3` under `userDataDir` (which this file points at the
+  // temp repo) inside a `BEGIN IMMEDIATE` transaction, and nothing awaits that flush before the
+  // directory is deleted. A synchronous retry loop waits for something it is itself preventing.
   //
-  // Left at the ordinary budget rather than inflated, because a longer wait demonstrably buys
-  // nothing and would only slow every run on the way to the same failure.
-  removeDirReportingHolders(repo)
+  // Measured: the sync form failed 2-4 of every 6 runs and 30 attempts over 3 s never succeeded;
+  // the awaited form passed 8 of 8, then 6 of 6 for the whole file. The published diagnosis before
+  // this was wrong in two ways worth naming — a scan that opened files for APPEND reported
+  // "nothing is locked" (SQLite's byte-range locks do not block that open, so it was a false
+  // negative), and a 60-second wait implemented as a busy spin reported "never released" when the
+  // spin was the reason it could not be.
+  await fsp.rm(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 async function call(method: string, ...args: unknown[]) {
