@@ -1,3 +1,5 @@
+import { alphaTint } from '../components/color/tint'
+
 /**
  * Node colour, including the animated rainbow.
  *
@@ -51,25 +53,30 @@ export function rainbowDurationSeconds(speed: number | undefined): number {
 }
 
 /**
- * What a component should spread onto the element it colours.
+ * What a component spreads onto the element it colours.
  *
- * Returns a class instead of a colour for rainbow, because the animation lives in the stylesheet
- * where `prefers-reduced-motion` can turn it off. That is not optional politeness: a continuously
- * cycling background is exactly the kind of motion the reduced-motion preference exists for, and
- * this project treats respecting it as a completion blocker rather than a nicety.
+ * Two concerns that must not be solved separately, because a component picking one and forgetting
+ * the other is how a colour silently fails to apply:
  *
- * `alpha` is the two-hex-digit suffix several call sites already append (`${color}33` for a header
- * tint). It is ignored for rainbow, which tints itself in CSS.
+ *  - RAINBOW is not a colour, so it returns a CLASS and no inline value. The animation lives in the
+ *    stylesheet, which is where `prefers-reduced-motion` can switch it off — this project treats
+ *    respecting that as a completion blocker, not a nicety.
+ *  - EVERYTHING ELSE goes through `alphaTint`, never through string concatenation. `${color}33`
+ *    is only a colour when the stored value is 6-digit hex, and the picker has offered rgb() and
+ *    oklch() for a while, so concatenation drops the whole declaration for anyone who used them.
+ *
+ * `alpha` is a multiplier (0..1), matching `alphaTint` rather than the hex-suffix idiom it
+ * replaced. Rainbow ignores it and tints itself in CSS.
  */
 export function nodeColorStyle(
   color: string | undefined,
-  alpha = ''
-): { className: string; style: { background?: string; borderColor?: string } } {
+  alpha = 1
+): { className: string; style: { background?: string } } {
   if (isRainbowColor(color)) return { className: 'nt-rainbow', style: {} }
-  return { className: '', style: { background: color ? `${color}${alpha}` : undefined } }
+  return { className: '', style: { background: alphaTint(color, alpha) } }
 }
 
-/** Border-only variant, for the node root which colours its border rather than its background. */
+/** Border-only variant, for a node root that colours its border rather than its background. */
 export function nodeBorderStyle(color: string | undefined): {
   className: string
   style: { borderColor?: string }

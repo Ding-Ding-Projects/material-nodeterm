@@ -14491,3 +14491,48 @@ body.focus-mode .dock:hover {
   outline: 2px solid var(--md-primary, #0a84ff);
   outline-offset: 2px;
 }
+
+/* The service node's address field. Full width because a URL is long and a cramped box makes people
+ * scroll inside it to check what they typed. */
+.service-node__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-node__field-label {
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.service-node__input {
+  width: 100%;
+  padding: 6px 8px;
+  color: var(--md-on-surface, #f2f2f7);
+  background: var(--md-surface-container-highest, #2c2c2e);
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 8px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+/* The invalid state is a border AND the sentence beneath it, never the border alone: a colour is
+ * not information, and a red box that does not say why teaches nothing. */
+.service-node__input[aria-invalid='true'] {
+  border-color: var(--md-error, #ff453a);
+}
+
+.service-node__note {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.service-node__input[aria-invalid='true'] + .service-node__note,
+.service-node__field:has(.service-node__input[aria-invalid='true']) + .service-node__note {
+  color: var(--md-error, #ff453a);
+}

@@ -82,15 +82,20 @@ describe('rainbow node colour', () => {
     expect(isRainbowColor('#ff0000')).toBe(false)
     // The failure this prevents is quiet: `rainbow33` is not a CSS error, it is an ignored
     // declaration, so the surface renders with no background and nothing says why.
-    const { className, style } = nodeColorStyle(RAINBOW_COLOR, '33')
+    const { className, style } = nodeColorStyle(RAINBOW_COLOR, 0.2)
     expect(className).toBe('nt-rainbow')
     expect(style.background).toBeUndefined()
   })
 
-  it('still returns a plain tint for an ordinary colour', () => {
-    const { className, style } = nodeColorStyle('#ff0000', '33')
+  it('still returns a real tint for an ordinary colour, via alphaTint', () => {
+    const { className, style } = nodeColorStyle('#ff0000', 0.2)
     expect(className).toBe('')
-    expect(style.background).toBe('#ff000033')
+    // A parsed rgba(), not a concatenated string: `#ff000033` is only a colour because that value
+    // happens to be 6-digit hex, and the picker has offered rgb() and oklch() for a while.
+    // `startsWith`, not a regex: an escaped paren has been eaten by a shell four times in this
+    // session alone, and a mangled pattern here would either fail on correct output or — worse —
+    // match nothing and pass forever.
+    expect(style.background?.startsWith('rgb')).toBe(true)
   })
 
   it('colours a border by class for rainbow and by value otherwise', () => {

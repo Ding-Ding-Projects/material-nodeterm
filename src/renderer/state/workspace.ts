@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { ServiceConnection } from '@shared/node-exec'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import {
   agentConfig,
@@ -150,6 +151,9 @@ export interface NodeData {
   highScore?: number
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
+   *  shared document and from inbound peers; see shared/node-exec.ts. */
+  serviceConnection?: ServiceConnection
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /**
@@ -1734,6 +1738,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        serviceConnection: n.serviceConnection,
         filePath: n.filePath,
         fileMissing: n.fileMissing,
         url: n.url,
@@ -1798,6 +1803,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        serviceConnection: n.data.serviceConnection,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
