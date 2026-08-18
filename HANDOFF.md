@@ -484,10 +484,30 @@ Two deliberate non-fixes, both recorded rather than papered over:
 - Six `codex-identity-proxy` tests set `$NODETERM_CODEX_NODE_TOKEN` directly, which
   `codex-identity-proxy.ts` says explicitly does not exist as a fallback — search its launcher
   script for "deliberately NO". They test removed behaviour and are platform-independent.
-- The `state=2, hello=1` handshake question the section above raises is **still open**. Comparing
-  compatibility (`state >= negotiated`) rather than equality remains the likely fix and was again
-  NOT applied: changing handshake logic in the Windows persistence path deserves a verified change,
-  not a plausible one.
+- The `state=2, hello=1` handshake question raised above is **closed, and the fix it proposed was
+  wrong.** That entry suggested comparing compatibility (`state >= negotiated`) rather than
+  equality, on the theory that "a current client meeting a host behaving as v1 legitimately yields
+  state=2, hello=1, and strict equality refuses a combination the design explicitly supports."
+
+  The premise does not hold. Read in the source rather than reasoned about:
+
+  - **The host writes its own state file**, with its own pid and
+    `protocolVersion: currentProtocolVersion()` (`session-host/host.ts`, the publication just after
+    the token file is written). State and behaviour therefore come from one process and cannot
+    disagree for a host that is actually alive.
+  - **The host omits `protocolVersion` from its hello reply only when the CLIENT asked for v1** —
+    its branch is `clientProtocolVersion === 1`, set when the request carries version 1 or none.
+  - **The client always asks for v2**: it sends `protocolVersion: SESSION_HOST_PROTOCOL_VERSION`,
+    which is 2.
+
+  So a current client reaching a live v2 host always negotiates 2 against a state that says 2. The
+  only way to reach `state=2, hello=1` is a **stale state file** describing a dead v2 host while the
+  socket is answered by something behaving as v1 — which is precisely an inconsistent host, and is
+  what `session-host-client.test.ts` already says the refusal is for in as many words.
+
+  Relaxing the comparison would accept that state and then run v1 semantics while trusting a state
+  file the client reads v2 facts from, including the generation bookkeeping. The strict equality
+  stays. **No change was needed; what was needed was reading the host's own publication path.**
 
 ## Open: a fixture directory outlives the Server Edition shutdown test
 
