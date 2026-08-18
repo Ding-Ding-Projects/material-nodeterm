@@ -381,3 +381,307 @@ describe('OllamaManagerPanel project-session routing', () => {
     expect(second.ollama.chatDelete).not.toHaveBeenCalled()
   })
 })
+
+/** A catalog payload shaped exactly like the core's snapshot, so these tests exercise the real
+ *  parse → page → render path rather than a convenient stand-in. */
+function catalogPayload(over: Record<string, unknown> = {}): unknown {
+  return {
+    kind: 'ollama-catalog',
+    version: 1,
+    models: [
+      {
+        name: 'llama3.2',
+        origin: 'registry',
+        tagsState: 'resolved',
+        tagsError: null,
+        tagsFetchedAt: 10,
+        tags: [
+          {
+            tag: 'latest',
+            sizeBytes: 2_000_000_000,
+            sizeExact: false,
+            revision: 'a80c4f17acd5',
+            revisionExact: false,
+            publishedAt: null,
+            installed: false,
+            facts: 'unresolved',
+            factsError: null,
+            fetchedAt: 10
+          }
+        ]
+      },
+      { name: 'qwen2.5', origin: 'registry', tagsState: 'unresolved', tagsError: null, tagsFetchedAt: null, tags: [] }
+    ],
+    index: { state: 'resolved', fetchedAt: 1000, error: null, count: 2 },
+    installed: { state: 'resolved', error: null, fetchedAt: 1000 },
+    registry: { enabled: true, disabledReason: null, indexUrl: 'https://ollama.com/library', manifestHost: 'registry.ollama.ai' },
+    refresh: { state: 'idle', startedAt: 1, finishedAt: 2, lastError: null, pendingTagFetches: 1, pendingFactFetches: 1 },
+    cache: { state: 'loaded', error: null },
+    completeness: {
+      state: 'partial',
+      modelsKnown: 2,
+      tagsKnown: 1,
+      reasons: ['1 of 2 models have not had their tag list fetched yet.']
+    },
+    staleness: 'fresh',
+    ttlMs: 43_200_000,
+    computedAt: 2000,
+    ...over
+  }
+}
+
+describe('OllamaManagerPanel model store', () => {
+  it('lists real catalog references and states that a partial catalog is partial', async () => {
+    const harness = ollamaHarness('catalog')
+    harness.ollama.popularModels.mockResolvedValue(catalogPayload() as never)
+    activeApi = harness.api
+    act(() => root.render(<OllamaManagerPanel onClose={() => {}} />))
+    await settle()
+    act(() => button('Model store').click())
+    await settle()
+
+    expect(document.body.textContent).toContain('llama3.2:latest')
+    expect(document.body.textContent).toContain('qwen2.5')
+    expect(document.body.textContent).toContain('not yet the whole catalog')
+    expect(document.body.textContent).not.toContain('Complete first-party library')
+    // The pull path still works from a catalog row.
+    act(() => button('Add to cart').click())
+    await settle()
+    expect(harness.ollama.pullEnqueue).toHaveBeenCalledWith(['llama3.2:latest'])
+  })
+
+  it('shows a catalog load failure as a failure, never as an empty catalog, and keeps the exact-reference fallback usable', async () => {
+    const harness = ollamaHarness('catalog-down')
+    harness.ollama.popularModels.mockRejectedValue(new Error('ECONNRESET'))
+    activeApi = harness.api
+    act(() => root.render(<OllamaManagerPanel onClose={() => {}} />))
+    await settle()
+    act(() => button('Model store').click())
+    await settle()
+
+    expect(document.body.textContent).toContain('ECONNRESET')
+    expect(document.body.textContent).toContain('not an empty catalog')
+    const draft = document.body.querySelector<HTMLInputElement>('input[placeholder^="Exact model reference"]')!
+    act(() => changeInput(draft, 'llama3.2:1b'))
+    act(() => button('Add').click())
+    await settle()
+    expect(harness.ollama.pullEnqueue).toHaveBeenCalledWith(['llama3.2:1b'])
+  })
+
+  it('claims a complete catalog only when the core says it is complete', async () => {
+    const harness = ollamaHarness('catalog-complete')
+    harness.ollama.popularModels.mockResolvedValue(
+      catalogPayload({
+        completeness: { state: 'complete', modelsKnown: 234, tagsKnown: 9412, reasons: [] }
+      }) as never
+    )
+    activeApi = harness.api
+    act(() => root.render(<OllamaManagerPanel onClose={() => {}} />))
+    await settle()
+    act(() => button('Model store').click())
+    await settle()
+    expect(document.body.textContent).toContain('Complete first-party library')
+    expect(document.body.textContent).toContain('9412')
+  })
+
+  it('shows an installed row\'s date honestly as "installed <date>", never as an unlabeled publish date', async () => {
+    const harness = ollamaHarness('installed-date')
+    harness.ollama.popularModels.mockResolvedValue(
+      catalogPayload({
+        models: [
+          {
+            name: 'llama3.2',
+            origin: 'registry',
+            tagsState: 'resolved',
+            tagsError: null,
+            tagsFetchedAt: 10,
+            tags: [
+              {
+                tag: '1b',
+                sizeBytes: 1_000_000,
+                sizeExact: true,
+                revision: 'sha256:aa',
+                revisionExact: true,
+                publishedAt: '2026-08-15T00:00:00.000Z',
+                installed: true,
+                facts: 'resolved',
+                factsError: null,
+                fetchedAt: 10
+              }
+            ]
+          }
+        ]
+      }) as never
+    )
+    activeApi = harness.api
+    act(() => root.render(<OllamaManagerPanel onClose={() => {}} />))
+    await settle()
+    act(() => button('Model store').click())
+    await settle()
+
+    // publishedAt on this codepath is never a real publish date — it is only ever an installed
+    // model's local /api/tags modified_at (catalog-types.ts). Labeling it "installed" says what it
+    // actually is.
+    expect(document.body.textContent).toContain(`installed ${new Date('2026-08-15T00:00:00.000Z').toLocaleDateString()}`)
+    expect(document.body.textContent).not.toContain('no published date')
+  })
+
+  it('puts the ellipsis on the truncated full digest, not on the already-complete short digest', async () => {
+    const harness = ollamaHarness('revision-precision')
+    harness.ollama.popularModels.mockResolvedValue(
+      catalogPayload({
+        models: [
+          {
+            name: 'llama3.2',
+            origin: 'registry',
+            tagsState: 'resolved',
+            tagsError: null,
+            tagsFetchedAt: 10,
+            tags: [
+              {
+                // A full 64-hex manifest digest: sliced to 12 chars for display, which IS a
+                // truncation and must carry the "…".
+                tag: 'exact-digest',
+                sizeBytes: 1_000_000,
+                sizeExact: true,
+                revision: `sha256:${'a'.repeat(64)}`,
+                revisionExact: true,
+                publishedAt: null,
+                installed: false,
+                facts: 'resolved',
+                factsError: null,
+                fetchedAt: 10
+              },
+              {
+                // The library page's own 12-hex short digest, printed complete — appending "…"
+                // here would claim more digits exist than were ever fetched.
+                tag: 'short-digest',
+                sizeBytes: 2_000_000,
+                sizeExact: false,
+                revision: 'baf6a787fdff',
+                revisionExact: false,
+                publishedAt: null,
+                installed: false,
+                facts: 'unresolved',
+                factsError: null,
+                fetchedAt: 10
+              }
+            ]
+          }
+        ],
+        completeness: { state: 'complete', modelsKnown: 1, tagsKnown: 2, reasons: [] }
+      }) as never
+    )
+    activeApi = harness.api
+    act(() => root.render(<OllamaManagerPanel onClose={() => {}} />))
+    await settle()
+    act(() => button('Model store').click())
+    await settle()
+
+    expect(document.body.textContent).toContain(`rev ${'a'.repeat(12)}…`)
+    expect(document.body.textContent).toContain('rev baf6a787fdff')
+    expect(document.body.textContent).not.toContain('rev baf6a787fdff…')
+  })
+})
+
+describe('OllamaManagerPanel model store — hardware-fit and progress-poll timing', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not re-ask ollama.fit on every 3s catalog poll when the visible refs have not changed', async () => {
+    vi.useFakeTimers()
+    const harness = ollamaHarness('fit-storm')
+    // Every call returns a FRESH object — exactly what the real argument-less IPC channel returns
+    // on every poll — but the same model/tag content, so the set of refs actually on screen never
+    // changes across polls.
+    harness.ollama.popularModels.mockImplementation(() =>
+      Promise.resolve(
+        catalogPayload({
+          refresh: {
+            state: 'running',
+            startedAt: 1,
+            finishedAt: null,
+            lastError: null,
+            pendingTagFetches: 1,
+            pendingFactFetches: 1
+          }
+        }) as never
+      )
+    )
+    activeApi = harness.api
+    act(() => root.render(<OllamaManagerPanel onClose={() => {}} />))
+    await settle()
+    act(() => button('Model store').click())
+    await settle()
+
+    const fitCallsAfterInitialLoad = harness.ollama.fit.mock.calls.length
+    expect(fitCallsAfterInitialLoad).toBeGreaterThan(0)
+
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000)
+      })
+    }
+
+    // The poll really did keep running (this is what defect 3 also pins) …
+    expect(harness.ollama.popularModels.mock.calls.length).toBeGreaterThan(1)
+    // … but with the same refs on screen every time, ollama.fit must not have been re-asked.
+    expect(harness.ollama.fit.mock.calls.length).toBe(fitCallsAfterInitialLoad)
+  })
+
+  it('keeps polling for catalog progress after one transient load failure, and stops once the core reports the refresh idle', async () => {
+    vi.useFakeTimers()
+    const harness = ollamaHarness('poll-resilience')
+    let call = 0
+    harness.ollama.popularModels.mockImplementation(() => {
+      call++
+      if (call === 1) {
+        return Promise.resolve(
+          catalogPayload({
+            refresh: {
+              state: 'running',
+              startedAt: 1,
+              finishedAt: null,
+              lastError: null,
+              pendingTagFetches: 3,
+              pendingFactFetches: 3
+            }
+          }) as never
+        )
+      }
+      if (call === 2) return Promise.reject(new Error('ECONNRESET'))
+      return Promise.resolve(
+        catalogPayload({
+          refresh: { state: 'idle', startedAt: 1, finishedAt: 5, lastError: null, pendingTagFetches: 0, pendingFactFetches: 0 }
+        }) as never
+      )
+    })
+    activeApi = harness.api
+    act(() => root.render(<OllamaManagerPanel onClose={() => {}} />))
+    await settle()
+    act(() => button('Model store').click())
+    await settle()
+    expect(harness.ollama.popularModels).toHaveBeenCalledTimes(1)
+
+    // Poll #2 fails. The bug this test pins: a version keyed on `catalog` object identity never
+    // re-arms after this, because a failed load leaves `catalog` untouched.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+    })
+    expect(harness.ollama.popularModels).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent).toContain('ECONNRESET')
+
+    // Poll #3 only fires if the loop survived the failure.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+    expect(harness.ollama.popularModels).toHaveBeenCalledTimes(3)
+
+    // The refresh is now idle — no further polling.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+    expect(harness.ollama.popularModels).toHaveBeenCalledTimes(3)
+  })
+})

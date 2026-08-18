@@ -13,6 +13,8 @@ import { join } from 'node:path'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { registerOllamaIpc } from './register-ipc'
 import type { CorePlatform } from '../platform'
+import type { OllamaCatalogStore } from './catalog-store'
+import type { FitEvaluation } from '../../shared/ollama'
 
 async function unusedPort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -54,14 +56,17 @@ describe('registerOllamaIpc — ollama:status', () => {
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
-  function harness(checkInstalled: () => { found: boolean; via: 'path' | 'known-location' | null }) {
+  function harness(
+    checkInstalled: () => { found: boolean; via: 'path' | 'known-location' | null },
+    catalog?: OllamaCatalogStore
+  ) {
     const handlers = new Map<string, (...args: unknown[]) => unknown>()
     const dir = mkdtempSync(join(tmpdir(), 'ollama-ipc-'))
     dirs.push(dir)
     const platform = fakePlatform(dir)
     platform.handle = (channel, fn) => handlers.set(channel, fn as (...args: unknown[]) => unknown)
     process.env.OLLAMA_HOST = `http://127.0.0.1:${port}`
-    registerOllamaIpc(platform, { checkInstalled })
+    registerOllamaIpc(platform, { checkInstalled, catalog })
     delete process.env.OLLAMA_HOST
     return handlers
   }
@@ -84,5 +89,27 @@ describe('registerOllamaIpc — ollama:status', () => {
     const status = await handlers.get('ollama:status')!()
     expect((status as { health: string }).health).not.toBe('ok')
     expect((status as { health: string }).health).not.toBe('unhealthy')
+  })
+
+  // Ollama is unreachable in this harness, so nothing is installed as far as the handler can tell.
+  // That used to force every store row to "Unknown"; the catalog's published size is a real fact
+  // about the model and is now allowed to feed the same evaluator, with its precision named.
+  describe('ollama:fit for a model that is not installed', () => {
+    const withCatalog = (size: { sizeBytes: number; exact: boolean } | null): OllamaCatalogStore =>
+      ({ publishedSize: async () => size }) as unknown as OllamaCatalogStore
+
+    it('reaches a real verdict from the published size and says where that size came from', async () => {
+      const handlers = harness(() => ({ found: true, via: 'path' }), withCatalog({ sizeBytes: 1_300_000_000, exact: false }))
+      const fit = (await handlers.get('ollama:fit')!(['llama3.2:1b'])) as Record<string, FitEvaluation>
+      expect(fit['llama3.2:1b'].verdict).not.toBe('unknown')
+      expect(fit['llama3.2:1b'].evidence[0]).toContain('is not installed')
+      expect(fit['llama3.2:1b'].evidence[0]).toContain('approximate')
+    })
+
+    it('stays "unknown" — never a guess from the name — when the catalog has no size for it', async () => {
+      const handlers = harness(() => ({ found: true, via: 'path' }), withCatalog(null))
+      const fit = (await handlers.get('ollama:fit')!(['llama3.2:1b'])) as Record<string, FitEvaluation>
+      expect(fit['llama3.2:1b'].verdict).toBe('unknown')
+    })
   })
 })

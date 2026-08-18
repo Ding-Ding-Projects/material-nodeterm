@@ -18,7 +18,26 @@ import { formatBytes } from '../../lib/bytesFormat'
 import { useActiveSessionApi } from '../../session/session'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { promptDialog } from '../promptDialog'
+import {
+  catalogPollDelayMs,
+  catalogPollShouldContinue,
+  completenessHeadline,
+  parseCatalogPayload,
+  selectCatalogPage,
+  stalenessSentence,
+  type CatalogFilter,
+  type CatalogPage,
+  type CatalogRow,
+  type CatalogSort,
+  type CatalogView
+} from './catalogView'
 import { troubleshootSteps } from './troubleshoot'
+
+/** How often the panel re-asks for the catalog while the core reports a refresh in flight. The
+ *  catalog rides an argument-less request/response channel (see core/ollama/register-ipc.ts), so
+ *  there is no push event to subscribe to; polling stops as soon as the refresh goes idle. */
+const CATALOG_POLL_MS = 3000
+const STORE_PAGE_SIZE = 50
 
 export interface OllamaManagerPanelProps {
   onClose: () => void
@@ -116,11 +135,20 @@ function FitDetail({ fit }: { fit: FitEvaluation | undefined }) {
  * model browser with evidence-backed hardware fit, a batch-pull "cart" (never money), and a
  * streaming chat surface.
  *
+ * The Model store lists the exhaustive catalog of Ollama's own first-party library — every model
+ * and every tag on ollama.com/library, paginated, searchable, filterable and sortable, each row
+ * carrying whatever revision/size/date its source really has, above a recorded completeness and
+ * staleness state. Community models (published under a namespace, e.g. "user/model") have no
+ * enumerable index — ollama.com/search caps results at ~20 per query with no working pagination,
+ * measured live — so they are reached by exact reference, not by browsing this list; the
+ * completeness headline names this scope explicitly rather than ever claiming "every model". What
+ * the catalog can and cannot know (and why it needs a first-party network source at all) is
+ * core/ollama/catalog-*.ts and docs/ollama-manager.md.
+ *
  * Known gaps versus the full house contract, left for a follow-up (see docs/ollama-manager.md):
- * the Model Store here is a small curated "popular models" seed plus free-text entry, not an
- * exhaustive paginated mirror of Ollama's official catalog; image attachments are gated correctly
- * but not actually implemented (the control stays visibly disabled with the real reason); and the
- * search boxes are plain substring search, not the full anchored regex builder.
+ * image attachments are gated correctly but not actually implemented (the control stays visibly
+ * disabled with the real reason); and the search boxes are plain substring search, not the full
+ * anchored regex builder.
  */
 export function OllamaManagerPanel(props: OllamaManagerPanelProps) {
   // Ollama runs on the machine that owns the active project. In particular, a relay tab must use
@@ -145,9 +173,13 @@ function OllamaManagerPanelForApi({
   const [hardware, setHardware] = useState<HardwareEvidence | null>(null)
   const [models, setModels] = useState<OllamaModelInfo[]>([])
   const [running, setRunning] = useState<OllamaRunningModel[]>([])
-  const [popular, setPopular] = useState<{ name: string; note: string }[]>([])
+  const [catalog, setCatalog] = useState<CatalogView | null>(null)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   const [fitMap, setFitMap] = useState<Record<string, FitEvaluation>>({})
   const [storeQuery, setStoreQuery] = useState('')
+  const [storeFilter, setStoreFilter] = useState<CatalogFilter>('all')
+  const [storeSort, setStoreSort] = useState<CatalogSort>('name')
+  const [storePage, setStorePage] = useState(1)
   const [customRef, setCustomRef] = useState('')
   const [cart, setCart] = useState<PullQueueItem[]>([])
   const [cartSummary, setCartSummary] = useState<Pick<PullQueueState, 'running' | 'concurrency'>>({
@@ -168,6 +200,31 @@ function OllamaManagerPanelForApi({
     (candidate: ActiveSessionApi): boolean => mountedRef.current && apiRef.current === candidate,
     []
   )
+
+  /** Loads the model catalog for the ACTIVE session. The channel's declared return type is still
+   *  the legacy `{name, note}[]` short list (its declaration lives in a file this pass does not
+   *  own), while the core now answers with a catalog snapshot — so the payload is parsed as
+   *  untrusted input, and the legacy array is still understood. A failure sets an error and leaves
+   *  whatever was already listed alone: "could not load" must not render as "there are none".
+   *
+   *  Returns the freshly parsed view (or `null` on failure/staleness) rather than only updating
+   *  state: the progress-poll loop below needs to know THIS attempt's outcome synchronously to
+   *  decide whether to keep polling, and reading it back off `catalog` state would race React's
+   *  render cycle (a `setCatalog` call does not make the new value visible until the next render). */
+  const loadCatalog = useCallback(async (): Promise<CatalogView | null> => {
+    try {
+      const payload = (await ollama.popularModels()) as unknown
+      if (!apiStillActive(api)) return null
+      const view = parseCatalogPayload(payload)
+      setCatalog(view)
+      setCatalogError(null)
+      return view
+    } catch (e) {
+      if (!apiStillActive(api)) return null
+      setCatalogError((e as Error).message)
+      return null
+    }
+  }, [api, apiStillActive, ollama])
 
   const refreshStatus = useCallback(async () => {
     if (!apiStillActive(api)) return
@@ -210,7 +267,9 @@ function OllamaManagerPanelForApi({
     setHardware(null)
     setModels([])
     setRunning([])
-    setPopular([])
+    setCatalog(null)
+    setCatalogError(null)
+    setStorePage(1)
     setFitMap({})
     setCart([])
     setCartSummary({ running: false, concurrency: 1 })
@@ -219,10 +278,7 @@ function OllamaManagerPanelForApi({
     setDeleteTarget(null)
     setAccessError(null)
     void refreshStatus()
-    void ollama
-      .popularModels()
-      .then((models) => live && setPopular(models))
-      .catch(() => {})
+    void loadCatalog()
     void ollama
       .pullState()
       .then((s) => {
@@ -249,29 +305,88 @@ function OllamaManagerPanelForApi({
       offItem()
       offSummary()
     }
-  }, [ollama, refreshStatus])
+  }, [loadCatalog, ollama, refreshStatus])
 
-  // Recompute fit whenever the set of names we care about changes (installed + popular + cart refs).
+  // While the core reports a crawl in flight, re-ask periodically so the completeness counters move
+  // instead of freezing at whatever the first call happened to catch. This is a SELF-PERPETUATING
+  // loop (each attempt schedules the next one itself via `catalogPollShouldContinue`/
+  // `catalogPollDelayMs`, both pure and tested in catalogView.ts) rather than one keyed on `catalog`
+  // object identity: a version keyed that way only re-arms on a SUCCESSFUL load replacing `catalog`,
+  // so a single transient rejection (`catalogError` set, `catalog` untouched) left the loop
+  // permanently dead — the panel stuck on a stale "Still fetching…" counter until a manual Reload.
+  // The effect itself is keyed on the primitive `catalog?.refreshing` boolean, not the `catalog`
+  // object: every poll (success or failure) replaces or leaves `catalog`, but the loop must not
+  // restart on each one — only start when a refresh begins and stop when one goes idle or unmounts.
   useEffect(() => {
-    if (status?.health !== 'ok') return
+    if (!catalog?.refreshing) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let failures = 0
+    const tick = async (): Promise<void> => {
+      const view = await loadCatalog()
+      if (cancelled) return
+      failures = view === null ? failures + 1 : 0
+      if (catalogPollShouldContinue(view)) {
+        timer = setTimeout(() => void tick(), catalogPollDelayMs(failures, CATALOG_POLL_MS))
+      }
+    }
+    timer = setTimeout(() => void tick(), CATALOG_POLL_MS)
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [catalog?.refreshing, loadCatalog])
+
+  // A query/filter/sort change can shorten the list past the current page. Land on page 1 rather
+  // than on an empty page, which reads as "no results" when there are thousands.
+  useEffect(() => {
+    setStorePage(1)
+  }, [storeQuery, storeFilter, storeSort])
+
+  const catalogPage = useMemo(
+    () =>
+      selectCatalogPage(catalog?.rows ?? [], {
+        query: storeQuery,
+        filter: storeFilter,
+        sort: storeSort,
+        page: storePage,
+        pageSize: STORE_PAGE_SIZE
+      }),
+    [catalog, storeQuery, storeFilter, storeSort, storePage]
+  )
+
+  // Recompute fit for installed models, the cart, and the catalog rows actually ON SCREEN. The
+  // catalog is thousands of rows now; asking for a verdict on all of them would be a pointless
+  // round trip per page turn, and the verdicts the user can see are the ones that matter.
+  //
+  // The set of visible refs, not `catalogPage` itself, is what this effect actually consumes — but
+  // `catalogPage` is a fresh object every time the 3 s catalog poll lands (`selectCatalogPage`
+  // re-runs because its `catalog` input is a new object each successful load, even when the visible
+  // page's refs did not change at all). Keying the effect on `catalogPage`'s IDENTITY therefore
+  // re-fires on every poll tick during a first-time crawl that can run for minutes — each firing
+  // spawns `nvidia-smi` (2.5 s timeout) plus a disk probe plus a full `/api/tags` read. `fitRefsKey`
+  // is a primitive string built from the same refs; two computations that land on the same set of
+  // refs produce the same string VALUE, and React's dependency comparison (`Object.is`) treats equal
+  // primitives as unchanged regardless of how many times the surrounding objects were rebuilt.
+  const fitRefsKey = useMemo(() => {
     const refs = new Set<string>()
     for (const m of models) refs.add(m.name)
-    for (const p of popular) refs.add(p.name)
+    for (const row of catalogPage.rows) refs.add(row.ref)
     for (const c of cart) refs.add(c.ref)
-    if (refs.size === 0) return
+    return [...refs].sort().join('\n')
+  }, [models, catalogPage, cart])
+
+  useEffect(() => {
+    if (status?.health !== 'ok') return
+    if (fitRefsKey === '') return
+    const refs = fitRefsKey.split('\n')
     ollama
-      .fit([...refs])
+      .fit(refs)
       .then((fit) => {
         if (apiStillActive(api)) setFitMap(fit)
       })
       .catch(() => {})
-  }, [models, popular, cart, status?.health, api, apiStillActive, ollama])
-
-  const filteredPopular = useMemo(() => {
-    const q = storeQuery.trim().toLowerCase()
-    if (!q) return popular
-    return popular.filter((p) => p.name.toLowerCase().includes(q) || p.note.toLowerCase().includes(q))
-  }, [popular, storeQuery])
+  }, [fitRefsKey, status?.health, api, apiStillActive, ollama])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget || deleteTarget.api !== api || !apiStillActive(api)) {
@@ -392,7 +507,15 @@ function OllamaManagerPanelForApi({
                   status={status}
                   storeQuery={storeQuery}
                   setStoreQuery={setStoreQuery}
-                  filteredPopular={filteredPopular}
+                  storeFilter={storeFilter}
+                  setStoreFilter={setStoreFilter}
+                  storeSort={storeSort}
+                  setStoreSort={setStoreSort}
+                  page={catalogPage}
+                  setStorePage={setStorePage}
+                  catalog={catalog}
+                  catalogError={catalogError}
+                  onReloadCatalog={loadCatalog}
                   fitMap={fitMap}
                   customRef={customRef}
                   setCustomRef={setCustomRef}
@@ -570,12 +693,39 @@ function ModelsTab({
   )
 }
 
+/** One catalog row's size, stated at the precision the source actually has. "≈" is not decoration:
+ *  the library page prints "1.3GB" while the manifest knows 1_321_098_329 bytes, and a rounded
+ *  figure must not look like a measured one. A missing size stays "unknown", never 0. */
+function CatalogSize({ row }: { row: CatalogRow }) {
+  if (row.sizeBytes === null) {
+    return (
+      <span className="om-model__meta" title={row.factsError ?? undefined}>
+        {row.factsError ? 'size unavailable' : 'size not fetched yet'}
+      </span>
+    )
+  }
+  return (
+    <span className="om-model__meta">
+      {row.sizeExact ? '' : '≈'}
+      {formatBytes(row.sizeBytes)}
+    </span>
+  )
+}
+
 function StoreTab({
   ollama,
   status,
   storeQuery,
   setStoreQuery,
-  filteredPopular,
+  storeFilter,
+  setStoreFilter,
+  storeSort,
+  setStoreSort,
+  page,
+  setStorePage,
+  catalog,
+  catalogError,
+  onReloadCatalog,
   fitMap,
   customRef,
   setCustomRef,
@@ -589,7 +739,15 @@ function StoreTab({
   status: OllamaStatus | null
   storeQuery: string
   setStoreQuery: (v: string) => void
-  filteredPopular: { name: string; note: string }[]
+  storeFilter: CatalogFilter
+  setStoreFilter: (v: CatalogFilter) => void
+  storeSort: CatalogSort
+  setStoreSort: (v: CatalogSort) => void
+  page: CatalogPage
+  setStorePage: (updater: (current: number) => number) => void
+  catalog: CatalogView | null
+  catalogError: string | null
+  onReloadCatalog: () => void
   fitMap: Record<string, FitEvaluation>
   customRef: string
   setCustomRef: (v: string) => void
@@ -602,33 +760,149 @@ function StoreTab({
   return (
     <>
       <section>
-        <h3>Popular models</h3>
+        <h3>Model catalog</h3>
+        {catalog === null ? (
+          <p className="om-empty-note">
+            {catalogError
+              ? `The catalog could not be loaded: ${catalogError}. This is a load failure, not an empty catalog — the exact-reference field below still reaches any model.`
+              : 'Loading the catalog…'}
+          </p>
+        ) : (
+          <div
+            // Reuses the panel's existing note styling so this block is legible today; the
+            // completeness modifier is there for a later stylesheet pass (the Ollama styles live
+            // outside this change's ownership) and is inert until then.
+            className={`om-empty-note om-catalog-state om-catalog-state--${catalog.completeness.state}`}
+            role="status"
+            aria-live="polite"
+          >
+            <p>{completenessHeadline(catalog)}</p>
+            {catalog.refreshing && (
+              <p>
+                Still fetching: {catalog.pendingTagFetches} model tag lists, {catalog.pendingFactFetches} exact
+                sizes.
+              </p>
+            )}
+            {(() => {
+              const staleness = stalenessSentence(catalog, Date.now())
+              return staleness ? <p>{staleness}</p> : null
+            })()}
+            {catalog.completeness.reasons.map((reason, i) => (
+              <p key={i}>{reason}</p>
+            ))}
+            {catalog.refreshError && <p>Last refresh error: {catalog.refreshError}</p>}
+            {catalogError && <p>The most recent reload failed: {catalogError}. Showing the last list that loaded.</p>}
+            <button className="sc-btn" onClick={onReloadCatalog}>
+              Reload catalog
+            </button>
+          </div>
+        )}
+        <div className="om-actions">
+          <input
+            type="search"
+            className="om-search"
+            style={{ marginBottom: 0, flex: 1 }}
+            placeholder="Search every model and tag…"
+            aria-label="Search the model catalog"
+            value={storeQuery}
+            onChange={(e) => setStoreQuery(e.target.value)}
+          />
+          <label>
+            Show
+            <select
+              aria-label="Filter the model catalog"
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value as CatalogFilter)}
+            >
+              <option value="all">Everything</option>
+              <option value="installed">Installed</option>
+              <option value="not-installed">Not installed</option>
+              <option value="with-size">Known size</option>
+            </select>
+          </label>
+          <label>
+            Sort
+            <select
+              aria-label="Sort the model catalog"
+              value={storeSort}
+              onChange={(e) => setStoreSort(e.target.value as CatalogSort)}
+            >
+              <option value="name">Name</option>
+              <option value="size-asc">Smallest first</option>
+              <option value="size-desc">Largest first</option>
+              <option value="installed-first">Installed first</option>
+            </select>
+          </label>
+        </div>
         <p className="om-empty-note">
-          A small curated starting point, not Ollama's full official catalog (see docs/ollama-manager.md) —
-          enter any exact reference below if you don't see what you want.
+          {page.total === 0
+            ? catalog && catalog.rows.length > 0
+              ? 'No catalog row matches this search or filter.'
+              : 'No rows are listed. See the catalog state above for whether that is a load failure or a catalog that is genuinely still being fetched.'
+            : `Showing ${page.from}–${page.to} of ${page.total} matching references (page ${page.page} of ${page.pageCount}).`}
         </p>
-        <input
-          type="search"
-          className="om-search"
-          placeholder="Search popular models…"
-          aria-label="Search popular models"
-          value={storeQuery}
-          onChange={(e) => setStoreQuery(e.target.value)}
-        />
         <ul className="om-model-list">
-          {filteredPopular.map((p) => (
-            <li key={p.name} className="om-model">
+          {page.rows.map((row) => (
+            <li key={row.ref} className="om-model">
               <div className="om-model__row">
-                <span className="om-model__name">{p.name}</span>
-                <span className="om-model__meta">{p.note}</span>
-                <FitBadge fit={fitMap[p.name]} />
-                <button className="sc-btn" disabled={status?.health !== 'ok'} onClick={() => onAddToCart(p.name)}>
+                <span className="om-model__name">{row.ref}</span>
+                {row.installed && <span className="om-model__meta">installed</span>}
+                <CatalogSize row={row} />
+                <span className="om-model__meta" title={row.revision ?? undefined}>
+                  {row.revision
+                    ? // `revisionExact` = the FULL 64-hex manifest digest, sliced to 12 chars for
+                      // display — that slice IS a truncation and must carry the "…". A short
+                      // digest (`revisionExact` false) is the library page's own 12-hex figure,
+                      // shown here complete: appending "…" to it would claim more digits exist
+                      // than were ever fetched. (This used to be backwards — the truncated case
+                      // had no ellipsis and the complete case had one.)
+                      `rev ${row.revision.replace(/^sha256:/, '').slice(0, 12)}${row.revisionExact ? '…' : ''}`
+                    : 'rev unknown'}
+                </span>
+                <span className="om-model__meta">
+                  {row.installed
+                    ? // `publishedAt` is never a real publish date — catalog-types.ts documents it
+                      // as ONLY ever an installed model's local /api/tags `modified_at` (neither the
+                      // registry manifest nor the library pages expose a machine-readable publish
+                      // time). Labeling it "installed" says what it actually is; showing a bare date
+                      // here implied a publish date this app has never had evidence for.
+                      row.publishedAt
+                      ? `installed ${new Date(row.publishedAt).toLocaleDateString()}`
+                      : 'no timestamp'
+                    : 'no published date'}
+                </span>
+                <FitBadge fit={fitMap[row.ref]} />
+                <button className="sc-btn" disabled={status?.health !== 'ok'} onClick={() => onAddToCart(row.ref)}>
                   Add to cart
                 </button>
               </div>
+              {row.tag === null && (
+                <p className="om-empty-note">
+                  {row.tagsState === 'error'
+                    ? `This model's tag list could not be fetched (${row.tagsError ?? 'unknown error'}) — its other tags are not listed. The bare name pulls :latest.`
+                    : "This model's published tag list has not been fetched yet — its other tags are not listed. The bare name pulls :latest."}
+                </p>
+              )}
             </li>
           ))}
         </ul>
+        {page.pageCount > 1 && (
+          <div className="om-actions">
+            <button className="sc-btn" disabled={page.page <= 1} onClick={() => setStorePage((p) => p - 1)}>
+              Previous
+            </button>
+            <span className="om-model__meta">
+              Page {page.page} of {page.pageCount}
+            </span>
+            <button
+              className="sc-btn"
+              disabled={page.page >= page.pageCount}
+              onClick={() => setStorePage((p) => p + 1)}
+            >
+              Next
+            </button>
+          </div>
+        )}
         <div className="om-actions" style={{ marginTop: 10 }}>
           <input
             type="text"

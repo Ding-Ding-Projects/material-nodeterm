@@ -1,13 +1,13 @@
 import { IPC } from '../../shared/ipc'
 import type { CorePlatform } from '../platform'
 import {
-  OLLAMA_POPULAR_MODELS,
   evaluateFit,
   type FitEvaluation,
   type ModelFitFacts,
   type OllamaStatus
 } from '../../shared/ollama'
 import { OllamaClient, OllamaUnreachableError } from './client'
+import { OllamaCatalogStore } from './catalog-store'
 import { detectHardware } from './hardware'
 import { classifyOllamaHealth, detectOllamaInstalled, type OllamaInstallEvidence } from './installation'
 import { OllamaPullQueue } from './pull-queue'
@@ -18,6 +18,9 @@ export interface RegisterOllamaIpcDeps {
    *  make the 'stopped' vs 'not-installed' verdict deterministic instead of depending on whether
    *  Ollama happens to be installed on the machine running the suite. */
   checkInstalled?: () => OllamaInstallEvidence
+  /** Override for the exhaustive model catalog (network + cache). Injectable so a suite can drive
+   *  the catalog without any real HTTP. */
+  catalog?: OllamaCatalogStore
 }
 
 /** Registers the ollama:* RPC surface on a CorePlatform. Every call here reaches only Ollama's own
@@ -42,7 +45,15 @@ export function registerOllamaIpc(platform: CorePlatform, deps: RegisterOllamaIp
   platform.handle(IPC.ollamaShow, (model: string) => client.show(model))
   platform.handle(IPC.ollamaDelete, (model: string) => client.deleteModel(model))
   platform.handle(IPC.ollamaCopy, (source: string, destination: string) => client.copyModel(source, destination))
-  platform.handle(IPC.ollamaPopularModels, () => OLLAMA_POPULAR_MODELS)
+  // The exhaustive catalog rides the existing (argument-less) popular-models channel: this pass does
+  // not own src/shared/ipc.ts or the preload, so a new channel could not be added. The payload is
+  // now a CatalogSnapshot object instead of the old `{name, note}[]` array; the renderer validates
+  // whatever arrives (catalogView.ts) and still understands the legacy array from an older core.
+  // Nothing is fetched until this handler is actually called — i.e. until the user opens the
+  // manager. Widening `OllamaApi.popularModels()`'s declared type is owed follow-up work in the
+  // file that declares it. See docs/ollama-manager.md.
+  const catalog = deps.catalog ?? new OllamaCatalogStore({ userDataDir: platform.userDataDir, client })
+  platform.handle(IPC.ollamaPopularModels, () => catalog.snapshot())
 
   platform.handle(IPC.ollamaHardware, () => detectHardware(platform.userDataDir))
 
@@ -55,19 +66,38 @@ export function registerOllamaIpc(platform: CorePlatform, deps: RegisterOllamaIp
     const out: Record<string, FitEvaluation> = {}
     for (const ref of refs) {
       const model = byName.get(ref)
-      let facts: ModelFitFacts
       if (model) {
-        facts = {
+        const facts: ModelFitFacts = {
           sizeBytes: model.sizeBytes,
           parameterSize: model.details.parameter_size ?? null,
           quantization: model.details.quantization_level ?? null,
           contextLength: null
         }
-      } else {
-        // Not installed — we have no verified size/param/quant for it. Never guessed from the name.
-        facts = { sizeBytes: null, parameterSize: null, quantization: null, contextLength: null }
+        out[ref] = evaluateFit(hw, facts)
+        continue
       }
-      out[ref] = evaluateFit(hw, facts)
+      // Not installed. The catalog may still know this exact tag's PUBLISHED download size, which
+      // is a real measured fact about the model rather than a guess from its name — that is what
+      // makes a pre-pull verdict possible at all. Its precision is named explicitly, because
+      // evaluateFit's own evidence line calls the number an on-disk size (true for an installed
+      // model, and the reason this line goes in front of it). Nothing is ever inferred from the
+      // reference text; a model with no published size stays 'unknown'.
+      const published = await catalog.publishedSize(ref).catch(() => null)
+      const facts: ModelFitFacts = {
+        sizeBytes: published?.sizeBytes ?? null,
+        parameterSize: null,
+        quantization: null,
+        contextLength: null
+      }
+      const evaluation = evaluateFit(hw, facts)
+      if (published) {
+        evaluation.evidence.unshift(
+          published.exact
+            ? `${ref} is not installed; the size below is its exact published download size from Ollama's registry manifest.`
+            : `${ref} is not installed; the size below is the published download size as Ollama's library page rounds it (approximate).`
+        )
+      }
+      out[ref] = evaluation
     }
     return out
   })
