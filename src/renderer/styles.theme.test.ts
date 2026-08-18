@@ -162,6 +162,45 @@ describe('the light theme overrides every themeable token', () => {
       .map(([k]) => k)
     expect(missing).toEqual([])
   })
+
+  // Hand-written inventory of the tokens the git history graph paints with, and the ONLY guard
+  // that would notice if they were deleted.
+  //
+  // These are invisible to every search. GitHistoryGraphSvg carries their names as bare strings
+  // without the `--` prefix (`'git-graph-lane-1'`) and assembles the reference when it paints:
+  //
+  //     return `var(--${color})`      // GitHistoryGraphSvg.tsx
+  //
+  // so neither `var(--git-graph-lane-1)` nor `'--git-graph-lane-1'` appears anywhere. A dead-token
+  // sweep therefore reports all eight as referenced nowhere, and removing them would take the
+  // graph's colours out behind a clean diff and a green suite — this was nearly done.
+  //
+  // The theme-independence check above mentions `--git-graph-` but cannot protect them: it is a
+  // predicate over the keys it finds, so if the keys vanish it simply stops matching and passes.
+  // That is the failure this repo names by name — a rule-shaped check catches a thing done wrongly
+  // and never a thing not done at all — which is why this list is written out by hand.
+  it('keeps every git-graph token the runtime-built var() depends on', () => {
+    const GIT_GRAPH_TOKENS = [
+      '--git-graph-ref',
+      '--git-graph-remote-ref',
+      '--git-graph-base-ref',
+      '--git-graph-lane-1',
+      '--git-graph-lane-2',
+      '--git-graph-lane-3',
+      '--git-graph-lane-4',
+      '--git-graph-lane-5'
+    ]
+    // Line-based rather than a regex: a declaration is a line whose first non-space text is the
+    // token followed by a colon, which needs no escaping and cannot be mangled on its way here.
+    const declared = new Set(
+      CSS.split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.includes(':'))
+        .map((line) => line.slice(0, line.indexOf(':')).trim())
+    )
+    const missing = GIT_GRAPH_TOKENS.filter((t) => !declared.has(t))
+    expect(missing, 'the git history graph builds var(--<name>) at run time; nothing else names these').toEqual([])
+  })
 })
 
 describe('Material 3 token foundation', () => {
