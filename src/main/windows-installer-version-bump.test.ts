@@ -90,3 +90,29 @@ describe('requireCleanSourceStatus', () => {
     expect(() => requireCleanSourceStatus(' M package.json', tampered)).toThrow(/more than its version/)
   })
 })
+
+describe('package-lock.json carries the version twice', () => {
+  const lock = (version: string) =>
+    JSON.stringify({
+      name: 'node-terminal',
+      version,
+      lockfileVersion: 3,
+      packages: { '': { name: 'node-terminal', version }, 'node_modules/x': { version: '1.0.0' } },
+    })
+
+  it('accepts a bump that updates BOTH the root and packages[""] version', () => {
+    // `npm version` writes both. Neutralising only the top-level one would read the second as an
+    // unrelated change and refuse the very bump the exemption exists for.
+    expect(isVersionOnlyManifestChange(lock('0.4.3'), lock('0.4.4'))).toBe(true)
+  })
+
+  it('still rejects a changed DEPENDENCY version riding along', () => {
+    const tampered = JSON.stringify({
+      name: 'node-terminal',
+      version: '0.4.4',
+      lockfileVersion: 3,
+      packages: { '': { name: 'node-terminal', version: '0.4.4' }, 'node_modules/x': { version: '9.9.9' } },
+    })
+    expect(isVersionOnlyManifestChange(lock('0.4.3'), tampered)).toBe(false)
+  })
+})

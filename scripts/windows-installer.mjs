@@ -397,7 +397,18 @@ export function isVersionOnlyManifestChange(committedText, workingText) {
   if (committed === null || working === null || typeof committed !== 'object' || typeof working !== 'object') {
     return false
   }
-  const strip = (value) => JSON.stringify({ ...value, version: null })
+  // package-lock.json carries the version TWICE — once at the root and once as the root package's
+  // own entry (`packages[""]`, lockfile v2/v3) — and `npm version` updates both. Neutralising only
+  // the top-level one would read the second as an unrelated change and refuse the very bump this
+  // exemption exists for.
+  const strip = (value) => {
+    const root = value.packages?.['']
+    return JSON.stringify({
+      ...value,
+      version: null,
+      ...(root && typeof root === 'object' ? { packages: { ...value.packages, '': { ...root, version: null } } } : {}),
+    })
+  }
   return strip(committed) === strip(working)
 }
 
@@ -406,7 +417,14 @@ export function requireCleanSourceStatus(status, readPair) {
   if (changed === null) return
   const unexpected = changed.filter((path) => !VERSION_BUMP_PATHS.has(path))
   if (unexpected.length || typeof readPair !== 'function') {
-    fail('refusing to package a dirty source tree; commit every tracked and untracked source first')
+    // NAME the offending paths. Without them this refusal is unactionable on a runner whose
+    // working tree you cannot inspect: it cost a whole release cycle to learn only that
+    // *something* was dirty, on a build where the release version bump legitimately dirties two
+    // known files and the interesting question is which OTHER file joined them.
+    const offenders = unexpected.length ? unexpected : changed
+    fail(
+      `refusing to package a dirty source tree; commit every tracked and untracked source first (dirty: ${offenders.join(', ')})`,
+    )
   }
   for (const path of changed) {
     const { committed, working } = readPair(path)
