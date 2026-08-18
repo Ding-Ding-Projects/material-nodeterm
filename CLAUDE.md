@@ -2381,49 +2381,6 @@ loopback bind and port they validated. Do not replace that with a partial dotenv
 accepts whitespace, quotes, colon delimiters and predefined control variables that can otherwise
 redirect the stack or bypass the loopback decision.
 
-### Server Edition container image
-
-The root `Dockerfile` is a separate Node-runtime packaging path. `npm postinstall` is unusable in
-that path because it rebuilds native addons for Electron's ABI; the deps stage uses
-`--ignore-scripts` and explicitly rebuilds **both** `node-pty` and `smart-whisper` against the same
-Node major the runtime stage uses. Rebuilding only node-pty produces a healthy terminal server whose
-browser dictation fails later with a missing `smart-whisper/build/Release/smart-whisper` binding —
-the health check cannot see that feature-specific native load.
-
-The legacy image ran as root and therefore left existing `/data` volumes root-owned. The container
-entrypoint exists solely to bridge that upgrade: while uid 0, it scans the literal `/data` filesystem
-and changes only uid/gid-0 entries, without dereferencing symlinks, then `exec`s through `gosu` as the
-image's `node` user (uid 1000), leaving Node as PID 1 so `docker stop` reaches the server's SIGTERM
-handler. It must never follow `NODETERM_DATA_DIR`: that value is operator-controlled, and a hand-edited
-`/` would turn a compatibility migration into filesystem-wide damage. A new image/compose/host-wrapper
-change owes the real `node scripts/test-docker-host.mjs` smoke: build, health/auth page, both native
-loads, uid of PID 1, graceful shutdown, volume persistence across restart and recreation, and the
-first-boot-only password contract.
-
-That smoke may target a local socket or an explicit `ssh://` Docker endpoint, but it must remain a
-safe guest on a shared daemon. The selected endpoint is pinned on every command after inherited
-context/TLS/builder controls are removed; `tcp://` and HTTP API endpoints are refused. Each run uses
-a cryptographic UUID and preflights every exact name as absent. Its image, volumes, server, and
-one-shot helpers all carry exact run/role/source-SHA labels, while image/container iid/cid files and
-a volume creation fingerprint supply cleanup identities. Runtime containers publish no port, use
-`network=none`, have CPU/memory/swap/PID/no-new-privilege/capability limits, and the HTTP/auth/asset
-probe executes inside the server container with its password arriving only over stdin. Cleanup
-rechecks identity and labels before removal and a zero-residue label scan is part of the green
-verdict. The predeclared recovery journal lives outside the checkout, pins the daemon identity, and
-`--cleanup-run <uuid>` is the only recovery route; it refuses a daemon, resource-identity, or label
-mismatch rather than adopting a lookalike.
-SSH host trust remains the user's persistent OpenSSH policy: the harness removes an inherited
-`DOCKER_SSH_COMMAND`, never disables host-key comparison, never creates an ephemeral trust store,
-and never mutates the user's SSH configuration.
-
-The wrappers create the first-boot password before starting the build. Root `.env` and the wrappers'
-`.env.bak` / `.nodeterm-env-*` temporary files therefore belong in **both** `.gitignore` and
-`.dockerignore`: Git exclusion alone still sends them through `COPY . .` into the BuildKit context
-and cache. Wrapper starts pin the Compose file/project/profiles and export the exact password,
-loopback bind and port they validated. Do not replace that with a partial dotenv parser: Compose
-accepts whitespace, quotes, colon delimiters and predefined control variables that can otherwise
-redirect the stack or bypass the loopback decision.
-
 **Backend check feed** (`src/main/check.ts`, successor to the static `announcements.json`): the
 **main process** calls `GET https://api.nodeterm.dev/v1/check?version=&os=&channel=stable` (so the
 renderer CSP stays `'self'`) on launch + every 6h, cached 5 min, returning `{ messages, update }`.
