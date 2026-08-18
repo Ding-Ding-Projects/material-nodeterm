@@ -28,6 +28,12 @@ describe('terminateWindowsProcessTree', () => {
     }
   }
 
+  // `ping.exe` directly, never `cmd.exe /c ping`. The wrapper is what the first version of this
+  // file used, and `child.kill()` then ends cmd while leaving ping running for its full 30 seconds
+  // — measured, not assumed: one orphan survived every kill. That is precisely the failure the
+  // function under test exists to prevent, so a test for it that leaks processes is worse than
+  // funny; a suite that spawns real shells elsewhere then competes with the litter.  }
+
   it('refuses to run at all off Windows, rather than pretending to have killed something', async () => {
     if (process.platform === 'win32') return
     await expect(terminateWindowsProcessTree(999_999)).rejects.toThrow(/unavailable on this platform/)
@@ -47,7 +53,7 @@ describe('terminateWindowsProcessTree', () => {
     async () => {
       // A process that produces no early output: `ping -n` just waits, which is the exact shape
       // this helper exists for, because node-pty defers its own kill() until a first write.
-      const child = spawn('cmd.exe', ['/c', 'ping', '-n', '30', '127.0.0.1'], {
+      const child = spawn('ping.exe', ['-n', '30', '127.0.0.1'], {
         windowsHide: true,
         stdio: 'ignore'
       })
@@ -68,7 +74,7 @@ describe('terminateWindowsProcessTree', () => {
       // process alive for the first few polls and only then absent, which is the race the loop
       // exists for and which cannot be produced by killing a real child — taskkill /F has already
       // finished by the time the promise would settle.
-      const child = spawn('cmd.exe', ['/c', 'ping', '-n', '30', '127.0.0.1'], {
+      const child = spawn('ping.exe', ['-n', '30', '127.0.0.1'], {
         windowsHide: true,
         stdio: 'ignore'
       })
@@ -95,7 +101,7 @@ describe('terminateWindowsProcessTree', () => {
     'rejects when the tree never goes away, rather than acknowledging a kill it cannot prove',
     async () => {
       // A timeout is always rejection — the other half of the same sentence in the source.
-      const child = spawn('cmd.exe', ['/c', 'ping', '-n', '30', '127.0.0.1'], {
+      const child = spawn('ping.exe', ['-n', '30', '127.0.0.1'], {
         windowsHide: true,
         stdio: 'ignore'
       })
