@@ -167,6 +167,9 @@ import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { isRemoteSessionNode } from '@shared/worktree'
 import { useSession, useActiveSessionPresence } from '../session/session'
 import { isBrowserRuntime } from '../bridge/runtime'
+import { useToyLocks } from '../state/toylocks'
+import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
+import { isNodeLockEngaged, nodeLockTeardownMode } from '@shared/toylock'
 import {
   accountChipLabel,
   COLLAPSED_HEIGHT,
@@ -509,6 +512,15 @@ export function disposeAllParkedTerminals(): void {
  *  deletion, where the unmount runs AFTER the session was already destroyed, so parking would keep a
  *  dead xterm. */
 const noParkIds = new Set<string>()
+
+/** Session-scoped keys whose upcoming REAL teardown must skip `killSession` — the toy-lock gate's
+ *  `detach-view-only` mode (`nodeLockTeardownMode` in shared/toylock.ts) on a NON-persistent
+ *  session: the plain-shell pty client IS the process, so the ordinary offscreen-style teardown
+ *  this reuses would end it. Set immediately before the same down-transition offscreen release
+ *  uses (`noParkIds` + the epoch bump), so the cleanup takes the "dispose the view, keep the
+ *  session" branch instead of the "dispose the view, detach/kill the client" one. See
+ *  `engageNodeLockDown` in TerminalNode for the only caller. */
+const noKillIds = new Set<string>()
 
 /** Canvas calls this when permanently deleting a terminal node: drops an already-parked entry
  *  AND makes the upcoming unmount (if the node is currently mounted) dispose instead of park. Takes
@@ -1345,6 +1357,103 @@ export function TerminalNode({
   // with — it can be off-screen mid-drag or right after a ⌘K jump — so it is never taken down.
   const selectedRef = useRef(selected)
   selectedRef.current = selected
+
+  // --- toy-lock enforcement (docs/toy-locks.md, "Known limitations" — this is the fix) ---
+  // A `kind: 'node'` toy lock used to be created, persisted, listed and rate-limited with NOTHING
+  // ever consulting it: the terminal kept rendering, kept taking keystrokes, kept streaming PTY
+  // output regardless. This block is the only wired-up consumer of that lock's actual on/off state.
+  // It deliberately REUSES the offscreen-release machinery above (`offscreenDown`/`offscreenEpoch`/
+  // `noParkIds`) rather than inventing a parallel teardown path — see `nodeLockTeardownMode` in
+  // shared/toylock.ts for the one place a lock's teardown legitimately differs from an ordinary
+  // offscreen release (a non-persistent session must never have its client killed).
+  const lockRecords = useToyLocks((s) => s.records)
+  const lockUnlockedUntil = useToyLocks((s) => s.unlockedUntil)
+  const lockStoreLoaded = useToyLocks((s) => s.loaded)
+  useEffect(() => {
+    // Idempotent with whatever else already triggered a refresh (TabBar/AppearanceSection do their
+    // own on mount) — `refresh()` just overwrites `records` with the latest list either way.
+    void useToyLocks.getState().refresh()
+  }, [])
+  const nodeLockRecord = lockRecords.find((r) => r.target.kind === 'node' && r.target.id === id)
+  const nodeLockUnlockedUntil = nodeLockRecord ? lockUnlockedUntil[nodeLockRecord.id] : undefined
+  const nodeLockUnlockedNow = nodeLockUnlockedUntil !== undefined && Date.now() < nodeLockUnlockedUntil
+  const nodeLocked = isNodeLockEngaged({
+    storeLoaded: lockStoreLoaded,
+    hasRecord: !!nodeLockRecord,
+    unlockedNow: nodeLockUnlockedNow
+  })
+  // Mirrors for closures that cannot see fresh render state: the paste/drop/rename handlers below
+  // (ordinary event handlers, re-created every render — a ref is not strictly required for THEM,
+  // but keeps the refusal check identical in shape to the mount-stable visibility observer's, which
+  // truly does need one), and the relock-on-hidden edge inside it.
+  const nodeLockedRef = useRef(nodeLocked)
+  nodeLockedRef.current = nodeLocked
+  const nodeLockRecordRef = useRef(nodeLockRecord)
+  nodeLockRecordRef.current = nodeLockRecord
+  // A 'minutes' unlock expires by TIMESTAMP, not by an event — nothing else in this component
+  // re-renders on a schedule while the terminal just sits there idle (PTY output paints xterm
+  // directly, bypassing React state). Without this, an expired-but-still-rendered-unlocked node
+  // would only actually re-lock on the NEXT incidental re-render (a resize, a title edit…), which
+  // could be minutes late. Scoped tightly — only while there is an active 'minutes' unlock to catch
+  // expiring — so this costs nothing for the overwhelmingly common case of an unlocked node.
+  const [, forceLockRecheck] = useState(0)
+  useEffect(() => {
+    if (!nodeLockRecord || nodeLockRecord.duration !== 'minutes' || !nodeLockUnlockedNow) return
+    const t = setInterval(() => forceLockRecheck((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [nodeLockRecord, nodeLockUnlockedNow])
+  const [nodeUnlockPromptAnchor, setNodeUnlockPromptAnchor] = useState<{ x: number; y: number } | null>(
+    null
+  )
+  /** Tears this node's view down exactly like an offscreen release, EXCEPT the client-kill step on
+   *  a non-persistent session (`nodeLockTeardownMode`) — see that function's doc comment in
+   *  shared/toylock.ts for why. Idempotent: a node already down (offscreen release beat the lock to
+   *  it, or the lock is already engaged) is left alone; the mode is decided fresh every call, so a
+   *  session that only just finished spawning (and only NOW knows whether it is persistent) is
+   *  still judged correctly. */
+  const engageNodeLockDown = (): void => {
+    if (offscreenDownRef.current) return
+    // Belt-and-braces against the one-commit gap between THIS synchronous layout effect (which
+    // runs, and flushes its own state updates, before the browser paints) and the terminal
+    // lifecycle effect's actual teardown (a passive `useEffect` cleanup, which does not). The
+    // plate already covers the terminal visually by the same paint (same commit, DOM sibling with
+    // a higher z-index — see the render below), but a keystroke sent to a still-focused,
+    // not-yet-disposed xterm in that gap would still reach the pty. Disabling stdin AND blurring
+    // right here closes that window immediately rather than trusting effect-ordering timing.
+    if (termRef.current) {
+      termRef.current.options.disableStdin = true
+      termRef.current.blur()
+    }
+    offscreenDownRef.current = true
+    noParkIds.add(termKey)
+    if (nodeLockTeardownMode(sessionPersistentRef.current) === 'detach-view-only') {
+      noKillIds.add(termKey)
+    }
+    setOffscreenDown(true)
+    setOffscreenEpoch((n) => n + 1)
+  }
+  /** Reverses `engageNodeLockDown` — a warm reattach for a persistent session, or (per
+   *  `nodeLockTeardownMode`) a fresh, unreplayed rejoin of the still-running client for a
+   *  non-persistent one; either way the redraw comes from the LIVE session, never from a buffer
+   *  that merely sat in memory behind the plate. No-op if nothing is down. */
+  const releaseNodeLockDown = (): void => {
+    if (!offscreenDownRef.current) return
+    offscreenDownRef.current = false
+    setOffscreenDown(false)
+    setOffscreenEpoch((n) => n + 1)
+  }
+  // The gate itself. `useLayoutEffect`, not `useEffect`, and placed to run BEFORE the terminal
+  // lifecycle effect below: on the very first mount of an unknown-or-locked node this must set
+  // `offscreenDownRef.current` (a plain ref, read synchronously) before that effect's own body runs
+  // its `if (offscreenDownRef.current) return` guard — otherwise a locked node would spawn a real
+  // xterm + PTY for one paint before this caught up and tore it down again. See `isNodeLockEngaged`
+  // for why the very first render can already read `nodeLocked === true` (storeLoaded still false).
+  useLayoutEffect(() => {
+    if (nodeLocked) engageNodeLockDown()
+    else releaseNodeLockDown()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- engage/release close over refs/setters only
+  }, [nodeLocked])
+
   // --- glyphgrid (experimental shared renderer) ---
   // This node's registered grid, published by the lifecycle effect so the position effect can push
   // an origin without re-running (and therefore respawning) the terminal. Null for every terminal
@@ -3923,12 +4032,16 @@ export function TerminalNode({
         handedOff = entry
         return
       }
-      // Real teardown (respawn / permanent delete). `life` is shared, so a spawn continuation of an
-      // EARLIER effect (this terminal may have been adopted from a park) sees the session die here
-      // and tears down instead of wiring listeners onto it; `killSession` keeps the kill single.
+      // Real teardown (respawn / permanent delete / offscreen release / a toy lock engaging).
+      // `life` is shared, so a spawn continuation of an EARLIER effect (this terminal may have
+      // been adopted from a park) sees the session die here and tears down instead of wiring
+      // listeners onto it; `killSession` keeps the kill single.
       life.dead = true
       cleanups.forEach((fn) => fn())
-      if (sessionId) killSession(sessionId)
+      // `noKillIds` (toy-lock `detach-view-only` mode, see its own doc comment): the client is
+      // deliberately left attached so a non-persistent session's process keeps running while
+      // locked — killing it here would be the #126 live-work bug wearing a padlock icon.
+      if (sessionId && !noKillIds.delete(termKey)) killSession(sessionId)
       term.dispose()
     }
     // `offscreenEpoch` is bumped on BOTH offscreen edges: going down runs this effect's cleanup
@@ -3984,6 +4097,17 @@ export function TerminalNode({
         visibilityReportRef.current?.(visible)
         const wasVisible = wasVisibleRef.current
         wasVisibleRef.current = visible
+        // A 'session'-duration toy lock relocks the moment this node STOPS being the looked-at
+        // surface — the same idea as TabBar's relock() on leaving a tab, expressed with the signal
+        // a canvas node actually has: going out of the viewport. (`isUnlocked` re-checked here
+        // rather than trusted from a stale render: this callback lives on the mount-stable
+        // observer, so its closure is old by the time a hidden edge actually fires.)
+        if (!visible && wasVisible) {
+          const lr = nodeLockRecordRef.current
+          if (lr && lr.duration === 'session' && useToyLocks.getState().isUnlocked(lr.id)) {
+            useToyLocks.getState().relock(lr.id)
+          }
+        }
         // Publish the same verdict for the hibernation sweep, which runs in Canvas and cannot see
         // this node's box. One observer, two consumers — a second observer would be a second
         // opinion about the same rectangle.
@@ -4356,6 +4480,10 @@ export function TerminalNode({
    * how the files got here, and in whether our window needs raising afterwards.
    */
   const insertFiles = async (files: File[], opts: { raiseWindow: boolean }) => {
+    // Locked: `termRef.current` is already null (the toy-lock gate disposed the xterm), which
+    // alone would refuse this — the explicit check is belt-and-braces so a future refactor that
+    // changes what a locked node keeps mounted cannot silently reopen drag-drop/paste input.
+    if (nodeLockedRef.current) return
     const term = termRef.current
     if (!term || !files.length) return
     // Clipboard bytes (a screenshot) have never been a file anywhere, so something has to write
@@ -4453,7 +4581,11 @@ export function TerminalNode({
   // The line is composed by `renameCommand` — the shared one, which is what keeps a `\n` in the
   // name from submitting a SECOND line here (✦ Name with AI feeds this a model's answer).
   const pushSessionRename = (name: string) => {
-    if (canRenameNode && name) void api.pty.sendText(id, renameCommand(name))
+    // A rename push writes attacker/user-chosen text straight into the pty (`/rename <name>`) — the
+    // same "reaches the pty" concern the lock guards keystrokes/paste/drop against, just via a
+    // header action instead of the body. The title itself may still be edited while locked (it is
+    // node metadata, not terminal input); only the SESSION push is refused.
+    if (canRenameNode && name && !nodeLockedRef.current) void api.pty.sendText(id, renameCommand(name))
   }
 
   // The user took over the name (manual rename or ✦ AI-name): stop auto-tracking the session
@@ -5067,11 +5199,56 @@ export function TerminalNode({
             intersection, the observer fires, and the node reattaches. Collapsed is exactly the
             state in which nobody is reading this terminal's output, which is why the WebGL budget
             has always treated it as hidden too; this feature only agrees with it. Not a bug. */}
-          {offscreenDown && (
+          {offscreenDown && !nodeLocked && (
             <div className="term-node__offscreen nodrag">
               <span>Session running — reattaches on view</span>
             </div>
           )}
+          {/* Toy-lock enforcement (docs/toy-locks.md) — the fix for "a locked node does not
+            actually lock". Reuses `.term-node__closed`'s existing opaque-cover styling (no new CSS
+            needed) rather than the quieter `.term-node__offscreen` treatment above: unlike that
+            resting state, this one is meant to be seen head-on and acted on. `nodeLocked` implies
+            the view is already torn down (the useLayoutEffect above keeps that invariant), so
+            nothing of the terminal is left under this — see `engageNodeLockDown`. */}
+          {nodeLocked && (
+            <div
+              className="term-node__closed nodrag"
+              role="button"
+              tabIndex={0}
+              // Inline, not a new styles.css rule: `.term-node__closed` is shared with the
+              // non-interactive "session ended" states, which must not gain a pointer cursor.
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => setNodeUnlockPromptAnchor({ x: e.clientX, y: e.clientY })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                  setNodeUnlockPromptAnchor({ x: r.left, y: r.top })
+                }
+              }}
+            >
+              <span>🔒 Locked — click to unlock</span>
+            </div>
+          )}
+          {nodeUnlockPromptAnchor &&
+            nodeLockRecord &&
+            (() => {
+              // Re-resolved from the live store (not the closed-over `nodeLockRecord`) the same way
+              // Canvas's own "Manage lock…" prompt does — the record can change (removed elsewhere,
+              // duration edited in Settings) while this popover is open.
+              const record = useToyLocks
+                .getState()
+                .records.find((r) => r.target.kind === 'node' && r.target.id === id)
+              if (!record) return null
+              return (
+                <UnlockPrompt
+                  record={record}
+                  anchor={nodeUnlockPromptAnchor}
+                  onClose={() => setNodeUnlockPromptAnchor(null)}
+                  onUnlocked={() => setNodeUnlockPromptAnchor(null)}
+                />
+              )
+            })()}
           {co.closed && (
             <div className="term-node__closed nodrag">
               Closed by {closedName} — this session was ended.

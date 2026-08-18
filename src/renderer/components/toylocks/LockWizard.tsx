@@ -15,6 +15,17 @@ import { RecoveryNotice } from './RecoveryNotice'
 
 type Step = 'setup' | 'password' | 'totp' | 'done'
 
+// Windows Hello itself is not reachable from here — Electron's `systemPreferences` biometric
+// prompt (`promptTouchID`) is macOS-only, and there is no documented Electron API surface for
+// Windows' own Hello/PIN prompt (see docs/toy-locks.md). What this ships instead, honestly
+// labelled, is a Windows-only NUMERIC PIN credential — mechanically identical to a password (same
+// scrypt hashing, see toylock-service.ts), never presented as "Windows Hello" anywhere in this
+// file's copy. `navigator.platform`/`navigator.userAgent` is the same convention every other
+// Windows-only affordance in this renderer already uses (see e.g. Canvas.tsx's `isMac`); the core
+// re-checks `process.platform` itself before ever creating one, so a wrong guess here only costs a
+// hidden/disabled option, never a false accept.
+const isWindows = /Win/i.test(navigator.platform || navigator.userAgent)
+
 export function LockWizard({
   target,
   anchor,
@@ -63,12 +74,18 @@ export function LockWizard({
     onClose()
   }
 
+  // 'password' and 'windows-pin' go straight to the password step; 'password-totp' collects its
+  // FIRST factor there too (submitPassword below routes it into startTotp instead of createPassword
+  // once both password fields match) before moving on to enrollment.
   const startPassword = (): void => {
     setError(null)
     setStep('password')
   }
 
-  const startTotp = async (): Promise<void> => {
+  /** `comboPassword` is set only when finishing the combo's password step — it is the signal to
+   *  the core that this enrollment needs BOTH factors before it may ever be persisted (see
+   *  ToyLockBeginTotpInput.password in shared/toylock.ts). */
+  const startTotp = async (comboPassword?: string): Promise<void> => {
     setError(null)
     setBusy(true)
     try {
@@ -76,7 +93,8 @@ export function LockWizard({
         target,
         duration,
         durationMinutes: duration === 'minutes' ? durationMinutes : undefined,
-        lockedOnLaunch
+        lockedOnLaunch,
+        password: comboPassword
       })
       if (!res.ok) {
         setError(res.error)
@@ -91,14 +109,26 @@ export function LockWizard({
 
   const submitPassword = async (): Promise<void> => {
     if (!password) {
-      setError('A password is required.')
+      setError(credentialKind === 'windows-pin' ? 'A PIN is required.' : 'A password is required.')
+      return
+    }
+    if (credentialKind === 'windows-pin' && !/^\d+$/.test(password)) {
+      setError('A Windows PIN must be digits only.')
       return
     }
     if (password !== passwordConfirm) {
-      setError('The two passwords do not match.')
+      setError(
+        credentialKind === 'windows-pin' ? 'The two PINs do not match.' : 'The two passwords do not match.'
+      )
       return
     }
     setError(null)
+    // The combo's password step hands off to TOTP enrollment instead of creating the lock now —
+    // nothing is persisted until confirmTotp proves the second factor too (see toylock-service.ts).
+    if (credentialKind === 'password-totp') {
+      await startTotp(password)
+      return
+    }
     setBusy(true)
     try {
       const res = await window.nodeTerminal.toylock.createPassword({
@@ -106,7 +136,8 @@ export function LockWizard({
         password,
         duration,
         durationMinutes: duration === 'minutes' ? durationMinutes : undefined,
-        lockedOnLaunch
+        lockedOnLaunch,
+        credentialKind: credentialKind === 'windows-pin' ? 'windows-pin' : undefined
       })
       if (!res.ok) {
         setError(res.error)
@@ -187,7 +218,32 @@ export function LockWizard({
                   />
                   Authenticator code (TOTP)
                 </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="credentialKind"
+                    checked={credentialKind === 'password-totp'}
+                    onChange={() => setCredentialKind('password-totp')}
+                  />
+                  Password + code (both required)
+                </label>
+                <label title={isWindows ? undefined : 'Windows only'}>
+                  <input
+                    type="radio"
+                    name="credentialKind"
+                    checked={credentialKind === 'windows-pin'}
+                    disabled={!isWindows}
+                    onChange={() => setCredentialKind('windows-pin')}
+                  />
+                  Windows PIN{!isWindows && ' (Windows only)'}
+                </label>
               </div>
+              {credentialKind === 'windows-pin' && (
+                <span className="toylock-hint">
+                  A numeric PIN, hashed the same way as a password — not Windows Hello. Electron has
+                  no Windows Hello prompt to call into; see docs/toy-locks.md.
+                </span>
+              )}
             </div>
             <div className="toylock-field">
               <span className="toylock-field__label">Stay unlocked</span>
@@ -228,9 +284,19 @@ export function LockWizard({
               <button
                 className="toylock-btn toylock-btn--primary"
                 disabled={busy}
-                onClick={() => (credentialKind === 'password' ? startPassword() : void startTotp())}
+                onClick={() =>
+                  credentialKind === 'password' || credentialKind === 'windows-pin' || credentialKind === 'password-totp'
+                    ? startPassword()
+                    : void startTotp()
+                }
               >
-                {credentialKind === 'password' ? 'Set password…' : 'Generate secret…'}
+                {credentialKind === 'password'
+                  ? 'Set password…'
+                  : credentialKind === 'windows-pin'
+                    ? 'Set PIN…'
+                    : credentialKind === 'password-totp'
+                      ? 'Set password…'
+                      : 'Generate secret…'}
               </button>
             </div>
           </>
@@ -239,23 +305,38 @@ export function LockWizard({
         {step === 'password' && (
           <>
             <div className="toylock-field">
-              <span className="toylock-field__label">Password</span>
+              <span className="toylock-field__label">
+                {credentialKind === 'windows-pin' ? 'PIN' : 'Password'}
+                {credentialKind === 'password-totp' && ' (first factor — an authenticator code is required too)'}
+              </span>
               <input
                 ref={firstFieldRef}
                 type="password"
+                inputMode={credentialKind === 'windows-pin' ? 'numeric' : undefined}
                 className="toylock-input"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) =>
+                  setPassword(
+                    credentialKind === 'windows-pin' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value
+                  )
+                }
                 autoComplete="new-password"
               />
             </div>
             <div className="toylock-field">
-              <span className="toylock-field__label">Confirm password</span>
+              <span className="toylock-field__label">
+                {credentialKind === 'windows-pin' ? 'Confirm PIN' : 'Confirm password'}
+              </span>
               <input
                 type="password"
+                inputMode={credentialKind === 'windows-pin' ? 'numeric' : undefined}
                 className="toylock-input"
                 value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
+                onChange={(e) =>
+                  setPasswordConfirm(
+                    credentialKind === 'windows-pin' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value
+                  )
+                }
                 autoComplete="new-password"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void submitPassword()
@@ -268,7 +349,13 @@ export function LockWizard({
                 Back
               </button>
               <button className="toylock-btn toylock-btn--primary" disabled={busy} onClick={() => void submitPassword()}>
-                {busy ? 'Locking…' : 'Lock it'}
+                {credentialKind === 'password-totp'
+                  ? busy
+                    ? 'Continuing…'
+                    : 'Next: authenticator code…'
+                  : busy
+                    ? 'Locking…'
+                    : 'Lock it'}
               </button>
             </div>
           </>

@@ -17,11 +17,17 @@ export function UnlockPrompt({
   onUnlocked: () => void
   onClose: () => void
 }): React.JSX.Element {
-  const [value, setValue] = useState('')
+  // `password` carries a plain password OR a Windows PIN (same field on the wire — see
+  // ToyLockVerifyInput); `code` carries a TOTP code. The combo kind (`password-totp`) is the only
+  // one that reads both.
+  const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [retryAfterMs, setRetryAfterMs] = useState(0)
   const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const needsPassword = record.credentialKind !== 'totp'
+  const needsCode = record.credentialKind === 'totp' || record.credentialKind === 'password-totp'
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -51,9 +57,11 @@ export function UnlockPrompt({
     setBusy(true)
     setError(null)
     try {
-      const res = await window.nodeTerminal.toylock.verify(
-        record.credentialKind === 'password' ? { id: record.id, password: value } : { id: record.id, code: value }
-      )
+      const res = await window.nodeTerminal.toylock.verify({
+        id: record.id,
+        password: needsPassword ? password : undefined,
+        code: needsCode ? code : undefined
+      })
       if (res.ok) {
         useToyLocks.getState().markUnlocked(record)
         onUnlocked()
@@ -86,23 +94,52 @@ export function UnlockPrompt({
         aria-label={`Unlock ${record.target.label}`}
       >
         <div className="toylock-wizard__title">🔒 “{record.target.label}” is locked</div>
-        <div className="toylock-field">
-          <span className="toylock-field__label">
-            {record.credentialKind === 'password' ? 'Password' : 'Authenticator code'}
-          </span>
-          <input
-            ref={inputRef}
-            type={record.credentialKind === 'password' ? 'password' : 'text'}
-            inputMode={record.credentialKind === 'totp' ? 'numeric' : undefined}
-            className="toylock-input"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void submit()
-            }}
-            disabled={retryAfterMs > 0}
-          />
-        </div>
+        {needsPassword && (
+          <div className="toylock-field">
+            <span className="toylock-field__label">
+              {record.credentialKind === 'windows-pin' ? 'PIN' : 'Password'}
+              {record.credentialKind === 'password-totp' && ' (both required)'}
+            </span>
+            <input
+              ref={inputRef}
+              type="password"
+              inputMode={record.credentialKind === 'windows-pin' ? 'numeric' : undefined}
+              className="toylock-input"
+              value={password}
+              onChange={(e) =>
+                setPassword(
+                  record.credentialKind === 'windows-pin' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value
+                )
+              }
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !needsCode) void submit()
+              }}
+              disabled={retryAfterMs > 0}
+            />
+          </div>
+        )}
+        {needsCode && (
+          <div className="toylock-field">
+            <span className="toylock-field__label">
+              Authenticator code
+              {record.credentialKind === 'password-totp' && ' (both required)'}
+            </span>
+            <input
+              ref={needsPassword ? undefined : inputRef}
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="toylock-input toylock-input--code"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ''))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void submit()
+              }}
+              disabled={retryAfterMs > 0}
+              maxLength={8}
+            />
+          </div>
+        )}
         {error && (
           <div className="toylock-error">
             {error}
@@ -113,7 +150,13 @@ export function UnlockPrompt({
           <button className="toylock-btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="toylock-btn toylock-btn--primary" disabled={busy || retryAfterMs > 0 || !value} onClick={() => void submit()}>
+          <button
+            className="toylock-btn toylock-btn--primary"
+            disabled={
+              busy || retryAfterMs > 0 || (needsPassword && !password) || (needsCode && !code)
+            }
+            onClick={() => void submit()}
+          >
             {busy ? 'Checking…' : 'Unlock'}
           </button>
         </div>

@@ -34,9 +34,10 @@ import type {
   ToyLockVerifyResult
 } from '../../shared/toylock'
 
-type PasswordSecret = {
-  v: 1
-  kind: 'password'
+/** The scrypt fields shared by every password-shaped secret (a real password AND a Windows PIN —
+ *  see `WindowsPinSecret` below; a PIN is, honestly, just a short password). Factored out so the
+ *  two credential kinds hash and check identically and cannot silently drift apart. */
+interface ScryptSecret {
   salt: string // base64
   hash: string // base64
   N: number
@@ -44,6 +45,14 @@ type PasswordSecret = {
   p: number
   keylen: number
 }
+
+type PasswordSecret = ScryptSecret & { v: 1; kind: 'password' }
+
+/** Windows-only, and honestly just a numeric password under the hood — see the wizard's platform
+ *  gate and docs/toy-locks.md for why this is NOT a real Windows Hello prompt. Kept as its OWN
+ *  sealed-secret kind (rather than silently reusing `'password'`) so what is actually on disk is
+ *  never harder to read than what the record already claims. */
+type WindowsPinSecret = ScryptSecret & { v: 1; kind: 'windows-pin' }
 
 type TotpSecret = {
   v: 1
@@ -54,23 +63,39 @@ type TotpSecret = {
   period: number
 }
 
-type LockSecret = PasswordSecret | TotpSecret
+/** The two-factor combo (`password-totp`): BOTH halves are required, sealed together as one
+ *  record. `confirmTotp` is the only place this is ever constructed — see there for why neither
+ *  factor is persisted alone. */
+type ComboSecret = {
+  v: 1
+  kind: 'password-totp'
+  password: ScryptSecret
+  totp: Omit<TotpSecret, 'v' | 'kind'>
+}
+
+type LockSecret = PasswordSecret | WindowsPinSecret | TotpSecret | ComboSecret
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 }
 
-function hashPassword(password: string): PasswordSecret {
+function hashScryptSecret(secret: string): ScryptSecret {
   const salt = randomBytes(16)
-  const hash = scryptSync(password, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p })
+  const hash = scryptSync(secret, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p })
   return {
-    v: 1,
-    kind: 'password',
     salt: salt.toString('base64'),
     hash: hash.toString('base64'),
     ...SCRYPT
   }
 }
 
-function checkPassword(secret: PasswordSecret, attempt: string): boolean {
+function hashPassword(password: string): PasswordSecret {
+  return { v: 1, kind: 'password', ...hashScryptSecret(password) }
+}
+
+function hashWindowsPin(pin: string): WindowsPinSecret {
+  return { v: 1, kind: 'windows-pin', ...hashScryptSecret(pin) }
+}
+
+function checkScryptSecret(secret: ScryptSecret, attempt: string): boolean {
   const salt = Buffer.from(secret.salt, 'base64')
   const stored = Buffer.from(secret.hash, 'base64')
   const computed = scryptSync(attempt, salt, secret.keylen, {
@@ -89,6 +114,10 @@ interface PendingTotp {
   meta: ToyLockRecord
   secret: TotpSecret
   expiresAt: number
+  /** Present only for a `password-totp` enrollment — the hashed FIRST factor, stashed here rather
+   *  than persisted, so a combo lock never exists on disk with only one factor proven. Folded into
+   *  a `ComboSecret` by `confirmTotp` the moment the TOTP half also matches. */
+  passwordSecret?: ScryptSecret
 }
 
 const PENDING_TOTP_TTL_MS = 10 * 60 * 1000
@@ -128,6 +157,17 @@ export function startToyLockService(): { dispose(): void } {
   platform().handle(
     IPC.toylockCreatePassword,
     async (input: ToyLockCreatePasswordInput): Promise<ToyLockCreateResult> => {
+      const credentialKind = input.credentialKind ?? 'password'
+      // Windows-only, enforced HERE regardless of what the wizard already hid — the renderer's
+      // platform guess (`navigator.platform`) drives copy, not authority; a Server Edition browser
+      // could be a different OS from the core process this request actually lands on. Refuse
+      // cleanly (not silently, not by pretending to succeed) on every other platform.
+      if (credentialKind === 'windows-pin' && process.platform !== 'win32') {
+        return { ok: false, error: 'Windows PIN locks are only available on Windows.' }
+      }
+      if (credentialKind === 'windows-pin' && !/^\d+$/.test(input.password ?? '')) {
+        return { ok: false, error: 'A Windows PIN must be digits only.' }
+      }
       return store.mutate<ToyLockCreateResult>((entries) => {
         if (findByTarget(entries, input.target.kind, input.target.id)) {
           return {
@@ -136,18 +176,26 @@ export function startToyLockService(): { dispose(): void } {
           }
         }
         if (!input.password || input.password.length < 1) {
-          return { changed: false, result: { ok: false, error: 'A password is required.' } }
+          return {
+            changed: false,
+            result: {
+              ok: false,
+              error: credentialKind === 'windows-pin' ? 'A PIN is required.' : 'A password is required.'
+            }
+          }
         }
         const meta: ToyLockRecord = {
           id: randomUUID(),
           target: input.target,
-          credentialKind: 'password',
+          credentialKind,
           createdAt: Date.now(),
           duration: input.duration,
           durationMinutes: input.durationMinutes,
           lockedOnLaunch: input.lockedOnLaunch
         }
-        const secretEnc = store.seal(hashPassword(input.password))
+        const secretEnc = store.seal(
+          credentialKind === 'windows-pin' ? hashWindowsPin(input.password) : hashPassword(input.password)
+        )
         entries.push({ meta, secretEnc })
         return { changed: true, result: { ok: true, record: meta } }
       })
@@ -163,6 +211,11 @@ export function startToyLockService(): { dispose(): void } {
       if (findByTarget(entries, input.target.kind, input.target.id)) {
         return { ok: false, error: 'This is already locked — remove the existing lock first.' }
       }
+      // The combo's first factor: hashed and stashed on the PENDING record only. It is never
+      // written to the store until `confirmTotp` also proves the TOTP half — see PendingTotp.
+      if (input.password !== undefined && input.password.length < 1) {
+        return { ok: false, error: 'A password is required.' }
+      }
       const lockId = randomUUID()
       const secretBuf = generateSecret()
       const secretBase32 = base32Encode(secretBuf)
@@ -174,7 +227,7 @@ export function startToyLockService(): { dispose(): void } {
       const meta: ToyLockRecord = {
         id: lockId,
         target: input.target,
-        credentialKind: 'totp',
+        credentialKind: input.password !== undefined ? 'password-totp' : 'totp',
         createdAt: Date.now(),
         duration: input.duration,
         durationMinutes: input.durationMinutes,
@@ -183,7 +236,8 @@ export function startToyLockService(): { dispose(): void } {
       pending.set(lockId, {
         meta,
         secret: { v: 1, kind: 'totp', secretBase32, algorithm, digits, period },
-        expiresAt: Date.now() + PENDING_TOTP_TTL_MS
+        expiresAt: Date.now() + PENDING_TOTP_TTL_MS,
+        passwordSecret: input.password !== undefined ? hashScryptSecret(input.password) : undefined
       })
       const otpauthUri = buildOtpAuthUri({ issuer, account, secretBase32, algorithm, digits, period })
       return {
@@ -211,6 +265,17 @@ export function startToyLockService(): { dispose(): void } {
         return { ok: false, error: "That code doesn't match — check the time on both devices and try again." }
       }
       pending.delete(input.lockId)
+      // The combo's SECOND (and last) factor just matched — only now does either half get
+      // written anywhere. `p.passwordSecret` is undefined for a plain TOTP lock, so this collapses
+      // to exactly the old single-factor behavior for every existing caller.
+      const secret: LockSecret = p.passwordSecret
+        ? {
+            v: 1,
+            kind: 'password-totp',
+            password: p.passwordSecret,
+            totp: { secretBase32: p.secret.secretBase32, algorithm: p.secret.algorithm, digits: p.secret.digits, period: p.secret.period }
+          }
+        : p.secret
       return store.mutate<ToyLockConfirmTotpResult>((entries) => {
         // A duplicate could only appear if two enrollments for the same target were confirmed in
         // a race; this check and its append share one transaction, so both cannot win.
@@ -220,7 +285,7 @@ export function startToyLockService(): { dispose(): void } {
             result: { ok: false, error: 'This is already locked — remove the existing lock first.' }
           }
         }
-        const secretEnc = store.seal(p.secret)
+        const secretEnc = store.seal(secret)
         entries.push({ meta: p.meta, secretEnc })
         return { changed: true, result: { ok: true, record: p.meta } }
       })
@@ -277,18 +342,58 @@ export function startToyLockService(): { dispose(): void } {
       const entry = entries.find((e) => e.meta.id === input.id)
       if (!entry) return { ok: false, reason: 'This lock no longer exists.' }
       const secret = store.unseal<LockSecret>(entry.secretEnc)
+      // Exhaustive on `secret.kind`, deliberately NOT `if (kind === 'password') {…} else {…totp…}`.
+      // That shape shipped once and was a live trap: an `else` treats ANY future kind as TOTP, so
+      // a new credential kind that forgot its own branch here would silently verify against the
+      // wrong factor instead of failing to compile. The `default` below is the guard — see
+      // `_exhaustive` — and it is what makes that impossible now.
       let ok = false
-      if (secret.kind === 'password') {
-        ok = typeof input.password === 'string' && checkPassword(secret, input.password)
-      } else {
-        const secretBytes = base32Decode(secret.secretBase32)
-        ok =
-          typeof input.code === 'string' &&
-          verifyTotp(secretBytes, input.code, {
-            algorithm: secret.algorithm,
-            digits: secret.digits,
-            period: secret.period
-          }).matched
+      let reason: string
+      switch (secret.kind) {
+        case 'password':
+          ok = typeof input.password === 'string' && checkScryptSecret(secret, input.password)
+          reason = "That password doesn't match."
+          break
+        case 'windows-pin':
+          ok = typeof input.password === 'string' && checkScryptSecret(secret, input.password)
+          reason = "That PIN doesn't match."
+          break
+        case 'totp': {
+          const secretBytes = base32Decode(secret.secretBase32)
+          ok =
+            typeof input.code === 'string' &&
+            verifyTotp(secretBytes, input.code, {
+              algorithm: secret.algorithm,
+              digits: secret.digits,
+              period: secret.period
+            }).matched
+          reason = "That code doesn't match."
+          break
+        }
+        case 'password-totp': {
+          // BOTH factors are computed before this returns — no early return on the first wrong
+          // one. An early return would leak, via which branch replied fastest (a real password
+          // check is a deliberately slow scrypt call; a TOTP check is fast HMACs), WHICH factor
+          // was wrong. Awaiting both keeps that timing signal — and the reason string below —
+          // identical whether the password, the code, or both were wrong.
+          const secretBytes = base32Decode(secret.totp.secretBase32)
+          const passwordOk = typeof input.password === 'string' && checkScryptSecret(secret.password, input.password)
+          const codeOk =
+            typeof input.code === 'string' &&
+            verifyTotp(secretBytes, input.code, {
+              algorithm: secret.totp.algorithm,
+              digits: secret.totp.digits,
+              period: secret.totp.period
+            }).matched
+          ok = passwordOk && codeOk
+          // Never "the password was right but the code wasn't" — see the comment above.
+          reason = "That password or code doesn't match."
+          break
+        }
+        default: {
+          const _exhaustive: never = secret
+          throw new Error(`toylock-service: unhandled credential kind ${(_exhaustive as LockSecret).kind}`)
+        }
       }
       if (ok) {
         rate.delete(input.id)
@@ -296,8 +401,6 @@ export function startToyLockService(): { dispose(): void } {
       }
       const next: RateState = { fails: (state?.fails ?? 0) + 1, lastFailAt: now }
       rate.set(input.id, next)
-      const reason =
-        secret.kind === 'password' ? "That password doesn't match." : "That code doesn't match."
       return { ok: false, reason }
     }
   )

@@ -38,13 +38,69 @@ targets a `{kind, id, label}` triple — and today three kinds are wired up:
 | Target kind | Where to lock it | What locking does |
 | --- | --- | --- |
 | `tab` | A project tab's caret (`⌄`) menu → **Lock this tab…** | Clicking that tab (when it isn't already the active one) opens the unlock prompt instead of switching to it. |
-| `node` | Right-click a single canvas node → **Lock this node…** | The lock is created, listed, searchable and removable in Settings → Toy locks. *(Visual enforcement — dimming/blocking the node's own content until unlocked — is not wired up yet; see [Known limitations](#known-limitations).)* |
+| `node` | Right-click a single canvas node → **Lock this node…** | The terminal's xterm view is torn down and covered by an opaque "🔒 Locked — click to unlock" plate: no output paints, no keystroke/paste/drop reaches the pty. See [Node-lock enforcement](#node-lock-enforcement) for exactly what "locked" means for a live terminal. |
 | `appearance` | Settings → Appearance → Accent → **Lock this…** | The colour swatches are replaced with a "🔒 Locked — click to unlock" button until you unlock it. |
 
 Adding a new target kind means: pick a stable `id` for it, capture a human-readable `label` at
 lock-creation time, and reuse the existing `LockWizard` / `UnlockPrompt` components
 (`src/renderer/components/toylocks/`) plus the `useToyLocks` store (`src/renderer/state/toylocks.ts`)
 the way `TabBar.tsx` and `AppearanceSection.tsx` already do — see those two files for the pattern.
+
+## Node-lock enforcement
+
+Locking a canvas node actually disables it — output, input, and the reattach-after-unlock all
+matter here, because unlike a tab or a setting a terminal node has a LIVE process behind it.
+`TerminalNode.tsx` is the only consumer of a `node` lock's on/off state; it reads the
+`useToyLocks` store directly and never routes the decision through `Canvas.tsx`.
+
+- **No output visible.** The xterm view is fully disposed (not merely hidden behind CSS) the
+  moment the lock engages, and an opaque plate covers the body. This deliberately REUSES the
+  offscreen-viewer release machinery (`offscreenDown`/`offscreenEpoch` in TerminalNode.tsx, backed
+  by `terminal/offscreen-policy.ts`) rather than inventing a parallel teardown path — a lock is,
+  mechanically, "tear the view down right now, for a different reason".
+- **No input accepted.** With the xterm disposed there is nothing to focus, type into, paste onto,
+  or drop a file onto — the paste/drop handlers also refuse explicitly while locked, and stdin is
+  disabled on the outgoing xterm instance synchronously (before the teardown effect even runs) so a
+  keystroke in flight at the exact moment of locking cannot slip through. One gap remains, and it
+  is deliberate to document rather than hide: a few features write into a session by **name**
+  through core (`sendText` — dictation, the header's "push rename to session", context-link/note
+  pushes), bypassing the renderer's client entirely. Those are not gated by this pass; closing that
+  gap needs a guard inside `src/core/pty-manager.ts`'s `sendText` (or the IPC layer above it), which
+  was outside this change's editable surface. The in-component rename push (`pushSessionRename`) IS
+  gated, since it lives in the same file as the rest of this enforcement.
+- **No stale scrollback on unlock.** Reattaching redraws from the LIVE session, never from a
+  buffer that merely sat in memory behind the plate — which is why this does not reuse the ordinary
+  PARK path (project-switch parking deliberately keeps the exact xterm buffer for instant, exact
+  re-adoption; that is precisely the behavior a lock must not have).
+- **Persistent vs. non-persistent sessions are NOT treated the same**, and getting this backwards
+  is the one mistake that would turn "lock a terminal" into "kill it":
+  - A **persistent** session (tmux / the Windows session host) is released exactly like an
+    offscreen dispose: the client detaches, the session keeps running, unlocking is a warm
+    reattach. Nothing is at risk.
+  - A **non-persistent** session (the plain-shell fallback) is different because there the pty
+    client IS the process — the same #126 live-work lesson `terminal/live-work.ts` already
+    documents for the offscreen release. Locking such a node must NOT kill the client: it detaches
+    the VIEW only (dispose the xterm, stop consuming pty data, refuse input) and leaves the
+    session's client attached so the process keeps running, unattended but alive, until unlock.
+  - `nodeLockTeardownMode()` in `src/shared/toylock.ts` is the pure decision behind this split;
+    `TerminalNode.tsx`'s `engageNodeLockDown` is the only caller.
+- **A `session`-duration node lock relocks itself** the moment the node leaves the viewport —
+  the same "leaving the surface" idea `TabBar` already applies on a tab switch, expressed with the
+  signal a canvas node actually has (its own visibility observer).
+- **Unknown lock state fails LOCKED, not unlocked.** Before the toy-lock store has answered even
+  once (app just launched, one local IPC round trip still in flight), every node with an unresolved
+  lock state renders as locked rather than assuming "no lock exists" — a failed or still-pending
+  read is never evidence of absence. This applies for a very small window and to every node, not
+  only ones that actually carry a lock.
+
+Three surfaces: **Desktop** is the primary target and everything above describes it directly.
+**Server Edition** gets the same enforcement for free — `TerminalNode.tsx` and the offscreen-release
+machinery it reuses are shared between the Electron renderer and the browser build, and
+`window.nodeTerminal.toylock.*` resolves through the WS bridge exactly like every other core call
+(see "Server Edition and the desktop relay" below); the persistent-vs-non-persistent split is
+decided by the SAME `session.persistent` flag either shell already reports. **Mobile** (the private
+`nodeterm-ios` companion) has no canvas node UI at all today, so a `node` lock is not reachable from
+it — not applicable, not a gap.
 
 ## Every lock has its own credential
 
@@ -53,7 +109,7 @@ independent locks with three independent credentials; unlocking one never unlock
 want one password everywhere, you type the same password three times on purpose — the app never
 assumes that for you.
 
-Two credential kinds:
+Four credential kinds:
 
 - **Password** — typed twice to confirm, hashed with `scrypt` (N=16384, r=8, p=1, 64-byte key),
   never stored in plaintext.
@@ -63,6 +119,24 @@ Two credential kinds:
   one current code before the lock actually activates. You can optionally also save that same
   secret into the built-in authenticator — the wizard says plainly that doing so makes the lock
   **ornamental**, because the key then sits right next to the door it opens.
+- **Password + code (both required)** — the combo kind. Both factors must pass; a correct password
+  alone does not unlock, and neither does a correct code alone. The failure reason shown for a
+  wrong attempt is deliberately the SAME string regardless of whether the password, the code, or
+  both were wrong — `toylock-service.ts`'s `verify()` computes both checks before ever returning,
+  so which factor failed cannot leak through timing or copy either. Setting one up is two steps
+  chained: a password step, then TOTP enrollment (QR + confirm code) — nothing is written to disk
+  until BOTH are proven; an abandoned enrollment leaves no half-armed lock behind.
+- **Windows PIN** (Windows only) — a numeric PIN, hashed exactly like a password (same `scrypt`
+  call). **This is not Windows Hello.** Electron has no Windows Hello prompt to call into —
+  `systemPreferences.promptTouchID`-equivalent biometric prompting is macOS-only in Electron's
+  public API surface, and there is no documented Electron path to Windows' own Hello/PIN UI short
+  of writing a bespoke native (WinRT `UserConsentVerifier`) addon, which this app does not carry.
+  Rather than fake a prompt or quietly store a PIN while calling it "Hello", this kind is exactly
+  what it says: a numeric password, Windows-only, never presented as biometric or as more secure
+  than any other kind here. The wizard hides/disables the option on other platforms
+  (`navigator.platform`-based, for copy only); the core independently refuses it on any process
+  where `process.platform !== 'win32'`, so a wrong client guess only costs a hidden option, never a
+  false accept.
 
 When an authenticator entry records a link to a toy lock, the authenticator copy and the toy-lock
 credential are still separate sealed records. Removing the authenticator entry removes its
@@ -160,16 +234,26 @@ handler for the Server Edition does not, by itself, make it relay-callable.
 
 ## Known limitations
 
-This shipped in one focused pass and is honest about what didn't make it in:
+This shipped in a few focused passes and is honest about what didn't make it in:
 
-- **Node-lock visual enforcement isn't wired up.** Locking a canvas node creates a real,
-  persisted, listed, removable lock — but the terminal/agent node itself doesn't yet show a
-  blocking overlay or dim its content until unlocked. The tab and appearance-setting targets *do*
-  block interaction until unlocked; extending the same enforcement to a node is future work
-  (candidate approach: an ephemeral overlay node in the same style as the subagent/loop cards in
-  `Canvas.tsx`, rather than touching `TerminalNode.tsx` directly).
+- **A node lock does not gate `sendText`-style core-addressed writes.** Dictation
+  (`DictationOverlay.tsx` → `api.pty.sendText`), and anything else that writes into a session by
+  NAME through `src/core/pty-manager.ts` rather than through the renderer's own pty client, reaches
+  the pty regardless of a node's lock state — that delivery path is entirely independent of the
+  xterm/client this feature tears down. Closing it needs a guard inside `pty-manager.ts`'s
+  `sendText` (or the IPC layer above it) that consults the toy-lock store before writing; it was
+  outside the editable surface for the pass that wired up the rest of node-lock enforcement. The
+  in-app rename push (`TerminalNode.tsx`'s `pushSessionRename`) IS gated, since it lives in the
+  same file as the rest of the enforcement.
+- **The Settings → Toy locks list still shows a two-way credential label** (`ToyLocksSection.tsx`:
+  `credentialKind === 'password' ? 'Password' : 'Authenticator code'`) — a combo or Windows-PIN
+  lock displays as "Authenticator code" there even though it isn't one. That file was outside this
+  pass's editable surface; the label needs a fourth branch.
 - **No command-palette "(locked)" label on search results yet.** Locked surfaces are honest in
   their own native search/UI (the tab strip, the Toy locks list), but a locked tab/node doesn't
   currently show a distinct "(locked)" badge inside the ⌘K command palette's own results.
 - **Bulk creation isn't offered** — you lock things one at a time, at the element itself. Bulk
   *removal* is supported from the Toy locks settings list.
+- **Windows PIN is not Windows Hello** — see the credential-kinds section above. If a genuine
+  Windows Hello prompt ever becomes reachable (a native WinRT addon, or a future Electron API), it
+  should be a NEW credential kind rather than silently changing what `windows-pin` means today.
