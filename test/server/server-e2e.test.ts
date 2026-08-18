@@ -12,23 +12,27 @@ import { TMUX_SOCKET, sessionName } from '../../src/core/tmux-naming'
 
 const hasTmux = (() => { try { execSync('tmux -V'); return true } catch { return false } })()
 
-function removeFixtureDir(dataDir: string): void {
+async function removeFixtureDir(dataDir: string): Promise<void> {
   // Teardown must not decide this test's verdict. The subject is shutdown ORDERING — that the
   // upgraded websocket is terminated before the HTTP server closes — and by the time this runs
   // every assertion proving it has already passed.
   //
-  // On Windows the removal intermittently fails with EPERM on the directory itself. Measured here
-  // rather than assumed: roughly one run in four with a 1 s bounded retry, and still one in six
-  // after raising it to 5 s. That is the useful part — a holder surviving five seconds of retries
-  // is NOT the transient post-close lag the original comment assumed, so buying more time is the
-  // wrong fix and was reverted. Something still owns a handle to that directory when the test ends.
+  // This used to fail on Windows with EPERM on the directory itself: about one run in four with a
+  // 1 s bounded retry, still one in six at 5 s. The comment here correctly concluded that a holder
+  // surviving five seconds is not transient lag and that buying more time was the wrong fix. The
+  // owner is now known, and it was never going to yield to a longer wait.
   //
-  // So the retry stays bounded and short, and an exhausted retry becomes a loud warning instead of
-  // a red test: failing here reports "shutdown ordering is broken" when what actually happened is
-  // that a temp directory outlived the run. The warning names the directory so the leak stays
-  // visible and can be chased with a handle inspector — see HANDOFF.md.
+  // `fs.rmSync`'s retries are SYNCHRONOUS. They block the event loop, so they cannot let in-flight
+  // async work in this same process finish and release what it holds — the retry loop waits for
+  // the thing it is itself preventing. The holder is a mirror publication: it opens
+  // `agent-status.json.publication.sqlite3` under this very dataDir inside a BEGIN IMMEDIATE
+  // transaction, and nothing awaits that flush. Diagnosed in src/server/handlers/index.test.ts,
+  // where the same symptom went from 2-4 failures per 6 runs to 8 of 8 on this one change.
+  //
+  // So: await. Same options, same retry count, one keyword. The warning below stays as a net,
+  // because a teardown must still never fail a passing test — but it should now be silent.
   try {
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })
+    await fs.promises.rm(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })
   } catch (error) {
     console.warn(
       `[server-e2e] fixture directory outlived the run and could not be removed: ${dataDir}\n` +
@@ -80,7 +84,7 @@ describe.skipIf(!hasTmux)('server e2e: login → ws → pty echo round-trip', ()
     } catch {
       // session already gone / no server — fine
     }
-    removeFixtureDir(dataDir)
+    await removeFixtureDir(dataDir)
   })
 
   it('creates a real pty, echoes output over binary frames, destroys it', async () => {
@@ -170,7 +174,7 @@ describe('server shutdown with a live websocket', () => {
     } finally {
       if (closeTimer) clearTimeout(closeTimer)
       ws.terminate()
-      removeFixtureDir(dataDir)
+      await removeFixtureDir(dataDir)
     }
   }, 10_000)
 })
