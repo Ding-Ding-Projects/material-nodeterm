@@ -21,21 +21,33 @@
      indicator (node glow, sidebar dot, project-header badge) so it only has to be edited once. */
   --agent-working: #d97757;
 
-  --bg: #1e1e1e; /* content / canvas / terminal (controlBackground) */
-  --panel: #282828; /* bars, panels, node chrome (underPage) */
+  --panel: #282828; /* bars, panels, node chrome (underPage) — stays an authored literal like
+    --accent below: it sits BETWEEN two ramp steps (high/container) with no single honest role,
+    so unlike the six ramp tokens it is not repointed. */
   --panel-header: #323232; /* elevated / hover (windowBackground) */
   --panel-2: #323232;
   /* Surfaces that were spelled as one-off hexes all over the sheet — nine slightly different
      darks, which was already drift before a second theme existed. Named by ELEVATION, so the light
-     palette can invert the ramp instead of guessing what each hex meant. */
-  --surface-black: #0a0a0c; /* the onboarding scenes' near-black backdrop */
-  --surface-sunken: #141416; /* below the page: wells, empty states, code blocks */
-  --surface-deep: #1a1a1a; /* deepest chrome: dock, modal shells */
-  --surface-raised: #242424; /* above the panel: cards, popovers */
-  --surface-overlay: #2c2c2e; /* menus and floating layers */
-  --border: rgba(var(--tint-rgb), 0.1); /* separator */
-  --text: rgba(var(--tint-rgb), 0.85); /* label */
-  --muted: rgba(var(--tint-rgb), 0.55); /* secondaryLabel */
+     palette can invert the ramp instead of guessing what each hex meant.
+     RE-POINTED onto the M3 surface-container ramp below (see "Material Design 3 — colour roles"):
+     these six were themselves the SOURCE the --md-surface-* roles used to alias FROM. Now the
+     Material tonal palette is the source and these six are the aliases, so the ~90% of the sheet
+     that still says `var(--bg)`/`var(--surface-deep)`/etc. (never touched at the call site) moves
+     with the re-derived palette instead of staying frozen at the old neutral-grey hex. */
+  --bg: var(--md-surface); /* content / canvas / terminal (controlBackground) */
+  --surface-black: var(--md-surface-container-lowest); /* the onboarding scenes' near-black backdrop */
+  --surface-sunken: var(--md-surface-dim); /* below the page: wells, empty states, code blocks */
+  --surface-deep: var(--md-surface-container-low); /* deepest chrome: dock, modal shells */
+  --surface-raised: var(--md-surface-container-high); /* above the panel: cards, popovers */
+  --surface-overlay: var(--md-surface-container-highest); /* menus and floating layers */
+  /* --border/--text/--muted were the ALPHA-TINT versions of "outline" / "on-surface" / "on-surface
+     variant" — three different concepts that happened to share one mixing recipe. Re-pointing them
+     at the tonal-palette roles (below) is what moves the sheet's other ~350 direct call sites
+     (171 --text, 178 --muted, 164 --border) without touching one of them; --muted-2 keeps the
+     tint-mix (no single M3 role between --muted's on-surface-variant and true "quiet" text). */
+  --border: var(--md-outline-variant); /* separator */
+  --text: var(--md-on-surface); /* label */
+  --muted: var(--md-on-surface-variant); /* secondaryLabel */
   --muted-2: rgba(var(--tint-rgb), 0.25); /* tertiaryLabel */
   --accent: #0a84ff; /* systemBlue */
   --accent-hover: #3a9bff;
@@ -101,61 +113,81 @@
   --radius-lg: 12px;
 
   /* ---- Material Design 3 — colour roles -----------------------------------------------------
-     EXTENDS the alpha-tint model above; nothing above is replaced or renamed. Every role below is
-     either an ALIAS onto an existing token (so it inherits that token's per-theme value, and any
-     future edit to the aliased token, for free) or — where the app genuinely has no equivalent
-     (containers, outline, scrim, shadow) — a value AUTHORED from the app's own hues/alphas, never
-     the design doc's site-derived numbers. Prefixed `--md-` so these can never collide with the
-     app's existing bare names. See docs/app-design-tokens.md for the mapping this follows.
-     A token that merely aliases another token (its value is another `var(...)` reference) needs no
-     light-block restatement (styles.theme.test.ts only requires literal/`--tint-rgb` values to be
-     restated — an alias already flips with whatever it points at); a token whose value is a
-     literal hex/rgba is restated in the light block below. */
+     Was a "vocabulary bridge": every role below aliased onto an existing app token, so the
+     Material name resolved to the exact same pixel and moving a component onto it changed
+     nothing (docs/features/appearance/material-3-migration-status.md measured this: 30 of 38
+     roles were plain aliases). Roles are now backed by a REAL tonal palette — see "Material
+     Design 3 — tonal palettes" below — so this is the step the migration doc's own next-step
+     paragraph describes: re-deriving the palette moves every component already speaking Material,
+     without a second edit. Prefixed `--md-` so these can never collide with the app's existing
+     bare names. A token whose value is a literal hex/rgba is restated in the light block below; a
+     bare alias (primary/tertiary/error, still tied to their live identity colours — see below)
+     needs no restatement, since it flips for free with whatever it points at. */
 
-  /* Surface container ramp — the app's six-step elevation ramp, wearing M3's names. */
-  --md-surface-container-lowest: var(--surface-black);
-  --md-surface-dim: var(--surface-sunken);
-  --md-surface-container-low: var(--surface-deep);
-  --md-surface: var(--bg);
-  --md-surface-container-high: var(--surface-raised);
-  --md-surface-container-highest: var(--surface-overlay);
-  --md-on-surface: var(--text);
-  --md-on-surface-variant: var(--muted);
-  --md-outline-variant: var(--border);
-  /* No existing token sits between --muted-2 (0.25) and --muted (0.55); "outline" wants a
-     boundary a user actually notices (an input's edge, a divider that carries meaning) —
-     stronger than --border/outline-variant, quieter than body text. Authored as one more step in
-     the SAME --tint-rgb alpha family the rest of the sheet already uses, which is why (per the
-     comment above) it needs no separate light-theme value: the tint flip already carries it. */
-  --md-outline: rgba(var(--tint-rgb), 0.35);
+  /* Surface container ramp — the app's six-step elevation ramp, wearing M3's names. Each value is
+     the Neutral tonal palette (see below) held at the tone whose lightness matches this app's
+     ORIGINAL hand-picked hex for that step (measured via CIE L*, e.g. surface = the app's old
+     `--bg` #1e1e1e was L*≈11, so it becomes Neutral tone 11) — so the ramp keeps its existing
+     elevation feel and every measured contrast floor, but is now genuinely mixed from the seed's
+     neutral hue instead of being a bag of nine independently-chosen dark greys. `--bg` and the
+     five `--surface-*` tokens above now alias INTO these roles instead of the other way around. */
+  --md-surface-container-lowest: var(--md-tone-neutral-3);
+  --md-surface-dim: var(--md-tone-neutral-6);
+  --md-surface-container-low: var(--md-tone-neutral-9);
+  --md-surface: var(--md-tone-neutral-11);
+  --md-surface-container-high: var(--md-tone-neutral-14);
+  --md-surface-container-highest: var(--md-tone-neutral-18);
+  --md-on-surface: var(--md-tone-neutral-90);
+  --md-on-surface-variant: var(--md-tone-neutral-variant-80);
+  --md-outline-variant: var(--md-tone-neutral-variant-30);
+  --md-outline: var(--md-tone-neutral-variant-60); /* a stronger boundary than outline-variant,
+    quieter than on-surface text; previously a plain --tint-rgb mix, now the same tonal family the
+    rest of the on-surface roles use, so it stays in step with them as the seed changes. */
 
-  /* Primary — the app's one existing accent, under M3's name. The container is a real tint of
-     that accent (not a neutral surface), built from --accent-rgb so it themes automatically. */
+  /* Primary stays tied to the app's LIVE, user-configurable accent (`--accent`), not a fixed P40/P80
+     tone: `lib/accentTokens.ts` expands whatever accent the user picks into this exact family
+     (mdPrimary = the accent hex verbatim) and asserts the authored default equals that computed
+     value byte-for-byte (accentTokens.test.ts, "leaves the default accent family to the authored
+     stylesheet values") — tone-mapping primary would break that contract for every custom accent.
+     The container is a real tint of that accent (not a neutral surface), built from --accent-rgb
+     so it themes automatically; styles.theme.test.ts pins this wiring by name. */
   --md-primary: var(--accent);
   --md-on-primary: #fff; /* white text on a saturated accent fill, in both themes — same call as --knob */
   --md-primary-container: rgba(var(--accent-rgb), 0.16);
   --md-on-primary-container: var(--accent-text);
 
-  /* Secondary + tertiary do not exist yet (docs/app-design-tokens.md) — the only two genuinely
-     new colour decisions here. Secondary is authored NEUTRAL: the app has exactly one identity
-     accent (blue) and inventing an arbitrary second hue with no real call site would just be a
-     stray colour in a terminal app. Tertiary instead reuses --agent-working, the app's actual
-     SECOND hue already live in the product (the working/busy clay accent) — a real existing
-     identity colour, not a new invention. */
-  --md-secondary: var(--muted);
-  --md-secondary-container: var(--md-surface-container-highest);
-  --md-on-secondary-container: var(--text);
+  /* Secondary is now a REAL M3 secondary: the Secondary tonal palette below is the primary's own
+     hue at low chroma (16, vs primary's ~71) — Material's own convention for "same identity,
+     quieter" — rather than an alias onto whatever --muted happened to equal. Tertiary keeps
+     reusing --agent-working as its KEY colour (the app's actual second identity hue, the
+     working/busy clay accent — a deliberate choice kept from the original bridge, not a new
+     invention), but its container pair is now the Tertiary tonal palette built from that colour's
+     own hue/chroma, not a hand-picked alpha wash. */
+  --md-secondary: var(--md-tone-secondary-80);
+  --md-secondary-container: var(--md-tone-secondary-30);
+  --md-on-secondary-container: var(--md-tone-secondary-90);
   --md-tertiary: var(--agent-working);
-  --md-tertiary-container: rgba(217, 119, 87, 0.18); /* --agent-working (dark) at container alpha */
-  --md-on-tertiary-container: var(--agent-working);
+  --md-tertiary-container: var(--md-tone-tertiary-30);
+  --md-on-tertiary-container: var(--md-tone-tertiary-90);
 
+  /* Error stays tied to --danger (same "live identity colour" pattern as primary/tertiary — the
+     app's status red is tuned per-theme for contrast already, not a fixed tone). The container
+     MUST stay a --danger-rgb tint (styles.theme.test.ts "themed container roles" guard): a
+     container mixed from --danger-rgb themes for free the same way --md-primary-container does,
+     and a future edit that "restates" it with a pasted-in fixed triple was the exact light-mode
+     regression that guard exists to catch. Only on-error-container — which had no such guard, and
+     previously was just `var(--danger)` again — becomes a real Error-tonal-palette value so it
+     has its own contrast headroom against the container tint instead of borrowing the plain hue. */
   --md-error: var(--danger);
   --md-error-container: rgba(var(--danger-rgb), 0.16);
-  --md-on-error-container: var(--danger);
+  --md-on-error-container: var(--md-tone-error-90);
 
   /* M3 defines no success/warning role; the app genuinely needs both (SSH status, permission-mode
      copy), so they are extended as custom colour roles per docs/app-design-tokens.md — aliased
-     onto the app's existing hues, never invented. */
+     onto the app's existing hues, never invented. Left as plain aliases (not tonal-palette-backed)
+     deliberately: they are secondary status hues with a handful of call sites each, and inventing
+     a seventh/eighth tonal palette for them would be exactly the "arbitrary new hue" the original
+     secondary decision above already declined to do. */
   --md-success: var(--success);
   --md-success-container: rgba(50, 215, 75, 0.16); /* --success (dark) at container alpha */
   --md-on-success-container: var(--success);
@@ -170,6 +202,123 @@
      describes, since there is nothing of the app's to alias instead. */
   --md-scrim: rgba(0, 0, 0, 0.62);
   --md-shadow: rgba(0, 0, 0, 0.55);
+
+  /* ---- Material Design 3 — tonal palettes -------------------------------------------------
+     The actual HCT-style tonal scales (13 canonical tones, 0=black..100=white) the roles above
+     are drawn from. Computed once, offline, from three seed colours already live in the app —
+     never the design doc's site-derived numbers — using this app's own Lab/LCH math
+     (renderer/lib/color/convert.ts): each seed is converted to CIE LCH, and HCT's "tone" is by
+     definition the same quantity as Lab's L* (google/material-color-utilities), so holding L*
+     fixed while stepping through 0..100 and re-applying the seed's own hue/chroma (tapered
+     smoothly to zero at the black/white extremes, so no tone asks for an out-of-gamut colour) is
+     a faithful, reproducible tonal palette without needing a CAM16 implementation this app does
+     not have. Theme-independent by design — only WHICH tone a role picks differs between the
+     dark and light blocks, never the scale itself:
+       primary   — seed #0a84ff (the app's accent): hue 283.5°, chroma 71.0
+       secondary — same hue as primary, chroma reduced to 16 (M3's own "quieter, same identity"
+                   convention), so a second hue is never invented (docs/app-design-tokens.md)
+       tertiary  — seed #d97757 (--agent-working, the app's real second identity colour): hue
+                   44.2°, chroma 49.3
+       error     — seed #ff453a (--danger): hue 35.2°, chroma 84.2
+       neutral / neutral-variant — hue 88°, chroma 4 / 8. NOT the accent's hue: 88° is measured
+                   from the app's OWN pre-existing warm light surfaces (--bg light was already
+                   hue≈87°, chroma≈2.8 — "warm, not white", see the light block below), so the
+                   ramp keeps the anti-glare warmth that was already deliberately tuned and
+                   contrast-tested there instead of fighting it with an unrelated blue cast.
+                   Material Theme Builder itself treats Neutral as an independently choosable seed
+                   for exactly this reason. */
+  --md-tone-primary-0: #000000;
+  --md-tone-primary-10: #001f7f;
+  --md-tone-primary-20: #003299;
+  --md-tone-primary-30: #0047b5;
+  --md-tone-primary-40: #005dd1;
+  --md-tone-primary-50: #0075ee;
+  --md-tone-primary-60: #2f8fff;
+  --md-tone-primary-70: #5ca9ff;
+  --md-tone-primary-80: #80c4ff;
+  --md-tone-primary-90: #a1dfff;
+  --md-tone-primary-95: #d4eeff;
+  --md-tone-primary-99: #f8fcff;
+  --md-tone-primary-100: #ffffff;
+  --md-tone-secondary-0: #000000;
+  --md-tone-secondary-10: #121b30;
+  --md-tone-secondary-20: #283047;
+  --md-tone-secondary-30: #3f465f;
+  --md-tone-secondary-40: #575d77;
+  --md-tone-secondary-50: #6f7691;
+  --md-tone-secondary-60: #8990ac;
+  --md-tone-secondary-70: #a3aac7;
+  --md-tone-secondary-80: #bfc5e3;
+  --md-tone-secondary-90: #dbe1ff;
+  --md-tone-secondary-95: #ecf0ff;
+  --md-tone-secondary-99: #fbfcff;
+  --md-tone-secondary-100: #ffffff;
+  --md-tone-tertiary-0: #000000;
+  --md-tone-tertiary-10: #490000;
+  --md-tone-tertiary-20: #631000;
+  --md-tone-tertiary-30: #7f2a11;
+  --md-tone-tertiary-40: #9c4327;
+  --md-tone-tertiary-50: #ba5c3e;
+  --md-tone-tertiary-60: #d87656;
+  --md-tone-tertiary-70: #f6906f;
+  --md-tone-tertiary-80: #ffab88;
+  --md-tone-tertiary-90: #ffc7a3;
+  --md-tone-tertiary-95: #ffe0c8;
+  --md-tone-tertiary-99: #fff9f4;
+  --md-tone-tertiary-100: #ffffff;
+  --md-tone-neutral-0: #000000;
+  --md-tone-neutral-10: #1e1b16;
+  --md-tone-neutral-20: #33302b;
+  --md-tone-neutral-30: #4a4640;
+  --md-tone-neutral-40: #615e58;
+  --md-tone-neutral-50: #7a7770;
+  --md-tone-neutral-60: #94908a;
+  --md-tone-neutral-70: #afaba4;
+  --md-tone-neutral-80: #cac6bf;
+  --md-tone-neutral-90: #e6e2db;
+  --md-tone-neutral-95: #f3f0ec;
+  --md-tone-neutral-99: #fdfcfb;
+  --md-tone-neutral-100: #ffffff;
+  /* Extra rungs the canonical 13-step ladder does not carry, completing it exactly the way
+     --radius-xs completes the shape scale (see that token's own comment): the surface-container
+     ramp below matches each of its six steps to the app's PRE-EXISTING elevation hex by lightness
+     (measured CIE L*), and those measured tones do not land on round multiples of 10. */
+  --md-tone-neutral-3: #0d0b07;
+  --md-tone-neutral-6: #16130e;
+  --md-tone-neutral-9: #1c1914;
+  --md-tone-neutral-11: #201d18;
+  --md-tone-neutral-14: #26231e;
+  --md-tone-neutral-18: #2f2c26;
+  --md-tone-neutral-89: #e3dfd8;
+  --md-tone-neutral-93: #eeebe4;
+  --md-tone-neutral-97: #f8f6f3;
+  --md-tone-neutral-98: #faf9f7;
+  --md-tone-neutral-variant-0: #000000;
+  --md-tone-neutral-variant-10: #201b10;
+  --md-tone-neutral-variant-20: #353025;
+  --md-tone-neutral-variant-30: #4c463a;
+  --md-tone-neutral-variant-40: #645e51;
+  --md-tone-neutral-variant-50: #7d7669;
+  --md-tone-neutral-variant-60: #979083;
+  --md-tone-neutral-variant-70: #b2aa9d;
+  --md-tone-neutral-variant-80: #cdc6b8;
+  --md-tone-neutral-variant-90: #eae2d3;
+  --md-tone-neutral-variant-95: #f5f0e7;
+  --md-tone-neutral-variant-99: #fdfcfa;
+  --md-tone-neutral-variant-100: #ffffff;
+  --md-tone-error-0: #000000;
+  --md-tone-error-10: #680000;
+  --md-tone-error-20: #850000;
+  --md-tone-error-30: #a40000;
+  --md-tone-error-40: #c40011;
+  --md-tone-error-50: #e52928;
+  --md-tone-error-60: #ff4c3f;
+  --md-tone-error-70: #ff6a57;
+  --md-tone-error-80: #ff8770;
+  --md-tone-error-90: #ffa58a;
+  --md-tone-error-95: #ffcfb8;
+  --md-tone-error-99: #fff6f1;
+  --md-tone-error-100: #ffffff;
 
   /* ---- Material Design 3 — shape scale --------------------------------------------------------
      The app's three existing radii (6/8/12) are kept byte-for-byte as this scale's small/medium
@@ -221,24 +370,21 @@
   --tint-rgb: 58, 48, 38;
   --text-strong: #2b241c;
 
-  /* Warmth costs contrast — brown on cream is a shorter range than black on white — so the
-     secondary alphas are raised to buy it back rather than left at the dark theme's values.
-     `--muted` at 0.55 measured 3.2:1 against `--bg`, under the 4.5:1 floor for body text; 0.7
-     puts it at 4.9:1, and `--text` at 0.85 is 7.7:1. These floors are asserted, not assumed —
-     see the contrast block in styles.theme.test.ts. */
-  --border: rgba(var(--tint-rgb), 0.14);
-  --muted: rgba(var(--tint-rgb), 0.7);
+  /* --border/--muted/--text carry no literal here any more: they alias --md-outline-variant /
+     --md-on-surface-variant / --md-on-surface (see the dark block's comment), and those roles get
+     their own tonal-palette literal restated below in the M3 section — the alias flips for free,
+     the same mechanism --md-surface already relied on before this pass. `--muted-2` keeps the old
+     tint-mix (no single M3 role covers it, same reasoning as the dark block), so its warmth-
+     buyback alpha (0.7 in the pre-M3-palette version measured 4.9:1 against `--bg`, versus the
+     dark theme's 0.55/3.2:1 — the floors are asserted, not assumed, in styles.theme.test.ts) is
+     preserved on `--muted-2` alone. */
   --muted-2: rgba(var(--tint-rgb), 0.4);
 
-  --bg: #fbf8f3; /* content / canvas */
+  /* `--bg` and the five `--surface-*` tokens likewise carry no literal here: they alias the M3
+     surface-container roles (dark block), restated with their own tonal-palette literal below. */
   --panel: #f3efe7; /* bars, panels, node chrome */
   --panel-header: #eae5db; /* elevated / hover */
   --panel-2: #eae5db;
-  --surface-black: #f5f1ea;
-  --surface-sunken: #efeae1; /* wells stay DARKER than the page */
-  --surface-deep: #e6e0d4;
-  --surface-raised: #fdfbf7; /* …while raised surfaces come up, but never to pure white */
-  --surface-overlay: #fdfbf7;
 
   /* systemBlue's light-mode value — the dark one is deliberately lighter for a dark field and
      loses contrast against a pale one. Kept BLUE on a warm field: the accent is the product's
@@ -288,10 +434,30 @@
   --minimap-mask: rgba(251, 248, 243, 0.6);
 
   /* ---- Material Design 3 — literal roles restated for light --------------------------------
-     Every alias above (`--md-primary: var(--accent)` and the rest) already flips with the token
-     it points at and needs nothing here. Only the LITERAL values from the dark block are restated
-     — styles.theme.test.ts requires every colour-valued token to appear in this block, and a
-     `var(--tint-rgb)`-only mix (like --md-outline) is exempted the same way --text already is. */
+     A bare alias straight to another APP token (`--md-primary: var(--accent)`, `--md-tertiary`,
+     `--md-error`) already flips with the token it points at and needs nothing here. Every role
+     that is now backed by a tonal palette is restated with its OWN `--md-tone-` reference —
+     tonal palettes are theme-independent (declared once, in the dark block above), so what changes
+     per theme is only WHICH tone a role points at, same mechanism, different target. A
+     `var(--tint-rgb)`-only mix is exempted the same way --muted-2 already is — none remain among
+     the roles below after this pass; --md-outline used to be one and is now tonal too. */
+  --md-surface-container-lowest: var(--md-tone-neutral-95);
+  --md-surface-dim: var(--md-tone-neutral-93);
+  --md-surface-container-low: var(--md-tone-neutral-89);
+  --md-surface: var(--md-tone-neutral-97); /* tone 98/99 measured >=0.97 relative luminance, the
+    "no light surface is pure white" floor styles.theme.test.ts asserts (the same anti-glare
+    reason the pre-palette #fbf8f3 never reached 255 either) */
+  --md-surface-container-high: var(--md-tone-neutral-98);
+  --md-surface-container-highest: var(--md-tone-neutral-98); /* same tone as container-high, same
+    as the pre-palette --surface-raised/--surface-overlay pair this ramp aliases, which were also
+    identical (#fdfbf7 both) */
+  --md-on-surface: var(--md-tone-neutral-10);
+  --md-on-surface-variant: var(--md-tone-neutral-variant-30);
+  --md-outline-variant: var(--md-tone-neutral-variant-80);
+  --md-outline: var(--md-tone-neutral-variant-50);
+  --md-secondary: var(--md-tone-secondary-40);
+  --md-secondary-container: var(--md-tone-secondary-90);
+  --md-on-secondary-container: var(--md-tone-secondary-10);
   --md-on-primary: #fff; /* same call as --knob: a white knob/label needs no theme flip */
   --md-primary-container: rgba(var(--accent-rgb), 0.16); /* --accent-rgb already themes */
   /* Darker than --accent-text (#0060df), which this used to alias. That token is tuned to sit
@@ -301,8 +467,10 @@
      already clears both (5.39 / 5.41). M3's own light on-primary-container tones are darker
      still; this is the closest step to the app's existing hue that clears both consumers. */
   --md-on-primary-container: #004fb8;
-  --md-tertiary-container: rgba(176, 74, 40, 0.18); /* --agent-working (light) at container alpha */
+  --md-tertiary-container: var(--md-tone-tertiary-90);
+  --md-on-tertiary-container: var(--md-tone-tertiary-10);
   --md-error-container: rgba(var(--danger-rgb), 0.16); /* --danger-rgb already themes */
+  --md-on-error-container: var(--md-tone-error-10);
   --md-success-container: rgba(31, 122, 56, 0.16); /* --success (light) at container alpha */
   --md-warning-container: rgba(var(--warn-rgb), 0.16); /* --warn-rgb already themes */
   --md-scrim: rgba(0, 0, 0, 0.32); /* design doc's own light value — no app scrim to alias */

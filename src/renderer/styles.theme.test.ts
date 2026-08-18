@@ -146,13 +146,20 @@ describe('the light theme overrides every themeable token', () => {
     )
 
     // The git-graph lane hues are branch IDENTITY, not chrome: they must stay the same colour in
-    // both themes or a graph would change meaning when the theme flips.
-    const themeIndependent = (k: string): boolean => k.startsWith('--git-graph-')
+    // both themes or a graph would change meaning when the theme flips. `--md-tone-*` are the raw
+    // M3 tonal-palette scale (styles.css "Material Design 3 — tonal palettes"): HCT's "tone" is
+    // defined as the same quantity as Lab's L*, so a tonal SCALE is a fixed ladder of lightness
+    // steps for one hue/chroma — it does not have a "light theme value", any more than a ruler
+    // does. What changes per theme is which TONE a role picks (e.g. `--md-on-surface` reads tone
+    // 90 in dark and tone 10 in light), and those role tokens each carry their own literal
+    // restatement below — this predicate is only about the reference ladder itself.
+    const themeIndependent = (k: string): boolean =>
+      k.startsWith('--git-graph-') || k.startsWith('--md-tone-')
     // A token mixed ONLY from `--tint-rgb` already flips with the theme by construction — that
     // triple is itself overridden in the light block, which is the whole point of routing ~280
-    // overlays through it. `--text: rgba(var(--tint-rgb), 0.85)` is the live example: it is
-    // deliberately NOT restated in the light block (only `--muted`/`--border`, whose alphas had to
-    // be raised to buy back the contrast warmth costs). Requiring a redundant restatement here
+    // overlays through it. `--muted-2: rgba(var(--tint-rgb), 0.25)` is the live example: it is
+    // deliberately NOT restated in the light block (`--muted-2` there just carries a different
+    // alpha to buy back the contrast warmth cost). Requiring a redundant restatement here
     // would teach the next person to copy tokens that are already correct.
     const followsTint = (v: string): boolean =>
       /^\s*rgba?\(\s*var\(--tint-rgb\)[^)]*\)\s*$/.test(v)
@@ -358,8 +365,9 @@ describe('the theme selector uses this app\'s convention, not the design doc\'s 
 describe('light palette contrast', () => {
   /**
    * A light-palette token — falling back to the dark block when light does not restate it.
-   * That fall-back is not laxity: the only tokens light omits are the ones mixed purely from
-   * `--tint-rgb` (`--text` is the live example), which read as the LIGHT ink here because
+   * That fall-back is not laxity: the only tokens light omits are ones that flip for free — a
+   * bare `var(--other-token)` alias (resolved by `resolve()` below), or a value mixed purely from
+   * `--tint-rgb` (`--muted-2` is the live example), which reads as the LIGHT ink here because
    * `--tint-rgb` itself is overridden. And a hue that genuinely went missing would resolve to its
    * dark-field value and fail the contrast floor below — loudly, which is the point.
    */
@@ -368,6 +376,22 @@ describe('light palette contrast', () => {
     const m = re.exec(LIGHT) ?? re.exec(DARK)
     if (!m) throw new Error(`neither token block defines ${name}`)
     return m[1].trim()
+  }
+
+  /**
+   * Follows a chain of bare `var(--x)` aliases (`--bg` → `--md-surface`, `--panel` unchanged, …)
+   * to the literal declaration underneath. Bounded rather than infinite: an accidental alias
+   * cycle (two tokens pointing at each other) must fail this test loudly, not hang the runner.
+   */
+  function resolve(name: string): string {
+    let current = name
+    for (let hop = 0; hop < 8; hop += 1) {
+      const raw = token(current)
+      const alias = /^var\(\s*(--[a-z0-9-]+)\s*\)$/i.exec(raw)
+      if (!alias) return raw
+      current = alias[1]
+    }
+    throw new Error(`alias chain resolving ${name} did not terminate within 8 hops`)
   }
 
   const INK = token('--tint-rgb').split(',').map((n) => +n.trim()) as [number, number, number]
@@ -391,28 +415,35 @@ describe('light palette contrast', () => {
     const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
     return (hi + 0.05) / (lo + 0.05)
   }
-  /** The alpha out of `rgba(var(--tint-rgb), α)`. */
-  function inkAlpha(name: string): number {
-    const m = /rgba\(var\(--tint-rgb\),\s*([\d.]+)\)/.exec(token(name))
-    if (!m) throw new Error(`${name} is not mixed from --tint-rgb`)
-    return +m[1]
+  /**
+   * The resolved colour of a role/token as it actually paints on `bg`: either a `--tint-rgb`
+   * mix composited over `bg` (the pre-M3 `--text`/`--muted` shape), or — since the tonal-palette
+   * pass — an opaque literal reached by following its alias chain (`--text` → `--md-on-surface`).
+   * Generic on purpose: this must keep working whichever representation a role uses today, rather
+   * than asserting on which one it happens to be (the house rule against pinning behaviour to
+   * source text).
+   */
+  function resolvedColorAt(name: string, bg: [number, number, number]): [number, number, number] {
+    const raw = resolve(name)
+    const tint = /^rgba\(\s*var\(--tint-rgb\)\s*,\s*([\d.]+)\s*\)$/.exec(raw)
+    return tint ? inkOver(+tint[1], bg) : hex(raw)
   }
 
   // The two surfaces body text actually sits on. `--surface-deep` is the deepest chrome (dock,
   // modal shells) and carries labels rather than prose, so it is held to the 3:1 large-text floor.
   const SURFACES: [string, [number, number, number]][] = [
-    ['--bg', hex(token('--bg'))],
-    ['--panel', hex(token('--panel'))],
-    ['--canvas-bg', hex(token('--canvas-bg'))]
+    ['--bg', hex(resolve('--bg'))],
+    ['--panel', hex(resolve('--panel'))],
+    ['--canvas-bg', hex(resolve('--canvas-bg'))]
   ]
 
   it.each(SURFACES)('body text clears WCAG AA on %s', (_name, bg) => {
-    expect(contrast(inkOver(inkAlpha('--text'), bg), bg)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(resolvedColorAt('--text', bg), bg)).toBeGreaterThanOrEqual(4.5)
   })
 
   it.each(SURFACES)('secondary text clears WCAG AA on %s', (_name, bg) => {
     // This is the one the warm re-tune nearly broke: the dark theme's 0.55 measured 3.2:1 here.
-    expect(contrast(inkOver(inkAlpha('--muted'), bg), bg)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(resolvedColorAt('--muted', bg), bg)).toBeGreaterThanOrEqual(4.5)
   })
 
   it.each(SURFACES)('the status hues and link accent stay legible on %s', (_name, bg) => {
@@ -420,18 +451,18 @@ describe('light palette contrast', () => {
     // it (`.ss-group__sig--working`) — it is text, so it owes the text floor, not the 3:1 one.
     const HUES = ['--accent-text', '--danger', '--warn', '--caution', '--success', '--agent-working']
     for (const t of HUES) {
-      expect(contrast(hex(token(t)), bg), `${t}`).toBeGreaterThanOrEqual(4.3)
+      expect(contrast(hex(resolve(t)), bg), `${t}`).toBeGreaterThanOrEqual(4.3)
     }
   })
 
   it('no light surface is pure white — that brightness is the glare being avoided', () => {
     for (const t of ['--bg', '--panel', '--surface-raised', '--surface-overlay', '--canvas-bg']) {
-      expect(luminance(hex(token(t))), t).toBeLessThan(0.97)
+      expect(luminance(hex(resolve(t))), t).toBeLessThan(0.97)
     }
   })
 
   it('the canvas sits below the panels, so nodes keep their edges', () => {
-    expect(luminance(hex(token('--canvas-bg')))).toBeLessThan(luminance(hex(token('--bg'))))
+    expect(luminance(hex(resolve('--canvas-bg')))).toBeLessThan(luminance(hex(resolve('--bg'))))
   })
 })
 
