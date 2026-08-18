@@ -1,3 +1,4 @@
+import type { ServiceConnection } from './node-exec'
 // Types shared across the main, preload, and renderer processes.
 
 import type { CloneProgress } from './clone-url'
@@ -469,6 +470,13 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /**
+   * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
+   * every project file we write and from every node arriving over the wire, then restored from the
+   * machine-local index — the same round trip `shell` and `ssh.extraArgs` take, for the same
+   * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
+   */
+  serviceConnection?: ServiceConnection
   // editor / diff
   filePath?: string
   /**

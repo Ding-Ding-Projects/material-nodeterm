@@ -40,6 +40,108 @@ export interface LocalNodeExec {
   sshExtraArgs?: string
   /** A delayed launch authorized on this machine; never accepted from project files or peers. */
   pendingLaunch?: PendingLaunch
+  /**
+   * `NodeState.serviceConnection` — where a service-manager node reaches the thing it manages.
+   *
+   * It belongs on this boundary for two reasons, and the second is the one that makes it urgent
+   * rather than merely tidy:
+   *
+   *  - It is one person's environment. A host, a port, an internal name — none of that is
+   *    meaningful to anybody else who clones the repository, and several of them are the sort of
+   *    detail people would rather not publish along with their code.
+   *  - For some kinds it is EXEC-ADJACENT. A Docker host reached over SSH turns an endpoint into
+   *    the target of a command; a project file that could set it would be choosing which machine
+   *    this one talks to. That is the same hazard `shell` and `ssh.extraArgs` are here for.
+   *
+   * It carries NO credential, by construction. A secret belongs in the operating-system credential
+   * vault, and the record holds only enough to look one up. See `safeServiceEndpoint` for why an
+   * endpoint with a password embedded in it is refused rather than stored.
+   */
+  serviceConnection?: ServiceConnection
+}
+
+/**
+ * How a service-manager node reaches its service. Deliberately small: anything that grows this
+ * record should be asked whether it is really the connection, or whether it is state that belongs
+ * where the service itself keeps it.
+ */
+export interface ServiceConnection {
+  /** An absolute `http:`, `https:` or `ssh:` URL. Never carries userinfo — see below. */
+  endpoint: string
+  /**
+   * Opaque key naming the entry in the OS credential vault, when this connection has a secret.
+   * The SECRET IS NOT HERE and must never be: this record is written to a file in plain text, so a
+   * token in it would be a token on disk, and the vault exists precisely so that never happens.
+   */
+  credentialKey?: string
+}
+
+/**
+ * An endpoint we are willing to keep.
+ *
+ * Refused, and each for a concrete reason rather than out of caution:
+ *
+ *  - **Userinfo** (`https://user:pass@host`). This is the important one. A URL is the most common
+ *    way a password gets pasted into a settings field, and storing it would put that password in
+ *    plain text in workspace.json — where it would then survive in backups, in a support bundle,
+ *    and in any screenshot of the file. Refusing sends the user to the vault instead, which is the
+ *    only place it should have gone.
+ *  - **Any scheme but http/https/ssh.** `file:` reads local disk, `javascript:` is a script, and a
+ *    scheme nobody vetted is a scheme that does something nobody predicted.
+ *  - **Control characters**, which is how a value smuggles a newline into whatever consumes it.
+ *  - **Absurd length**, so a pathological value cannot be used to bloat the index.
+ */
+const SERVICE_SCHEMES = new Set(['http:', 'https:', 'ssh:'])
+const MAX_ENDPOINT_LENGTH = 2048
+
+export function safeServiceEndpoint(value: unknown): value is string {
+  if (typeof value !== 'string' || value === '' || value.length > MAX_ENDPOINT_LENGTH) return false
+  // Codepoint scan rather than a regex: a control-character class needs backslash escapes, and
+  // this line has already been mangled once by a shell into a range that matched a HYPHEN — which
+  // would have rejected every ordinary hostname while looking like a security check.
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+    if (code < 0x20 || code === 0x7f) return false
+  }
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return false
+  }
+  if (!SERVICE_SCHEMES.has(url.protocol)) return false
+  // Read from the parsed URL rather than by regex on the raw string: the parser has already
+  // resolved the percent-encodings a regex would have to guess at, and `user:pass%40word@host` is
+  // exactly the shape a regex misses.
+  //
+  // A PASSWORD is refused everywhere, always. This record is written to disk in plain text, so a
+  // password in it is a password in workspace.json, in every backup of that file, and in any
+  // screenshot of it. Refusing sends the user to the credential vault, which is where it should
+  // have gone.
+  if (url.password !== '') return false
+  // A USERNAME is different, and treating the two alike was wrong. `ssh://docker@host` is the
+  // standard way to name a Docker host over SSH — it is the target, not a secret, and refusing it
+  // would reject the single most likely endpoint this feature will ever be given. For http and
+  // https a bare username is vestigial and far more often a half-pasted credential, so it stays
+  // refused there.
+  if (url.username !== '' && url.protocol !== 'ssh:') return false
+  return url.hostname !== ''
+}
+
+const SAFE_CREDENTIAL_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/
+
+/** Keeps only a connection we are prepared to write down. Returns undefined rather than a partial
+ *  record: half a connection is not a usable one, and storing it would produce a node that looks
+ *  configured and cannot connect. */
+export function safeServiceConnection(value: unknown): ServiceConnection | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  if (!safeServiceEndpoint(raw.endpoint)) return undefined
+  const out: ServiceConnection = { endpoint: raw.endpoint }
+  if (typeof raw.credentialKey === 'string' && SAFE_CREDENTIAL_KEY.test(raw.credentialKey)) {
+    out.credentialKey = raw.credentialKey
+  }
+  return out
 }
 
 /** Node id → the exec values that stay on this machine. */
@@ -170,6 +272,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     n.shell === undefined &&
     n.terminalProfileId === undefined &&
     n.pendingLaunch === undefined &&
+    n.serviceConnection === undefined &&
     n.ssh?.extraArgs === undefined &&
     n.ssh?.execTrusted === undefined
   )
@@ -178,6 +281,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.shell
   delete out.terminalProfileId
   delete out.pendingLaunch
+  delete out.serviceConnection
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
     // if it could ride a document or a wire frame, a hostile one would simply set it to true.
@@ -315,11 +419,17 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (extraArgs && (n.ssh?.execTrusted || !sshExtraArgsEnableLocalExec(extraArgs)))
       entry.sshExtraArgs = extraArgs
     if (n.kind === 'terminal') entry.pendingLaunch = clonePendingLaunch(n.pendingLaunch)
+    // Validated on the way IN as well as on the way out. This value reaches us from the live node,
+    // which a peer mutation can have touched, so harvesting it unchecked would launder a foreign
+    // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
+    const conn = safeServiceConnection(n.serviceConnection)
+    if (conn) entry.serviceConnection = conn
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
       entry.sshExtraArgs ||
-      entry.pendingLaunch
+      entry.pendingLaunch ||
+      entry.serviceConnection
     )
       map[n.id] = entry
   }
@@ -351,6 +461,11 @@ export function applyLocalNodeExec(
       const pendingLaunch = clonePendingLaunch(mine?.pendingLaunch)
       if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
     }
+    // Re-validated on restore too. The index is machine-local but it is still a FILE: a hand edit,
+    // a partial write, or a record written by an older build all reach this line, and a connection
+    // that would be refused today must not be honoured merely because it is already on disk.
+    const conn = safeServiceConnection(mine?.serviceConnection)
+    if (conn) out.serviceConnection = conn
     return out
   })
 }
