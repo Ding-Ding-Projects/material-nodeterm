@@ -85,7 +85,11 @@ export default defineConfig({
     maxWorkers: Math.max(2, Math.min(8, cpus().length)),
     testTimeout: 30_000,
     hookTimeout: 30_000,
-    environment: 'node'
+    environment: 'node',
+    // Node 26 ships a global `localStorage` getter that yields undefined without
+    // --localstorage-file, and it occupies the slot before jsdom populates globals — so jsdom
+    // suites got window === globalThis with localStorage undefined. Restores it per realm.
+    setupFiles: ['./test/setup/jsdom-storage.ts']
   },
   plugins: [stripShebang],
   resolve: {
