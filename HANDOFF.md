@@ -596,3 +596,32 @@ Verified in both directions rather than assumed: it flags exactly those eight an
 across 300 commits containing five real contributors’ addresses, it refuses a simulated push that
 would carry them, an ordinary push with nothing new to send passes, and breaking the matcher turns
 `scripts/reserved-identity.test.mjs` red (3 of 7) before restoring it turns it green.
+
+## Open: stranded draft releases, and what they cost
+
+`v0.4.4`, `v0.4.5` and `v0.4.7` are drafts left behind by failed release runs on 2026-08-18.
+`v0.4.6` published normally, so nothing is broken — but each stranded draft permanently occupies a
+version number, because the planner reads `repos/:owner/:repo/releases`, which includes drafts, and
+a number a draft holds cannot be reused without colliding.
+
+**A re-run no longer strands another one.** `planReleaseVersion` always had a `retry` outcome for
+exactly this ("bumping would strand the half-staged draft under a number nobody can find"), but it
+required `packageVersion === highest.version` — and the every-push-releases design writes the
+computed version into the working tree and deliberately never commits it, so `package.json`
+permanently lags whatever shipped. The branch was unreachable by construction: measured at
+`4a5596f6`, a re-run **at the same commit** planned `0.4.6` rather than resuming the `0.4.5` draft
+sitting right there. It now also retries when the highest version exists ONLY as a draft targeting
+this exact commit, which is the same claim the original condition was trying to make.
+
+Four cases pinned, because the failure modes point opposite ways: same commit resumes its own
+draft; a draft belonging to ANOTHER commit is refused and bumped past; no drafts bumps normally; a
+hand-bumped `package.json` is still respected. Anything that cannot be PROVEN to be a draft counts
+as published — the conservative direction mints a new number, the careless one would resume
+something already shipped.
+
+**The three existing drafts are not cleaned up here.** Deleting a release is outward-facing and
+irreversible, and these are not obviously disposable: they are the only record of what those runs
+staged. Removing them would also free their numbers for reuse, which is the one thing the version
+rules exist to prevent. That is a call for whoever owns the repository, and either answer is
+defensible — the reason to raise it at all is that nothing else will, and a draft list that only
+grows eventually makes the release page unreadable.
