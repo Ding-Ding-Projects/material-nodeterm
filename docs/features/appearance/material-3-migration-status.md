@@ -60,6 +60,38 @@ The four `--md-primary*` roles are additionally set at runtime from TypeScript
 (`renderer/lib/accentTokens.ts`), so a custom accent moves the Material primary family with it.
 
 
+
+## Why step one stops at the surface ramp
+
+The obvious next move is to keep going — 1,206 call sites still name a base token that has a
+Material alias. **Do not convert them by script.** The surface ramp was safe for a reason that does
+not hold for the rest, and the difference is exact:
+
+Each of the six surface tokens is aliased by **exactly one** Material role, so `var(--bg)` has one
+correct answer and a substitution cannot be wrong. Six other base tokens are aliased by **two**:
+
+| base | Material roles pointing at it |
+|---|---|
+| `--text` | `--md-on-surface` · `--md-on-secondary-container` |
+| `--muted` | `--md-on-surface-variant` · `--md-secondary` |
+| `--danger` | `--md-error` · `--md-on-error-container` |
+| `--warn` | `--md-warning` · `--md-on-warning-container` |
+| `--success` | `--md-success` · `--md-on-success-container` |
+| `--agent-working` | `--md-tertiary` · `--md-on-tertiary-container` |
+
+So "which Material name should this `var(--muted)` become?" has no mechanical answer. It depends on
+whether that particular use is a *secondary* colour or an *on-surface-variant* colour — two
+different roles that happen to share one value **today**, because both alias the same base.
+
+A script would pick one and freeze it. It would look clean, the tests would stay green, and the
+appearance would not change — and then step two re-derives the palette, `--md-secondary` stops
+equalling `--md-on-surface-variant`, and every site guessed wrongly takes the wrong colour. The
+damage would be invisible until exactly the moment the migration was supposed to pay off, and it
+would be spread across 1,206 sites with nothing recording which were guesses.
+
+These need a human deciding, per component, which role each use actually is. That is the same work
+step two needs anyway, and it wants the compare tool. What is safe to do mechanically has been done.
+
 ## The site carries the same bridge
 
 CLAUDE.md's scope rule is that every user-facing surface carries these contracts, so the site was
