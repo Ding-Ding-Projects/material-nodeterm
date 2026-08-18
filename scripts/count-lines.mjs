@@ -19,6 +19,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
+import { reservedAddress } from './reserved-identity.mjs'
 
 const execFileAsync = promisify(execFile)
 
@@ -153,7 +154,15 @@ async function attributeLines(files, ref, cwd) {
       const authorName = raw.slice(0, sep)
       const authorEmail = raw.slice(sep + 1, sep2)
       const body = raw.slice(sep2 + 1)
-      info = { isAgent: isAgentCommit(authorName, authorEmail, body), unknown: false }
+      if (reservedAddress(authorEmail)) {
+        // A placeholder identity on a domain that can never resolve is neither an agent nor a
+        // person — it is a harness that was left configured. Counting it as person-written is a
+        // wrong number in a published record, so it goes to the bucket that already means
+        // "nobody can be credited for this". `check-commit-identity.mjs` refuses new ones.
+        info = { isAgent: false, unknown: true }
+      } else {
+        info = { isAgent: isAgentCommit(authorName, authorEmail, body), unknown: false }
+      }
     } catch {
       info = { isAgent: false, unknown: true }
     }
@@ -288,9 +297,12 @@ export async function computeLineCounts({ cwd = process.cwd(), ref = 'HEAD' } = 
         ') is attributed to an agent when the line\'s commit author name/email matches a ' +
         'known automation identity, or the commit body carries a Co-Authored-By trailer ' +
         'naming one (Claude, Codex, Copilot, OpenAI, *bot*, [bot], or github-actions, ' +
-        'case-insensitive). Every other attributable line is a person. This sums lines that ' +
-        'SURVIVE at the counted ref, never lines added across history — a line written and ' +
-        'later deleted belongs to nobody.',
+        'case-insensitive). A line whose commit author sits on a reserved, un-routable domain ' +
+        '(RFC 2606 / RFC 6761 — .invalid, .test, .example, .localhost, example.com/net/org) is ' +
+        'a placeholder a harness left configured, so it is credited to nobody and counted as ' +
+        'unknown rather than to a person. Every other attributable line is a person. This sums ' +
+        'lines that SURVIVE at the counted ref, never lines added across history — a line ' +
+        'written and later deleted belongs to nobody.',
     },
   }
 }
@@ -333,7 +345,7 @@ function renderTable(data) {
   lines.push(`Attribution — agent-written vs person-written (surviving lines):`)
   lines.push(`  agent:   ${fmt(a.agentLines)} (${a.agentPercent.toFixed(1)}%)`)
   lines.push(`  person:  ${fmt(a.personLines)}`)
-  if (a.unknownLines > 0) lines.push(`  unknown: ${fmt(a.unknownLines)} (uncommitted or unresolvable)`)
+  if (a.unknownLines > 0) lines.push(`  unknown: ${fmt(a.unknownLines)} (uncommitted, unresolvable, or a placeholder identity)`)
   lines.push(`  rule:    ${a.rule}`)
   return lines.join('\n')
 }

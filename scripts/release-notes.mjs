@@ -160,7 +160,7 @@ async function renderLineCountSection() {
   lines.push('**Attribution (agent-written vs person-written, surviving lines):**')
   lines.push(`- agent: ${fmtInt(a.agentLines)} (${a.agentPercent.toFixed(1)}%)`)
   lines.push(`- person: ${fmtInt(a.personLines)}`)
-  if (a.unknownLines > 0) lines.push(`- unknown: ${fmtInt(a.unknownLines)} (uncommitted or unresolvable)`)
+  if (a.unknownLines > 0) lines.push(`- unknown: ${fmtInt(a.unknownLines)} (uncommitted, unresolvable, or a placeholder identity)`)
   lines.push('')
   lines.push(`<details><summary>Attribution rule</summary>\n\n${a.rule}\n\n</details>`)
   return lines.join('\n')

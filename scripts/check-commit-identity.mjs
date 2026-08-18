@@ -21,24 +21,7 @@
  * means a force-push, which is a decision for whoever owns the branch and not for a hook.
  */
 import { execFileSync } from 'node:child_process'
-
-const RESERVED = [
-  '.invalid',
-  '.test',
-  '.example',
-  '.localhost',
-  '@example.com',
-  '@example.net',
-  '@example.org'
-]
-
-const reservedAddress = (address) => {
-  const value = String(address ?? '').trim().toLowerCase()
-  if (!value) return false
-  return RESERVED.some((suffix) =>
-    suffix.startsWith('@') ? value.endsWith(suffix) : value.endsWith(suffix)
-  )
-}
+import { reservedAddress } from './reserved-identity.mjs'
 
 const range = process.argv[2]
 if (!range) {
