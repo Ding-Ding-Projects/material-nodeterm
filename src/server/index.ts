@@ -667,6 +667,18 @@ export async function startServer(
       await speechService.shutdown()
       // Close the loopback hook-server listener (it would otherwise die with the process anyway).
       hookServer.stop()
+      // Both shared-mode stores own an fs.watch DIRECTORY handle, and both ship a dispose() that
+      // closes it. Neither was called here: a repo-wide search found no non-test caller of either,
+      // so every close() leaked two watcher handles. The desktop is materially different and is not
+      // a defect — it holds them for the process lifetime and the process exits. close() is a real,
+      // repeated operation, and its own tests call it once or twice per file.
+      //
+      // An open directory handle is also what makes Windows answer EPERM on the DIRECTORY rather
+      // than a file inside it, which is the shape of the intermittent teardown failure recorded in
+      // HANDOFF.md. That link is NOT claimed here — these watchers target the shared home, not a
+      // test's data dir — but leaking a handle on shutdown is a defect on its own terms.
+      schoolModeStore.dispose()
+      kidsModeStore.dispose()
       // Upgraded WebSockets are not ordinary HTTP connections: server.close() waits for them but
       // does not end them. Own the WS lifecycle explicitly so a client close racing shutdown
       // cannot hang the Server Edition (or its tests) forever.

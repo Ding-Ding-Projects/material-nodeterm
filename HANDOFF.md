@@ -513,7 +513,13 @@ Teardown no longer decides the verdict: the retry stays bounded and short, and e
 logs a warning naming the directory instead of turning "a temp directory outlived the run" into
 "shutdown ordering is broken". Eight consecutive runs pass.
 
-**Still open**, and deliberately not guessed at: WHO holds it. The candidates worth checking first
-are a SQLite-backed service, and any child process spawned with that directory as its working
-directory that outlives `close()`. If it is a child outliving shutdown, that is a product defect
-rather than a test one, and the warning is what will keep it visible.
+**Answered.**  brings up SchoolModeStore and KidsModeStore, both of which own an
+ DIRECTORY handle and both of which ship a purpose-built  that closes it.
+ disposed nine things and neither of them; a repo-wide search found no non-test caller of
+either. Every shutdown leaked two watcher handles, and an open directory handle is exactly what
+makes Windows answer EPERM on the DIRECTORY rather than a file inside it.
+
+Fixed by disposing both in . The teardown warning fired roughly one run in five before,
+and **0 times in 18 consecutive runs** after — at that prior rate, 18 clean runs by chance is about
+1.8%, so this is strong evidence rather than proof. The desktop is materially different and was not
+changed: it holds the stores for the process lifetime and the process exits.
