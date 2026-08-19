@@ -314,6 +314,8 @@ shows, the commit it came from, the exact capture method — is in
 | **Home, light.** | **Home, dark.** |
 | ![A search field on the site with the anchored regex builder open beside it](./docs/assets/shots/site-search-regex-builder.png) | ![The site rendered at a 390px phone width](./docs/assets/shots/site-narrow-390.png) |
 | **The regex builder**, anchored to the field it belongs to. | **390px phone width** — measured, not eyeballed: no sideways scroll at 390, 768 or 1280. |
+| ![The deployed Screenshots room: a three-column gallery of fifteen real app captures, each with a caption, above a note about the two surfaces deliberately absent](./docs/assets/shots/site-screenshots-room.png) | |
+| **The Screenshots room** — the site publishing the same captures this README shows, taken from the deployed page. | |
 
 </details>
 

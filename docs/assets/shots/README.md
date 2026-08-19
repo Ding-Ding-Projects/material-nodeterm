@@ -21,11 +21,11 @@ Every image in this directory is a **real screen capture** — not a mockup, not
 hand-edited image, and not reused from anywhere upstream. There are two sets:
 
 - `site-*.png` — the live, deployed documentation/landing site.
-  Not yet captured: the **Screenshots** room (`site/app/features/screenshots.js`), added
-  2026-08-19. It is the room that publishes the `app-*.png` set to the site, and the `site-*.png`
-  set is taken by hand against the DEPLOYED site rather than by a script — so its capture is owed
-  on the next deploy, and is recorded as missing here rather than taken from localhost and
-  presented as the live site.
+  Includes `site-screenshots-room.png` — the **Screenshots** room
+  (`site/app/features/screenshots.js`), captured from the DEPLOYED page at
+  <https://ding-ding-projects.github.io/material-nodeterm/> rather than a local server, at
+  1440px through a headless browser. It is the room that publishes the `app-*.png` set to the
+  site: 15 cards, all 15 images decoded, no horizontal scroll.
 - `app-*.png` — the **desktop Electron app**, captured from a real running build.
 
 The desktop set was blocked for most of this work and is no longer; the section
