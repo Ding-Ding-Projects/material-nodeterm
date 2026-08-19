@@ -1,0 +1,876 @@
+/* ============================================================================================
+   MD3: Canvas node kinds  (lane: nodes)
+
+   Restyles the chrome of every React Flow custom node — terminal/editor/diff/browser/web/video
+   (all sharing `.term-node`), sticky, group frame, annotation, loop/subagent/native-loop,
+   service, dino — plus the per-node context meter and the node error boundary.
+
+   Loaded AFTER styles.css (see boot.tsx), so a same-specificity rule below wins by source order.
+   Everything here only overrides the properties the MD3 recipe actually changes (color, shape,
+   motion); untouched layout rules (flex, gap, absolute insets, sizes) keep working as in
+   styles.css. Recipe source: design/v2/md3/HANDOFF.md + design/v2/MD3 Canvas.dc.html.
+
+   Colours: only `var(--md-*)` tokens, with ONE documented exception — the "working" glow keeps
+   its literal Claude-clay hex because it is intentionally paired with the AgentMascot sprite's
+   clay pixel art (see styles.css's own comment on `.term-node.working`); there is no MD3 token
+   for that specific brand colour and substituting one would break the documented pairing.
+   ============================================================================================ */
+
+/* styles.css's existing --md-* layer already carries every colour ROLE this file leans on
+   (surface-container-*, outline-variant, primary/tertiary/error/success/warning + their
+   containers) — it is mid-migration to the new baseline hues (see HANDOFF-README's "Known
+   divergence"), but the NAMES already resolve, so those tokens are left alone here for whichever
+   lane re-seeds the literals. It does NOT yet carry the shape/motion scale under the contract's
+   own names (`--md-shape-xs/sm/md/lg`, `--md-motion-spatial/effect` — it currently has
+   `--md-shape-extra-small/small/medium/large` instead), so those six are defined here from the
+   literal values in design/v2/md3/tokens.css. Harmless if another lane later adds the same names
+   to styles.css: they'd carry the identical numbers from the same contract file. */
+:root {
+  --md-shape-xs: 8px;
+  --md-shape-sm: 12px;
+  --md-shape-md: 16px;
+  --md-shape-lg: 28px;
+  --md-motion-spatial: 500ms cubic-bezier(0.38, 1.21, 0.22, 1);
+  --md-motion-effect: 200ms cubic-bezier(0.34, 0.8, 0.34, 1);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Node card contract — shared by terminal / editor / diff / browser / web / video (all render
+   `.term-node` as their root). r24, surface-container body, no drop-shadow elevation, a 1px
+   outline-variant ring that becomes 2px error when the node needs the user.
+   --------------------------------------------------------------------------------------------- */
+.term-node {
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+  border-top-width: 1px; /* was a 3px inline-coloured accent border; the header dot now carries
+                             the user's colour choice, so the whole ring stays one weight */
+  border-radius: 24px;
+  box-shadow: none;
+  transition:
+    border-color var(--md-motion-effect),
+    box-shadow var(--md-motion-effect);
+}
+
+.term-node.selected {
+  border-color: var(--md-primary);
+}
+
+/* Unread glow: recoloured from the old macOS-blue accent to the MD3 primary, same opacity-pulse
+   technique (never animate box-shadow directly — see styles.css's note on this). */
+.term-node.unread {
+  border-color: var(--md-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-primary) 55%, transparent),
+    0 0 16px 1px color-mix(in srgb, var(--md-primary) 32%, transparent);
+}
+
+.react-flow__node:has(.term-node.unread)::after {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-primary) 80%, transparent),
+    0 0 26px 4px color-mix(in srgb, var(--md-primary) 55%, transparent);
+}
+
+/* Working glow keeps the literal Claude-clay colour on purpose — see file banner. Only the
+   trailing drop-shadow "elevation" term is dropped (tonal-only per the MD3 contract); the ring +
+   bloom glow is a functional status signal, not card elevation, so it stays. */
+.term-node.working {
+  box-shadow:
+    0 0 0 1px rgba(217, 119, 87, 0.35),
+    0 0 14px 1px rgba(217, 119, 87, 0.22);
+}
+
+/* Needs-you: the design's explicit "2px error ring when NEEDS YOU" — a real border, not just a
+   glow, so it reads at a glance even at low zoom. */
+.term-node.attention {
+  border-width: 2px;
+  border-color: var(--md-error);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-error) 60%, transparent),
+    0 0 14px 1px color-mix(in srgb, var(--md-error) 35%, transparent);
+}
+
+.react-flow__node:has(.term-node.attention)::after {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-error) 70%, transparent),
+    0 0 22px 3px color-mix(in srgb, var(--md-error) 50%, transparent);
+}
+
+/* Link handles (bridge-handle): MD3 primary, box-shadow kept (the one documented exception — a
+   transform here would fight React Flow's own centering translate on the handle). */
+.react-flow__handle.bridge-handle {
+  background: var(--md-primary);
+  border-color: var(--md-surface-container);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--md-scrim) 50%, transparent);
+}
+.react-flow__handle.bridge-handle:hover {
+  box-shadow:
+    0 1px 4px color-mix(in srgb, var(--md-scrim) 50%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--md-primary) 30%, transparent);
+}
+.react-flow__handle.bridge-handle[data-tip]::after {
+  background: var(--md-surface-container-highest);
+  border-color: var(--md-outline-variant);
+  color: var(--md-on-surface);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Header — 52px, surface-container-high (one tonal step above the body), MD3 icon buttons.
+   --------------------------------------------------------------------------------------------- */
+.term-node__header {
+  min-height: 52px;
+  padding: 6px 10px;
+  gap: 8px;
+  background: var(--md-surface-container-high);
+}
+
+.term-node__collapse,
+.term-node__ai,
+.term-node__move-worktree,
+.term-node__search,
+.term-node__refresh,
+.term-node__mic,
+.term-node__chat,
+.term-node__close,
+.term-node__find-btn {
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+
+/* Hover steps one surface-container level up from the header's own surface-container-high. */
+.term-node__collapse:hover,
+.term-node__ai:hover:not(:disabled),
+.term-node__move-worktree:hover,
+.term-node__search:hover,
+.term-node__refresh:hover,
+.term-node__mic:hover,
+.term-node__chat:hover,
+.term-node__find-btn:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.term-node__close:hover {
+  background: color-mix(in srgb, var(--md-error) 20%, transparent);
+  color: var(--md-error);
+}
+
+.term-node__title,
+.term-node__title-text {
+  color: var(--md-on-surface);
+}
+.term-node__title:focus,
+.term-node__title-text:hover {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+  border-radius: var(--md-shape-xs);
+}
+
+.term-node__session,
+.term-ssh-chip,
+.node-account-chip {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+}
+.node-account-chip--warning {
+  color: var(--md-warning);
+  background: color-mix(in srgb, var(--md-warning) 20%, transparent);
+}
+.account-identity-pill,
+.account-provenance-pill {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+}
+.account-identity-check {
+  color: var(--md-primary);
+}
+.account-identity-pills--warning .account-identity-pill,
+.account-identity-pills--warning .account-provenance-pill {
+  color: var(--md-warning);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Status chips — 28px pill, 11.5px/700, per the handoff table. RUNNING = tertiary-container +
+   pulsing dot; NEEDS YOU = error-container; tmux/ok = success-container; SLEEPING/QUEUED =
+   surface-container-highest.
+   --------------------------------------------------------------------------------------------- */
+.term-node__status {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: var(--md-shape-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-highest);
+}
+
+.term-node__status-dot {
+  width: 7px;
+  height: 7px;
+}
+
+.term-node__status--busy {
+  color: var(--md-on-tertiary-container);
+  background: var(--md-tertiary-container);
+}
+.term-node__status--busy .term-node__status-dot {
+  background: var(--md-tertiary);
+}
+
+.term-node__status--attention {
+  color: var(--md-on-error-container);
+  background: var(--md-error-container);
+}
+.term-node__status--attention .term-node__status-dot {
+  background: var(--md-error);
+}
+
+.term-node__status--unread {
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+}
+
+/* LOOP (in-session /loop|/schedule|/cron): reuses the primary role so it reads as "a mode the
+   agent is in" without competing with RUNNING's tertiary. Brand purple retired for a token. */
+.term-node__status--loop {
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+}
+
+/* SLEEPING (Eco hibernation) and QUEUED (armed --after launch): the quietest chips, unchanged
+   surface-container-highest — nothing is wrong, nothing is running yet. */
+.term-node__status--sleeping,
+.term-node__status--queued {
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-highest);
+}
+.term-node__status--sleeping:hover {
+  color: var(--md-on-surface);
+}
+.term-node__queued-run:hover {
+  color: var(--md-primary);
+}
+
+.term-node__approve-btn {
+  border-radius: var(--md-shape-full);
+}
+.term-node__approve-btn--allow {
+  color: var(--md-on-success-container);
+  border-color: transparent;
+  background: var(--md-success-container);
+}
+.term-node__approve-btn--allow:hover {
+  background: color-mix(in srgb, var(--md-success-container) 80%, var(--md-success) 20%);
+}
+.term-node__approve-btn--deny {
+  color: var(--md-on-error-container);
+  border-color: transparent;
+  background: var(--md-error-container);
+}
+.term-node__approve-btn--deny:hover {
+  background: color-mix(in srgb, var(--md-error-container) 80%, var(--md-error) 20%);
+}
+
+/* Mascot / brand pulse badges: unchanged geometry, just make sure their bloom sits on token
+   colours — the sprites themselves are raster assets and are untouched. */
+.term-node__mascot--pulse {
+  color: var(--md-on-tertiary-container);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Find bar
+   --------------------------------------------------------------------------------------------- */
+.term-node__find {
+  background: var(--md-surface-container-high);
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.term-node__find-input {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  color: var(--md-on-surface);
+}
+.term-node__find-input:focus {
+  border-color: var(--md-primary);
+}
+.term-node__find-count {
+  color: var(--md-on-surface-variant);
+}
+.term-node__find-tag {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-xs);
+}
+.term-node__find-tag--claude {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.term-node__find-error {
+  color: var(--md-error);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Body — terminal surface stays fixed dark in both themes (--term-bg); every overlay above it
+   moves to token colours.
+   --------------------------------------------------------------------------------------------- */
+.term-node__body {
+  background: var(--term-bg, var(--md-surface));
+}
+
+.term-node__upload {
+  color: var(--md-primary);
+  background: color-mix(in srgb, var(--md-surface) 60%, transparent);
+  border-radius: var(--md-shape-xs);
+}
+.term-node__upload.failed {
+  color: var(--md-error);
+}
+.term-node__upload-spin {
+  border-color: var(--md-outline-variant);
+  border-top-color: var(--md-primary);
+}
+
+.term-copy-pill {
+  color: var(--md-on-success-container);
+  background: var(--md-success-container);
+  border: 1px solid color-mix(in srgb, var(--md-success) 35%, transparent);
+  border-radius: var(--md-shape-full);
+}
+.term-copy-pill--hint {
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-highest);
+  border-color: var(--md-outline-variant);
+}
+
+.term-node__body.dropping::after {
+  color: var(--md-primary);
+  background: color-mix(in srgb, var(--md-primary) 12%, transparent);
+  border: 2px dashed var(--md-primary);
+  border-radius: var(--md-shape-xs);
+}
+
+/* Resting states: offscreen dispose (nothing to do) vs. closed/error (something to do). */
+.term-node__offscreen {
+  color: var(--md-on-surface-variant);
+  background: color-mix(in srgb, var(--md-surface-container) 92%, transparent);
+}
+.term-node__closed {
+  color: var(--md-on-surface-variant);
+  background: color-mix(in srgb, var(--md-surface-container) 96%, transparent);
+}
+.term-node__reopen {
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface);
+}
+.term-node__reopen:hover {
+  background: var(--md-surface-container-high);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Markdown overlay (⌘M) and the chat panel it can defer to on Claude nodes.
+   --------------------------------------------------------------------------------------------- */
+.term-md {
+  background: var(--md-surface);
+}
+.term-md__bar {
+  color: var(--md-on-surface-variant);
+  border-bottom: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-high);
+}
+.term-md__content {
+  color: var(--md-on-surface);
+}
+.term-md__content a {
+  color: var(--md-primary);
+}
+.term-md__content code {
+  background: var(--md-surface-container-highest);
+}
+.term-md__content pre {
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+}
+.term-md__content blockquote {
+  border-left-color: var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+.term-md__content th,
+.term-md__content td {
+  border-color: var(--md-outline-variant);
+}
+
+.term-chat {
+  background: var(--md-surface);
+}
+.term-chat__bar {
+  color: var(--md-on-surface-variant);
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.term-chat__empty {
+  color: var(--md-on-surface-variant);
+}
+.term-chat__empty-detail {
+  color: color-mix(in srgb, var(--md-on-surface-variant) 70%, transparent);
+}
+.term-chat__retry {
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+}
+.term-chat__retry:hover {
+  background: var(--md-surface-container-highest);
+}
+.term-chat__msg--user {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.term-chat__msg--assistant {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.term-chat__text pre {
+  background: var(--md-surface-container-lowest);
+}
+.term-chat__tool {
+  background: var(--md-surface-container-lowest);
+}
+.term-chat__tool-name {
+  color: var(--md-primary);
+}
+.term-chat__compose {
+  border-top: 1px solid var(--md-outline-variant);
+}
+.term-chat__input {
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+}
+.term-chat__input:focus {
+  border-color: var(--md-primary);
+}
+
+/* Comments/board-log flyout container the terminal node opens beside itself. */
+.term-node__comments {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Per-node error boundary (NodeBoundary.tsx) — an error-container card, not a bare red border.
+   --------------------------------------------------------------------------------------------- */
+.node-error {
+  background: var(--md-error-container);
+  border: none;
+  border-radius: var(--md-shape-md);
+  color: var(--md-on-error-container);
+}
+.node-error__title {
+  color: var(--md-on-error-container);
+}
+.node-error__msg {
+  color: color-mix(in srgb, var(--md-on-error-container) 85%, transparent);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Context meter (ContextMeter.tsx) — compact header pill + popover. Tertiary is the meter's own
+   fill colour per the handoff table; the fullness colour (meterColor() in the component) is now
+   emitted as `var(--md-...)` strings rather than raw hex, so this file stays the sole colour
+   authority for the component.
+   --------------------------------------------------------------------------------------------- */
+.ctx-pill {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+}
+.ctx-pill:hover {
+  background: color-mix(in srgb, var(--md-surface-container-highest) 70%, var(--md-on-surface) 10%);
+}
+.ctx-pill__model {
+  color: var(--md-on-surface-variant);
+}
+.ctx-pill__bar {
+  background: var(--md-surface-container-lowest);
+}
+.ctx-popover {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  box-shadow: none;
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-md);
+}
+.ctx-bar {
+  background: var(--md-surface-container-lowest);
+}
+.ctx-popover__sub {
+  color: var(--md-on-surface-variant);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Editor / diff nodes (share `.term-node` chrome above; these are their body-specific bits).
+   --------------------------------------------------------------------------------------------- */
+.editor-node__body {
+  background: var(--md-surface);
+}
+.editor-node__toggle,
+.editor-node__save {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+}
+.editor-node__toggle:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.editor-node__save:not(:disabled) {
+  color: var(--md-on-primary);
+  background: var(--md-primary);
+  border-color: transparent;
+}
+.editor-node__image {
+  background-color: var(--md-surface-container-low);
+  background-image: linear-gradient(45deg, var(--md-surface-container-high) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--md-surface-container-high) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--md-surface-container-high) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--md-surface-container-high) 75%);
+}
+.editor-node__pdf {
+  background: var(--md-surface-container-low);
+}
+.editor-node__loading,
+.editor-node__dims {
+  color: var(--md-on-surface-variant);
+}
+
+.diff-node__tag {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-xs);
+  padding: 1px 6px;
+  margin-left: 6px;
+  font-size: 10.5px;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Browser node + start page
+   --------------------------------------------------------------------------------------------- */
+.browser-node__toolbar {
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.browser-node__btn {
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+}
+.browser-node__btn:hover:not(:disabled) {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.browser-node__address {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+}
+.browser-node__discarded,
+.browser-node__discarded.browser-node__discarded {
+  background: var(--md-surface);
+  color: var(--md-on-surface-variant);
+}
+.browser-node__error {
+  background: var(--md-error);
+  color: var(--md-on-error);
+}
+
+.startpage {
+  background: var(--md-surface);
+}
+.startpage__searchbar {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+}
+.startpage__searchbar:focus-within {
+  border-color: var(--md-primary);
+}
+.startpage__search-icon,
+.startpage__recent-title,
+.startpage__recent-host {
+  color: var(--md-on-surface-variant);
+}
+.startpage__search,
+.startpage__recent-name,
+.startpage__tile-label {
+  color: var(--md-on-surface);
+}
+.startpage__tile:hover,
+.startpage__recent-item:hover {
+  background: var(--md-surface-container-high);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Sticky note — r20, no drop-shadow elevation; the fill/border tint stays inline (data.color via
+   alphaTint, a per-note user choice, not a role token) — only shape/elevation change here.
+   --------------------------------------------------------------------------------------------- */
+.sticky-node {
+  border-radius: 20px;
+  box-shadow: none;
+}
+/* `outline`, not `box-shadow`: the border is already carrying the note's OWN colour (inline
+   `borderColor: data.color`), so recolouring it on select would erase that identity. Outline is
+   drawn outside the border box without touching it, and Chromium clips it to the radius. */
+.sticky-node.selected {
+  outline: 1.5px solid var(--md-primary);
+}
+.sticky-node__body::placeholder {
+  color: color-mix(in srgb, var(--md-on-surface) 40%, transparent);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Group frame — r28 dashed, label pill on the top border. Bound-to-worktree keeps the user's own
+   colour tint (unchanged, per-group data), but the stale state now reads through the warning
+   token rather than a raw amber.
+   --------------------------------------------------------------------------------------------- */
+.group-node {
+  border-radius: var(--md-shape-lg);
+}
+.group-node--worktree-stale {
+  border-color: color-mix(in srgb, var(--md-warning) 55%, transparent);
+  background: color-mix(in srgb, var(--md-warning) 6%, transparent);
+}
+.group-node__label {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface);
+}
+.group-node__name {
+  color: var(--md-on-surface);
+}
+.group-node__branch {
+  color: var(--md-primary);
+}
+.group-node__branch--stale {
+  color: var(--md-warning);
+}
+.group-node__wt-dirty,
+.group-node__wt-ahead,
+.group-node__wt-behind {
+  color: var(--md-on-surface-variant);
+}
+.group-node__wt-dirty {
+  color: var(--md-warning);
+}
+.group-node__wt-btn,
+.group-node__ungroup,
+.group-node__close {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+}
+.group-node__wt-btn:hover,
+.group-node__ungroup:hover,
+.group-node__close:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Annotation node — the midpoint toolbar pill only; the line/arrow itself is user-coloured SVG.
+   --------------------------------------------------------------------------------------------- */
+.annotation-node.selected {
+  outline-color: color-mix(in srgb, var(--md-on-surface) 35%, transparent);
+}
+.annotation-node__toolbar {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+}
+.annotation-node__variant,
+.annotation-node__close {
+  color: var(--md-on-surface-variant);
+}
+.annotation-node__variant:hover,
+.annotation-node__close:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.canvas-draw-preview--area {
+  border-color: var(--md-primary);
+  background: color-mix(in srgb, var(--md-primary) 6%, transparent);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Subagent / loop (ephemeral, hook-driven) cards — the design's own "SUBAGENT CARD" recipe:
+   r20, surface-container-low body, 1px DASHED outline-variant ring, no drop-shadow elevation.
+   Subagent keeps its literal Claude-clay accent (border-left + dot) for the same brand-pairing
+   reason `.term-node.working` does; loop moves its purple to the MD3 primary token.
+   --------------------------------------------------------------------------------------------- */
+.subagent-node,
+.loop-node {
+  background: var(--md-surface-container-low);
+  border: 1px dashed var(--md-outline-variant);
+  border-radius: 20px;
+  box-shadow: none;
+}
+.subagent-node {
+  border-left: 3px solid #d97757; /* Claude clay — see file banner */
+}
+.loop-node {
+  border-left: 3px solid var(--md-primary);
+}
+/* Border only — these cards carry no per-node user colour, so switching the dashed ring solid
+   and primary-coloured is enough of a selection cue without a box-shadow. */
+.react-flow__node.selected .subagent-node,
+.react-flow__node.selected .loop-node {
+  border-style: solid;
+  border-color: var(--md-primary);
+}
+.subagent-node__expand:hover,
+.loop-node__expand:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.subagent-node__term {
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+.subagent-node.done .subagent-node__dot {
+  background: var(--md-success);
+}
+.subagent-node__state,
+.subagent-node__task,
+.subagent-node__meta {
+  color: var(--md-on-surface-variant);
+}
+.subagent-node__result {
+  border-top: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface);
+}
+.subagent-node__result-task {
+  border-bottom: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+.loop-node__dot {
+  background: var(--md-primary);
+}
+.loop-node__task,
+.loop-node__empty {
+  color: var(--md-on-surface-variant);
+}
+.loop-node__item-n {
+  color: var(--md-on-surface-variant);
+}
+.loop-node__play:hover {
+  background: var(--md-surface-container-high);
+}
+.loop-node__close:hover {
+  background: color-mix(in srgb, var(--md-error) 18%, transparent);
+  color: var(--md-error);
+}
+
+/* Native (cron-scheduled) loop node — same shape recipe, warning token in place of raw amber. */
+.native-loop-node {
+  border: 1px solid color-mix(in srgb, var(--md-warning) 55%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--md-surface-container-low) 92%, var(--md-warning) 8%);
+  color: var(--md-on-surface);
+  box-shadow: none;
+}
+.native-loop-node.selected {
+  border-color: var(--md-warning);
+}
+.native-loop-node__header {
+  border-bottom: 1px solid var(--md-outline-variant);
+  background: color-mix(in srgb, var(--md-warning) 10%, transparent);
+}
+.native-loop-node__clock {
+  color: var(--md-warning);
+}
+.native-loop-node__close {
+  color: var(--md-on-surface-variant);
+}
+.native-loop-node__task {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+}
+.native-loop-node__task:focus {
+  border-color: var(--md-warning);
+}
+.native-loop-node__interval input,
+.native-loop-node__interval select {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+}
+.native-loop-node__meta {
+  color: var(--md-on-surface-variant);
+}
+.native-loop-node__actions button {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.native-loop-node__actions button.active {
+  border-color: var(--md-warning);
+  color: var(--md-warning);
+  background: color-mix(in srgb, var(--md-warning) 16%, transparent);
+}
+.schedule-handle {
+  border-color: var(--md-surface-container);
+  background: var(--md-warning);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Service node — same "node card" recipe as terminal/editor: r24 body, surface-container.
+   Most of ServiceNode's own colours already read `var(--md-*, <old fallback>)`, so tokens.css
+   already re-tints it; this file bumps its shape to match the rest of the canvas.
+   --------------------------------------------------------------------------------------------- */
+.service-node {
+  border-radius: 24px;
+}
+/* `outline`, not `box-shadow`: the root border is already user-coloured (nodeBorderStyle ->
+   inline `borderColor: data.color`), so an outline sits outside it without erasing that choice. */
+.service-node.selected {
+  outline: 1px solid var(--md-primary);
+}
+.service-node__header {
+  min-height: 52px;
+}
+.service-node :is(button, input):focus-visible {
+  outline-color: var(--md-primary);
+}
+.service-node__input {
+  border-radius: var(--md-shape-sm);
+}
+.ctx-colors__rainbow.is-active {
+  outline-color: var(--md-primary);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Dino node (mini-game) — same card recipe, one flat radius.
+   --------------------------------------------------------------------------------------------- */
+.dino-node {
+  border-radius: 24px;
+}
+/* Outline again: `borderColor: data.color` on the root carries the user's own choice. */
+.dino-node.selected {
+  outline: 1.5px solid var(--md-primary);
+}
+.dino-node__header {
+  min-height: 52px;
+}
