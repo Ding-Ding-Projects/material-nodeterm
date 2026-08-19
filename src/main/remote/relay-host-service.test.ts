@@ -11,6 +11,25 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
+/** `addSeat` starts a real container unless `startDocker` is injected. These two fakes are what let
+ *  30 unit tests drive the seat path without Docker on the machine. */
+const fakeDockerSettings = {
+  context: '',
+  image: 'nodeterm/host:test',
+  containerPrefix: 'nt-test',
+  mountMode: 'readonly' as const,
+  cpus: 1,
+  memoryMb: 512,
+  pidsLimit: 128,
+  network: 'none' as const,
+  workdir: '/workspace' as const
+}
+const fakeDockerRuntime = () => ({
+  context: '',
+  containerName: 'nt-test-0',
+  stop: async () => {}
+})
+
 const h: {
   handlers: Record<string, (...a: any[]) => unknown>
   sent: Array<{ channel: string; args: any[] }>
@@ -133,10 +152,11 @@ function wireHost(): {
 
   const win = fakeWin()
   initRelayHost(win as never, platform, {
+    dockerSettingsFor: () => ({ settings: fakeDockerSettings, cwd: '/tmp/proj' }),
+    startDocker: async () => fakeDockerRuntime(),
     transport: hostT,
     loadKeys: async () => hostKeys,
     mintToken: async () => ({ pairingToken: 'tok-123' }),
-    isPremium: () => true,
     relayAllowed: () => true,
     getEntitlement: () => 'ent-abc',
     licensedSeats: () => 3
@@ -197,7 +217,7 @@ function wireHost(): {
 }
 
 /** Run `relay:host:start` (optionally scoped to a project) and return its offer. */
-async function start(projectId?: string): Promise<{ offer: string }> {
+async function start(projectId: string = 'p1'): Promise<{ offer: string }> {
   return (await h.handlers[IPC.relayHostStart]({}, projectId)) as { offer: string }
 }
 
@@ -245,22 +265,26 @@ describe('initRelayHost — start()', () => {
     expect(decoded!.hostPublicKeyB64).toBeTruthy()
   })
 
-  it('rejects when not entitled', async () => {
+  // Hosting is FREE since the deployment-first device access change (CHANGELOG: "the site
+  // without a Pro plan or paid seat") — this used to assert a Pro gate that no longer exists.
+  it('starts without a Pro entitlement — hosting is free', async () => {
     const win = fakeWin()
     initRelayHost(win as never, platform, {
-      isPremium: () => false,
+      dockerSettingsFor: () => ({ settings: fakeDockerSettings, cwd: '/tmp/proj' }),
+      startDocker: async () => fakeDockerRuntime(),
       relayAllowed: () => true,
       getEntitlement: () => 'ent',
       loadKeys: async () => genKeyPair(),
       mintToken: async () => ({ pairingToken: 't' })
     })
-    await expect(h.handlers[IPC.relayHostStart]({})).rejects.toThrow(/Pro/)
+    await expect(h.handlers[IPC.relayHostStart]({}, 'p1')).resolves.toHaveProperty('offer')
   })
 
   it('surfaces a locked peer key as a rejected start', async () => {
     const win = fakeWin()
     initRelayHost(win as never, platform, {
-      isPremium: () => true,
+      dockerSettingsFor: () => ({ settings: fakeDockerSettings, cwd: '/tmp/proj' }),
+      startDocker: async () => fakeDockerRuntime(),
       relayAllowed: () => true,
       getEntitlement: () => 'ent',
       licensedSeats: () => 3,
@@ -269,7 +293,7 @@ describe('initRelayHost — start()', () => {
       },
       mintToken: async () => ({ pairingToken: 't' })
     })
-    await expect(h.handlers[IPC.relayHostStart]({})).rejects.toThrow(/locked/)
+    await expect(h.handlers[IPC.relayHostStart]({}, 'p1')).rejects.toThrow(/locked/)
   })
 })
 
@@ -332,9 +356,10 @@ describe('initRelayHost — sharedProjectId threads start → connect', () => {
     let captured: any = null
     const win = fakeWin()
     initRelayHost(win as never, platform, {
+      dockerSettingsFor: () => ({ settings: fakeDockerSettings, cwd: '/tmp/proj' }),
+      startDocker: async () => fakeDockerRuntime(),
       loadKeys: async () => genKeyPair(),
       mintToken: async () => ({ pairingToken: 'tok-123' }),
-      isPremium: () => true,
       relayAllowed: () => true,
       getEntitlement: () => 'ent-abc',
       licensedSeats: () => 3,
@@ -360,10 +385,11 @@ describe('initRelayHost — sharedProjectId threads start → connect', () => {
     expect(cap.opts()?.sharedProjectId).toBe('proj-1')
   })
 
-  it('start() with no arg leaves sharedProjectId undefined', async () => {
-    const cap = wireWithCapture()
-    await h.handlers[IPC.relayHostStart]({})
-    expect(cap.opts()?.sharedProjectId).toBeUndefined()
+  // Since d5bdf341 a seat runs inside a bounded Docker container, so a project is mandatory —
+  // this used to assert the opposite (no arg → undefined sharedProjectId).
+  it('start() with no project is refused — a seat needs a local Docker workspace', async () => {
+    wireWithCapture()
+    await expect(h.handlers[IPC.relayHostStart]({})).rejects.toThrow(/local project/i)
   })
 })
 
@@ -429,9 +455,10 @@ function wirePool(seats: number): {
   const win = fakeWin()
   const captured: Array<{ opts: any; session: FakeSession }> = []
   initRelayHost(win as never, platform, {
+    dockerSettingsFor: () => ({ settings: fakeDockerSettings, cwd: '/tmp/proj' }),
+    startDocker: async () => fakeDockerRuntime(),
     loadKeys: async () => genKeyPair(),
     mintToken: async () => ({ pairingToken: 'tok' }),
-    isPremium: () => true,
     relayAllowed: () => true,
     getEntitlement: () => 'ent',
     licensedSeats: () => seats,
@@ -443,7 +470,7 @@ function wirePool(seats: number): {
   })
   return {
     invite: (opts = {}) =>
-      h.handlers[IPC.relayHostInvite]({}, opts) as Promise<{ offer: string; id: string }>,
+      h.handlers[IPC.relayHostInvite]({}, { projectId: 'p1', ...opts }) as Promise<{ offer: string; id: string }>,
     captured
   }
 }
@@ -514,11 +541,12 @@ describe('initRelayHost — Task-2 review: reserve-at-mint with a revocable id',
     vi.mocked(killRelayHostsByPeerKey).mockClear()
     const win = fakeWin()
     const invite = (): Promise<{ offer: string; id: string }> =>
-      h.handlers[IPC.relayHostInvite]({}, {}) as Promise<{ offer: string; id: string }>
+      h.handlers[IPC.relayHostInvite]({}, { projectId: 'p1' }) as Promise<{ offer: string; id: string }>
     initRelayHost(win as never, platform, {
+      dockerSettingsFor: () => ({ settings: fakeDockerSettings, cwd: '/tmp/proj' }),
+      startDocker: async () => fakeDockerRuntime(),
       loadKeys: async () => genKeyPair(),
       mintToken: async () => ({ pairingToken: 'tok' }),
-      isPremium: () => true,
       relayAllowed: () => true,
       getEntitlement: () => 'ent',
       licensedSeats: () => 1,
@@ -552,12 +580,13 @@ describe('initRelayHost — Task-2 review: reserve-at-mint with a revocable id',
     let fail = true
     const captured: FakeSession[] = []
     initRelayHost(win as never, platform, {
+      dockerSettingsFor: () => ({ settings: fakeDockerSettings, cwd: '/tmp/proj' }),
+      startDocker: async () => fakeDockerRuntime(),
       loadKeys: async () => genKeyPair(),
       mintToken: async () => {
         if (fail) throw new Error('mint boom')
         return { pairingToken: 'tok' }
       },
-      isPremium: () => true,
       relayAllowed: () => true,
       getEntitlement: () => 'ent',
       licensedSeats: () => 1,
@@ -567,10 +596,10 @@ describe('initRelayHost — Task-2 review: reserve-at-mint with a revocable id',
         return s as unknown as RelayHostSession
       }
     })
-    await expect(h.handlers[IPC.relayHostInvite]({}, {})).rejects.toThrow('mint boom')
+    await expect(h.handlers[IPC.relayHostInvite]({}, { projectId: 'p1' })).rejects.toThrow('mint boom')
     // The reservation was rolled back — at cap 1 a fresh (now-succeeding) invite still fits.
     fail = false
-    await expect(h.handlers[IPC.relayHostInvite]({}, {})).resolves.toHaveProperty('offer')
+    await expect(h.handlers[IPC.relayHostInvite]({}, { projectId: 'p1' })).resolves.toHaveProperty('offer')
   })
 })
 
@@ -654,9 +683,10 @@ describe('initRelayHost — Team Access start() aliases invite (additive)', () =
     const win = fakeWin()
     const captured: Array<{ session: FakeSession }> = []
     initRelayHost(win as never, platform, {
+      dockerSettingsFor: () => ({ settings: fakeDockerSettings, cwd: '/tmp/proj' }),
+      startDocker: async () => fakeDockerRuntime(),
       loadKeys: async () => genKeyPair(),
       mintToken: async () => ({ pairingToken: 'tok' }),
-      isPremium: () => true,
       relayAllowed: () => true,
       getEntitlement: () => 'ent',
       licensedSeats: () => 1,
@@ -666,9 +696,9 @@ describe('initRelayHost — Team Access start() aliases invite (additive)', () =
         return session as unknown as RelayHostSession
       }
     })
-    await h.handlers[IPC.relayHostStart]({})
+    await h.handlers[IPC.relayHostStart]({}, 'p1')
     // A second start does NOT supersede the first (which would close it); it is refused at cap 1.
-    await expect(h.handlers[IPC.relayHostStart]({})).rejects.toThrow(E_SEATS_FULL)
+    await expect(h.handlers[IPC.relayHostStart]({}, 'p1')).rejects.toThrow(E_SEATS_FULL)
     expect(captured[0].session.close).not.toHaveBeenCalled()
   })
 })

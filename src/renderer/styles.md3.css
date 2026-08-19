@@ -109,6 +109,12 @@
   font-size: 17px;
   line-height: 1;
 }
+.cluster-search__placeholder {
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cluster-search .kbd {
   margin-left: auto;
   font-family: var(--md-font-mono, ui-monospace, monospace);
@@ -8951,4 +8957,19 @@
 }
 .md3-export-menu .export-menu__result--error {
   color: var(--md-error);
+}
+
+/* ---- History screen host ----
+   The screen itself is height:100% and needs a positioned host. It is INSET behind the app bar
+   and the nav rail rather than fixed inset-0, because the rail is how you leave it: z 27 sits
+   above the canvas and its clusters, below the rail (28), so the Canvas destination stays
+   clickable and no separate close button is needed. */
+.md3-history-host {
+  position: fixed;
+  top: var(--app-bar-h);
+  left: var(--nav-rail-w);
+  right: 0;
+  bottom: 0;
+  z-index: 27;
+  background: var(--md-surface);
 }

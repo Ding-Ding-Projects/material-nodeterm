@@ -53,14 +53,18 @@ export interface RelayHostDeps {
   loadKeys?: () => Promise<KeyPair>
   /** Mint the single-use pairing token (defaults to the shared `mintPairingToken`). */
   mintToken?: (entitlement?: string) => Promise<{ pairingToken: string }>
-  isPremium?: () => boolean
   relayAllowed?: () => boolean
   getEntitlement?: () => string | null
   /** The licensed seat cap (Team Access). Defaults to the real `licensedSeats()` (core/license.ts). */
   licensedSeats?: () => number
   /** TEST ONLY: override the wire-up (defaults to `connectRelayHost`). */
   connect?: typeof connectRelayHost
-  dockerSettingsFor?: (projectId: string) => { settings: DockerHostSettings; cwd: string } | null
+  /** Resolve the local Docker workspace for a project. REQUIRED, not optional: `addSeat` demands it
+   *  unconditionally, so an omitted dep is a runtime throw rather than a compile error — which is
+   *  exactly how 30 tests drove a real container start and failed. */
+  dockerSettingsFor: (projectId: string) => { settings: DockerHostSettings; cwd: string } | null
+  /** TEST ONLY: override the container start (defaults to the real `startDockerHostRuntime`). */
+  startDocker?: typeof startDockerHostRuntime
 }
 
 /** Metadata options for a new seat. `email` is a DISPLAY label only (never trust/identity — the SAS
@@ -84,7 +88,7 @@ export interface RelayHost {
 export function initRelayHost(
   win: BrowserWindow,
   platform: ElectronPlatform,
-  deps: RelayHostDeps = {}
+  deps: RelayHostDeps
 ): RelayHost {
   const url = deps.url ?? RELAY_URL
   const connect = deps.connect ?? connectRelayHost
@@ -141,9 +145,10 @@ export function initRelayHost(
 
     try {
       if (!projectId) throw new Error('Choose a local project before starting Docker host.')
-      const dockerConfig = deps.dockerSettingsFor?.(projectId)
+      const dockerConfig = deps.dockerSettingsFor(projectId)
       if (!dockerConfig) throw new Error('The selected project has no local Docker workspace.')
-      const docker = await startDockerHostRuntime(dockerConfig.settings, dockerConfig.cwd)
+      const startDocker = deps.startDocker ?? startDockerHostRuntime
+      const docker = await startDocker(dockerConfig.settings, dockerConfig.cwd)
       const reservation = byId.get(rendererId)
       if (!reservation) {
         await docker.stop()

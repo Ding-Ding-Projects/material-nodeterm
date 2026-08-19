@@ -215,6 +215,7 @@ import {
   type AccountRemovalTeardownDetail
 } from '../lib/accountRemoval'
 import { NotificationCenter } from '../components/NotificationCenter'
+import { HistoryScreen } from '../components/HistoryScreen'
 import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
@@ -1051,6 +1052,7 @@ export function Canvas() {
   const captureTsRef = useRef<Record<string, number>>({})
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [notifCenterOpen, setNotifCenterOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
   const [phonePairAnchor, setPhonePairAnchor] = useState<{
@@ -12037,6 +12039,7 @@ export function Canvas() {
           onClick={() => setPaletteOpen(true)}
         >
           <span className="cluster-search__icon">⌕</span>
+            <span className="cluster-search__placeholder">Search everything…</span>
           <span className="kbd">{hintLabel('⌘K')}</span>
         </button>
         <div className="md3-app-bar__cluster">
@@ -12324,6 +12327,7 @@ export function Canvas() {
           setOllamaOpen(false)
           setSettingsOpen(false)
           setNotifCenterOpen(false)
+          setHistoryOpen(false)
         }
         const mobileServer = isMobileServerEdition()
         const leaveBoard = () => {
@@ -12333,7 +12337,7 @@ export function Canvas() {
           if (!kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
         }
         const anyDrawerOpen =
-          explorerOpen || scOpen || converterOpen || ollamaOpen || settingsOpen || notifCenterOpen
+          explorerOpen || scOpen || converterOpen || ollamaOpen || settingsOpen || notifCenterOpen || historyOpen
         const destinations: RailDestination[] = [
           {
             id: 'canvas',
@@ -12399,6 +12403,17 @@ export function Canvas() {
                   { label: 'Ollama manager', onClick: () => setOllamaOpen(true) }
                 ]
               })
+            }
+          },
+          {
+            id: 'history',
+            icon: <IconSessions />,
+            label: 'History',
+            active: historyOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setHistoryOpen(true)
             }
           },
           {
@@ -12838,6 +12853,14 @@ export function Canvas() {
         />
       )}
 
+      {historyOpen && (
+        <div className="md3-history-host">
+        <HistoryScreen
+          onGoToNode={travelToNode}
+          onKillSession={killSessionById}
+        />
+        </div>
+      )}
       {notifCenterOpen && (
         <NotificationCenter
           onClose={() => setNotifCenterOpen(false)}
