@@ -27,12 +27,13 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
 import unzipper from 'unzipper'
 import { findExecutableSync } from '../exec-path'
+import { renameAtomic } from '../fs-atomic'
 
 const execFileP = promisify(execFile)
 
@@ -211,7 +212,9 @@ export async function ensureJavaRuntime(opts: EnsureJavaOptions): Promise<JavaPr
     const relativeJavaPath = path.relative(staging, javaPath)
     await writeFile(path.join(staging, 'runtime.json'), JSON.stringify({ javaPath: relativeJavaPath }, null, 2), 'utf-8')
     await rm(root, { recursive: true, force: true })
-    await rename(staging, root)
+    // renameAtomic, not a bare rename: Defender/the indexer briefly opening `root` right after we
+    // just cleared it is exactly the transient case the retry exists for on Windows.
+    await renameAtomic(staging, root)
     const installedPath = path.join(root, relativeJavaPath)
     const installed = await detectInstalledJava(() => installedPath)
     if (installed.major === null || installed.major < opts.requiredMajor) {
