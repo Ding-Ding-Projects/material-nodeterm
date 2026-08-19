@@ -1,0 +1,553 @@
+/* nodeterm — Material Design 3 rewrite, per-screen chrome.
+   Loaded after styles.css / tailwind.css (see boot.tsx) so these rules win the cascade for the
+   selectors they redeclare. Every colour reads var(--md-*) (or the pre-existing themed
+   --canvas-bg / --canvas-dot / --mono-font tokens); no hex literals, no box-shadow — Material 3
+   elevation here is tonal (a step up the surface-container ladder), never a drop shadow.
+   design/v2/md3/HANDOFF.md is the recipe table this follows; design/v2/MD3 Welcome.dc.html is the
+   prototype for the welcome screen specifically. */
+
+/* =====================================================================================
+   MD3: Welcome / start screen  (design/v2/MD3 Welcome.dc.html)
+   ===================================================================================== */
+
+.md3-welcome {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  overflow: auto;
+  background: var(--canvas-bg);
+  background-image: radial-gradient(var(--md-canvas-dot, var(--canvas-dot)) 1.2px, transparent 1.2px);
+  background-size: 26px 26px;
+  color: var(--md-on-surface);
+}
+
+/* Opened via "+" while a project is in kanban view: the board overlay (z 25) is opaque and would
+   hide the default z-5 welcome screen. Lift it above the board + controls (26) + banners (27), but
+   keep it below the tab bar (30) so tabs stay reachable — same relative stacking as on the canvas. */
+.md3-welcome--over-board {
+  z-index: 28;
+}
+
+.md3-welcome__topbar {
+  position: absolute;
+  top: 14px;
+  left: 20px;
+  right: 64px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.md3-welcome__back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__back svg {
+  flex: none;
+}
+.md3-welcome__back:hover {
+  background: var(--md-surface-container);
+}
+.md3-welcome__back:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.md3-welcome__back-note {
+  font-size: 11.5px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-welcome__close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__close:hover {
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+}
+.md3-welcome__close:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.md3-welcome__hero {
+  width: 860px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.md3-welcome__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.md3-welcome__brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--md-shape-medium);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  flex: none;
+}
+.md3-welcome__brand-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-welcome__title {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--md-on-surface);
+}
+.md3-welcome__title-secondary {
+  display: block;
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-welcome__subtitle {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.5;
+  max-width: 640px;
+  color: var(--md-on-surface-variant);
+}
+.md3-welcome__subtitle-secondary {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+  opacity: 0.8;
+}
+
+.md3-welcome__cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .md3-welcome__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.md3-welcome__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 20px;
+  border: none;
+  border-radius: var(--md-shape-extra-large);
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--md-motion-spatial, 500ms cubic-bezier(0.38, 1.21, 0.22, 1)),
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__card:hover {
+  transform: translateY(-3px);
+  background: var(--md-surface-container-high);
+}
+.md3-welcome__card:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.md3-welcome__card--primary {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.md3-welcome__card--primary:hover {
+  background: var(--md-primary-container);
+  filter: brightness(1.06);
+}
+.md3-welcome__card-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+.md3-welcome__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.md3-welcome__card-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.md3-welcome__card-desc {
+  font-size: 12.5px;
+  opacity: 0.8;
+}
+
+/* ---- "Recently closed" projects list on the start screen ---- */
+.md3-welcome__recent {
+  border-radius: var(--md-shape-extra-large);
+  background: var(--md-surface-container-low);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.md3-welcome__recent-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+  padding: 0 4px 8px;
+}
+
+.md3-welcome__recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.md3-welcome__recent-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 52px;
+  padding: 0 16px;
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface);
+  cursor: pointer;
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__recent-item:hover {
+  background: var(--md-surface-container);
+}
+.md3-welcome__recent-item:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
+.md3-welcome__recent-icon {
+  color: var(--md-on-surface-variant);
+  flex: none;
+}
+
+.md3-welcome__recent-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  flex: none;
+}
+
+.md3-welcome__recent-path {
+  font-size: 12.5px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--mono-font);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md3-welcome__recent-spacer {
+  flex: 1;
+}
+
+.md3-welcome__recent-del {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__recent-item:hover .md3-welcome__recent-del,
+.md3-welcome__recent-del:focus-visible {
+  opacity: 1;
+}
+.md3-welcome__recent-del:hover {
+  background: var(--md-error-container);
+  color: var(--md-error);
+}
+
+.md3-welcome__recent-arrow {
+  flex: none;
+  color: var(--md-on-surface-variant);
+  opacity: 0;
+  transition: opacity var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__recent-item:hover .md3-welcome__recent-arrow {
+  opacity: 1;
+}
+
+/* =====================================================================================
+   MD3: Onboarding tour — chrome only (cover, two-pane shell, buttons, progress, agent
+   picker, model list). The animated scenes themselves (`.onb-scene-canvas`, `.onb-node`,
+   `.onb-ghost`, `.onb-mic`, `.onb-kstage`, `.onb-lid`, `.onb-phone`, …) live in
+   scenes.tsx and are a DIFFERENT lane's classes — not touched here.
+   ===================================================================================== */
+
+.onb {
+  background: var(--canvas-bg);
+  background-image: radial-gradient(var(--md-canvas-dot, var(--canvas-dot)) 1.2px, transparent 1.2px);
+  background-size: 26px 26px;
+  color: var(--md-on-surface);
+}
+
+.onb-skip {
+  border-radius: var(--md-shape-full);
+  padding: 8px 14px;
+  color: var(--md-on-surface-variant);
+  transition:
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-skip:hover {
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+}
+.onb-skip:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* ---- step 0: cover ---- */
+.onb-cover__name {
+  color: var(--md-on-surface);
+}
+.onb-cover__tagline {
+  color: var(--md-on-surface-variant);
+}
+.onb-prop {
+  color: var(--md-on-surface-variant);
+}
+.onb-prop svg {
+  color: var(--md-primary);
+}
+
+/* ---- steps 1-N: two-pane card ---- */
+.onb-card {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-extra-large);
+  box-shadow: none; /* tonal elevation only — no drop shadow */
+}
+.onb-scene {
+  background:
+    radial-gradient(color-mix(in srgb, var(--md-on-surface-variant) 12%, transparent) 1px, transparent 1px) 0 0 /
+      22px 22px,
+    var(--md-surface-container-lowest);
+  border-right: 1px solid var(--md-outline-variant);
+}
+.onb-pane {
+  color: var(--md-on-surface);
+}
+.onb-step-no {
+  color: var(--md-on-surface-variant);
+}
+.onb-pane h2 {
+  color: var(--md-on-surface);
+}
+.onb-pane p {
+  color: var(--md-on-surface-variant);
+}
+.onb-label {
+  color: var(--md-on-surface-variant);
+}
+.onb-toggle-row {
+  color: var(--md-on-surface);
+}
+.onb-fineprint {
+  color: var(--md-on-surface-variant);
+}
+
+.onb-dots span {
+  background: var(--md-outline-variant);
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-dots span.is-active {
+  background: var(--md-primary);
+}
+
+.onb-btn {
+  height: 40px;
+  padding: 0 20px;
+  background: transparent;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-btn:hover {
+  background: var(--md-surface-container);
+}
+.onb-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.onb-btn--primary {
+  background: var(--md-primary);
+  border-color: transparent;
+  color: var(--md-on-primary);
+}
+.onb-btn--primary:hover {
+  background: var(--md-primary);
+  filter: brightness(1.08);
+}
+
+/* ---- agent picker ---- */
+.onb-agent {
+  background: var(--md-surface-container-high);
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface);
+  transition:
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    border-color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-agent:hover {
+  background: var(--md-surface-container-highest);
+}
+.onb-agent.is-selected {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.onb-agent:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* ---- dictation model list ---- */
+.onb-model {
+  background: var(--md-surface-container-high);
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface);
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-model:hover {
+  background: var(--md-surface-container-highest);
+}
+.onb-model.is-selected {
+  border-color: var(--md-primary);
+}
+.onb-model:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.onb-model__radio {
+  border-color: var(--md-outline);
+}
+.onb-model.is-selected .onb-model__radio {
+  border-color: var(--md-primary);
+  background: radial-gradient(circle at center, var(--md-primary) 0 4px, transparent 4.5px);
+}
+.onb-model__size {
+  color: var(--md-on-surface-variant);
+}
+.onb-model__ok {
+  color: var(--md-success);
+}
+.onb-model__bar {
+  background: var(--md-surface-container-highest);
+}
+.onb-model__bar span {
+  background: var(--md-tertiary);
+}
+
+/* ---- kanban try-it ---- */
+.onb-tryit {
+  border: 1px dashed var(--md-outline);
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface-variant);
+}
+.onb-tryit.is-done {
+  border-style: solid;
+  border-color: var(--md-success);
+  color: var(--md-success);
+}
+.onb-defaultview__label {
+  color: var(--md-on-surface-variant);
+}
+.onb-seg {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  overflow: hidden;
+}
+.onb-seg__btn {
+  color: var(--md-on-surface-variant);
+  transition:
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-seg__btn + .onb-seg__btn {
+  border-left: 1px solid var(--md-outline-variant);
+}
+.onb-seg__btn.is-on {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.onb-seg__btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
