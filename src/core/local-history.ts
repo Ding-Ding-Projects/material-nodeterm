@@ -24,7 +24,7 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { HistoryAction, HistoryEntry, HistoryFilters } from '../shared/local-history'
-import { removeAtomic, writeFileAtomic } from './fs-atomic'
+import { removeAtomic, renameAtomic, writeFileAtomic } from './fs-atomic'
 
 export type { HistoryAction, HistoryEntry, HistoryFilters } from '../shared/local-history'
 
@@ -284,7 +284,9 @@ export class LocalHistoryStore {
       await this.runGit(staging, ['bundle', 'verify', bundle])
       await fs.rm(staging, { recursive: true, force: true })
       await this.runGit(parent, ['clone', '--quiet', bundle, staging])
-      await fs.rename(staging, target)
+      // renameAtomic, not a bare fs.rename: on Windows this publish can lose to Defender or the
+      // indexer briefly holding `target` open, exactly like every other temp-then-rename here.
+      await renameAtomic(staging, target)
       this.ready.delete(target)
     } finally {
       await fs.rm(bundle, { force: true }).catch(() => {})

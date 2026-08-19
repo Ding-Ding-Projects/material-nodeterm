@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react'
+
 import {
   AUTO_PERMISSION_MODE_MIN_VERSION,
   gatePermissionMode,
@@ -158,6 +160,53 @@ export function activePermissionMode(agentId: AgentId = 'claude'): AgentPermissi
   // It is agent-agnostic on purpose, unlike claude's version gate: "an agent may act without
   // asking" is a property of the MODE, not of which CLI implements it.
   return gateKidsPermissionMode(versionGated, useKidsMode.getState().enabled).mode
+}
+
+/**
+ * Reactive counterpart to `activePermissionMode()`, for a surface that RENDERS the gated value
+ * live rather than reading it once to build a command. `activePermissionMode` is a plain function
+ * over `getState()` — correct for a launch, which reads it exactly once — but a component using it
+ * directly in render would silently go stale, since nothing tells React to re-render when the
+ * settings/project/kids-mode stores it reads from change.
+ *
+ * Subscribes to every store the resolver touches (not just settings), so a project switch or a
+ * Kids-mode toggle re-renders the caller too, not only a `claudePermissionMode` write.
+ */
+export function useActivePermissionMode(agentId: AgentId = 'claude'): AgentPermissionMode {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      const unsubs = [
+        useSettings.subscribe(onStoreChange),
+        useProjects.subscribe(onStoreChange),
+        useKidsMode.subscribe(onStoreChange)
+      ]
+      return () => {
+        for (const unsub of unsubs) unsub()
+      }
+    },
+    () => activePermissionMode(agentId)
+  )
+}
+
+/**
+ * Set the app-wide default to one of the two modes Kids mode allows: `'plan'` (propose a whole
+ * plan without asking first) or `'manual'` (ask before every step) — the ONE write path for Kids
+ * mode's "Allow Beep to answer freely" switch (docs/kids-mode.md, "The grown-up screen's
+ * switches"). It deliberately writes the SAME setting Settings -> Agents exposes, so it affects
+ * every agent on the machine while it is in effect, not only a Kids-mode session — a documented,
+ * deliberate trade, not an oversight.
+ *
+ * That write can never let a session start wider than Kids mode allows: it only ever chooses
+ * between the two modes `KIDS_ALLOWED_PERMISSION_MODES` already permits, and `activePermissionMode`
+ * narrows the result through `gateKidsPermissionMode` regardless of what is stored here.
+ *
+ * Lives HERE — in the funnel module that already owns `claudePermissionMode` gating — rather than
+ * in the Kids-mode component itself, so `permissionMode.funnel.test.ts`'s raw-setting scan has
+ * exactly one reviewable place outside `AgentsSection.tsx`'s dropdown that writes it, instead of a
+ * Kids-facing surface reaching into `useSettings` directly.
+ */
+export function setKidsAllowedPermissionMode(allowPlanning: boolean): void {
+  useSettings.getState().update({ claudePermissionMode: allowPlanning ? 'plan' : 'manual' })
 }
 
 /**

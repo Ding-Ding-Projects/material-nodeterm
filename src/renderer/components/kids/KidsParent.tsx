@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useKidsMode } from '@renderer/state/kidsMode'
 import { useKidsActivity } from '@renderer/state/kidsActivity'
 import { useSettings } from '@renderer/state/settings'
+import { setKidsAllowedPermissionMode, useActivePermissionMode } from '@renderer/state/permissionMode'
 import { IconBackArrow, IconClock, IconCode, IconHourglass, IconSparkle } from './icons'
 import { Md3Switch } from './Md3Switch'
 import { narrateKidsScreen } from './narration'
@@ -35,7 +36,10 @@ export function KidsParent({
   const setLockOnLaunch = useKidsActivity((s) => s.setLockOnLaunch)
 
   const narratorEnabled = useSettings((s) => s.settings.narratorEnabled)
-  const permissionMode = useSettings((s) => s.settings.claudePermissionMode)
+  // Reads through the same Kids-gated funnel every agent launch does (see
+  // permissionMode.funnel.test.ts) rather than the raw setting, so the switch always reflects
+  // what Beep will actually start in — not just what the app-wide default happens to say.
+  const permissionMode = useActivePermissionMode('claude')
   const updateSettings = useSettings((s) => s.update)
 
   const disable = useKidsMode((s) => s.disable)
@@ -144,7 +148,7 @@ export function KidsParent({
             </div>
             <Md3Switch
               checked={permissionMode === 'plan'}
-              onChange={(v) => updateSettings({ claudePermissionMode: v ? 'plan' : 'manual' })}
+              onChange={setKidsAllowedPermissionMode}
               ariaLabel="Allow Beep to answer freely"
             />
           </div>
