@@ -1,5 +1,11 @@
 # nodeterm Server Edition (Phase 2)
 
+The Windows desktop app's top-right device button drives this same deployment automatically. It
+obtains Docker Desktop through Windows Package Manager when missing, invokes the validated
+`host.bat` path, builds `nodeterm-server:local` when absent, reuses the named data volume, waits for
+the container health check, and offers the verified local URL. This route is free and has no Pro,
+seat, subscription, or purchase requirement.
+
 Run nodeterm's canvas in a browser, backed by a headless Node server on your own
 machine or box. The server serves the **same** built renderer the desktop app uses
 and speaks a WebSocket-RPC protocol to it; a browser-side `window.nodeTerminal`

@@ -182,6 +182,9 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(IPC.workspaceExternalChange, h)
     }
   },
+  serverDeployment: {
+    start: () => ipcRenderer.invoke(IPC.serverDeploymentStart)
+  },
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),
     selectFile: () => ipcRenderer.invoke(IPC.dialogSelectFile),
