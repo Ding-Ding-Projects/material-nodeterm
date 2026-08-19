@@ -24,6 +24,18 @@ const ROWS = {
 const ENTRIES = Object.values(ROWS)
 
 /**
+ * Kids-mode PINs SET through this app are exactly 4 digits — never enforced on a PIN this app is
+ * only VERIFYING (that value may have been set by another app on the shared record, or an older
+ * build, and could be any shape), only on a freshly chosen one. This is what lets the numeric-only
+ * `PinPad` (`components/kids/PinPad.tsx`) reliably enter any PIN Settings just created: a pad with
+ * only digit keys can never type a letter, so a PIN containing one — set here — would make the
+ * grown-up screen unreachable without deleting the shared kids-mode folder.
+ */
+function onlyDigits4(value: string): string {
+  return value.replace(/\D/g, '').slice(0, 4)
+}
+
+/**
  * Settings surface for the shared Kids-mode switch. See docs/kids-mode.md.
  *
  * The disclosure is not decoration and must not be softened: this app's core function is arbitrary
@@ -122,16 +134,18 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                   <div className="flex items-center gap-2">
                     <Input
                       type="password"
+                      inputMode="numeric"
                       value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      placeholder="Choose a PIN"
+                      onChange={(e) => setPin(onlyDigits4(e.target.value))}
+                      placeholder="Choose a 4-digit PIN"
                       className="w-32"
                       aria-label="Choose a grown-up PIN"
                     />
                     <Input
                       type="password"
+                      inputMode="numeric"
                       value={pinConfirm}
-                      onChange={(e) => setPinConfirm(e.target.value)}
+                      onChange={(e) => setPinConfirm(onlyDigits4(e.target.value))}
                       placeholder="Confirm PIN"
                       className="w-32"
                       aria-label="Confirm the grown-up PIN"
@@ -140,7 +154,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                 ) : null}
                 <Button
                   variant="primary"
-                  disabled={busy || (!hasCredential && (pin.length < 4 || pin !== pinConfirm))}
+                  disabled={busy || (!hasCredential && (pin.length !== 4 || pin !== pinConfirm))}
                   onClick={async () => {
                     setBusy(true)
                     const result = await enable(hasCredential ? undefined : pin)
@@ -168,10 +182,10 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
       </SearchableRow>
 
       <SearchableRow {...ROWS.limits}>
-        {/* The honest boundary, stated before anyone relies on the mode rather than after. */}
-        <p className="rounded-md border border-[color:var(--warn)] px-3 py-2 text-[13px] leading-relaxed text-text">
-          {KIDS_DISCLOSURE}
-        </p>
+        {/* The honest boundary, stated before anyone relies on the mode rather than after. Same
+            `.md3-kids-disclosure` class as the Home screen and the rail's enable dialog, so the
+            one sentence this app makes no promise beyond looks identical everywhere it appears. */}
+        <p className="md3-kids-disclosure md3-kids-disclosure--settings">{KIDS_DISCLOSURE}</p>
         <p className="mt-3 text-[12px] leading-relaxed text-muted">
           While it is on, an agent cannot be started in these modes:
         </p>
@@ -235,17 +249,18 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
               />
               <Input
                 type="password"
+                inputMode="numeric"
                 value={nextPinDraft}
                 onChange={(e) => {
-                  setNextPinDraft(e.target.value)
+                  setNextPinDraft(onlyDigits4(e.target.value))
                   setPinChangeMsg(null)
                 }}
-                placeholder="New"
+                placeholder="New (4 digits)"
                 className="w-32"
                 aria-label="New grown-up PIN"
               />
               <Button
-                disabled={!hasCredential || currentPinDraft.length === 0 || nextPinDraft.length < 4}
+                disabled={!hasCredential || currentPinDraft.length === 0 || nextPinDraft.length !== 4}
                 onClick={async () => {
                   const ok = await changePin(currentPinDraft, nextPinDraft)
                   setPinChangeMsg(ok ? 'PIN changed.' : 'That current PIN did not match.')

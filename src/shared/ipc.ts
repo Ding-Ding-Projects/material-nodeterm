@@ -263,6 +263,7 @@ export const IPC = {
   kidsModeRename: 'kids-mode:rename',
   kidsModeChangePin: 'kids-mode:change-pin',
   kidsModeHasCredential: 'kids-mode:has-credential',
+  kidsModeVerifyPin: 'kids-mode:verify-pin',
   kidsModeChanged: 'kids-mode:changed',
   schoolModeLoad: 'school-mode:load',
   /** Turn the mode on. A `pin` is required only the FIRST time (no stored credential yet); it is

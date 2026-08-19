@@ -1805,6 +1805,16 @@ export interface KidsModeApi {
   rename(name: string): Promise<KidsModeSnapshot>
   changePin(currentPin: string, nextPin: string): Promise<boolean>
   hasCredential(): Promise<boolean>
+  /**
+   * Verify the grown-up PIN WITHOUT changing state — the entry point for the grown-up screen,
+   * which must be reachable without leaving Kids mode. Optional on the interface: the desktop
+   * preload implements it for real (backed by the same core `KidsModeStore.verifyPin`, registered
+   * on both shells over IPC), but the Server Edition's browser bridge (`renderer/bridge/
+   * ws-bridge.ts`) predates this member and does not yet expose it — a follow-up, not a design
+   * gap. Callers must fail CLOSED (never assume success) when this is `undefined`, exactly as an
+   * unreadable credential fails closed; see `bridge/stubs.ts`'s `verifyKidsModePin`.
+   */
+  verifyPin?(pin: string): Promise<boolean>
   onChanged(cb: (r: KidsModeSnapshot) => void): () => void
 }
 

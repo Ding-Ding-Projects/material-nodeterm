@@ -6,6 +6,8 @@ import { PromptDialogHost } from './components/promptDialog'
 import { DestructiveGateHost } from './components/DestructiveGateHost'
 import { DimSumSurprise } from './components/DimSumSurprise'
 import { NotificationToasts } from './components/NotificationToasts'
+import { KidsShell } from './components/kids/KidsShell'
+import { EnableKidsModeDialogHost } from './components/kids/EnableKidsModeDialog'
 import { SessionProvider } from './session/session'
 import { localSession } from './session/localSession'
 import { useSettings } from './state/settings'
@@ -108,14 +110,34 @@ export default function App() {
     document.title = resolveAppDisplayName(appDisplayName)
   }, [appDisplayName])
 
+  // Kids-mode routing — and it MUST fail closed. `hydrated` starts false on every cold start
+  // (see state/kidsMode.ts), and `enabled` starts false right alongside it as a placeholder, not
+  // as evidence the shared record is off. Rendering the developer canvas while `hydrated` is
+  // still false would flash the full dev surface — dock, tab bar, every project — to a child on
+  // the very first frame of every launch, for exactly as long as the one IPC round trip to read
+  // the shared record takes. So the order below is deliberate and load-bearing:
+  //   not hydrated  → a neutral splash (no dev chrome, no Kids branding — we don't know which
+  //                    surface belongs on screen yet)
+  //   hydrated + on → <KidsShell/>, and <Canvas/> is not mounted AT ALL
+  //   hydrated + off→ <Canvas/>, exactly as before this feature existed
+  const kidsHydrated = useKidsMode((s) => s.hydrated)
+  const kidsEnabled = useKidsMode((s) => s.enabled)
+
   return (
     <SessionProvider session={localSession}>
       <ReactFlowProvider>
-        <Canvas />
+        {!kidsHydrated ? (
+          <div className="md3-kids-boot-splash" aria-hidden="true" />
+        ) : kidsEnabled ? (
+          <KidsShell />
+        ) : (
+          <Canvas />
+        )}
         {/* In-app window.prompt replacement (Electron has no prompt); driven by promptDialog(). */}
         <PromptDialogHost />
       {/* Mounted at the root so every surface can reach the super gate, and so an open one
-          survives a project switch beneath it. See state/destructiveGate.ts. */}
+          survives a project switch beneath it. See state/destructiveGate.ts. Kids mode upgrades
+          every destructive surface to this same gate — see kids-mode-policy.ts. */}
       <DestructiveGateHost />
         {/* Non-blocking corner-anchored toast stack — mounted once, app-wide. See
             docs/notifications.md. */}
@@ -124,7 +146,13 @@ export default function App() {
             plus the one shared anchored editor popover, both mounted once. */}
         <AppearanceStyleInjector />
         <AppearanceEditorHost />
+        {/* The nav rail's `child_care` entry point (components/kids/entry.ts) — mounted
+            unconditionally so it is reachable the moment a rail lane wires the destination up,
+            regardless of whether Kids mode is currently on. Renders nothing while closed. */}
+        <EnableKidsModeDialogHost />
       </ReactFlowProvider>
+      {/* Kids mode explicitly KEEPS the dim-sum surprise (see kids-mode.ts's header) — it is not
+          suppressed here, unlike the developer-only surfaces above. */}
       <DimSumSurprise />
     </SessionProvider>
   )

@@ -38,6 +38,31 @@ export function unsupported(name: string): Promise<never> {
 /** A subscription stub: ignores its listener, returns a no-op unsubscribe. */
 export const noopUnsub: () => () => void = () => () => {}
 
+/**
+ * `kidsMode.verifyPin` is optional on the shared API (see shared/types.ts): it is a member the
+ * desktop preload implements for real, but it predates the Server Edition's ws-bridge `kidsMode`
+ * object and a relay/older bridge can simply lack it. `kidsMode` itself is APP-GLOBAL and never
+ * routed through this file's stub object (every session composer spreads the LOCAL preload for it
+ * — see relay-api.ts), so there is no `kidsMode` key here for `verifyPin` to join.
+ *
+ * This is the fail-closed stand-in for the surfaces that reach it instead: a bridge with no
+ * `verifyPin` at all must answer "cannot verify" rather than silently letting a caller assume the
+ * check passed (or, worse, throwing past a caller that only guards against a rejection). A grown-up
+ * screen a stranger can walk into by pointing a stale bridge at the PIN pad is worse than one that
+ * is occasionally unreachable on an older build.
+ */
+export async function verifyKidsModePin(
+  api: Pick<NodeTerminalApi['kidsMode'], 'verifyPin'>,
+  pin: string
+): Promise<boolean> {
+  if (typeof api.verifyPin !== 'function') return false
+  try {
+    return await api.verifyPin(pin)
+  } catch {
+    return false
+  }
+}
+
 // Per-member helpers. Each returned function ignores its arguments, so it is assignable to the
 // real (more-specific) member signature while `satisfies` still enforces the member exists.
 /** Promise member that is unavailable on the server. */
