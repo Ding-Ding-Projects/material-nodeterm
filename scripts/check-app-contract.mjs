@@ -1266,6 +1266,7 @@ if (stylesText.includes('data-md-theme')) {
 // either, but this project documents features as it ships them, so a doc is the earliest artifact
 // a scan can catch.
 const NON_FEATURE_DOCS = new Map([
+  ['agent-working-conventions.md', 'contributor session-discipline guide (session-finishing passes, cleanup order), not a user-facing app surface'],
   ['app-contract.md', 'this guard\'s own documentation'],
   ['app-design-tokens.md', 'design-token reference, not a user-facing surface'],
   ['building.md', 'build process'],
@@ -1276,6 +1277,7 @@ const NON_FEATURE_DOCS = new Map([
   ['hook-reply-approvals.md', 'agent hook internals'],
   ['node-identity.md', 'agent hook credential internals'],
   ['ssh-agent-skills.md', 'agent internals on the remote-ssh surface'],
+  ['shared-codex-node-identity.md', 'agent internals — the shared Codex app-server sharing/identity boundary behind the agent-support row, same class as codex-shared-identity.md'],
   ['github-issues-kanban.md', 'workflow note for maintainers, not an app surface'],
   ['ios-protocol-migration.md', 'the mobile companion lives in a separate repo'],
   ['mobile-usage-inbox.md', 'the mobile companion lives in a separate repo'],
