@@ -143,8 +143,9 @@ submitting). Works identically on desktop and in the Server Edition's browser ta
   supports select-all, bulk delete/export/move with a reviewable preview first. See
   [`docs/exports.md`](./docs/exports.md) and [`docs/bulk-actions.md`](./docs/bulk-actions.md).
 - **Universal file converter** — a local, offline conversion surface (documents/PDF, images,
-  audio, video, archives, structured data, code/text, binary encodings) reachable from the
-  canvas controls or the command palette. See [`docs/file-converter.md`](./docs/file-converter.md).
+  audio, video, archives, structured data, code/text, binary encodings) reachable from the nav
+  rail's Tools destination or the command palette. See
+  [`docs/file-converter.md`](./docs/file-converter.md).
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
@@ -258,6 +259,14 @@ Real captures of the built app and the live site — every image below was taken
 build or the deployed site, never mocked up and never reused from upstream. The full manifest
 (what each shows, the commit, the exact capture method) is in
 [`docs/assets/shots/README.md`](./docs/assets/shots/README.md).
+
+**The `app-*.png` set below is stale and known to be.** It was captured from commit `b5815d21`
+(2026-08-15, recorded in [`docs/assets/shots/capture-manifest.json`](./docs/assets/shots/capture-manifest.json)),
+which predates the Material Design 3 chrome rewrite: the app now uses a 64px top app bar
+(`TopAppBar.tsx` + `ProjectSwitcher.tsx`) and an 88px left nav rail with a FAB
+(`NavRail.tsx` + `FabMenu.tsx`) in place of the project tab strip and bottom dock these images
+show. Treat every caption below mentioning "the bottom dock" or a tab strip as describing the
+previous UI, not the current one, until the set is re-captured.
 
 <details>
 <summary><strong>The desktop app</strong> — settings, the command palette, and the features this fork adds</summary>
