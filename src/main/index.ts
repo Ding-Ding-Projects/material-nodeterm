@@ -236,6 +236,7 @@ import {
 } from './relay-pty-create'
 import { wirePeerRegistry } from './peer-registry'
 import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
+import { APP_BAR_HEIGHT } from '../shared/layout'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
@@ -554,9 +555,11 @@ function createWindow(): BrowserWindow {
           titleBarStyle: 'hidden',
           // Colors match the tab bar's own panel background/text (styles.css `--panel`/`--text`
           // at the time this was written) so the native caption buttons don't look like a
-          // different app's chrome pasted on top. Height matches `.tabbar`'s 44px so the overlay
-          // buttons line up with our own row instead of floating over the canvas below it.
-          titleBarOverlay: { color: '#1a1a1e', symbolColor: '#e6e6e6', height: 44 }
+          // different app's chrome pasted on top. Height matches `.tabbar`'s height (styles.css
+          // `--app-bar-h`) so the overlay buttons line up with our own row instead of floating
+          // over the canvas below it — APP_BAR_HEIGHT is main's copy of that same 44px; the two
+          // are independent CSS/TS values with no shared build-time link (see layout.ts).
+          titleBarOverlay: { color: '#1a1a1e', symbolColor: '#e6e6e6', height: APP_BAR_HEIGHT }
         }
       : { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 15 } }
   const win = new BrowserWindow({
