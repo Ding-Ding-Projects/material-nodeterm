@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0" rel="stylesheet">
+<link rel="stylesheet" href="md3/tokens.css">
+<style>
+  body { margin:0; background:#0A090D; }
+  a { color:var(--md-primary); text-decoration:none; }
+  a:hover { color:var(--md-on-primary-container); }
+  .msr { font-family:'Material Symbols Rounded'; font-weight:400; font-style:normal; line-height:1;
+         letter-spacing:normal; display:inline-block; white-space:nowrap; direction:ltr;
+         font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+  .msrf { font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24; }
+  @keyframes mdEq { 0%,100%{height:6px} 50%{height:16px} }
+</style>
+</helmet>
+
+<div style="font-family:var(--md-font-ui);padding:36px;display:flex;flex-direction:column;gap:18px;color:#E6E0E9">
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div>
+      <div style="font-size:21px;font-weight:600">Overlays, dialogs &amp; notifications · Material 3 rewrite</div>
+      <div style="font-size:13px;color:#938F99;margin-top:2px"><a href="MD3 Canvas.dc.html">Canvas</a> · <a href="MD3 Board.dc.html">Board</a> · <a href="MD3 Files.dc.html">Files</a> · <a href="MD3 Settings.dc.html">Settings</a> · <a href="MD3 Welcome.dc.html">Welcome</a> · <a href="MD3 Kids Mode.dc.html">Kids</a></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 20px;border-radius:999px;border:1px solid #49454F;background:transparent;color:#E6E0E9;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer"><span class="msr" style="font-size:18px">contrast</span>{{ themeLabel }}</button>
+  </div>
+
+<div style="display:flex;gap:24px;align-items:flex-start">
+
+  <!-- COMMAND PALETTE -->
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="font-size:13px;font-weight:600;color:#938F99">Command palette · ⌘K / Ctrl+Shift+F</div>
+    <div data-screen-label="Command palette" style="width:680px;background:var(--md-surface-container-high);border-radius:28px;overflow:hidden;display:flex;flex-direction:column;color:var(--md-on-surface)">
+      <div style="display:flex;align-items:center;gap:14px;height:68px;padding:0 24px">
+        <span class="msr" style="font-size:24px;color:var(--md-on-surface-variant)">search</span>
+        <div style="flex:1;font-size:17px">new claude<span style="border-left:2px solid var(--md-primary);margin-left:2px">&nbsp;</span></div>
+        <span style="height:32px;padding:0 14px;border-radius:999px;background:var(--md-primary-container);color:var(--md-on-primary-container);font-family:var(--md-font-mono);font-size:11.5px;display:flex;align-items:center">.* regex</span>
+      </div>
+      <div style="height:1px;background:var(--md-outline-variant)"></div>
+      <div style="padding:10px;display:flex;flex-direction:column;gap:2px">
+        <sc-for list="{{ paletteItems }}" as="p" hint-placeholder-count="6">
+          <div style="display:flex;align-items:center;gap:16px;height:58px;padding:0 16px;border-radius:20px;background:{{ p.bg }};cursor:pointer" style-hover="background:var(--md-surface-container-highest)">
+            <div style="width:40px;height:40px;border-radius:14px;background:{{ p.iconBg }};color:{{ p.iconFg }};display:flex;align-items:center;justify-content:center"><span class="msr msrf" style="font-size:21px">{{ p.icon }}</span></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14.5px;font-weight:500">{{ p.label }}</div>
+              <div style="font-size:12px;color:var(--md-on-surface-variant);margin-top:1px">{{ p.sub }}</div>
+            </div>
+            <sc-if value="{{ p.kbd }}" hint-placeholder-val="{{ false }}">
+              <span style="font-family:var(--md-font-mono);font-size:11px;padding:5px 10px;border-radius:8px;background:var(--md-surface-container);color:var(--md-on-surface-variant)">{{ p.kbd }}</span>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- CONTEXT MENU -->
+    <div style="font-size:13px;font-weight:600;color:#938F99;margin-top:14px">Canvas context menu — flat, filterable, never sectioned</div>
+    <div data-screen-label="Context menu" style="width:280px;background:var(--md-surface-container-high);border-radius:20px;padding:8px;display:flex;flex-direction:column;gap:1px;color:var(--md-on-surface)">
+      <div style="display:flex;align-items:center;gap:9px;height:38px;padding:0 12px;border-radius:999px;background:var(--md-surface-container-highest);margin-bottom:6px">
+        <span class="msr" style="font-size:16px;color:var(--md-on-surface-variant)">search</span>
+        <input value="{{ cq }}" onChange="{{ setCq }}" placeholder="Filter actions…" style="flex:1;min-width:0;border:none;background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:12.5px;outline:none">
+        <span style="font-family:var(--md-font-mono);font-size:10.5px;color:var(--md-on-surface-variant)">.*</span>
+      </div>
+      <sc-for list="{{ ctxItems }}" as="m" hint-placeholder-count="9">
+        <div style="display:flex;align-items:center;gap:13px;height:42px;padding:0 14px;border-radius:14px;cursor:pointer;color:{{ m.fg }}" style-hover="background:var(--md-surface-container-highest)">
+          <span class="msr" style="font-size:19px">{{ m.icon }}</span>
+          <span style="flex:1;font-size:13.5px;font-weight:500">{{ m.label }}</span>
+          <sc-if value="{{ m.kbd }}" hint-placeholder-val="{{ false }}"><span style="font-family:var(--md-font-mono);font-size:11px;color:var(--md-on-surface-variant)">{{ m.kbd }}</span></sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <!-- DESTRUCTIVE GATE -->
+    <div style="font-size:13px;font-weight:600;color:#938F99">Destructive confirmation gate</div>
+    <div data-screen-label="Destructive gate" style="width:480px;background:var(--md-surface-container-high);border-radius:28px;padding:26px 26px 22px;color:var(--md-on-surface)">
+      <div style="width:52px;height:52px;border-radius:16px;background:var(--md-error-container);color:var(--md-on-error-container);display:flex;align-items:center;justify-content:center"><span class="msr msrf" style="font-size:26px">gpp_maybe</span></div>
+      <div style="font-size:19px;font-weight:600;margin-top:16px">Delete project “ha-box · SSH”?</div>
+      <div style="font-size:13.5px;color:var(--md-on-surface-variant);line-height:1.6;margin-top:6px;text-wrap:pretty">This ends 4 live sessions and removes the canvas layout. The remote folder itself is untouched.</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:18px">
+        <span style="display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--md-outline);font-size:12.5px;font-weight:600"><span class="msr" style="font-size:16px;color:var(--md-success)">check</span>Hold <span style="font-family:var(--md-font-mono)">D</span></span>
+        <span style="display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--md-outline);font-size:12.5px;font-weight:600;color:var(--md-on-surface-variant)"><span class="msr" style="font-size:16px">radio_button_unchecked</span>Hold <span style="font-family:var(--md-font-mono)">K</span></span>
+      </div>
+      <div style="margin-top:16px;height:56px;border-radius:999px;background:var(--md-surface-container);position:relative;display:flex;align-items:center;justify-content:center">
+        <span style="font-size:13px;font-weight:600;color:var(--md-on-surface-variant)">Slide to confirm</span>
+        <span style="position:absolute;left:5px;top:5px;width:46px;height:46px;border-radius:999px;background:var(--md-error);color:var(--md-on-error);display:flex;align-items:center;justify-content:center"><span class="msr" style="font-size:22px">chevron_right</span></span>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+        <button style="height:40px;padding:0 18px;border-radius:999px;border:none;background:transparent;color:var(--md-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+
+    <!-- CLONE DIALOG -->
+    <div style="font-size:13px;font-weight:600;color:#938F99;margin-top:14px">Clone repo dialog</div>
+    <div data-screen-label="Clone dialog" style="width:480px;background:var(--md-surface-container-high);border-radius:28px;padding:26px 26px 22px;color:var(--md-on-surface)">
+      <div style="font-size:19px;font-weight:600">Clone a repository</div>
+      <div style="margin-top:18px;display:flex;flex-direction:column;gap:12px">
+        <div style="height:56px;border-radius:16px;border:1px solid var(--md-outline);padding:0 18px;display:flex;align-items:center;gap:12px;position:relative">
+          <span style="position:absolute;top:-8px;left:14px;padding:0 6px;background:var(--md-surface-container-high);font-size:11.5px;color:var(--md-primary);font-weight:600">Repository</span>
+          <span class="msr" style="font-size:20px;color:var(--md-on-surface-variant)">link</span>
+          <span style="font-family:var(--md-font-mono);font-size:13px">Ding-Ding-Projects/material-nodeterm</span>
+        </div>
+        <div style="height:56px;border-radius:16px;border:1px solid var(--md-outline-variant);padding:0 18px;display:flex;align-items:center;gap:12px;color:var(--md-on-surface-variant);position:relative">
+          <span style="position:absolute;top:-8px;left:14px;padding:0 6px;background:var(--md-surface-container-high);font-size:11.5px;font-weight:600">Destination</span>
+          <span class="msr" style="font-size:20px">folder</span>
+          <span style="font-family:var(--md-font-mono);font-size:13px">~/dev</span>
+          <div style="flex:1"></div>
+          <span style="font-size:13px;font-weight:600;color:var(--md-primary);cursor:pointer">Browse</span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+        <button style="height:40px;padding:0 18px;border-radius:999px;border:none;background:transparent;color:var(--md-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Cancel</button>
+        <button style="height:40px;padding:0 22px;border-radius:999px;border:none;background:var(--md-primary);color:var(--md-on-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Clone</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATIONS PANEL -->
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="font-size:13px;font-weight:600;color:#938F99">Notifications panel</div>
+    <div data-screen-label="Notifications" style="width:440px;background:var(--md-surface-container);border-radius:28px;padding:20px;display:flex;flex-direction:column;gap:14px;color:var(--md-on-surface)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:17px;font-weight:600">Alerts</div>
+        <span style="min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--md-error);color:var(--md-on-error);font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">3</span>
+        <div style="flex:1"></div>
+        <span style="font-size:12.5px;font-weight:600;color:var(--md-primary);cursor:pointer">Mark all read</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <sc-for list="{{ notifFilters }}" as="f" hint-placeholder-count="4">
+          <span style="display:flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:8px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-size:12.5px;font-weight:600;cursor:pointer">
+            <sc-if value="{{ f.check }}" hint-placeholder-val="{{ false }}"><span class="msr" style="font-size:15px">check</span></sc-if>{{ f.label }}
+          </span>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="6">
+          <div style="display:flex;gap:14px;padding:13px 14px;border-radius:20px;background:var(--md-surface-container-low);cursor:pointer" style-hover="background:var(--md-surface-container-high)">
+            <div style="width:40px;height:40px;border-radius:14px;background:{{ n.iconBg }};color:{{ n.iconFg }};display:flex;align-items:center;justify-content:center;flex:0 0 auto"><span class="msr msrf" style="font-size:20px">{{ n.icon }}</span></div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-size:13.5px;font-weight:600">{{ n.title }}</div>
+                <sc-if value="{{ n.unread }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;border-radius:50%;background:var(--md-primary)"></span></sc-if>
+                <div style="flex:1"></div>
+                <span style="font-size:11.5px;color:var(--md-on-surface-variant)">{{ n.time }}</span>
+              </div>
+              <div style="font-size:12.5px;color:var(--md-on-surface-variant);margin-top:2px;text-wrap:pretty">{{ n.body }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- REGEX BUILDER -->
+    <div style="font-size:13px;font-weight:600;color:#938F99;margin-top:14px">Anchored regex builder</div>
+    <div data-screen-label="Regex builder" style="width:440px;background:var(--md-surface-container-high);border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:12px;color:var(--md-on-surface)">
+      <div style="height:48px;border-radius:14px;background:var(--md-surface-container-lowest);padding:0 16px;display:flex;align-items:center;font-family:var(--md-font-mono);font-size:13px">(?&lt;host&gt;[\w.-]+):(?&lt;port&gt;\d+)</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <sc-for list="{{ regexChips }}" as="c" hint-placeholder-count="6">
+          <span style="height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--md-outline);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--md-on-surface)"><span class="msr" style="font-size:14px">add</span>{{ c.label }}</span>
+        </sc-for>
+      </div>
+      <div style="border-radius:14px;background:var(--md-surface-container);padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:11.5px;font-weight:700;letter-spacing:.5px;color:var(--md-on-surface-variant)">LIVE MATCHES</div>
+        <div style="font-family:var(--md-font-mono);font-size:12px;line-height:1.8">
+          <span style="background:var(--md-primary-container);color:var(--md-on-primary-container);border-radius:4px;padding:1px 4px">ha-box.local</span>:<span style="background:var(--md-tertiary-container);color:var(--md-on-tertiary-container);border-radius:4px;padding:1px 4px">8443</span> · <span style="background:var(--md-primary-container);color:var(--md-on-primary-container);border-radius:4px;padding:1px 4px">127.0.0.1</span>:<span style="background:var(--md-tertiary-container);color:var(--md-on-tertiary-container);border-radius:4px;padding:1px 4px">5173</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:1200},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  state = { theme: 'dark', cq: '' };
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+  applyTheme() { document.documentElement.dataset.theme = this.props.theme ?? this.state.theme; }
+  renderVals() {
+    const s = this.state;
+    return {
+      themeLabel: (this.props.theme ?? s.theme) === 'dark' ? 'Dark' : 'Light',
+      toggleTheme: () => this.setState((p) => ({ theme: p.theme === 'dark' ? 'light' : 'dark' })),
+      paletteItems: [
+        { label: 'New Claude Code', sub: 'Spawn an agent node on this canvas', icon: 'smart_toy', iconBg: 'var(--md-primary-container)', iconFg: 'var(--md-on-primary-container)', bg: 'var(--md-surface-container-highest)', kbd: '⌘⇧C' },
+        { label: 'New Claude — work@ha', sub: 'Managed account', icon: 'account_circle', iconBg: 'var(--md-secondary-container)', iconFg: 'var(--md-on-secondary-container)', bg: 'transparent', kbd: '' },
+        { label: 'New terminal', sub: 'zsh · persistent tmux session', icon: 'terminal', iconBg: 'var(--md-secondary-container)', iconFg: 'var(--md-on-secondary-container)', bg: 'transparent', kbd: '⌘T' },
+        { label: 'Toggle kanban board', sub: 'Same project, other view', icon: 'view_kanban', iconBg: 'var(--md-secondary-container)', iconFg: 'var(--md-on-secondary-container)', bg: 'transparent', kbd: '⌘⇧B' },
+        { label: 'Create worktree from group', sub: 'An agent per branch is a group per branch', icon: 'call_split', iconBg: 'var(--md-tertiary-container)', iconFg: 'var(--md-on-tertiary-container)', bg: 'transparent', kbd: '' },
+        { label: 'Switch to kids mode', sub: 'Guided home for 4–5 year olds', icon: 'child_care', iconBg: 'var(--md-tertiary-container)', iconFg: 'var(--md-on-tertiary-container)', bg: 'transparent', kbd: '' }
+      ],
+      cq: s.cq,
+      setCq: (e) => this.setState({ cq: e.target.value }),
+      ctxItems: [
+        ['terminal', 'New terminal', '⌘T', 0],
+        ['smart_toy', 'New Claude Code', '⌘⇧C', 0],
+        ['smart_toy', 'New Codex', '', 0],
+        ['sticky_note_2', 'New sticky note', '', 0],
+        ['edit_note', 'New editor', '', 0],
+        ['difference', 'New diff view', '', 0],
+        ['select_all', 'New group frame', '', 0],
+        ['call_split', 'Create worktree here', '', 0],
+        ['content_paste', 'Paste', '⌘V', 0],
+        ['fit_screen', 'Fit view', '⇧1', 0],
+        ['palette', 'Node color…', '', 0],
+        ['delete', 'Delete selection', '⌫', 1]
+      ].map(([icon, label, kbd, danger]) => ({ icon, label, kbd, fg: danger ? 'var(--md-error)' : 'var(--md-on-surface)' }))
+        .filter((m) => !s.cq || m.label.toLowerCase().includes(s.cq.toLowerCase())),
+      notifFilters: [
+        { label: 'All', bg: 'var(--md-secondary-container)', fg: 'var(--md-on-secondary-container)', bd: 'transparent', check: true },
+        { label: 'Needs you', bg: 'transparent', fg: 'var(--md-on-surface)', bd: 'var(--md-outline)', check: false },
+        { label: 'Completed', bg: 'transparent', fg: 'var(--md-on-surface)', bd: 'var(--md-outline)', check: false },
+        { label: 'System', bg: 'transparent', fg: 'var(--md-on-surface)', bd: 'var(--md-outline)', check: false }
+      ],
+      notifs: [
+        { title: 'Codex needs you', body: 'Permission prompt on ha-box · migrate iOS protocol', time: 'now', icon: 'pan_tool', iconBg: 'var(--md-error-container)', iconFg: 'var(--md-on-error-container)', unread: true },
+        { title: 'Turn complete', body: 'Claude finished refactoring the transport seam', time: '2 min', icon: 'task_alt', iconBg: 'var(--md-success-container)', iconFg: 'var(--md-on-success-container)', unread: true },
+        { title: 'Restart to update', body: 'nodeterm 0.9.5 downloaded from the self-hosted feed', time: '1 h', icon: 'system_update', iconBg: 'var(--md-tertiary-container)', iconFg: 'var(--md-on-tertiary-container)', unread: true },
+        { title: 'Phone paired', body: 'iPhone 16 Pro attached to nt-claude-3 over the relay', time: '3 h', icon: 'smartphone', iconBg: 'var(--md-secondary-container)', iconFg: 'var(--md-on-secondary-container)', unread: false },
+        { title: 'Runner offline', body: 'self-hosted runner ha-box-2 dropped; cloud fallback used', time: '5 h', icon: 'dns', iconBg: 'var(--md-warning-container)', iconFg: 'var(--md-on-warning-container)', unread: false }
+      ],
+      regexChips: ['Named group', 'Any digit', 'Anchor', 'Optional', 'Character class', 'Repeat'].map((label) => ({ label }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>
