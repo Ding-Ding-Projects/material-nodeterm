@@ -132,6 +132,8 @@ the substitution without anyone remembering to opt in:
 - ✅ Every tooltip (`Tooltip.tsx`)
 - ✅ Every toast's title, action labels and dismiss control (`NotificationToasts.tsx`)
 - ✅ The project-file conflict bar (`ConflictBar.tsx`)
+- ✅ The worktree creation/binding dialog (`WorktreeDialog.tsx`), including its title, field labels,
+  placeholders, validation guidance and actions; paths, refs and submitted values remain exact
 - ✅ The command palette's own rows — label, hint, note, section heading, secondary-button label
   and an inline control's accessible name / option labels (`CommandPalette.tsx`, applied **before**
   the query filter so a visible row can still be typed for)

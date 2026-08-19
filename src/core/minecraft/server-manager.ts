@@ -32,7 +32,7 @@ import type {
   MinecraftServerStatus,
   MinecraftVersionList
 } from '../../shared/minecraft'
-import { detectInstalledJava, type JavaProbe } from './java'
+import { detectInstalledJava, ensureJavaRuntime, type JavaProbe } from './java'
 import {
   checkJavaCompatibility,
   parseLatestVersions,
@@ -177,6 +177,7 @@ export interface MinecraftServerManagerOptions {
   fetchBinary?: (url: string) => Promise<Response>
   manifestUrl?: string
   detectJava?: () => Promise<JavaProbe>
+  ensureJava?: (requiredMajor: number) => Promise<JavaProbe>
   now?: () => number
   spawnFn?: typeof spawn
   onEvent?: (event: MinecraftEvent) => void
@@ -188,6 +189,7 @@ export class MinecraftServerManager {
   private readonly fetchBinary: (url: string) => Promise<Response>
   private readonly manifestUrl: string
   private readonly detectJavaFn: () => Promise<JavaProbe>
+  private readonly ensureJavaFn: (requiredMajor: number) => Promise<JavaProbe>
   private readonly now: () => number
   private readonly spawnFn: typeof spawn
   private readonly onEvent?: (event: MinecraftEvent) => void
@@ -207,6 +209,7 @@ export class MinecraftServerManager {
     this.fetchBinary = opts.fetchBinary ?? ((url: string) => fetch(url))
     this.manifestUrl = opts.manifestUrl ?? MOJANG_VERSION_MANIFEST_URL
     this.detectJavaFn = opts.detectJava ?? (() => detectInstalledJava())
+    this.ensureJavaFn = opts.ensureJava ?? ((requiredMajor) => ensureJavaRuntime({ userDataDir: this.userDataDir, requiredMajor }))
     this.now = opts.now ?? Date.now
     this.spawnFn = opts.spawnFn ?? spawn
     this.onEvent = opts.onEvent
@@ -478,6 +481,10 @@ export class MinecraftServerManager {
 
     try {
       const download = await resolveServerDownload(versionId, this.fetchJson, this.manifestUrl)
+      if (download.requiredJavaMajor !== null) {
+        const java = await this.ensureJavaFn(download.requiredJavaMajor)
+        this.javaCache = { at: this.now(), probe: java }
+      }
       const url = new URL(download.url)
       if (url.protocol !== 'https:') {
         throw new Error('The published download is not https; refusing it.')
@@ -525,7 +532,16 @@ export class MinecraftServerManager {
     if (!(await readEulaAccepted(record.dir))) {
       return this.oneShotError(id, 'The Minecraft EULA has not been accepted yet.')
     }
-    const java = await this.detectJavaCached()
+    let java = await this.detectJavaCached()
+    if (record.requiredJavaMajor !== null && (!java.path || java.major === null || java.major < record.requiredJavaMajor)) {
+      try {
+        java = await this.ensureJavaFn(record.requiredJavaMajor)
+        this.javaCache = { at: this.now(), probe: java }
+      } catch (e) {
+        runtime.error = `Java ${record.requiredJavaMajor} could not be installed automatically: ${describeError(e)}`
+        return this.emitStatus(id)
+      }
+    }
     const compat = checkJavaCompatibility(record.requiredJavaMajor, java.major)
     if (!compat.ok) {
       runtime.error = compat.reason ?? 'This Java runtime is not compatible with this Minecraft version.'

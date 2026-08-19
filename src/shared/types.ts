@@ -951,6 +951,10 @@ export interface WorkspaceApi {
   save(workspace: Workspace): Promise<void>
   /** Reads <folder>/.nodeterm/project.json and returns the assembled Project (cwd resolved), or null. */
   probeFolder(folder: string): Promise<Project | null>
+  /** Save one portable project snapshot plus its complete app-owned local Git history as one file. */
+  exportProject(project: Project): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>
+  /** Open and validate a one-file project archive, restoring a fresh project and its history. */
+  importProject(): Promise<{ ok: boolean; project?: Project; canceled?: boolean; error?: string }>
   /** Fired once after an on-disk migration: `v2` = a v2→v3 migration wrote .nodeterm/ dirs into the
    *  project folders; `exec` = the custom shell / advanced ssh args of already-open projects moved
    *  out of the shared project file into this machine's own workspace index (@shared/node-exec). */
@@ -1651,9 +1655,9 @@ export const DEFAULT_SETTINGS: Settings = {
   rainbowSpeed: 3,
   doubleClickFocus: true,
   terminalMiddleClickPaste: false,
-  wheelZoom: false,
+  wheelZoom: true,
   trackpadPan: true,
-  canvasDragMode: 'select',
+  canvasDragMode: 'pan',
   browserMemorySaver: true,
   accent: DEFAULT_ACCENT,
   tmuxEnabled: true,

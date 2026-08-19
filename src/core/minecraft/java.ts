@@ -25,8 +25,13 @@
  */
 
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { createWriteStream } from 'node:fs'
+import { access, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
+import unzipper from 'unzipper'
 import { findExecutableSync } from '../exec-path'
 
 const execFileP = promisify(execFile)
@@ -49,9 +54,9 @@ function javaHomeCandidate(): string | null {
 
 /** Subprocess-free — a PATH/JAVA_HOME walk with an access check, same as every other executable
  *  lookup in this codebase. Never spawns, so it is safe to call from the main thread. */
-export function resolveJavaExecutable(): string | null {
+export function resolveJavaExecutable(managedCandidates: string[] = []): string | null {
   const home = javaHomeCandidate()
-  return findExecutableSync('java', home ? [home] : [])
+  return findExecutableSync('java', [...managedCandidates, ...(home ? [home] : [])])
 }
 
 export interface JavaProbe {
@@ -89,4 +94,133 @@ export async function detectInstalledJava(
   if (!javaPath) return { path: null, major: null }
   const output = await run(javaPath)
   return { path: javaPath, major: parseJavaMajorVersion(output) }
+}
+
+const ADOPTIUM_API = 'https://api.adoptium.net'
+
+interface AdoptiumAsset {
+  binary?: {
+    package?: { checksum?: string; link?: string; name?: string }
+  }
+}
+
+export interface EnsureJavaOptions {
+  userDataDir: string
+  requiredMajor: number
+  fetchJson?: (url: string) => Promise<unknown>
+  fetchBinary?: (url: string) => Promise<Response>
+  detect?: () => Promise<JavaProbe>
+}
+
+function runtimePlatform(): { os: string; arch: string; executable: string } {
+  if (process.platform !== 'win32') {
+    throw new Error('Automatic Java installation is currently available on Windows only.')
+  }
+  const arch = process.arch === 'arm64' ? 'aarch64' : process.arch === 'x64' ? 'x64' : null
+  if (!arch) throw new Error(`Automatic Java installation does not support ${process.arch}.`)
+  return { os: 'windows', arch, executable: 'java.exe' }
+}
+
+function safeZipEntry(name: string): boolean {
+  const normalized = name.replace(/\\/g, '/')
+  return (
+    normalized.length > 0 &&
+    !normalized.startsWith('/') &&
+    !/^[A-Za-z]:/.test(normalized) &&
+    normalized.split('/').every((part) => part !== '..')
+  )
+}
+
+async function findManagedJava(root: string, executable: string): Promise<string | null> {
+  const marker = path.join(root, 'runtime.json')
+  try {
+    const parsed = JSON.parse(await readFile(marker, 'utf-8')) as { javaPath?: unknown }
+    if (typeof parsed.javaPath !== 'string') return null
+    const candidate = path.resolve(root, parsed.javaPath)
+    if (!candidate.startsWith(`${path.resolve(root)}${path.sep}`)) return null
+    await access(candidate)
+    return candidate
+  } catch {
+    return null
+  }
+}
+
+/** Obtain the exact Java major the selected Minecraft server needs. The runtime is private to
+ * nodeterm's app-data directory: no administrator rights, PATH mutation, installer prompt, or
+ * machine-wide toolchain change. Adoptium supplies both the archive URL and SHA-256; neither a
+ * filename nor a successful HTTP response is accepted as integrity evidence. */
+export async function ensureJavaRuntime(opts: EnsureJavaOptions): Promise<JavaProbe> {
+  const platform = runtimePlatform()
+  const root = path.join(opts.userDataDir, 'runtimes', 'java', String(opts.requiredMajor), `${platform.os}-${platform.arch}`)
+  const cached = await findManagedJava(root, platform.executable)
+  const detect = opts.detect ?? (() => detectInstalledJava(() => resolveJavaExecutable(cached ? [cached] : [])))
+  const existing = await detect()
+  if (existing.path && existing.major !== null && existing.major >= opts.requiredMajor) return existing
+
+  const fetchJson = opts.fetchJson ?? (async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Java metadata download failed (HTTP ${response.status}).`)
+    return response.json()
+  })
+  const fetchBinary = opts.fetchBinary ?? ((url: string) => fetch(url))
+  const metadataUrl = `${ADOPTIUM_API}/v3/assets/latest/${opts.requiredMajor}/hotspot?architecture=${platform.arch}&image_type=jre&os=${platform.os}&vendor=eclipse`
+  const metadata = await fetchJson(metadataUrl)
+  const asset = Array.isArray(metadata) ? (metadata[0] as AdoptiumAsset | undefined) : undefined
+  const pkg = asset?.binary?.package
+  if (!pkg?.link || !pkg.checksum || !/^[a-f0-9]{64}$/i.test(pkg.checksum)) {
+    throw new Error(`Adoptium did not publish a usable Java ${opts.requiredMajor} runtime and checksum for this machine.`)
+  }
+  const downloadUrl = new URL(pkg.link)
+  if (downloadUrl.protocol !== 'https:') throw new Error('The Java runtime download is not HTTPS; refusing it.')
+
+  const parent = path.dirname(root)
+  const staging = `${root}.install-${process.pid}-${Date.now()}`
+  const archive = `${staging}.zip`
+  await mkdir(parent, { recursive: true })
+  await rm(staging, { recursive: true, force: true })
+  await mkdir(staging, { recursive: true })
+  try {
+    const response = await fetchBinary(downloadUrl.toString())
+    if (!response.ok || !response.body) throw new Error(`Java runtime download failed (HTTP ${response.status}).`)
+    const hash = createHash('sha256')
+    const file = createWriteStream(archive, { flags: 'wx', mode: 0o600 })
+    const reader = response.body.getReader()
+    await pipeline(
+      async function* () {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) return
+          hash.update(value)
+          yield Buffer.from(value)
+        }
+      },
+      file
+    )
+    if (hash.digest('hex').toLowerCase() !== pkg.checksum.toLowerCase()) {
+      throw new Error('The Java runtime did not match Adoptium’s published SHA-256 checksum.')
+    }
+    const directory = await unzipper.Open.file(archive)
+    if (directory.files.some((entry) => !safeZipEntry(entry.path))) {
+      throw new Error('The Java runtime archive contains an unsafe path; refusing it.')
+    }
+    await directory.extract({ path: staging })
+    const javaEntry = directory.files.find((entry) => entry.path.replace(/\\/g, '/').endsWith('/bin/java.exe'))
+    if (!javaEntry) throw new Error('The Java runtime archive does not contain bin/java.exe.')
+    const javaPath = path.join(staging, ...javaEntry.path.replace(/\\/g, '/').split('/'))
+    await access(javaPath)
+    const relativeJavaPath = path.relative(staging, javaPath)
+    await writeFile(path.join(staging, 'runtime.json'), JSON.stringify({ javaPath: relativeJavaPath }, null, 2), 'utf-8')
+    await rm(root, { recursive: true, force: true })
+    await rename(staging, root)
+    const installedPath = path.join(root, relativeJavaPath)
+    const installed = await detectInstalledJava(() => installedPath)
+    if (installed.major === null || installed.major < opts.requiredMajor) {
+      await rm(root, { recursive: true, force: true })
+      throw new Error(`The downloaded Java runtime did not report Java ${opts.requiredMajor} or newer.`)
+    }
+    return installed
+  } finally {
+    await rm(archive, { force: true }).catch(() => {})
+    await rm(staging, { recursive: true, force: true }).catch(() => {})
+  }
 }

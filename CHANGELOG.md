@@ -16,6 +16,13 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Added
 
+- **Automatic Java runtime provisioning for managed Minecraft servers.** The desktop app obtains
+  the required Eclipse Temurin JRE in its private application-data cache, verifies Adoptium's
+  published SHA-256, and uses it without changing the machine-wide PATH.
+- **Per-project local history and portable project archives.** Every successful project save is
+  snapshotted in its own app-data Git repository. A project and that complete history can be
+  exported and imported as one bounded `.nodeterm-project` file.
+
 - **Canonical upstream source pin.** `upstream/nodeterm` is now a real Git submodule pinned to
   `https://github.com/eneskirca/nodeterm.git`; `.gitmodules` records `main` for intentional remote
   updates, and the contributor guidance distinguishes the nested repository from the top-level
@@ -36,6 +43,10 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
   about the one thing it cannot do — it does not sandbox the terminal.
 
 ### Changed
+
+- Mouse-wheel rotation now zooms the canvas by default, while dragging empty canvas pans it.
+  Existing installations using the former untouched defaults migrate to the mouse-first behavior;
+  both choices remain configurable.
 
 - Windows profile ids are resolved in the trusted desktop core immediately before spawning.
   Executable paths and argv remain private; `terminalProfileId`, custom shell selection, and
@@ -66,6 +77,9 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
   only — no layout, markup or behaviour changed, and every surface kept its full feature set.
 
 ### Fixed
+
+- The worktree creation dialog now applies the uploaded personal vocabulary to app-authored
+  labels and guidance while keeping paths, branch names, refs, typed values, and Git errors exact.
 
 - **Windows Python discovery now reuses the exact manifest-selected per-user installation before
   invoking an installer.** An explicit trusted `PYTHON` remains first, followed by

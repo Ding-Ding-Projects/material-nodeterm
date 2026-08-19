@@ -22,9 +22,8 @@ function JavaLine({ status }: { status: MinecraftServerStatus }): React.JSX.Elem
   if (status.installedJavaMajor === null) {
     return (
       <p className="service-node__note mc-note--warn">
-        No Java runtime was found on this machine
-        {status.requiredJavaMajor ? ` — this version needs Java ${status.requiredJavaMajor}` : ''}.
-        Install one and reopen this node.
+        No Java runtime is installed yet
+        {status.requiredJavaMajor ? ` — Java ${status.requiredJavaMajor} will be installed automatically when needed` : ''}.
       </p>
     )
   }
@@ -266,7 +265,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
         )}
       </div>
       <p className="service-node__note">
-        Downloads the real server jar for this version from Mojang's own metadata and verifies it
+        Installs the required Java runtime automatically, then downloads the real server jar for this version from Mojang's own metadata and verifies it
         against the checksum that metadata publishes. Nothing runs until you accept the Minecraft
         EULA yourself.
       </p>

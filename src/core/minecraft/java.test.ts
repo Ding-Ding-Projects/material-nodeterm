@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseJavaMajorVersion } from './java'
+import { ensureJavaRuntime, parseJavaMajorVersion } from './java'
 
 describe('parseJavaMajorVersion', () => {
   it('reads the modern (Java 9+) three-part scheme', () => {
@@ -29,5 +29,22 @@ describe('parseJavaMajorVersion', () => {
     expect(parseJavaMajorVersion('command not found')).toBeNull()
     expect(parseJavaMajorVersion('bash: java: command not found')).toBeNull()
     expect(parseJavaMajorVersion('version banner with no quoted version at all')).toBeNull()
+  })
+})
+
+describe('ensureJavaRuntime', () => {
+  it('reuses a compatible runtime without making a network request', async () => {
+    let fetched = false
+    const probe = await ensureJavaRuntime({
+      userDataDir: 'unused',
+      requiredMajor: 25,
+      detect: async () => ({ path: 'C:/Java/bin/java.exe', major: 25 }),
+      fetchJson: async () => {
+        fetched = true
+        return []
+      }
+    })
+    expect(probe).toEqual({ path: 'C:/Java/bin/java.exe', major: 25 })
+    expect(fetched).toBe(false)
   })
 })
