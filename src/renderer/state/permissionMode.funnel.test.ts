@@ -159,7 +159,13 @@ const ALLOWED = new Map<string, string>([
   [
     'components/ProjectSwitcher.tsx',
     'displays the global default in the override menu; launches nothing'
-  ]
+  ],
+  // The funnel module itself: `setKidsAllowedPermissionMode` is the ONE write path for Kids
+  // mode's "Allow Beep to answer freely" switch, so a Kids-facing component never reaches into
+  // `useSettings` directly. It only ever writes 'plan'/'manual' (the two Kids-allowed modes), and
+  // `activePermissionMode`'s own `gateKidsPermissionMode` narrows the result regardless — see
+  // docs/kids-mode.md, "The grown-up screen's switches".
+  ['state/permissionMode.ts', 'hosts the sole reviewable Kids-mode write path, beside the gate']
 ])
 
 function normalizeRelativePath(path: string): string {
