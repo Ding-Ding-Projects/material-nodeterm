@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
-import { formatShortcut, isHoldChord } from '@shared/shortcut'
-import { hintLabel } from '@shared/platform-utils'
 import { AgentIcon } from '../lib/agentIcons'
 import { useSettings } from '../state/settings'
 import { useProjects } from '../state/projects'
@@ -9,13 +7,7 @@ import { accountsForProject, sshAccountsHint } from '../state/workspace'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
-
-interface DockProps {
-  dirty: boolean
-  zoomPct: number
-  canUndo: boolean
-  canRedo: boolean
+export interface FabMenuProps {
   onAddTerminal: () => void
   /** Desktop-local Windows capability. Keep false for SSH, relay, and Server Edition sessions. */
   offersTerminalProfiles?: boolean
@@ -31,25 +23,17 @@ interface DockProps {
   onOpenFile: () => void
   onAddRemote: () => void
   onConnectRemote: () => void
-  onUndo: () => void
-  onRedo: () => void
-  onSave: () => void
-  onFitView: () => void
-  onZoomIn: () => void
-  onZoomOut: () => void
-  onDictate: () => void
-  dictateActive: boolean
 }
 
 /**
- * Bottom-center floating dock. The "+" opens a node-type menu above it.
- * All canvas actions live here so the canvas itself stays clean.
+ * The nav rail's FAB and its "add a node" menu (formerly the bottom dock's `+`, moved here
+ * verbatim per the Material 3 handoff — the rail's FAB owns node creation now, same choices,
+ * same `⌘T`/`⌘⇧C` shortcuts, same profile drill-in).
+ *
+ * A standalone component (rather than folded into `NavRail`) so the terminal-profile-creation
+ * behavior test can drive exactly this surface, the same way it drove the old `Dock`.
  */
-export function Dock({
-  dirty,
-  zoomPct,
-  canUndo,
-  canRedo,
+export function FabMenu({
   onAddTerminal,
   offersTerminalProfiles = false,
   terminalProfileChoices = [],
@@ -61,27 +45,18 @@ export function Dock({
   onAddAgent,
   onOpenFile,
   onAddRemote,
-  onConnectRemote,
-  onUndo,
-  onRedo,
-  onSave,
-  onFitView,
-  onZoomIn,
-  onZoomOut,
-  onDictate,
-  dictateActive
-}: DockProps) {
+  onConnectRemote
+}: FabMenuProps) {
   const profileText = useLocalizedVocabularyText()
   const [menuOpen, setMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const dictationShortcut = useSettings((s) => s.settings.speech.shortcut)
   const customAgents = useSettings((s) => s.settings.customAgents)
   const disabledAgents = useSettings((s) => s.settings.disabledAgents)
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const activeProject = useProjects((s) => s.projects.find((p) => p.id === activeProjectId))
   // Accounts usable in the active project (local for a local project, this host's for an SSH
-  // project). The flat dock menu can't nest, so Claude gets one "New Claude — <label>" entry per
+  // project). The flat FAB menu can't nest, so Claude gets one "New Claude — <label>" entry per
   // account (plus the base "Claude" = project default).
   const localAccounts = accountsForProject(claudeAccounts, activeProject)
   // ✓ marks the project's default account entry (what the base "Claude" resolves to).
@@ -116,12 +91,12 @@ export function Dock({
 
   return (
     <>
-      {menuOpen && <div className="dock-backdrop" onClick={closeMenu} />}
+      {menuOpen && <div className="md3-fab-backdrop" onClick={closeMenu} />}
 
-      <div className="dock">
+      <div className="md3-fab-wrap">
         {menuOpen && (
           <div
-            className="dock-menu"
+            className="md3-fab-menu"
             role="menu"
             aria-label={
               profileMenuOpen
@@ -153,7 +128,7 @@ export function Dock({
                           )
                         : undefined
                     const reasonId = disabled
-                      ? `dock-terminal-profile-reason-${index}`
+                      ? `fab-terminal-profile-reason-${index}`
                       : undefined
                     return (
                       <button
@@ -168,10 +143,10 @@ export function Dock({
                         }}
                       >
                         <TerminalIcon />
-                        <span className="dock-menu__copy">
+                        <span className="md3-fab-menu__copy">
                           <span>{profile.label}</span>
                           {disabledReason ? (
-                            <span id={reasonId} className="dock-menu__hint">
+                            <span id={reasonId} className="md3-fab-menu__hint">
                               {disabledReason}
                             </span>
                           ) : null}
@@ -183,15 +158,15 @@ export function Dock({
                   <button
                     role="menuitem"
                     aria-disabled="true"
-                    aria-describedby="dock-terminal-profile-empty-reason"
+                    aria-describedby="fab-terminal-profile-empty-reason"
                     title={profileEmptyState.hint}
                   >
                     <TerminalIcon />
-                    <span className="dock-menu__copy">
+                    <span className="md3-fab-menu__copy">
                       <span>{profileEmptyState.label}</span>
                       <span
-                        id="dock-terminal-profile-empty-reason"
-                        className="dock-menu__hint"
+                        id="fab-terminal-profile-empty-reason"
+                        className="md3-fab-menu__hint"
                       >
                         {profileEmptyState.hint}
                       </span>
@@ -293,51 +268,11 @@ export function Dock({
         )}
 
         <button
-          className={`dock-btn dock-add${menuOpen ? ' active' : ''}`}
+          className={`md3-fab${menuOpen ? ' is-open' : ''}`}
           title="Add node"
           onClick={toggleMenu}
         >
           <PlusIcon />
-        </button>
-
-        <span className="dock-sep" />
-
-        <button className="dock-btn" title={hintLabel('Undo (⌘Z)')} disabled={!canUndo} onClick={onUndo}>
-          <UndoIcon />
-        </button>
-        <button className="dock-btn" title={hintLabel('Redo (⌘⇧Z)')} disabled={!canRedo} onClick={onRedo}>
-          <RedoIcon />
-        </button>
-
-        <span className="dock-sep" />
-
-        <button className="dock-btn" title="Save" onClick={onSave}>
-          <SaveIcon />
-          <span className={`dock-dirty${dirty ? ' dirty' : ''}`} />
-        </button>
-        <button className="dock-btn" title="Fit view" onClick={onFitView}>
-          <FrameIcon />
-        </button>
-        <button
-          className={`dock-btn${dictateActive ? ' active' : ''}`}
-          title={
-            isHoldChord(dictationShortcut)
-              ? `Dictate (hold ${formatShortcut(dictationShortcut, isMac)})`
-              : `Dictate (${formatShortcut(dictationShortcut, isMac)})`
-          }
-          onClick={onDictate}
-        >
-          <MicIcon />
-        </button>
-
-        <span className="dock-sep" />
-
-        <button className="dock-btn dock-zoom-btn" title="Zoom out" onClick={onZoomOut}>
-          <MinusIcon />
-        </button>
-        <span className="dock-zoom">{zoomPct}%</span>
-        <button className="dock-btn dock-zoom-btn" title="Zoom in" onClick={onZoomIn}>
-          <PlusSmallIcon />
         </button>
       </div>
     </>
@@ -349,51 +284,8 @@ const S = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: '
 
 function PlusIcon() {
   return (
-    <svg {...S} width={20} height={20}>
+    <svg {...S} width={26} height={26}>
       <path d="M12 5v14M5 12h14" />
-    </svg>
-  )
-}
-function UndoIcon() {
-  return (
-    <svg {...S}>
-      <path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2" />
-    </svg>
-  )
-}
-function RedoIcon() {
-  return (
-    <svg {...S}>
-      <path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10h2" />
-    </svg>
-  )
-}
-function PlusSmallIcon() {
-  return (
-    <svg {...S} width={15} height={15}>
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  )
-}
-function MinusIcon() {
-  return (
-    <svg {...S} width={15} height={15}>
-      <path d="M5 12h14" />
-    </svg>
-  )
-}
-function SaveIcon() {
-  return (
-    <svg {...S}>
-      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-      <path d="M17 21v-8H7v8M7 3v5h8" />
-    </svg>
-  )
-}
-function FrameIcon() {
-  return (
-    <svg {...S}>
-      <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
     </svg>
   )
 }
@@ -445,14 +337,6 @@ function EditorIcon() {
   return (
     <svg {...S}>
       <path d="M9 8l-4 4 4 4M15 8l4 4-4 4" />
-    </svg>
-  )
-}
-function MicIcon() {
-  return (
-    <svg {...S}>
-      <rect x="9" y="2" width="6" height="12" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
     </svg>
   )
 }

@@ -3,7 +3,7 @@ import { act } from 'react'
 import type { ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Dock } from './Dock'
+import { FabMenu } from './FabMenu'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useSettings } from '../state/settings'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
@@ -45,8 +45,8 @@ function button(label: string, startsWith = false): HTMLButtonElement {
   return hit
 }
 
-function renderDock(
-  overrides: Partial<ComponentProps<typeof Dock>> = {}
+function renderFabMenu(
+  overrides: Partial<ComponentProps<typeof FabMenu>> = {}
 ): {
   onAddTerminal: ReturnType<typeof vi.fn>
   onAddTerminalWithProfile: ReturnType<typeof vi.fn>
@@ -58,11 +58,7 @@ function renderDock(
   const onAddTerminalWithProfile = vi.fn()
   act(() =>
     root?.render(
-      <Dock
-        dirty={false}
-        zoomPct={100}
-        canUndo={false}
-        canRedo={false}
+      <FabMenu
         onAddTerminal={onAddTerminal}
         offersTerminalProfiles
         terminalProfileChoices={choices}
@@ -74,14 +70,6 @@ function renderDock(
         onOpenFile={() => {}}
         onAddRemote={() => {}}
         onConnectRemote={() => {}}
-        onUndo={() => {}}
-        onRedo={() => {}}
-        onSave={() => {}}
-        onFitView={() => {}}
-        onZoomIn={() => {}}
-        onZoomOut={() => {}}
-        onDictate={() => {}}
-        dictateActive={false}
         {...overrides}
       />
     )
@@ -100,20 +88,20 @@ function openProfileMenu(): void {
   act(() => button('New terminal with profile…').click())
 }
 
-describe('Dock Windows terminal profile creation', () => {
+describe('FabMenu (nav rail) Windows terminal profile creation', () => {
   it('keeps the ordinary Terminal row as the direct saved-default action', () => {
-    const { onAddTerminal, onAddTerminalWithProfile } = renderDock()
+    const { onAddTerminal, onAddTerminalWithProfile } = renderFabMenu()
 
     openAddMenu()
     act(() => button('Terminal').click())
 
     expect(onAddTerminal).toHaveBeenCalledOnce()
     expect(onAddTerminalWithProfile).not.toHaveBeenCalled()
-    expect(host?.querySelector('.dock-menu')).toBeNull()
+    expect(host?.querySelector('.md3-fab-menu')).toBeNull()
   })
 
   it('passes only the selected stable id from the profile drill-in', () => {
-    const { onAddTerminal, onAddTerminalWithProfile } = renderDock()
+    const { onAddTerminal, onAddTerminalWithProfile } = renderFabMenu()
 
     openProfileMenu()
     expect(host?.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe(
@@ -124,11 +112,11 @@ describe('Dock Windows terminal profile creation', () => {
     expect(onAddTerminalWithProfile).toHaveBeenCalledOnce()
     expect(onAddTerminalWithProfile).toHaveBeenCalledWith('pwsh')
     expect(onAddTerminal).not.toHaveBeenCalled()
-    expect(host?.querySelector('.dock-menu')).toBeNull()
+    expect(host?.querySelector('.md3-fab-menu')).toBeNull()
   })
 
   it('keeps unavailable choices inert and associates the visible failure reason', () => {
-    const { onAddTerminalWithProfile } = renderDock()
+    const { onAddTerminalWithProfile } = renderFabMenu()
 
     openProfileMenu()
     const unavailable = button('WSL — Missing Linux', true)
@@ -142,11 +130,11 @@ describe('Dock Windows terminal profile creation', () => {
 
     act(() => unavailable.click())
     expect(onAddTerminalWithProfile).not.toHaveBeenCalled()
-    expect(host?.querySelector('.dock-menu')).toBeTruthy()
+    expect(host?.querySelector('.md3-fab-menu')).toBeTruthy()
   })
 
   it('hides profile creation outside the local Windows capability', () => {
-    renderDock({ offersTerminalProfiles: false })
+    renderFabMenu({ offersTerminalProfiles: false })
 
     openAddMenu()
 
@@ -159,7 +147,7 @@ describe('Dock Windows terminal profile creation', () => {
   })
 
   it('preserves a profile detection failure as distinct empty-state copy', () => {
-    renderDock({
+    renderFabMenu({
       terminalProfileChoices: [],
       terminalProfileEmptyState: {
         label: 'Profile detection failed',
@@ -186,7 +174,7 @@ describe('Dock Windows terminal profile creation', () => {
     // (schoolModeAllowsOptionalFeatures fails closed on the pre-hydration default); without this
     // the resolver silently falls back to English and the Cantonese button is never rendered.
     useSchoolMode.setState({ enabled: false, hydrated: true })
-    renderDock()
+    renderFabMenu()
 
     openAddMenu()
     act(() => button('用設定檔新增終端機…').click())
@@ -203,7 +191,7 @@ describe('Dock Windows terminal profile creation', () => {
       status: 'loaded',
       entryCount: 3
     })
-    renderDock()
+    renderFabMenu()
 
     openAddMenu()
     act(() => button('New console with preset…').click())
