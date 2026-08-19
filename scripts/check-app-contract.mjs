@@ -835,6 +835,37 @@ const FEATURES = [
     ],
     docs: ['docs/unlock-ladder.md'],
   },
+  {
+    // The extracted MD3 component library — one definition per shape (button, chip, menu
+    // surface, …) instead of the same recipe re-authored per feature lane. See the doc for why
+    // `mdx-` and not `md3-`, and which pieces reuse an already-shipped class instead of a new one.
+    id: 'md3-primitives',
+    label: 'MD3 shared primitive components',
+    files: [
+      'src/renderer/ui/md3/index.ts',
+      'src/renderer/ui/md3/primitives.css',
+      'src/renderer/ui/md3/Button.tsx',
+      'src/renderer/ui/md3/IconButton.tsx',
+      'src/renderer/ui/md3/Fab.tsx',
+      'src/renderer/ui/md3/Switch.tsx',
+      'src/renderer/ui/md3/TextField.tsx',
+      'src/renderer/ui/md3/Chip.tsx',
+      'src/renderer/ui/md3/StatusChip.tsx',
+      'src/renderer/ui/md3/Card.tsx',
+      'src/renderer/ui/md3/ListRow.tsx',
+      'src/renderer/ui/md3/Menu.tsx',
+      'src/renderer/ui/md3/Dialog.tsx',
+      'src/renderer/ui/md3/Badge.tsx',
+      'src/renderer/ui/md3/SegmentedButton.tsx',
+      'src/renderer/ui/md3/Divider.tsx',
+    ],
+    contentChecks: [
+      ['src/renderer/ui/md3/Button.tsx', 'export const Button = forwardRef<'],
+      ['src/renderer/ui/md3/Switch.tsx', "export { Switch } from '../Switch'"],
+      ['src/renderer/ui/SegmentedPill.tsx', "export { SegmentedButton as SegmentedPill } from './md3/SegmentedButton'"],
+    ],
+    docs: ['docs/md3-primitives.md'],
+  },
 ]
 
 // A feature-row check is only fail-closed if removing the whole row, or one of its required
