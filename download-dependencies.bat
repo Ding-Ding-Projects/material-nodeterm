@@ -259,6 +259,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem node-pty vendors winpty, whose winpty.gyp shells out to `cmd /c "cd shared && GetCommitHash.bat"`
+rem -- a CWD-RELATIVE batch invocation, from a file we do not own and cannot change. On a machine
+rem where NoDefaultCurrentDirectoryInExePath=1 is inherited, cmd refuses to search the current
+rem directory, and the whole install dies with:
+rem
+rem     GetCommitHash.bat is not recognized as an internal or external command
+rem     gyp: Call to cmd /c "cd shared && GetCommitHash.bat" returned exit status 1
+rem
+rem The comment at the top of this file already covers our OWN invocation; this covers the npm
+rem CHILD, which is where the failure actually lands. Cleared for this process only -- `setlocal`
+rem at the top of this file scopes it, so the caller keeps whatever it had and no persistent user
+rem or machine setting is weakened.
+set "NoDefaultCurrentDirectoryInExePath="
+
 pushd "%NODETERM_ROOT%"
 if exist package-lock.json (
     echo   package-lock.json found - running: npm ci
