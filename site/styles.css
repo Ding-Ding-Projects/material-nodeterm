@@ -829,3 +829,37 @@ textarea.mono-area {
 .pair-btn:hover { background: var(--orange); }
 .pair-btn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 @media (max-width: 620px) { .pair-route-grid { grid-template-columns: 1fr; } }
+
+/* ---- Screenshots room ----
+   A responsive gallery of real app captures. auto-fit rather than a fixed column count so it
+   reflows from a phone to a wide desktop without a media query per breakpoint; each image keeps
+   its aspect ratio and never forces the page to scroll sideways. */
+.shots-room__lede, .shots-room__foot { max-width: 68ch; color: var(--ink2); }
+.shots-room__foot { margin-top: 22px; font-size: 0.92em; }
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 18px;
+  margin: 18px 0 0;
+}
+.shot-card {
+  margin: 0;
+  /* Grid items default to min-width:auto, so they refuse to shrink below their content's
+     INTRINSIC width — a 1600px capture then forces the cell wide and the page body scrolls
+     sideways, which is the one thing the responsive rule forbids. Measured at a 320px body:
+     the column was 317px and the image rendered 389px. */
+  min-width: 0;
+}
+.shot-card__link {
+  display: block;
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--paper2);
+}
+.shot-card__link:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.shot-card__img { display: block; width: 100%; height: auto; }
+.shot-card__cap { display: flex; flex-direction: column; gap: 3px; padding: 9px 3px 0; }
+.shot-card__title { font-size: 1em; }
+.shot-card__note { color: var(--ink2); font-size: 0.9em; }
+.shot-empty { color: var(--ink2); }

@@ -44,6 +44,11 @@ import {
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'docs/assets/shots')
+// GitHub Pages serves ONLY site/ (see .github/workflows/pages.yml: `path: site`), so a capture
+// under docs/ is unreachable from the site. Rather than hand-copying — two copies of one picture
+// are two pictures that disagree eventually — ONE run writes both, and
+// scripts/check-site-shots.mjs asserts they stay byte-identical.
+const SITE_OUT = join(ROOT, 'site/assets/shots')
 
 const argv = process.argv.slice(2)
 const flag = (name) => {
@@ -561,6 +566,8 @@ for (const s of SURFACES) {
       continue
     }
     writeFileSync(join(OUT, `${s.id}.png`), buf)
+    mkdirSync(SITE_OUT, { recursive: true })
+    writeFileSync(join(SITE_OUT, `${s.id}.png`), buf)
     captured.push({ id: s.id, title: s.title, bytes: buf.length, hadOpener: !!s.open })
     console.log(`✓ ${s.id}.png  ${(buf.length / 1024).toFixed(0)} KB`)
     // Return to a known state so the next surface does not open on top of this one.

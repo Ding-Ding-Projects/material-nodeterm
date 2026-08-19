@@ -260,13 +260,14 @@ build or the deployed site, never mocked up and never reused from upstream. The 
 (what each shows, the commit, the exact capture method) is in
 [`docs/assets/shots/README.md`](./docs/assets/shots/README.md).
 
-**The `app-*.png` set below is stale and known to be.** It was captured from commit `b5815d21`
-(2026-08-15, recorded in [`docs/assets/shots/capture-manifest.json`](./docs/assets/shots/capture-manifest.json)),
-which predates the Material Design 3 chrome rewrite: the app now uses a 64px top app bar
-(`TopAppBar.tsx` + `ProjectSwitcher.tsx`) and an 88px left nav rail with a FAB
-(`NavRail.tsx` + `FabMenu.tsx`) in place of the project tab strip and bottom dock these images
-show. Treat every caption below mentioning "the bottom dock" or a tab strip as describing the
-previous UI, not the current one, until the set is re-captured.
+The `app-*.png` set was re-captured from commit `8e37e640` (2026-08-19) against the built
+`out/` artifact, so it shows the current Material Design 3 chrome — the 64px top app bar
+([`TopAppBar.tsx`](./src/renderer/components/TopAppBar.tsx) +
+[`ProjectSwitcher.tsx`](./src/renderer/components/ProjectSwitcher.tsx)) and the 88px left nav
+rail with its FAB ([`NavRail.tsx`](./src/renderer/components/NavRail.tsx) +
+[`FabMenu.tsx`](./src/renderer/components/FabMenu.tsx)). Exact commit, method and per-image
+provenance: [`capture-manifest.json`](./docs/assets/shots/capture-manifest.json).
+
 
 <details>
 <summary><strong>The desktop app</strong> — settings, the command palette, and the features this fork adds</summary>
@@ -278,8 +279,11 @@ previous UI, not the current one, until the set is re-captured.
 | ![The Language settings section, offering English, Cantonese and Bilingual modes with two independent funny-level sliders](./docs/assets/shots/app-settings-language.png) | ![The command palette open over the app, listing create actions for terminals and each supported agent](./docs/assets/shots/app-03-palette.png) |
 | **Language** — three modes, and two funny-level sliders that change tone without changing what a message says. | **Command palette** — every command, destination and setting, with a persisted size. |
 
-| ![The nodeterm canvas showing a project with one terminal node, the sessions sidebar listing it, a minimap and the bottom dock](./docs/assets/shots/app-04-canvas.png) | ![The same project shown as a kanban board with Ungrouped, To Do, In Progress and Done columns, the terminal session appearing as a card in Ungrouped](./docs/assets/shots/app-05-kanban.png) |
-| **The canvas** — a project with a live terminal node, sessions sidebar, minimap and dock. | **The same project as a board** — cards *are* the session nodes; Ungrouped holds anything unassigned. |
+| ![The nodeterm canvas showing the 88px nav rail with Canvas selected, the sessions sidebar, the zoom controls and the minimap](./docs/assets/shots/app-04-canvas.png) | ![The same project shown as a kanban board with Ungrouped, To Do, In Progress and Done columns, the terminal session appearing as a card in Ungrouped](./docs/assets/shots/app-05-kanban.png) |
+| **The canvas** — the nav rail, the sessions sidebar, and the minimap; the FAB owns node creation. | **The same project as a board** — cards *are* the session nodes; Ungrouped holds anything unassigned. |
+
+| ![The History screen inset behind the app bar and nav rail, with Session memory, Settings history and Changelog tabs, showing the session-memory panel](./docs/assets/shots/app-06-history.png) | ![The Kids mode settings section](./docs/assets/shots/app-settings-kids-mode.png) |
+| **History** — session memory, local settings history and the changelog viewer, one rail destination. | **Kids mode** — the shared switch, with its disclosure on screen rather than only in the source. |
 
 Also captured: [the appearance editor](./docs/assets/shots/app-settings-appearance-editor.png),
 [app name & logo](./docs/assets/shots/app-settings-app-identity.png),

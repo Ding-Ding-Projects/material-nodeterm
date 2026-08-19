@@ -277,10 +277,24 @@ were **not** captured or driven through a real packaged build as part of this pa
 work was done under is explicitly scoped to skip test runs, linting, static analysis and captures
 ("a deliberate speed pass"). Everything above is stated as implemented and reviewed against the
 existing patterns it reuses (`TerminalNode`, `createAgentNode`, `activeAgentLaunchPlan`,
-`decideCanvasNarration`), not as observed on screen. The existing `docs/assets/shots/
-app-settings-kids-mode.png` capture (Settings section only) predates this work and does not cover
-any of the new screens; a follow-up pass should add real captures of Home, the gate, the grown-up
-screen and the activity canvas the same way that one was produced.
+`decideCanvasNarration`), not as observed on screen.
+
+The Settings section itself IS captured, and re-captured against the Material Design 3 chrome
+on 2026-08-19 (commit `8e37e640`) — this shot is current, not the pre-M3 one this paragraph
+used to describe:
+
+![The Kids mode settings section in the built app: the shared switch, the plain-language
+disclosure that this is a user-experience lock rather than a security boundary, and the stated
+unlock route](./assets/shots/app-settings-kids-mode.png)
+
+That the disclosure is visible ON SCREEN — not merely present in the source — is the reason
+this surface is a required capture at all: the mode's defensibility rests on a person having
+been shown it.
+
+What remains uncaptured is the rest: Home, the parent gate, the grown-up screen and the
+activity canvas have no shots, and a follow-up pass should add them the same way this one is
+produced (`npm run shots -- --launch`, as required surfaces so an unreachable one fails the
+run).
 
 ## Still outstanding
 

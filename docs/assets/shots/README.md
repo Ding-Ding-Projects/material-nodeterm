@@ -21,6 +21,11 @@ Every image in this directory is a **real screen capture** — not a mockup, not
 hand-edited image, and not reused from anywhere upstream. There are two sets:
 
 - `site-*.png` — the live, deployed documentation/landing site.
+  Not yet captured: the **Screenshots** room (`site/app/features/screenshots.js`), added
+  2026-08-19. It is the room that publishes the `app-*.png` set to the site, and the `site-*.png`
+  set is taken by hand against the DEPLOYED site rather than by a script — so its capture is owed
+  on the next deploy, and is recorded as missing here rather than taken from localhost and
+  presented as the live site.
 - `app-*.png` — the **desktop Electron app**, captured from a real running build.
 
 The desktop set was blocked for most of this work and is no longer; the section

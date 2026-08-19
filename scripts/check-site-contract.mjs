@@ -140,6 +140,20 @@ const indexText = readText(INDEX_FILE) || ''
 
 const FEATURES = [
   {
+    // The site is a tour of a desktop app, and until this room existed it showed no picture of
+    // that app: the captures lived only under docs/, which Pages never serves. Listed here so a
+    // gallery that silently stops rendering fails the inventory rather than going quietly.
+    id: 'app-screenshots',
+    label: 'Screenshots of the real built app',
+    file: 'site/app/features/screenshots.js',
+    exportName: 'registerScreenshots',
+    contentChecks: [
+      ['site/app/features/screenshots.js', 'makeMatcher'],
+      ['site/app/shared/data.js', "id: 'shots'"],
+      ['site/styles.css', '.shot-grid'],
+    ],
+  },
+  {
     id: 'language-modes-funny-emoji',
     label: 'Language modes, funny levels, emoji toggle',
     file: 'site/app/features/language-settings.js',

@@ -10,6 +10,27 @@ process, driving it over the Chrome DevTools Protocol (the same method `scripts/
 and `scripts/capture-shots.mjs` already use), and reading the results back — screenshots, computed
 styles, `document.fonts`, and raw sampled pixels. No claim below is inferred from source alone.
 
+## What it looks like
+
+A document about whether pixels render should show the pixels. These are the real captures —
+the same files `npm run shots -- --launch` writes, taken from the built `out/` artifact over CDP
+at commit `8e37e640`, never a mockup and never a crop of the prototypes in `design/`.
+
+| | |
+| --- | --- |
+| ![The nodeterm app at launch: a 64px top app bar carrying the brand mark, project switcher and docked search, an 88px left nav rail with its FAB, and the empty canvas with its dot grid](./assets/shots/app-01-launch.png) | ![The canvas with the sessions sidebar open, zoom and lock controls bottom-left and the minimap bottom-right](./assets/shots/app-04-canvas.png) |
+| **At launch** — app bar and nav rail are the whole chrome; the project tab strip and bottom dock are gone. | **The canvas** — the FAB owns node creation, and Canvas is a rail destination rather than a default. |
+| ![The History screen inset behind the app bar and nav rail, with Session memory, Settings history and Changelog tabs](./assets/shots/app-06-history.png) | ![The Language settings section showing the English/Cantonese/Bilingual segmented button and two funny-level sliders](./assets/shots/app-settings-language.png) |
+| **History** — inset at 88px left and 64px top, so the rail stays the way out. | **Language** — the segmented button here is the one that exposed the dead primitive sheet (below). |
+
+The Language capture earned its place: for one build it showed three **white boxes** where the
+segmented button should be. That was not a styling slip in the component — it was the entire
+`ui/md3/primitives.css` failing to reach the bundle (`mdx-seg` appeared **0** times in every built
+CSS file), because `ui/SegmentedPill.tsx` deep-imports `./md3/SegmentedButton` and bypasses the
+barrel that imports the stylesheet. A green build, a green typecheck and 8,551 green tests all
+missed it. One screenshot did not. Guarded now by
+`src/renderer/ui/md3/primitives-wired.test.ts`.
+
 ## What was fixed as part of this pass
 
 Two harness defects were found and fixed in the same commit as this document, both against the
