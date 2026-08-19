@@ -313,6 +313,7 @@ import { newEntryPath, parentDir } from '../lib/explorerCreate'
 import { useProjects } from '../state/projects'
 import { useAgentStatus } from '../state/agentStatus'
 import { useToyLocks } from '../state/toylocks'
+import { useSessionRelock } from '../state/useSessionRelock'
 import { LockWizard } from '../components/toylocks/LockWizard'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import {
@@ -900,6 +901,10 @@ export function Canvas() {
   // This canvas's core api (a context read — stable for the session, no store subscription).
   // For the local session it IS window.nodeTerminal, so every call resolves identically.
   const { api, source: sessionSource } = useSession()
+  // 'session'-duration toy-lock re-lock-on-tab-leave (docs/toy-locks.md). Mounted exactly once
+  // here rather than in TabBar — it is a session-lifecycle rule, not tab-bar UI, and must keep
+  // working regardless of which component renders the project switcher.
+  useSessionRelock()
   const profileText = useLocalizedVocabularyText()
   const terminalProfiles = useTerminalProfiles((state) => state.profiles)
   const terminalProfilesError = useTerminalProfiles((state) => state.error)

@@ -118,7 +118,8 @@ describe('every CSS variable resolves', () => {
     '--cmascot-w',
     '--cmascot-h',
     '--cmascot-sheet-w',
-    '--cmascot-sheet-h' // notch HUD sprite sheets
+    '--cmascot-sheet-h', // notch HUD sprite sheets
+    '--nt-rainbow-duration' // App.tsx, from the user's rainbow-speed setting
   ])
 
   it('references no variable that is never defined', () => {
@@ -223,6 +224,7 @@ describe('Material 3 token foundation', () => {
     '--md-surface-dim',
     '--md-surface-container-low',
     '--md-surface',
+    '--md-surface-container',
     '--md-surface-container-high',
     '--md-surface-container-highest',
     '--md-on-surface',
