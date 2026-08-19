@@ -23,6 +23,7 @@ import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
+import type { MinecraftEvent } from '../shared/minecraft'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -66,6 +67,7 @@ const subscribeOllamaPullSummary = subscribe<[Pick<PullQueueState, 'running' | '
 const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
+const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
@@ -824,6 +826,18 @@ const api: NodeTerminalApi = {
     chatSend: (id, text) => ipcRenderer.invoke(IPC.ollamaChatSend, id, text),
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
+  },
+  minecraft: {
+    versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
+    status: (id) => ipcRenderer.invoke(IPC.minecraftStatus, id),
+    create: (input) => ipcRenderer.invoke(IPC.minecraftCreate, input),
+    acceptEula: (id) => ipcRenderer.invoke(IPC.minecraftAcceptEula, id),
+    start: (id) => ipcRenderer.invoke(IPC.minecraftStart, id),
+    stop: (id) => ipcRenderer.invoke(IPC.minecraftStop, id),
+    sendCommand: (id, command) => ipcRenderer.invoke(IPC.minecraftSendCommand, id, command),
+    remove: (id, deleteFiles) => ipcRenderer.invoke(IPC.minecraftRemove, id, deleteFiles),
+    recentConsole: (id) => ipcRenderer.invoke(IPC.minecraftRecentConsole, id),
+    onEvent: (listener) => subscribeMinecraftEvent(listener)
   }
 }
 

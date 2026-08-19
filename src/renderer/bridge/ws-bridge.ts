@@ -17,6 +17,7 @@ import { IPC } from '../../shared/ipc'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
+import type { MinecraftApi } from '../../shared/minecraft'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -851,6 +852,26 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
+ *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
+ *  main does. */
+export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'minecraft'> {
+  const minecraft: MinecraftApi = {
+    versions: () => client.request(IPC.minecraftVersions) as ReturnType<MinecraftApi['versions']>,
+    status: (id) => client.request(IPC.minecraftStatus, id) as ReturnType<MinecraftApi['status']>,
+    create: (input) => client.request(IPC.minecraftCreate, input) as ReturnType<MinecraftApi['create']>,
+    acceptEula: (id) => client.request(IPC.minecraftAcceptEula, id) as ReturnType<MinecraftApi['acceptEula']>,
+    start: (id) => client.request(IPC.minecraftStart, id) as ReturnType<MinecraftApi['start']>,
+    stop: (id) => client.request(IPC.minecraftStop, id) as ReturnType<MinecraftApi['stop']>,
+    sendCommand: (id, command) => client.request(IPC.minecraftSendCommand, id, command) as Promise<boolean>,
+    remove: (id, deleteFiles) => client.request(IPC.minecraftRemove, id, deleteFiles) as Promise<void>,
+    recentConsole: (id) =>
+      client.request(IPC.minecraftRecentConsole, id) as ReturnType<MinecraftApi['recentConsole']>,
+    onEvent: (listener) => client.subscribe(IPC.minecraftEvent, listener as Listener)
+  }
+  return { minecraft }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1168,6 +1189,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
+    ...buildMinecraftApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
