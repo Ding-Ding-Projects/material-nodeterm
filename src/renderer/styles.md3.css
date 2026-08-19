@@ -8973,3 +8973,152 @@
   z-index: 27;
   background: var(--md-surface);
 }
+
+/* ---- ADHD modes ----
+   Five independent accommodations, all off by default. App.tsx publishes the properties below on
+   <html> and removes them when a mode is off, so nothing here applies unless somebody asked.
+
+   FOCUS DIMS, IT NEVER HIDES. `--nt-adhd-dim` is capped in lib/adhdModes.ts so an unfocused node
+   stays visible and clickable at every setting — an interface that makes work disappear is a worse
+   problem than a busy one, especially for the person this is for. Nothing here sets
+   `display: none`, `visibility: hidden` or `pointer-events: none`. */
+.react-flow__node.adhd-dimmed {
+  opacity: var(--nt-adhd-dim, 1);
+  transition: opacity calc(220ms * var(--nt-adhd-motion-scale, 1)) ease;
+}
+/* Hovering an unfocused node brings it back fully: reaching for something must never require
+   turning the mode off first. */
+.react-flow__node.adhd-dimmed:hover,
+.react-flow__node.adhd-dimmed:focus-within {
+  opacity: 1;
+}
+
+/* LOW STIMULATION only ever REMOVES motion. `--nt-adhd-motion-scale` is a multiplier rather than a
+   switch, so it composes with the platform preference instead of fighting it: a person who already
+   asked their OS for less motion has asked once and must not have to ask again. */
+:root[data-adhd-quiet="on"] {
+  --md-motion-spatial: 1ms linear;
+  --md-motion-effect: 1ms linear;
+}
+:root[data-adhd-quiet="on"] *,
+:root[data-adhd-quiet="on"] *::before,
+:root[data-adhd-quiet="on"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
+/* Quieter colour, not a different palette: the accent still reads as the accent, and every
+   contrast floor the theme tests enforce is untouched because only saturation moves. */
+:root[data-adhd-quiet="on"] .react-flow__node,
+:root[data-adhd-quiet="on"] .md3-nav-rail,
+:root[data-adhd-quiet="on"] .md3-app-bar {
+  filter: saturate(var(--nt-adhd-chroma, 1));
+}
+
+/* TIME AWARENESS — an elapsed-time chip on the node itself, because a clock in a menu does not
+   help time blindness. Factual and unstyled by state: it never turns red or urgent. */
+.adhd-elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ONE THING — a single pinned next action, in the person's own words. */
+.adhd-one-thing {
+  position: absolute;
+  top: calc(var(--app-bar-h) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, calc(100vw - var(--nav-rail-w) - 48px));
+  padding: 8px 16px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 13px;
+}
+.adhd-one-thing__label {
+  opacity: 0.75;
+  white-space: nowrap;
+}
+.adhd-one-thing__text {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* MOMENTUM — a dismissible note stating elapsed time and nothing else. Deliberately NOT styled as
+   a warning: it is not an error, and colouring it like one would make a neutral fact feel like a
+   reprimand. */
+.adhd-momentum {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+.adhd-momentum__dismiss {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--md-primary);
+  font: inherit;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--md-shape-xs);
+}
+.adhd-momentum__dismiss:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* The ADHD section's own range and number inputs. Authored CSS rather than a Tailwind arbitrary
+   value (`accent-[var(--accent)]`, the idiom used by the funny-level sliders): styles.theme.test.ts
+   parses AUTHORED declarations, so a colour expressed as a Tailwind arbitrary value is invisible to
+   the "every surface is themed" sweep — which is exactly how the one un-themed colour in this
+   codebase survived. Left unstyled these render with the browser's default blue thumb, which is the
+   one colour in the app that belongs to no theme at all. */
+.adhd-range {
+  width: 160px;
+  accent-color: var(--md-primary);
+}
+.adhd-number {
+  width: 88px;
+  padding: 6px 10px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+  font: inherit;
+  accent-color: var(--md-primary);
+}
+.adhd-text {
+  width: min(340px, 48vw);
+  padding: 8px 12px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+  font: inherit;
+}
+.adhd-range:focus-visible,
+.adhd-number:focus-visible,
+.adhd-text:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}

@@ -28,6 +28,7 @@ import { AppearanceStyleInjector } from './components/appearance/AppearanceStyle
 import { AppearanceEditorHost } from './components/appearance/AppearanceEditor'
 import { resolveAppDisplayName } from '../shared/appIdentity'
 import { applyAccentTokens } from './lib/accentTokens'
+import { adhdCssVars, anyAdhdModeOn, normalizeAdhdModes } from './lib/adhdModes'
 
 export default function App() {
   // Apply the terminal-rendering setting to the two GPU coordinators, live. 'auto' is
@@ -69,6 +70,31 @@ export default function App() {
       `${rainbowDurationSeconds(rainbowSpeed)}s`
     )
   }, [rainbowSpeed])
+
+  // ADHD modes publish their CSS custom properties on <html>, the same way the accent and the
+  // rainbow duration do, so every stylesheet reads one source rather than each surface deriving
+  // its own. `data-adhd` is the hook a rule needs when a property cannot express the change.
+  //
+  // Properties are REMOVED when a mode is off rather than set to a neutral value: an authored
+  // stylesheet's own value should win when nothing is overriding it, which is the same reason
+  // applyAccentTokens deletes its properties at the default accent.
+  const adhdModes = useSettings((s) => s.settings.adhdModes)
+  useEffect(() => {
+    const modes = normalizeAdhdModes(adhdModes)
+    const root = document.documentElement
+    const vars = adhdCssVars(modes)
+    for (const name of ['--nt-adhd-motion-scale', '--nt-adhd-chroma', '--nt-adhd-dim']) {
+      const value = vars[name]
+      if (value === undefined) root.style.removeProperty(name)
+      else root.style.setProperty(name, value)
+    }
+    if (anyAdhdModeOn(modes)) root.dataset.adhd = 'on'
+    else delete root.dataset.adhd
+    root.dataset.adhdFocus = modes.focus ? 'on' : ''
+    if (!modes.focus) delete root.dataset.adhdFocus
+    root.dataset.adhdQuiet = modes.lowStimulation ? 'on' : ''
+    if (!modes.lowStimulation) delete root.dataset.adhdQuiet
+  }, [adhdModes])
 
   // Publish the resolved appearance as `data-theme` on <html> — what the light palette in
   // styles.css keys off. Absent, or 'dark', leaves every token at its original value, so this one

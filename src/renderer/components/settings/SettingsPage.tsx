@@ -15,6 +15,7 @@ import { NotchSection } from './sections/NotchSection'
 import { PhoneSection } from './sections/PhoneSection'
 import { SpeechSection } from './sections/SpeechSection'
 import { ScheduleSection } from './sections/ScheduleSection'
+import { AdhdModesSection } from './sections/AdhdModesSection'
 import { ShortcutsSection } from './sections/ShortcutsSection'
 import { AgentsSection } from './sections/AgentsSection'
 import { UsageSection } from './sections/UsageSection'
@@ -163,6 +164,7 @@ export function SettingsPage({
             <SpeechSection isActive={active === 'speech'} />
             {languageFeaturesAllowed && <LanguageSection isActive={active === 'language'} />}
             <ScheduleSection isActive={active === 'schedule'} />
+            <AdhdModesSection isActive={active === 'adhd-modes'} />
             <ShortcutsSection isActive={active === 'shortcuts'} />
             <AgentsSection isActive={active === 'agents'} />
             <UsageSection isActive={active === 'usage'} />

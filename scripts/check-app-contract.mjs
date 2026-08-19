@@ -747,6 +747,38 @@ const FEATURES = [
     docs: ['docs/minecraft-server-manager.md'],
   },
   {
+    id: 'adhd-modes',
+    label: 'ADHD modes',
+    docs: ['docs/adhd-modes.md'],
+    files: [
+      'src/renderer/lib/adhdModes.ts',
+      'src/renderer/lib/adhdModes.test.ts',
+      'src/renderer/components/settings/sections/AdhdModesSection.tsx'
+    ],
+    contentChecks: [
+      // Five INDEPENDENT modes. A master switch would defeat the whole design, so each one is
+      // named here: losing any single field is a red row rather than a quietly smaller feature.
+      ['src/renderer/lib/adhdModes.ts', /focus:\s*false/],
+      ['src/renderer/lib/adhdModes.ts', /lowStimulation:\s*false/],
+      ['src/renderer/lib/adhdModes.ts', /timeAwareness:\s*false/],
+      ['src/renderer/lib/adhdModes.ts', /oneThing:\s*false/],
+      ['src/renderer/lib/adhdModes.ts', /momentum:\s*false/],
+      // FOCUS DIMS, IT NEVER HIDES — the cap is that rule as a number.
+      ['src/renderer/lib/adhdModes.ts', 'export const FOCUS_DIM_MAX'],
+      // Low stimulation must never silence a notification that costs real work to miss.
+      ['src/renderer/lib/adhdModes.ts', 'export function allowsNotification'],
+      // Hand-editable settings.json reaches a CSS opacity and a timer comparison.
+      ['src/renderer/lib/adhdModes.ts', 'export function normalizeAdhdModes'],
+      // The section must actually be registered and rendered, not merely written.
+      ['src/renderer/components/settings/nav.ts', "id: 'adhd-modes'"],
+      ['src/renderer/components/settings/SettingsPage.tsx', /^\s*<AdhdModesSection isActive=/m],
+      // Published on <html> by App, or none of the CSS applies.
+      ['src/renderer/App.tsx', /^\s*const modes = normalizeAdhdModes\(adhdModes\)/m],
+      // Not medical, said on the surface rather than only in the docs.
+      ['src/renderer/components/settings/sections/AdhdModesSection.tsx', 'not a diagnosis']
+    ]
+  },
+  {
     // Kids mode. The needles carry delimiters for the usual reason, and the BOTH-SHELLS rows are
     // the important ones: this repo has shipped a one-shell core change three times, and the
     // boundary tests cannot tell you a feature is missing from the other shell — only that what

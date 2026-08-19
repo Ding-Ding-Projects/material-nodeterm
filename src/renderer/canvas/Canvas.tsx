@@ -100,6 +100,7 @@ import {
 import { withNodeBoundary } from '../components/NodeBoundary'
 import { NavRail, type RailDestination } from '../components/NavRail'
 import { enterKidsModeFromRail } from '../components/kids/entry'
+import { focusTargetId as adhdFocusTarget, normalizeAdhdModes } from '../lib/adhdModes'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { type MenuItem } from '../components/ContextMenu'
@@ -1847,10 +1848,36 @@ export function Canvas() {
 
   // Merge the persisted nodes with the ephemeral ones once per change (not per render),
   // so React Flow's array-identity short-circuit holds while panning/zooming.
-  const allNodes = useMemo(
-    () => (ephemeralNodes.length ? [...nodes, ...ephemeralNodes] : nodes),
-    [nodes, ephemeralNodes]
-  )
+  // ADHD focus mode marks every node that is NOT the focus target, and the stylesheet fades it.
+  // Marked rather than filtered on purpose: focus dims and never hides, so the node stays in the
+  // graph, stays clickable, and comes back to full opacity on hover. Off, `dimmedId` is null and
+  // this maps to exactly the array it was given.
+  const adhdModes = normalizeAdhdModes(settings.adhdModes)
+  const adhdFocusId = adhdModes.focus
+    ? adhdFocusTarget(
+        nodes.filter((n) => n.selected).map((n) => n.id),
+        null
+      )
+    : null
+  const allNodes = useMemo(() => {
+    const base = ephemeralNodes.length ? [...nodes, ...ephemeralNodes] : nodes
+    if (!adhdFocusId) return base
+    // `as typeof n` keeps each element's own type: `base` is a union of canvas nodes and the
+    // ephemeral subagent/loop nodes, and a bare object literal here widens it until <ReactFlow>
+    // no longer accepts it.
+    return base.map((n) =>
+      n.id === adhdFocusId
+        ? n
+        : ({
+            ...n,
+            // React Flow puts a node's `className` on its own `.react-flow__node` wrapper, which
+            // is the element the fade has to apply to — the component inside cannot reach it.
+            // Appended rather than replaced: nodes carry their own classes.
+            className: n.className ? `${n.className} adhd-dimmed` : 'adhd-dimmed',
+            data: { ...n.data, adhdDimmed: true }
+          } as typeof n)
+    )
+  }, [nodes, ephemeralNodes, adhdFocusId])
 
   // Context-link edges, statically styled (no per-message activity in the pull model).
   const accent = settings.accent
@@ -12716,6 +12743,16 @@ export function Canvas() {
             <span className={`md3-canvas-actions__dirty${dirty ? ' dirty' : ''}`} />
           </button>
         </div>
+        {/* ADHD 'one thing at a time': the person's own next action, kept visible so it survives a
+            context switch. Written by them and never inferred — a guess here would be the app
+            deciding what matters, which is exactly the judgement this feature must not make.
+            `data-canvas-chrome` is the documented opt-out so fit-view ignores it. */}
+        {adhdModes.oneThing && adhdModes.oneThingText.trim() ? (
+          <div className="adhd-one-thing" data-canvas-chrome role="status">
+            <span className="adhd-one-thing__label">Right now:</span>
+            <span className="adhd-one-thing__text">{adhdModes.oneThingText}</span>
+          </div>
+        ) : null}
         <CanvasPills>
           {/* `travelToNode`, not `focusNodeById`: the panel resolves sessions in CLOSED projects
               too (their tmux sessions keep running), and reaching one means reopening its tab

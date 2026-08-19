@@ -140,6 +140,23 @@ const indexText = readText(INDEX_FILE) || ''
 
 const FEATURES = [
   {
+    // Every user-facing app AND every user-facing page carries the accommodations — a docs site
+    // that describes one while not offering it is the exact gap that rule closes.
+    id: 'adhd-modes',
+    label: 'ADHD modes',
+    file: 'site/app/features/adhd-modes.js',
+    exportName: 'registerAdhdModes',
+    contentChecks: [
+      // Five independent switches, never a master toggle.
+      ['site/app/features/adhd-modes.js', 'adhd-toggle-'],
+      // Focus dims and never hides — asserted on the stylesheet, where it would actually break.
+      ['site/styles.css', 'data-adhd-focus'],
+      ['site/styles.css', 'data-adhd-quiet'],
+      // Not medical, said on the surface rather than only in the docs.
+      ['site/app/features/adhd-modes.js', 'Not a diagnosis'],
+    ],
+  },
+  {
     // The site is a tour of a desktop app, and until this room existed it showed no picture of
     // that app: the captures lived only under docs/, which Pages never serves. Listed here so a
     // gallery that silently stops rendering fails the inventory rather than going quietly.

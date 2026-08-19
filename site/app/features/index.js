@@ -27,6 +27,7 @@ import { registerConverter } from './converter.js'
 import { registerPlayroom } from './playroom.js'
 import { registerPairDevice } from './pair-device.js'
 import { registerScreenshots } from './screenshots.js'
+import { registerAdhdModes } from './adhd-modes.js'
 
 // Order matters only for the Settings room's card order and mirrors the
 // imported design's own settings-card order.
@@ -51,6 +52,7 @@ const FEATURE_REGISTRARS = [
   registerPlayroom,
   registerPairDevice,
   registerScreenshots,
+  registerAdhdModes,
 ]
 
 export function registerFeatures({ store, deps, registerAction, registerBinding }) {

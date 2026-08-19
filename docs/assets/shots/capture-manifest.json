@@ -1,6 +1,6 @@
 {
-  "commit": "d7bab426c577dc51c09ec9ae4dc320b3932e7260",
-  "capturedAt": "2026-08-19T06:39:59.111Z",
+  "commit": "f16535e9bd9117c8f82ff6c6e3d53843eee7c42d",
+  "capturedAt": "2026-08-19T07:14:20.773Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -17,7 +17,7 @@
     {
       "id": "app-02-settings",
       "title": "Settings",
-      "bytes": 112449,
+      "bytes": 112656,
       "hadOpener": true
     },
     {
@@ -41,7 +41,7 @@
     {
       "id": "app-settings-kids-mode",
       "title": "Settings — Kids mode",
-      "bytes": 103465,
+      "bytes": 103665,
       "hadOpener": true
     },
     {
@@ -53,37 +53,43 @@
     {
       "id": "app-settings-language",
       "title": "Settings — Language",
-      "bytes": 75996,
+      "bytes": 76226,
       "hadOpener": true
     },
     {
       "id": "app-settings-narrator",
       "title": "Settings — Narrator",
-      "bytes": 84897,
+      "bytes": 85133,
       "hadOpener": true
     },
     {
       "id": "app-settings-schedule",
       "title": "Settings — Schedule",
-      "bytes": 72703,
+      "bytes": 72903,
       "hadOpener": true
     },
     {
       "id": "app-settings-app-identity",
       "title": "Settings — App name & logo",
-      "bytes": 82305,
+      "bytes": 82542,
       "hadOpener": true
     },
     {
       "id": "app-settings-appearance-editor",
       "title": "Settings — Appearance editor",
-      "bytes": 87013,
+      "bytes": 87221,
+      "hadOpener": true
+    },
+    {
+      "id": "app-adhd-modes",
+      "title": "Settings — ADHD modes",
+      "bytes": 84388,
       "hadOpener": true
     },
     {
       "id": "app-kids-home",
       "title": "Kids mode — Home",
-      "bytes": 75716,
+      "bytes": 75781,
       "hadOpener": true
     },
     {

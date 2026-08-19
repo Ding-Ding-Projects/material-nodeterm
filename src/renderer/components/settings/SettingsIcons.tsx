@@ -43,6 +43,14 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
     </>
   ),
   // A keycap — the obvious glyph for configurable keyboard shortcuts.
+  // A spotlight: one circle brought forward, the surrounds still drawn rather than removed —
+  // the glyph says what Focus mode does, and what it deliberately does not do.
+  'adhd-modes': (
+    <>
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6" />
+    </>
+  ),
   shortcuts: (
     <>
       <rect x="2.2" y="4" width="11.6" height="8" rx="1.8" />

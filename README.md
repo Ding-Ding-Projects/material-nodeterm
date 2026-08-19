@@ -69,6 +69,8 @@ surface cannot be reached. Provenance for each is in
 | **History** — session memory, local settings history and the changelog viewer. | **Settings** — every surface carries its own search, wired to the full regex builder. |
 | ![The Language settings section: an English, Cantonese and Bilingual segmented button and two independent funny-level sliders](./docs/assets/shots/app-settings-language.png) | ![The Narrator settings section: a master toggle off by default, a narrated-language choice, and a separate voice picker per language](./docs/assets/shots/app-settings-narrator.png) |
 | **Language** — three modes, and two sliders that change tone without changing the facts. | **Narrator** — off by default, with a live line saying which voice will actually speak. |
+| ![The ADHD modes settings section: five independent switches — Focus, Low stimulation, Time awareness, One thing at a time and Momentum — each with a plain description, and a note that they are not a diagnosis, assessment or advice](./docs/assets/shots/app-adhd-modes.png) | |
+| **ADHD modes** — five accommodations, switched on independently, all off by default. | |
 
 Kids mode ships its own screens, captured the same way:
 
@@ -151,6 +153,24 @@ optional AI-generated message from a local agent CLI you already have), push/syn
 **Worktrees bind to group frames**: create one from the panel or the command palette and every
 node opened inside that frame runs in that worktree, so an agent per branch is just a group per
 branch.
+
+### ADHD modes
+
+This README has always said nodeterm is built for scattered workflows. These are the part you
+can actually switch on — five accommodations, independently, all off by default:
+**Focus** (fades everything but the node you are in), **Low stimulation** (less motion, quieter
+colour, and only the notifications that need an answer), **Time awareness** (elapsed time on the
+node, not in a menu), **One thing at a time** (one next action, in your words), and **Momentum**
+(a note when something has sat untouched).
+
+Independent on purpose: someone may want a quieter interface without time nudges, or want the
+nudges precisely because they are hyperfocusing. Behind one master switch, most people turn the
+lot off to escape the single part that does not suit them.
+
+Focus **dims and never hides** — nothing becomes unreachable, at any setting. The copy states
+facts and never verdicts: no streaks, no scores, no congratulation. And none of it is presented
+as medical: these are interface accommodations, not assessment or advice, and nothing is
+recorded or sent anywhere. See [`docs/adhd-modes.md`](./docs/adhd-modes.md).
 
 ### Dictation
 
@@ -294,6 +314,7 @@ package-manager `PATH` refresh race): [`docs/building.md`](./docs/building.md).
 | [`CLAUDE.md`](./CLAUDE.md) | The deep architecture reference: process boundaries, every subsystem's invariants and the reasoning behind them. |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Setup, the process-boundary rules, and the house rules a PR gets sent back for. |
 | [`AGENTS.md`](./AGENTS.md) | Guidance for coding agents working in this repository. |
+| [`docs/adhd-modes.md`](./docs/adhd-modes.md) | The five ADHD modes: what each does, why they are independent, and the rules the copy follows. |
 | [`CHANGELOG.md`](./CHANGELOG.md) | What actually shipped, release by release. |
 
 ## Screenshots

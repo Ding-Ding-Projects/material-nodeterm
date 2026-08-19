@@ -234,6 +234,16 @@ const SURFACES = [
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Appearance editor'] },
       verify: '[class*="settings"]'
     },
+    {
+      // The README has always described this app as built for scattered workflows; until these
+      // modes existed it shipped nothing a person could switch on. Required so the settings
+      // surface cannot quietly regress into an unreachable one.
+      id: 'app-adhd-modes',
+      required: true,
+      title: 'Settings — ADHD modes',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'ADHD modes'] },
+      verify: '[class*="settings"]'
+    },
     // ── The Kids screens ────────────────────────────────────────────────────────────────────────
     // These had no captures because they had no way in: `components/kids/entry.ts` has always
     // documented the rail's Kids destination as the caller of `enterKidsModeFromRail()`, but the

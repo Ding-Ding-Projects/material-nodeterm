@@ -1288,8 +1288,46 @@ export interface DockerHostSettings {
   workdir: '/workspace'
 }
 
+/**
+ * ADHD modes — five independent interface accommodations, all off by default.
+ *
+ * Independent on purpose: someone may want a quieter interface without time nudges, or want the
+ * nudges precisely because they are hyperfocusing. One master switch means most people turn the
+ * whole thing off to escape the single part that does not suit them.
+ *
+ * Named for what each one DOES, not for who it is for, so a person can use one without disclosing
+ * anything to a colleague reading over their shoulder. These are interface accommodations, never
+ * medical: no diagnosis, no assessment, no advice, no claim of clinical benefit.
+ *
+ * Logic lives in `renderer/lib/adhdModes.ts`; every field here is re-validated on read because
+ * settings.json is hand-editable and these values reach CSS properties and timer comparisons.
+ */
+export interface AdhdModes {
+  /** Spotlight the focused node and fade the rest. Dims — never hides. */
+  focus: boolean
+  /** Less motion, quieter colour, and only notifications that genuinely need a person. */
+  lowStimulation: boolean
+  /** Show elapsed time where the work is, because time blindness is not helped by a clock in a menu. */
+  timeAwareness: boolean
+  /** One visible, user-chosen next action that survives a context switch. */
+  oneThing: boolean
+  /** A dismissible, factual note when something has sat untouched. Never a verdict. */
+  momentum: boolean
+  /** How much to fade unfocused nodes, 0.1–0.8. Capped so an unfocused node stays visible. */
+  focusDim: number
+  /** Minutes untouched before the momentum note appears, 5–240. */
+  momentumMinutes: number
+  /** The person's own next action, in their words. Bounded to 200 characters. */
+  oneThingText: string
+  /** "Not now", respected until this timestamp rather than until the next render. */
+  snoozeUntilMs: number | null
+}
+
+
 /** User-configurable application settings (settings.json). */
 export interface Settings {
+  /** ADHD modes — five independent accommodations, all off by default. See `AdhdModes`. */
+  adhdModes: AdhdModes
   dockerHost: DockerHostSettings
   fontSize: number
   fontFamily: string
@@ -1655,6 +1693,17 @@ export interface Settings {
 export const DEFAULT_ACCENT = '#6750a4'
 
 export const DEFAULT_SETTINGS: Settings = {
+  adhdModes: {
+    focus: false,
+    lowStimulation: false,
+    timeAwareness: false,
+    oneThing: false,
+    momentum: false,
+    focusDim: 0.55,
+    momentumMinutes: 20,
+    oneThingText: '',
+    snoozeUntilMs: null
+  },
   dockerHost: {
     context: '',
     image: 'node:24-bookworm-slim',

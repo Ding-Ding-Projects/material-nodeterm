@@ -78,6 +78,11 @@ export const COLLAPSED_HEIGHT = 40
 
 /** User data carried in the React Flow node's data field. */
 export interface NodeData {
+  /** Set by ADHD focus mode on every node that is NOT the focus target; the stylesheet fades it.
+   *  Marked rather than filtered, because focus DIMS and never hides — the node stays in the graph,
+   *  stays clickable, and returns to full opacity on hover. Transient: derived on every render from
+   *  the live selection and never written by `flowToNodeStates`, so it cannot reach project.json. */
+  adhdDimmed?: boolean
   title: string
   /**
    * Agent nodes only: while true (the default for agent nodes), the title auto-tracks the

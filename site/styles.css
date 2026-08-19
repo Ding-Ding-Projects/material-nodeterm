@@ -863,3 +863,35 @@ textarea.mono-area {
 .shot-card__title { font-size: 1em; }
 .shot-card__note { color: var(--ink2); font-size: 0.9em; }
 .shot-empty { color: var(--ink2); }
+
+/* ---- ADHD modes ----
+   Focus DIMS, it never hides: nothing below sets display:none, visibility:hidden or
+   pointer-events:none, and hovering or focusing brings a faded region straight back. A page that
+   makes content disappear is a worse problem than a busy one. */
+:root[data-adhd-focus="on"] .room-main__aside,
+:root[data-adhd-focus="on"] .rail,
+:root[data-adhd-focus="on"] .home-hero__art {
+  opacity: 0.45;
+  transition: opacity 200ms ease;
+}
+:root[data-adhd-focus="on"] .room-main__aside:hover,
+:root[data-adhd-focus="on"] .rail:hover,
+:root[data-adhd-focus="on"] .room-main__aside:focus-within,
+:root[data-adhd-focus="on"] .rail:focus-within {
+  opacity: 1;
+}
+
+/* Low stimulation only ever REMOVES motion, so it composes with a reduced-motion preference the
+   visitor already set instead of overriding it. */
+:root[data-adhd-quiet="on"] *,
+:root[data-adhd-quiet="on"] *::before,
+:root[data-adhd-quiet="on"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
+/* Quieter colour, not a different palette: only saturation moves, so every contrast pairing the
+   page already meets is untouched. */
+:root[data-adhd-quiet="on"] body {
+  filter: saturate(0.55);
+}
