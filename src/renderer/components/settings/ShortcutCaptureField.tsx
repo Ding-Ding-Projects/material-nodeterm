@@ -123,7 +123,7 @@ export function ShortcutCaptureField({
       ) : null}
       <button
         type="button"
-        className="min-w-[140px] cursor-pointer rounded-md border border-border bg-panel-header px-3 py-1.5 text-[13px] font-medium text-text outline-none hover:bg-[rgba(255,255,255,0.06)]"
+        className="md3-shortcut-field"
         onClick={startCapturing}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
