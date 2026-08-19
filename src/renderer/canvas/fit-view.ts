@@ -16,14 +16,17 @@
  *  being added here. */
 export const CANVAS_CHROME_SELECTOR = [
   '[data-canvas-chrome]',
-  '.dock',
   '.minimap',
   '.react-flow__controls',
   // The bottom-left pill cluster (usage + system resources) opts in via `data-canvas-chrome` on its
   // wrapper, so the two pills are ONE obstacle rect instead of two overlapping inflated ones. The
   // wrapper's border box is exactly their union (they are its only, in-flow, children), and an
   // empty cluster measures 0 and is dropped by the size filter below.
-  '.controls-cluster',
+  // `.dock` and `.controls-cluster` are gone (Material 3 nav shell — the FAB/rail and the app-bar
+  // icon cluster replaced them). The nav rail itself is deliberately NOT listed here: it is a real
+  // flex sibling of `.flow-wrap` now, so the wrapper's own measured rect already excludes the
+  // rail's screen region — adding `.md3-nav-rail` as an obstacle too would double-count it and
+  // shrink every fit-view by its width for nothing.
   '.sessions-sidebar',
   '.sessions-icon-cluster',
   '.top-banners',

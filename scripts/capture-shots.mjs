@@ -68,7 +68,7 @@ const SURFACES = [
     required: true,
     title: 'App at launch',
     open: null,
-    verify: '.tabbar',
+    verify: '.md3-app-bar',
     // The tab bar is present underneath the kanban overlay too, so without this a re-run that
     // started with the board open photographed the BOARD under this name. Observed, not feared.
     verifyAbsent: '[class*="kanban"]'
