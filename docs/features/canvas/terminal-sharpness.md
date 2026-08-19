@@ -244,3 +244,39 @@ app: Chromium's compositor filter may differ in detail from canvas 2D's, and it 
 xterm's atlas, the WebGL upload path, or subpixel antialiasing. It settles *how much the optics
 change*; it does not replace looking once at a real screen. But "is the improvement visible or
 marginal" is no longer the open question — a 24–64% coverage gain is not marginal.
+
+## The `shared` default would NOT fix the zoom-out blur — measured, and this retracts the suggestion
+
+An earlier section of this document proposed that closing the minification case was a one-line
+default change: `resolveTerminalRenderer` resolving `auto` to `shared`, on the reasoning that
+`glyphgrid/atlas.ts` carries a mip chain and xterm's per-terminal WebGL does not.
+
+**That reasoning is wrong, and the measurement says so plainly.** Same raster, built at dpr 1.5,
+minified two ways — one direct bilinear step (what a renderer with no mip chain does) against
+repeated halving to the nearest level then a final step (what trilinear sampling off a mip pyramid
+approximates):
+
+| zoom | ratio | direct | mip-chained | levels used | gain |
+| --- | --- | --- | --- | --- | --- |
+| 0.83 | 0.83 | 0.4520 | 0.4520 | **0** | **0%** |
+| 0.6 | 0.60 | 0.4059 | 0.4059 | 0 | 0% |
+| 0.5 | 0.50 | 0.3755 | 0.3755 | 1 | 0% |
+| 0.35 | 0.35 | 0.1153 | 0.1154 | 1 | 0.1% |
+| 0.25 | 0.25 | 0.0137 | 0.0137 | 1 | 0% |
+
+The reason is elementary once measured: **a mip chain does nothing above a 0.5 ratio**, because no
+level below 0 exists to sample. At zoom 0.83 — the case the −44% figure came from — **zero** mip
+levels engage. The pyramid only begins to matter past 2:1 minification, and even at 0.25 it buys
+nothing here, because the glyphs have already collapsed.
+
+So `shared` is not the fix for zoom-out, and switching the default on that reasoning would have
+been a change that shipped, measured nothing, and left the original complaint intact. Its genuine
+advantages are elsewhere and unaffected by this: PHASE immunity via its own camera snapping, and
+the recorded 17% ink advantage at zoom 1.
+
+**What would actually address it**, for whoever takes it on: the loss at zoom < 1 is that a
+dpr-density raster is being *minified*, and the only thing that recovers detail is having built it
+denser — supersampling. `RASTER_SCALE_MIN_FACTOR = 1` currently forbids exactly that, for two
+stated reasons (a rebuild during zoom-in, and the mip chain being "already built for it"). The
+second reason is now disproven. The first still stands and is a real cost. That trade is a genuine
+design decision, not an oversight — and it is the open question here, not the renderer default.
