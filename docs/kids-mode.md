@@ -128,6 +128,160 @@ Both shells are asserted by the `kids-mode` row in `scripts/check-app-contract.m
 repo has shipped a one-shell core change three times and the boundary tests cannot tell you a
 feature is *missing* from the other shell.
 
+## The screens (Home / Gate / Grown-up)
+
+Before 2026-08-19 this document described the record, the policy, and the settings section — but
+there was no Kids-facing UI at all: `<Canvas/>` rendered unconditionally regardless of the shared
+record, so turning Kids mode on changed launch-time flags and the destructive gate without ever
+changing what was on screen. `src/renderer/components/kids/` is that UI, matching
+`design/v2/MD3 Kids Mode.dc.html`'s three screens (Home, the parent gate, the grown-up screen) plus
+one screen the design does not draw (the kid-scoped activity canvas a tile opens into).
+
+### Routing is fail-closed, at the App root
+
+`App.tsx` no longer renders `<Canvas/>` unconditionally. It reads `useKidsMode()`'s `hydrated` and
+`enabled` and picks exactly one of three things: a neutral splash while `hydrated` is still false
+(so the very first frame of a cold start never flashes the full developer canvas — dock, tab bar,
+every project — to a child before the one IPC round trip to read the shared record has answered),
+`<KidsShell/>` once hydrated and on, or `<Canvas/>` once hydrated and off. `<Canvas/>` is not
+merely hidden while Kids mode is on — it is not mounted at all.
+
+### Four tiles are real; two are an honest placeholder
+
+The design lists six tiles. Only four map to something this app actually has:
+
+| Tile | Backing | Notes |
+| --- | --- | --- |
+| Talk to Beep | a real Claude agent node (`createAgentNode`) | permission mode comes from the SAME production funnel every other agent launch uses (`ensureActiveAgentLaunchPlan('canvas-new-agent', 'claude')`), so it is narrowed to `manual`/`plan` by `gateKidsPermissionMode` automatically — nothing kids-specific was added to the launch path |
+| Type things | a real plain terminal node (`createTerminalNode`) | gated by the grown-up screen's "Allow the real terminal" switch |
+| Draw | a real `StickyNode`, not the canvas's line/arrow `AnnotationNode` | see below |
+| My stickers | a real counter (`state/kidsActivity.ts`), not a hand-set number | |
+| Story time | **placeholder** | no read-aloud story library exists anywhere in this codebase |
+| Sounds | **placeholder** | no sound-matching feature exists anywhere in this codebase |
+
+The two placeholders render as visibly disabled tiles carrying a "Soon" badge and a `title`
+explaining why, rather than as buttons that look interactive and silently do nothing — the
+decorative-UI rule's own escape hatch ("intentionally illustrative, plainly labelled") is what
+licenses shipping them at all instead of hiding the tiles outright.
+
+**Why "Draw" is a `StickyNode` and not an `AnnotationNode`:** the brief explicitly allows either.
+An `AnnotationNode` (a line/arrow) is created by dragging a rectangle on the developer canvas's own
+pane — `Canvas.tsx`'s pointer-drag lifecycle, a file this lane does not own and should not fork a
+copy of. This app has no freehand drawing/painting feature at all; a sticky note a kid can write
+and colour on is the closest real, working stand-in, not a from-scratch canvas feature invented
+for this lane. It is genuinely functional (a real `StickyNode`, same component the developer canvas
+renders), just not literally "drawing".
+
+### The kid-scoped canvas
+
+`KidsActivityCanvas.tsx` is a second, independent `<ReactFlow>` instance (its own
+`<ReactFlowProvider>`), never the developer canvas from `canvas/Canvas.tsx`. It renders the SAME
+node components the developer canvas does — `TerminalNode`/`StickyNode`, imported unmodified —
+because the terminal genuinely is the product (see `KIDS_DISCLOSURE`); there is no separate
+"kid-safe" terminal implementation to fork and maintain. Three fixed node ids
+(`kids-beep-node`/`kids-terminal-node`/`kids-draw-node`) mean "Type things" always reattaches the
+same tmux/session-host session rather than cold-starting a fresh one on every visit — the same
+persistence contract every other terminal node in this app already has. A small quick-switch strip
+in the activity header lets a kid hop between the three without a round trip through Home; each is
+created lazily on first visit and kept for the lifetime of that "away from Home" session.
+
+**Known gap:** these three nodes are NOT part of any project's `project.json` and do not persist
+across a full app restart the way ordinary project nodes do — they are recreated (with the same
+fixed ids, so the underlying tmux/session-host session still reattaches once one exists) the first
+time each tile is revisited after a restart. Giving them real project-scoped persistence would mean
+Kids mode owning a slice of the workspace/projects store, which is out of this lane's file
+ownership; a follow-up that wants persisted kid canvases should look there first.
+
+### Stickers are earned, not decorative
+
+A sticker is awarded once per "away from Home" session (i.e. once when the kid taps "Back to Beep"
+in the activity canvas, not once per activity visited), and only if at least
+`stickerThresholdMs()` (20s) of real time was spent — long enough that trying something briefly
+still counts, short enough that opening and immediately leaving does not farm stickers. "Sessions
+today" on the grown-up screen counts activity **navigations** logged in `state/kidsActivity.ts`,
+never keystrokes: counting what was typed inside a REAL terminal — the very thing the "Allow the
+real terminal" switch exists to gate — is a keylogger shape, and this whole mode's defensibility
+rests on `KIDS_DISCLOSURE` being literally true. This is why "Words typed" from the design mock is
+gone rather than implemented.
+
+### The grown-up screen's switches, and their exact scope
+
+Every switch is wired to something real; two of the five reach further than "just this screen",
+and the copy next to each one says so rather than looking narrower than it is:
+
+| Switch | What it actually does |
+| --- | --- |
+| Allow the real terminal | `state/kidsActivity.ts`'s `allowRealTerminal` — gates the "Type things" tile only |
+| Allow Beep to answer freely | writes `settings.claudePermissionMode` directly (`'plan'` on / `'manual'` off) — the SAME app-wide setting Settings → Agents exposes, so while Kids mode is on this affects every agent on the machine, not only Beep. `activePermissionMode()` still applies `gateKidsPermissionMode` on top, so it can never widen past `manual`/`plan` regardless |
+| Read every screen aloud | `settings.narratorEnabled` — the same app-wide narrator Settings → Speech controls; every Kids screen calls `narrateKidsScreen()` on entry through the existing `decideCanvasNarration` policy, so School mode's Cantonese suppression still applies |
+| Daily time limit | `state/kidsActivity.ts`'s `dailyLimitMinutes` (on = 60, matching the design mock's own stat card; off = `null`). A real 60-second ticker in `KidsShell` accumulates minutes while a kid-facing screen is showing (never while the gate/parent screens are up) and routes to a PIN-only "times up" screen — the same `KidsGate` component in its `variant="timesUp"` mode, which drops the casual "Back to Beep" escape — the moment the limit is reached |
+| Lock kids mode on launch | `state/kidsActivity.ts`'s `lockOnLaunch`, read ONCE at `KidsShell` mount to decide the starting screen (`gate` vs `home`) — a mid-session flip never yanks the current screen out from under a kid |
+
+The scoping caveat on "Allow Beep to answer freely" is a deliberate trade, not an oversight: giving
+it a Kids-only override would mean either mutating the active project's `defaultPermissionMode`
+(there usually isn't a meaningful "active project" once the whole canvas is replaced by Kids mode)
+or building a new override layer in `permissionMode.ts`/`kids-mode-policy.ts`, neither of which is
+this lane's file to touch. The honest, working choice was to use the real setting and say so.
+
+### PIN entry: the grown-up gate and the rail's first-time setup
+
+`components/kids/PinPad.tsx` is a 4-digit numeric keypad matching the design's `gateKeys`/
+`gateDots` layout (84px keys, r28, 4 dots, `⌫` in `tertiary-container`) — used both by `KidsGate`
+(verifying) and by `EnableKidsModeDialog` (choosing a new one, with a second pad to confirm).
+**Kids-mode PINs are fixed at exactly 4 digits**, enforced at every place THIS app lets a grown-up
+CHOOSE one — `KidsModeSection.tsx`'s Settings fields (`onlyDigits4`) and the rail dialog — but
+deliberately NOT enforced on a field that only VERIFIES an existing PIN (Settings' "Turn off"
+unlock field, the "Current" field in "Change the grown-up PIN"), since that value may have been set
+by another app sharing `~/.nodeterm/shared/`, or an older nodeterm build, and could be any shape. A
+pad with only digit keys can never type a letter, so this is what keeps every PIN this app itself
+creates enterable on the pad that later has to check it.
+
+`window.nodeTerminal.kidsMode.verifyPin(pin)` is new IPC (`src/core/kids-mode.ts`,
+`IPC.kidsModeVerifyPin`) — a read-only check with the SAME "no credential → true" honesty
+`disable()` already has (a mode with no PIN ever set cannot lock anyone out of the screen that
+administers it), never mutating the record, so the grown-up screen is reachable without leaving
+Kids mode at all (unlike Settings' "Turn off", which always disables). It is **optional** on the
+shared `KidsModeApi` type: the desktop preload implements it for real, but `src/renderer/bridge/
+ws-bridge.ts` (the Server Edition's browser bridge) predates it and was not touched by this lane —
+touching it was outside this lane's file ownership, and a one-line RPC addition there is a safe,
+low-risk follow-up for whichever pass next owns that file. Until then, `verifyKidsModePin()` in
+`bridge/stubs.ts` fails CLOSED (never open) when the method is absent, so the grown-up screen is
+simply unreachable on the Server Edition rather than silently insecure. `KidsShell`/`KidsGate`/
+`EnableKidsModeDialog` all reach the core store's `enable()`/`disable()` unchanged, so entering,
+turning it on and turning it fully off already work on every surface `window.nodeTerminal.kidsMode`
+does; only the read-only PEEK is desktop-only for now.
+
+### The rail's entry point
+
+`components/kids/entry.ts` exports `enterKidsModeFromRail()` — the "clean entry point" the nav
+rail's `child_care` destination (owned by a different lane, and not yet built in this checkout)
+calls instead of toggling a local view. It is not a view a child could navigate back out of: it
+calls the real `enable()` action, and once the shared record's `enabled` flips to `true`, App.tsx's
+own fail-closed routing swaps the canvas out on its own. If no grown-up PIN exists anywhere on this
+machine yet, it opens `EnableKidsModeDialogHost` (mounted once, always, at the App root) instead of
+enabling immediately, so a first-time user is never asked to remember a PIN they never chose.
+
+### Surfaces (screens specifically, updates the table above)
+
+| Surface | Screens |
+| --- | --- |
+| Desktop | full — Home/Gate/Grown-up/activity canvas, all real |
+| Server Edition | Home/activity canvas work (same renderer, real `TerminalNode`/`StickyNode`, real IPC via the ws-bridge's existing `kidsMode` object); the grown-up gate cannot verify a PIN yet (`verifyPin` not wired into `ws-bridge.ts` — see above), so it is reachable in principle but always fails closed until that follow-up lands |
+| Pages site | not applicable — no agents, no shell, unchanged from the rest of this document |
+| Mobile companion | not applicable — a Kids canvas node is a real terminal/agent node like any other, so it is reachable over the existing transport once created on desktop/server, but there is no Kids-specific mobile screen (follow-up in `nodeterm-ios`, same as every other mobile note in this document) |
+
+### Not verified against a running build
+
+Unlike the rest of this document's "Verified against a running build" section, the screens above
+were **not** captured or driven through a real packaged build as part of this pass — the task this
+work was done under is explicitly scoped to skip test runs, linting, static analysis and captures
+("a deliberate speed pass"). Everything above is stated as implemented and reviewed against the
+existing patterns it reuses (`TerminalNode`, `createAgentNode`, `activeAgentLaunchPlan`,
+`decideCanvasNarration`), not as observed on screen. The existing `docs/assets/shots/
+app-settings-kids-mode.png` capture (Settings section only) predates this work and does not cover
+any of the new screens; a follow-up pass should add real captures of Home, the gate, the grown-up
+screen and the activity canvas the same way that one was produced.
+
 ## Still outstanding
 
 - **A real agent CLI observed starting with the narrowed flag.** Everything up to the command
@@ -142,6 +296,14 @@ feature is *missing* from the other shell.
   below; those paths are now covered by behaviour tests and mutation probes. That review is not a
   substitute for observing whether the disclosure and confirmations are understood on real
   hardware, so this product-level validation remains outstanding.
+- **`verifyPin` is desktop-only.** The Server Edition's `ws-bridge.ts` `kidsMode` object was not
+  extended in the pass that added the screens (see "The screens" above) — it is a small, low-risk
+  follow-up, not a design gap.
+- **Story time and Sounds are placeholders**, and **kid-canvas nodes do not persist across a full
+  app restart** the way project nodes do. Both are explained, with the reasoning, in "The screens"
+  above rather than left as a silent gap.
+- **The new screens were not captured or driven through a running build** — see "Not verified
+  against a running build" above.
 - **Remote account removal is not proven end-to-end here.** The renderer authorization is covered,
   but a disconnected or ambiguous SSH-backed account cannot presently provide authoritative
   deletion evidence, and the browser edition exposes account management as unsupported. The current
