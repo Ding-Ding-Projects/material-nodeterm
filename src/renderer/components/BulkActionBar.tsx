@@ -65,6 +65,11 @@ export function BulkActionBar<T>({
   }
 
   const confirmAction = async (): Promise<void> => {
+    // Re-entry guard. `running` is the real one: `pending` stays set for the whole run, but a
+    // second Enter/click while the first await is in flight would otherwise call run() again
+    // over the same items — a duplicated irreversible action, which is the exact failure the
+    // disabled-control rule exists to prevent.
+    if (running) return
     if (!pending) return
     const action = pending
     setRunning(true)
@@ -85,6 +90,12 @@ export function BulkActionBar<T>({
       setPending(null)
     }
   }
+
+  // The rows an action would actually touch: selection minus its own exclusions. Computed here
+  // so the preview and confirmAction read one definition instead of two that can diverge.
+  const previewExcluded = pending?.excluded?.(selectedItems) ?? []
+  const previewExcludedIds = new Set(previewExcluded.map((e) => idOf(e.item)))
+  const previewRunnable = selectedItems.filter((i) => !previewExcludedIds.has(idOf(i)))
 
   return (
     <div className="bulk-bar" role="toolbar" aria-label="Bulk actions">
@@ -129,10 +140,16 @@ export function BulkActionBar<T>({
           })}
         </div>
       )}
+      {/* Derived from the same excluded() predicate confirmAction runs, so what the dialog
+          promises and what the action actually touches cannot drift apart. */}
       {pending && (
         <BulkActionPreview
           title={pending.label}
-          items={selectedItems}
+          // The RUNNABLE set, not the whole selection: the preview adds excluded.length back on
+          // to state the total, so passing everything counted each excluded row twice —
+          // 3 selected with 1 excluded rendered "3 of 4 selected will change", one more of
+          // each than exists, and listed the excluded row among the ones that WILL change.
+          items={previewRunnable}
           describe={pending.describe}
           excluded={pending.excluded?.(selectedItems) ?? []}
           destructive={!!pending.destructive}

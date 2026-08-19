@@ -10,6 +10,11 @@ interface ConfirmDialogProps {
   /** Optional content rendered ABOVE the message (e.g. the remote-access ConsentNotice), so the
    *  human reads what they are granting before the SAS body + buttons. */
   body?: ReactNode
+  /** The confirm action is in flight. Disables the confirm button AND makes Enter inert, so a
+   *  second submit cannot re-run an irreversible action. A relabel alone is not enough: a
+   *  disabled button is the visible guard, never the real one — a keyboard submit walks past
+   *  it, which is exactly how a bulk run could be fired twice over the same rows. */
+  busy?: boolean
   confirmLabel?: string
   cancelLabel?: string
   danger?: boolean
@@ -40,6 +45,7 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({
   message,
   body,
+  busy = false,
   confirmLabel,
   cancelLabel,
   danger: dangerProp,
@@ -106,12 +112,12 @@ export function ConfirmDialog({
       })
       if (!action) return
       e.preventDefault()
-      if (action === 'confirm') onConfirm()
+      if (action === 'confirm' && !busy) onConfirm()
       else onCancel()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [id, enterConfirms, onConfirm, onCancel])
+  }, [id, enterConfirms, onConfirm, onCancel, busy])
 
   return createPortal(
     <div className="confirm-overlay" onClick={onCancel}>
@@ -148,6 +154,7 @@ export function ConfirmDialog({
             className={`confirm__btn${danger ? ' danger' : ' primary'}`}
             autoFocus={!danger}
             onClick={onConfirm}
+            disabled={busy}
           >
             {confirmText}
           </button>
