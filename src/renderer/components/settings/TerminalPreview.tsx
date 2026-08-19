@@ -53,7 +53,7 @@ export function TerminalPreview(): React.JSX.Element {
   const visual = useXtermVisualSettings('base')
 
   useEffect(() => {
-    const s = useSettings.getState().base
+    const s = useSettings.getState().settings
     const term = new Terminal({
       ...xtermOptionsFromSettings(s),
       cols: PREVIEW_COLS,

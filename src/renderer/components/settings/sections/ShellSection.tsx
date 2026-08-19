@@ -249,11 +249,11 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
     setPreparingRefresh(true)
     setPreparationError(null)
     try {
-      // Settings writes are intentionally coalesced while typing. Persist the current base before
-      // refreshing so the trusted desktop detector checks this exact custom path rather than the
-      // previous on-disk value.
-      await window.nodeTerminal.settings.save(useSettings.getState().base)
-      await refresh()
+      // Detection receives the effective active-project value directly. Persisting `base` here
+      // bypassed project scope, ignored sparse overrides, and could make a project-local shell look
+      // global. The detector uses this bounded value for this refresh only; settings persistence
+      // remains owned by useSettings.update().
+      await refresh(useSettings.getState().settings.defaultShell)
       if (
         customRevision.current === revisionBeingChecked &&
         !useTerminalProfiles.getState().error

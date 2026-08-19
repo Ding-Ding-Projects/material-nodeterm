@@ -455,12 +455,17 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
     }
   }
 
-  async refresh(): Promise<WindowsTerminalProfileDescriptor[]> {
+  async refresh(customExecutableOverride?: unknown): Promise<WindowsTerminalProfileDescriptor[]> {
+    const hasCustomExecutableOverride = arguments.length > 0
     const refreshed = this.detectAll()
     this.cachedDetection = refreshed
     try {
       const snapshot = await refreshed
-      return this.withCurrentCustomProfile(snapshot.profiles)
+      return this.withCurrentCustomProfile(
+        snapshot.profiles,
+        hasCustomExecutableOverride,
+        customExecutableOverride
+      )
     } catch (error) {
       if (this.cachedDetection === refreshed) this.cachedDetection = null
       throw error
@@ -639,7 +644,9 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
   }
 
   private async withCurrentCustomProfile(
-    detected: readonly WindowsTerminalProfileDescriptor[]
+    detected: readonly WindowsTerminalProfileDescriptor[],
+    hasConfiguredOverride = false,
+    configuredOverride?: unknown
   ): Promise<WindowsTerminalProfileDescriptor[]> {
     if (this.runtime.platform !== 'win32') {
       return [
@@ -655,7 +662,7 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
 
     let configured: unknown
     try {
-      configured = this.getCustomExecutable()
+      configured = hasConfiguredOverride ? configuredOverride : this.getCustomExecutable()
     } catch {
       return [
         ...detected.map((profile) => ({ ...profile })),

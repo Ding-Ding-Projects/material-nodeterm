@@ -260,10 +260,17 @@ const FEATURES = [
       ],
     },
     persistence: {
-      files: ['src/core/settings-store.ts', 'src/shared/node-exec.ts'],
+      files: [
+        'src/core/settings-store.ts',
+        'src/shared/node-exec.ts',
+        'src/renderer/state/settings.ts',
+        'src/renderer/components/settings/sections/ShellSection.tsx',
+      ],
       contentChecks: [
         ['src/core/settings-store.ts', 'defaultTerminalProfileId'],
         ['src/shared/node-exec.ts', /^\s*terminalProfileId\?: string\s*$/m],
+        ['src/renderer/state/settings.ts', /^\s*update\(patch\)\s*\{/m],
+        ['src/renderer/components/settings/sections/ShellSection.tsx', /await refresh\(useSettings\.getState\(\)\.settings\.defaultShell\)/],
       ],
       tests: [
         ['src/core/settings-store.test.ts', /^\s*describe\((['"])legacy defaultShell migration to Windows terminal profiles\1,\s*\(\)\s*=>\s*\{/m],

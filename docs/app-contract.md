@@ -168,6 +168,10 @@ columns are pending: packaged-app interaction and real cheap-headless captures. 
 persistence, documentation, localized copy, and focused source/unit behaviour can be green without
 upgrading those unperformed release gates into claimed evidence.
 
+Its persistence inventory now also names the shared renderer Settings store and the project-aware
+Shell refresh call. This prevents a future direct `settings.save(base)` shortcut from satisfying
+the row merely because global settings and node-profile persistence still exist elsewhere.
+
 ## The other half: proving controls DO something (`check-app-wired.mjs`)
 
 Everything above is a source scan. It proves a feature's file exists, exports what it should, and

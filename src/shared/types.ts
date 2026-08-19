@@ -837,7 +837,7 @@ export interface WindowsTerminalProfile {
 /** Optional desktop capability for detecting the Windows terminal profiles on this machine. */
 export interface TerminalProfilesApi {
   list(): Promise<WindowsTerminalProfile[]>
-  refresh(): Promise<WindowsTerminalProfile[]>
+  refresh(customExecutable?: string): Promise<WindowsTerminalProfile[]>
 }
 
 export interface PtyApi {

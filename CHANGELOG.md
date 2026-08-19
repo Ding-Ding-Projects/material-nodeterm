@@ -7,6 +7,8 @@
   onto the same token set. The default accent colour also changes for every existing install —
   see "Changed" below.
 - Add Global mode and complete per-project Settings overlays through the shared settings surface.
+- Make Windows shell-profile refresh and terminal preview use effective active-project Settings
+  without saving sparse project values into global defaults.
 - Replace the paid remote-host prompt with a free Docker-hosted relay flow while retaining
   end-to-end encryption and mutual pairing approval.
 - Run hosted relay terminals inside bounded, least-privileged, task-owned Docker containers with

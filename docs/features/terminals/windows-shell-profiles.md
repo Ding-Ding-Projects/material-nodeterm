@@ -29,6 +29,12 @@ Settings → Shell lists the catalog, shows why an unavailable profile cannot be
 refresh detection after a shell or WSL distribution is installed or removed. The custom profile
 keeps an executable picker/text field for advanced setups.
 
+Detection refresh evaluates the effective active-project custom executable without persisting it
+as a global default. The renderer sends one bounded control-character-free string for that
+read-only refresh; the trusted desktop service uses it only while deriving the public availability
+row. It is never stored by the refresh path and never becomes launch arguments. Global and sparse
+project persistence remains owned by the shared Settings store.
+
 An explicit profile never silently changes identity. If PowerShell 7, Git Bash, or a selected WSL
 distribution later disappears, an existing node reports that profile as unavailable and offers a
 profile choice; it does not open cmd, another distribution, or the automatic profile instead.
@@ -87,9 +93,11 @@ replaces the shell and therefore cannot preserve the process that shell owns.
 
 ## Trust boundary
 
-Executable paths and launch arguments are private to the trusted desktop core. The renderer sends
-only `profileId`, and core validates and resolves that id again at the point of use. A malformed,
-unknown, unavailable, or hand-edited id fails closed.
+Executable launch paths and launch arguments are private to the trusted desktop core. The renderer
+sends only `profileId` for launch, and core validates and resolves that id again at the point of
+use. For read-only detection refresh only, the renderer may send the bounded effective custom
+executable setting described above; it is validated again, used only for availability, and never
+stored or executed by that call. A malformed, unknown, unavailable, or hand-edited id fails closed.
 
 `terminalProfileId`, the legacy custom `shell`, and advanced SSH execution fields live in the
 machine-local `LocalNodeExec` overlay. They are stripped from `.nodeterm/project.json`, portable

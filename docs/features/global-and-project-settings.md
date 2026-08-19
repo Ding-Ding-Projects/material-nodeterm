@@ -27,6 +27,13 @@ protected stores and are not project-setting exports.
 An unreadable workspace index never treats shared project JSON as a fallback settings source.
 Resetting an overlay is local and does not alter global defaults.
 
+Shell-profile detection is project-aware without becoming a persistence side door. Refresh passes
+the effective active-project `defaultShell` value to the bounded desktop detector for that one
+read-only probe. It does not write the project value into global `settings.json`; ordinary edits
+continue through the shared `useSettings.update()` scope resolver. Terminal preview reads the same
+effective settings layer. A source sweep found no other production call that directly saves
+`useSettings.getState().base` from a Settings section.
+
 ## Verification
 
 This ultra-speed lane did not run tests, type-checking, lint, runtime interaction, accessibility

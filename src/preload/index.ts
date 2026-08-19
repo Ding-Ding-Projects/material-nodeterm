@@ -199,7 +199,8 @@ const api: NodeTerminalApi = {
     ? {
         terminalProfiles: {
           list: () => ipcRenderer.invoke(IPC.terminalProfilesList),
-          refresh: () => ipcRenderer.invoke(IPC.terminalProfilesRefresh)
+          refresh: (customExecutable?: string) =>
+            ipcRenderer.invoke(IPC.terminalProfilesRefresh, customExecutable)
         }
       }
     : {}),

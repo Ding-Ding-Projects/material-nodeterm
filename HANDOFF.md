@@ -1,5 +1,16 @@
 # Handoff
 
+## Project-aware shell detection persistence repair
+
+`ShellSection.refreshDetection` no longer writes `useSettings.getState().base` directly before
+refreshing Windows terminal profiles. It passes the bounded effective active-project custom
+executable to a read-only detector path instead, so sparse `defaultShell` and
+`defaultTerminalProfileId` overrides remain project-owned and global `settings.json` is untouched.
+`TerminalPreview` now reads effective Settings as well. The production Settings-source sweep found
+no second direct `settings.save(base)` bypass. Build/package evidence belongs to the commit reported
+for this section; no tests, lint, type checking, runtime interaction, installer execution, or
+screenshots were performed in the ultra-speed lane.
+
 ## 2026-08-19 runtime, project history, deployment and device-access pass
 
 Three milestones were implemented and pushed to `main` during this session:

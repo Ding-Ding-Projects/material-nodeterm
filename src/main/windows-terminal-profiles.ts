@@ -4,7 +4,7 @@ import type { WindowsTerminalProfile } from '../shared/types'
 /** The two safe catalog operations exposed by the trusted core service. Launch plans stay private. */
 export interface DesktopTerminalProfileCatalog {
   list(): WindowsTerminalProfile[] | Promise<WindowsTerminalProfile[]>
-  refresh(): WindowsTerminalProfile[] | Promise<WindowsTerminalProfile[]>
+  refresh(customExecutable?: string): WindowsTerminalProfile[] | Promise<WindowsTerminalProfile[]>
 }
 
 /** Narrow Electron seam so registration and cleanup are behavior-testable without booting Electron. */
@@ -52,7 +52,17 @@ export function registerWindowsTerminalProfileIpc(
   try {
     ipcMain.handle(IPC.terminalProfilesList, () => publicProfiles(() => catalog.list()))
     installed.push(IPC.terminalProfilesList)
-    ipcMain.handle(IPC.terminalProfilesRefresh, () => publicProfiles(() => catalog.refresh()))
+    ipcMain.handle(IPC.terminalProfilesRefresh, (_event: unknown, customExecutable?: unknown) => {
+      if (
+        customExecutable !== undefined &&
+        (typeof customExecutable !== 'string' ||
+          customExecutable.length > 4096 ||
+          /[\u0000-\u001f\u007f]/.test(customExecutable))
+      ) {
+        throw new Error('The custom executable used for profile detection is invalid.')
+      }
+      return publicProfiles(() => catalog.refresh(customExecutable))
+    })
     installed.push(IPC.terminalProfilesRefresh)
   } catch (error) {
     for (const channel of installed) ipcMain.removeHandler(channel)
