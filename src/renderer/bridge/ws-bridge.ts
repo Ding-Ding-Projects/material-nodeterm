@@ -1074,9 +1074,14 @@ export function showReconnectOverlay(): void {
   const el = document.createElement('div')
   el.id = OVERLAY_ID
   el.setAttribute('data-nt-reconnect', '')
+  // M3 tokens with literal fallbacks: this can mount before the app's own stylesheet has
+  // painted (an initial-connect failure races React's first render), so the fallback is what
+  // actually renders in that split second and the var() takes over once styles.css is live —
+  // which is also what keeps this overlay in step with the app's own light/dark switch instead
+  // of a fixed dark-only wash.
   el.style.cssText =
     'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;' +
-    'justify-content:center;background:rgba(0,0,0,0.72);color:#fff;' +
+    'justify-content:center;background:var(--md-scrim,rgba(0,0,0,0.6));color:var(--md-on-surface,#E6E0E9);' +
     'font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;padding:24px'
   el.textContent = 'Connection lost — reconnecting…'
   document.body.appendChild(el)
