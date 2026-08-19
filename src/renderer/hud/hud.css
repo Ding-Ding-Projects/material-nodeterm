@@ -19,7 +19,33 @@
   --capsule-radius: 16px; /* bottom-corner radius of the fused capsule */
   --panel-width: 400px; /* expanded panel width */
   --panel-max-h: 420px; /* expanded panel max content height (rows scroll past it) */
-  --capsule-bg: #000; /* opaque black — fuses with the physical notch (no seam) */
+  /* theme-exempt: fuses with the physical notch, which is black hardware regardless of the
+     system appearance — an M3 surface token here would put a visible seam at the notch edge. */
+  --capsule-bg: #000;
+
+  /* --- M3 dark-token subset (design/v2/md3/tokens.css), inlined -----------------------------
+     This document has no <html data-theme> to key off (it renders standalone, before any app
+     chrome exists), and there is nothing here that WOULD go light: the capsule above is fused
+     to the physical notch and is always black, so every row painted on it needs the DARK
+     on-* roles for contrast, in both system appearances. --md-tertiary departs from the v2
+     baseline's stock seed-pink on purpose: it carries --agent-working's exact coral
+     (src/renderer/styles.css) so the HUD's generic "working" dot reads as the identical hue
+     a user sees glowing on the canvas node for that same live agent, not an unrelated pink. */
+  --md-primary: #D0BCFF;
+  --md-on-primary: #381E72;
+  --md-primary-container: #4F378B;
+  --md-on-primary-container: #EADDFF;
+  --md-tertiary: #d97757;
+  --md-error: #F2B8B5;
+  --md-on-error: #601410;
+  --md-success: #89D88C;
+  --md-surface-container: #211F26;
+  --md-surface-container-low: #1D1B20;
+  --md-on-surface: #E6E0E9;
+  --md-on-surface-variant: #CAC4D0;
+  /* Alpha-composited stops (dither separator) need an RGB triple, not a hex string. */
+  --md-outline-variant-rgb: 73, 69, 79; /* #49454F */
+  --md-scrim: rgba(0, 0, 0, 0.6);
   --capsule-ease: cubic-bezier(0.22, 1, 0.36, 1); /* spring-ish grow */
   --capsule-dur: 0.22s;
   /* Notchless fallback (no physical notch): a standalone floating pill. */
@@ -73,7 +99,10 @@ body {
   background: var(--capsule-bg);
   /* Both bottom corners round — the notch simply reads as a wider notch. */
   border-radius: 0 0 var(--capsule-radius) var(--capsule-radius);
-  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.55);
+  /* Elevation is a drop-shadow, not a box-shadow — this app's M3 pass keeps box-shadow for
+     React Flow's handle ring alone; every other surface (this one included) reads its lift
+     off a filter so the shape can stay a plain flat fill underneath. */
+  filter: drop-shadow(0 8px 20px var(--md-scrim));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -211,7 +240,7 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: rgb(217, 120, 87);
+  background: var(--md-tertiary);
   animation: hud-pulse 1.1s ease-in-out infinite;
 }
 @keyframes hud-pulse {
@@ -242,8 +271,8 @@ body {
 /* Fallback when the pixel sprite couldn't be built (no DOM canvas): a plain round green blob. */
 .done-blob--fallback {
   border-radius: 50%;
-  background: #30d158;
-  box-shadow: 0 0 6px 1px rgba(48, 209, 88, 0.7);
+  background: var(--md-success);
+  filter: drop-shadow(0 0 4px var(--md-success));
 }
 @keyframes hud-shimmer {
   0%,
@@ -265,7 +294,7 @@ body {
   padding: 4px 10px 10px;
   padding-top: calc(var(--bar) + 4px);
   font-family: var(--hud-mono);
-  color: #f2f2f7;
+  color: var(--md-on-surface);
   display: none;
   opacity: 0;
   transition: opacity 0.16s ease 0.06s;
@@ -291,7 +320,7 @@ body {
   transition: padding-right 0.12s ease;
 }
 .hud-row:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--md-surface-container-low);
   /* Make room for the dismiss × instead of letting it sit on top of the tag. */
   padding-right: 26px;
 }
@@ -308,8 +337,8 @@ body {
   justify-content: center;
   font-size: 13px;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container);
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -320,8 +349,8 @@ body {
   opacity: 1;
 }
 .hud-row__close:hover {
-  color: #fff;
-  background: rgba(255, 69, 58, 0.75);
+  color: var(--md-on-error);
+  background: var(--md-error);
 }
 .hud-row__icon {
   grid-row: 1 / span 2;
@@ -349,16 +378,16 @@ body {
   opacity: 0.9;
 }
 .hud-row__tag--working {
-  color: #0a84ff;
+  color: var(--md-primary);
 }
 .hud-row__tag--needsYou {
-  color: #ff453a;
+  color: var(--md-error);
 }
 .hud-row__tag--done {
-  color: #30d158;
+  color: var(--md-success);
 }
 .hud-row__tag--idle {
-  color: #8e8e93;
+  color: var(--md-on-surface-variant);
 }
 .hud-row__sub {
   /* Column 2 ONLY: spanning into column 3 ran the `You: …` line UNDER the Go button. */
@@ -367,13 +396,13 @@ body {
   min-width: 0;
   font-family: var(--hud-mono);
   font-size: 11px;
-  color: #98989d;
+  color: var(--md-on-surface-variant);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .hud-row__sub b {
-  color: #c7c7cc;
+  color: var(--md-on-surface);
   font-weight: 600;
 }
 
@@ -384,8 +413,8 @@ body {
   margin: 3px 4px;
   opacity: 0.6;
   background-image:
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0 2px, transparent 2px 6px),
-    repeating-linear-gradient(90deg, transparent 0 4px, rgba(255, 255, 255, 0.08) 4px 6px);
+    repeating-linear-gradient(90deg, rgba(var(--md-outline-variant-rgb), 0.14) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(90deg, transparent 0 4px, rgba(var(--md-outline-variant-rgb), 0.08) 4px 6px);
   background-position:
     0 0,
     3px 0;
@@ -401,7 +430,7 @@ body {
   font-family: var(--hud-mono);
   font-size: 10px;
   font-weight: 600;
-  color: #0a84ff;
+  color: var(--md-primary);
   padding-left: 20px;
   cursor: pointer;
 }
@@ -416,7 +445,7 @@ body {
   gap: 6px;
   font-family: var(--hud-mono);
   font-size: 10.5px;
-  color: #c7c7cc;
+  color: var(--md-on-surface-variant);
   padding: 1px 0 1px 20px;
 }
 .hud-subs__dot {
@@ -426,10 +455,10 @@ body {
   flex-shrink: 0;
 }
 .hud-subs__dot--working {
-  background: #0a84ff;
+  background: var(--md-primary);
 }
 .hud-subs__dot--done {
-  background: #30d158;
+  background: var(--md-success);
 }
 
 .hud-row__go {
@@ -439,19 +468,20 @@ body {
   font-family: var(--hud-mono);
   font-size: 10px;
   font-weight: 600;
-  color: #0a84ff;
-  background: rgba(10, 132, 255, 0.15);
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
   border-radius: 6px;
   padding: 2px 8px;
   border: none;
   cursor: pointer;
 }
 .hud-row__go:hover {
-  background: rgba(10, 132, 255, 0.28);
+  color: var(--md-on-primary);
+  background: var(--md-primary);
 }
 
 .check {
-  color: #30d158;
+  color: var(--md-success);
   font-size: 15px;
   line-height: 1;
 }
@@ -459,6 +489,6 @@ body {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #ff453a;
+  background: var(--md-error);
   animation: hud-pulse 1.1s ease-in-out infinite;
 }
