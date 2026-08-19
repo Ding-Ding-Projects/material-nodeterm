@@ -57,6 +57,70 @@ baseline scheme, rather than the design bundle being re-derived from the app's o
 time. `#6750A4` — the exact purple the site/bundle comparison above used as the mismatch example — is
 now the app's own literal `--md-primary` (light theme).
 
+## The site's own divergence, closed
+
+The table above measured the site as it stood *before* the site had any real M3 tokens of its
+own — `var(--paper2)`/`var(--sunk)`/`var(--ink)` were the site's pre-existing hand-drawn
+"paper-and-ink" palette (`#fffdf7`, `#fff1cf`, `#2c2036`, …), reused only as a stand-in source
+because nothing else existed yet. That stand-in has since been retired: `site/styles.css` now
+carries its own complete, literal `:root` / `:root[data-theme='night']` M3 block, transcribed from
+`design/v2/md3/tokens.css` the same way this file describes for the app — restated under the
+site's own `'day'`/`'night'` `data-theme` values rather than the app's `'light'`/absent
+convention, because the site's store, history log and toggle button persist and compare against
+those exact two strings (`app/core/engine.js`'s `applyTheme()`), and this was a palette swap, not
+a theme-plumbing rebuild. `site/README.md` and `site/styles.css`'s own top comment carry the
+site-side half of this story; this section is the app-side pointer to it.
+
+**Now genuinely shared** between the app and the site, byte-for-byte identical:
+
+- Every `--md-primary/secondary/tertiary/error/success/warning/surface*/on-*/outline*/scrim`
+  role name and literal hex/`rgba()` value, in both themes. Both surfaces trace to the exact same
+  `design/v2/md3/tokens.css` source; a `diff` between the two files' `--md-` blocks (ignoring
+  each file's own unrelated legacy-alias lines) shows no daylight between them.
+- The two webfonts. The site used to fall back to each system's generic sans/monospace because
+  vendoring Outfit/Roboto Mono was cut for time in the original site redesign; it now bundles the
+  identical committed `.woff2` files the app ships (`src/renderer/assets/fonts/` copied
+  byte-for-byte into `site/assets/fonts/` — verified by SHA-256 at copy time), with the same
+  CJK-fallback reasoning (Outfit carries no CJK glyphs, and the site's Cantonese language mode
+  needs a real platform face behind it, same as the app's `shared/i18n/catalog.ts`).
+- Motion. The site adopted the same two named durations/easings
+  (`--md-motion-spatial`/`--md-motion-effect`) verbatim, though — like the app — it does not yet
+  wire any transition to them; both are available tokens, not yet an applied convention on either
+  surface.
+
+**Still deliberately different**, and why neither difference is a residual mismatch to "fix":
+
+- **Shape-scale naming.** The app aliases M3's scale onto ITS OWN pre-existing radii under
+  long-form names (`--md-shape-extra-small` → `--radius-sm` → `6px`, one step off the design's own
+  `8px` — see the shape table above and its own reasoning for keeping that gap). The site instead
+  aliases the SHORT-form names (`--md-shape-xs/sm/md/lg/full`) directly onto the design's own
+  literal `8/12/16/28/999` scale, because `site/docs/assets/docs.css` already read exactly those
+  short names before this pass (`--md-shape-xs`, `--md-shape-lg`) and there was nothing of the
+  site's own to preserve underneath them. The two naming schemes do not collide — the app never
+  defines `--md-shape-xs`, the site never defines `--md-shape-extra-small` — so this is two
+  independently reasonable choices sitting side by side, not a bug.
+- **Elevation.** The app's own `box-shadow` rules — ~100 of them in `src/renderer/styles.css`
+  alone — are the "still outstanding" item this document already tracks below; they were
+  deliberately left untouched by either M3 landing and still scale off `--md-shadow`/`--shadow-k`.
+  The site's much smaller stylesheet (~800 lines against the app's several thousand) made a
+  complete pass tractable in the same change that added its M3 tokens: every site `box-shadow` is
+  now `none` (`--shadow`/`--shadow-sm` both resolve to it), and the handful of rules that wrote a
+  literal offset shadow instead of the variable were individually rewritten onto tonal fills,
+  outline borders, or a scrim — see `site/styles.css`'s own top comment and each rewritten rule's
+  comment for the specifics. Retiring the app's own shadow ramp the same way remains future work,
+  tracked in "What is still outstanding" below.
+- **Data/status swatch palettes.** Each surface keeps its own separate, purpose-built exemption
+  from the `--md-*` roles, and neither adopts the other's: the app keeps `--git-graph-lane-1..5`
+  and friends (encoding branch identity in a git graph); the site keeps its seven-hue
+  `--yellow/--red/--orange/--green/--blue/--purple/--pink` set (the regex-builder token chips,
+  the favourite-colour picker, and every on/off/right/wrong status chip across its rooms). Both
+  are the same CLAUDE.md exemption — "functional data colours … are exempt as data, not chrome" —
+  applied independently to two unrelated sets of data.
+- **Everything that isn't a token.** This pass is colour, type and shape only. The site remains
+  its own hand-rolled vanilla-JS "hallway of doors" application with no shared component code,
+  markup, or interaction model with the Electron/React app — sharing the token *values* was the
+  whole scope of closing this divergence, not merging the two surfaces.
+
 ## The app's ramp, before this pass
 
 For context (and because the legacy compatibility tokens below still describe SOME of these): the

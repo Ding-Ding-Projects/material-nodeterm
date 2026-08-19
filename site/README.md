@@ -8,7 +8,10 @@ no third-party requests: plain HTML/CSS and vanilla ES modules only.
 ```
 site/
   index.html          the whole page's shell — everything else is rendered by app/main.js
-  styles.css           the paper-and-ink design system (day + night themes)
+  styles.css           Material Design 3 tokens (day + night themes) + this site's own
+                        vanilla-JS "hallway of doors" component styling — see the file's
+                        own top comment; docs/app-design-tokens.md's "The site's own
+                        divergence, closed" section is the app-side half of the same story
   app/
     core/               the generic engine: store, render loop, menus, regex builder,
                          command palette, confirm gate, room/settings-card registries
@@ -17,7 +20,8 @@ site/
     shared/             pure data tables and logic shared by the features above
   content/changelog.json  real changelog data (generated from this fork's CHANGELOG.md)
   docs/                one article per feature, plus docs/index.html
-  assets/              logo + hero illustration
+  assets/              logo + hero illustration + fonts/ (Outfit, Roboto Mono — the exact
+                        committed .woff2 files the desktop app bundles, copied byte-for-byte)
   updates/             the desktop app's own auto-update feed hosting convention
                         (unrelated to this page's own JS, which fetches nothing from it)
 ```
@@ -44,10 +48,11 @@ browsers block `fetch()` of local files under that scheme.
 
 No CDN script, no analytics, no third-party font, no tracking pixel. Settings, messages,
 the local history log, toy-lock passwords (hashed), and TOTP secrets all live in this
-browser's own `localStorage` and are never sent anywhere. See `styles.css`'s top comment
-for the one documented exception to "no CDN" this redesign currently carries (a webfont
-fallback, not a live request) and `app/main.js`/`app/core/engine.js` for how the rest is
-wired together.
+browser's own `localStorage` and are never sent anywhere. Outfit and Roboto Mono are bundled
+locally under `assets/fonts/` (the exact committed `.woff2` files the desktop app ships,
+SIL OFL-1.1 licensed — see `THIRD-PARTY-NOTICES.md` at the repo root); `styles.css`'s
+`@font-face` blocks load them from this origin only. See `app/main.js`/`app/core/engine.js`
+for how the rest is wired together.
 
 The Time machine stores the prior durable values beside each saved-setting change, so **Put back**
 really restores state, reapplies live theme/text-size effects, and the restore itself can be
