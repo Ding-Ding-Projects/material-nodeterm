@@ -55,7 +55,10 @@ describe('preload IPC wiring', () => {
       await api.terminalProfiles!.list()
       await api.terminalProfiles!.refresh()
       expect(h.invoke).toHaveBeenCalledWith(IPC.terminalProfilesList)
-      expect(h.invoke).toHaveBeenCalledWith(IPC.terminalProfilesRefresh)
+      // `refresh(customExecutable?)` always forwards its parameter, so an argument-less call
+      // still invokes with an explicit undefined — assert the real two-argument shape rather
+      // than a one-argument call that never happens.
+      expect(h.invoke).toHaveBeenCalledWith(IPC.terminalProfilesRefresh, undefined)
     } else {
       expect(api.terminalProfiles).toBeUndefined()
     }

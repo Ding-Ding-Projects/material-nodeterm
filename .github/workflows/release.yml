@@ -372,7 +372,11 @@ jobs:
 
           completed_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           WORKFLOW_COMPLETED_AT="$completed_at" node scripts/release-notes.mjs > "$RUNNER_TEMP/final-notes.md"
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest --notes-file "$RUNNER_TEMP/final-notes.md"
+          # Notes only. The public transition happened once, above; repeating --draft=false
+          # --prerelease=false --latest here changed nothing on an already-public release but read
+          # as a SECOND public transition, which is exactly what the contract forbids — and it
+          # made the workflow fail its own check.
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/final-notes.md"
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body,isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/final-release.json"
           node scripts/release-assets.mjs verify "$RUNNER_TEMP/final-release.json" published exact
           FINAL_RELEASE_JSON="$RUNNER_TEMP/final-release.json" FINAL_NOTES="$RUNNER_TEMP/final-notes.md" node -e 'const fs=require("fs"); const release=JSON.parse(fs.readFileSync(process.env.FINAL_RELEASE_JSON,"utf8")); const expected=fs.readFileSync(process.env.FINAL_NOTES,"utf8").trim(); if ((release.body||"").trim()!==expected) throw new Error("published release notes do not match the completed timing document")'
