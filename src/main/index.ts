@@ -46,6 +46,7 @@ import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
+import { ServerDeploymentService } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
 import type { Settings } from '../shared/types'
@@ -802,6 +803,8 @@ app.whenReady().then(async () => {
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
   const projectArchives = new ProjectArchiveService(localHistoryStore)
+  const serverDeployment = new ServerDeploymentService(app.getAppPath())
+  ipcMain.handle(IPC.serverDeploymentStart, () => serverDeployment.start())
   workspaceStore.setProjectHistoryRecorder((project, content) =>
     localHistoryStore.record({
       domain: `project_${project.id}`,

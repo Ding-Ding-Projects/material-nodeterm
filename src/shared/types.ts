@@ -967,6 +967,15 @@ export interface WorkspaceApi {
   onExternalChange(cb: (project: Project) => void): () => void
 }
 
+export interface ServerDeploymentApi {
+  start(): Promise<{
+    ok: boolean
+    state: 'ready' | 'docker-restart-required' | 'failed'
+    url?: string
+    error?: string
+  }>
+}
+
 export interface DialogApi {
   /** Opens a native folder picker; returns the chosen path or null if cancelled. */
   selectFolder(): Promise<string | null>
@@ -3144,6 +3153,7 @@ export interface NodeTerminalApi {
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
   terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
+  serverDeployment: ServerDeploymentApi
   dialog: DialogApi
   settings: SettingsApi
   schoolMode: SchoolModeApi

@@ -16,6 +16,11 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Added
 
+- **Deployment-first device access.** The top-right device button now starts the local Server
+  Edition container stack, automatically installs Docker Desktop through Windows Package Manager
+  when absent, starts its daemon, builds the local image when needed, waits for health, and opens
+  the site without a Pro plan or paid seat.
+
 - **Automatic Java runtime provisioning for managed Minecraft servers.** The desktop app obtains
   the required Eclipse Temurin JRE in its private application-data cache, verifies Adoptium's
   published SHA-256, and uses it without changing the machine-wide PATH.

@@ -1,53 +1,40 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Switch } from '@renderer/ui/Switch'
-import { useSettings } from '@renderer/state/settings'
-import { usePhonePairing } from './settings/usePhonePairing'
 
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+type DeploymentState = 'starting' | 'ready' | 'docker-restart-required' | 'failed'
 
-/**
- * Quick phone pairing, anchored under the top-right phone button: opens straight into a live QR
- * (no "Start pairing" click — that's the whole point of the shortcut), with the standing
- * "Reach this machine from anywhere" toggle below and a link into the full Phone settings.
- * Closing the popover stops an unfinished pairing (the shared hook's unmount rule).
- */
+/** The phone shortcut is deployment-first: it brings up the complete Server Edition site, building
+ * the local image when absent. Device enrollment belongs to that site, so this surface never asks
+ * for a subscription or starts the older desktop SSH/relay QR listener. */
 export function PhonePairPopover({
   anchor,
   onClose,
   onOpenSettings
 }: {
-  /** Viewport rect of the phone button — the popover right-aligns under it. */
   anchor: { right: number; bottom: number }
   onClose: () => void
   onOpenSettings: () => void
 }): React.JSX.Element {
-  const { phase, qr, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start } = usePhonePairing()
+  const [state, setState] = useState<DeploymentState>('starting')
+  const [url, setUrl] = useState('')
+  const [error, setError] = useState('')
 
-  const phoneAccessEnabled = useSettings((s) => s.settings.phoneAccessEnabled)
-  const updateSettings = useSettings((s) => s.update)
-
-  const togglePhoneAccess = (next: boolean): void => {
-    updateSettings({ phoneAccessEnabled: next })
-    // Start/stop the standing relay host immediately.
-    window.nodeTerminal.remoteHost.setPhoneAccess(next)
-    // The relay block is baked into the QR when the listener STARTS — a code already on
-    // screen doesn't know about this flip, and scanning it would still produce a LAN-only
-    // pairing (the field failure: works at home, dies on cellular). Regenerate; start()
-    // cancels the old listener silently.
-    if (phase === 'waiting') void start()
+  const start = async (): Promise<void> => {
+    setState('starting')
+    setError('')
+    const result = await window.nodeTerminal.serverDeployment.start()
+    if (result.ok && result.url) {
+      setUrl(result.url)
+      setState('ready')
+    } else {
+      setError(result.error ?? 'Server Edition could not be started.')
+      setState(result.state === 'docker-restart-required' ? 'docker-restart-required' : 'failed')
+    }
   }
 
-  // Straight into the QR on open (local-network pairing is free — no gate here).
+  useEffect(() => { void start() }, [])
   useEffect(() => {
-    void start()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run exactly once, on open
-  }, [])
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
-    }
+    const onKey = (event: KeyboardEvent): void => { if (event.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
@@ -59,108 +46,37 @@ export function PhonePairPopover({
         className="phone-pair"
         style={{ top: anchor.bottom + 8, right: Math.max(8, window.innerWidth - anchor.right) }}
         role="dialog"
-        aria-label="Pair phone"
+        aria-label="Server Edition deployment"
       >
-        <div className="phone-pair__title">Pair your phone</div>
+        <div className="phone-pair__title">Open nodeterm on another device</div>
 
-        {phase === 'waiting' && qr ? (
-          !sshOpen ? (
-            // No QR while Remote Login is off — pairing against an unreachable sshd installs a
-            // key the phone can never use. The live probe flips sshOpen and the QR appears.
-            <div className="phone-pair__warn">
-              <strong>Remote Login</strong> is off — the pairing QR appears the moment it is on
-              {isMac ? (
-                <>
-                  {' '}
-                  (
-                  <button
-                    className="phone-pair__link"
-                    onClick={() => void window.nodeTerminal.pairing.openRemoteLoginSettings()}
-                  >
-                    System Settings
-                  </button>
-                  &nbsp;— watching).
-                </>
-              ) : (
-                '.'
-              )}
-            </div>
-          ) : (
-            <>
-              <img src={qr} width={208} height={208} alt="Pairing QR code" className="phone-pair__qr" />
-              <div className="phone-pair__hint">Scan with the nodeterm iOS app · waiting (10 min)</div>
-              {relayPlan === 'dev' ? (
-                <div className="phone-pair__warn">
-                  Dev build: the relay is off regardless of the toggle, so this code pairs
-                  LAN-only. Run a packaged build — or set NODETERM_RELAY_URL — for remote access.
-                </div>
-              ) : !phoneAccessEnabled ? (
-                <div className="phone-pair__warn">
-                  LAN-only code: the phone will reach this Mac only on this network. Flip the
-                  toggle below first to also connect from anywhere — the QR refreshes by itself.
-                </div>
-              ) : null}
-              {sshHealed ? <div className="phone-pair__ok">✓ Remote Login is on.</div> : null}
-            </>
-          )
-        ) : phase === 'paired' ? (
+        {state === 'starting' ? (
           <>
-            <div className="phone-pair__ok">✓ Paired — your phone can now connect.</div>
-            {relayResult === 'ok' ? (
-              <div className="phone-pair__ok">Remote access is set up — reachable from anywhere.</div>
-            ) : relayResult === 'failed' ? (
-              <div className="phone-pair__warn">
-                ⚠ Remote-access setup failed — this pairing is LAN-only for now. Check the
-                internet connection and pair again to retry.
-              </div>
-            ) : relayResult === 'off' ? (
-              <div className="phone-pair__hint">LAN-only pairing — remote access is off.</div>
-            ) : relayResult === 'dev' ? (
-              <div className="phone-pair__hint">
-                LAN-only pairing — dev builds disable the relay (set NODETERM_RELAY_URL to test).
-              </div>
-            ) : null}
+            <div className="phone-pair__hint">Starting Server Edition…</div>
+            <div className="phone-pair__hint">Docker Desktop and the local server image are obtained automatically when missing. The first build can take several minutes.</div>
           </>
-        ) : phase === 'timeout' ? (
+        ) : state === 'ready' ? (
           <>
-            <div className="phone-pair__hint">Pairing timed out.</div>
-            <button className="phone-pair__btn" disabled={busy} onClick={() => void start()}>
-              Show a new code
+            <div className="phone-pair__ok">✓ Server Edition is healthy and ready.</div>
+            <div className="phone-pair__hint">Use the site from this PC now. Mobile access will appear here only after its protected TOTP transport is configured.</div>
+            <button className="phone-pair__btn" onClick={() => void window.nodeTerminal.shell.openExternal(url)}>
+              Open Server Edition
             </button>
-          </>
-        ) : phase === 'failed' ? (
-          <>
-            <div className="phone-pair__warn">{error}</div>
-            <button className="phone-pair__btn" disabled={busy} onClick={() => void start()}>
-              Try pairing again
-            </button>
-            <button className="phone-pair__link" onClick={onOpenSettings}>
-              Review paired devices
-            </button>
+            <div className="phone-pair__hint">{url}</div>
           </>
         ) : (
-          <div className="phone-pair__hint">{busy ? 'Starting…' : error || 'Starting…'}</div>
+          <>
+            <div className="phone-pair__warn">{error}</div>
+            <button className="phone-pair__btn" onClick={() => void start()}>
+              {state === 'docker-restart-required' ? 'Check Docker and continue' : 'Try deployment again'}
+            </button>
+          </>
         )}
-        {error && phase !== 'idle' && phase !== 'failed' ? (
-          <div className="phone-pair__warn">{error}</div>
-        ) : null}
 
         <div className="phone-pair__divider" />
-
-        <div className="phone-pair__row">
-          <div className="phone-pair__row-text">
-            <div className="phone-pair__row-title">Reach this machine from anywhere</div>
-            <div className="phone-pair__row-sub">E2E encrypted over the relay — not just your LAN.</div>
-          </div>
-          <Switch
-            checked={phoneAccessEnabled}
-            onChange={togglePhoneAccess}
-            ariaLabel="Reach this machine from anywhere"
-          />
-        </div>
-
+        <div className="phone-pair__hint">No Pro plan, paid seat, subscription, or purchase is required.</div>
         <button className="phone-pair__link phone-pair__footer" onClick={onOpenSettings}>
-          All phone settings…
+          All device settings…
         </button>
       </div>
     </>,

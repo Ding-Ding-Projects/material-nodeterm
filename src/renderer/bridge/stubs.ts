@@ -136,6 +136,7 @@ export function buildStubApi(): Omit<
   NodeTerminalApi,
   | 'pty'
   | 'workspace'
+  | 'serverDeployment'
   | 'settings'
   | 'schoolMode'
   | 'kidsMode'
@@ -551,6 +552,7 @@ export function buildStubApi(): Omit<
     NodeTerminalApi,
     | 'pty'
     | 'workspace'
+    | 'serverDeployment'
     | 'settings'
     | 'schoolMode'
   | 'kidsMode'

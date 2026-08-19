@@ -25,6 +25,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
       { sha: "540d6898f4dc275c4753b8d3d7506ffe5635cf1d", label: "540d6898", url: "https://github.com/eneskirca/nodeterm/commit/540d6898f4dc275c4753b8d3d7506ffe5635cf1d" },
     ],
     items: [
+      { category: "Added", text: "**Deployment-first device access.** The top-right device button now starts the local Server Edition container stack, automatically installs Docker Desktop through Windows Package Manager when absent, starts its daemon, builds the local image when needed, waits for health, and opens the site without a Pro plan or paid seat." },
       { category: "Added", text: "**Automatic Java runtime provisioning for managed Minecraft servers.** The desktop app obtains the required Eclipse Temurin JRE in its private application-data cache, verifies Adoptium's published SHA-256, and uses it without changing the machine-wide PATH." },
       { category: "Added", text: "**Per-project local history and portable project archives.** Every successful project save is snapshotted in its own app-data Git repository. A project and that complete history can be exported and imported as one bounded `.nodeterm-project` file." },
       { category: "Added", text: "**Canonical upstream source pin.** `upstream/nodeterm` is now a real Git submodule pinned to `https://github.com/eneskirca/nodeterm.git`; `.gitmodules` records `main` for intentional remote updates, and the contributor guidance distinguishes the nested repository from the top-level remotes before a new gitlink is committed." },
