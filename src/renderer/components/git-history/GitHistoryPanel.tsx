@@ -4,6 +4,7 @@ import { buildDefaultGitHistoryColorMap, buildGitHistoryViewModels } from '@shar
 import type { GitFileChange } from '@shared/types'
 import { GitHistoryRow } from './GitHistoryRow'
 import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './GitHistoryCommitFiles'
+import { MaterialSymbol } from '../MaterialSymbol'
 
 export function GitHistoryPanel({
   result,
@@ -76,14 +77,31 @@ export function GitHistoryPanel({
   const count = result?.items.length ?? 0
 
   return (
-    <section className="scm-section">
+    <section className="scm-section md3-git-history">
       <div className="scm-history__head">
-        <button onClick={() => setCollapsed((c) => !c)} style={{ flex: 1, textAlign: 'left' }}>
-          {collapsed ? '▸' : '▾'} COMMITS {result && <span className="scm-history__count">{count}{result.hasMore ? '+' : ''}</span>}
+        <button
+          className="md3-git-history__toggle"
+          onClick={() => setCollapsed((c) => !c)}
+          style={{ flex: 1, textAlign: 'left' }}
+          aria-expanded={!collapsed}
+        >
+          <MaterialSymbol
+            className={`md3-git-history__toggle-chevron${collapsed ? ' collapsed' : ''}`}
+            name="chevron_right"
+            size={15}
+          />
+          COMMITS {result && <span className="scm-history__count">{count}{result.hasMore ? '+' : ''}</span>}
         </button>
-        <button title="Refresh commits" onClick={onRefresh}>{loading ? '…' : '⟳'}</button>
+        <button
+          className="md3-git-history__refresh"
+          title="Refresh commits"
+          aria-label="Refresh commits"
+          onClick={onRefresh}
+        >
+          <MaterialSymbol name="refresh" size={16} className={loading ? 'md3-spin' : undefined} />
+        </button>
       </div>
-      {!collapsed && error && !result && <div className="scm-history__msg" style={{ color: '#ff453a' }}>{error}</div>}
+      {!collapsed && error && !result && <div className="scm-history__msg md3-history-error">{error}</div>}
       {!collapsed && !result && !error && <div className="scm-history__msg">Loading graph…</div>}
       {!collapsed && result && viewModels.length === 0 && <div className="scm-history__msg">No commits yet</div>}
       {!collapsed && viewModels.length > 0 && (
