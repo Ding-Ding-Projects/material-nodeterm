@@ -715,6 +715,11 @@ export interface Project {
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are
    *  not covered — the chat driver still runs in `default`. Unset = use the global setting. */
   defaultPermissionMode?: AgentPermissionMode
+  /** Machine-local app-wide setting overrides for this project. The complete Settings surface
+   * edits this sparse overlay; absent keys inherit the global default. It is deliberately kept
+   * out of the git-shared project file because Settings contains credentials, executable paths,
+   * host labels, and other values a cloned repository must never inject. */
+  settingsOverrides?: Partial<Settings>
   /** Best dino-game score in this project — new dino nodes seed from it, so the record survives closing the node. */
   dinoHighScore?: number
   /** Kanban task board — shared via .nodeterm/project.json like nodes. */

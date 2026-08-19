@@ -67,6 +67,7 @@ interface ProjectsState {
   /** Sets (or clears, with undefined = fall back to the global setting) the project's default
    *  permission mode for new Claude terminal (CLI) sessions. Chat nodes are not covered. */
   setProjectDefaultPermissionMode(id: string, mode: AgentPermissionMode | undefined): void
+  setProjectSettingsOverrides(id: string, overrides: Project['settingsOverrides']): void
   /** Raises the project's dino high score (never lowers it). */
   setDinoHighScore(id: string, score: number): void
   /** Replaces the project's kanban board (the UI computes the next board via lib/kanban). */
@@ -344,6 +345,16 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   setProjectDefaultPermissionMode(id, mode) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, defaultPermissionMode: mode } : p))
+    }))
+  },
+
+  setProjectSettingsOverrides(id, settingsOverrides) {
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.id === id
+          ? { ...p, ...(settingsOverrides && Object.keys(settingsOverrides).length > 0 ? { settingsOverrides } : { settingsOverrides: undefined }) }
+          : p
+      )
     }))
   },
 

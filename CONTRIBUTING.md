@@ -551,6 +551,18 @@ pass paths as data and compare them literally—never put a checkout path into a
 
 ## Documentation
 
+### Settings scopes and Docker hosting
+
+Add app settings once to the shared `Settings` type and existing section. Global and Project modes
+route the same control through the central store; do not create project-specific section copies.
+Project overlays belong only in the machine-local workspace index and never in
+`.nodeterm/project.json`, whose cloned content must not inject executable, credential, path, or
+host-local fields.
+
+Remote-access UI calls the free encrypted flow **Docker host**. Preserve single-use pairing and
+mutual SAS approval. Never add a purchase or entitlement check to the first host connection, and
+never fabricate a credential for an anonymous free pairing request.
+
 Two files, two audiences:
 
 - **`CONTRIBUTING.md`** (this file) — what another human needs before touching the code.

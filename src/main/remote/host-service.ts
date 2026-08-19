@@ -1,7 +1,7 @@
 // Host service — serve local PTYs over the relay (main process).
 //
-// On "host mode" the app: (1) gates on a valid Pro entitlement, (2) mints a single-use
-// pairing token from our API with the stored entitlement, (3) connects to the relay as the
+// On "host mode" the app: (1) mints a single-use pairing token from our API, optionally carrying
+// legacy entitlement metadata for seat accounting, (2) connects to the relay as the
 // HOST (so it becomes the pending host the client later joins to trigger the bridge), and
 // (4) returns the pairing OFFER string for the user to hand to a client.
 //
@@ -631,10 +631,11 @@ interface PairTokenResponse {
   exp: number
 }
 
-// Mint a single-use pairing token from our API, proving entitlement with the stored token.
+// Mint a single-use pairing token from our API. Entitlement metadata is optional and only used for
+// legacy seat accounting; the first encrypted host connection is free.
 // Exported so the NEW interactive relay host (relay-host-service.ts) mints its offer token the same
-// way (same `POST /v1/pair/token`, same entitlement proof) instead of duplicating the call.
-export async function mintPairingToken(entitlement: string): Promise<PairTokenResponse> {
+// way (same `POST /v1/pair/token`) instead of duplicating the call.
+export async function mintPairingToken(entitlement?: string): Promise<PairTokenResponse> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 8000)
   let res: Response
@@ -642,7 +643,9 @@ export async function mintPairingToken(entitlement: string): Promise<PairTokenRe
     res = await fetch(`${API_BASE}/v1/pair/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ entitlement }),
+      // The relay accepts an optional entitlement for legacy seat accounting. Hosting itself is
+      // free; omitting the field is the anonymous Docker-host flow rather than a fabricated token.
+      body: JSON.stringify(entitlement ? { entitlement } : {}),
       signal: ctrl.signal
     })
   } catch {
@@ -860,7 +863,7 @@ export function connectHostSession(opts: HostSessionOptions): HostSession {
 // --- IPC wiring --------------------------------------------------------------
 
 /**
- * Wire the host-mode IPC. `remote:host:start` gates on Pro, mints a pairing token, connects to
+ * Wire the host-mode IPC. `remote:host:start` mints a pairing token, connects to
  * the relay as host, and returns the offer string. `remote:host:stop` closes the relay socket
  * (which kills the served PTYs and drops the client's access).
  */
@@ -906,16 +909,10 @@ export function initRemoteHost(
   }
 
   ipcMain.handle(IPC.remoteHostStart, async (): Promise<{ offer: string }> => {
-    if (!isPremium()) {
-      throw new Error('Remote access requires nodeterm Pro.')
-    }
     if (!relayAllowed()) {
       throw new Error('Remote access is unavailable in development builds (set NODETERM_RELAY_URL).')
     }
-    const entitlement = getStoredEntitlement()
-    if (!entitlement) {
-      throw new Error('No entitlement found — please re-activate nodeterm Pro.')
-    }
+    const entitlement = getStoredEntitlement() ?? undefined
 
     // Already hosting → tear the old session down before starting a fresh one.
     endSession()

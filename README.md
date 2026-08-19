@@ -43,6 +43,14 @@ app** (Windows, macOS and Linux), and as a **self-hosted browser app** you reach
 
 ## ✨ Features
 
+- **Global and per-project settings** — Global mode holds durable app-wide defaults. Every project
+  opens the same complete Settings surface in Project mode, can override any setting, and can reset
+  its sparse local overlay to Global mode. Shared project JSON cannot inject local executables,
+  credentials, paths, or host secrets.
+- **Free Docker host access** — share one selected project from a Docker-hosted relay and connect
+  with a single-use pairing code. Hosting and joining are free; end-to-end encryption and mutual
+  approval remain intact.
+
 ### The canvas
 
 Right-click the canvas to open a **terminal** or an **agent** node. Each runs in its own

@@ -250,6 +250,7 @@ export class WorkspaceStore {
               closed: e.closed,
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
+              settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
             })
           })
@@ -273,6 +274,7 @@ export class WorkspaceStore {
               closed: e.closed,
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
+              settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
             })
           })

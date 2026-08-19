@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add Global mode and complete per-project Settings overlays through the shared settings surface.
+- Replace the paid remote-host prompt with a free Docker-hosted relay flow while retaining
+  end-to-end encryption and mutual pairing approval.
+
 All notable changes to nodeterm are recorded here, generated from the project's
 Git history. Each entry names the released version, its date, its categorized changes,
 and the exact commit the release was built from.

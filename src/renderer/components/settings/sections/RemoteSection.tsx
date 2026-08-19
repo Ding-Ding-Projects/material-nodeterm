@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useEntitlement } from '../../../state/entitlement'
 import { useProjects } from '../../../state/projects'
 import { hostShareOptions } from '../../../lib/relayHostShare'
 import { SettingsSection } from '../SettingsSection'
@@ -26,7 +25,6 @@ export function RemoteSection({
   isActive: boolean
   onClose: () => void
 }): React.JSX.Element {
-  const isPremium = useEntitlement((s) => s.isPremium)
   const projects = useProjects((s) => s.projects)
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const [hostOffer, setHostOffer] = useState('')
@@ -80,20 +78,19 @@ export function RemoteSection({
   return (
     <SettingsSection
       id="remote"
-      title="Remote access"
-      description="Open terminals that run on another machine you own — end-to-end encrypted over the relay. Hosting (sharing this machine) is Pro; connecting to a host is free."
+      title="Docker host"
+      description="Open terminals on a Docker host you own — end-to-end encrypted over the relay. Hosting and connecting are free. Configure the relay target globally or override it for the active project."
       isActive={isActive}
       searchEntries={ENTRIES}
     >
       <SearchableRow {...ROWS.allow}>
         <div className="space-y-3">
           <h4 className="text-[13px] font-medium text-text">Allow remote access</h4>
-          {isPremium ? (
-            hostOffer ? (
+          {hostOffer ? (
               <div className="space-y-2">
                 <p className="text-sm text-muted">
                   Sharing <strong className="text-text">{sharedName || 'this project'}</strong> —
-                  the joiner will see this project and can run commands on this Mac. Share this
+                  the joiner will see this project and can run commands on this Docker host. Share this
                   pairing code with the other device (single use):
                 </p>
                 <FieldRow
@@ -134,20 +131,14 @@ export function RemoteSection({
                 ) : (
                   <p className="text-sm text-muted">
                     Sharing <strong className="text-text">{sharedName || 'this project'}</strong> —
-                    the joiner sees this project and can run commands on this Mac.
+                    the joiner sees this project and can run commands on this Docker host.
                   </p>
                 )}
                 <Button disabled={hostBusy} onClick={() => void startHosting()}>
                   {hostBusy ? 'Starting…' : 'Allow remote access'}
                 </Button>
               </div>
-            )
-          ) : (
-            <p className="text-sm text-muted">
-              Hosting this machine requires nodeterm Pro — upgrade above. Connecting to a host you
-              were given a code for is free.
-            </p>
-          )}
+            )}
         </div>
       </SearchableRow>
       <SearchableRow {...ROWS.connect}>

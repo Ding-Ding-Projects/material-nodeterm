@@ -5,7 +5,7 @@
 // shares the same offer format and pairing-token mint, but everything a bridged peer does afterwards
 // flows through `connectRelayHost` (→ `platform.dispatch`/`cast`), not the legacy phone RPC vocabulary.
 //
-// TEAM ACCESS — a POOL, not one listener. A paying host shares this Mac with up to `seats` devices
+// TEAM ACCESS — a POOL, not one listener. A host shares this machine with up to `seats` devices
 // (one seat per connected device). This module manages a POOL of independent `RelayHostSession`s;
 // each seat still goes through the UNCHANGED per-session mutual-SAS + ConsentNotice gate in
 // relay-host.ts. `relay:host:invite` (and the legacy `relay:host:start`) ADD a seat (cap-checked, no
@@ -32,7 +32,7 @@ import type { RelayTransport } from './relay-socket'
 import { publicKeyToB64, type KeyPair } from './e2ee'
 import { encodeOffer } from './pairing'
 import { loadOrCreatePeerKeyPair } from './peer-identity'
-import { isPremium as licenseIsPremium, getStoredEntitlement, licensedSeats as licenseSeats } from '../../core/license'
+import { getStoredEntitlement, licensedSeats as licenseSeats } from '../../core/license'
 import { RELAY_URL, relayAllowed as hostRelayAllowed, mintPairingToken } from './host-service'
 import { canAcceptSeat } from './seat-cap'
 
@@ -50,7 +50,7 @@ export interface RelayHostDeps {
   /** The long-lived peer identity this desktop presents (defaults to loadOrCreatePeerKeyPair). */
   loadKeys?: () => Promise<KeyPair>
   /** Mint the single-use pairing token (defaults to the shared `mintPairingToken`). */
-  mintToken?: (entitlement: string) => Promise<{ pairingToken: string }>
+  mintToken?: (entitlement?: string) => Promise<{ pairingToken: string }>
   isPremium?: () => boolean
   relayAllowed?: () => boolean
   getEntitlement?: () => string | null
@@ -74,7 +74,7 @@ export interface RelayHost {
 
 /**
  * Wire the interactive relay-host IPC. `relay:host:invite` (and legacy `relay:host:start`) gate on
- * Pro + a free seat, mint a pairing token, open a NEW relay host listener via `connectRelayHost`, and
+ * a free seat, mint a pairing token, open a NEW relay host listener via `connectRelayHost`, and
  * return the offer to hand to a peer — ADDING it to the pool (no supersede). `relay:host:confirm`
  * approves a pending peer; `relay:host:revoke` cuts one; `relay:host:stop` tears the whole pool down.
  */
@@ -87,7 +87,6 @@ export function initRelayHost(
   const connect = deps.connect ?? connectRelayHost
   const loadKeys = deps.loadKeys ?? loadOrCreatePeerKeyPair
   const mintToken = deps.mintToken ?? mintPairingToken
-  const isPremium = deps.isPremium ?? licenseIsPremium
   const relayAllowed = deps.relayAllowed ?? hostRelayAllowed
   const getEntitlement = deps.getEntitlement ?? getStoredEntitlement
   const licensedSeats = deps.licensedSeats ?? licenseSeats
@@ -114,23 +113,18 @@ export function initRelayHost(
    * plus the seat's renderer `id`.
    */
   async function addSeat({ projectId, email }: AddSeatOptions): Promise<{ offer: string; id: string }> {
-    if (!isPremium()) {
-      throw new Error('Remote access requires nodeterm Pro.')
-    }
     if (!relayAllowed()) {
       throw new Error('Remote access is unavailable in development builds (set NODETERM_RELAY_URL).')
     }
-    const entitlement = getEntitlement()
-    if (!entitlement) {
-      throw new Error('No entitlement found — please re-activate nodeterm Pro.')
-    }
+    const entitlement = getEntitlement() ?? undefined
 
     // SEAT CAP + RESERVATION — atomic (no await between reading the count and reserving). The count is
     // minted (reserved + pending + live) seats. This is HOST-SIDE / UX enforcement, NOT a
-    // server-guaranteed limit: a host that patched it out only cheats itself (it is paying for the
-    // seats). Real, un-bypassable enforcement is v2, server-side (the relay refuses the (seats+1)th
+    // server-guaranteed limit. Real enforcement is server-side (the relay refuses the (seats+1)th
     // bridge per account). Do NOT close others here — Team Access is ADDITIVE.
-    if (!canAcceptSeat(byId.size, licensedSeats())) {
+    // One encrypted Docker-host connection is free. Legacy paid seat metadata may raise the cap,
+    // but an absent entitlement must never collapse the free host path back to zero.
+    if (!canAcceptSeat(byId.size, Math.max(1, licensedSeats()))) {
       throw new Error(E_SEATS_FULL)
     }
     // Reserve the seat SYNCHRONOUSLY — with a revocable id — before any await, so two concurrent
