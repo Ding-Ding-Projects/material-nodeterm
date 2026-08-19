@@ -15,9 +15,9 @@ function swatchColors(t: TerminalTheme): string[] {
  *  a name alone ("Nord", "Gruvbox") tells you nothing if you haven't seen it before. */
 function Swatch({ theme }: { theme: TerminalTheme }): React.JSX.Element {
   return (
-    <span className="theme-swatch" style={{ background: theme.theme.background }} aria-hidden="true">
+    <span className="md3-theme-swatch" style={{ background: theme.theme.background }} aria-hidden="true">
       {swatchColors(theme).map((c, i) => (
-        <span key={i} className="theme-swatch__dot" style={{ background: c }} />
+        <span key={i} className="md3-theme-swatch__dot" style={{ background: c }} />
       ))}
     </span>
   )
@@ -37,12 +37,12 @@ function Group({
   if (!themes.length) return null
   return (
     <>
-      <div className="theme-select__group">{label}</div>
+      <div className="md3-theme-menu__group">{label}</div>
       {themes.map((t) => (
         <button type="button" key={t.id} onClick={() => onPick(t.id)}>
-          <span className="tab-menu__check">{t.id === value ? '✓' : ''}</span>
+          <span className="md3-theme-menu__check">{t.id === value ? '✓' : ''}</span>
           <Swatch theme={t} />
-          <span className="theme-select__name">{t.label}</span>
+          <span className="md3-theme-menu__name">{t.label}</span>
         </button>
       ))}
     </>
@@ -53,8 +53,9 @@ function Group({
  * Terminal colour-theme picker.
  *
  * A native `<select>` can only show names, and the thing being chosen is a set of colours — so
- * this is the app's own dropdown idiom instead (portal + full-screen `.tab-backdrop` click-catcher
- * + `.tab-menu`, exactly as BranchSelect and the tab caret menu do), with every row carrying its
+ * this is the app's own dropdown idiom instead (portal + full-screen `.tab-backdrop` click-catcher,
+ * same as BranchSelect and the tab caret menu, but its own `md3-theme-menu` — not the shared
+ * `.tab-menu` those use — so restyling one never restyles the other), with every row carrying its
  * own palette.
  */
 export function ThemeSelect({
@@ -78,10 +79,10 @@ export function ThemeSelect({
 
   return (
     <>
-      <button type="button" className="bind-select theme-select__trigger" onClick={open}>
+      <button type="button" className="md3-theme-trigger" onClick={open}>
         <Swatch theme={current} />
-        <span className="bind-select__val">{current.label}</span>
-        <span className="bind-select__chev">⌄</span>
+        <span className="md3-theme-trigger__val">{current.label}</span>
+        <span className="md3-theme-trigger__chev">⌄</span>
       </button>
       {menu && (
         <ThemeMenu
@@ -116,7 +117,7 @@ function ThemeMenu({
       <div className="tab-backdrop" style={{ zIndex: 78 }} onClick={onClose} />
       <div
         ref={flip.ref}
-        className="tab-menu theme-select__menu"
+        className="md3-theme-menu"
         style={{ top: flip.top, left: flip.left, minWidth: anchor.width, zIndex: 80 }}
       >
         <Group

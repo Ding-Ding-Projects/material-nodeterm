@@ -180,19 +180,34 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
               🔒 Locked — click to unlock
             </button>
           ) : (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="md3-accent-swatches">
               {NODE_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
+                  aria-pressed={accent === c}
                   aria-label={`Accent ${c}`}
                   onClick={() => update({ accent: c })}
                   style={{ background: c }}
-                  className={cn(
-                    'size-6 rounded-full border-2',
-                    accent === c ? 'border-text' : 'border-transparent'
-                  )}
-                />
+                  className={cn('md3-accent-swatch', accent === c && 'md3-accent-swatch--selected')}
+                >
+                  {accent === c ? (
+                    <svg
+                      aria-hidden="true"
+                      className="md3-accent-swatch__check"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 18 18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M4 9.5 7.5 13 14 5.5" />
+                    </svg>
+                  ) : null}
+                </button>
               ))}
               <button
                 type="button"

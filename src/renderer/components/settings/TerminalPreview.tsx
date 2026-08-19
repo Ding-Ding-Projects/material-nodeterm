@@ -85,7 +85,7 @@ export function TerminalPreview(): React.JSX.Element {
   }, [visual])
 
   return (
-    <div className="settings-term-preview">
+    <div className="md3-terminal-preview">
       <div ref={hostRef} />
     </div>
   )

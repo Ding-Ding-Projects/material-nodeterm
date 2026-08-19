@@ -106,7 +106,7 @@ export function SettingsPage({
 
   return createPortal(
     <div
-      className="nt-settings fixed inset-0 z-[55] flex bg-bg text-text"
+      className="nt-settings md3-settings-shell fixed inset-0 z-[55] flex"
       data-appearance-id="app:settings-dialog"
     >
       <SettingsSidebar

@@ -4313,6 +4313,91 @@
 
 .md3-regex-builder__info-title {
   font-size: 9.5px;
+/* nodeterm — Material Design 3 rewrite stylesheet.
+ * Loaded after styles.css (see boot.tsx) so an equal-specificity rule here wins on the cascade.
+ * Every colour below reads a --md-* custom property from design/v2/md3/tokens.css's contract —
+ * never a literal, except a saturated-fill foreground that genuinely needs #fff. Tonal elevation
+ * only: no box-shadow anywhere in this file.
+ *
+ * Each lane appends its own banner-delimited section here. Do not edit another lane's section. */
+
+/* ================================================================================
+   MD3: Settings — SettingsPage.tsx, SettingsSidebar.tsx, SettingsSection.tsx,
+   FieldRow.tsx, ThemeSelect.tsx, TerminalPreview.tsx, ShortcutCaptureField.tsx,
+   AppearanceSection.tsx's accent card, ui/Switch.tsx
+   ================================================================================ */
+
+/* ---- Root shell: three tonal layers (sidebar > body > card), matching the nav-rail /
+   surface / surface-container-low ladder the rest of the app-bar rewrite uses. ---- */
+.md3-settings-shell {
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+
+/* ---- Sidebar ---- */
+.md3-settings-sidebar {
+  width: 300px;
+  background: var(--md-surface-container);
+  border-right: 1px solid var(--md-outline-variant);
+}
+
+.md3-settings-sidebar__back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-settings-sidebar__back:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+
+/* Docked search pill (recipe: "Search: docked bar 44px pill surface-container-high"). The Input
+   atom keeps its own component contract; this just gives it the pill housing and repaints its
+   text so it reads as one continuous field rather than a bare box floating on the pill. */
+.md3-settings-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 6px 0 14px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+}
+.md3-settings-search__icon {
+  flex: none;
+  color: var(--md-on-surface-variant);
+}
+.md3-settings-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13.5px;
+  padding: 0;
+}
+.md3-settings-search input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+.md3-settings-search input:focus {
+  outline: none;
+  border: none;
+}
+
+.md3-settings-sidebar__group-title {
+  padding: 0 14px 6px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -4745,6 +4830,43 @@
   font-size: 12.5px;
   color: var(--md-on-surface-variant);
   font-family: var(--mono-font);
+.md3-settings-nav-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-settings-nav-row:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.md3-settings-nav-row[aria-current='page'] {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-weight: 600;
+}
+.md3-settings-nav-row--dimmed {
+  opacity: 0.35;
+}
+.md3-settings-nav-row__icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+.md3-settings-nav-row__label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5160,6 +5282,293 @@
   padding: 0;
   cursor: pointer;
   transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
+}
+/* ---- Section card + rows (the highest-leverage piece — every one of the 35 sections funnels
+   through SettingsSection + FieldRow, so this list-card is the whole MD3 rewrite for most of
+   them). Recipe: r28 surface-container-low card, rows r20 with a hover step to surface-container. */
+.md3-settings-header {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md3-settings-header__title {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--md-on-surface);
+}
+.md3-settings-header__desc {
+  margin-top: 6px;
+  max-width: 640px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container-low);
+  padding: 8px;
+}
+
+/* Every direct child of the card gets the row's padding/radius/hover — whether it is a bare
+   FieldRow (which sets its own internal flex layout via .md3-settings-row below), a raw two-item
+   row a section wrote by hand (already `display:flex` via its own Tailwind classes), or a
+   heading+FieldRow / heading+list GROUP (`<div className="space-y-3">`, or a bare unclassed
+   `<div>` — see AppearanceSection's "Node menu items" block). Deliberately NOT forcing `display`
+   here: a grouped block needs to stay block-level so its heading and list stack vertically by
+   plain flow, and overriding it to `flex` (even column) would have needed a second, narrower
+   selector just to undo it for THIS one case — simpler to only own what every child actually
+   shares (padding, radius, hover) and leave `display` to whichever child needs it. */
+.md3-settings-card > * {
+  border-radius: 20px;
+  padding: 12px 18px;
+  min-height: 64px;
+  box-sizing: border-box;
+  transition: background var(--md-motion-effect);
+}
+.md3-settings-card > *:hover {
+  background: var(--md-surface-container);
+}
+
+.md3-settings-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.md3-settings-row__body {
+  min-width: 0;
+}
+.md3-settings-row__label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+.md3-settings-row__desc {
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+  text-wrap: pretty;
+}
+.md3-settings-row__note {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--md-warning);
+}
+.md3-settings-row__control {
+  flex: none;
+}
+
+/* Small standalone hint/warning text — used outside FieldRow (e.g. FontPicker's "not
+   installed" note, which sits under a control rather than inside a labelled row). */
+.md3-settings-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+.md3-settings-warn-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--md-warning);
+}
+
+/* ---- Theme select (colour-theme dropdown) — self-contained so it never shares the shared
+   `.tab-menu` / `.bind-select` classes other lanes' surfaces (tab bar, source control) still own. */
+.md3-theme-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 260px;
+  height: 40px;
+  padding: 0 10px 0 14px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--md-motion-effect);
+}
+.md3-theme-trigger:hover {
+  background: var(--md-surface-container);
+}
+.md3-theme-trigger__val {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md3-theme-trigger__chev {
+  flex: none;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-theme-swatch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  border-radius: var(--md-shape-xs);
+  border: 1px solid var(--md-outline-variant);
+}
+.md3-theme-swatch__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.md3-theme-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: var(--md-shape-lg);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-high);
+}
+.md3-theme-menu__group {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+.md3-theme-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.md3-theme-menu button:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-theme-menu__check {
+  flex: none;
+  width: 14px;
+  color: var(--md-primary);
+  font-weight: 700;
+}
+.md3-theme-menu__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Terminal preview card ---- */
+.md3-terminal-preview {
+  display: inline-block;
+  padding: 14px 18px;
+  border-radius: var(--md-shape-md);
+  outline: 1px solid var(--md-outline-variant);
+  outline-offset: -1px;
+  /* Terminal bodies stay dark in both themes — --term-bg is deliberately not a --md-* role. */
+  background: var(--term-bg);
+  overflow: hidden;
+}
+.md3-terminal-preview .xterm-viewport {
+  scrollbar-width: none;
+}
+.md3-terminal-preview .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ---- Shortcut capture field (was a hardcoded `hover:bg-[rgba(255,255,255,0.06)]`) ---- */
+.md3-shortcut-field {
+  min-width: 140px;
+  cursor: pointer;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline);
+  background: var(--md-surface-container-high);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-on-surface);
+  outline: none;
+  transition: background var(--md-motion-effect);
+}
+.md3-shortcut-field:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-shortcut-field:focus-visible {
+  border-color: var(--md-primary);
+}
+
+/* ---- Accent picker card (AppearanceSection.tsx) ---- */
+.md3-accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.md3-accent-swatch {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color var(--md-motion-effect);
+}
+.md3-accent-swatch--selected {
+  outline-color: var(--md-primary);
+}
+/* White check on a saturated accent fill — the one literal colour this file allows (see the
+   file banner): it must read against arbitrary user-picked hues, not against a themed surface. */
+.md3-accent-swatch__check {
+  color: #fff;
+}
+
+/* ---- Switch (ui/Switch.tsx) — shared across the app; recipe values from HANDOFF.md's
+   component table. Track 52x32, knob 24px on / 16px off, both eased on --md-motion-spatial. ---- */
+.md3-switch {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
+}
+.md3-switch[aria-checked='true'] {
+  border-color: var(--md-primary);
+  background: var(--md-primary);
 }
 .md3-switch__knob {
   position: absolute;
@@ -6111,4 +6520,17 @@
 }
 .presence-prompt {
   top: calc(var(--app-bar-h) + 2px);
+  transition:
+    top var(--md-motion-spatial),
+    left var(--md-motion-spatial),
+    width var(--md-motion-spatial),
+    height var(--md-motion-spatial),
+    background var(--md-motion-effect);
+}
+.md3-switch[aria-checked='true'] .md3-switch__knob {
+  top: 4px;
+  left: 24px;
+  width: 24px;
+  height: 24px;
+  background: var(--md-on-primary);
 }

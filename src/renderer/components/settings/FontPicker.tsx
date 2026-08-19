@@ -120,18 +120,14 @@ export function FontPicker({
         onChange={(e) => onChange(e.target.value)}
       />
       {missing ? (
-        <p className="text-[12px] leading-relaxed text-[color:var(--warn)]">
+        <p className="md3-settings-warn-text">
           “{primary}” isn’t installed — the next font in the stack is being used.
         </p>
       ) : null}
       {hasLocalFontAccess() && !extraFamilies.length ? (
-        <Button onClick={() => void browseAll()}>
-          Browse all installed fonts
-        </Button>
+        <Button onClick={() => void browseAll()}>Browse all installed fonts</Button>
       ) : null}
-      {browseError ? (
-        <p className="text-[12px] leading-relaxed text-muted">{browseError}</p>
-      ) : null}
+      {browseError ? <p className="md3-settings-hint">{browseError}</p> : null}
     </div>
   )
 }
