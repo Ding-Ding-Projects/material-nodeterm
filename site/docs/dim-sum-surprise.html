@@ -11,9 +11,14 @@
     <script>
       ;(function () {
         try {
-          var saved = localStorage.getItem('nodeterm-theme')
-          if (saved === 'light' || saved === 'dark') document.documentElement.setAttribute('data-theme', saved)
-        } catch (_) {}
+          var saved = JSON.parse(localStorage.getItem('nodeterm-playground.v1') || '{}')
+          if (saved && saved.theme === 'night') document.documentElement.setAttribute('data-theme', 'night')
+          if (saved && saved.bigText) {
+            document.documentElement.style.fontSize = '19px'
+          }
+        } catch (_err) {
+          /* localStorage unavailable (private mode, etc.) -- falls back to the day palette */
+        }
       })()
     </script>
   </head>
