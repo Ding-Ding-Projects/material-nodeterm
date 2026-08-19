@@ -1,5 +1,6 @@
 import { contrastRatio, parseAnyColor, parseHex, toHex, type RGBA } from './color/convert'
 import type { ResolvedAppTheme } from './appTheme'
+import { DEFAULT_ACCENT } from '@shared/types'
 
 export interface AccentTokens {
   accent: string
@@ -12,15 +13,24 @@ export interface AccentTokens {
   mdOnPrimaryContainer: string
 }
 
+// The two panels a custom accent's readable roles are checked against. Post the M3-baseline
+// re-seed (2026-08) these are the M3 `surface-container` literal for each theme (styles.css's
+// `--panel` alias now points there too) — NOT the app's old hand-picked panel hexes, which this
+// constant used to carry verbatim (`#282828` dark / `#f3efe7` light).
 const PANEL: Record<ResolvedAppTheme, RGBA> = {
-  dark: { r: 40, g: 40, b: 40, a: 1 },
-  light: { r: 243, g: 239, b: 231, a: 1 }
+  dark: { r: 0x21, g: 0x1f, b: 0x26, a: 1 }, // --md-surface-container dark, #211F26
+  light: { r: 0xf3, g: 0xed, b: 0xf7, a: 1 } // --md-surface-container light, #F3EDF7
 }
 
 const WHITE: RGBA = { r: 255, g: 255, b: 255, a: 1 }
 const BLACK: RGBA = { r: 0, g: 0, b: 0, a: 1 }
 const INK: RGBA = { r: 26, g: 26, b: 26, a: 1 }
-const CUSTOM_PROPERTIES = [
+/** The complete set of custom properties one call to `applyAccentTokens` publishes for a non-
+ *  default accent. Exported so `accentTokens.test.ts` can assert the whole family is republished
+ *  rather than duplicating this list — see that file's "a custom accent republishes the whole
+ *  primary family" test, which replaced a stylesheet-side check that this file's own literals now
+ *  make impossible to express in CSS alone (see the M3 foundation section of styles.css). */
+export const CUSTOM_PROPERTIES = [
   '--accent',
   '--accent-hover',
   '--accent-text',
@@ -102,10 +112,11 @@ export function applyAccentTokens(
   theme: ResolvedAppTheme
 ): void {
   const tokens = accentTokens(accentValue, theme)
-  // The persisted default is the dark palette's systemBlue. Leaving it to styles.css preserves
-  // BOTH authored default families: dark #0a84ff and light #007aff plus their deliberately tuned
-  // hover/text/container roles. Inline derivation is only for a genuine override.
-  if (!tokens || tokens.accent === '#0a84ff') {
+  // The persisted default is the M3 baseline seed. Leaving it to styles.css preserves BOTH
+  // authored default families — dark #D0BCFF / light #6750A4 as `--md-primary`, plus every
+  // deliberately tuned hover/text/container role that goes with them. Inline derivation is only
+  // for a genuine override.
+  if (!tokens || tokens.accent === DEFAULT_ACCENT) {
     for (const property of CUSTOM_PROPERTIES) root.style.removeProperty(property)
     return
   }
