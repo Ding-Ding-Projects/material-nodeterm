@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0" rel="stylesheet">
+<link rel="stylesheet" href="md3/tokens.css">
+<style>
+  body { margin:0; background:#0A090D; }
+  a { color:var(--md-primary); text-decoration:none; }
+  a:hover { color:var(--md-on-primary-container); }
+  .msr { font-family:'Material Symbols Rounded'; font-weight:400; font-style:normal; line-height:1;
+         letter-spacing:normal; display:inline-block; white-space:nowrap; direction:ltr;
+         font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+  .msrf { font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24; }
+  @keyframes kidBob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+</style>
+</helmet>
+
+<div style="font-family:var(--md-font-ui);padding:36px;display:flex;flex-direction:column;gap:14px;color:#E6E0E9">
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div>
+      <div style="font-size:21px;font-weight:600">Kids mode · Material 3 rewrite</div>
+      <div style="font-size:13px;color:#938F99;margin-top:2px">Same tonal system, expressive shapes — <a href="MD3 Canvas.dc.html">Canvas</a> · <a href="MD3 Settings.dc.html">Settings</a></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleGate }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 20px;border-radius:999px;border:1px solid #49454F;background:transparent;color:#E6E0E9;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer"><span class="msr" style="font-size:18px">lock</span>{{ gateLabel }}</button>
+  </div>
+
+<div style="width:1440px;height:900px;border-radius:28px;overflow:hidden;position:relative;background:var(--md-surface);color:var(--md-on-surface);display:flex;flex-direction:column;outline:1px solid var(--md-outline-variant)">
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <div data-screen-label="Kids home" style="flex:1;display:flex;flex-direction:column;align-items:center;padding:44px 60px;gap:30px;background:linear-gradient(180deg, var(--md-surface) 0%, var(--md-surface-container-low) 100%)">
+    <div style="display:flex;align-items:center;gap:12px;align-self:stretch">
+      <sc-for list="{{ strip }}" as="k" hint-placeholder-count="3">
+        <span style="display:flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:999px;background:var(--md-secondary-container);color:var(--md-on-secondary-container);font-size:14px;font-weight:600"><span class="msr msrf" style="font-size:18px">{{ k.icon }}</span>{{ k.label }}</span>
+      </sc-for>
+      <div style="flex:1"></div>
+      <button onClick="{{ toggleGate }}" style="width:48px;height:48px;border-radius:16px;border:none;background:var(--md-surface-container-high);color:var(--md-on-surface-variant);cursor:pointer;display:flex;align-items:center;justify-content:center"><span class="msr" style="font-size:22px">lock</span></button>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:110px;height:110px;border-radius:38px;background:var(--md-primary-container);color:var(--md-on-primary-container);display:flex;align-items:center;justify-content:center;animation:kidBob 2.4s ease-in-out infinite"><span class="msr msrf" style="font-size:60px">smart_toy</span></div>
+      <div style="font-size:40px;font-weight:700">Hi! I'm Beep.</div>
+      <div style="font-size:18px;color:var(--md-on-surface-variant)">What do you want to do?</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3, 320px);gap:20px">
+      <sc-for list="{{ tiles }}" as="t" hint-placeholder-count="6">
+        <div style="border-radius:32px;background:{{ t.bg }};color:{{ t.fg }};padding:26px 26px 22px;display:flex;flex-direction:column;gap:16px;cursor:pointer;transition:transform var(--md-motion-spatial)" style-hover="transform:scale(1.03)">
+          <span class="msr msrf" style="font-size:44px">{{ t.icon }}</span>
+          <div>
+            <div style="font-size:22px;font-weight:700">{{ t.title }}</div>
+            <div style="font-size:14px;opacity:.75;margin-top:2px;font-weight:500">{{ t.sub }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Parent gate" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;background:var(--md-surface)">
+    <div style="width:76px;height:76px;border-radius:26px;background:var(--md-tertiary-container);color:var(--md-on-tertiary-container);display:flex;align-items:center;justify-content:center"><span class="msr msrf" style="font-size:38px">lock</span></div>
+    <div style="text-align:center">
+      <div style="font-size:30px;font-weight:700">Just a moment</div>
+      <div style="font-size:15.5px;color:var(--md-on-surface-variant);margin-top:6px">This part is for a grown-up. Enter the PIN.</div>
+    </div>
+    <div style="display:flex;gap:14px">
+      <sc-for list="{{ gateDots }}" as="d" hint-placeholder-count="4">
+        <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--md-outline);background:{{ d.bg }}"></span>
+      </sc-for>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3, 84px);gap:14px">
+      <sc-for list="{{ gateKeys }}" as="k" hint-placeholder-count="12">
+        <button onClick="{{ k.tap }}" style="width:84px;height:84px;border-radius:28px;border:none;background:{{ k.bg }};color:{{ k.fg }};font-family:inherit;font-size:26px;font-weight:700;cursor:pointer;visibility:{{ k.vis }};transition:background var(--md-motion-effect)" style-hover="background:var(--md-surface-container-highest)">{{ k.k }}</button>
+      </sc-for>
+    </div>
+    <button onClick="{{ goHome }}" style="height:44px;padding:0 24px;border-radius:999px;border:none;background:transparent;color:var(--md-primary);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">Back to Beep</button>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isParent }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Parent screen" style="flex:1;display:flex;flex-direction:column;padding:36px 56px;gap:22px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div>
+        <div style="font-size:28px;font-weight:700">Grown-up screen</div>
+        <div style="font-size:14px;color:var(--md-on-surface-variant);margin-top:3px">Time, activity and what Beep is allowed to do.</div>
+      </div>
+      <div style="flex:1"></div>
+      <button onClick="{{ goHome }}" style="height:44px;padding:0 22px;border-radius:999px;border:1px solid var(--md-outline);background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Back to kids</button>
+      <a href="MD3 Canvas.dc.html" style="display:flex;align-items:center;gap:8px;height:44px;padding:0 22px;border-radius:999px;background:var(--md-primary);color:var(--md-on-primary);font-size:14px;font-weight:600"><span class="msr" style="font-size:18px">code</span>Exit to developer mode</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:14px">
+      <sc-for list="{{ stats }}" as="st" hint-placeholder-count="4">
+        <div style="border-radius:24px;background:var(--md-surface-container-low);padding:18px 20px;display:flex;align-items:center;gap:14px">
+          <span class="msr" style="font-size:26px;color:var(--md-primary)">{{ st.icon }}</span>
+          <div>
+            <div style="font-size:22px;font-weight:700">{{ st.value }}</div>
+            <div style="font-size:12.5px;color:var(--md-on-surface-variant)">{{ st.label }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1;min-height:0">
+      <div style="border-radius:28px;background:var(--md-surface-container-low);padding:20px 22px;display:flex;flex-direction:column;gap:4px;overflow:hidden">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.7px;color:var(--md-on-surface-variant);padding-bottom:8px">TODAY'S ACTIVITY</div>
+        <sc-for list="{{ activity }}" as="a" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:14px;min-height:56px;padding:6px 4px">
+            <span style="width:40px;height:40px;border-radius:14px;background:var(--md-secondary-container);color:var(--md-on-secondary-container);display:flex;align-items:center;justify-content:center;flex:0 0 auto"><span class="msr" style="font-size:20px">{{ a.icon }}</span></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600">{{ a.what }}</div>
+              <div style="font-size:12.5px;color:var(--md-on-surface-variant)">{{ a.detail }}</div>
+            </div>
+            <span style="font-size:12px;color:var(--md-on-surface-variant);font-family:var(--md-font-mono)">{{ a.when }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border-radius:28px;background:var(--md-surface-container-low);padding:20px 22px;display:flex;flex-direction:column;gap:4px;overflow:hidden">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.7px;color:var(--md-on-surface-variant);padding-bottom:8px">PERMISSIONS</div>
+        <sc-for list="{{ toggles }}" as="t" hint-placeholder-count="5">
+          <div style="display:flex;align-items:center;gap:14px;min-height:56px;padding:6px 4px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600">{{ t.label }}</div>
+              <div style="font-size:12.5px;color:var(--md-on-surface-variant)">{{ t.hint }}</div>
+            </div>
+            <span style="width:52px;height:32px;border-radius:999px;background:{{ t.bg }};border:2px solid {{ t.trackBd }};position:relative;flex:0 0 auto">
+              <span style="position:absolute;top:{{ t.knobTop }};left:{{ t.knobLeft }};width:{{ t.knobSize }};height:{{ t.knobSize }};border-radius:50%;background:{{ t.knobBg }}"></span>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:1040},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  state = { view: 'home' };
+  componentDidMount() { document.documentElement.dataset.theme = this.props.theme ?? 'dark'; }
+  componentDidUpdate() { document.documentElement.dataset.theme = this.props.theme ?? 'dark'; }
+  sw(on) {
+    return {
+      bg: on ? 'var(--md-primary)' : 'var(--md-surface-container-highest)',
+      trackBd: on ? 'transparent' : 'var(--md-outline)',
+      knobBg: on ? 'var(--md-on-primary)' : 'var(--md-outline)',
+      knobTop: on ? '4px' : '8px', knobLeft: on ? '24px' : '8px', knobSize: on ? '24px' : '16px'
+    };
+  }
+  renderVals() {
+    const s = this.state;
+    return {
+      isHome: s.view === 'home', isGate: s.view === 'gate', isParent: s.view === 'parent',
+      gateLabel: s.view === 'home' ? 'Parent gate' : 'Kids home',
+      toggleGate: () => this.setState((p) => ({ view: p.view === 'home' ? 'gate' : 'home' })),
+      goHome: () => this.setState({ view: 'home' }),
+      strip: [
+        { icon: 'wb_sunny', label: 'Morning' },
+        { icon: 'schedule', label: '18 min left today' },
+        { icon: 'auto_awesome', label: '12 stickers' }
+      ],
+      tiles: [
+        { title: 'Talk to Beep', sub: 'Ask me anything', icon: 'smart_toy', bg: 'var(--md-primary-container)', fg: 'var(--md-on-primary-container)' },
+        { title: 'Type things', sub: 'A real computer', icon: 'keyboard', bg: 'var(--md-success-container)', fg: 'var(--md-on-success-container)' },
+        { title: 'Draw', sub: 'Make something', icon: 'brush', bg: 'var(--md-warning-container)', fg: 'var(--md-on-warning-container)' },
+        { title: 'Story time', sub: 'Read along', icon: 'auto_stories', bg: 'var(--md-tertiary-container)', fg: 'var(--md-on-tertiary-container)' },
+        { title: 'Sounds', sub: 'Listen and repeat', icon: 'graphic_eq', bg: 'var(--md-secondary-container)', fg: 'var(--md-on-secondary-container)' },
+        { title: 'My stickers', sub: 'You have 12', icon: 'auto_awesome', bg: 'var(--md-surface-container-high)', fg: 'var(--md-on-surface)' }
+      ],
+      gateDots: [1, 2, 3, 4].map((n) => ({ bg: n <= 2 ? 'var(--md-primary)' : 'transparent' })),
+      gateKeys: ['1','2','3','4','5','6','7','8','9','','0','⌫'].map((k) => ({
+        k, vis: k === '' ? 'hidden' : 'visible',
+        bg: k === '⌫' ? 'var(--md-tertiary-container)' : 'var(--md-surface-container-high)',
+        fg: k === '⌫' ? 'var(--md-on-tertiary-container)' : 'var(--md-on-surface)',
+        tap: k === '⌫' ? () => this.setState({ view: 'gate' }) : () => this.setState({ view: 'parent' })
+      })),
+      stats: [
+        { label: 'Time today', value: '42 min', icon: 'schedule' },
+        { label: 'Daily limit', value: '60 min', icon: 'hourglass_top' },
+        { label: 'Stickers earned', value: '12', icon: 'auto_awesome' },
+        { label: 'Words typed', value: '318', icon: 'keyboard' }
+      ],
+      activity: [
+        { what: 'Talked to Beep', detail: '14 questions · all answered on-device', when: '10:12', icon: 'smart_toy' },
+        { what: 'Typed things', detail: 'Ran say hello, count, clear', when: '10:31', icon: 'keyboard' },
+        { what: 'Drew a picture', detail: 'Saved to My stickers', when: '10:48', icon: 'brush' },
+        { what: 'Story time', detail: 'Finished "The little robot"', when: '11:02', icon: 'auto_stories' }
+      ],
+      toggles: [
+        { label: 'Allow the real terminal', hint: 'A plain shell with a safe command list', ...this.sw(true) },
+        { label: 'Allow Beep to answer freely', hint: 'Off restricts Beep to the suggestion cards', ...this.sw(true) },
+        { label: 'Read every screen aloud', hint: 'Narrator speaks labels on focus', ...this.sw(true) },
+        { label: 'Daily time limit', hint: 'Ends the session and returns to the gate', ...this.sw(true) },
+        { label: 'Lock kids mode on launch', hint: 'The app always opens here until unlocked', ...this.sw(false) }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>
