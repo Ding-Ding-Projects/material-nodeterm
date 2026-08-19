@@ -45,15 +45,18 @@ export function PinPad({
 
   const push = (d: string) => {
     if (disabled) return
-    setValue((v) => {
-      if (v.length >= length) return v
-      const next = v + d
-      if (next.length === length) {
-        // Let the last dot paint before handing the completed PIN to the caller.
-        window.setTimeout(() => onComplete(next), 60)
-      }
-      return next
-    })
+    // The completion callback is scheduled OUT here, not inside a setValue updater. An updater must
+    // be pure: React may call it more than once for a single update, which would hand the caller the
+    // finished PIN twice — and for the enable dialog that means running `enable()` twice for one tap.
+    // Reading `value` from this render's closure is correct for a click handler, since each render
+    // closes over its own value and a tap can only act on what was on screen when it happened.
+    if (value.length >= length) return
+    const next = value + d
+    setValue(next)
+    if (next.length === length) {
+      // Let the last dot paint before handing the completed PIN to the caller.
+      window.setTimeout(() => onComplete(next), 60)
+    }
   }
   const backspace = () => !disabled && setValue((v) => v.slice(0, -1))
 

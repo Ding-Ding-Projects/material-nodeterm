@@ -97,6 +97,24 @@ export const SHOTS = [
     note: 'Language, theme and appearance on a schedule, with the timezone stated.'
   },
   {
+    file: 'app-kids-home.png',
+    title: 'Kids mode — Home',
+    alt: 'The Kids mode home screen: a robot avatar introducing itself as Beep, a Morning chip and sticker count, six large activity tiles including Talk to Beep, Type things and Draw, and a plain-language notice that Kids mode does not sandbox the terminal.',
+    note: 'The notice is deliberate — Kids mode is friendly, not a sandbox, and says so on the screen a child uses.'
+  },
+  {
+    file: 'app-kids-gate.png',
+    title: 'Kids mode — the grown-up gate',
+    alt: 'The grown-up gate: a four-digit PIN pad standing between the kid-facing home screen and the grown-up settings.',
+    note: 'A speed bump for a child, not a security boundary; the recovery route is stated rather than hidden.'
+  },
+  {
+    file: 'app-kids-parent.png',
+    title: 'Kids mode — the grown-up screen',
+    alt: 'The grown-up screen behind the gate: time today, daily limit, stickers and sessions, an activity log, and permission switches for the real terminal, how freely the agent may answer, reading screens aloud, a daily time limit and locking Kids mode on launch.',
+    note: 'Each switch says what it actually changes, including that two of them are the same app-wide settings under another name.'
+  },
+  {
     file: 'app-settings-kids-mode.png',
     title: 'Kids mode',
     alt: 'The Kids mode settings section, showing the shared switch and its plain-language disclosure.',

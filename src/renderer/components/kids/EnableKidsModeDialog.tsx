@@ -89,6 +89,13 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
             : "Type the same 4 digits once more."}
         </p>
         <PinPad
+          // `key` is load-bearing, not tidiness. PinPad holds the typed digits in its OWN state and
+          // `push()` early-returns once that reaches `length`. Without a key React reuses one instance
+          // across choose -> confirm, so the confirm step arrives still holding the four digits from
+          // the choose step: every tap is silently ignored, `onComplete` never fires again, and a
+          // first-time user simply cannot turn Kids mode on. Remounting per step gives the confirm pad
+          // the empty value that step actually means.
+          key={step}
           length={4}
           onComplete={step === 'choose' ? onChoose : onConfirm}
           errorToken={errorToken}

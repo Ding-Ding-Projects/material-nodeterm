@@ -99,6 +99,7 @@ import {
 } from '../lib/nativeLoop'
 import { withNodeBoundary } from '../components/NodeBoundary'
 import { NavRail, type RailDestination } from '../components/NavRail'
+import { enterKidsModeFromRail } from '../components/kids/entry'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { type MenuItem } from '../components/ContextMenu'
@@ -12445,7 +12446,16 @@ export function Canvas() {
           <NavRail
             destinations={destinations}
             kidsLabel="Kids"
-            onOpenKids={() => openSettingsTo('kids-mode')}
+            // ENTERS Kids mode; it does not open a settings page about it. `components/kids/entry.ts`
+            // has always documented this destination as its caller ("the clean entry point the nav
+            // rail's child_care destination calls instead of toggling a local view"), but the rail was
+            // built by a different lane and shipped a placeholder that opened Settings — so
+            // enterKidsModeFromRail() had no callers and the whole Kids shell was unreachable from the
+            // rail. Entering flips the shared record; App.tsx's fail-closed routing swaps the canvas for
+            // <KidsShell/> on its own, and there is deliberately no way back out that a child can take.
+            onOpenKids={() => {
+              void enterKidsModeFromRail()
+            }}
             onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
             offersTerminalProfiles={offersTerminalProfiles}
             terminalProfileChoices={terminalProfileMenuChoices}

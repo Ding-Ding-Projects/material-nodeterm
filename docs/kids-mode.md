@@ -291,10 +291,28 @@ That the disclosure is visible ON SCREEN — not merely present in the source �
 this surface is a required capture at all: the mode's defensibility rests on a person having
 been shown it.
 
-What remains uncaptured is the rest: Home, the parent gate, the grown-up screen and the
-activity canvas have no shots, and a follow-up pass should add them the same way this one is
-produced (`npm run shots -- --launch`, as required surfaces so an unreachable one fails the
-run).
+Home, the grown-up gate and the grown-up screen are captured too, as REQUIRED surfaces so an
+unreachable one fails the run:
+
+| | |
+| --- | --- |
+| ![The Kids mode home screen: a robot avatar introducing itself as Beep, a Morning chip and sticker count, six large activity tiles, and a notice that Kids mode does not sandbox the terminal](./assets/shots/app-kids-home.png) | ![The grown-up gate: a four-digit PIN pad between the kid-facing home screen and the grown-up settings](./assets/shots/app-kids-gate.png) |
+| **Home** — the disclosure sits on the screen the child uses, not only in a settings page. | **The gate** — a speed bump, and the docs say so rather than implying a security boundary. |
+
+![The grown-up screen: time today, daily limit, stickers and sessions, an activity log, and permission switches for the real terminal, how freely the agent answers, reading screens aloud, a daily time limit and locking Kids mode on launch](./assets/shots/app-kids-parent.png)
+
+Getting these took fixing the reason they had never been captured. `entry.ts` has always
+documented the rail's Kids destination as the caller of `enterKidsModeFromRail()`, but the rail
+shipped a placeholder that opened a settings page instead, so that function had **zero callers**
+and the shell was unreachable. And once the rail was wired, the first-run flow still could not
+complete: `EnableKidsModeDialog` rendered one `PinPad` for both the choose and confirm steps
+with no `key`, React reused the instance, and because `push()` early-returns on a full pad every
+tap on the confirm step was silently swallowed — **a first-time user could not turn Kids mode on
+at all**. Both fixed; the second is pinned by
+`EnableKidsModeDialog.pinpad-reset.test.tsx`, whose dialog-level case goes red when the `key` is
+removed.
+
+Still uncaptured: the activity canvas, the stickers screen and the times-up screen.
 
 ## Still outstanding
 

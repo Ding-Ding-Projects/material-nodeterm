@@ -60,6 +60,68 @@ const doLaunch = flag('launch')
 const only = typeof flag('only') === 'string' ? String(flag('only')).split(',') : null
 
 // ---------------------------------------------------------------------
+// Shared driver for the Kids surfaces (see their entries below for why they need one).
+// ---------------------------------------------------------------------
+// Written as one string so the steps compose: every driver opens with the same helpers and then
+// appends only what its own surface needs. `until()` polls rather than sleeping, because a fixed
+// wait is a guess about how long a state change takes and it guessed wrong here.
+const KIDS_DRIVER = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  const until = async (sel, ms) => {
+    const end = Date.now() + ms
+    while (Date.now() < end) { if (document.querySelector(sel)) return true; await wait(150) }
+    return false
+  }
+  const byLabel = (needle) => [...document.querySelectorAll('button,[role=button]')].find((e) =>
+    (e.getAttribute('aria-label') || e.title || e.textContent || '').trim().toLowerCase().includes(needle))
+  const pad = async (pin) => {
+    for (const digit of pin) {
+      const key = document.querySelector('[aria-label="Digit ' + digit + '"]')
+      if (!key) return false
+      key.click()
+      await wait(150)
+    }
+    return true
+  }
+`
+
+// Enter the mode from the rail. First run also gets the choose/confirm PIN dialog; a later run in
+// the same profile skips straight through, so both paths are handled.
+const KIDS_HOME_STEPS = `
+  if (document.querySelector('.md3-kids-home')) return true
+  const kidsBtn = byLabel('kids')
+  if (!kidsBtn) return false
+  kidsBtn.click()
+  if (await until('[aria-label="Choose a 4-digit PIN"]', 5000)) {
+    if (!(await pad('1234'))) return false
+    if (!(await until('[aria-label="Confirm the 4-digit PIN"]', 5000))) return false
+    if (!(await pad('1234'))) return false
+  }
+  return await until('.md3-kids-home', 15000)
+})()`
+
+const KIDS_GATE_STEPS = `
+  if (document.querySelector('.md3-kids-pinpad')) return true
+  if (!(await until('.md3-kids-home', 10000))) return false
+  const gate = document.querySelector('[aria-label="Grown-up gate"]')
+  if (!gate) return false
+  gate.click()
+  return await until('.md3-kids-pinpad', 10000)
+})()`
+
+const KIDS_PARENT_STEPS = `
+  if (document.querySelector('.md3-kids-parent')) return true
+  if (!(await until('.md3-kids-pinpad', 3000))) {
+    const gate = document.querySelector('[aria-label="Grown-up gate"]')
+    if (!gate) return false
+    gate.click()
+    if (!(await until('.md3-kids-pinpad', 10000))) return false
+  }
+  if (!(await pad('1234'))) return false
+  return await until('.md3-kids-parent', 12000)
+})()`
+
+// ---------------------------------------------------------------------
 // The surface list. REQUIRED failures fail the run — see rule 2.
 // ---------------------------------------------------------------------
 // `verify` is the load-bearing field, and its absence was a real defect in the first version of
@@ -171,6 +233,42 @@ const SURFACES = [
       title: 'Settings — Appearance editor',
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Appearance editor'] },
       verify: '[class*="settings"]'
+    },
+    // ── The Kids screens ────────────────────────────────────────────────────────────────────────
+    // These had no captures because they had no way in: `components/kids/entry.ts` has always
+    // documented the rail's Kids destination as the caller of `enterKidsModeFromRail()`, but the
+    // rail was built by a different lane and shipped a placeholder that opened a settings page, so
+    // that function had zero callers and the whole shell was unreachable. Wired now, so it can be
+    // both driven and photographed.
+    //
+    // The PIN is 1234 and lives only inside the disposable sandbox profile this harness creates and
+    // deletes (see createAppSandbox — HOME and every agent config root are redirected too). It is
+    // not a credential and never touches a real home directory.
+    //
+    // Each driver POLLS for its target rather than sleeping a fixed time. Fixed sleeps failed here
+    // in a way worth remembering: the enable→shell swap outran a 1.5s wait, so `kids-home` reported
+    // failure while `kids-gate`, running afterwards, passed — the flow had worked and only the
+    // verification was early.
+    {
+      id: 'app-kids-home',
+      required: true,
+      title: 'Kids mode — Home',
+      open: { script: KIDS_DRIVER + KIDS_HOME_STEPS },
+      verify: '.md3-kids-home'
+    },
+    {
+      id: 'app-kids-gate',
+      required: true,
+      title: 'Kids mode — the grown-up gate',
+      open: { script: KIDS_DRIVER + KIDS_GATE_STEPS },
+      verify: '.md3-kids-pinpad'
+    },
+    {
+      id: 'app-kids-parent',
+      required: true,
+      title: 'Kids mode — the grown-up screen',
+      open: { script: KIDS_DRIVER + KIDS_PARENT_STEPS },
+      verify: '.md3-kids-parent'
     },
   // Optional: these need state the harness cannot manufacture.
   { id: 'app-agent-running', required: false, title: 'Agent mid-turn', why: 'needs a real agent CLI session' },
@@ -524,6 +622,23 @@ for (const s of SURFACES) {
         continue
       }
       await sleep(1500)
+    } else if (!alreadyOpen && s.open?.script) {
+      // A SCRIPTED DRIVER, for a surface no click sequence can reach. The Kids flow has to enter
+      // the mode, choose a PIN on a pad, confirm the same PIN, then unlock the grown-up screen with
+      // it — a sequence that must remember a value between steps. This still drives the app's OWN
+      // controls (it clicks real buttons and polls for the real result); it is not a way to reach
+      // past the UI into state. It must resolve `true`, or the run fails rather than photographing
+      // wherever it stopped — the same rule every other opener here obeys.
+      const drove = await send('Runtime.evaluate', {
+        returnByValue: true,
+        awaitPromise: true,
+        expression: s.open.script
+      })
+      if (drove.result.value !== true) {
+        failures.push({ id: s.id, why: `scripted opener did not reach its surface (returned ${JSON.stringify(drove.result.value)})` })
+        continue
+      }
+      await sleep(900)
     } else if (!alreadyOpen && s.open) {
       // Chords go through the real key path so the app's own handlers run. The code/vk pair is
       // spelled out per surface rather than derived from the key — deriving it produced

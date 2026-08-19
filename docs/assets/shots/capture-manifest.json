@@ -1,6 +1,6 @@
 {
-  "commit": "0ed347be175c48866aed9480927a638f0de419f8",
-  "capturedAt": "2026-08-19T06:10:54.856Z",
+  "commit": "d7bab426c577dc51c09ec9ae4dc320b3932e7260",
+  "capturedAt": "2026-08-19T06:39:59.111Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -78,6 +78,24 @@
       "id": "app-settings-appearance-editor",
       "title": "Settings — Appearance editor",
       "bytes": 87013,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-home",
+      "title": "Kids mode — Home",
+      "bytes": 75716,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-gate",
+      "title": "Kids mode — the grown-up gate",
+      "bytes": 26074,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-parent",
+      "title": "Kids mode — the grown-up screen",
+      "bytes": 63281,
       "hadOpener": true
     }
   ],
