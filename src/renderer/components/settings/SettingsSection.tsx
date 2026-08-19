@@ -1,6 +1,6 @@
 import type React from 'react'
-import { useSettingsSearch } from './context'
-import { matchesQuery, type SettingsSearchEntry } from './search'
+import { useSettingsSearchState } from './context'
+import { matchesEntry, type SettingsSearchEntry } from './search'
 import { useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
 
 /** Section shell: header + card body. Renders only when it is the active section
@@ -20,14 +20,22 @@ export function SettingsSection({
   searchEntries?: SettingsSearchEntry[]
   children: React.ReactNode
 }): React.JSX.Element | null {
-  const query = useSettingsSearch()
-  const hasQuery = query.trim() !== ''
+  // Mode-aware — the same state SearchableRow and the sidebar already match against. This used
+  // to be the plain-text `useSettingsSearch()` string run through `matchesQuery`'s literal
+  // substring check, so a regex-mode query was tested as if its raw pattern SOURCE were the
+  // search text: a section with no searchEntries bypassed the check entirely (`!searchEntries`)
+  // and stayed on screen regardless of the query, while a section that DID declare entries almost
+  // never matched (the pattern source is not the thing being searched). Two different, both-wrong
+  // answers depending on whether a section happened to pass `searchEntries` — never the section's
+  // own real rows, which is what SearchableRow was faithfully filtering all along.
+  const search = useSettingsSearchState()
+  const hasQuery = (search.mode === 'text' ? search.query : search.pattern).trim() !== ''
   // Personal-vocabulary boundary for section chrome (unconditional — search matching below still
   // runs against the ORIGINAL title/searchEntries, so a rename never breaks ⌘K-style lookup).
   const vocabTitle = useVocabularyText(title)
   const vocabDescription = useVocabularyText(description)
   if (hasQuery) {
-    const anyMatch = !searchEntries || searchEntries.some((e) => matchesQuery(query, e))
+    const anyMatch = !searchEntries || searchEntries.some((e) => matchesEntry(search, e))
     if (!anyMatch) {
       return null
     }
