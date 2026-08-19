@@ -4,28 +4,29 @@
 
 # nodeterm
 
-**A node-based terminal manager — your terminals and agents on an infinite canvas.**
+**Your terminals and coding agents on one infinite canvas.**
 
-Multiple real terminals live as draggable nodes on a single pan/zoom canvas, and every
-project doubles as a **Trello-style board of live agent sessions**. Built for people with
-ADHD and scattered workflows: a spatial layout instead of a stack of hidden tabs.
+Real shells live as draggable nodes on a pan/zoom canvas instead of behind a row of tabs, and
+every project doubles as a **board of live agent sessions**. Built for people whose work does not
+fit in a stack of hidden tabs — a map you arrange, not a list you scroll.
 
 [![Build check](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/ci.yml/badge.svg)](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20·%20macOS%20(arm64%20%2B%20x64)%20·%20Linux-black)](#windows)
 [![Built with Electron](https://img.shields.io/badge/built%20with-Electron-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![Material Design 3](https://img.shields.io/badge/design-Material%203-6750A4)](#the-interface)
 [![License](https://img.shields.io/badge/license-BUSL--1.1-blue)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Ding-Ding-Projects/material-nodeterm?style=flat)](https://github.com/Ding-Ding-Projects/material-nodeterm/stargazers)
 [![Latest release](https://img.shields.io/github/v/release/Ding-Ding-Projects/material-nodeterm?sort=semver)](https://github.com/Ding-Ding-Projects/material-nodeterm/releases)
-
-**Install:** grab the latest build from **[Releases](https://github.com/Ding-Ding-Projects/material-nodeterm/releases)**
-(Windows `Setup.exe` today — see [Windows](#windows) for the unsigned-installer note), or
-build it yourself with `build.bat` / `build.sh` — see [Install / build](#install--build).
 
 [Site](https://ding-ding-projects.github.io/material-nodeterm/) · [Releases](https://github.com/Ding-Ding-Projects/material-nodeterm/releases) · [Features](#-features) · [Windows](#windows) · [Build from source](#install--build) · [Documentation](#documentation) · [Contributing](#contributing) · [License](#license)
 
 </div>
 
----
+![The nodeterm canvas: a 64px Material Design 3 top app bar carrying the brand mark, project switcher and docked search; an 88px left nav rail with its floating action button and the destinations Canvas, Board, Files, Tools, History, Alerts and Settings; the sessions sidebar; and the pan/zoom canvas with its dot grid, zoom controls and minimap](./docs/assets/shots/app-04-canvas.png)
+
+> **Install:** grab the latest build from **[Releases](https://github.com/Ding-Ding-Projects/material-nodeterm/releases)**
+> (Windows `Setup.exe` today — see [Windows](#windows) for the unsigned-installer note), or build
+> it yourself with `build.bat` / `build.sh` — see [Install / build](#install--build).
 
 This is a fork of [eneskirca/nodeterm](https://github.com/eneskirca/nodeterm). The site's own
 custom domain belongs to the upstream repository, so this fork publishes its documentation at
@@ -34,86 +35,129 @@ instead — note the trailing `/material-nodeterm/`.
 
 ## Why nodeterm
 
-Stacked terminal tabs hide context — you lose track of what's running where. nodeterm turns
-that into a **map**: every shell is a node you can place, group, label, and zoom into. Sessions
-are spatial and persistent, so your mental model stays intact across restarts. And because the
-app is built around a clean service seam, the same canvas runs two ways: as the **desktop
-app** (Windows, macOS and Linux), and as a **self-hosted browser app** you reach from anywhere
-(Server Edition) — including from a phone, with no app to install.
+Stacked terminal tabs hide context — you lose track of what is running where. nodeterm turns that
+into a **map**: every shell is a node you can place, group, label and zoom into. Sessions are
+spatial and persistent, so your mental model survives a restart. And because the app is built
+around a clean service seam, the same canvas runs two ways: as the **desktop app** (Windows,
+macOS, Linux) and as a **self-hosted browser app** you reach from anywhere — including a phone,
+with nothing to install.
+
+## The interface
+
+The whole app is **Material Design 3** — one baseline scheme seeded at `#6750A4`, tonal elevation
+rather than drop shadows, and Outfit / Roboto Mono / Material Symbols bundled and subsetted so it
+renders identically offline. A 64px top app bar carries the brand, the project switcher and a
+docked search; an 88px nav rail carries the destinations and a FAB that owns node creation.
+
+Every colour, typeface, size, weight, radius and spacing the app renders is adjustable at runtime
+through the appearance editor, and every colour control is a continuous field with a colour-space
+translator rather than a fixed list of swatches.
+
+<details>
+<summary><strong>See it</strong> — real captures of the built app, not mockups</summary>
+
+Every image below was taken from the built `out/` artifact over the DevTools protocol by
+[`scripts/capture-shots.mjs`](./scripts/capture-shots.mjs), which fails the run when a required
+surface cannot be reached. Provenance for each is in
+[`capture-manifest.json`](./docs/assets/shots/capture-manifest.json).
+
+| | |
+| --- | --- |
+| ![The command palette open over the app, listing create actions for terminals and each supported agent](./docs/assets/shots/app-03-palette.png) | ![The project rendered as a kanban board with Ungrouped, To Do, In Progress and Done columns](./docs/assets/shots/app-05-kanban.png) |
+| **Command palette** — every command, destination and setting behind `Ctrl+Shift+F`. | **The same project as a board** — cards *are* the session nodes, not a separate list. |
+| ![The History screen inset behind the app bar and nav rail, with Session memory, Settings history and Changelog tabs](./docs/assets/shots/app-06-history.png) | ![The settings surface with sidebar navigation, a search field with the regex-builder affordance beside it, and per-agent controls](./docs/assets/shots/app-02-settings.png) |
+| **History** — session memory, local settings history and the changelog viewer. | **Settings** — every surface carries its own search, wired to the full regex builder. |
+| ![The Language settings section: an English, Cantonese and Bilingual segmented button and two independent funny-level sliders](./docs/assets/shots/app-settings-language.png) | ![The Narrator settings section: a master toggle off by default, a narrated-language choice, and a separate voice picker per language](./docs/assets/shots/app-settings-narrator.png) |
+| **Language** — three modes, and two sliders that change tone without changing the facts. | **Narrator** — off by default, with a live line saying which voice will actually speak. |
+
+Kids mode ships its own screens, captured the same way:
+
+| | |
+| --- | --- |
+| ![The Kids mode home screen: a robot avatar introducing itself as Beep, activity tiles, and a notice that Kids mode does not sandbox the terminal](./docs/assets/shots/app-kids-home.png) | ![The grown-up screen: time today, daily limit, stickers and sessions, an activity log, and permission switches](./docs/assets/shots/app-kids-parent.png) |
+| **Kids home** — the disclosure sits on the screen the child uses. | **The grown-up screen**, behind a PIN gate that the docs call a speed bump, not security. |
+
+Also captured: [at launch](./docs/assets/shots/app-01-launch.png),
+[the appearance editor](./docs/assets/shots/app-settings-appearance-editor.png),
+[app name & logo](./docs/assets/shots/app-settings-app-identity.png),
+[scheduled settings](./docs/assets/shots/app-settings-schedule.png),
+[the Kids gate](./docs/assets/shots/app-kids-gate.png) and
+[Kids mode settings](./docs/assets/shots/app-settings-kids-mode.png).
+
+Two surfaces are deliberately **absent** rather than faked — an agent mid-turn and an SSH project
+need a live agent session and a reachable host, so the harness skips them loudly and lists why.
+
+</details>
 
 ## ✨ Features
 
-- **Global and per-project settings** — Global mode holds durable app-wide defaults. Every project
-  opens the same complete Settings surface in Project mode, can override any setting, and can reset
-  its sparse local overlay to Global mode. Shared project JSON cannot inject local executables,
-  credentials, paths, or host secrets.
-- **Free Docker host access** — share one selected project from a Docker-hosted relay and connect
-  with a single-use pairing code. Hosting and joining are free; end-to-end encryption and mutual
-  approval remain intact.
-
 ### The canvas
 
-Right-click the canvas to open a **terminal** or an **agent** node. Each runs in its own
-persistent session next to **sticky notes** (link one to a terminal to feed it context on
-demand), **Monaco editors**, and **diff views** — six node kinds in total, all panning,
-zooming, resizing and persisting the same way. **Group** nodes are real containers that can
-nest inside each other and optionally bind to a git worktree, so every node created inside one
-inherits that worktree's directory. Quit the app and its persistent backend reattaches to the
-live session. Restart the machine and cold restore reconstructs the node, replays saved scrollback,
-and resumes a supported agent CLI; it does not preserve the original OS process.
+Right-click to open a **terminal** or an **agent** node. Alongside them live **sticky notes**
+(link one to a terminal to feed it context on demand), **Monaco editors**, **diff views**, web and
+browser views, annotations, and a family of **service managers** — Minecraft, Docker host,
+Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, colour, group and
+persist like any other, because a managed service is something you arrange beside the terminals
+working on it, not a modal you visit.
+
+**Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
+every node created inside one inherits that worktree's directory. Quit the app and the persistent
+backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,
+replays saved scrollback and resumes a supported agent CLI — it does not preserve the original OS
+process, and says so.
 
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 
 An **agent** node is a terminal preset that launches an agent CLI as its first command. Status
-is driven entirely by each agent's own hooks — never by scraping terminal output — so you get
-pulsing **RUNNING / NEEDS YOU** badges, a per-node context-window meter, subagent cards with
-live transcripts, and (for capable agents) session renaming and conversation branching. A
-custom command works too, with basic process/title status. See
-[`docs/features/agents/agent-support.md`](./docs/features/agents/agent-support.md) for exactly
-which capability each agent has.
+comes from each agent's own hooks — never from scraping terminal output — so you get pulsing
+**RUNNING / NEEDS YOU** badges, a per-node context-window meter, subagent cards with live
+transcripts, and, for capable agents, session renaming and conversation branching. A custom
+command works too, with basic process/title status.
+
+Capabilities are per agent and none are assumed: see
+[`docs/features/agents/agent-support.md`](./docs/features/agents/agent-support.md) for exactly what
+each one has, and what it does not.
 
 ### One project, two views — the kanban board
 
-Every project is a canvas **and also a Trello-style board**. Cards *are* your live session
-nodes, derived from the same data every time the board renders — drag one across columns while
-its agent keeps running, or open a card into a live modal (the real session, plus members, due
-date, priority and comments). The canvas stays mounted underneath the board, so nothing running
-is ever interrupted by switching views.
+Every project is a canvas **and** a Trello-style board. Cards *are* your live session nodes,
+derived from the same data on every render — drag one across columns while its agent keeps
+running, or open a card into a live modal holding the real session plus members, due date,
+priority and comments. The canvas stays mounted underneath, so switching views never interrupts
+anything.
 
 ### Session continuity
 
-Every terminal node runs inside a persistent [tmux](https://github.com/tmux/tmux) session on
-macOS and Linux, so a shell — and anything running in it, including an in-flight agent turn —
-survives closing a node, switching projects, and quitting the app. A machine reboot ends the live
-process; the cold-restore path replays saved scrollback and resumes supported agent conversations.
-**Windows has no tmux binary to bundle**, so nodeterm ships a from-scratch equivalent instead:
-the [Windows session host](#windows), a standalone process that owns the real PTYs and outlives
-the app. See [Windows](#windows) for its two honest caveats.
+Every terminal runs inside a persistent [tmux](https://github.com/tmux/tmux) session on macOS and
+Linux, so a shell — and anything in it, including an in-flight agent turn — survives closing a
+node, switching projects and quitting the app. **Windows has no tmux binary to bundle**, so
+nodeterm ships a from-scratch equivalent: the [Windows session host](#windows), a standalone
+process that owns the real PTYs and outlives the app. See [Windows](#windows) for its two honest
+caveats.
 
 ### Remote & SSH, and the Server Edition
 
-Point a project at a folder on a remote host and every terminal, file operation, git command
-and even the kanban board for that project run there while the canvas stays local — session
-continuity applies remotely too. Or run nodeterm's **Server Edition**: the exact same renderer,
-served headless over plain HTTP/WebSocket from a Linux, macOS, or Windows host you own, reached from any
-browser, with passkey or password auth. One command (`./host.sh` on macOS/Linux or `host.bat` on
-Windows) builds and starts it in a container. Phone pairing — so a browser on your phone can reach
-the terminals on your desktop too — is a Core feature, not a paywalled one.
+Point a project at a folder on a remote host and every terminal, file operation, git command and
+even the kanban board for that project runs there while the canvas stays local — session
+continuity applies remotely too. Or run the **Server Edition**: the same renderer served headless
+over HTTP/WebSocket from a host you own, reached from any browser, with passkey or password auth.
+One command (`./host.sh`, or `host.bat` on Windows) builds and starts it in a container. Phone
+pairing is a free feature, not a paywalled one.
 
 ### Source control and git worktrees
 
 A full git panel — stage/unstage, discard, diff nodes, branch switch/create, commit (with an
-optional AI-generated commit message from a local agent CLI you already have), push/sync,
-`gh` sign-in. **Worktrees bind to group frames**: create one from the panel or command palette
-and every node you open inside that frame runs in that worktree — an agent per branch is just a
-group per branch.
+optional AI-generated message from a local agent CLI you already have), push/sync, `gh` sign-in.
+**Worktrees bind to group frames**: create one from the panel or the command palette and every
+node opened inside that frame runs in that worktree, so an agent per branch is just a group per
+branch.
 
 ### Dictation
 
 Voice-to-text for any terminal or agent node, transcribed entirely on-device with
 [Whisper](https://github.com/openai/whisper) — nothing you say leaves your machine. Hold the
-dictation chord, speak, and choose **Send** (submits it) or **Insert** (drops it in without
-submitting). Works identically on desktop and in the Server Edition's browser tab.
+chord, speak, then choose **Send** (submits) or **Insert** (drops it in without submitting).
+Identical on desktop and in the browser.
 
 <details>
 <summary><strong>More — language modes, the regex builder, toy locks, exports, and everything else this fork adds</strong></summary>
@@ -163,7 +207,6 @@ submitting). Works identically on desktop and in the Server Edition's browser ta
   command, setting and destination in the app. See [`docs/command-palette.md`](./docs/command-palette.md).
 
 </details>
-
 ## Windows
 
 Windows is a first-class desktop target: a native **Squirrel.Windows** installer, a
@@ -255,42 +298,12 @@ package-manager `PATH` refresh race): [`docs/building.md`](./docs/building.md).
 
 ## Screenshots
 
-Real captures of the built app and the live site — every image below was taken from a running
-build or the deployed site, never mocked up and never reused from upstream. The full manifest
-(what each shows, the commit, the exact capture method) is in
+The app captures live in [The interface](#the-interface) above. This section is the **site**: the
+published documentation site at
+[ding-ding-projects.github.io/material-nodeterm](https://ding-ding-projects.github.io/material-nodeterm/),
+captured from the deployed page rather than a local server. The full manifest — what each image
+shows, the commit it came from, the exact capture method — is in
 [`docs/assets/shots/README.md`](./docs/assets/shots/README.md).
-
-The `app-*.png` set was re-captured from commit `8e37e640` (2026-08-19) against the built
-`out/` artifact, so it shows the current Material Design 3 chrome — the 64px top app bar
-([`TopAppBar.tsx`](./src/renderer/components/TopAppBar.tsx) +
-[`ProjectSwitcher.tsx`](./src/renderer/components/ProjectSwitcher.tsx)) and the 88px left nav
-rail with its FAB ([`NavRail.tsx`](./src/renderer/components/NavRail.tsx) +
-[`FabMenu.tsx`](./src/renderer/components/FabMenu.tsx)). Exact commit, method and per-image
-provenance: [`capture-manifest.json`](./docs/assets/shots/capture-manifest.json).
-
-
-<details>
-<summary><strong>The desktop app</strong> — settings, the command palette, and the features this fork adds</summary>
-
-| | |
-| --- | --- |
-| ![The nodeterm settings surface, showing the sidebar navigation with Agents selected, per-agent enable/default controls for Claude Code, Codex, Gemini, opencode and Grok, and the permission-mode explanation](./docs/assets/shots/app-02-settings.png) | ![The Narrator settings section: a master toggle that is off by default, a narrated-language choice of English, Cantonese or Both, and two separate voice pickers each set to Choose automatically](./docs/assets/shots/app-settings-narrator.png) |
-| **Settings** — the tabbed surface, its search field with the regex-builder affordance beside it, and per-agent capability controls. | **Narrator** — off by default, with a *separate* voice picker per language and a live line saying which voice will actually speak. |
-| ![The Language settings section, offering English, Cantonese and Bilingual modes with two independent funny-level sliders](./docs/assets/shots/app-settings-language.png) | ![The command palette open over the app, listing create actions for terminals and each supported agent](./docs/assets/shots/app-03-palette.png) |
-| **Language** — three modes, and two funny-level sliders that change tone without changing what a message says. | **Command palette** — every command, destination and setting, with a persisted size. |
-
-| ![The nodeterm canvas showing the 88px nav rail with Canvas selected, the sessions sidebar, the zoom controls and the minimap](./docs/assets/shots/app-04-canvas.png) | ![The same project shown as a kanban board with Ungrouped, To Do, In Progress and Done columns, the terminal session appearing as a card in Ungrouped](./docs/assets/shots/app-05-kanban.png) |
-| **The canvas** — the nav rail, the sessions sidebar, and the minimap; the FAB owns node creation. | **The same project as a board** — cards *are* the session nodes; Ungrouped holds anything unassigned. |
-
-| ![The History screen inset behind the app bar and nav rail, with Session memory, Settings history and Changelog tabs, showing the session-memory panel](./docs/assets/shots/app-06-history.png) | ![The Kids mode settings section](./docs/assets/shots/app-settings-kids-mode.png) |
-| **History** — session memory, local settings history and the changelog viewer, one rail destination. | **Kids mode** — the shared switch, with its disclosure on screen rather than only in the source. |
-
-Also captured: [the appearance editor](./docs/assets/shots/app-settings-appearance-editor.png),
-[app name & logo](./docs/assets/shots/app-settings-app-identity.png),
-[scheduled settings](./docs/assets/shots/app-settings-schedule.png), and
-[the app at launch](./docs/assets/shots/app-01-launch.png).
-
-</details>
 
 <details>
 <summary><strong>The site</strong> — light and dark, the regex builder, and a phone layout</summary>
@@ -299,16 +312,16 @@ Also captured: [the appearance editor](./docs/assets/shots/app-settings-appearan
 | --- | --- |
 | ![The nodeterm site home page in its light theme](./docs/assets/shots/site-home-light.png) | ![The same site home page in its dark theme](./docs/assets/shots/site-home-dark.png) |
 | **Home, light.** | **Home, dark.** |
-| ![A search field on the site with the anchored regex builder open beside it](./docs/assets/shots/site-search-regex-builder.png) | ![The site rendered at a 390px-wide phone viewport](./docs/assets/shots/site-narrow-390.png) |
-| **The regex builder**, anchored to the field it belongs to. | **390px phone width** — measured to have no sideways scroll. |
+| ![A search field on the site with the anchored regex builder open beside it](./docs/assets/shots/site-search-regex-builder.png) | ![The site rendered at a 390px phone width](./docs/assets/shots/site-narrow-390.png) |
+| **The regex builder**, anchored to the field it belongs to. | **390px phone width** — measured, not eyeballed: no sideways scroll at 390, 768 or 1280. |
 
 </details>
 
-**Not yet captured, and honestly absent rather than staged:** an agent mid-turn (the
-RUNNING / NEEDS YOU badge and a subagent fan-out), and the Squirrel installer's SmartScreen
-prompt. The canvas shot above shows a real, live terminal session, but its pane is empty — see
-[the manifest](./docs/assets/shots/README.md) for why, and for the two captures that were taken
-and discarded rather than shipped.
+**Honestly absent rather than staged:** an agent mid-turn (the RUNNING / NEEDS YOU badge and a
+subagent fan-out) and an SSH project need a live agent session and a reachable host, so the
+capture harness skips them loudly and records why. The canvas shot shows a real, live session
+whose pane is empty — [the manifest](./docs/assets/shots/README.md) explains that, and lists the
+captures that were taken and discarded rather than shipped.
 
 ## Contributing
 
