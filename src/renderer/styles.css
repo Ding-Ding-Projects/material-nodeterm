@@ -182,6 +182,9 @@
   --danger-rgb: 242, 184, 181; /* --md-error decomposed */
   --warn-rgb: 231, 194, 108; /* --md-warning decomposed */
   --mono-font: var(--md-font-mono);
+  /* Bare alias for the call sites written against the short name (the colour popover's hex
+     field, the service node's meta text) -- same stack, different spelling. */
+  --mono: var(--mono-font);
   /* The switch/slider thumb sitting ON a filled --md-primary track is genuinely M3's own on-primary
      role — in dark that is a dark purple thumb on a light purple track, not an un-themed white. */
   --knob: var(--md-on-primary);
@@ -14546,7 +14549,7 @@ body.focus-mode .dock:hover {
   min-height: 80px;
   padding: 6px 8px;
   color: var(--md-on-surface, #f2f2f7);
-  background: #000000;
+  background: var(--term-bg);
   border: 1px solid var(--md-outline-variant, #3a3a3c);
   border-radius: 8px;
   font-family: var(--mono, ui-monospace, monospace);
