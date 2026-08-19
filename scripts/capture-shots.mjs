@@ -381,6 +381,24 @@ await send('Emulation.setDeviceMetricsOverride', {
   await sleep(1500)
 }
 
+// `--launch` always boots a genuinely fresh, isolated sandbox (createAppSandbox — no prior
+// projects), so `.md3-welcome__card--primary` ("New project") is on screen at this point. Several
+// required surfaces — the kanban toggle chief among them — render ONLY once a project exists
+// (ProjectSwitcher's `{activeProject && <button className="tab__board-toggle">}`), so a run that
+// never creates one can NEVER capture them: not a stale selector, a state the harness never
+// reaches. (`--attach` is unaffected — it drives an already-open, already-populated dev profile,
+// which is how earlier committed captures show a real "Project 1" with a terminal on it.) Create
+// one empty project so `--launch` reaches the same reachable state on its own.
+{
+  const created = await send('Runtime.evaluate', { returnByValue: true, expression: `(function(){
+    var card = document.querySelector('.md3-welcome__card--primary');
+    if (card) { card.click(); return 'created'; }
+    return 'already have a project';
+  })()` })
+  console.log(`  starter project: ${created.result.value}`)
+  await sleep(1200)
+}
+
 // Return to a KNOWN BASE STATE before photographing anything. The previous run ends on the
 // kanban board (it is the last surface), and a board left open made the next run capture it
 // under two other surfaces' names. A harness whose output depends on how the last run finished
