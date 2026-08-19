@@ -1,0 +1,762 @@
+/* nodeterm — Material Design 3 rewrite styles.
+ * Each lane owns one clearly banner-delimited section below. New global classes only
+ * (md3-<component> / md3-<component>__<part> / md3-<component>--<variant>), colours from
+ * var(--md-*) tokens only. See design/v2/md3/tokens.css + HANDOFF.md for the source contract.
+ */
+
+/* ================================================================================
+   MD3: Regex Builder (design/v2/MD3 Regex Builder.dc.html)
+   Owns: src/renderer/components/regex/*, the .md3-regex-trigger chip, and the
+   .md3-regex-popover override of the shared .anchored-pop shell (a second, MORE
+   SPECIFIC selector — `.anchored-pop.md3-regex-popover` — rather than editing
+   .anchored-pop itself, which belongs to another lane).
+   ================================================================================ */
+
+/* ---- the ".*" trigger chip every regex-capable search field carries ---- */
+.md3-regex-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--md-surface-container-high, transparent);
+  border: none;
+  border-radius: var(--md-shape-full, 999px);
+  color: var(--md-on-surface-variant, inherit);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--md-motion-effect, 160ms ease), color var(--md-motion-effect, 160ms ease);
+}
+
+.md3-regex-trigger:hover {
+  /* Hover steps one surface-container level up from the resting `-high` tier. */
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.md3-regex-trigger:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.md3-regex-trigger--active {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+.md3-regex-trigger--active:hover {
+  background: var(--md-primary);
+  filter: brightness(1.06);
+}
+
+/* Widen + re-shell the shared anchored-popover instance this builder opens in — deliberately a
+   MORE SPECIFIC selector than the shared `.anchored-pop` rule (styles.css, owned elsewhere) so
+   this overrides cleanly without touching that file. The width override needs `!important`
+   because AnchoredPopover sets an inline `style={{width}}` — importance is the one thing that
+   legitimately beats an inline style from an external stylesheet. */
+.anchored-pop.md3-regex-popover {
+  width: min(920px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px);
+  background: var(--md-surface-container-high);
+  border: none;
+  outline: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg, 28px);
+  box-shadow: none;
+}
+
+/* ---- the builder itself ---- */
+.md3-regex-builder {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--md-font-ui, inherit);
+  color: var(--md-on-surface);
+}
+
+.md3-regex-builder__columns {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.md3-regex-builder *:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+/* -- palette column: token search + stacked, scrollable token/preset sections -- */
+.md3-regex-builder__palette {
+  width: 240px;
+  flex: 0 0 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 8px 14px 14px;
+  border-right: 1px solid var(--md-outline-variant);
+  max-height: min(76vh, 720px);
+}
+
+.md3-regex-builder__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.md3-regex-builder__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.md3-regex-builder__engine-chip {
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  color: var(--md-on-surface-variant);
+  cursor: help;
+  white-space: nowrap;
+}
+
+.md3-regex-builder__note {
+  margin: -2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__token-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__token-search svg {
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__token-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.md3-regex-builder__palette-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.md3-regex-builder__empty-note {
+  margin: 4px 0;
+  font-size: 11.5px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__token-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.md3-regex-builder__section-title {
+  margin: 0;
+  padding: 0 4px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__section-title--mt {
+  margin-top: 4px;
+}
+
+.md3-regex-builder__token-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.md3-regex-builder__token {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: var(--md-shape-xs, 8px);
+  background: transparent;
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.md3-regex-builder__token:hover {
+  /* One step below the glyph badge's own --highest tone, so the row highlight
+     stays visually distinct from the badge sitting inside it. */
+  background: var(--md-surface-container-high);
+}
+
+.md3-regex-builder__token-glyph {
+  flex: 0 0 auto;
+  min-width: 60px;
+  padding: 2px 6px;
+  border-radius: var(--md-shape-xs, 8px);
+  background: var(--md-surface-container-highest);
+  color: var(--md-primary);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.md3-regex-builder__token-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.md3-regex-builder__preset {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: var(--md-shape-xs, 8px);
+  background: transparent;
+  color: var(--md-on-surface);
+  cursor: pointer;
+}
+
+.md3-regex-builder__preset:hover {
+  background: var(--md-surface-container-high);
+}
+
+.md3-regex-builder__preset-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.md3-regex-builder__preset svg {
+  flex: 0 0 auto;
+  color: var(--md-outline);
+}
+
+/* -- main column: pattern / flags / sample / live highlight / substitution -- */
+.md3-regex-builder__main {
+  flex: 1 1 340px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  max-height: min(76vh, 720px);
+  overflow-y: auto;
+}
+
+.md3-regex-builder__row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.md3-regex-builder__row-head--mt {
+  margin-top: 6px;
+}
+
+.md3-regex-builder__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__spacer {
+  flex: 1;
+}
+
+.md3-regex-builder__count {
+  font-size: 10.5px;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full, 999px);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect, 160ms ease);
+}
+
+.md3-regex-builder__chip-btn svg {
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__chip-btn:hover {
+  background: var(--md-surface-container-high);
+}
+
+.md3-regex-builder__chip-btn--muted {
+  border-color: transparent;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__pattern-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+}
+
+.md3-regex-builder__pattern-pill--error {
+  border-color: var(--md-error);
+}
+
+.md3-regex-builder__slash {
+  color: var(--md-outline);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__pattern-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 14px;
+}
+
+.md3-regex-builder__flag-string {
+  flex: 0 0 auto;
+  color: var(--md-primary);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.md3-regex-builder__flag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.md3-regex-builder__flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-xs, 8px);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.md3-regex-builder__flag-letter {
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-weight: 700;
+}
+
+.md3-regex-builder__flag-chip--on {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.md3-regex-builder__banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--md-shape-sm, 12px);
+  padding: 8px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.md3-regex-builder__banner svg {
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__banner--error {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+
+.md3-regex-builder__banner--warn {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+
+.md3-regex-builder__sample {
+  resize: vertical;
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  padding: 9px 12px;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  outline: none;
+}
+
+.md3-regex-builder__sample:focus-visible {
+  border-color: var(--md-primary);
+}
+
+.md3-regex-builder__match-badge {
+  height: 20px;
+  padding: 0 9px;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  font-size: 10.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.md3-regex-builder__match-badge--hit {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+
+.md3-regex-builder__hint {
+  font-size: 10.5px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__hint--mono {
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+}
+
+.md3-regex-builder__highlight {
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container-lowest);
+  padding: 9px 12px;
+  min-height: 42px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.md3-regex-builder__muted {
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__error-text {
+  color: var(--md-error);
+}
+
+.md3-regex-builder__mark {
+  border-radius: 4px;
+  padding: 0 1px;
+}
+
+.md3-regex-builder__truncated-note {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__replacement {
+  height: 38px;
+  border-radius: var(--md-shape-sm, 12px);
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  padding: 0 12px;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  outline: none;
+}
+
+.md3-regex-builder__replacement:focus-visible {
+  border-color: var(--md-primary);
+}
+
+.md3-regex-builder__substituted {
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container-lowest);
+  padding: 9px 12px;
+  min-height: 22px;
+  max-height: 100px;
+  overflow-y: auto;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--md-on-surface-variant);
+}
+
+/* -- side column: matches & capture groups, explanation, info card -- */
+.md3-regex-builder__side {
+  width: 270px;
+  flex: 0 0 270px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 14px 12px;
+  border-left: 1px solid var(--md-outline-variant);
+  max-height: min(76vh, 720px);
+  overflow-y: auto;
+}
+
+.md3-regex-builder__match-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.md3-regex-builder__match-card {
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container);
+  padding: 8px 10px;
+}
+
+.md3-regex-builder__match-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.md3-regex-builder__match-num {
+  flex: 0 0 auto;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.md3-regex-builder__match-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.md3-regex-builder__match-at {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__group-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding-left: 4px;
+}
+
+.md3-regex-builder__group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.md3-regex-builder__group-name {
+  flex: 0 0 auto;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.md3-regex-builder__group-value {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+  word-break: break-all;
+}
+
+.md3-regex-builder__no-matches {
+  border-radius: var(--md-shape-md, 16px);
+  border: 1px dashed var(--md-outline-variant);
+  padding: 12px;
+  font-size: 11.5px;
+  color: var(--md-on-surface-variant);
+  text-align: center;
+}
+
+.md3-regex-builder__explain-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.md3-regex-builder__explain-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 2px;
+}
+
+.md3-regex-builder__explain-tok {
+  flex: 0 0 auto;
+  min-width: 56px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--md-surface-container-highest);
+  color: var(--md-primary);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.md3-regex-builder__explain-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__info-card {
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container);
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.md3-regex-builder__info-title {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__info-body {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+
+/* -- footer ("Done") -- */
+.md3-regex-builder__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.md3-regex-builder__done {
+  height: 34px;
+  padding: 0 18px;
+  border-radius: var(--md-shape-full, 999px);
+  border: none;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.md3-regex-builder__done:hover {
+  filter: brightness(1.05);
+}
+
+/* -- narrow-viewport fallback: stack the three columns instead of squeezing them -- */
+@media (max-width: 900px) {
+  .md3-regex-builder__columns {
+    flex-direction: column;
+  }
+  .md3-regex-builder__palette,
+  .md3-regex-builder__main,
+  .md3-regex-builder__side {
+    width: auto;
+    flex: 0 0 auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .md3-regex-builder__palette {
+    border-right: none;
+    border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .md3-regex-builder__side {
+    border-left: none;
+    border-top: 1px solid var(--md-outline-variant);
+  }
+}
