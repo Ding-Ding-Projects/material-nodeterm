@@ -117,6 +117,7 @@ import {
   IconCollapse,
   IconBellFilled,
   IconBranch,
+  IconCircleCheck,
   IconDuplicate,
   IconEditor,
   IconColor,
@@ -218,6 +219,7 @@ import {
 } from '../lib/accountRemoval'
 import { NotificationCenter } from '../components/NotificationCenter'
 import { HistoryScreen } from '../components/HistoryScreen'
+import { StatusSurface } from '../components/StatusSurface'
 import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
@@ -1055,6 +1057,7 @@ export function Canvas() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [notifCenterOpen, setNotifCenterOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
   const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
   const [phonePairAnchor, setPhonePairAnchor] = useState<{
@@ -12356,6 +12359,7 @@ export function Canvas() {
           setSettingsOpen(false)
           setNotifCenterOpen(false)
           setHistoryOpen(false)
+          setStatusOpen(false)
         }
         const mobileServer = isMobileServerEdition()
         const leaveBoard = () => {
@@ -12365,7 +12369,7 @@ export function Canvas() {
           if (!kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
         }
         const anyDrawerOpen =
-          explorerOpen || scOpen || converterOpen || ollamaOpen || settingsOpen || notifCenterOpen || historyOpen
+          explorerOpen || scOpen || converterOpen || ollamaOpen || settingsOpen || notifCenterOpen || historyOpen || statusOpen
         const destinations: RailDestination[] = [
           {
             id: 'canvas',
@@ -12442,6 +12446,17 @@ export function Canvas() {
               closeAllDrawers()
               leaveBoard()
               setHistoryOpen(true)
+            }
+          },
+          {
+            id: 'status',
+            icon: <IconCircleCheck />,
+            label: 'Status',
+            active: statusOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setStatusOpen(true)
             }
           },
           {
@@ -12906,6 +12921,11 @@ export function Canvas() {
           onGoToNode={travelToNode}
           onKillSession={killSessionById}
         />
+        </div>
+      )}
+      {statusOpen && (
+        <div className="md3-status-host">
+          <StatusSurface />
         </div>
       )}
       {notifCenterOpen && (

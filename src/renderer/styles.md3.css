@@ -9122,3 +9122,343 @@
   outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
+
+/* ---- Status surface (the Status rail destination) ----
+   The app's own status: one M3 card per project gate, each carrying the stable state emoji, an
+   honest summary and the recorded evidence behind it — see docs/status-surface.md. Host follows
+   the .md3-history-host pattern exactly: inset behind the app bar and the nav rail (z 27 < rail
+   28), so the rail stays clickable as the way out and no separate close button is needed.
+   Tokens only, tonal surfaces, no box-shadow; state colour is never the only signal (every state
+   also carries its emoji and its text label). */
+.md3-status-host {
+  position: fixed;
+  top: var(--app-bar-h);
+  left: var(--nav-rail-w);
+  right: 0;
+  bottom: 0;
+  z-index: 27;
+  background: var(--md-surface);
+}
+
+.md3-status-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 24px 28px;
+  overflow-y: auto;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+}
+.md3-status-screen__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.md3-status-screen__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+}
+.md3-status-screen__subtitle {
+  margin-top: 4px;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--md-on-surface-variant);
+}
+.md3-status-screen__baseline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, max-content));
+  gap: 8px 28px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container);
+}
+.md3-status-screen__baseline dt {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+.md3-status-screen__baseline dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  max-width: 420px;
+}
+
+.md3-status-screen__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+/* Same anatomy as .md3-history-search — one search field, the anchored regex builder beside it. */
+.md3-status-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 6px 0 14px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  flex: 0 1 280px;
+  min-width: 180px;
+}
+.md3-status-search:focus-within {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -1px;
+}
+.md3-status-search__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  outline: none;
+}
+.md3-status-screen__search-error {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--md-error);
+}
+.md3-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.status-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+.status-filter-chip:hover:not(:disabled) {
+  background: var(--md-surface-container-high);
+}
+.status-filter-chip--on {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.status-filter-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.status-filter-chip:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.md3-status-screen__body {
+  min-height: 0;
+}
+.md3-status-screen__empty {
+  margin: 24px 0;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+.md3-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--md-shape-large);
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+}
+/* A failed gate is the one state that must shout: tonal error container, never a soft tint. */
+.status-card--failed {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+  border-color: transparent;
+}
+.status-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.status-card__emoji {
+  font-size: 20px;
+  line-height: 24px;
+}
+.status-card__titles {
+  flex: 1;
+  min-width: 0;
+}
+.status-card__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.status-card__stateline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 3px;
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--md-shape-full);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+.status-chip--verified {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.status-chip--failed {
+  background: var(--md-error);
+  color: var(--md-on-error);
+}
+.status-chip--waiting,
+.status-chip--running {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.status-card__age {
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+}
+.status-card--failed .status-card__age {
+  color: var(--md-on-error-container);
+}
+.status-card__expand {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: inherit;
+  font-family: var(--md-font-ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+.status-card__expand:hover {
+  background: var(--md-surface-container-high);
+}
+.status-card__expand:focus-visible,
+.status-card__facts a:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.status-card__summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+}
+.status-card__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+.status-card__facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 0;
+}
+.status-card__fact {
+  display: contents;
+}
+.status-card__facts dt {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+  padding-top: 2px;
+}
+.status-card--failed .status-card__facts dt {
+  color: var(--md-on-error-container);
+}
+.status-card__facts dd {
+  margin: 0;
+  font-size: 12px;
+  line-height: 17px;
+  font-family: var(--md-font-mono);
+  overflow-wrap: anywhere;
+}
+.status-card__facts a {
+  color: var(--md-primary);
+}
+.status-card--failed .status-card__facts a {
+  color: inherit;
+  text-decoration: underline;
+}
+.status-card__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.status-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 17px;
+}
+.status-row__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.status-row__note {
+  color: var(--md-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+.status-card--failed .status-row__note {
+  color: var(--md-on-error-container);
+}
+
+/* Narrow widths: the baseline block and toolbar stack; the grid is already auto-fill. */
+@media (max-width: 720px) {
+  .md3-status-screen {
+    padding: 16px;
+  }
+  .md3-status-screen__baseline {
+    width: 100%;
+  }
+  .md3-status-search {
+    flex-basis: 100%;
+  }
+}
