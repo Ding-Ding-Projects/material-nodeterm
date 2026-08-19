@@ -26,7 +26,7 @@ export function SettingsSidebar({
   // `search.active` — not `value !== ''` — because in regex mode an INVALID pattern must not dim
   // every row as though nothing matched; the field owns that distinction.
   const hasQuery = search.active
-  // Sidebar rows are compact (256px column, up to ~22 of them) — bilingual mode joins primary +
+  // Sidebar rows are compact (300px column, up to ~22 of them) — bilingual mode joins primary +
   // secondary on ONE line here (`ts`) rather than stacking a second row per item, which would
   // crowd badly. Contrast with LanguageSection's own body copy, which has room to stack.
   const { ts } = useI18n()
@@ -37,9 +37,9 @@ export function SettingsSidebar({
   const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
   const groups = visibleSettingsGroups(isMac, schoolModeHydrated && !schoolModeEnabled)
   return (
-    <aside className="flex w-[256px] shrink-0 flex-col border-r border-border bg-panel">
+    <aside className="md3-settings-sidebar flex shrink-0 flex-col">
       <div
-        className="flex items-center px-3 pb-2 pt-14"
+        className="flex items-center px-4 pb-2 pt-14"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <button
@@ -47,7 +47,7 @@ export function SettingsSidebar({
           onClick={onClose}
           aria-label={ts('settings.nav.backToApp', 'Back to app')}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex items-center gap-1.5 rounded-md border-0 bg-transparent px-1.5 py-1 text-sm font-medium text-muted outline-none transition-colors hover:bg-fill-weak hover:text-text"
+          className="md3-settings-sidebar__back"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M8.5 3.5 5 7l3.5 3.5" />
@@ -56,36 +56,33 @@ export function SettingsSidebar({
         </button>
       </div>
 
-      <div className="px-3 pb-3">
-        <div className="relative flex items-center gap-1">
-          <div className="relative flex-1">
-            <svg
-              aria-hidden="true"
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-2"
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            >
-              <circle cx="6" cy="6" r="4" />
-              <path d="M9.2 9.2 12 12" />
-            </svg>
-            <Input
-              ref={inputRef}
-              className="h-8 w-full pl-8"
-              value={search.value}
-              onChange={(e) => search.setValue(e.target.value)}
-              placeholder={
-                search.mode === 'regex'
-                  ? ts('settings.nav.searchRegex', 'Search settings (regex)')
-                  : ts('settings.nav.search', 'Search settings')
-              }
-              aria-label={ts('settings.nav.search', 'Search settings')}
-            />
-          </div>
+      <div className="px-4 pb-4">
+        <div className="md3-settings-search">
+          <svg
+            aria-hidden="true"
+            className="md3-settings-search__icon"
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          >
+            <circle cx="7" cy="7" r="4.6" />
+            <path d="M10.5 10.5 14 14" />
+          </svg>
+          <Input
+            ref={inputRef}
+            value={search.value}
+            onChange={(e) => search.setValue(e.target.value)}
+            placeholder={
+              search.mode === 'regex'
+                ? ts('settings.nav.searchRegex', 'Search settings (regex)')
+                : ts('settings.nav.search', 'Search settings')
+            }
+            aria-label={ts('settings.nav.search', 'Search settings')}
+          />
           <AnchoredRegexBuilder
             search={search}
             fieldRef={inputRef}
@@ -98,7 +95,7 @@ export function SettingsSidebar({
       <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
         {groups.map((group) => (
           <div key={group.id} className="space-y-0.5">
-            <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-2">
+            <p className="md3-settings-sidebar__group-title">
               {ts(`settings.group.${group.id}`, group.title)}
             </p>
             {group.sections.map((s) => {
@@ -124,23 +121,12 @@ export function SettingsSidebar({
                   type="button"
                   onClick={() => onSelect(s.id)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={cn(
-                    'group flex w-full items-center gap-2.5 rounded-lg border-0 px-3 py-2 text-left text-[13px] outline-none transition-colors',
-                    isActive
-                      ? 'bg-white/[0.09] font-medium text-text ring-1 ring-inset ring-white/10'
-                      : 'bg-panel text-muted hover:bg-white/[0.05] hover:text-text',
-                    dimmed && 'opacity-35'
-                  )}
+                  className={cn('md3-settings-nav-row', dimmed && 'md3-settings-nav-row--dimmed')}
                 >
-                  <span
-                    className={cn(
-                      'flex size-4 shrink-0 items-center justify-center transition-colors',
-                      isActive ? 'text-text' : 'text-muted-2 group-hover:text-muted'
-                    )}
-                  >
+                  <span className="md3-settings-nav-row__icon">
                     <SectionIcon id={s.id} />
                   </span>
-                  <span className="truncate">{sectionTitle}</span>
+                  <span className="md3-settings-nav-row__label">{sectionTitle}</span>
                 </button>
               )
             })}
