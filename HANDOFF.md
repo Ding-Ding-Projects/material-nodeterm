@@ -282,7 +282,13 @@ disabled. The list must be converted into tracked issues if issue tracking is en
 - Ollama image attachments, exhaustive catalog metadata, regex search, copy-model UI, relay
   routing, and the stronger destructive gate remain incomplete.
 - Site nested tab grouping remains unimplemented.
-- Material 3 elevation roles and migration of existing components remain unstarted.
+- ~~Material 3 elevation roles and migration of existing components remain unstarted.~~ **Stale
+  as of 2026-08-19 — this line was wrong the moment it was written into this section and nobody
+  caught it for three days.** The migration happened in full: the tab strip and dock were torn out
+  and replaced with an M3 nav shell, both stylesheets were re-seeded to the M3 baseline, and the
+  app now declares 46 M3 roles in both themes. See "Handoff addendum — the Material Design 3
+  rewrite this file never recorded" at the end of this document for what shipped, what was
+  verified, and what is still open.
 - Speech native ABI/device proof remains incomplete, and the cloud transcription endpoint is not
   built.
 - Session-memory macOS per-row comparison and a real memory-pressure signal remain open.
@@ -759,3 +765,276 @@ fix one writer, look at what the survivor still contains. `hook-endpoint.env` di
 Ask what is IN the leftover, then remove writers one at a time. Both of tonight's directory
 mysteries — this one and the EPERM flake — gave themselves up to that same question, after five
 hypotheses between them had failed.
+---
+
+## Handoff addendum — the Material Design 3 rewrite this file never recorded (2026-08-19)
+
+### Why this section exists
+
+`HANDOFF.md` is the handoff of record for this repository, and until this section was added it
+contained **zero** occurrences of "Material Design 3", "MD3", "NavRail", "TopAppBar",
+"styles.md3", or "TabBar.tsx" — confirmed with a plain `grep`, not assumed. The largest change to
+this app's UI in its history — every stock chrome surface torn out and replaced — happened
+entirely underneath a document that kept describing an app whose tab strip and dock still existed.
+A handoff that is confidently wrong about the biggest recent change is worse than no handoff at
+all, because the next reader trusts it. Every claim below was checked against the tree at commit
+`38280b0b7d3d7a22641464984225c07c4df833f8` (this worktree's `HEAD`, and `origin/main`'s tip at
+write time) before being written down; none of it is restated from the brief that asked for this
+correction.
+
+### What actually shipped
+
+The rewrite spans roughly twenty commits landing 2026-08-18 (`git log --oneline -- design/v2/`
+and `-- src/renderer/styles.md3.css` both bottom out that day), starting from
+`84ef6d14 feat(design): apply the M3 roles to the low-risk surfaces` and running through
+`41a593eb feat(tools): Ollama, converter, authenticator and toy locks get the M3 seed`. It is
+fully merged into `main` — not stranded on a branch — via `main`'s own first-parent chain
+(`db0c00ed Merge branch 'feat/minecraft-server-manage'` and `7c922e70 fix(md3): rebuild the M3
+sheet from its lanes, and let the bar be 64` both sit on that chain, ahead of the
+Docker-hosted-deployment commits `d475bdee`/`fd752f51` at the very tip).
+
+**The tab strip and bottom dock are gone.** `src/renderer/components/TabBar.tsx` and `Dock.tsx`
+were deleted outright in `b4061448 feat(shell): wire the app to the nav shell; retire the tab
+strip and dock`. In their place: `TopAppBar.tsx` (51 lines — a flat 64px surface-container bar
+that is also the window drag region), `ProjectSwitcher.tsx` (799 lines — a menu button replacing
+the project tab strip: one dropdown lists every project, drag-reorders them, and expands a
+per-project actions panel carrying everything the old tab caret menu did, including the
+session-duration toy-lock relock effect, which moved here so it could never go missing), `NavRail`
+(81 lines — an 88px rail that is a real flex sibling of the canvas, not a floating overlay, with
+Canvas/Board/Files/Tools/Alerts/Settings destinations and Kids pinned to the bottom), and
+`FabMenu.tsx` (350 lines — the "add a node" dropdown, the old dock menu moved here verbatim). The
+floating `.controls-cluster` is gone entirely too: search, the presence facepile, notifications,
+phone pairing and help moved into the app bar; Explorer/Source Control/the file converter/the
+Ollama manager are now reached through the rail's Files/Tools destinations. **`CLAUDE.md` itself
+was not fully updated for this** — as of this writing it still says, in its own "Window chrome"
+section, that "the tab bar (`TabBar.tsx`) is the drag region" (`CLAUDE.md:2060`), a file that no
+longer exists. That correction belongs to whoever next touches that file; it is out of scope for
+this pass, which only writes `HANDOFF.md`.
+
+**The app bar is 64px, the rail is 88px.** `--app-bar-h: 64px` and `--nav-rail-w: 88px` are
+declared at `src/renderer/styles.css:100-101`; every floating panel/overlay that positions itself
+below the bar does so via `calc(var(--app-bar-h) + …)`. `src/shared/layout.ts` exports
+`APP_BAR_HEIGHT = 64` as main's independent copy of the same number (the file's own doc comment
+says outright that the two have no shared build-time link and must be changed together), consumed
+by `src/main/index.ts:569` for the Windows `titleBarOverlay` height so the native caption-button
+overlay lines up with the app bar instead of floating over the canvas below it.
+
+**There are now two stylesheets.** `src/renderer/styles.css` (14,569 lines — the pre-existing
+token layer plus legacy rules) and `src/renderer/styles.md3.css` (8,414 lines — the new chrome),
+the second imported immediately after the first in `src/renderer/boot.tsx` (`import
+'./styles.css'` then `import './styles.md3.css'`) so it wins on source order wherever the two
+declare the same selector.
+
+**Three font families ship as committed, subsetted `.woff2` under
+`src/renderer/assets/fonts/`** — `material-symbols/material-symbols-rounded-subset.woff2` (one
+file), `outfit/` (two variable-weight files, latin and latin-ext), `roboto-mono/` (four files:
+400/700 × normal/italic) — seven files total, all tracked in Git (`git ls-files` confirms none are
+gitignored). `scripts/build-fonts.mjs` regenerates them and also emits
+`src/renderer/components/materialSymbols.generated.ts`, a generated name union consumed by
+`MaterialSymbol.tsx`. Material Symbols is subset **by codepoint, not by ligature name**: the
+component renders the glyph's raw private-use-area character directly, never the ligature text,
+because the subset was built with GSUB/ligature substitutions stripped — confirmed by reading both
+`build-fonts.mjs`'s own comments and `MaterialSymbol.tsx`'s doc comment, which say this in nearly
+identical words.
+
+**The token layer was re-seeded to the M3 baseline, and the default accent changed.**
+`DEFAULT_ACCENT = '#6750a4'` (`src/shared/types.ts:1655`) replaced the prior default of systemBlue
+`#0a84ff`. This is a real, user-visible appearance change for every existing install, and
+`src/core/settings-store.ts` carries an explicit one-time migration for it (its own comment and
+guard, lines 53-63): because the app always persists the full settings object including untouched
+defaults,
+every existing `settings.json` has `#0a84ff` written in byte-for-byte — indistinguishable from a
+user who deliberately chose systemBlue — so the migration treats the old literal default as "never
+touched" and carries it forward to the new default once. A user who genuinely wanted systemBlue
+loses that choice on first launch after upgrade and has to re-pick it from the swatch row. The
+same migration also flips two canvas interaction defaults (`wheelZoom`/`canvasDragMode`) forward
+for anyone still on the old literal defaults.
+
+**New surfaces that did not exist before this window, confirmed present:** a changelog viewer
+(`src/renderer/components/changelog/ChangelogPanel.tsx`), Kids Mode as a set of dedicated screens
+distinct from the pre-existing School mode (`src/renderer/components/kids/`:
+`EnableKidsModeDialog.tsx`, `KidsActivityCanvas.tsx`, `KidsGate.tsx`, `KidsHome.tsx`,
+`KidsParent.tsx`, `KidsShell.tsx`, `KidsStickers.tsx`, plus its own settings section and state
+store), and a Minecraft server create/manage panel
+(`src/renderer/components/minecraft/MinecraftServerPanel.tsx`) wired to
+`src/core/minecraft/{java.ts,register-ipc.ts,server-manager.ts,version-resolve.ts}`. All four are
+present in `check-app-contract.mjs`'s feature inventory with passing existence/content checks (see
+Verification below).
+
+**The design bundle lives at `design/v2/`.** Ten `.dc.html` handoff artifacts (Board, Canvas,
+Files, History, Kids Mode, Overlays, Regex Builder, Settings, Tools, Welcome), a `support.js`, a
+`HANDOFF-README.md`, and `design/v2/md3/tokens.css` (102 lines, 3,665 bytes) — the token contract
+the rewrite drew from.
+
+### Verification actually performed at `38280b0b` (this HEAD)
+
+Every number below was observed by running the command, not assumed from a prior session's
+report.
+
+| Check | Command | Result |
+|---|---|---|
+| Type checking | `npm run typecheck` | **Clean.** Zero errors on both `tsconfig.node.json` and `tsconfig.web.json`. |
+| Vocabulary lock | `node scripts/check-vocabulary.mjs` | Passed. |
+| App contract | `node scripts/check-app-contract.mjs` | 725 assertions across 47 features. **3 failures**, all under "First-class Windows terminal profiles" (a suite-boundary string match, a pending built-artifact-interaction assertion, and a pending real-capture-evidence assertion) — none related to the M3 rewrite. The same run's "M3 foundation" checks passed: no CDN font/icon link across 748 scanned renderer files, all 46 M3 roles declared in the dark `:root` block, all 46 roles defined for both themes, and the app's `data-theme` attribute (not a stray `data-md-theme`) is what's actually used. |
+| Site contract | `node scripts/check-site-contract.mjs` | 340 assertions, all clear. |
+| Full test suite | `npx vitest run` (default parallel workers) | **691 test files: 677 passed, 7 failed, 7 skipped. 8,730 tests: 8,477 passed, 55 failed, 198 skipped.** Wall time 213.19 s. Full breakdown below. |
+| Production build | `npm run build` (vocabulary + changelog checks, `electron-vite build`, `host:build`) | **Succeeded, exit 0.** Produces `out/main`, `out/preload`, `out/renderer` (including the ~7.6 MB `monaco-setup` chunk and the ~2.8 MB `boot` chunk) and `out/session-host/host.cjs`. |
+
+**The redesign has never been visually verified. Nobody has launched the built app and looked at
+it.** This pass ran `npm run build` and confirmed it exits 0 and produces the expected output
+files; it did not run `npm run check:wired`, did not launch the packaged app on a headless
+desktop, and took no screenshots of the new app bar, nav rail, project switcher, or FAB menu. A
+clean typecheck and a clean production build are evidence the code compiles and bundles — they are
+**not** evidence that the 64px bar actually renders at 64px, that the rail's destinations actually
+open the right panels, that the re-seeded accent doesn't clash with something, or that the two
+stylesheets' cascade order produces the intended result on screen. That gap is exactly the kind of
+thing this document exists to be honest about rather than paper over.
+
+### The seven failing test files, with cause
+
+None of the 55 failing tests are new MD3 *layout* regressions beyond the one CSS defect below;
+most belong to other work that landed at the same tip. Recorded here because they were found
+while doing the verification this section reports, and leaving them undiagnosed would just mean
+the next reader re-does this work.
+
+1. **`src/renderer/styles.theme.test.ts` (2 failures) — real, and MD3-adjacent.** The Minecraft
+   panel's `.mc-console` rule (`src/renderer/styles.css:14543-14554`) hardcodes
+   `background: #000000` instead of a theme token, and both `.mc-console` and `.mc-path`
+   (`styles.css:14453`, `14552`) reference an undefined `--mono` custom property — only
+   `--mono-font` is actually defined anywhere in either stylesheet. This is very likely the exact
+   drift this document's own earlier section already flagged in passing ("`src/renderer/styles.css`
+   contains an unrelated unstaged user/other-session change (monospace token alias and terminal
+   background token)... deliberately excluded from this session's commits") that never got
+   finished. Not fixed here — out of scope for a document-only pass — but the cause is confirmed,
+   not guessed.
+2. **`src/core/build-bat.test.ts` (~19 failures)** — Windows batch installer-build tests
+   (Authenticode probing, `cmd.exe` orchestration). Not MD3-related on its face; needs an isolated
+   re-run per this repo's own documented contention guidance before attributing it to a real
+   regression versus environment noise, which this pass did not have time to do.
+3. **`src/core/fs-atomic.guard.test.ts` (1 failure) — real, and worth flagging loudly given how
+   much this repo's own documentation (see "Atomic writes" above) cares about this exact
+   invariant.** `core/local-history.ts` and `core/minecraft/java.ts` both publish through a bare
+   `fs.rename`/`rename(` instead of the required `renameAtomic` helper. `core/minecraft/java.ts` is
+   new code from this cycle (the automatic Java provisioning for managed Minecraft servers) and
+   never got the atomic-write treatment this repo dedicates an entire section of `CLAUDE.md` to.
+4. **`src/main/remote/relay-host-service.test.ts` (~28 failures) — not MD3-related.** These come
+   from the Docker-hosted-remote-access work merged at the very tip (`fd752f51`/`d475bdee`); tests
+   throw `Choose a local project before starting Docker host.` / `The selected project has no local
+   Docker workspace.` — the test harness was not updated after `addSeat` grew a new required
+   Docker-project precondition.
+5. **`src/renderer/nodes/ServiceNode.test.tsx` (3 failures) — a test-harness gap from the new
+   Minecraft surface.** The new `minecraft` kind renders `MinecraftServerPanel`, which calls
+   `useSession()`; the shared `ServiceNode.test.tsx` harness (`render(...)` → `Harness`) never
+   wraps in a `SessionProvider` for any kind, so the three Minecraft-specific cases throw `[session]
+   useSession() outside a SessionProvider`.
+6. **`src/renderer/terminal/webgl-addon-pair.test.ts` (1 failure) — an install artifact in this
+   environment, not a source defect.** `node_modules/@xterm/addon-webgl/lib/` does not exist at all
+   in this checkout (confirmed with `ls`), so the test's `fs.readFileSync` on
+   `lib/addon-webgl.js` fails with `ENOENT` before it ever gets to compare version guards.
+7. **`src/renderer/state/permissionMode.funnel.test.ts` (1 failure) — real, and in the new Kids
+   Mode surface.** `components/kids/KidsParent.tsx` reads `settings.claudePermissionMode` directly
+   instead of through `activePermissionMode()`, which is exactly the funnel-bypass class of bug
+   this test exists to catch (it names the Kids-mode gate specifically).
+
+### Corrections to other claims already in this file
+
+Checked because the brief asked whether the file's existing draft-release text was still accurate
+— it was not, and neither were two adjacent claims found along the way.
+
+- **The two stranded drafts this file described (`v0.4.4`, `v0.4.5`) no longer exist.**
+  `gh release view v0.4.4` / `v0.4.5` both return "release not found." Whether they were deleted by
+  the repository owner or superseded some other way is not recorded anywhere this pass could find;
+  either way, the "two drafts sitting there" state this document described is gone. In its place,
+  as of this write, there is exactly **one** draft release across the entire repository (checked
+  via `gh api repos/.../releases --paginate`, 100+ releases scanned): `v0.4.41`, whose
+  `targetCommitish` is `38280b0b` — **this exact commit**. The pattern this document already
+  documents (a failed run strands a version number nobody can reuse) is continuing under new
+  numbers; it was not a one-time event that got cleaned up.
+- **"`.github/workflows/release.yml` is a manual-only `workflow_dispatch` pipeline" and "Automatic
+  publication is disabled because the workflow has no push trigger" are both false as of this
+  commit.** Read directly from the file (`.github/workflows/release.yml:31-34`):
+  ```yaml
+  on:
+    push:
+      branches: [main]
+    workflow_dispatch:
+  ```
+  The workflow's own header comment says plainly: "EVERY PUSH TO MAIN RELEASES. There is no manual
+  bump step." `gh workflow list` confirms the Release workflow's status as `active`, and `gh run
+  list --workflow=Release` shows it firing on essentially every push to `main` throughout
+  2026-08-18/19, publishing a new version each time (`v0.4.27` through `v0.4.40` published, in
+  order, over the course of the day this rewrite landed). `docs/ci-and-releases.md` describes the
+  same old push-triggers-an-infinite-tag-loop incident and the resulting "no push trigger, ever"
+  fix — that document is now **also** stale in the same direction as this one was; it is not
+  touched by this pass (out of scope), but a future pass should reconcile it with the workflow file
+  it is supposed to describe.
+- **"The repository is public but has issues disabled... `gh issue list` fails for that reason" is
+  false as of this commit.** `gh api repos/.../material-nodeterm --jq .has_issues` returns `true`,
+  and `gh issue list --state open` returns two open issues (`#2` "Session handoff: test-suite
+  reliability, two server leaks, integration research", `#3` "Add global defaults, full project
+  settings, and Docker-hosted remote access") — neither is about the MD3 rewrite; `#2` is an
+  earlier handoff largely covering ground this file's own later sections already describe (the
+  temp-directory leaks, the contention-timeout run), and `#3`'s timing lines up with the
+  Docker-hosted-deployment commits at this file's very first section. This pass did not post
+  anything to either issue or open a new one; posting a handoff copy to GitHub Issues, now that
+  they're enabled, is a reasonable next step for whoever picks this up, but it was not part of what
+  was asked here.
+
+### Published baseline, re-verified
+
+- **Latest non-draft release: `v0.4.40`**, published `2026-08-19T04:03:10Z`, targeting commit
+  `d475bdee6e60612722f62981c9a67c4f11f4e7e1`. Verified via `gh release view v0.4.40 --json
+tagName,targetCommitish,publishedAt,isDraft,isPrerelease,assets`: `isDraft: false`,
+  `isPrerelease: false`, three assets uploaded
+  (`node-terminal-0.4.40-full.nupkg` 218,055,235 bytes, `nodeterm-Setup-0.4.40.exe`
+  218,183,168 bytes, `RELEASES` 85 bytes).
+- **Ancestry confirmed, not assumed**: `git merge-base --is-ancestor d475bdee HEAD` succeeds (the
+  published target is an ancestor of this worktree's `HEAD`), and `git merge-base --is-ancestor
+b4061448 d475bdee` also succeeds — the commit that deleted `TabBar.tsx`/`Dock.tsx` and wired in
+  the nav shell is itself an ancestor of what `v0.4.40` shipped. **The published `v0.4.40` build
+  does carry the Material Design 3 rewrite.** It does not carry the two Docker-hosted-deployment
+  commits at this file's tip (`fd752f51`, `d475bdee`'s sibling `38280b0b` merge) — those are one
+  and two commits ahead of what's published, respectively, and are what the draft `v0.4.41` (see
+  above) is attempting and has not yet succeeded at publishing cleanly.
+- Package version in the tree remains `"0.4.3"` (`package.json`), consistent with this release
+  pipeline's documented design: the computed release version is applied to the working tree at
+  build time and deliberately never committed back to `main`, so the Git tag (`v0.4.40`) is the
+  source of truth for what shipped, not `package.json`.
+
+### Open boundaries found or reconfirmed during this pass
+
+- No built-artifact interaction proof (`check:wired`) or real screenshot capture exists for the
+  Material Design 3 rewrite. This is the single biggest gap this addendum exists to name plainly.
+- No dedicated documentation file exists for the M3 rewrite under a categorized `docs/` subfolder,
+  unlike Kids Mode (`docs/kids-mode.md`) and the Minecraft server manager
+  (`docs/minecraft-server-manager.md`), both of which ship one and both of which are checked for by
+  `check-app-contract.mjs`. The "M3 foundation" contract check is narrower (four structural CSS
+  assertions) and does not require or check for a feature write-up.
+- `.mc-console`'s hardcoded black background and the dangling `--mono` token reference
+  (`src/renderer/styles.theme.test.ts`, both failing) are unfixed.
+- `core/local-history.ts` and `core/minecraft/java.ts` publish via bare renames instead of
+  `renameAtomic` (`src/core/fs-atomic.guard.test.ts`, failing) — a real Windows data-loss risk per
+  this repository's own extensively documented reasoning for why that helper exists.
+- `components/kids/KidsParent.tsx` bypasses the permission-mode funnel
+  (`src/renderer/state/permissionMode.funnel.test.ts`, failing).
+- `ServiceNode.test.tsx`'s shared test harness has no `SessionProvider`, so all three
+  Minecraft-kind test cases fail on mount.
+- `src/core/build-bat.test.ts`'s ~19 failures and the `relay-host-service.test.ts` failures (Docker
+  precondition, unrelated to MD3) were observed but not root-caused to the same depth as the items
+  above in the time available for this pass; both deserve an isolated re-run.
+- `CLAUDE.md`'s own "Window chrome" section still describes `TabBar.tsx` as the drag region
+  (`CLAUDE.md:2060`); that file was not touched by this pass.
+- `docs/ci-and-releases.md` still describes the release workflow as manual-`workflow_dispatch`-only
+  with no push trigger, which the workflow file itself now contradicts; also not touched by this
+  pass.
+- The stranded-draft pattern this document already flagged is recurring under new numbers
+  (`v0.4.41`, targeting this exact commit) rather than resolved.
+
+### Next-owner note
+
+Before claiming the Material Design 3 rewrite is release-ready: launch the packaged build (or run
+`npm run build && npm run check:wired`) and actually look at the new app bar, nav rail, project
+switcher and FAB menu on a real screen — nothing above substitutes for that. Then decide whether
+the `.mc-console` styling defect and the two atomic-write violations found above are worth a
+one-line fix before the next release, since both are small, both are diagnosed, and neither
+requires touching anything MD3-specific to correct.
