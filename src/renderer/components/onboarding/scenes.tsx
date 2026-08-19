@@ -8,9 +8,15 @@ import { AgentMascot } from '../../nodes/AgentMascot'
  * Animated scenes for the first-run setup tour (OnboardingFlow). All motion is CSS-only
  * (keyframes in styles.css, `.onb-*`) so there are no new dependencies; every scene loops
  * and respects `prefers-reduced-motion` (styles.css freezes them to their final frame).
- * Where a scene depicts real UI (context menu, terminal node, kanban columns) it reuses
- * the app's OWN classes (`ctx-menu`/`ctx-item`, `term-node__status`, kanban column look)
- * so the tour never drifts from what the user actually gets.
+ * Where a scene depicts real UI (context menu, terminal node, kanban columns) it uses its
+ * OWN private `.onb-*` classes (`onb-menu`/`onb-menu__item`, `onb-node__status`, kanban
+ * column look) — a frozen snapshot of the app chrome these scenes were drawn to match, not
+ * the live app classes. That isolation is deliberate and enforced by
+ * `scene-isolation.test.ts`, which fails this file the moment it borrows one of the app's
+ * real context-menu or terminal-status-badge class names again, because a later restyle of
+ * that live UI would otherwise silently re-skin or misalign these illustrations — they are
+ * geometry- and colour-tuned to a 7s cursor animation, not to whatever the real component
+ * looks like today.
  */
 
 /** Inline check icon — a literal "✓" is tofu on Linux's default font stack. */
@@ -65,31 +71,33 @@ export function OnbGhostCanvas() {
   )
 }
 
-/** Right-click → context menu → an agent node pops onto the canvas. The menu is the app's
- *  real `.ctx-menu`/`.ctx-item` (with the real brand icons) and the node mirrors
- *  `.term-node`'s look (3px color top border, panel header, real RUNNING badge classes) —
- *  both follow the currently selected default agent. */
+/** Right-click → context menu → an agent node pops onto the canvas. The menu is a frozen
+ *  copy of the app's context menu (`.onb-menu`/`.onb-menu__item`, real brand icons) and the
+ *  node mirrors `.term-node`'s look (3px color top border, panel header, a frozen copy of
+ *  the RUNNING badge, `.onb-node__status`) — both follow the currently selected default
+ *  agent. */
 export function SceneAgents({ agentId, label, color }: { agentId: AgentId; label: string; color: string }) {
   return (
     <div className="onb-scene-canvas" aria-hidden="true">
       {/* click ripple where the cursor right-clicks */}
       <div className="onb-ripple" />
-      {/* the real context menu, replayed (pointer-events off; positioned by the scene) */}
-      <div className="ctx-menu onb-menu">
-        <button className="ctx-item" tabIndex={-1}>
-          <span className="ctx-icon"><IconTerminal /></span>
+      {/* a frozen copy of the context menu, replayed (pointer-events off; positioned by the
+          scene) — .onb-menu/.onb-menu__item/.onb-menu__icon, never the live .ctx-* classes */}
+      <div className="onb-menu">
+        <button className="onb-menu__item" tabIndex={-1}>
+          <span className="onb-menu__icon"><IconTerminal /></span>
           New terminal
         </button>
-        <button className="ctx-item onb-menu__hl" tabIndex={-1}>
-          <span className="ctx-icon"><AgentIcon agentId={agentId} /></span>
+        <button className="onb-menu__item onb-menu__hl" tabIndex={-1}>
+          <span className="onb-menu__icon"><AgentIcon agentId={agentId} /></span>
           New {label}
         </button>
-        <button className="ctx-item" tabIndex={-1}>
-          <span className="ctx-icon"><IconNote /></span>
+        <button className="onb-menu__item" tabIndex={-1}>
+          <span className="onb-menu__icon"><IconNote /></span>
           New sticky note
         </button>
-        <button className="ctx-item" tabIndex={-1}>
-          <span className="ctx-icon"><IconEditor /></span>
+        <button className="onb-menu__item" tabIndex={-1}>
+          <span className="onb-menu__icon"><IconEditor /></span>
           Open file…
         </button>
       </div>
@@ -99,8 +107,8 @@ export function SceneAgents({ agentId, label, color }: { agentId: AgentId; label
           <span className="onb-node__color" style={{ background: color }} />
           <AgentIcon agentId={agentId} size={13} />
           <span className="onb-node__title">{label}</span>
-          <span className="term-node__status term-node__status--busy" style={{ marginLeft: 'auto' }}>
-            <span className="term-node__status-dot" />
+          <span className="onb-node__status onb-node__status--busy" style={{ marginLeft: 'auto' }}>
+            <span className="onb-node__status-dot" />
             RUNNING
           </span>
         </div>
@@ -297,16 +305,16 @@ export function ScenePhone() {
           <div className="onb-phone__row">
             <span className="onb-mini__dot" style={{ background: '#d97757' }} />
             <span className="onb-mini__bar" />
-            <span className="term-node__status term-node__status--busy onb-phone__badge">
-              <span className="term-node__status-dot" />
+            <span className="onb-node__status onb-node__status--busy onb-phone__badge">
+              <span className="onb-node__status-dot" />
               RUNNING
             </span>
           </div>
           <div className="onb-phone__row">
             <span className="onb-mini__dot" style={{ background: '#10a37f' }} />
             <span className="onb-mini__bar" />
-            <span className="term-node__status term-node__status--attention onb-phone__badge">
-              <span className="term-node__status-dot" />
+            <span className="onb-node__status onb-node__status--attention onb-phone__badge">
+              <span className="onb-node__status-dot" />
               NEEDS YOU
             </span>
           </div>
