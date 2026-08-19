@@ -1,5 +1,15 @@
 # Handoff
 
+## Release timing, dim-sum link, and Pages trigger repair
+
+The release workflow now requires GitHub's run start time, records a post-publication completion
+boundary, regenerates the same release body with exact start/completion/duration fields, and reads
+the published body back for byte-equivalent text verification. Already-published retries validate
+those fields and mutate nothing. Dim-sum prose links the catalog's published photo and explicitly
+says it is not a consumer-release attachment. Pages now runs on every `main` push and manual
+dispatch. Local build evidence does not prove the remote publication/deployment transaction; use
+the exact workflow and Pages run links recorded for the final commit.
+
 ## Project-aware shell detection persistence repair
 
 `ShellSection.refreshDetection` no longer writes `useSettings.getState().base` directly before

@@ -85,7 +85,7 @@ dispatched, one job:
 12. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
     and expected names are replaced with `--clobber`. Any failure leaves a private draft, never
     a public empty or partial release.
-13. **Generate the final release notes after upload** (`scripts/release-notes.mjs`, embedding
+13. **Generate the publication-ready release notes after upload** (`scripts/release-notes.mjs`, embedding
     `scripts/count-lines.mjs`'s report — see [Release notes content](#release-notes-content)).
 14. **Read the draft back and recheck version authority immediately before publication.** The
     exact hosted asset inventory, draft/non-prerelease state, target/tag ownership, and stable
@@ -93,7 +93,11 @@ dispatched, one job:
     build ran.
 15. **Publish once, explicitly as latest and non-prerelease**, then re-read the tag, release, and
     latest-release view to prove the complete inventory and exact target survived the transition.
-16. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
+16. **Record the post-publication completion boundary and finalize the notes.** Regenerate notes
+    with exact `Workflow started`, `Workflow completed`, and `Workflow duration` values, edit the
+    same published release, then read it back and require exact body equality. A retry of an
+    already-published release verifies those fields and changes nothing.
+17. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
     the collection and the upload — so a failed run still leaves the packaged output, the
     generated notes, and the run context inspectable, without ever masking or reversing the
     real pass/fail verdict of the steps above it. Only explicitly safe paths are copied: the
@@ -176,10 +180,9 @@ instead of by a signature that does not exist.
 a check ran that did not, and it never estimates a missing timestamp — a missing value is
 printed as **missing**, not guessed at. It always includes:
 
-1. **Release-preparation timing** — `Workflow started` (from GitHub's own `run_started_at`,
-   or "missing" if that read failed), `Release notes generated` (stamped after asset upload),
-   and `Elapsed to release notes` as a stable `HH:mm:ss`. It deliberately does not call this
-   workflow completion: remote verification, publication, and the public post-check follow.
+1. **Workflow timing** — final published notes carry `Workflow started` from GitHub's own
+   `run_started_at`, the post-publication `Workflow completed` boundary, and `Workflow duration`
+   as stable `HH:mm:ss`. Missing, invalid, or reversed timing fails closed; it is never estimated.
 2. **The project's line count at that exact commit**, via `scripts/count-lines.mjs` —
    see below.
 3. **What actually ran** — an explicit statement that no tests, type-check, or lint ran in
@@ -188,6 +191,8 @@ printed as **missing**, not guessed at. It always includes:
    specifically so a release is never read as "passing" a check it never ran.
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
+6. **A dim-sum code name with an honest public catalog-photo link.** The photo remains hosted by
+   the catalog release and is not described as attached to this consumer release.
 
 ### `scripts/count-lines.mjs`
 

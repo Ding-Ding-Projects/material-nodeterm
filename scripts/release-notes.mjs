@@ -8,11 +8,13 @@
  * timestamp — see docs/ci-and-releases.md for the governing policy: this workflow runs
  * no tests, type-check or lint, and nothing here gates the release.
  *
- * Environment (all read at run time; every one has a documented fallback so the script
- * can also be run by hand for a dry-run preview):
+ * Environment (all read at run time; release timing fails closed when required evidence is
+ * missing, while optional asset/repository context may be omitted for a dry-run preview):
  *   RELEASE_TAG              the tag this release publishes under
  *   WORKFLOW_STARTED_AT      ISO-8601 UTC — the workflow run's first-job startedAt
- *                             (GitHub's own `run_started_at`). Reported as "missing" if unset.
+ *                             (GitHub's own `run_started_at`). Required.
+ *   WORKFLOW_COMPLETED_AT    ISO-8601 UTC — post-publication completion boundary. When supplied,
+ *                             the notes emit the final started/completed/duration triplet.
  *   RELEASE_NOTES_GENERATED_AT
  *                            ISO-8601 UTC — when note generation begins. Defaults to "now";
  *                             verification and publication happen afterward.
@@ -93,27 +95,25 @@ async function listAssets() {
 
 function renderTimingSection() {
   const startedRaw = process.env.WORKFLOW_STARTED_AT
+  const completedRaw = process.env.WORKFLOW_COMPLETED_AT
   const generatedRaw = process.env.RELEASE_NOTES_GENERATED_AT ?? new Date().toISOString()
-
-  const lines = ['## Release preparation timing', '']
-  if (!startedRaw) {
-    lines.push('- **Workflow started:** missing (the run-start timestamp could not be read)')
-    lines.push(`- **Release notes generated:** ${generatedRaw}`)
-    lines.push('- **Elapsed to release notes:** missing (cannot compute without a start time)')
-    return lines.join('\n')
-  }
+  if (!startedRaw) throw new Error('WORKFLOW_STARTED_AT is required for release timing')
   const started = new Date(startedRaw)
-  const generated = new Date(generatedRaw)
-  if (Number.isNaN(started.getTime())) {
-    lines.push(`- **Workflow started:** missing (unparsable value: ${JSON.stringify(startedRaw)})`)
-    lines.push(`- **Release notes generated:** ${generatedRaw}`)
-    lines.push('- **Elapsed to release notes:** missing (cannot compute without a valid start time)')
-    return lines.join('\n')
-  }
-  const durationMs = generated.getTime() - started.getTime()
+  if (Number.isNaN(started.getTime())) throw new Error('WORKFLOW_STARTED_AT must be a valid ISO-8601 timestamp')
+  const boundaryRaw = completedRaw ?? generatedRaw
+  const boundary = new Date(boundaryRaw)
+  if (Number.isNaN(boundary.getTime())) throw new Error(`${completedRaw ? 'WORKFLOW_COMPLETED_AT' : 'RELEASE_NOTES_GENERATED_AT'} must be a valid ISO-8601 timestamp`)
+  const durationMs = boundary.getTime() - started.getTime()
+  if (durationMs < 0) throw new Error('release timing completion boundary precedes workflow start')
+  const lines = [completedRaw ? '## Workflow timing' : '## Release preparation timing', '']
   lines.push(`- **Workflow started:** ${started.toISOString()}`)
-  lines.push(`- **Release notes generated:** ${generated.toISOString()}`)
-  lines.push(`- **Elapsed to release notes:** ${fmtDurationMs(durationMs)} (HH:mm:ss)`)
+  if (completedRaw) {
+    lines.push(`- **Workflow completed:** ${boundary.toISOString()}`)
+    lines.push(`- **Workflow duration:** ${fmtDurationMs(durationMs)} (HH:mm:ss)`)
+  } else {
+    lines.push(`- **Release notes generated:** ${boundary.toISOString()}`)
+    lines.push(`- **Elapsed to release notes:** ${fmtDurationMs(durationMs)} (HH:mm:ss)`)
+  }
   return lines.join('\n')
 }
 

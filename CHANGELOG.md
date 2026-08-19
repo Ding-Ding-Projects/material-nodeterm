@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Finalize published release notes with fail-closed workflow start/completion/duration evidence,
+  link dim-sum photos at their public catalog release, and deploy Pages for every `main` push.
 - Rebuild the app's chrome on Material Design 3: a new top app bar and project switcher replace
   the tab strip, a left nav rail with a FAB replaces the bottom dock, and every panel restyles
   onto the same token set. The default accent colour also changes for every existing install —

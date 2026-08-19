@@ -73,16 +73,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         # Prefer GitHub's own `run_started_at` (the workflow run's first-job startedAt) so
         # the reported duration reflects real queue+run time, not just this step's wall
-        # clock. Fails open to "unknown" — release-notes.mjs reports a missing start time
-        # honestly rather than estimating one.
+        # clock. Timing is release evidence, so a missing or invalid API value fails closed.
         run: |
-          started_at=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .run_started_at 2>/dev/null || true)
+          started_at=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .run_started_at)
           if [ -z "$started_at" ] || [ "$started_at" = "null" ]; then
-            echo "::warning::could not read run_started_at from the GitHub API; release notes will report the workflow start time as missing"
-            echo "started_at=" >> "$GITHUB_OUTPUT"
-          else
-            echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
+            echo "::error::could not read run_started_at from the GitHub API"
+            exit 1
           fi
+          node -e 'const value=process.argv[1]; const d=new Date(value); if (!Number.isFinite(d.getTime())) process.exit(1)' "$started_at"
+          echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -352,6 +351,32 @@ jobs:
           gh release view --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/latest-release.json"
           node scripts/release-assets.mjs verify "$RUNNER_TEMP/latest-release.json" published exact
 
+      - name: Record completion and finalize published release notes
+        id: finalize
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          WORKFLOW_STARTED_AT: ${{ steps.timing.outputs.started_at }}
+          RELEASE_ASSET_PATHS: ${{ steps.assets.outputs.paths }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}
+        run: |
+          if [ "$ALREADY_PUBLISHED" = "true" ]; then
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body,isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/final-release.json"
+            node scripts/release-assets.mjs verify "$RUNNER_TEMP/final-release.json" published exact
+            FINAL_RELEASE_JSON="$RUNNER_TEMP/final-release.json" node -e 'const fs=require("fs"); const body=JSON.parse(fs.readFileSync(process.env.FINAL_RELEASE_JSON,"utf8")).body||""; for (const label of ["Workflow started","Workflow completed","Workflow duration"]) if (!body.includes(`**${label}:**`)) throw new Error(`published retry is missing ${label}`)'
+            echo "Existing published release already carries verified workflow timing; no public asset or note was changed."
+            exit 0
+          fi
+
+          completed_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          WORKFLOW_COMPLETED_AT="$completed_at" node scripts/release-notes.mjs > "$RUNNER_TEMP/final-notes.md"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest --notes-file "$RUNNER_TEMP/final-notes.md"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body,isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/final-release.json"
+          node scripts/release-assets.mjs verify "$RUNNER_TEMP/final-release.json" published exact
+          FINAL_RELEASE_JSON="$RUNNER_TEMP/final-release.json" FINAL_NOTES="$RUNNER_TEMP/final-notes.md" node -e 'const fs=require("fs"); const release=JSON.parse(fs.readFileSync(process.env.FINAL_RELEASE_JSON,"utf8")); const expected=fs.readFileSync(process.env.FINAL_NOTES,"utf8").trim(); if ((release.body||"").trim()!==expected) throw new Error("published release notes do not match the completed timing document")'
+
       # Runs even when an earlier step failed, so a broken build still leaves something to
       # inspect. Never uploads credentials, node_modules, caches, or the source tree — only
       # the packaged output and the generated release notes. `continue-on-error` on both
@@ -376,6 +401,9 @@ jobs:
           fi
           if [ -f "$RUNNER_TEMP/notes.md" ]; then
             cp "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP/artifact-out/release-notes.md" || true
+          fi
+          if [ -f "$RUNNER_TEMP/final-notes.md" ]; then
+            cp "$RUNNER_TEMP/final-notes.md" "$RUNNER_TEMP/artifact-out/final-release-notes.md" || true
           fi
         env:
           JOB_STATUS: ${{ job.status }}

@@ -2,7 +2,7 @@
  * dim-sum-code-name.mjs — resolve one release code name, and the photo that goes with it, from the
  * public dim-sum catalog.
  *
- * Every release carries a dim sum code name and attaches its photo. That contract had never been
+ * Every release carries a dim sum code name and links its public catalog photo. That contract had never been
  * implemented here: v0.4.0, v0.4.1 and v0.4.2 all shipped without one, because nothing in the
  * release tooling knew about it and it depended on somebody remembering. v0.4.3 was resolved by
  * hand; this module is what stops the next release losing it again.
@@ -123,7 +123,8 @@ export function renderCodeNameSection(codeName) {
     '',
     `**${codeName.nameEn} · ${codeName.nameZh}** (\`${codeName.id}\`)`,
     '',
-    `From the public [dim-sum-photos](https://github.com/${CATALOG_REPO}) catalog. The photo is`,
-    `attached to this release as \`${codeName.assetName}\`${codeName.alt ? ` — *${codeName.alt}*` : ''}.`
+    `From the public [dim-sum-photos](https://github.com/${CATALOG_REPO}) catalog.`,
+    `[View the published catalog photo](${codeName.assetUrl})${codeName.alt ? ` — *${codeName.alt}*` : ''}.`,
+    `The photo is hosted by the catalog release and is not attached to this consumer release.`
   ].join('\n')
 }

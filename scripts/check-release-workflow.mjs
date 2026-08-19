@@ -295,6 +295,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     ['upload', 'bash'],
     ['notes', 'bash'],
     ['publish', 'bash'],
+    ['finalize', 'bash'],
   ])
   for (const id of ['package', ...criticalShells.keys()]) {
     const step = stepById(id)
@@ -321,6 +322,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     ['draft', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
     ['upload', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
     ['publish', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
+    ['finalize', '${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}'],
   ])
   for (const step of steps) {
     const token = step?.env?.GH_TOKEN ?? step?.env?.GITHUB_TOKEN
@@ -377,6 +379,16 @@ export function validateReleaseWorkflow(workflow, packageJson) {
         RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
         RELEASE_VERSION: '${{ steps.tag.outputs.version }}',
         RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}',
+      },
+    ],
+    [
+      'finalize',
+      {
+        RELEASE_TAG: '${{ steps.tag.outputs.tag }}',
+        WORKFLOW_STARTED_AT: '${{ steps.timing.outputs.started_at }}',
+        RELEASE_ASSET_PATHS: '${{ steps.assets.outputs.paths }}',
+        RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}',
+        ALREADY_PUBLISHED: '${{ steps.draft.outputs.already_published }}',
       },
     ],
   ])
@@ -557,13 +569,23 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const uploadAt = stepIndex(steps, 'upload')
   const notesAt = stepIndex(steps, 'notes')
   const publishAt = stepIndex(steps, 'publish')
+  const finalizeAt = stepIndex(steps, 'finalize')
   // `sourceAt` (the removed checked-out-SHA step) is replaced by the version PLANNER: the bump has
   // to be applied before the tag is computed, or the release is named after the old version while
   // the artifact carries the new one.
   const planAt = stepIndex(steps, 'version_plan')
-  const ordered = [planAt, tagAt, versionAt, packageAt, assetsAt, unsignedAt, draftAt, uploadAt, notesAt, publishAt]
+  const ordered = [planAt, tagAt, versionAt, packageAt, assetsAt, unsignedAt, draftAt, uploadAt, notesAt, publishAt, finalizeAt]
   if (ordered.some((index) => index < 0) || ordered.some((index, i) => i > 0 && index <= ordered[i - 1])) {
-    issues.push('version planning, tag, version proof, package, local verification, draft, upload, notes and publication must stay ordered')
+    issues.push('version planning, tag, version proof, package, local verification, draft, upload, notes, publication and final timing must stay ordered')
+  }
+
+  const finalizeCommands = logicalCommands(steps[finalizeAt]?.run)
+  if (
+    !finalizeCommands.some((command) => /WORKFLOW_COMPLETED_AT=.*node scripts\/release-notes\.mjs/.test(command)) ||
+    !finalizeCommands.some((command) => /gh release edit .*--notes-file "\$RUNNER_TEMP\/final-notes\.md"/.test(command)) ||
+    !finalizeCommands.some((command) => /published release notes do not match the completed timing document/.test(command))
+  ) {
+    issues.push('final release notes must record completion timing, edit the published release, and verify exact body equality')
   }
 
   const draftCommands = logicalCommands(steps[draftAt]?.run)
