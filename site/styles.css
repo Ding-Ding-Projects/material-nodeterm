@@ -865,19 +865,30 @@ textarea.mono-area {
 .shot-empty { color: var(--ink2); }
 
 /* ---- ADHD modes ----
+   Focus dims the chrome AROUND what is being read (the room rail, the header actions, the search
+   bar) and leaves `.room-main` — the content itself — untouched.
+
+   The selectors are the ones this page actually renders. The first version of this rule targeted
+   `.room-main__aside`, `.rail` and `.home-hero__art`, none of which exist here: the switch flipped
+   its attribute and absolutely nothing faded — a control that looks live and does nothing, which is
+   the defect this project forbids everywhere else. Caught by measuring computed opacity in a real
+   browser rather than trusting that the CSS matched something.
+
    Focus DIMS, it never hides: nothing below sets display:none, visibility:hidden or
    pointer-events:none, and hovering or focusing brings a faded region straight back. A page that
    makes content disappear is a worse problem than a busy one. */
-:root[data-adhd-focus="on"] .room-main__aside,
-:root[data-adhd-focus="on"] .rail,
-:root[data-adhd-focus="on"] .home-hero__art {
+:root[data-adhd-focus="on"] .room-rail,
+:root[data-adhd-focus="on"] .header-actions,
+:root[data-adhd-focus="on"] .searchbar {
   opacity: 0.45;
   transition: opacity 200ms ease;
 }
-:root[data-adhd-focus="on"] .room-main__aside:hover,
-:root[data-adhd-focus="on"] .rail:hover,
-:root[data-adhd-focus="on"] .room-main__aside:focus-within,
-:root[data-adhd-focus="on"] .rail:focus-within {
+:root[data-adhd-focus="on"] .room-rail:hover,
+:root[data-adhd-focus="on"] .header-actions:hover,
+:root[data-adhd-focus="on"] .searchbar:hover,
+:root[data-adhd-focus="on"] .room-rail:focus-within,
+:root[data-adhd-focus="on"] .header-actions:focus-within,
+:root[data-adhd-focus="on"] .searchbar:focus-within {
   opacity: 1;
 }
 
