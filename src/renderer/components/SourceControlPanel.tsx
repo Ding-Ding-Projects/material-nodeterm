@@ -22,6 +22,8 @@ import { VocabularyContextMenu } from './menu/VocabularyContextMenu'
 import { PublishDialog } from './PublishDialog'
 import { defaultScmScope, type ScmScope } from '@shared/scm-scope'
 import { hintLabel } from '@shared/platform-utils'
+import { MaterialSymbol } from './MaterialSymbol'
+import { gitStatusBadgeClass } from '../lib/gitStatusBadge'
 
 export interface SourceControlPanelProps {
   onClose: () => void
@@ -41,14 +43,6 @@ export interface SourceControlPanelProps {
 }
 
 const AUTO_FETCH_MS = 180_000
-
-const STATUS_COLOR: Record<string, string> = {
-  M: '#ffd60a',
-  A: '#32d74b',
-  D: '#ff453a',
-  R: '#bf5af2',
-  U: '#6ac4dc'
-}
 
 function DiffStat({ added, deleted }: { added: number; deleted: number }) {
   if (!added && !deleted) return null
@@ -313,7 +307,7 @@ export function SourceControlPanel({
             setFileMenu({ x: e.clientX, y: e.clientY, path: f.path })
           }}
         >
-          <span className="scm-letter" style={{ color: STATUS_COLOR[f.status] ?? 'rgba(255,255,255,0.85)' }}>
+          <span className={`scm-letter md3-status-badge ${gitStatusBadgeClass(f.status)}`}>
             {f.status}
           </span>
           <button
@@ -326,18 +320,19 @@ export function SourceControlPanel({
           <DiffStat added={f.added} deleted={f.deleted} />
           <span className="scm-row-actions">
             {!staged && (
-              <button className="scm-iconbtn" title="Discard changes" onClick={() => discard(f)}>
+              <button className="scm-iconbtn" title="Discard changes" aria-label="Discard changes" onClick={() => discard(f)}>
                 ↩
               </button>
             )}
             <button
               className="scm-iconbtn"
               title={staged ? 'Unstage' : 'Stage'}
+              aria-label={staged ? 'Unstage' : 'Stage'}
               onClick={() =>
                 act(() => (staged ? git.unstage(cwd!, [f.path]) : git.stage(cwd!, [f.path])))
               }
             >
-              {staged ? '−' : '+'}
+              <MaterialSymbol name={staged ? 'remove' : 'add'} size={15} />
             </button>
           </span>
         </div>
@@ -402,6 +397,7 @@ export function SourceControlPanel({
             title={`Pull ${behind}, push ${ahead}`}
             onClick={() => act(() => git.sync(cwd!))}
           >
+            <MaterialSymbol name="sync" size={16} />
             Sync
           </button>
         ) : behind > 0 ? (
@@ -411,6 +407,7 @@ export function SourceControlPanel({
             title={`Pull ${behind} commit${behind === 1 ? '' : 's'}`}
             onClick={() => act(() => git.pull(cwd!))}
           >
+            <MaterialSymbol name="sync" size={16} />
             Pull
           </button>
         ) : ahead > 0 ? (
@@ -420,10 +417,12 @@ export function SourceControlPanel({
             title={`Push ${ahead} commit${ahead === 1 ? '' : 's'}`}
             onClick={() => act(() => git.push(cwd!))}
           >
+            <MaterialSymbol name="sync" size={16} />
             Push
           </button>
         ) : (
           <button className="scm-sync" disabled title="Up to date with origin">
+            <MaterialSymbol name="sync" size={16} />
             Synced
           </button>
         )}
@@ -433,11 +432,11 @@ export function SourceControlPanel({
 
   return createPortal(
     <div className="drawer-overlay" onClick={onClose}>
-      <aside className="drawer scm" onClick={(e) => e.stopPropagation()}>
+      <aside className="drawer scm md3-source-control" onClick={(e) => e.stopPropagation()}>
         <div className="drawer__head">
           <h2>Source Control</h2>
-          <button className="drawer__close" onClick={onClose}>
-            ×
+          <button className="drawer__close" aria-label="Close" onClick={onClose}>
+            <MaterialSymbol name="close" size={19} />
           </button>
         </div>
 
@@ -471,7 +470,9 @@ export function SourceControlPanel({
                     setScopeMenu({ top: r.bottom + 4, left: r.left })
                   }}
                 >
-                  ⌥ {scope?.label ?? status.repoName} ⌄
+                  <MaterialSymbol name="account_tree" size={15} />
+                  {scope?.label ?? status.repoName}
+                  <MaterialSymbol name="arrow_drop_down" size={18} />
                 </button>
               ) : (
                 <span className="scm-repo">{status.repoName}</span>
@@ -484,7 +485,9 @@ export function SourceControlPanel({
                   setBranchMenu({ top: r.bottom + 4, left: r.left })
                 }}
               >
-                ⎇ {status.branch} ⌄
+                <MaterialSymbol name="call_split" size={15} />
+                {status.branch}
+                <MaterialSymbol name="arrow_drop_down" size={18} />
               </button>
               <span className="scm-spacer" />
               {renderRemoteAction()}
@@ -517,7 +520,7 @@ export function SourceControlPanel({
                       useScmDraft.getState().clearError(draftKey)
                     }}
                   >
-                    ×
+                    <MaterialSymbol name="close" size={16} />
                   </button>
                 </div>
               )}
@@ -549,7 +552,7 @@ export function SourceControlPanel({
                     aria-label="Generate commit message"
                     onClick={generate}
                   >
-                    ✦
+                    <MaterialSymbol name="auto_awesome" size={16} />
                   </button>
                 </div>
                 <button
@@ -557,6 +560,7 @@ export function SourceControlPanel({
                   disabled={busy || !message.trim() || stagedCount === 0}
                   onClick={commitAndPush}
                 >
+                  <MaterialSymbol name="check" size={17} />
                   {status.hasUpstream ? 'Commit & Push' : 'Commit'} → {status.branch}
                 </button>
               </section>

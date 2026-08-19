@@ -1,5 +1,6 @@
 import { useState, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { MaterialSymbol } from './MaterialSymbol'
 
 interface Props {
   value: string
@@ -44,9 +45,9 @@ export function BranchSelect({
 
   return (
     <>
-      <button type="button" className="bind-select" onClick={open}>
+      <button type="button" className="bind-select md3-branch-select" onClick={open}>
         <span className={value ? 'bind-select__val' : 'bind-select__ph'}>{value || placeholder}</span>
-        <span className="bind-select__chev">⌄</span>
+        <MaterialSymbol className="bind-select__chev" name="arrow_drop_down" size={18} />
       </button>
       {menu &&
         createPortal(
@@ -60,7 +61,9 @@ export function BranchSelect({
             >
               {options.map((b) => (
                 <button type="button" key={b} onClick={() => pick(b)}>
-                  <span className="tab-menu__check">{b === value ? '✓' : ''}</span>
+                  <span className="tab-menu__check">
+                    {b === value && <MaterialSymbol name="check" size={14} />}
+                  </span>
                   {b}
                 </button>
               ))}

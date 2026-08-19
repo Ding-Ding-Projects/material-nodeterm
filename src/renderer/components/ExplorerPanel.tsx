@@ -18,6 +18,7 @@ import { canRevealLocally, downloadRoute, triggerBrowserDownload } from '../lib/
 import { isBrowserRuntime } from '../bridge/runtime'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { MaterialSymbol, type MaterialSymbolName } from './MaterialSymbol'
 
 export interface ExplorerPanelProps {
   onClose: () => void
@@ -64,16 +65,23 @@ const toast = (message: string): void => {
   window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message } }))
 }
 
-function EntryIcon({ dir }: { dir: boolean }) {
-  return dir ? (
-    <svg className="ex-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    </svg>
-  ) : (
-    <svg className="ex-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M6 3h8l4 4v14H6z" />
-      <path d="M14 3v4h4" />
-    </svg>
+/** Best-effort file glyph from the extension — every name not called out here (the overwhelming
+ *  majority) gets the plain document glyph, matching the tree's previous one-icon-for-every-file
+ *  behavior. Only extensions the bundled 92-glyph subset actually has a distinct icon for are
+ *  special-cased (see scripts/material-symbols-glyphs.json). */
+function fileIconName(name: string): MaterialSymbolName {
+  const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
+  return ext === 'css' ? 'css' : 'description'
+}
+
+function EntryIcon({ dir, open, name }: { dir: boolean; open: boolean; name: string }) {
+  return (
+    <MaterialSymbol
+      className={`ex-icon${dir ? ' ex-icon--dir' : ''}`}
+      name={dir ? (open ? 'folder_open' : 'folder') : fileIconName(name)}
+      size={17}
+      fill={dir}
+    />
   )
 }
 
@@ -177,7 +185,7 @@ function TreeEntry({
     <>
       <div
         ref={rowRef}
-        className={`ex-row${entry.ignored ? ' ignored' : ''}${selected === path ? ' selected' : ''}`}
+        className={`ex-row md3-explorer__row${entry.ignored ? ' ignored' : ''}${selected === path ? ' selected' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={onClick}
         onContextMenu={(e) => {
@@ -187,8 +195,12 @@ function TreeEntry({
         }}
         title={entry.name}
       >
-        <span className={`ex-chevron${entry.dir ? '' : ' hidden'}${open ? ' open' : ''}`}>›</span>
-        <EntryIcon dir={entry.dir} />
+        <MaterialSymbol
+          className={`ex-chevron${entry.dir ? '' : ' hidden'}${open ? ' open' : ''}`}
+          name="chevron_right"
+          size={16}
+        />
+        <EntryIcon dir={entry.dir} open={open} name={entry.name} />
         <span className="ex-name">{entry.name}</span>
         {onDownload && (
           <button
@@ -205,7 +217,15 @@ function TreeEntry({
               onDownload(path, entry.dir)
             }}
           >
-            {dl === 'running' ? <span className="ex-dl__spin" /> : dl === 'done' ? '✓' : dl === 'error' ? '!' : '⤓'}
+            {dl === 'running' ? (
+              <span className="ex-dl__spin" />
+            ) : (
+              <MaterialSymbol
+                name={dl === 'done' ? 'check_circle' : dl === 'error' ? 'error' : 'download'}
+                size={15}
+                fill={dl === 'done' || dl === 'error'}
+              />
+            )}
           </button>
         )}
       </div>
@@ -465,15 +485,15 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
 
   return createPortal(
     <div className="drawer-overlay" onClick={onClose}>
-      <aside className="drawer" onClick={(e) => e.stopPropagation()}>
+      <aside className="drawer md3-explorer" onClick={(e) => e.stopPropagation()}>
         <div className="drawer__head">
           <h2>{project?.name || 'Explorer'}</h2>
           <div className="ex-head-actions">
-            <button title="Refresh" onClick={() => setVersion((v) => v + 1)}>
-              ↻
+            <button title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
+              <MaterialSymbol name="refresh" size={18} />
             </button>
-            <button className="drawer__close" onClick={onClose}>
-              ×
+            <button className="drawer__close" aria-label="Close" onClick={onClose}>
+              <MaterialSymbol name="close" size={19} />
             </button>
           </div>
         </div>
@@ -486,7 +506,7 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
 
         {cwd && (
           <>
-            <div className="ex-filter-row">
+            <div className="ex-filter-row md3-explorer__filter">
               <input
                 ref={filterInputRef}
                 className="ex-filter-input"
@@ -535,10 +555,18 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
         )}
 
         {downloads.length > 0 && (
-          <div className="ex-dls">
+          <div className="ex-dls md3-explorer__downloads">
             {downloads.map((d) => (
               <div key={d.id} className={`ex-dls__row ${d.status}`}>
-                {d.status === 'running' && <span className="ex-dls__spin" />}
+                {d.status === 'running' ? (
+                  <span className="ex-dls__spin" />
+                ) : (
+                  <MaterialSymbol
+                    className="ex-dls__icon"
+                    name={d.status === 'error' ? 'error' : 'downloading'}
+                    size={17}
+                  />
+                )}
                 <span className="ex-dls__name" title={d.detail || d.localPath || d.name}>
                   {d.name}
                   {d.dir && d.status === 'running' ? ' (folder)' : ''}
@@ -552,11 +580,11 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
                   </button>
                 )}
                 <button
-                  className="ex-dls__act"
+                  className="ex-dls__act ex-dls__dismiss"
                   aria-label="Dismiss"
                   onClick={() => setDownloads((list) => list.filter((x) => x.id !== d.id))}
                 >
-                  ×
+                  <MaterialSymbol name="close" size={15} />
                 </button>
               </div>
             ))}

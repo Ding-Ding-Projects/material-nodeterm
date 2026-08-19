@@ -176,10 +176,10 @@ export function GitHistoryGraphSvg({
             cy={cy}
             r={CIRCLE_RADIUS + 3}
             fill={graphColor(circleColor)}
-            stroke="var(--background)"
+            stroke="var(--md-surface-container)"
             strokeWidth={CIRCLE_STROKE_WIDTH}
           />
-          <circle cx={cx} cy={cy} r={CIRCLE_STROKE_WIDTH} fill="var(--background)" />
+          <circle cx={cx} cy={cy} r={CIRCLE_STROKE_WIDTH} fill="var(--md-surface-container)" />
         </>
       )}
       {isBoundaryNode && (
@@ -189,15 +189,15 @@ export function GitHistoryGraphSvg({
             cy={cy}
             r={CIRCLE_RADIUS + 3}
             fill={graphColor(circleColor)}
-            stroke="var(--background)"
+            stroke="var(--md-surface-container)"
             strokeWidth={CIRCLE_STROKE_WIDTH}
           />
           <circle
             cx={cx}
             cy={cy}
             r={CIRCLE_RADIUS + 1}
-            fill="var(--background)"
-            stroke="var(--background)"
+            fill="var(--md-surface-container)"
+            stroke="var(--md-surface-container)"
             strokeWidth={CIRCLE_STROKE_WIDTH + 1}
           />
           <circle
@@ -214,7 +214,7 @@ export function GitHistoryGraphSvg({
       {!isBoundaryNode && viewModel.kind !== 'HEAD' && isMergeNode && (
         <>
           <circle cx={cx} cy={cy} r={CIRCLE_RADIUS + 1} fill={graphColor(circleColor)} />
-          <circle cx={cx} cy={cy} r={CIRCLE_RADIUS - 1.5} fill="var(--background)" />
+          <circle cx={cx} cy={cy} r={CIRCLE_RADIUS - 1.5} fill="var(--md-surface-container)" />
         </>
       )}
       {!isBoundaryNode && viewModel.kind !== 'HEAD' && !isMergeNode && (

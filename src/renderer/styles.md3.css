@@ -1,0 +1,732 @@
+/* Material Design 3 restyle layer. Loaded after styles.css (see boot.tsx), so an equal-
+   specificity selector here always wins the cascade against the legacy rule of the same name —
+   that is how this file can restyle existing elements (`.scm-file`, `.ex-row`, …) without a
+   parallel rename of every className in the source. New markup introduced for this pass uses
+   `md3-<component>` / `md3-<component>__<part>` names per the design contract.
+
+   Colours are `var(--md-*)` roles only (never a literal), matching the app's own already-wired
+   token names in src/renderer/styles.css (`--md-primary`, `--md-surface-container-*`, …).
+   Typography reads `var(--font-ui)` / `var(--font-mono)` — this app's real, already-shipped
+   token names for the Outfit / Roboto Mono families (see src/renderer/fonts.css); there is no
+   separate `--md-font-*` pair defined anywhere in this codebase. Shape uses the shape scale
+   styles.css already exposes (`--md-shape-extra-small` 6px … `--md-shape-full` pill), which is
+   the same numeric ladder design/v2/md3/tokens.css calls xs/sm/md/lg/full. Motion is
+   `var(--md-motion-spatial)` for movement and `var(--md-motion-effect)` for colour/hover, both
+   already defined with the exact values design/v2/md3/HANDOFF.md specifies. No box-shadow is
+   introduced anywhere below — elevation here is tonal (surface-container steps) only. */
+
+/* ============================================================================================
+   Shared: git status badges (Source Control staged/changes rows + git-history commit files).
+   Both consumers resolve the same letter → class name through
+   src/renderer/lib/gitStatusBadge.ts, so this is the one place the M3 tag-colour recipe lives —
+   design/v2/MD3 Files.dc.html's `tagBg`/`tagFg` per status (M -> warning-container, A ->
+   success-container, …), never a literal hex on the element as the two source files did before.
+   ============================================================================================ */
+
+.md3-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 7px; /* no exact --md-shape step between extra-small(6)/small(8) — the design's
+    own literal, same authoring convention already used elsewhere in styles.css */
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.md3-status-badge--tiny {
+  width: 15px;
+  height: 15px;
+  font-size: 9px;
+  border-radius: 5px;
+}
+
+.md3-status--m {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.md3-status--a {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.md3-status--d {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md3-status--r {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.md3-status--u {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-status--default {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+
+/* Shared error-text utility for git-history's inline error/failure lines — replaces the two
+   `style={{ color: '#ff453a' }}` literals in GitHistoryPanel.tsx / GitHistoryCommitFiles.tsx. */
+.md3-history-error {
+  color: var(--md-error);
+}
+
+/* Spin utility for an icon standing in for the old "…" busy text (GitHistoryPanel's refresh). */
+.md3-spin {
+  animation: md3-icon-spin 900ms linear infinite;
+}
+@keyframes md3-icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================================================
+   Explorer (design/v2/MD3 Files.dc.html — left column: file tree + download strip)
+   ============================================================================================ */
+
+.md3-explorer.drawer {
+  background: var(--md-surface-container);
+  border-left: 1px solid var(--md-outline-variant);
+  box-shadow: none;
+}
+
+.md3-explorer .drawer__head {
+  padding: 16px 14px 14px 18px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+
+.md3-explorer .drawer__head h2 {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--md-on-surface);
+}
+
+.md3-explorer .ex-head-actions button {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  font-size: inherit;
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+.md3-explorer .ex-head-actions button:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.md3-explorer .ex-filter-row {
+  margin: 10px 12px 6px;
+  padding: 0 8px 0 16px;
+  height: 40px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  border-bottom: none;
+  gap: 6px;
+}
+.md3-explorer .ex-filter-input {
+  height: 40px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+.md3-explorer .ex-filter-input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+.md3-explorer .ex-filter-input:focus {
+  border-color: transparent;
+}
+.md3-explorer .ex-filter-error {
+  color: var(--md-error);
+}
+.md3-explorer .ex-filter-note {
+  color: var(--md-on-surface-variant);
+}
+
+.md3-explorer .ex-body {
+  padding: 6px 8px 16px;
+  font-family: var(--font-ui);
+}
+
+.md3-explorer .ex-row {
+  height: 34px;
+  gap: 8px;
+  padding-right: 10px;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  transition: background var(--md-motion-effect);
+}
+.md3-explorer .ex-row:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-explorer .ex-row.selected {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-explorer .ex-row.selected:hover {
+  background: var(--md-secondary-container);
+  filter: brightness(1.08);
+}
+.md3-explorer .ex-row.ignored .ex-name,
+.md3-explorer .ex-row.ignored .ex-icon {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.md3-explorer .ex-chevron {
+  width: auto;
+  color: var(--md-on-surface-variant);
+  transition: transform var(--md-motion-effect);
+}
+.md3-explorer .ex-chevron.hidden {
+  visibility: hidden;
+}
+.md3-explorer .ex-chevron.open {
+  transform: rotate(90deg);
+}
+
+.md3-explorer .ex-icon {
+  width: auto;
+  height: auto;
+  color: var(--md-on-surface-variant);
+}
+.md3-explorer .ex-icon--dir {
+  color: var(--md-primary);
+}
+
+.md3-explorer .ex-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.md3-explorer .ex-dl {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+}
+.md3-explorer .ex-dl:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.md3-explorer .ex-dl.done {
+  color: var(--md-success);
+}
+.md3-explorer .ex-dl.error {
+  color: var(--md-error);
+}
+.md3-explorer .ex-dl__spin {
+  border-color: color-mix(in srgb, var(--md-primary) 35%, transparent);
+  border-top-color: var(--md-primary);
+}
+
+.md3-explorer .ex-dls {
+  border-top: none;
+  margin: 6px 10px 10px;
+  padding: 0;
+  gap: 8px;
+}
+.md3-explorer .ex-dls__row {
+  padding: 10px 12px;
+  border-radius: var(--md-shape-large);
+  background: var(--md-surface-container);
+  gap: 10px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+.md3-explorer .ex-dls__row.done {
+  color: var(--md-on-surface);
+}
+.md3-explorer .ex-dls__row.error {
+  color: var(--md-error);
+}
+.md3-explorer .ex-dls__icon {
+  flex-shrink: 0;
+  color: var(--md-primary);
+}
+.md3-explorer .ex-dls__row.error .ex-dls__icon {
+  color: var(--md-error);
+}
+.md3-explorer .ex-dls__spin {
+  border-color: color-mix(in srgb, var(--md-primary) 35%, transparent);
+  border-top-color: var(--md-primary);
+}
+.md3-explorer .ex-dls__act {
+  color: var(--md-primary);
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+.md3-explorer .ex-dls__dismiss {
+  display: inline-flex;
+  align-items: center;
+  color: var(--md-on-surface-variant);
+}
+.md3-explorer .ex-dls__act + .ex-dls__dismiss {
+  color: var(--md-on-surface-variant);
+}
+
+/* ============================================================================================
+   Source Control (design/v2/MD3 Files.dc.html — centre column: branch bar, staged/changes,
+   commit composer) + Git History (right column, rendered inside this same drawer)
+   ============================================================================================ */
+
+.md3-source-control.drawer.scm {
+  width: 480px;
+  background: var(--md-surface-container);
+  box-shadow: none;
+}
+
+.md3-source-control .drawer__head {
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md3-source-control .drawer__head h2 {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--md-on-surface);
+}
+.md3-source-control > .drawer__head > .drawer__close {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+.md3-source-control > .drawer__head > .drawer__close:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.md3-source-control .scm-bar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--md-outline-variant);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  gap: 8px;
+}
+
+.md3-source-control .scm-repo {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.md3-source-control .scm-scope,
+.md3-source-control .scm-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  max-width: 220px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background var(--md-motion-effect);
+}
+.md3-source-control .scm-scope {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.md3-source-control .scm-scope:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-source-control .scm-branch {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.md3-source-control .scm-branch:hover {
+  filter: brightness(1.08);
+}
+
+.md3-source-control .scm-ahead {
+  color: var(--md-success);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.md3-source-control .scm-behind {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.md3-source-control .scm-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background var(--md-motion-effect);
+}
+.md3-source-control .scm-sync:hover:not(:disabled) {
+  background: var(--md-surface-container-high);
+}
+.md3-source-control .scm-sync:disabled {
+  opacity: 0.5;
+}
+
+.md3-source-control .scm-more {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  font-size: 16px;
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+.md3-source-control .scm-more:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+
+.md3-source-control .scm-body {
+  font-family: var(--font-ui);
+  padding: 10px 16px 24px;
+}
+
+.md3-source-control .scm-section-head {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+  padding: 6px 4px 8px;
+}
+.md3-source-control .scm-section-head b {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-full);
+  padding: 1px 7px;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.md3-source-control .scm-section-head button {
+  color: var(--md-primary);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.md3-source-control .scm-file {
+  border-radius: var(--md-shape-medium);
+  padding: 6px 8px;
+  gap: 10px;
+  transition: background var(--md-motion-effect);
+}
+.md3-source-control .scm-file:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-source-control .scm-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--md-on-surface);
+}
+.md3-source-control .scm-path:hover,
+.md3-source-control .scm-file.open .scm-path {
+  color: var(--md-primary);
+  text-decoration: none;
+}
+.md3-source-control .scm-add {
+  color: var(--md-success);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.md3-source-control .scm-del {
+  color: var(--md-error);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.md3-source-control .scm-iconbtn {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+}
+.md3-source-control .scm-iconbtn:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.md3-source-control .scm-iconbtn[title='Discard changes']:hover {
+  color: var(--md-error);
+}
+
+.md3-source-control .scm-commit {
+  padding: 14px 0 18px;
+}
+.md3-source-control .scm-message {
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  padding: 12px 46px 12px 14px;
+  transition:
+    border-color var(--md-motion-effect),
+    box-shadow var(--md-motion-effect);
+}
+.md3-source-control .scm-message::placeholder {
+  color: var(--md-on-surface-variant);
+}
+.md3-source-control .scm-message:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-primary) 20%, transparent);
+}
+.md3-source-control .scm-gen {
+  top: 9px;
+  right: 9px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  border: none;
+  color: var(--md-primary);
+  transition: background var(--md-motion-effect);
+}
+.md3-source-control .scm-gen:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.md3-source-control .scm-gen.is-generating {
+  color: var(--md-primary);
+}
+.md3-source-control .scm-commit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  letter-spacing: normal;
+  padding: 12px;
+  transition:
+    filter var(--md-motion-effect),
+    opacity var(--md-motion-effect);
+}
+.md3-source-control .scm-commit-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.md3-source-control .scm-error {
+  background: var(--md-error-container);
+  border: none;
+  border-radius: var(--md-shape-medium);
+  padding: 10px 12px;
+}
+.md3-source-control .scm-error__msg {
+  color: var(--md-on-error-container);
+  font-family: var(--font-mono);
+}
+.md3-source-control .scm-error__dismiss {
+  color: var(--md-on-error-container);
+  opacity: 0.75;
+}
+.md3-source-control .scm-error__dismiss:hover {
+  opacity: 1;
+}
+
+/* ---- Git history (rendered via GitHistoryPanel inside the Source Control drawer) ---- */
+
+.md3-git-history .scm-history__head {
+  padding: 6px 4px 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+.md3-git-history__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+}
+.md3-git-history__toggle-chevron {
+  color: var(--md-on-surface-variant);
+  transform: rotate(90deg);
+  transition: transform var(--md-motion-effect);
+}
+.md3-git-history__toggle-chevron.collapsed {
+  transform: rotate(0deg);
+}
+.md3-git-history__refresh {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+.md3-git-history__refresh:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+
+.md3-git-history .scm-history__body {
+  max-height: 42vh;
+}
+.md3-git-history .scm-history__row {
+  border-radius: var(--md-shape-medium);
+  padding: 8px 10px;
+  margin: 1px 0;
+  font-family: var(--font-ui);
+  color: var(--md-on-surface);
+  transition: background var(--md-motion-effect);
+}
+.md3-git-history .scm-history__row:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-git-history .scm-history__subject {
+  color: var(--md-on-surface);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.md3-git-history .scm-history__ref {
+  border-radius: var(--md-shape-full);
+  border-color: var(--md-outline-variant);
+  font-family: var(--font-mono);
+  color: var(--md-on-surface-variant);
+}
+.md3-git-history .scm-history__chevron {
+  color: var(--md-on-surface-variant);
+}
+.md3-git-history .scm-history__file {
+  border-radius: var(--md-shape-small);
+  font-family: var(--font-ui);
+  color: var(--md-on-surface);
+}
+.md3-git-history .scm-history__file:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-git-history .scm-history__file-dir {
+  color: var(--md-on-surface-variant);
+}
+.md3-git-history .scm-history__meta,
+.md3-git-history .scm-history__msg {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+
+/* ============================================================================================
+   Conflict bar — non-blocking "project file changed on disk" notice.
+   ============================================================================================ */
+
+.md3-conflict-bar {
+  background: var(--md-warning-container);
+  border: none;
+  box-shadow: none;
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-warning-container);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  padding: 10px 14px;
+}
+.md3-conflict-bar__icon {
+  flex-shrink: 0;
+  color: var(--md-on-warning-container);
+}
+.md3-conflict-bar__btn {
+  border: 1px solid color-mix(in srgb, var(--md-on-warning-container) 40%, transparent);
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-warning-container);
+  font-family: var(--font-ui);
+  transition: background var(--md-motion-effect);
+}
+.md3-conflict-bar__btn:hover {
+  background: color-mix(in srgb, var(--md-on-warning-container) 14%, transparent);
+}
+.md3-conflict-bar__btn--primary {
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-warning-container);
+  border-color: transparent;
+  font-weight: 700;
+}
+.md3-conflict-bar__btn--primary:hover {
+  background: var(--md-surface);
+}
+
+/* ============================================================================================
+   Branch select — the "field-styled trigger + portaled list" dropdown BranchSelect.tsx renders
+   (used here for worktree base-branch pickers; also reused, unmodified, by Settings' theme
+   select — restyling the shared `.bind-select` classes benefits both consistently).
+   ============================================================================================ */
+
+.bind-select {
+  height: 40px;
+  padding: 0 12px 0 14px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  transition:
+    background var(--md-motion-effect),
+    border-color var(--md-motion-effect);
+}
+.bind-select:hover {
+  background: var(--md-surface-container-highest);
+  border-color: var(--md-outline);
+}
+.bind-select__val {
+  color: var(--md-on-surface);
+}
+.bind-select__ph {
+  color: var(--md-on-surface-variant);
+}
+.bind-select__chev {
+  color: var(--md-on-surface-variant);
+}
