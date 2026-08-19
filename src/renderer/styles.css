@@ -10584,14 +10584,25 @@ body,
   20% { opacity: 0.9; transform: scale(0.5); }
   30%, 100% { opacity: 0; transform: scale(1.6); }
 }
-/* The scene's context menu is the app's REAL .ctx-menu — this modifier only re-anchors it
-   into the scene (absolute, no fixed/z-index) and makes it a non-interactive replay. */
-.ctx-menu.onb-menu {
+/* The scene's context menu used to be the app's REAL .ctx-menu, re-anchored with a modifier
+   class. It is now a frozen, standalone copy (.onb-menu/.onb-menu__item/.onb-menu__icon) that
+   never touches the live .ctx-menu/.ctx-item/.ctx-icon classes — see scene-isolation.test.ts.
+   The base properties below are a snapshot of the real menu's look at the time this scene was
+   drawn; a later restyle of the real context menu cannot silently re-skin this illustration. */
+.onb-menu {
   position: absolute;
   left: 112px;
   top: 132px;
   z-index: auto;
   min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px;
+  background: rgba(var(--menu-rgb), 0.98);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, calc(0.55 * var(--shadow-k)));
   pointer-events: none;
   opacity: 0;
   transform-origin: top left;
@@ -10602,9 +10613,27 @@ body,
   23%, 52% { opacity: 1; transform: scale(1); }
   56%, 100% { opacity: 0; transform: scale(0.97); }
 }
-.onb-menu .ctx-item {
-  font-size: 11.5px;
+.onb-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 5px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.onb-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--muted);
 }
 .onb-menu__hl {
   animation: onb-menu-hl 7s ease infinite;
@@ -10649,7 +10678,39 @@ body,
   border-radius: 50%;
   flex: none;
 }
-.onb-node__head .term-node__status {
+/* Frozen copy of the real .term-node__status/-dot/--busy/--attention badge family — never the
+   live app classes, so a later restyle of the real status badge cannot silently re-skin this
+   illustration. See scene-isolation.test.ts. */
+.onb-node__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--success);
+}
+.onb-node__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.onb-node__status--busy {
+  color: #d97757;
+}
+.onb-node__status--busy .onb-node__status-dot {
+  animation: nt-pulse 1.1s ease-in-out infinite;
+}
+.onb-node__status--attention {
+  color: var(--danger);
+}
+.onb-node__status--attention .onb-node__status-dot {
+  animation: nt-pulse 1.1s ease-in-out infinite;
+}
+.onb-node__head .onb-node__status {
   font-size: 8.5px;
 }
 .onb-node__title {
@@ -11099,8 +11160,8 @@ body,
   border-radius: 8px;
   padding: 7px 8px;
 }
-/* the real status badges, scaled to phone-row size */
-.onb-phone__row .term-node__status {
+/* the frozen status-badge copy (.onb-node__status), scaled to phone-row size */
+.onb-phone__row .onb-node__status {
   margin-left: 0;
   flex: none;
   font-size: 7.5px;
