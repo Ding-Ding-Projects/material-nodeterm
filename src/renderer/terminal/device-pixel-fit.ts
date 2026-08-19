@@ -149,3 +149,102 @@ export function devicePixelSnapOffset(cssCoord: number, dpr: number): number {
   if (!Number.isFinite(dpr) || dpr <= 0) return 0
   return Math.round(cssCoord * dpr) / dpr - cssCoord
 }
+
+/**
+ * A cell width quantized onto a device grid: `floor(width × grid) / grid`.
+ *
+ * This is not a helper invented for tidiness — it is the arithmetic BOTH ends of the terminal
+ * already perform, written once so the stability proof below can compose them:
+ *   - `char-size-quantize.ts` applies it to the raw measurement, so the DOM and WebGL renderers
+ *     agree on a cell (that helper's own header explains why);
+ *   - `@xterm/addon-webgl`'s `_updateDimensions` applies it again implicitly —
+ *     `device.char.width = floor(charWidth × dpr)`, then `css.cell.width = device.cell.width / dpr`
+ *     — because its glyph atlas needs an integer grid.
+ */
+export function quantizedCellWidth(rawWidth: number, grid: number): number {
+  const g = sane(grid)
+  const w = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : 0
+  const q = Math.floor(w * g) / g
+  // A sub-device-pixel cell quantizes to 0, which would invalidate the whole char size. Same
+  // fallback `quantizeCharSize` makes: keep the raw measurement.
+  return q > 0 ? q : w
+}
+
+/** Slack for the cell-width comparison below. The quantities are sub-pixel CSS widths built from
+ *  two divisions, so anything under this is representation noise; a REAL disagreement is at least
+ *  `1/scale` px (~0.33 at scale 3), five orders of magnitude larger. */
+const CELL_EPS = 1e-9
+
+/**
+ * Would rasterizing at `rasterScale` leave the terminal's CSS cell width exactly where the display
+ * grid put it?
+ *
+ * THIS IS THE CONSTRAINT THE WHOLE SCALE FIX HANGS ON, and it is not obvious from the arithmetic
+ * above. `@xterm/addon-fit`'s `proposeDimensions` derives `cols` from
+ * `renderService.dimensions.css.cell.width`, and the WebGL renderer computes that as
+ * `floor(charWidth × dpr) / dpr` — i.e. it depends on the dpr the renderer is told. So a raster
+ * scale that moves the CSS cell by even a fraction of a pixel moves the COLUMN COUNT of a wide
+ * terminal, and a column change is a `terminal.resize()`, which is a SIGWINCH into the user's tmux
+ * session and a full repaint. Re-rasterizing on zoom is a cosmetic change; reflowing somebody's
+ * running session on zoom is a defect, so the scale is only allowed to move when this holds.
+ *
+ * Worked example, at the dpr the module header's measurements were taken on. A measured width of
+ * 8.6667 px at dpr 1.5 gives a cell of `floor(13)/1.5 = 8.6667`. Ask for the QUARTER-step scale
+ * 1.75 that `terminalRasterScale` would return and the renderer recomputes
+ * `floor(8.6667 × 1.75)/1.75 = 15/1.75 = 8.5714` — 1.1% narrower, which turns an 800 px terminal
+ * from 92 columns into 93. Multiply an already grid-aligned width by an INTEGER multiple of the dpr
+ * instead and the product is an integer by construction
+ * (`floor(w × d)/d × n × d = n × floor(w × d)`), so the floor loses nothing and the cell is
+ * unmoved. That is why `safeRasterScale` exists beside `terminalRasterScale` rather than replacing
+ * it.
+ *
+ * NOTE WHAT IT COMPARES, because the obvious alternative is a check that can never fail. It runs
+ * the SAME measured width through both grids, which is what the renderer itself does — it reads
+ * `_charSizeService.width` and floors it against whichever dpr it was told. Quantizing the display
+ * answer and THEN re-quantizing that would be a restatement of the proof above rather than a test
+ * of it: grid-aligned input survives every multiple by construction, so such a predicate returns
+ * true for every multiple and would wave through the one case this must catch — a width that never
+ * reached the display grid because `quantizeCharSize` (deliberately fail-open) did not install.
+ * With the raw width on both sides, that case is exactly the one that comes back false.
+ */
+export function cellWidthIsStable(
+  measuredWidth: number,
+  dpr: number,
+  rasterScale: number
+): boolean {
+  const onDisplayGrid = quantizedCellWidth(measuredWidth, dpr)
+  const onRasterGrid = quantizedCellWidth(measuredWidth, rasterScale)
+  return Math.abs(onRasterGrid - onDisplayGrid) <= CELL_EPS
+}
+
+/**
+ * The raster scale the WIRING may actually apply: `terminalRasterScale`'s answer rounded UP to a
+ * whole multiple of the display dpr, so `cellWidthIsStable` holds for every possible cell width.
+ *
+ * Rounding up, never down, keeps the existing module's promise that the raster is never COARSER
+ * than the ideal — the step exists to bound rebuilds, not to license blur.
+ *
+ * The clamp is a multiple too. `RASTER_SCALE_MAX` cannot simply be applied with `Math.min`: at dpr
+ * 2 that would produce 3, which is not a multiple of 2 and would move the cell. The ceiling is
+ * therefore the largest MULTIPLE at or under `RASTER_SCALE_MAX`, with a floor of one multiple so a
+ * display whose own dpr already exceeds the ceiling is never rasterized coarser than itself.
+ *
+ * Two consequences worth stating out loud rather than discovering on a device:
+ *  - Because the multiples of `dpr` are so far apart, the answer is `dpr` for every zoom ≤ 1 and
+ *    `2 × dpr` above it (React Flow's `maxZoom` is 2). Zooming OUT never re-rasterizes anything,
+ *    and a whole zoom-in gesture crosses at most ONE scale change. That is the cost argument for
+ *    the wiring, and it is a property of this function rather than of a debounce.
+ *  - At dpr 2 the next multiple is 4, past the memory ceiling, so this returns 2 at every zoom and
+ *    the scale half is INERT on an integer-dpr display. Deliberate: dpr 2 is already exact at zoom
+ *    1, and the reported defect is Windows at 1.25/1.5.
+ */
+export function safeRasterScale(dpr: number, zoom: number): number {
+  const d = sane(dpr)
+  const ideal = terminalRasterScale(d, zoom)
+  // Same `.toFixed(6)` guard as `terminalRasterScale`: these quotients are exactly the products
+  // that make `1.25 × 1.2` arrive as 1.4999999999999998, and here a float hair would buy a whole
+  // extra multiple — a 4× atlas nobody asked for.
+  const wanted = Math.max(1, Math.ceil(+(ideal / d).toFixed(6)))
+  const ceiling = Math.max(1, Math.floor(+(RASTER_SCALE_MAX / d).toFixed(6)))
+  return Math.min(wanted, ceiling) * d
+}
