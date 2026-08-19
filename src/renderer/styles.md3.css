@@ -1,0 +1,774 @@
+/* ============================================================================================
+   MD3 rewrite — incremental per-lane stylesheet.
+
+   Loaded after styles.css (see boot.tsx) so equal-specificity rules here win. Every lane appends
+   its own banner-delimited section below; see design/v2/md3/tokens.css for the token contract
+   every colour value here reads from, and design/v2/md3/HANDOFF.md for the component recipes.
+   ============================================================================================ */
+
+/* ---- MD3: Kids mode (Home / Gate / Grown-up / activity canvas) ---- */
+
+/* The neutral splash shown for the brief window before App.tsx knows whether Kids mode is on —
+   deliberately unbranded (no Kids copy, no dev chrome) since which surface belongs here is not
+   yet known. Matches the app's own surface colour so it reads as "still loading", not as a flash. */
+.md3-kids-boot-splash {
+  position: fixed;
+  inset: 0;
+  background: var(--md-surface);
+}
+
+.md3-kids-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  overflow: hidden;
+}
+
+.md3-kids-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+/* ---- Home ---- */
+
+.md3-kids-home {
+  align-items: center;
+  padding: 44px 60px 32px;
+  gap: 26px;
+  background: linear-gradient(180deg, var(--md-surface) 0%, var(--md-surface-container-low) 100%);
+}
+
+.md3-kids-home__strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  align-self: stretch;
+}
+
+.md3-kids-home__spacer {
+  flex: 1;
+}
+
+.md3-kids-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.md3-kids-iconbtn {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--md-shape-md);
+  border: none;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--md-motion-effect);
+}
+.md3-kids-iconbtn:hover {
+  background: var(--md-surface-container-highest);
+}
+/* IconLock (components/icons.tsx) is a fixed 16×16 SVG with no size prop — the CSS box model's
+   width/height override an SVG's own presentational width/height attributes, so this is how the
+   shared icon set is scaled up to match the design's larger touch targets without forking it. */
+.md3-kids-iconbtn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.md3-kids-home__avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.md3-kids-home__avatar-bubble {
+  width: 110px;
+  height: 110px;
+  border-radius: 38px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: md3KidsBob 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .md3-kids-home__avatar-bubble {
+    animation: none;
+  }
+}
+@keyframes md3KidsBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.md3-kids-home__hi {
+  font-size: 40px;
+  font-weight: 700;
+}
+.md3-kids-home__ask {
+  font-size: 18px;
+  color: var(--md-on-surface-variant);
+}
+.md3-kids-home__hint {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+  opacity: 0.7;
+}
+
+.md3-kids-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 320px));
+  gap: 20px;
+  width: 100%;
+  max-width: 1040px;
+}
+
+.md3-kids-tile {
+  position: relative;
+  border: none;
+  border-radius: 32px;
+  padding: 26px 26px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: transform var(--md-motion-spatial);
+}
+.md3-kids-tile:hover:not(:disabled) {
+  transform: scale(1.03);
+}
+.md3-kids-tile:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.md3-kids-tile:disabled,
+.md3-kids-tile--disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.md3-kids-tile:disabled:hover,
+.md3-kids-tile--disabled:hover {
+  transform: none;
+}
+
+.md3-kids-tile--primary { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.md3-kids-tile--success { background: var(--md-success-container); color: var(--md-on-success-container); }
+.md3-kids-tile--warning { background: var(--md-warning-container); color: var(--md-on-warning-container); }
+.md3-kids-tile--tertiary { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); }
+.md3-kids-tile--secondary { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.md3-kids-tile--neutral { background: var(--md-surface-container-high); color: var(--md-on-surface); }
+
+.md3-kids-tile__icon {
+  display: flex;
+}
+/* IconTerminal (components/icons.tsx, the "Type things" tile) is a fixed 16×16 SVG with no size
+   prop; this scales it up to match the 40px icons this lane's own icon set already renders at.
+   Harmless no-op on the icons that already pass size=40 — CSS width/height beat an SVG's own
+   presentational attributes either way. */
+.md3-kids-tile__icon svg {
+  width: 40px;
+  height: 40px;
+}
+.md3-kids-tile__title {
+  font-size: 22px;
+  font-weight: 700;
+}
+.md3-kids-tile__sub {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+.md3-kids-tile__badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+}
+
+.md3-kids-disclosure {
+  max-width: 720px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+  padding: 10px 16px;
+  background: var(--md-surface-container-low);
+}
+.md3-kids-disclosure--settings {
+  text-align: left;
+  max-width: none;
+  border-color: var(--md-warning);
+  color: var(--md-on-surface);
+}
+
+/* ---- Parent gate / times-up ---- */
+
+.md3-kids-gate {
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  background: var(--md-surface);
+  padding: 40px;
+}
+.md3-kids-gate__icon {
+  width: 76px;
+  height: 76px;
+  border-radius: var(--md-shape-lg);
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.md3-kids-gate__icon svg {
+  width: 38px;
+  height: 38px;
+}
+.md3-kids-gate__copy {
+  text-align: center;
+}
+.md3-kids-gate__title {
+  font-size: 30px;
+  font-weight: 700;
+}
+.md3-kids-gate__subtitle {
+  font-size: 15.5px;
+  color: var(--md-on-surface-variant);
+  margin-top: 6px;
+  max-width: 420px;
+}
+.md3-kids-gate__status {
+  min-height: 20px;
+  font-size: 13px;
+  color: var(--md-error);
+  text-align: center;
+}
+
+.md3-kids-textbtn {
+  height: 44px;
+  padding: 0 24px;
+  border-radius: var(--md-shape-full);
+  border: none;
+  background: transparent;
+  color: var(--md-primary);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.md3-kids-textbtn:hover {
+  background: var(--md-surface-container-high);
+}
+
+.md3-kids-outlined-btn,
+.md3-kids-filled-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: var(--md-shape-full);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+  white-space: nowrap;
+}
+.md3-kids-outlined-btn {
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+}
+.md3-kids-outlined-btn:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-kids-filled-btn {
+  border: none;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.md3-kids-filled-btn:hover {
+  background: var(--md-primary);
+  filter: brightness(1.08);
+}
+.md3-kids-filled-btn:disabled,
+.md3-kids-outlined-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- PIN pad — 84px keys, r28, matching the design exactly ---- */
+
+.md3-kids-pinpad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+.md3-kids-pinpad__dots {
+  display: flex;
+  gap: 14px;
+}
+.md3-kids-pinpad__dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--md-outline);
+  background: transparent;
+  transition: background var(--md-motion-effect);
+}
+.md3-kids-pinpad__dot--filled {
+  background: var(--md-primary);
+  border-color: var(--md-primary);
+}
+.md3-kids-pinpad__dot--shake {
+  border-color: var(--md-error);
+}
+@keyframes md3KidsShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.md3-kids-pinpad__dots:has(.md3-kids-pinpad__dot--shake) {
+  animation: md3KidsShake 420ms ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .md3-kids-pinpad__dots:has(.md3-kids-pinpad__dot--shake) {
+    animation: none;
+  }
+}
+
+.md3-kids-pinpad__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 84px);
+  gap: 14px;
+}
+.md3-kids-pinpad__key {
+  width: 84px;
+  height: 84px;
+  border-radius: var(--md-shape-lg);
+  border: none;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.md3-kids-pinpad__key:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.md3-kids-pinpad__key:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.md3-kids-pinpad__key--back {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.md3-kids-pinpad__key--blank {
+  background: transparent;
+  pointer-events: none;
+}
+
+/* ---- Grown-up screen ---- */
+
+.md3-kids-parent {
+  padding: 36px 56px;
+  gap: 22px;
+}
+.md3-kids-parent__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.md3-kids-parent__title {
+  font-size: 28px;
+  font-weight: 700;
+}
+.md3-kids-parent__subtitle {
+  font-size: 14px;
+  color: var(--md-on-surface-variant);
+  margin-top: 3px;
+}
+
+.md3-kids-parent__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.md3-kids-stat {
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container-low);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.md3-kids-stat__icon {
+  color: var(--md-primary);
+  display: flex;
+}
+.md3-kids-stat__value {
+  font-size: 22px;
+  font-weight: 700;
+}
+.md3-kids-stat__label {
+  font-size: 12.5px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-kids-parent__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+.md3-kids-parent__panel {
+  border-radius: 28px;
+  background: var(--md-surface-container-low);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+}
+.md3-kids-parent__panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  color: var(--md-on-surface-variant);
+  padding-bottom: 8px;
+  text-transform: uppercase;
+}
+.md3-kids-parent__empty {
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+  padding: 8px 4px;
+}
+
+.md3-kids-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 6px 4px;
+}
+.md3-kids-activity-row__badge {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.md3-kids-activity-row__text {
+  flex: 1;
+  min-width: 0;
+}
+.md3-kids-activity-row__what {
+  font-size: 14px;
+  font-weight: 600;
+}
+.md3-kids-activity-row__detail {
+  font-size: 12.5px;
+  color: var(--md-on-surface-variant);
+}
+.md3-kids-activity-row__when {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-mono);
+}
+
+.md3-kids-perm-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md3-kids-perm-row:last-child {
+  border-bottom: none;
+}
+.md3-kids-perm-row__text {
+  flex: 1;
+  min-width: 0;
+}
+.md3-kids-perm-row__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.md3-kids-perm-row__hint {
+  font-size: 12.5px;
+  color: var(--md-on-surface-variant);
+  line-height: 1.4;
+}
+
+/* ---- MD3 switch — 52×32 track, no box-shadow (tonal elevation only) ---- */
+
+.md3-switch {
+  width: 52px;
+  height: 32px;
+  border-radius: var(--md-shape-full);
+  border: 2px solid var(--md-outline);
+  background: var(--md-surface-container-highest);
+  position: relative;
+  flex: 0 0 auto;
+  padding: 0;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
+}
+.md3-switch__knob {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--md-outline);
+  transition: transform var(--md-motion-effect), width var(--md-motion-effect), height var(--md-motion-effect),
+    top var(--md-motion-effect), left var(--md-motion-effect), background var(--md-motion-effect);
+}
+.md3-switch--on {
+  background: var(--md-primary);
+  border-color: transparent;
+}
+.md3-switch--on .md3-switch__knob {
+  width: 24px;
+  height: 24px;
+  top: 4px;
+  left: 24px;
+  background: var(--md-on-primary);
+}
+.md3-switch:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- My stickers ---- */
+
+.md3-kids-stickers {
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 40px;
+}
+.md3-kids-stickers__count {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--md-primary);
+  font-size: 44px;
+  font-weight: 700;
+}
+.md3-kids-stickers__hint {
+  color: var(--md-on-surface-variant);
+  font-size: 14px;
+  text-align: center;
+  max-width: 420px;
+}
+.md3-kids-stickers__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 640px;
+  justify-content: center;
+}
+.md3-kids-stickers__item {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.md3-kids-stickers__item--empty {
+  background: var(--md-surface-container-high);
+  color: var(--md-outline);
+  opacity: 0.5;
+}
+
+/* ---- Activity canvas (Talk to Beep / Type things / Draw) ---- */
+
+.md3-kids-canvas-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+}
+.md3-kids-canvas-layer--active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.md3-kids-activity {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--md-surface);
+}
+.md3-kids-activity__bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 64px;
+  flex: 0 0 auto;
+  padding: 0 20px;
+  background: var(--md-surface-container);
+}
+.md3-kids-activity__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.md3-kids-activity__switch {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.md3-kids-switchbtn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--md-shape-md);
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-kids-switchbtn:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-kids-switchbtn--active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-kids-switchbtn svg {
+  width: 18px;
+  height: 18px;
+}
+.md3-kids-activity__canvas {
+  flex: 1;
+  min-height: 0;
+}
+.md3-kids-activity__canvas .react-flow {
+  background: var(--md-surface);
+}
+
+.md3-kids-backbtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline-variant);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.md3-kids-backbtn:hover {
+  background: var(--md-surface-container-high);
+}
+
+/* ---- Rail entry point: first-time PIN setup dialog ---- */
+
+.md3-kids-enable-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  padding: 28px 28px 24px;
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+}
+.md3-kids-enable-dialog__title {
+  font-size: 19px;
+  font-weight: 700;
+  text-align: center;
+}
+.md3-kids-enable-dialog__hint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+  text-align: center;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .md3-kids-home {
+    padding: 28px 20px 24px;
+  }
+  .md3-kids-tiles {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+  .md3-kids-parent {
+    padding: 24px 20px;
+  }
+  .md3-kids-parent__stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .md3-kids-parent__cols {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+}
