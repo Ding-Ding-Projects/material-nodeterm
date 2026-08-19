@@ -134,3 +134,49 @@ is the reflow this design exists to avoid.
 - `terminal/char-size-quantize.ts` — the cell-grid quantization the proof depends on, and the one
   call site that installs both.
 - `canvas/Canvas.tsx` `onMoveEnd` — the phase snap.
+
+## The minification case (zoom < 1) — analysed, not fixed here
+
+The measured −44% at zoom 0.83 is **not** addressed by this change, and it is worth writing down
+why, because the obvious next move is wrong.
+
+`RASTER_SCALE_MIN_FACTOR = 1` refuses to rasterize coarser than the display's own dpr, so the
+scale only acts when zoomed **in**. Raising the raster on zoom-out would not help anyway: at
+zoom < 1 the raster is already denser than the display needs. The loss is **resampling**, not
+resolution.
+
+**The defence for that already exists in this repository, and it is the shared glyphgrid renderer.**
+`glyphgrid/atlas.ts` was built for it: its gutter is sized so consecutive slots "share neither a
+texel nor a mip neighbourhood", and the atlas carries a deliberately bounded usable mip chain. That
+is exactly the machinery minification needs. xterm's per-terminal WebGL addon has no equivalent —
+it was never designed to be displayed under a CSS transform at all. The repo's own measurement
+agrees: glyphgrid put down **17% more ink** than per-terminal WebGL, and it is immune to PHASE
+because it snaps its own camera (`glyphgrid/camera.ts`).
+
+So closing the minification case is not new machinery. It is a **default change** —
+`resolveTerminalRenderer` resolving `auto` to `shared` rather than `webgl`.
+
+**That change is deliberately not made here.** Read the resolver's own doc comment first: the macOS
+branch of this decision has already flip-flopped twice (`dom` → `shared` on 2026-08-05, then
+`webgl` once the blackout it was avoiding was root-caused to an addon dispose crash rather than the
+compositor). A third flip on reasoning alone would be the same mistake a third time. It needs the
+same evidence the second one got: real captures at zoom 1 and at a fractional zoom, on both
+renderers, on a real display.
+
+### What a person has to do — the whole procedure
+
+Five minutes, and item 2 is a **stop-ship**.
+
+1. Windows at 150% (dpr 1.5), Settings → Terminal rendering → `webgl`, a text-heavy terminal.
+   Compare **zoom 1** against **zoom ~1.3**. Zoom 1 must be identical to before; 1.3 should be
+   visibly crisper. If it is not, the shadowed dpr getter is not reaching the renderer.
+2. **Run `tput cols`, zoom 1 → 2 → 1, run it again. The number must not change.** Any reflow is a
+   stop-ship — that is the SIGWINCH guard failing, and it means a live tmux session would be
+   re-wrapped by a camera movement.
+3. Switch to `shared` and compare the SAME terminal at zoom 0.83 against `webgl` at 0.83. If
+   `shared` is visibly better, that is the evidence the default change needs.
+4. Toggle `shared` ⇄ `webgl` while zoomed in; confirm it settles both ways.
+5. dpr 1.25 (125%), where the scale becomes 2.5.
+6. Many terminals at zoom > 1 — atlas cost is the square of the scale. Confirm no context loss or
+   black nodes.
+7. macOS (dpr 2) should show **no change at all**. Any difference means the ceiling logic is wrong.
