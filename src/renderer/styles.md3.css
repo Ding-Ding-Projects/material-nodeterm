@@ -16,6 +16,24 @@
    for that specific brand colour and substituting one would break the documented pairing.
    ============================================================================================ */
 
+/* styles.css's existing --md-* layer already carries every colour ROLE this file leans on
+   (surface-container-*, outline-variant, primary/tertiary/error/success/warning + their
+   containers) — it is mid-migration to the new baseline hues (see HANDOFF-README's "Known
+   divergence"), but the NAMES already resolve, so those tokens are left alone here for whichever
+   lane re-seeds the literals. It does NOT yet carry the shape/motion scale under the contract's
+   own names (`--md-shape-xs/sm/md/lg`, `--md-motion-spatial/effect` — it currently has
+   `--md-shape-extra-small/small/medium/large` instead), so those six are defined here from the
+   literal values in design/v2/md3/tokens.css. Harmless if another lane later adds the same names
+   to styles.css: they'd carry the identical numbers from the same contract file. */
+:root {
+  --md-shape-xs: 8px;
+  --md-shape-sm: 12px;
+  --md-shape-md: 16px;
+  --md-shape-lg: 28px;
+  --md-motion-spatial: 500ms cubic-bezier(0.38, 1.21, 0.22, 1);
+  --md-motion-effect: 200ms cubic-bezier(0.34, 0.8, 0.34, 1);
+}
+
 /* ---------------------------------------------------------------------------------------------
    Node card contract — shared by terminal / editor / diff / browser / web / video (all render
    `.term-node` as their root). r24, surface-container body, no drop-shadow elevation, a 1px
