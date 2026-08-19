@@ -511,9 +511,6 @@ body,
   border-radius: 4px;
   opacity: 0.55;
 }
-.tab__board-toggle:hover {
-  opacity: 1;
-}
 
 .tab__caret {
   background: transparent;
@@ -1175,10 +1172,6 @@ body,
   box-shadow: 0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
 }
 
-.term-node.selected {
-  border-color: var(--accent);
-}
-
 /* Unread (agent finished while unfocused): a blue glow around the whole node so it's
    obvious at a glance, not just the small header badge. Pulses gently to draw the eye.
    Selecting the node clears unread, so this never fights the selection ring.
@@ -1186,13 +1179,6 @@ body,
    a repaint of every glowing node each frame, which adds up with several unread agents. The
    pseudo lives on the React Flow wrapper (via :has) because .term-node is overflow:hidden
    and would clip its own ::after. */
-.term-node.unread {
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 1px rgba(10, 132, 255, 0.5),
-    0 0 16px 1px rgba(10, 132, 255, 0.35),
-    0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
-}
 
 .react-flow__node:has(.term-node.unread)::after {
   content: '';
@@ -1224,12 +1210,6 @@ body,
    box-shadow), but calmer: lower intensity, slower cycle, and it never fully disappears so
    the node reads "alive" rather than "blinking". Mutually exclusive with .unread (isUnread
    is false while working). Shadows only — the top border keeps the node's own color. */
-.term-node.working {
-  box-shadow:
-    0 0 0 1px rgba(217, 119, 87, 0.35),
-    0 0 14px 1px rgba(217, 119, 87, 0.22),
-    0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
-}
 
 .react-flow__node:has(.term-node.working)::after {
   content: '';
@@ -1258,12 +1238,6 @@ body,
 
 /* Needs-you (waiting/blocked): the red twin of the glows above — same badge/bell red,
    a touch more insistent than working (deeper pulse, faster cycle): it's asking for you. */
-.term-node.attention {
-  box-shadow:
-    0 0 0 1px rgba(255, 69, 58, 0.4),
-    0 0 14px 1px rgba(255, 69, 58, 0.25),
-    0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
-}
 
 .react-flow__node:has(.term-node.attention)::after {
   content: '';
@@ -1397,10 +1371,6 @@ body,
   cursor: text;
 }
 
-.term-node__title-text:hover {
-  background: rgba(var(--tint-rgb), 0.06);
-}
-
 /* Pushes the AI / close buttons to the far right. */
 .term-node__spacer {
   flex: 1;
@@ -1516,11 +1486,6 @@ body,
   border-radius: 6px;
 }
 
-.node-account-chip--warning {
-  color: var(--warn);
-  background: rgba(255, 159, 10, 0.16);
-}
-
 /* Claude Code status: RUNNING badge while working, unread dot when finished. */
 .term-node__status {
   display: inline-flex;
@@ -1542,9 +1507,6 @@ body,
 }
 
 /* RUNNING matches the working spinner + node glow (clay #d97757), not the base green. */
-.term-node__status--busy {
-  color: #d97757;
-}
 
 .term-node__status--busy .term-node__status-dot {
   animation: nt-pulse 1.1s ease-in-out infinite;
@@ -1639,13 +1601,6 @@ body,
 }
 
 /* NEEDS YOU is red everywhere (same as the sidebar attention dot). */
-.term-node__status--attention {
-  color: var(--danger);
-}
-
-.term-node__status--loop {
-  color: #bf7af0;
-}
 
 /* SLEEPING: the agent CLI was exited to reclaim its RAM (Eco); the session itself is fine, so
    this is the quietest chip on the header — grey, no pulse. It is a <button> (click = resume),
@@ -1662,16 +1617,8 @@ body,
   cursor: pointer;
 }
 
-.term-node__status--sleeping:hover {
-  color: var(--text);
-}
-
 .term-node__status--attention .term-node__status-dot {
   animation: nt-pulse 1.1s ease-in-out infinite;
-}
-
-.term-node__status--unread {
-  color: var(--accent);
 }
 
 /* QUEUED: a node armed with canvas-control `--after`, holding its launch until the stations it
@@ -1715,22 +1662,6 @@ body,
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
-}
-.term-node__approve-btn--allow {
-  color: var(--success);
-  border-color: rgba(48, 209, 88, 0.5);
-  background: rgba(48, 209, 88, 0.12);
-}
-.term-node__approve-btn--allow:hover {
-  background: rgba(48, 209, 88, 0.22);
-}
-.term-node__approve-btn--deny {
-  color: var(--danger);
-  border-color: rgba(255, 69, 58, 0.5);
-  background: rgba(255, 69, 58, 0.12);
-}
-.term-node__approve-btn--deny:hover {
-  background: rgba(255, 69, 58, 0.22);
 }
 
 @keyframes nt-pulse {
@@ -1777,11 +1708,6 @@ body,
   flex-shrink: 0;
 }
 
-.term-node__ai:hover:not(:disabled) {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
 .term-node__ai:disabled {
   opacity: 0.6;
   cursor: default;
@@ -1799,11 +1725,6 @@ body,
   flex-shrink: 0;
 }
 
-.term-node__move-worktree:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
 .term-node__search {
   background: transparent;
   border: none;
@@ -1815,11 +1736,6 @@ body,
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-}
-
-.term-node__search:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
 }
 
 .term-node__refresh {
@@ -1835,11 +1751,6 @@ body,
   align-items: center;
 }
 
-.term-node__refresh:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
 .term-node__mic {
   background: transparent;
   border: none;
@@ -1853,11 +1764,6 @@ body,
   align-items: center;
 }
 
-.term-node__mic:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
 .term-node__chat {
   background: transparent;
   border: none;
@@ -1869,11 +1775,6 @@ body,
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-}
-
-.term-node__chat:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
 }
 
 .term-node__find {
@@ -1903,10 +1804,6 @@ body,
   outline: none;
 }
 
-.term-node__find-input:focus {
-  border-color: var(--accent);
-}
-
 .term-node__find-count {
   color: var(--muted);
   font-size: 11px;
@@ -1924,11 +1821,6 @@ body,
   padding: 2px 5px;
   border-radius: 4px;
   flex-shrink: 0;
-}
-
-.term-node__find-btn:hover:not(:disabled) {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
 }
 
 .term-node__find-btn:disabled {
@@ -1963,11 +1855,6 @@ body,
   color: var(--muted);
 }
 
-.term-node__find-tag--claude {
-  background: rgba(10, 132, 255, 0.22);
-  color: var(--accent-text);
-}
-
 .term-node__find-error {
   color: var(--danger);
   font-size: 11px;
@@ -1983,11 +1870,6 @@ body,
   line-height: 1;
   padding: 2px 6px;
   border-radius: 4px;
-}
-
-.term-node__close:hover {
-  background: rgba(247, 118, 142, 0.2);
-  color: var(--danger);
 }
 
 .term-node__body {
@@ -2048,10 +1930,6 @@ body,
 }
 
 /* The hint is instruction, not status: quieter border, neutral text. */
-.term-copy-pill--hint {
-  color: var(--text);
-  border-color: var(--border);
-}
 
 @keyframes nt-copy-pill-in {
   from {
@@ -2062,10 +1940,6 @@ body,
     opacity: 1;
     transform: none;
   }
-}
-
-.term-node__upload.failed {
-  color: var(--danger);
 }
 
 .term-node__upload-spin {
@@ -2289,9 +2163,6 @@ body,
   font-size: 12px;
   cursor: pointer;
 }
-.term-node__reopen:hover {
-  background: rgba(var(--tint-rgb), 0.12);
-}
 
 /* "Reconnect" in the SSH connection banner. The banner paints its own dark-red background, so this
    sits on a light translucent fill rather than the card tint the node buttons use. */
@@ -2370,10 +2241,6 @@ body,
 .term-md__content ul,
 .term-md__content ol {
   margin: 0 0 10px;
-}
-
-.term-md__content a {
-  color: var(--accent);
 }
 
 .term-md__content code {
@@ -2479,9 +2346,7 @@ body,
   border-radius: 6px;
   cursor: pointer;
 }
-.term-chat__retry:hover {
-  background: rgba(var(--tint-rgb), 0.12);
-}
+
 .term-chat__msg {
   max-width: 92%;
   padding: 8px 10px;
@@ -2604,11 +2469,6 @@ body,
   padding: 2px 4px;
   border-radius: 4px;
   flex-shrink: 0;
-}
-
-.term-node__collapse:hover {
-  background: rgba(var(--tint-rgb), 0.08);
-  color: var(--text);
 }
 
 /* ---- Node tags ---- */
@@ -2971,10 +2831,6 @@ body,
   cursor: pointer;
 }
 
-.ctx-item:hover:not(:disabled):not([aria-disabled='true']) {
-  background: var(--panel-header);
-}
-
 .ctx-item__label {
   display: inline-flex;
   align-items: center;
@@ -3004,23 +2860,10 @@ body,
   color: inherit;
 }
 
-.ctx-item:hover:not(:disabled):not([aria-disabled='true']),
-.ctx-item.kbd-active:not(:disabled):not([aria-disabled='true']) {
-  background: var(--panel-header);
-}
-
 .ctx-item:disabled,
 .ctx-item[aria-disabled='true'] {
   color: var(--muted);
   cursor: not-allowed;
-}
-
-.ctx-item.danger {
-  color: var(--danger);
-}
-
-.ctx-item.danger:hover:not(:disabled):not([aria-disabled='true']) {
-  background: rgba(247, 118, 142, 0.15);
 }
 
 /* Submenu row + its flyout. A non-interactive host wraps the trigger and flyout so moving the
@@ -3150,10 +2993,6 @@ body,
   font-size: 12px;
   padding: 4px 7px;
   outline: none;
-}
-
-.menu-filter__input:focus {
-  border-color: var(--accent);
 }
 
 .menu-filter__error {
@@ -3519,17 +3358,6 @@ body,
   cursor: pointer;
 }
 
-.regex-trigger:hover {
-  background: var(--panel-header);
-  color: var(--text);
-}
-
-.regex-trigger.active {
-  background: rgba(var(--accent-rgb, 10, 132, 255), 0.18);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
 /* ---- Editor (Monaco) node ---- */
 .editor-node__body {
   position: relative;
@@ -3555,11 +3383,6 @@ body,
   flex-shrink: 0;
 }
 
-.editor-node__toggle:hover {
-  background: var(--panel-header);
-  color: var(--text);
-}
-
 .editor-node__save {
   background: transparent;
   border: 1px solid var(--border);
@@ -3569,12 +3392,6 @@ body,
   padding: 3px 9px;
   cursor: pointer;
   flex-shrink: 0;
-}
-
-.editor-node__save:not(:disabled) {
-  color: #fff;
-  background: var(--accent);
-  border-color: transparent;
 }
 
 .editor-node__save:disabled {
@@ -3699,10 +3516,6 @@ body,
   font-size: 13px;
   line-height: 1.45;
   padding: 8px 10px;
-}
-
-.sticky-node__body::placeholder {
-  color: rgba(192, 202, 245, 0.4);
 }
 
 .sticky-node.collapsed .sticky-node__body {
@@ -5094,17 +4907,13 @@ body,
   cursor: pointer;
   text-align: left;
 }
-.bind-select:hover {
-  border-color: rgba(var(--tint-rgb), 0.2);
-}
+
 .bind-select__val {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.bind-select__ph {
-  color: var(--muted);
-}
+
 .bind-select__chev {
   flex-shrink: 0;
   color: var(--muted);
@@ -5217,9 +5026,7 @@ body,
 }
 
 /* ---- Clone repo dialog (reuses the .confirm shell) ---- */
-.clone-dialog {
-  width: 420px;
-}
+
 .clone-dialog__label {
   display: block;
   margin: 10px 2px 4px;
@@ -5231,9 +5038,7 @@ body,
   gap: 6px;
   align-items: center;
 }
-.clone-dialog__row .confirm__input {
-  flex: 1;
-}
+
 .clone-dialog__preview {
   margin: 4px 2px 0;
   font-size: 11px;
@@ -5421,11 +5226,6 @@ body,
   padding: 8px 10px;
 }
 
-.confirm__input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
 .confirm__actions {
   display: flex;
   justify-content: flex-end;
@@ -5442,19 +5242,11 @@ body,
   cursor: pointer;
 }
 
-.confirm__btn:hover {
-  background: rgba(var(--tint-rgb), 0.1);
-}
-
 .confirm__btn.danger {
   background: var(--danger);
   border-color: transparent;
   color: #fff;
   font-weight: 600;
-}
-
-.confirm__btn.danger:hover {
-  background: #ff5e54;
 }
 
 .confirm__btn.primary {
@@ -5709,12 +5501,6 @@ body,
   cursor: pointer;
 }
 
-.palette__item.active {
-  background: var(--panel-header); /* --panel-header (#323232) sits between --md-surface-container-
-    high (--surface-raised, #242424) and -highest (--surface-overlay, #2c2c2e) — no exact role
-    matches it, and mapping to the nearest would visibly darken/lighten every active palette row */
-}
-
 .palette__icon {
   display: inline-flex;
   align-items: center;
@@ -5895,7 +5681,7 @@ body,
   color: var(--warn);
   cursor: help;
 }
-.sessmem-row__kill:hover { color: var(--danger); background: rgba(var(--tint-rgb), 0.08); }
+
 .sessmem-row__select {
   flex: 0 0 auto;
   width: 14px;
@@ -5949,11 +5735,6 @@ body,
   cursor: pointer;
 }
 
-.group-node__wt-btn:hover {
-  background: var(--panel-header);
-  color: var(--text);
-}
-
 /* ungroup / × — top-right, revealed on hover or when selected. */
 .group-node__actions {
   position: absolute;
@@ -5986,12 +5767,6 @@ body,
 .group-node__close {
   padding: 3px 8px;
   line-height: 1;
-}
-
-.group-node__ungroup:hover,
-.group-node__close:hover {
-  background: var(--panel-header);
-  color: var(--text);
 }
 
 /* Selected outline for ephemeral subagent/loop nodes. */
@@ -6084,12 +5859,6 @@ body,
   cursor: pointer;
 }
 
-.annotation-node__variant:hover,
-.annotation-node__close:hover {
-  background: var(--panel-header);
-  color: var(--text);
-}
-
 /* The next drag on the canvas creates an area/line/arrow — a crosshair says so before the click. */
 .flow-wrap.canvas-draw-active {
   cursor: crosshair;
@@ -6147,11 +5916,6 @@ body,
   cursor: pointer;
 }
 
-.subagent-node__expand:hover {
-  background: rgba(var(--tint-rgb), 0.08);
-  color: var(--text);
-}
-
 .subagent-node__term {
   margin-top: 8px;
   flex: 1;
@@ -6185,10 +5949,6 @@ body,
 
 .subagent-node.working .subagent-node__dot {
   animation: nt-pulse 1.1s ease-in-out infinite;
-}
-
-.subagent-node.done .subagent-node__dot {
-  background: var(--success);
 }
 
 .subagent-node__type {
@@ -6279,11 +6039,6 @@ body,
   cursor: pointer;
 }
 
-.loop-node__expand:hover {
-  background: rgba(var(--tint-rgb), 0.08);
-  color: var(--text);
-}
-
 .loop-node__head {
   display: flex;
   align-items: center;
@@ -6336,10 +6091,6 @@ body,
   cursor: pointer;
 }
 
-.loop-node__play:hover {
-  background: rgba(191, 122, 240, 0.32);
-}
-
 /* Dismiss the card (job itself is untouched). Sits at the right edge; when Play is present
    it follows Play with a small gap instead of both auto-margins splitting the space. */
 .loop-node__close {
@@ -6360,11 +6111,6 @@ body,
 
 .loop-node__play + .loop-node__close {
   margin-left: 6px;
-}
-
-.loop-node__close:hover {
-  background: rgba(var(--tint-rgb), 0.08);
-  color: var(--text);
 }
 
 .loop-node__task {
@@ -6404,10 +6150,6 @@ body,
 .loop-node__item-n {
   color: #bf7af0;
   font-weight: 700;
-}
-
-.loop-node__empty {
-  color: var(--muted);
 }
 
 /* ---- Minimap ---- */
@@ -6477,21 +6219,12 @@ body,
 }
 
 /* React Flow controls dark theme */
-.react-flow__controls {
-  border-radius: 10px; /* no exact --md-shape step (8/12) — left as its own authored radius */
-  overflow: hidden;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
-}
 
 .react-flow__controls-button {
   background: var(--panel);
   border-bottom: 1px solid var(--md-outline-variant);
   color: var(--md-on-surface);
   fill: var(--md-on-surface);
-}
-
-.react-flow__controls-button:hover {
-  background: var(--panel-header);
 }
 
 /* Canvas lock toggle (in the bottom-left Controls). The padlock fills with
@@ -6791,7 +6524,7 @@ body,
   gap: 8px;
   margin-bottom: 10px;
 }
-.sessmem-panel__title { font-size: 14px; font-weight: 600; }
+
 .sessmem-panel__scope {
   flex: 1 1 auto;
   min-width: 0;
@@ -6843,7 +6576,7 @@ body,
   text-align: left;
   cursor: pointer;
 }
-.sessmem-row__main:hover:not(:disabled) { background: rgba(var(--tint-rgb), 0.08); }
+
 /* An orphan has nowhere to travel to, so the row is inert rather than misleadingly clickable —
    but it keeps full contrast: it is still a session the user may want to end. */
 .sessmem-row__main:disabled { cursor: default; }
@@ -6858,8 +6591,7 @@ body,
   /* Reuse the terminal-header badge pulse rather than a bespoke keyframe. */
   animation: nt-pulse 1.1s ease-in-out infinite;
 }
-.sessmem-row__dot--attention { background: var(--warn); }
-.sessmem-row__dot--idle { background: rgba(var(--tint-rgb), 0.3); }
+
 /* Hollow = orphan: there is no node to have a state, and a filled neutral dot would read "idle". */
 .sessmem-row__dot--hollow {
   background: transparent;
@@ -6910,7 +6642,7 @@ body,
   line-height: 1;
   cursor: pointer;
 }
-.sessmem-row__kill:hover { color: var(--danger); background: rgba(var(--tint-rgb), 0.08); }
+
 /* The pane's descendants — the agent CLI itself included, since pane_pid is the pane's shell. */
 .sessmem-row__kids {
   flex: 1 0 100%;
@@ -6950,7 +6682,7 @@ body,
   font-size: 13px;
   cursor: pointer;
 }
-.sessmem-panel__refresh:hover { color: var(--text-strong); background: rgba(var(--tint-rgb), 0.08); }
+
 .sessmem-panel__refresh:disabled { opacity: 0.4; cursor: default; }
 /* Same spin as the usage panel's refresh. */
 .sessmem-panel__refresh.spin { animation: usage-spin 0.9s linear infinite; }
@@ -6975,7 +6707,7 @@ body,
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-.ctx-pill:hover { background: rgba(var(--tint-rgb), 0.12); }
+
 .ctx-pill__model {
   max-width: 72px;
   overflow: hidden;
@@ -7612,9 +7344,7 @@ body,
   border-radius: 999px;
   padding: 10px 16px;
 }
-.startpage__searchbar:focus-within {
-  border-color: var(--accent);
-}
+
 .startpage__search-icon {
   color: var(--muted);
   font-size: 16px;
@@ -7644,9 +7374,7 @@ body,
   padding: 8px 4px;
   border-radius: 10px;
 }
-.startpage__tile:hover {
-  background: var(--panel-header);
-}
+
 .site-icon {
   display: inline-flex;
   align-items: center;
@@ -7690,9 +7418,7 @@ body,
   border-radius: 8px;
   text-align: left;
 }
-.startpage__recent-item:hover {
-  background: var(--panel-header);
-}
+
 .startpage__recent-name {
   color: var(--text);
   font-size: 13px;
@@ -8553,20 +8279,12 @@ body,
   font-size: 11px;
   cursor: pointer;
 }
-.kanban-source-filter__button:hover {
-  color: var(--text-strong);
-}
-.kanban-source-filter__button.is-active {
-  background: rgba(var(--tint-rgb), 0.1);
-  color: var(--text-strong);
-}
+
 .kanban-github-status {
   color: rgba(var(--tint-rgb), 0.5);
   font-size: 11px;
 }
-.kanban-github-status--error {
-  color: var(--warn);
-}
+
 .kanban-github-retry {
   border: 0;
   background: transparent;
@@ -8661,9 +8379,7 @@ body,
   font-size: 11px;
   padding: 0;
 }
-.kanban-col__close:hover {
-  color: var(--danger);
-}
+
 .kanban-col__swatches {
   display: flex;
   gap: 6px;
@@ -8745,12 +8461,7 @@ body,
   background: var(--accent);
   color: #fff;
 }
-.kanban-card:hover {
-  border-color: rgba(var(--tint-rgb), 0.2);
-}
-.kanban-card--github {
-  border-left: 2px solid rgba(125, 133, 144, 0.7);
-}
+
 .github-issue-state {
   width: 9px;
   height: 9px;
@@ -8759,12 +8470,7 @@ body,
   border-radius: 50%;
   flex: 0 0 auto;
 }
-.github-issue-state--open {
-  color: #3fb950;
-}
-.github-issue-state--closed {
-  color: #a371f7;
-}
+
 .github-issue-source {
   flex: 0 0 auto;
   border: 1px solid rgba(var(--tint-rgb), 0.15);
@@ -8805,9 +8511,7 @@ body,
   color: rgba(var(--tint-rgb), 0.45);
   font-size: 10px;
 }
-.github-issue-conflict {
-  color: var(--warn);
-}
+
 .github-issue-card__footer .kanban-card__avatars {
   margin-left: auto;
 }
@@ -8852,10 +8556,7 @@ body,
   font-size: 11px;
   cursor: pointer;
 }
-.kanban-github-more:hover {
-  border-color: var(--accent);
-  color: var(--text-strong);
-}
+
 .github-issue-modal {
   width: min(680px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 48px));
@@ -9019,21 +8720,9 @@ body,
   padding: 2px 5px;
   flex: 0 0 auto;
 }
-.kanban-badge--running {
-  color: var(--success);
-  background: rgba(50, 215, 75, 0.12);
-  /* reuse the terminal-header badge pulse (nt-pulse) rather than a bespoke keyframe */
-  animation: nt-pulse 1.1s ease-in-out infinite;
-}
-.kanban-badge--needs {
-  color: var(--warn);
-  background: rgba(255, 159, 10, 0.12);
-}
+
 /* Eco: the agent CLI was exited to reclaim RAM. Quiet — the session is fine. */
-.kanban-badge--sleeping {
-  color: var(--muted);
-  background: rgba(var(--tint-rgb), 0.08);
-}
+
 .kanban-card__unread {
   width: 7px;
   height: 7px;
@@ -9041,9 +8730,7 @@ body,
   background: var(--accent);
   flex: 0 0 auto;
 }
-.kanban-col__dot--ungrouped {
-  background: rgba(var(--tint-rgb), 0.25);
-}
+
 .kanban-add-col {
   align-self: flex-start;
   flex: 0 0 auto;
@@ -9059,12 +8746,6 @@ body,
 .kanban-add-col {
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
-.kanban-add-col:hover {
-  color: var(--text-strong);
-  border-color: var(--accent);
-  background: rgba(10, 132, 255, 0.06);
-}
-
 
 /* ---- Kanban column pill: half-pill flush against a session node's top edge (rendered as a
    sibling of the overflow:hidden node root, so it can poke above the border). ---- */
@@ -9112,11 +8793,7 @@ body,
 .kanban-col__new {
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
-.kanban-col__new:hover {
-  color: var(--text-strong);
-  border-color: var(--accent);
-  background: rgba(10, 132, 255, 0.08);
-}
+
 /* GitHub Issues settings — the "Advanced" (token/provider) disclosure. Collapsed by default so the
    common gh-signed-in case shows no token noise. */
 .github-auth-advanced > summary {
@@ -9213,13 +8890,7 @@ body,
   color: rgba(var(--tint-rgb), 0.45);
   cursor: not-allowed;
 }
-.kanban-col__newmenu button[aria-disabled='true']:hover {
-  background: rgba(var(--tint-rgb), 0.05);
-  color: rgba(var(--tint-rgb), 0.45);
-}
-.kanban-col__newmenu button[aria-disabled='true']:hover .kanban-col__newicon {
-  color: rgba(var(--tint-rgb), 0.45);
-}
+
 .kanban-col__newback {
   border-bottom: 1px solid rgba(var(--tint-rgb), 0.08) !important;
   border-radius: 0 !important;
@@ -9236,13 +8907,7 @@ body,
   width: 14px;
   height: 14px;
 }
-.kanban-col__newmenu button:hover .kanban-col__newicon {
-  color: #fff;
-}
-.kanban-col__newmenu button:hover {
-  background: var(--accent);
-  color: #fff;
-}
+
 .kanban-card__stickytext {
   flex: 1;
   min-width: 0;
@@ -9371,10 +9036,7 @@ body,
   padding: 4px 10px;
   cursor: pointer;
 }
-.kanban-modal__action:hover {
-  background: rgba(var(--tint-rgb), 0.14);
-  color: var(--text-strong);
-}
+
 .kanban-modal__body {
   flex: 1;
   min-height: 0;
@@ -9459,9 +9121,7 @@ body,
   padding: 8px 10px;
   outline: none;
 }
-.board-log__composer:focus {
-  border-color: var(--accent);
-}
+
 .board-log__hint {
   flex: 0 0 auto;
   margin: 0 14px 10px;
@@ -9532,9 +9192,6 @@ body,
 .board-log__event .board-log__author {
   font-size: 11.5px;
 }
-.board-log__event-body {
-  color: rgba(var(--tint-rgb), 0.55);
-}
 
 .kanban-modal__termwrap {
   position: relative;
@@ -9547,10 +9204,6 @@ body,
   /* Same reason as `.term-node__body`: this 8px inset would otherwise frame the terminal in the
    * modal's own colour. The fallback is the modal surface, i.e. the pre-themes look. */
   background: var(--term-bg, var(--md-surface-dim));
-}
-.kanban-modal__action[aria-pressed='true'] {
-  background: var(--accent);
-  color: #fff;
 }
 
 /* ---- Node comments flyout: the header 💬 expands the board-log feed to the node's right ---- */
@@ -9733,9 +9386,7 @@ body,
   align-items: center;
   border-radius: 5px;
 }
-.label-picker__row:hover {
-  background: rgba(var(--tint-rgb), 0.06);
-}
+
 .label-picker__pick {
   flex: 1;
   display: flex;
@@ -9761,10 +9412,7 @@ body,
   border-radius: 5px;
   font-size: 15px;
 }
-.label-picker__more:hover {
-  background: rgba(var(--tint-rgb), 0.1);
-  color: var(--text-strong);
-}
+
 .label-picker__create {
   display: flex;
   align-items: center;
@@ -9778,9 +9426,7 @@ body,
   font-size: 12.5px;
   text-align: left;
 }
-.label-picker__create:hover {
-  background: rgba(var(--tint-rgb), 0.06);
-}
+
 .label-picker__createrow {
   position: relative;
   display: flex;
@@ -9797,9 +9443,7 @@ body,
   padding: 4px 5px;
   cursor: pointer;
 }
-.label-picker__createcolor:hover {
-  background: rgba(var(--tint-rgb), 0.12);
-}
+
 .label-picker__caret {
   font-size: 8px;
   color: rgba(var(--tint-rgb), 0.5);
@@ -9857,10 +9501,7 @@ body,
   font-size: 12.5px;
   text-align: left;
 }
-.label-picker__delete:hover {
-  background: rgba(255, 120, 120, 0.14);
-  color: #ff8f8f;
-}
+
 .label-picker__colhead {
   font-size: 10px;
   text-transform: uppercase;
@@ -9885,9 +9526,7 @@ body,
   color: rgba(var(--tint-rgb), 0.85);
   font-size: 12.5px;
 }
-.label-picker__colorrow:hover {
-  background: rgba(var(--tint-rgb), 0.06);
-}
+
 .label-picker__swatch {
   width: 18px;
   height: 18px;
@@ -9913,14 +9552,7 @@ body,
   padding: 4px 10px;
   cursor: pointer;
 }
-.kanban-filter-btn:hover {
-  background: rgba(var(--tint-rgb), 0.12);
-  color: var(--text-strong);
-}
-.kanban-filter-btn--on {
-  border-color: var(--accent);
-  color: var(--text-strong);
-}
+
 .kanban-filter-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -9946,9 +9578,7 @@ body,
   padding: 5px 6px;
   border-radius: 5px;
 }
-.kanban-filter-row:hover {
-  background: rgba(var(--tint-rgb), 0.06);
-}
+
 .kanban-filter-group {
   padding: 7px 10px 3px;
   color: rgba(var(--tint-rgb), 0.42);
@@ -9967,9 +9597,6 @@ body,
   padding: 6px;
   font-size: 12px;
   text-align: left;
-}
-.kanban-filter-clear:hover {
-  color: var(--text-strong);
 }
 
 .kanban-meta {
@@ -10010,24 +9637,14 @@ body,
   cursor: pointer;
   padding: 0;
 }
-.kanban-avatar--add {
-  background: rgba(var(--tint-rgb), 0.1);
-  color: rgba(var(--tint-rgb), 0.7);
-  border: 1px dashed rgba(var(--tint-rgb), 0.3);
-}
-.kanban-avatar--add:hover {
-  background: rgba(var(--tint-rgb), 0.18);
-  color: var(--text-strong);
-}
+
 .kanban-avatar--sm {
   width: 18px;
   height: 18px;
   font-size: 9px;
   cursor: default;
 }
-.kanban-avatar--more {
-  background: rgba(var(--tint-rgb), 0.18);
-}
+
 .kanban-meta__picker {
   position: absolute;
   top: 100%;
@@ -10055,17 +9672,12 @@ body,
   padding: 5px 8px;
   cursor: pointer;
 }
-.kanban-meta__picker > button:hover {
-  background: var(--accent);
-  color: #fff;
-}
+
 .kanban-meta__pname {
   flex: 1;
   text-align: left;
 }
-.kanban-meta__check {
-  color: var(--success);
-}
+
 .kanban-meta__due {
   background: rgba(var(--tint-rgb), 0.06);
   border: 1px solid rgba(var(--tint-rgb), 0.15);
@@ -10083,9 +9695,7 @@ body,
   cursor: pointer;
   font-size: 11px;
 }
-.kanban-meta__clear:hover {
-  color: var(--danger);
-}
+
 .kanban-due {
   font-size: 10px;
   font-weight: 700;
@@ -10095,10 +9705,7 @@ body,
   background: rgba(var(--tint-rgb), 0.1);
   color: rgba(var(--tint-rgb), 0.75);
 }
-.kanban-due--overdue {
-  background: rgba(255, 69, 58, 0.18);
-  color: #ff6961;
-}
+
 .kanban-card__metarow {
   display: flex;
   align-items: center;
@@ -10137,10 +9744,7 @@ body,
   cursor: pointer;
   transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
-.kanban-prio:hover {
-  border-color: rgba(var(--tint-rgb), 0.35);
-  color: var(--text-strong);
-}
+
 .kanban-prio-chip {
   letter-spacing: 0.04em;
 }
@@ -10170,9 +9774,6 @@ body,
   font-size: 12.5px;
   cursor: pointer;
   padding: 6px 10px;
-}
-.onb-skip:hover {
-  color: var(--text);
 }
 
 /* ---- step 0: cover ---- */
@@ -10358,9 +9959,7 @@ body,
   background: rgba(var(--tint-rgb), 0.18);
   transition: background 0.15s;
 }
-.onb-dots span.is-active {
-  background: var(--accent);
-}
+
 .onb-nav__btns {
   display: flex;
   gap: 8px;
@@ -10375,18 +9974,6 @@ body,
   padding: 7px 14px;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
-}
-.onb-btn:hover {
-  background: rgba(var(--tint-rgb), 0.1);
-}
-.onb-btn--primary {
-  background: var(--accent);
-  border-color: transparent;
-  color: #fff;
-}
-.onb-btn--primary:hover {
-  background: var(--accent);
-  filter: brightness(1.12);
 }
 
 /* ---- agent picker ---- */
@@ -10409,13 +9996,7 @@ body,
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s;
 }
-.onb-agent:hover {
-  background: rgba(var(--tint-rgb), 0.07);
-}
-.onb-agent.is-selected {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-}
+
 .onb-dot {
   width: 9px;
   height: 9px;
@@ -10444,12 +10025,7 @@ body,
   transition: border-color 0.12s, background 0.12s;
   overflow: hidden;
 }
-.onb-model:hover {
-  background: rgba(var(--tint-rgb), 0.07);
-}
-.onb-model.is-selected {
-  border-color: var(--accent);
-}
+
 .onb-model__radio {
   width: 12px;
   height: 12px;
@@ -10457,10 +10033,7 @@ body,
   border: 1.5px solid rgba(var(--tint-rgb), 0.35);
   flex: none;
 }
-.onb-model.is-selected .onb-model__radio {
-  border-color: var(--accent);
-  background: radial-gradient(circle at center, var(--accent) 0 4px, transparent 4.5px);
-}
+
 .onb-model__name {
   font-weight: 600;
 }
@@ -10524,13 +10097,7 @@ body,
   padding: 6px 14px;
   cursor: pointer;
 }
-.onb-seg__btn + .onb-seg__btn {
-  border-left: 1px solid rgba(var(--tint-rgb), 0.14);
-}
-.onb-seg__btn.is-on {
-  background: var(--accent);
-  color: #fff;
-}
+
 .onb-tryit.is-done {
   border-style: solid;
   border-color: rgba(52, 199, 89, 0.5);
@@ -11534,22 +11101,6 @@ body,
   }
 }
 
-.toast--success {
-  border-left-color: var(--md-success); /* an alias of --success, same as .toast--warning/error
-    below — unlike the minimap's status glows or --git-graph-*, these severities already flow
-    through the app's own themed hue tokens, so the --md-* roles built for exactly this purpose
-    are a byte-identical relabel, not a data-encoding exemption */
-}
-.toast--progress {
-  border-left-color: var(--md-primary);
-}
-.toast--warning {
-  border-left-color: var(--md-warning);
-}
-.toast--error {
-  border-left-color: var(--md-error);
-}
-
 .toast__icon {
   flex: none;
   width: 20px;
@@ -11565,12 +11116,7 @@ body,
     fill, so left un-relabeled rather than borrow a role for a coincidence */
   color: var(--md-primary);
 }
-.toast--success .toast__icon {
-  color: var(--md-success);
-  background: var(--md-success-container); /* was rgba(48,209,88,0.14) — an iOS-systemGreen
-    literal frozen to dark mode (never restated for light), unrelated to the app's own --success
-    hue; the role tints the REAL --success/--success-rgb-equivalent wash for both themes */
-}
+
 .toast--warning .toast__icon {
   color: var(--md-warning);
   background: rgba(255, 214, 10, 0.14); /* this is --caution's hex (#ffd60a), not --warn's
@@ -11579,11 +11125,7 @@ body,
     mapping to --md-warning-container would shift the hue itself rather than relabel it — left,
     flagged rather than silently folded in */
 }
-.toast--error .toast__icon {
-  color: var(--md-error);
-  background: var(--md-error-container); /* was rgba(255,69,58,0.14) — exactly --danger-rgb at a
-    frozen alpha that never themed for light mode; the role tints the REAL --danger-rgb */
-}
+
 .toast--progress .toast__icon {
   animation: nt-spin 1s linear infinite;
 }
@@ -11629,9 +11171,7 @@ body,
     authored radius */
   cursor: pointer;
 }
-.toast__action:hover {
-  background: rgba(var(--tint-rgb), 0.14);
-}
+
 .toast__dismiss {
   flex: none;
   width: 22px;
@@ -11648,10 +11188,6 @@ body,
   border-radius: var(--md-shape-extra-small); /* was a literal 6px — exact match to the shipped
     scale */
   cursor: pointer;
-}
-.toast__dismiss:hover {
-  color: var(--md-on-surface);
-  background: rgba(var(--tint-rgb), 0.1);
 }
 
 /* ---- Notification centre trigger (bell in the top-right controls cluster) ---- */
@@ -11731,11 +11267,7 @@ body,
   color: var(--md-on-surface-variant);
   cursor: pointer;
 }
-.notif-center__filter.active {
-  background: var(--md-primary);
-  border-color: var(--md-primary);
-  color: var(--md-on-primary);
-}
+
 .notif-center__bulkbar {
   display: flex;
   align-items: center;
@@ -11756,9 +11288,7 @@ body,
   color: var(--md-on-surface);
   cursor: pointer;
 }
-.notif-center__bulkbar button:hover:not(:disabled) {
-  background: rgba(var(--tint-rgb), 0.12);
-}
+
 .notif-center__bulkbar button:disabled {
   color: var(--md-on-surface-variant);
   cursor: not-allowed;
@@ -11789,15 +11319,7 @@ body,
   padding: 10px;
   border-radius: 10px; /* no exact --md-shape step (8/12) — left as its own authored radius */
 }
-.notif-center__row:hover {
-  background: rgba(var(--tint-rgb), 0.05);
-}
-.notif-center__row.unread {
-  background: rgba(var(--accent-rgb), 0.06); /* was rgba(10,132,255,0.06) — a frozen literal that
-    never followed a user-customized accent or the light theme's accent hue. --md-primary-container
-    is the same idea at 0.16 alpha, far stronger than this subtle row wash; --accent-rgb keeps the
-    original weight while fixing the theming bug */
-}
+
 .notif-center__row input[type='checkbox'] {
   margin-top: 3px;
   flex: none;
@@ -11836,10 +11358,6 @@ body,
   color: var(--md-on-surface-variant);
   cursor: pointer;
 }
-.notif-center__row-dismiss:hover {
-  color: var(--md-on-surface);
-  background: rgba(var(--tint-rgb), 0.1);
-}
 
 /* ==================================================================================
    Destructive-action super confirmation gate.
@@ -11855,9 +11373,7 @@ body,
 /* Anchored variant: the scrim is still full-screen (click-outside-to-cancel + no interaction
    leaks through to whatever is behind it) but the CARD is positioned near the control that
    opened it via useMenuFlip, instead of dead center. */
-.destgate-overlay--anchored {
-  background: rgba(10, 12, 18, 0.35);
-}
+
 .destgate {
   width: 380px;
   max-width: 92vw;
@@ -11898,11 +11414,7 @@ body,
   color: var(--danger);
   font-size: 16px;
 }
-.destgate__title {
-  font-size: 14.5px;
-  font-weight: 700;
-  color: var(--text);
-}
+
 .destgate__desc {
   margin-top: 4px;
   font-size: 12.5px;
@@ -11945,9 +11457,7 @@ body,
   font-weight: 600;
   cursor: pointer;
 }
-.destgate__key:hover {
-  background: rgba(var(--tint-rgb), 0.1);
-}
+
 .destgate__key[aria-pressed="true"] {
   border-color: var(--danger);
   background: rgba(255, 69, 58, 0.12);
@@ -12069,9 +11579,7 @@ body,
   border-radius: 9px;
   cursor: pointer;
 }
-.destgate__exit:hover {
-  background: rgba(var(--tint-rgb), 0.14);
-}
+
 .destgate__hint {
   font-size: 11px;
   color: var(--muted-2);
@@ -12155,9 +11663,7 @@ body,
     (0.1) and --md-outline (0.35); mapping to either would visibly change the off-track, so left */
   cursor: pointer;
 }
-.palette__switch.on {
-  background: var(--md-primary);
-}
+
 .palette__switch-thumb {
   position: absolute;
   top: 2px;
@@ -12189,9 +11695,7 @@ body,
   color: var(--md-on-surface);
   cursor: pointer;
 }
-.palette__cycle:hover {
-  background: rgba(var(--tint-rgb), 0.14);
-}
+
 .palette__header-row {
   display: flex;
   align-items: center;
@@ -13383,11 +12887,7 @@ body,
   opacity: 0.45;
   cursor: default;
 }
-.bulk-bar__select-all:hover:not(:disabled),
-.bulk-bar__invert:hover:not(:disabled),
-.bulk-bar__clear:hover {
-  background: rgba(var(--tint-rgb), 0.08);
-}
+
 .bulk-bar__count {
   font-size: 11px;
   color: rgba(var(--tint-rgb), 0.55);
@@ -13407,12 +12907,8 @@ body,
   font-size: 11px;
   cursor: pointer;
 }
-.bulk-bar__action:hover:not(:disabled) { background: rgba(var(--tint-rgb), 0.12); }
+
 .bulk-bar__action:disabled { opacity: 0.4; cursor: default; }
-.bulk-bar__action--danger {
-  border-color: rgba(var(--danger-rgb, 220, 60, 60), 0.35);
-  color: var(--danger);
-}
 
 .bulk-preview__list {
   margin: 6px 0;
@@ -13550,10 +13046,7 @@ body,
   cursor: pointer;
 }
 .local-history__presets button:hover { background: rgba(var(--tint-rgb), 0.08); }
-.local-history__date-error {
-  font-size: 11px;
-  color: var(--danger);
-}
+
 .local-history__search {
   padding: 4px 8px;
   border-radius: 6px;
@@ -13562,26 +13055,7 @@ body,
   color: var(--text-strong);
   font-size: 12px;
 }
-.local-history__actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.local-history__action-chip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: rgba(var(--tint-rgb), 0.08);
-  font-size: 10.5px;
-  cursor: pointer;
-}
-.local-history__note {
-  padding: 10px 2px;
-  color: rgba(var(--tint-rgb), 0.55);
-}
-.local-history__note--error { color: var(--danger); }
+
 .local-history__rows {
   list-style: none;
   margin: 0;
@@ -13592,14 +13066,7 @@ body,
   flex-direction: column;
   gap: 2px;
 }
-.local-history__row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 4px;
-  border-radius: 6px;
-}
-.local-history__row:hover { background: rgba(var(--tint-rgb), 0.06); }
+
 .local-history__when {
   flex: 0 0 auto;
   font-size: 10.5px;
@@ -13631,17 +13098,6 @@ body,
   font-size: 10.5px;
   color: rgba(var(--tint-rgb), 0.4);
 }
-.local-history__restore {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(var(--tint-rgb), 0.15);
-  background: transparent;
-  color: var(--text-strong);
-  font-size: 10.5px;
-  cursor: pointer;
-}
-.local-history__restore:hover { background: rgba(var(--tint-rgb), 0.08); }
 
 /* ---- Toy locks, Support Tickets, Authenticator (docs/toy-locks.md, docs/authenticator.md) ----
    Just for fun -- a UX speed bump, never security. Shares the same popover language as
@@ -13921,9 +13377,7 @@ body,
   color: var(--text);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
 }
-.native-loop-node.selected {
-  border-color: #ffb340;
-}
+
 .native-loop-node__header {
   display: flex;
   align-items: center;
@@ -13969,9 +13423,7 @@ body,
   font: inherit;
   line-height: 1.4;
 }
-.native-loop-node__task:focus {
-  border-color: #ffb340;
-}
+
 .native-loop-node__interval,
 .native-loop-node__actions,
 .native-loop-node__meta {
@@ -14007,10 +13459,7 @@ body,
   color: var(--text);
   cursor: pointer;
 }
-.native-loop-node__actions button.active {
-  border-color: #ffb340;
-  color: #ffb340;
-}
+
 .native-loop-node__actions button:disabled {
   opacity: 0.42;
   cursor: default;
