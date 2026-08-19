@@ -261,6 +261,18 @@ canonical read succeeds.
 
 ## Projects (tabs)
 
+### Global and per-project settings
+
+`renderer/state/settings.ts` resolves settings once: project override over the persisted global
+default, followed by a currently active scheduled override. SettingsPage changes only the editing
+scope; every section remains the same component and `update()` routes to either `settings.json` or
+the active project's sparse `settingsOverrides`. Canvas updates that context on tab changes.
+
+Project overrides are machine-local in `WorkspaceIndexV3`. They are absent from `ProjectFileV1`
+and `projectToFile()`, so Git-shared JSON cannot inject executable paths, credential/account ids,
+host labels, or other machine-local values. Resetting removes sparse keys and immediately reveals
+the current global values.
+
 Each project is one canvas/page; terminals and notes belong to a project. The `projects`
 zustand store (`renderer/state/projects.ts`) holds project metadata + the _serialized_ nodes
 of all projects. **React Flow remains the single live source of truth for the _active_
@@ -2063,7 +2075,22 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   unless the explicit Remove action is used. Preset Blob exports share the 30-second delayed URL
   revocation path; same-turn revocation can cancel Chromium before the download starts.
 
-## Remote access (phone relay) — free, not Pro
+## Remote access (Docker-hosted relay) — free, not Pro
+
+The interactive surface is **Docker host**. It retains the existing relay transport, single-use
+offer, E2EE handshake, and mutual SAS approval. Hosting has a free one-connection floor and no
+entitlement requirement. The pairing request omits legacy entitlement metadata when none exists;
+it never invents a credential. Packaged builds use the configured relay, while development still
+requires an explicit `NODETERM_RELAY_URL`.
+
+`main/remote/docker-host-runtime.ts` is the execution boundary. It discovers contexts with
+`docker context ls --format {{json .}}`, validates bounded settings at point of use, and starts one
+labelled random-name container per host seat using `execFile` argument arrays. The container is
+never privileged, receives no Docker socket, drops all capabilities, has no-new-privileges,
+read-only root, bounded CPU/memory/PIDs, a tmpfs `/tmp`, no network by default, and a read-only
+project bind by default. `RelayPtyCreateSource.docker` makes the trusted relay PTY authorizer replace
+all host/profile execution with `docker exec -i <owned-container> /bin/sh`. Revoke, socket close,
+stop, cancellation, and failed startup remove only that task-owned container; bind data survives.
 
 **LAN pairing is encrypted or it does not start.** `pairing-service.ts` loads the host's persistent
 NaCl key before binding the one-shot HTTP listener and advertises that public key as `hostKey` in

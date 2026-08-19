@@ -255,6 +255,7 @@ export class WorkspaceStore {
               closed: e.closed,
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
+              settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
             })
           })
@@ -278,6 +279,7 @@ export class WorkspaceStore {
               closed: e.closed,
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
+              settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
             })
           })
@@ -676,6 +678,11 @@ export class WorkspaceStore {
    *  projects. Sync (reads the in-memory index): the board-log router's local-vs-unsupported call. */
   localCwdForProject(projectId: string): string | undefined {
     return this.index?.entries.find((e) => e.id === projectId && e.cwd)?.cwd
+  }
+
+  settingsOverridesForProject(projectId: string): Project['settingsOverrides'] {
+    const entry = this.index?.entries.find((candidate) => candidate.id === projectId)
+    return entry?.settingsOverrides ?? entry?.project?.settingsOverrides
   }
 
   /** Resolve the shared project together with its machine-local trust identity. The approval id

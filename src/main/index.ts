@@ -2715,7 +2715,15 @@ app.whenReady().then(async () => {
   // CorePlatform client of this desktop after mutual SAS approval. Runs BESIDE initRemoteHost (the
   // phone still uses the legacy flow). Inert until `relay:host:start` — a solo user pays nothing.
   // Revocation reaches its sessions via `killRelayHostsByPeerKey` (peerRevoker, above).
-  initRelayHost(win, corePlatform, {})
+  initRelayHost(win, corePlatform, {
+    dockerSettingsFor: (projectId) => {
+      const cwd = workspaceStore.localCwdForProject(projectId)
+      if (!cwd) return null
+      const global = settingsStore.get().dockerHost
+      const project = workspaceStore.settingsOverridesForProject(projectId)?.dockerHost
+      return { settings: { ...global, ...project }, cwd }
+    }
+  })
   // Standing (phone) relay host: keep a host connection registered so a paired phone can reach
   // this Mac from anywhere. Honors settings.phoneAccessEnabled internally.
   const standingHost = initStandingHost(win, ptyManager, () => settingsStore.get(), listProjectsOutput, hostBridge)

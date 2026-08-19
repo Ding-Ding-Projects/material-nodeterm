@@ -96,7 +96,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     sections: [
       { id: 'presence', title: 'Your name' },
       { id: 'phone', title: 'Phone' },
-      { id: 'remote', title: 'Remote access' },
+      { id: 'remote', title: 'Docker host' },
+      { id: 'team-access', title: 'Team seats' },
       { id: 'ssh', title: 'Remote (SSH)' }
     ]
   },
@@ -104,6 +105,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     id: 'application',
     title: 'Application',
     sections: [
+      { id: 'license', title: 'License' },
       { id: 'updates', title: 'Updates' },
       { id: 'privacy', title: 'Privacy' },
       { id: 'school-mode', title: 'School mode' },

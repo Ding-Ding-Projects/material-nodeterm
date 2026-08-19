@@ -92,6 +92,8 @@ export interface IndexEntryV3 {
   /** MACHINE-LOCAL default managed Claude account for a ref'd project: the id names a credential
    *  dir in THIS machine's userData, so it is meaningless in anyone else's checkout. */
   defaultAccountId?: string
+  /** Sparse machine-local project settings overlay. Never serialized into ProjectFileV1. */
+  settingsOverrides?: Project['settingsOverrides']
   cwd?: string
   ssh?: Project['ssh']
   cache?: ProjectFileV1
@@ -220,6 +222,7 @@ export function fileToProject(
     viewport?: Viewport
     /** This machine's default managed account; falls back to the file's legacy value. */
     defaultAccountId?: string
+    settingsOverrides?: Project['settingsOverrides']
     /** This machine's own exec values for these nodes (from the local index entry). A file read
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */
@@ -238,6 +241,7 @@ export function fileToProject(
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
+    ...(base.settingsOverrides ? { settingsOverrides: base.settingsOverrides } : {}),
     ...(f.defaultPermissionMode ? { defaultPermissionMode: f.defaultPermissionMode } : {}),
     ...(f.dinoHighScore ? { dinoHighScore: f.dinoHighScore } : {}),
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
@@ -329,7 +333,8 @@ export function splitWorkspace(
     // Inline entries need none of this: they store the whole Project verbatim.
     const localState = {
       ...(p.viewport ? { viewport: p.viewport } : {}),
-      ...(p.defaultAccountId ? { defaultAccountId: p.defaultAccountId } : {})
+      ...(p.defaultAccountId ? { defaultAccountId: p.defaultAccountId } : {}),
+      ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {})
     }
     if (p.unavailable) {
       // Placeholder (folder missing / server unreachable at load): its nodes:[] is not real

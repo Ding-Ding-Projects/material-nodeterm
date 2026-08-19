@@ -418,6 +418,7 @@ export const IPC = {
   // the host human answers with `relayHostConfirm` (id). `relayHostOpen` / `relayHostClosed` fire
   // main → renderer when a bridged peer becomes a live client / drops (payload `{ id }`).
   relayHostStart: 'relay:host:start',
+  relayHostDockerContexts: 'relay:host:docker-contexts',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

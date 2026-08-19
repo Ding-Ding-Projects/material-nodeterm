@@ -1,5 +1,48 @@
 # Handoff
 
+## 2026-08-19 runtime, project history, deployment and device-access pass
+
+Three milestones were implemented and pushed to `main` during this session:
+
+- `66163ba0` — automatic verified Temurin Java provisioning for managed Minecraft servers;
+  mouse-wheel canvas zoom and empty-background drag panning defaults; per-project app-data Git
+  history on successful saves; one-file `.nodeterm-project` export/import containing a Git bundle;
+  and personal-vocabulary coverage for the worktree dialog while preserving paths, refs, typed
+  values and raw Git errors.
+- `d475bdee` — the top-right device shortcut now invokes the Server Edition deployment path,
+  automatically obtains/starts Docker Desktop where possible, runs the validated host wrapper,
+  builds the local image when absent, waits for health and offers the local site.
+- `fd752f51` — rotating deployment TOTP login with persisted replay prevention; no payment checkout
+  at the core IPC boundary; paid License/seat and upgrade surfaces removed; Remote Access presented
+  as free; and phone-sized Server Edition layouts forced to the sessions/board experience with the
+  Canvas destination omitted.
+
+While the third milestone was being pushed, `origin/main` advanced through `976bc0a6`, including
+project-wide settings and a bounded Docker-host runtime. A normal merge was started and the three
+overlapping renderer conflicts were resolved in favor of the newer Docker-host/settings
+implementation. Before finalizing the merge, rerun `npm run typecheck` and the focused suites below;
+the pre-merge third-milestone verdict was green, but a verdict never transfers across a merge.
+
+Focused evidence before that reconciliation:
+
+- `npm run typecheck` — passed.
+- Project/Java/canvas/settings/history/vocabulary suites — 150 tests passed.
+- Deployment production build (`npm run build`) — passed at `d475bdee`.
+- Server TOTP/auth/HTTP/license/mobile-view suites — 58 tests passed at `fd752f51`.
+
+Important remaining boundaries:
+
+- The deployed site is still advertised at loopback HTTP. Do not expose the application port on
+  `0.0.0.0`; mobile reach needs the existing TLS/private-network route completed and verified.
+- The TOTP secret is stored in `.nodeterm-server-totp`, excluded from Git, ACL-restricted by the
+  deployment service and mounted read-only into the container. Verify the ACL and real container
+  login in a fresh deployment before calling mobile pairing complete.
+- `src/renderer/styles.css` contains an unrelated unstaged user/other-session change (monospace
+  token alias and terminal background token). It was deliberately excluded from this session's
+  commits and must be preserved.
+- No real built-app UI capture or real Docker container interaction was completed for the third
+  milestone after the concurrent merge.
+
 This document records the measured repository state before the 2026-08-16 branch-convergence pass.
 It is intentionally explicit about evidence that belongs to an older commit and work that remains
 unintegrated. A passing check on one branch is not presented as proof for another branch. Treat

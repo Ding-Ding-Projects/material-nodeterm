@@ -1430,6 +1430,12 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProjectSettingsOverrides = useProjects(
+    (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
+  )
+  useEffect(() => {
+    useSettings.getState().setProjectContext(activeProjectId, activeProjectSettingsOverrides)
+  }, [activeProjectId, activeProjectSettingsOverrides])
   // Bumped by `requestReload()`; a dependency of the project-load effect so an in-place reload of
   // the ALREADY-active project actually re-runs it (see reloadActiveProject).
   const reloadNonce = useProjects((s) => s.reloadNonce)

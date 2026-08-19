@@ -63,6 +63,7 @@ export interface ConnectRelayHostOptions {
   /** The single project this hosting session shares with the peer. Undefined → unscoped (legacy
    *  behaviour: the peer sees the whole workspace). Held on the session for Task 2's scoped serve. */
   sharedProjectId?: string
+  docker?: { context: string; containerName: string }
   /** The SAS is known — ask the human to compare it. */
   onPeerPending(session: RelayHostSession): void
   /** Mutually approved: the peer is a CorePlatform client of this core now. */
@@ -333,6 +334,7 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
         void opts.platform
           .dispatch(id, m, {
             sharedProjectId: opts.sharedProjectId,
+            ...(opts.docker ? { docker: opts.docker } : {}),
             ...(persistKey && introducedNodes.has(persistKey)
               ? { introducedNode: introducedNodes.get(persistKey)! }
               : {}),

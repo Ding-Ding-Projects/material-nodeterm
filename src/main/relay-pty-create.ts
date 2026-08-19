@@ -9,6 +9,8 @@ export interface RelayPtyCreateSource {
   introducedNode?: { projectId: string; node: CanvasNodeState }
   /** Once this session removes an id, it cannot recycle that identity into a fresh launch. */
   retiredPersistKey?: boolean
+  /** Task-owned Docker container selected by the mutually approved host session. */
+  docker?: { context: string; containerName: string }
 }
 
 export type RelayPtyCreateDecision =
@@ -138,6 +140,7 @@ export function authorizeRelayPtyCreate(
 ): RelayPtyCreateDecision {
   const options = viewOptions(raw)
   if (!options?.persistKey) return deny('relay terminal creation requires valid persistent node options')
+  const docker = source.docker
   if (source.retiredPersistKey) return deny('this relay session already removed that terminal identity')
 
   const lookup = authority.node(options.persistKey)
@@ -177,7 +180,17 @@ export function authorizeRelayPtyCreate(
       return deny('the terminal has no trusted project SSH binding')
     }
 
-    addLocalExecution(options, lookup.localExec, authority.defaultTerminalProfileId())
+    if (docker) {
+      options.shell = 'docker'
+      options.shellArgs = [
+        ...(docker.context ? ['--context', docker.context] : []),
+        'exec', '-i', docker.containerName, '/bin/sh'
+      ]
+      delete options.cwd
+      delete options.profileId
+    } else {
+      addLocalExecution(options, lookup.localExec, authority.defaultTerminalProfileId())
+    }
     return { ok: true, options }
   }
 
@@ -212,6 +225,15 @@ export function authorizeRelayPtyCreate(
     return deny('a newly introduced SSH terminal has no trusted project binding')
   }
 
-  options.profileId = authority.defaultTerminalProfileId()
+  if (docker) {
+    options.shell = 'docker'
+    options.shellArgs = [
+      ...(docker.context ? ['--context', docker.context] : []),
+      'exec', '-i', docker.containerName, '/bin/sh'
+    ]
+    delete options.cwd
+  } else {
+    options.profileId = authority.defaultTerminalProfileId()
+  }
   return { ok: true, options }
 }

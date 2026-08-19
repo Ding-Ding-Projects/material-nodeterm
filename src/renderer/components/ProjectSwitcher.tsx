@@ -604,7 +604,7 @@ export function ProjectSwitcher({
                             closeMenu()
                           }}
                         >
-                          Remote access…
+                          Docker host…
                         </button>
                         {expandedAccounts.length > 0 && p.id === expandedId && (
                           <>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useEntitlement } from '../../state/entitlement'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { SettingsSearchContext } from './context'
 import { SettingsSidebar } from './SettingsSidebar'
@@ -23,8 +24,10 @@ import { NotificationsSection } from './sections/NotificationsSection'
 import { NarratorSection } from './sections/NarratorSection'
 import { CommitSection } from './sections/CommitSection'
 import { TmuxSection } from './sections/TmuxSection'
+import { LicenseSection } from './sections/LicenseSection'
 import { PresenceIdentitySection } from './sections/PresenceIdentitySection'
 import { RemoteSection } from './sections/RemoteSection'
+import { TeamAccessSection } from './sections/TeamAccessSection'
 import { SshSection } from './sections/SshSection'
 import { UpdatesSection } from './sections/UpdatesSection'
 import { PrivacySection } from './sections/PrivacySection'
@@ -39,6 +42,9 @@ import { AuthenticatorSection } from './sections/AuthenticatorSection'
 import { SupportTicketsSection } from './sections/SupportTicketsSection'
 import { useSchoolMode } from '../../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../../lib/schoolModePolicy'
+import { useSettings } from '../../state/settings'
+import { useProjects } from '../../state/projects'
+import { Button } from '@renderer/ui/Button'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -58,6 +64,14 @@ export function SettingsPage({
    */
   initialQuery?: string
 }): React.JSX.Element {
+  const hydrate = useEntitlement((s) => s.hydrate)
+  const scope = useSettings((s) => s.scope)
+  const setScope = useSettings((s) => s.setScope)
+  const setProjectContext = useSettings((s) => s.setProjectContext)
+  const resetProjectAll = useSettings((s) => s.resetProjectAll)
+  const projectOverrides = useSettings((s) => s.projectOverrides)
+  const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProject = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
   const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
   const languageFeaturesAllowed = schoolModeAllowsOptionalFeatures({
@@ -77,6 +91,13 @@ export function SettingsPage({
     [search.mode, search.query, search.pattern, search.flags]
   )
 
+  useEffect(() => {
+    void hydrate()
+  }, [hydrate])
+
+  useEffect(() => {
+    setProjectContext(activeProjectId, activeProject?.settingsOverrides)
+  }, [activeProjectId, activeProject?.settingsOverrides, setProjectContext])
 
   // Re-target when a caller opens settings to a specific section.
   useEffect(() => {
@@ -111,6 +132,26 @@ export function SettingsPage({
       <SettingsSearchContext.Provider value={searchState}>
         <main className="min-w-0 flex-1 overflow-y-auto px-12 py-10">
           <div className="mx-auto max-w-[860px] space-y-10">
+            <section className="rounded-[20px] border border-outline/30 bg-surface-container p-4" aria-label="Settings scope">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold">Settings mode</h2>
+                  <p className="mt-1 text-sm text-text-muted">
+                    Global mode stores durable app-wide defaults. Project mode edits a complete sparse overlay for <strong>{activeProject?.name ?? 'the active project'}</strong>; every unset value inherits Global mode.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2" role="group" aria-label="Choose settings mode">
+                  <Button aria-pressed={scope === 'global'} onClick={() => setScope('global')}>Global mode</Button>
+                  <Button aria-pressed={scope === 'project'} disabled={!activeProjectId} onClick={() => setScope('project')}>Project mode</Button>
+                  {scope === 'project' ? <Button disabled={Object.keys(projectOverrides).length === 0} onClick={resetProjectAll}>Reset all to Global</Button> : null}
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-text-muted" role="status">
+                {scope === 'global'
+                  ? 'Editing Global defaults. Projects with overrides keep them.'
+                  : `${Object.keys(projectOverrides).length} project override${Object.keys(projectOverrides).length === 1 ? '' : 's'} active. All other values show their inherited Global value.`}
+              </p>
+            </section>
             <TerminalSection isActive={active === 'terminal'} />
             <ShellSection isActive={active === 'shell'} />
             <BehaviorSection isActive={active === 'behavior'} />
@@ -132,8 +173,10 @@ export function SettingsPage({
             <CommitSection isActive={active === 'commit'} />
             <TmuxSection isActive={active === 'tmux'} />
             <GitHubIssuesSection isActive={active === 'github-issues'} />
+            <LicenseSection isActive={active === 'license'} />
             <PresenceIdentitySection isActive={active === 'presence'} />
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />
+            <TeamAccessSection isActive={active === 'team-access'} onClose={onClose} />
             <SshSection isActive={active === 'ssh'} onNavigate={setActive} />
             <UpdatesSection isActive={active === 'updates'} />
             <PrivacySection isActive={active === 'privacy'} />
