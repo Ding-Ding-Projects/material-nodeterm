@@ -1,0 +1,893 @@
+/* =================================================================================================
+ * Material Design 3 rewrite — OVERLAYS lane.
+ *
+ * Restyles: command palette, context menu (+ filterable-menu head), anchored popover + regex
+ * trigger, tooltip, confirm/input dialog shell, clone-repo dialog, the destructive confirmation
+ * gate, notification toasts, the notification centre, and bulk-action bar/preview.
+ *
+ * Loaded AFTER styles.css (see boot.tsx), so equal-specificity selectors here win by source
+ * order — nothing is deleted from styles.css, this file only overrides. Colours come only from
+ * var(--md-*) tokens (all already defined in styles.css's own token layer); shape/spacing follow
+ * design/v2/MD3 Overlays.dc.html and design/v2/md3/HANDOFF.md exactly per screen (menus/dialogs
+ * are NOT all the same radius — read the prototype, not just the recipe table). No box-shadow —
+ * elevation here is tonal only (surface-container steps), never a drop shadow.
+ * ================================================================================================= */
+
+:root {
+  /* Fallbacks only — if a later token pass adds these to styles.css's own :root, that
+     declaration wins automatically (var() re-resolves the live cascade, not a one-time copy),
+     so nothing here needs revisiting once it does. */
+  --md3-motion-spatial: var(--md-motion-spatial, 500ms cubic-bezier(0.38, 1.21, 0.22, 1));
+  --md3-motion-effect: var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+  --md3-font-ui: var(--md-font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif);
+  --md3-font-mono: var(--md-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --md3-motion-spatial: 1ms linear;
+    --md3-motion-effect: 1ms linear;
+  }
+}
+
+/* Shared spatial pop-in for a floating menu/dialog surface — an entrance, never applied to
+   anything that moves continuously (drag/zoom/scroll are explicitly out of scope for this
+   token). Kept as one keyframe so every overlay enters with the same character. */
+@keyframes md3-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes md3-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- MD3: Command palette ---- */
+
+.palette-overlay {
+  background: var(--md-scrim);
+}
+.palette {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 28px;
+  box-shadow: none;
+  animation: md3-pop-in var(--md3-motion-spatial);
+}
+.palette--full {
+  /* The expanded state keeps the same tonal surface + radius; only its size is special-cased. */
+  border-radius: 28px !important;
+}
+.palette__header-row {
+  min-height: 68px;
+  padding: 0 14px 0 24px;
+  gap: 14px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.palette__input {
+  font-family: var(--md3-font-ui);
+  font-size: 17px;
+  padding: 16px 0;
+}
+.palette__error {
+  padding: 8px 24px;
+}
+.palette__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+}
+.palette__row {
+  display: flex;
+  flex-direction: column;
+}
+.palette__section {
+  padding: 10px 14px 4px;
+  color: var(--md-on-surface-variant);
+}
+.palette__item {
+  min-height: 58px;
+  padding: 8px 16px;
+  gap: 16px;
+  border-radius: 20px;
+  font-family: var(--md3-font-ui);
+  transition: background var(--md3-motion-effect);
+}
+.palette__item.active {
+  background: var(--md-surface-container-highest);
+}
+.palette__item:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+.palette__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  flex: none;
+}
+.palette__icon:empty {
+  /* A row without a caller-supplied icon still keeps the 40px slot reserved (design uses a
+     uniform icon-chip column for every row) rather than collapsing and misaligning the labels
+     of the rows around it. */
+  background: transparent;
+}
+.palette__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--md-on-surface);
+}
+.palette__hint {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+.palette__secondary {
+  border-radius: 8px;
+  font-family: var(--md3-font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  transition: background var(--md3-motion-effect), color var(--md3-motion-effect);
+}
+.palette__empty {
+  font-family: var(--md3-font-ui);
+}
+.palette__size-toggle {
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--md-outline);
+  transition: background var(--md3-motion-effect), border-color var(--md3-motion-effect);
+}
+.palette__size-toggle:hover {
+  background: var(--md-surface-container-highest);
+}
+.palette__control {
+  margin-left: 10px;
+}
+.palette__switch {
+  width: 36px;
+  height: 20px;
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline);
+  transition: background var(--md3-motion-effect), border-color var(--md3-motion-effect);
+}
+.palette__switch.on {
+  background: var(--md-primary);
+  border-color: var(--md-primary);
+}
+.palette__switch-thumb {
+  width: 12px;
+  height: 12px;
+  top: 3px;
+  left: 3px;
+  background: var(--md-outline);
+  box-shadow: none;
+  transition: transform var(--md3-motion-effect), background var(--md3-motion-effect), width var(--md3-motion-effect), height var(--md3-motion-effect);
+}
+.palette__switch.on .palette__switch-thumb {
+  width: 14px;
+  height: 14px;
+  top: 2px;
+  left: 19px;
+  background: var(--md-on-primary);
+}
+.palette__cycle {
+  border-radius: 999px;
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface);
+  font-family: var(--md3-font-ui);
+}
+.palette__cycle:hover {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+/* ---- MD3: Context menu ---- */
+
+.ctx-menu {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 20px;
+  padding: 8px;
+  gap: 1px;
+  box-shadow: none;
+  animation: md3-pop-in var(--md3-motion-spatial);
+}
+/* A hover-driven flyout is a discrete state change, not a continuous one — pop it in too, but
+   don't fight the flip logic in ContextMenu.tsx: this only touches opacity/scale, never position. */
+.ctx-submenu {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 20px;
+  padding: 8px;
+  box-shadow: none;
+  animation: md3-fade-in var(--md3-motion-effect);
+}
+.ctx-item {
+  border-radius: 14px;
+  padding: 10px 14px;
+  gap: 13px;
+  font-family: var(--md3-font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background var(--md3-motion-effect);
+}
+.ctx-item:hover:not(:disabled):not([aria-disabled='true']),
+.ctx-item.kbd-active:not(:disabled):not([aria-disabled='true']) {
+  background: var(--md-surface-container-highest);
+}
+.ctx-item:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+.ctx-item.danger {
+  color: var(--md-error);
+}
+.ctx-item.danger:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.ctx-icon {
+  width: 19px;
+  height: 19px;
+  color: var(--md-on-surface-variant);
+}
+.ctx-sep {
+  background: var(--md-outline-variant);
+  margin: 6px 8px;
+}
+.ctx-label {
+  color: var(--md-on-surface-variant);
+  padding: 6px 14px 4px;
+}
+.ctx-empty {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-ui);
+  padding: 12px 14px;
+}
+.ctx-item__hint {
+  color: var(--md-on-surface-variant);
+}
+.ctx-item__shortcut .kbd {
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-mono);
+  border-radius: 6px;
+}
+.ctx-colors button {
+  border-radius: 50%;
+  border: 1px solid var(--md-outline-variant);
+}
+.ctx-colors__custom::after {
+  background: var(--md-surface-container-high);
+}
+.ctx-colors__custom.is-open {
+  outline: 2px solid var(--md-primary);
+}
+
+/* ---- MD3: Filterable menu head + anchored regex-builder trigger ----
+   Rendered inside every filterable menu/dropdown this lane owns (ContextMenu, CommandPalette's
+   own field carries its own AnchoredRegexBuilder directly). Kept a pill, per the "filter head on
+   top" treatment in the Context menu prototype. */
+
+.menu-filter {
+  padding: 6px;
+  margin: 2px 2px 8px;
+  border-bottom: none;
+}
+.menu-filter__row {
+  height: 38px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
+  background: var(--md-surface-container-highest);
+  gap: 9px;
+}
+.menu-filter__input {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-family: var(--md3-font-ui);
+  font-size: 12.5px;
+  color: var(--md-on-surface);
+}
+.menu-filter__input:focus {
+  border-color: transparent;
+}
+.menu-filter__error {
+  padding: 4px 8px 0;
+  color: var(--md-error);
+}
+
+.regex-trigger {
+  border-radius: 6px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-mono);
+  transition: background var(--md3-motion-effect), color var(--md3-motion-effect);
+}
+.regex-trigger:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.regex-trigger.active {
+  background: var(--md-primary-container);
+  border-color: transparent;
+  color: var(--md-on-primary-container);
+}
+
+/* ---- MD3: Anchored popover (regex builder, …) ---- */
+
+.anchored-pop__backdrop {
+  background: transparent;
+}
+.anchored-pop {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 24px;
+  box-shadow: none;
+  animation: md3-pop-in var(--md3-motion-spatial);
+}
+
+/* ---- MD3: Tooltip ----
+   A plain tonal surface rather than MD3's inverse-surface: this app's --md-inverse-* roles
+   are not defined anywhere yet (only the design bundle has them), and a fallback literal here
+   would render the DARK-theme colour in light mode too — worse than staying on the same
+   properly-themed surface family every other overlay in this lane already uses. */
+.tooltip {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 8px;
+  box-shadow: none;
+  font-family: var(--md3-font-ui);
+  font-size: 11.5px;
+  padding: 6px 10px;
+}
+
+/* ---- MD3: Confirm / input dialog shell (ConfirmDialog, InputDialog, and every reuser of the
+   .confirm shell — CloneRepoDialog is this lane's own reuser; the shell itself is shared, so a
+   worktree/dir-picker dialog elsewhere in the app inherits the same tonal, shadow-free look). ---- */
+
+.confirm-overlay {
+  background: var(--md-scrim);
+}
+.confirm {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 28px;
+  box-shadow: none;
+  padding: 26px 26px 22px;
+  animation: md3-pop-in var(--md3-motion-spatial);
+}
+.confirm__msg {
+  font-family: var(--md3-font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+  line-height: 1.5;
+}
+.confirm__option {
+  color: var(--md-on-surface-variant);
+}
+.confirm__input {
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline);
+  border-radius: 16px;
+  color: var(--md-on-surface);
+  font-family: var(--md3-font-ui);
+  padding: 16px 18px;
+  transition: border-color var(--md3-motion-effect);
+}
+.confirm__input:focus {
+  border-color: var(--md-primary);
+  outline: 2px solid var(--md-primary-container);
+  outline-offset: -3px;
+}
+.confirm__actions {
+  margin-top: 4px;
+  gap: 8px;
+}
+.confirm__btn {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--md-primary);
+  font-family: var(--md3-font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background var(--md3-motion-effect);
+}
+.confirm__btn:hover {
+  background: var(--md-surface-container-highest);
+}
+.confirm__btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.confirm__btn.primary {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  padding: 0 22px;
+}
+.confirm__btn.primary:hover {
+  background: var(--md-primary);
+  filter: brightness(1.06);
+}
+.confirm__btn.danger {
+  background: var(--md-error);
+  color: var(--md-on-error, #fff);
+  padding: 0 22px;
+}
+.confirm__btn.danger:hover {
+  background: var(--md-error);
+  filter: brightness(1.08);
+}
+
+/* ---- MD3: Clone repo dialog (outlined text fields with floating labels) ---- */
+
+.clone-dialog {
+  width: 480px;
+  gap: 4px;
+}
+/* The label/input pair for one field, positioned so the label overlaps the field's top border —
+   the standard MD3 outlined-text-field look. The label's background patch matches the dialog
+   surface it sits on, "cutting" the border line under it. */
+.md3-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin-top: 18px;
+}
+.md3-field__label {
+  position: absolute;
+  top: -8px;
+  left: 14px;
+  padding: 0 6px;
+  background: var(--md-surface-container-high);
+  color: var(--md-primary);
+  font-family: var(--md3-font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 1;
+}
+.clone-dialog__row {
+  gap: 8px;
+  align-items: stretch;
+}
+.clone-dialog__row .confirm__input {
+  flex: 1;
+}
+.clone-dialog__browse-btn {
+  flex: none;
+  align-self: center;
+}
+.clone-dialog__preview {
+  margin: 6px 4px 0;
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-mono);
+}
+.clone-dialog__error {
+  color: var(--md-error);
+}
+.clone-dialog__progress-label {
+  color: var(--md-on-surface-variant);
+}
+.clone-dialog__progress-track {
+  background: var(--md-surface-container-lowest);
+  border-radius: 999px;
+}
+.clone-dialog__progress-bar {
+  background: var(--md-primary);
+  border-radius: 999px;
+}
+
+/* ---- MD3: Destructive confirmation gate ---- */
+
+.destgate-overlay {
+  background: var(--md-scrim);
+}
+.destgate-overlay--anchored {
+  /* Still the full-screen click-outside-to-cancel catcher, just a lighter wash so the anchored
+     card doesn't read as a full modal takeover. */
+  background: color-mix(in srgb, var(--md-scrim) 55%, transparent);
+}
+.destgate {
+  width: 480px;
+  padding: 26px 26px 22px;
+  gap: 16px;
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 28px;
+  box-shadow: none;
+  animation: md3-pop-in var(--md3-motion-spatial);
+}
+.destgate__head {
+  gap: 14px;
+}
+.destgate__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+  font-size: 22px;
+}
+.destgate__title {
+  font-family: var(--md3-font-ui);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+.destgate__desc {
+  font-family: var(--md3-font-ui);
+  color: var(--md-on-surface-variant);
+  line-height: 1.6;
+}
+.destgate__affected {
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 16px;
+  color: var(--md-on-surface);
+}
+.destgate__keys {
+  gap: 10px;
+}
+/* Each key is a pill, not a card — matches the "Hold D / Hold K" chips in the prototype.
+   Arming is a SAFE step (only the slide is destructive), so it earns a success accent, not a
+   danger one — the danger colour is reserved for the actual point of no return below. */
+.destgate__key {
+  flex-direction: row;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--md-outline);
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-ui);
+  transition: background var(--md3-motion-effect), border-color var(--md3-motion-effect), color var(--md3-motion-effect);
+}
+.destgate__key:hover {
+  background: var(--md-surface-container-highest);
+}
+.destgate__key[aria-pressed='true'] {
+  border-color: var(--md-success);
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.destgate__key-glyph {
+  font-size: 15px;
+}
+.destgate__slider-label {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-ui);
+}
+.destgate__slider-wrap {
+  gap: 8px;
+}
+.destgate__slider {
+  height: 40px;
+  border-radius: 999px;
+  background: transparent;
+  /* Explicit stacking, not left to the static/positioned paint-order default: the fill bar
+     below overlaps this element's box via a negative margin, and the thumb must never end up
+     underneath it. */
+  position: relative;
+  z-index: 1;
+}
+/* The native track — layered under an oversized transparent input so the whole 40px band is a
+   drag target, matching the pill "Slide to confirm" track in the prototype. */
+.destgate__slider::-webkit-slider-runnable-track {
+  height: 40px;
+  border-radius: 999px;
+  background: var(--md-surface-container);
+}
+.destgate__slider::-moz-range-track {
+  height: 40px;
+  border-radius: 999px;
+  background: var(--md-surface-container);
+}
+.destgate__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--md-error);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 6 15 12 9 18'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+  box-shadow: none;
+}
+.destgate__slider::-moz-range-thumb {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--md-error);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 6 15 12 9 18'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+}
+.destgate__track-fill {
+  z-index: 0;
+  height: 40px;
+  /* Pulls this element up to overlay the slider directly above it: the slider's own height
+     (40px) PLUS the flex gap between them (8px, from .destgate__slider-wrap) — get this wrong
+     by the gap amount and the fill floats a few px below the track it's meant to sit inside. */
+  margin-top: -48px;
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--md-error) 55%, transparent), var(--md-error));
+}
+.destgate__complete {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+  border-radius: 20px;
+  font-family: var(--md3-font-ui);
+}
+.destgate__exit {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: transparent;
+  border: none;
+  color: var(--md-primary);
+  font-family: var(--md3-font-ui);
+  font-weight: 600;
+  transition: background var(--md3-motion-effect);
+}
+.destgate__exit:hover {
+  background: var(--md-surface-container-highest);
+}
+.destgate__hint {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-ui);
+}
+
+/* ---- MD3: Notification toasts ---- */
+
+.toast-stack {
+  gap: 10px;
+}
+.toast {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-left: 4px solid var(--md-primary);
+  border-radius: 20px;
+  box-shadow: none;
+  padding: 14px 14px 14px 16px;
+  animation: md3-pop-in var(--md3-motion-spatial);
+}
+.toast--success {
+  border-left-color: var(--md-success);
+}
+.toast--progress {
+  border-left-color: var(--md-primary);
+}
+.toast--warning {
+  border-left-color: var(--md-warning);
+}
+.toast--error {
+  border-left-color: var(--md-error);
+}
+.toast__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.toast--success .toast__icon {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.toast--warning .toast__icon {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.toast--error .toast__icon {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.toast__title {
+  font-family: var(--md3-font-ui);
+  font-weight: 600;
+}
+.toast__text {
+  font-family: var(--md3-font-ui);
+}
+.toast__action {
+  border-radius: 999px;
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-primary);
+  font-family: var(--md3-font-ui);
+  padding: 5px 12px;
+}
+.toast__action:hover {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.toast__dismiss {
+  border-radius: 8px;
+  color: var(--md-on-surface-variant);
+}
+.toast__dismiss:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+/* ---- MD3: Notification centre panel ----
+   Stays a right-edge, full-height drawer (the HANDOFF's approved structural changes list a
+   settings-drawer → screen swap and a dock → rail swap, but not this panel) — restyled to the
+   same tonal, shadow-free language as the rest of this lane rather than converted to a floating
+   card, which would need the shared drawer-overlay/stacking contract this lane doesn't own. */
+.notif-center {
+  background: var(--md-surface-container);
+  border-left: 1px solid var(--md-outline-variant);
+}
+.notif-center__head {
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.notif-center__head h2 {
+  font-family: var(--md3-font-ui);
+  font-weight: 600;
+}
+.notif-center__search {
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.notif-center__search input {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 999px;
+  font-family: var(--md3-font-ui);
+  padding: 9px 16px;
+  transition: border-color var(--md3-motion-effect);
+}
+.notif-center__search input:focus {
+  outline: none;
+  border-color: var(--md-primary);
+}
+.notif-center__filter {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  font-family: var(--md3-font-ui);
+  transition: background var(--md3-motion-effect), border-color var(--md3-motion-effect), color var(--md3-motion-effect);
+}
+.notif-center__filter.active {
+  background: var(--md-secondary-container);
+  border-color: transparent;
+  color: var(--md-on-secondary-container);
+}
+.notif-center__bulkbar button {
+  border-radius: 999px;
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface);
+  font-family: var(--md3-font-ui);
+  transition: background var(--md3-motion-effect);
+}
+.notif-center__bulkbar button:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.notif-center__bulkbar button.danger {
+  color: var(--md-error);
+  border-color: var(--md-error);
+}
+.notif-center__row {
+  border-radius: 20px;
+  transition: background var(--md3-motion-effect);
+}
+.notif-center__row:hover {
+  /* One tonal step UP from the panel's own --md-surface-container, per the house hover rule —
+     -low would step DOWN, blending the row further into the background instead of lifting it. */
+  background: var(--md-surface-container-high);
+}
+.notif-center__row.unread {
+  /* A low-opacity state layer, not the full-strength container colour: the container tint is
+     sized for a prominent chip/FAB, and painting a whole row with it while the row's own text
+     stays on-surface (not the paired on-primary-container) risks exactly the kind of unpaired
+     background/foreground this lane's colour rule exists to avoid. */
+  background: color-mix(in srgb, var(--md-primary) 10%, transparent);
+}
+.notif-center__row.unread:hover {
+  background: color-mix(in srgb, var(--md-primary) 16%, transparent);
+}
+.notif-center__row-title {
+  font-family: var(--md3-font-ui);
+  font-weight: 600;
+}
+.notif-center__row-text {
+  font-family: var(--md3-font-ui);
+}
+.notif-center__row-dismiss {
+  border-radius: 999px;
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-ui);
+  transition: background var(--md3-motion-effect);
+}
+.notif-center__row-dismiss:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.notif-center__empty {
+  font-family: var(--md3-font-ui);
+}
+
+/* ---- MD3: Bulk action bar + preview (BulkActionBar, BulkActionPreview) ---- */
+
+.bulk-bar {
+  border-bottom: 1px solid var(--md-outline-variant);
+  padding: 10px 4px;
+}
+.bulk-bar__select-all,
+.bulk-bar__invert,
+.bulk-bar__clear {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--md-outline);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md3-font-ui);
+  transition: background var(--md3-motion-effect);
+}
+.bulk-bar__select-all:hover:not(:disabled),
+.bulk-bar__invert:hover:not(:disabled),
+.bulk-bar__clear:hover {
+  background: var(--md-surface-container-high);
+}
+.bulk-bar__count {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-ui);
+}
+.bulk-bar__action {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 999px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-family: var(--md3-font-ui);
+  transition: background var(--md3-motion-effect);
+}
+.bulk-bar__action:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.bulk-bar__action--danger {
+  border-color: var(--md-error);
+  color: var(--md-error);
+}
+.bulk-preview__excluded-title {
+  color: var(--md-warning);
+}
