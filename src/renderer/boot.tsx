@@ -4,6 +4,7 @@ import App from './App'
 import { ensureClaudeCliCaps } from './state/permissionMode'
 import { ensureCodexIdentityCaps } from './state/codexIdentity'
 import './styles.css'
+import './styles.md3.css'
 import './tailwind.css'
 
 // Probe the local Claude CLI once, up front (never awaited — a launch is never blocked on it):

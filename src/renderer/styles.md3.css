@@ -1,0 +1,863 @@
+/* ============================================================================================
+   Material Design 3 restyle — HISTORY lane (session memory, local settings history, changelog).
+
+   Scope: this file adds a NEW stylesheet on top of styles.css rather than editing it — see
+   CONTRIBUTING.md / the lane brief this section was written from. Nothing here deletes an old
+   rule; a later sweep does that once every lane has landed.
+
+   Token contract: colours read ONLY `var(--md-*)` role tokens already live in styles.css
+   (--md-surface*, --md-on-surface*, --md-primary*, --md-secondary*, --md-tertiary*, --md-error*,
+   --md-success*, --md-warning*, --md-outline*). Shape uses the EXISTING app shape scale, mapped
+   1:1 onto design/v2/md3/HANDOFF.md's own scale by pixel value (verified against styles.css):
+     design xs  8px  -> --md-shape-small       (--radius,      8px)
+     design sm 12px  -> --md-shape-medium      (--radius-lg,  12px)
+     design md 16px  -> --md-shape-extra-large (--radius-xl,  16px)
+     design lg 28px  -> --md-shape-large       (--radius-xxl, 28px)
+     design full     -> --md-shape-full        (999px, same name in both)
+   Motion + font tokens (--md-motion-spatial/--md-motion-effect, --md-font-ui/--md-font-mono) do
+   not exist yet in styles.css, so they are defined once here, with the exact values
+   design/v2/md3/tokens.css specifies for motion, and the app's OWN existing system-font stacks for
+   type (never a Google Fonts / CDN icon link — the renderer's CSP is `font-src 'self' data:` and
+   scripts/check-app-contract.mjs fails the build on any such link anywhere under src/renderer).
+   Any later canonical token pass that defines these same names globally simply takes over, since
+   custom properties are looked up by name, not by which file happened to declare them first.
+
+   No box-shadow anywhere below — M3 elevation here is tonal only (surface-container stepping).
+   Hover steps one surface-container level up: low -> container -> high -> highest.
+   ============================================================================================ */
+
+:root {
+  --md-motion-spatial: 500ms cubic-bezier(0.38, 1.21, 0.22, 1);
+  --md-motion-effect: 200ms cubic-bezier(0.34, 0.8, 0.34, 1);
+  --md-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
+  --md-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* --------------------------------------------------------------------------------------------
+   Session memory panel (SessionMemoryPanel.tsx) — opened today from the bottom-left RAM pill's
+   popover, and embedded as the History screen's first tab (HistoryScreen.tsx). Every original
+   class name from styles.css is kept (SessionMemoryPanel.test.tsx queries them directly); this
+   section restyles those same selectors and adds `.md3-sessmem-*` companions for anything that
+   needed a new hook to style cleanly. Position/sizing for the POPOVER case (`.sysres-indicator
+   .sessmem-panel`, position:absolute, width:380px) is left exactly as styles.css declared it —
+   only paint properties are touched here.
+   -------------------------------------------------------------------------------------------- */
+
+.sessmem-panel {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-large);
+  box-shadow: none;
+  color: var(--md-on-surface);
+  padding: 16px;
+  font-family: var(--md-font-ui);
+}
+
+.sessmem-panel__head {
+  gap: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.sessmem-panel__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--md-on-surface);
+}
+.sessmem-panel__scope {
+  color: var(--md-on-surface-variant);
+}
+.sessmem-panel__total {
+  color: var(--md-on-surface);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.md3-sessmem-note {
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+
+.md3-sessmem-export {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.md3-sessmem-toast {
+  margin: 6px 0;
+  padding: 6px 12px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 12px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.sessmem-panel__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sessmem-row {
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-low);
+  padding: 6px 8px;
+  transition: background var(--md-motion-effect);
+}
+.sessmem-row:hover {
+  background: var(--md-surface-container);
+}
+
+.md3-sessmem-row__select {
+  accent-color: var(--md-primary);
+  cursor: pointer;
+}
+
+.sessmem-row__main {
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-small);
+}
+.sessmem-row__main:hover:not(:disabled) {
+  background: var(--md-surface-container-high);
+}
+.sessmem-row__main:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
+/* Status dot — the same working/waiting-or-blocked/idle vocabulary the terminal-node header uses,
+   restated in M3 role tokens (HANDOFF.md: "RUNNING = tertiary … NEEDS YOU = error"). */
+.sessmem-row__dot--working {
+  background: var(--md-tertiary);
+}
+.sessmem-row__dot--attention {
+  background: var(--md-error);
+}
+.sessmem-row__dot--idle {
+  background: var(--md-on-surface-variant);
+  opacity: 0.4;
+}
+.sessmem-row__dot--hollow {
+  background: transparent;
+  border: 1px solid var(--md-outline);
+  opacity: 1;
+}
+
+.sessmem-row__title {
+  color: var(--md-on-surface);
+  font-weight: 500;
+}
+
+.md3-sessmem-chip {
+  border-radius: var(--md-shape-small);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.sessmem-row__cmd {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-mono);
+}
+.sessmem-row__mb {
+  color: var(--md-on-surface);
+  font-weight: 600;
+}
+
+.sessmem-row__kill {
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+}
+.sessmem-row__kill:hover {
+  color: var(--md-error);
+  background: var(--md-error-container);
+}
+
+.sessmem-row__kids {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-mono);
+}
+.sessmem-row__kids span {
+  border-radius: var(--md-shape-small);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  padding: 0 6px;
+  margin-left: 4px;
+}
+
+.sessmem-panel__attrib {
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+
+.sessmem-panel__foot {
+  border-top: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+
+.sessmem-panel__refresh {
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.sessmem-panel__refresh:hover {
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-highest);
+}
+.sessmem-panel__refresh:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+/* Embedded (full-page History screen) rather than the RAM pill's floating popover: lay out in
+   normal flow instead of an anchored 380px box. Higher specificity than the bare `.sessmem-panel`
+   rule in styles.css, so it wins regardless of stylesheet load order. */
+.md3-history-screen .sessmem-panel {
+  position: static;
+  width: 100%;
+  max-width: 900px;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+.md3-history-screen .sessmem-panel__head {
+  padding: 0 0 12px;
+}
+.md3-history-screen .sessmem-panel__rows {
+  max-height: none;
+}
+.md3-history-screen .sessmem-row {
+  padding: 12px 14px;
+}
+
+/* --------------------------------------------------------------------------------------------
+   Local settings history (LocalHistoryPanel.tsx) — opened today from Settings → History, and
+   embedded as the History screen's second tab. Every original `.local-history*` class name is
+   kept (there is no test file pinning them, but the names are already good BEM and styles.css
+   already had rules for them, so keeping them avoids inventing a parallel naming scheme for the
+   same elements) with `.md3-history-*` companions for the restyled chrome.
+   -------------------------------------------------------------------------------------------- */
+
+.md3-history-panel {
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+}
+
+.md3-history-toolbar {
+  /* `.local-history__toolbar` in styles.css sets `flex-direction: column` (the pre-M3 stacked
+     layout) on the SAME element (both classes coexist on it) — set `row` explicitly here rather
+     than relying on the flex default, or that legacy declaration wins since it is the only one
+     touching this specific property. */
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.md3-history-dates {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* Shared by LocalHistoryPanel and ChangelogPanel — one "from/to" field recipe for both tabs. */
+.md3-history-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--md-on-surface-variant);
+}
+.md3-history-date-field input[type='date'] {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-small);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  color-scheme: dark light;
+}
+.md3-history-date-field input[type='date']:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+.md3-history-date-field input[aria-invalid='true'] {
+  border-color: var(--md-error);
+}
+
+/* Shared date-range preset pill row (today/7d/30d/90d/all — LocalHistoryPanel; 30d/90d/all —
+   ChangelogPanel, matching the design's "Last 30 days · Last 90 days · All time" chips). */
+.md3-history-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.md3-history-preset {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-history-preset:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-history-preset--active {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-history-preset:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+.local-history__date-error {
+  width: 100%;
+  color: var(--md-error);
+  font-size: 12px;
+}
+
+/* Shared search field shell (from ExplorerPanel's own `.ex-filter-row`-style pattern): a text
+   input plus the `.*` anchored-regex-builder trigger button beside it. */
+.md3-history-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 6px 0 14px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+.md3-history-search:focus-within {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+.local-history__search,
+.md3-history-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  outline: none;
+}
+.local-history__search::placeholder,
+.md3-history-search__input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+
+.local-history__actions,
+.md3-history-action-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.local-history__action-chip,
+.md3-history-action-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline-variant);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.md3-history-action-toggle input[type='checkbox'] {
+  accent-color: var(--md-primary);
+}
+.md3-history-action-toggle--on {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  border-color: transparent;
+}
+
+.local-history__note,
+.md3-history-note {
+  padding: 14px 4px;
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+.local-history__note--error,
+.md3-history-note--error {
+  color: var(--md-error);
+}
+
+.local-history__rows,
+.md3-history-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 900px;
+}
+
+.local-history__row,
+.md3-history-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-low);
+  padding: 12px 16px;
+  transition: background var(--md-motion-effect);
+}
+.local-history__row:hover {
+  background: var(--md-surface-container);
+}
+.local-history__row input[type='checkbox'] {
+  accent-color: var(--md-primary);
+  flex: 0 0 auto;
+}
+
+.md3-history-chip {
+  flex: 0 0 auto;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: var(--md-shape-small);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.md3-history-chip--created {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.md3-history-chip--deleted {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md3-history-chip--restored {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.md3-history-chip--updated {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.md3-history-row__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.local-history__label,
+.md3-history-row__label {
+  color: var(--md-on-surface);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md3-history-row__meta {
+  color: var(--md-on-surface-variant);
+  font-size: 11.5px;
+}
+/* Both carry an OWN legacy `color: rgba(var(--tint-rgb), …)` declaration in styles.css that a
+   directly-declared property always beats, regardless of specificity — inheriting the new
+   `--md-on-surface-variant` from the `.md3-history-row__meta` wrapper above is not enough on its
+   own to re-theme them. */
+.local-history__when,
+.local-history__sha {
+  color: var(--md-on-surface-variant);
+}
+.local-history__sha {
+  font-family: var(--md-font-mono);
+}
+
+.md3-history-current-chip {
+  flex: 0 0 auto;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.local-history__restore,
+.md3-history-restore {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.local-history__restore:hover,
+.md3-history-restore:hover {
+  background: var(--md-surface-container-high);
+}
+.local-history__restore:focus-visible,
+.md3-history-restore:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+/* --------------------------------------------------------------------------------------------
+   Changelog viewer (src/renderer/components/changelog/*) — genuinely new UI, so it uses the
+   `md3-changelog*` naming the lane brief asks new chrome to use throughout. Shares the
+   `.md3-history-date-field` / `.md3-history-presets` / `.md3-history-search` chrome above with
+   LocalHistoryPanel, so the two sibling tabs stay visually consistent.
+   -------------------------------------------------------------------------------------------- */
+
+.md3-changelog {
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+}
+
+.md3-changelog__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.md3-changelog__dates {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.md3-changelog__error {
+  width: 100%;
+  color: var(--md-error);
+  font-size: 12px;
+}
+
+.md3-changelog__toast {
+  margin: 6px 0;
+  padding: 6px 12px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 12px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.md3-changelog-empty {
+  padding: 14px 4px;
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+.md3-changelog-empty--panel {
+  padding: 32px 4px;
+  text-align: center;
+}
+
+.md3-changelog-releases {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 900px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.md3-changelog-release {
+  border-radius: var(--md-shape-large);
+  background: var(--md-surface-container-low);
+  padding: 18px 22px;
+}
+
+.md3-changelog-release__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.md3-changelog-release__select {
+  accent-color: var(--md-primary);
+  cursor: pointer;
+}
+
+.md3-changelog-version {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 13px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-family: var(--md-font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+.md3-changelog-version--unreleased {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+
+.md3-changelog-date {
+  color: var(--md-on-surface-variant);
+  font-size: 12.5px;
+}
+
+.md3-changelog-commits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.md3-changelog-commit {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-small);
+  border: 1px solid var(--md-outline-variant);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-changelog-commit:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.md3-changelog-commit:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+.md3-changelog-commit--none {
+  cursor: default;
+  border-style: dashed;
+}
+.md3-changelog-commit--none:hover {
+  background: transparent;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-changelog-items {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.md3-changelog-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+/* Six deterministic tones, cycled by a hash of the category name (see ReleaseCard.tsx) — a new
+   `### ` heading in CHANGELOG.md gets SOME distinguishable tone without a code change here. */
+.md3-changelog-cat {
+  flex: 0 0 auto;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: var(--md-shape-small);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.md3-changelog-cat--a {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.md3-changelog-cat--b {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-changelog-cat--c {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.md3-changelog-cat--d {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.md3-changelog-cat--e {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.md3-changelog-cat--f {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+
+.md3-changelog-item__text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--md-on-surface);
+}
+/* Release notes render through the shared markdown pipeline (see ReleaseCard.tsx) — style what
+   that can actually produce: bold, inline code, links. */
+.md3-changelog-item__text strong {
+  font-weight: 700;
+}
+.md3-changelog-item__text code {
+  font-family: var(--md-font-mono);
+  font-size: 0.92em;
+  background: var(--md-surface-container-highest);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.md3-changelog-item__text a {
+  color: var(--md-primary);
+}
+.md3-changelog-item__text p {
+  margin: 0;
+  display: inline;
+}
+
+/* --------------------------------------------------------------------------------------------
+   History screen shell (HistoryScreen.tsx) — the three tabs as one surface. Not yet wired into a
+   rail/screen switcher (see the file's own header comment); this section is what makes it render
+   correctly wherever it does get mounted.
+   -------------------------------------------------------------------------------------------- */
+
+.md3-history-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 24px 28px;
+  overflow-y: auto;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  box-sizing: border-box;
+}
+
+.md3-history-screen__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.md3-history-screen__heading {
+  display: flex;
+  flex-direction: column;
+}
+
+.md3-history-screen__title {
+  font-size: 24px;
+  font-weight: 600;
+}
+.md3-history-screen__subtitle {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-history-screen__tabs {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.md3-history-screen__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-history-screen__tab:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-history-screen__tab--active {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-history-screen__tab:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.md3-history-screen__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.md3-history-screen__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.md3-history-screen__panel[hidden] {
+  display: none;
+}
+
+/* Responsive: the toolbar rows and cards never force horizontal scroll on a narrow window. */
+@media (max-width: 720px) {
+  .md3-history-screen {
+    padding: 16px;
+  }
+  .md3-history-screen__tabs {
+    margin-left: 0;
+    width: 100%;
+  }
+  .md3-changelog-release__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .md3-changelog-commits {
+    margin-left: 0;
+  }
+}

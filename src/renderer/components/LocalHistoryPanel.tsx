@@ -8,10 +8,11 @@
 // for the only action producer today).
 //
 // A calendar-picker note: this uses the platform's native `<input type="date">` plus a small set
-// of named presets rather than a bespoke anchored calendar widget — a real, honest simplification
-// given this lane's scope; see docs/local-history.md.
+// of named presets (src/renderer/lib/dateRange.ts, shared with the changelog viewer) rather than a
+// bespoke anchored calendar widget — a real, honest simplification given this lane's scope; see
+// docs/local-history.md.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ExportTable } from '@shared/export'
 import { buildTableExport } from '@shared/export'
 import type { HistoryAction, HistoryEntry } from '@shared/local-history'
@@ -19,6 +20,14 @@ import { restoreSettingsRevision } from '../state/settings'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ExportMenu } from './ExportMenu'
 import { BulkActionBar, type BulkAction } from './BulkActionBar'
+import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import {
+  applyDateRangePreset,
+  DATE_RANGE_PRESET_LABELS,
+  parseBoundary,
+  type DateRangePreset
+} from '../lib/dateRange'
 import {
   clearSelection,
   emptySelection,
@@ -36,27 +45,7 @@ export interface LocalHistoryPanelProps {
   title: string
 }
 
-type Preset = 'today' | '7d' | '30d' | 'all'
-
-function toDateInputValue(ms: number): string {
-  const d = new Date(ms)
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-/** Parse a date-range boundary input. Accepts the browser's own `yyyy-mm-dd` AND a plain ISO
- *  timestamp typed by hand (the "typed dates in the locale's format and plain ISO alongside it"
- *  requirement) — reports invalid input via the returned `error` WITHOUT discarding what was
- *  typed, so the caller can echo it back rather than silently clearing the field. */
-function parseBoundary(raw: string, endOfDay: boolean): { ms: number | undefined; error: string | null } {
-  if (raw.trim() === '') return { ms: undefined, error: null }
-  // A bare `yyyy-mm-dd` (from the native date input, or hand-typed) has no time component — give
-  // it one so a `to` boundary includes the whole day rather than stopping at midnight. Anything
-  // longer (a full ISO timestamp typed by hand) is parsed as-is.
-  const parsed = Date.parse(raw.length === 10 ? `${raw}T${endOfDay ? '23:59:59.999' : '00:00:00'}` : raw)
-  if (Number.isNaN(parsed)) return { ms: undefined, error: `"${raw}" is not a date I can read.` }
-  return { ms: parsed, error: null }
-}
+const PRESETS: DateRangePreset[] = ['today', '7d', '30d', '90d', 'all']
 
 function toExportTable(entries: HistoryEntry[]): ExportTable {
   return {
@@ -78,6 +67,13 @@ function toExportTable(entries: HistoryEntry[]): ExportTable {
   }
 }
 
+/** A small, colored assist-chip label for one action word — never a hard-coded switch over the
+ *  closed set `HistoryAction` claims to be: an unrecognized future action still renders (neutral
+ *  tone), it just doesn't get a themed color yet. */
+function ActionChip({ action }: { action: HistoryAction }): JSX.Element {
+  return <span className={`md3-history-chip md3-history-chip--${action}`}>{action}</span>
+}
+
 export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JSX.Element {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -85,8 +81,10 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
 
   const [fromInput, setFromInput] = useState('')
   const [toInput, setToInput] = useState('')
+  const [activePreset, setActivePreset] = useState<DateRangePreset | null>('all')
   const [activeActions, setActiveActions] = useState<Set<HistoryAction>>(new Set())
-  const [query, setQuery] = useState('')
+  const search = useRegexSearchField()
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [restoring, setRestoring] = useState<HistoryEntry | null>(null)
   const [restoreBusy, setRestoreBusy] = useState(false)
@@ -112,26 +110,21 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
 
   useEffect(load, [domain])
 
-  const applyPreset = (preset: Preset): void => {
-    const now = Date.now()
-    const day = 24 * 60 * 60 * 1000
-    if (preset === 'all') {
-      setFromInput('')
-      setToInput('')
-    } else if (preset === 'today') {
-      setFromInput(toDateInputValue(now))
-      setToInput(toDateInputValue(now))
-    } else if (preset === '7d') {
-      setFromInput(toDateInputValue(now - 7 * day))
-      setToInput(toDateInputValue(now))
-    } else {
-      setFromInput(toDateInputValue(now - 30 * day))
-      setToInput(toDateInputValue(now))
-    }
+  const applyPreset = (preset: DateRangePreset): void => {
+    const { from, to } = applyDateRangePreset(preset)
+    setFromInput(from)
+    setToInput(to)
+    setActivePreset(preset)
   }
 
   const from = parseBoundary(fromInput, false)
   const to = parseBoundary(toInput, true)
+
+  // core/local-history.ts's `list()` promises "every revision, newest first" — the first entry of
+  // the RAW (unfiltered) list is therefore the current revision, always, regardless of what the
+  // date/action/text filters below currently hide. Deriving "current" from the filtered array
+  // instead would let a filter silently hand the CURRENT chip to the wrong row.
+  const currentSha = entries && entries.length > 0 ? entries[0].sha : null
 
   // Every action actually present in this domain's log, with counts — never a hard-coded list.
   const actionCounts = useMemo(() => {
@@ -142,15 +135,14 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
 
   const filtered = useMemo(() => {
     if (!entries) return []
-    const q = query.trim().toLowerCase()
     return entries.filter((e) => {
       if (from.ms !== undefined && e.timestamp < from.ms) return false
       if (to.ms !== undefined && e.timestamp > to.ms) return false
       if (activeActions.size > 0 && !activeActions.has(e.action)) return false
-      if (q && !e.label.toLowerCase().includes(q) && !e.sha.toLowerCase().includes(q)) return false
+      if (!search.test(`${e.label} ${e.sha}`)) return false
       return true
     })
-  }, [entries, from.ms, to.ms, activeActions, query])
+  }, [entries, from.ms, to.ms, activeActions, search])
 
   const visibleIds = useMemo(() => filtered.map((e) => e.sha), [filtered])
   useEffect(() => setSelection((s) => pruneSelection(s, visibleIds)), [visibleIds])
@@ -209,40 +201,45 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
   )
 
   return (
-    <div className="local-history" role="region" aria-label={`${title} history`}>
-      <div className="local-history__toolbar">
-        <div className="local-history__dates">
-          <label>
+    <div className="local-history md3-history-panel" role="region" aria-label={`${title} history`}>
+      <div className="local-history__toolbar md3-history-toolbar">
+        <div className="local-history__dates md3-history-dates">
+          <label className="md3-history-date-field">
             From
             <input
               type="date"
               value={fromInput}
-              onChange={(e) => setFromInput(e.target.value)}
+              onChange={(e) => {
+                setFromInput(e.target.value)
+                setActivePreset(null)
+              }}
               aria-invalid={!!from.error}
             />
           </label>
-          <label>
+          <label className="md3-history-date-field">
             To
             <input
               type="date"
               value={toInput}
-              onChange={(e) => setToInput(e.target.value)}
+              onChange={(e) => {
+                setToInput(e.target.value)
+                setActivePreset(null)
+              }}
               aria-invalid={!!to.error}
             />
           </label>
-          <div className="local-history__presets">
-            <button type="button" onClick={() => applyPreset('today')}>
-              Today
-            </button>
-            <button type="button" onClick={() => applyPreset('7d')}>
-              Last 7 days
-            </button>
-            <button type="button" onClick={() => applyPreset('30d')}>
-              Last 30 days
-            </button>
-            <button type="button" onClick={() => applyPreset('all')}>
-              All time
-            </button>
+          <div className="local-history__presets md3-history-presets" role="group" aria-label="Date range presets">
+            {PRESETS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                className={`md3-history-preset${activePreset === p ? ' md3-history-preset--active' : ''}`}
+                aria-pressed={activePreset === p}
+                onClick={() => applyPreset(p)}
+              >
+                {DATE_RANGE_PRESET_LABELS[p]}
+              </button>
+            ))}
           </div>
         </div>
         {from.error && (
@@ -256,19 +253,32 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
           </div>
         )}
 
-        <input
-          type="search"
-          className="local-history__search"
-          placeholder="Search what changed…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search history"
-        />
+        <div className="md3-history-search">
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="local-history__search md3-history-search__input"
+            placeholder={search.mode === 'regex' ? 'Search what changed (regex)…' : 'Search what changed…'}
+            value={search.value}
+            spellCheck={false}
+            onChange={(e) => search.setValue(e.target.value)}
+            aria-label="Search history"
+          />
+          <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — Settings history search" />
+        </div>
+        {search.error && (
+          <div className="local-history__date-error" role="alert">
+            {search.error}
+          </div>
+        )}
 
         {actionCounts.size > 0 && (
-          <div className="local-history__actions" role="group" aria-label="Filter by action">
+          <div className="local-history__actions md3-history-action-filters" role="group" aria-label="Filter by action">
             {[...actionCounts.entries()].map(([action, n]) => (
-              <label key={action} className="local-history__action-chip">
+              <label
+                key={action}
+                className={`local-history__action-chip md3-history-action-toggle${activeActions.has(action) ? ' md3-history-action-toggle--on' : ''}`}
+              >
                 <input
                   type="checkbox"
                   checked={activeActions.has(action)}
@@ -287,13 +297,17 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
         />
       </div>
 
-      {loading && <div className="local-history__note">Loading…</div>}
-      {!loading && error && <div className="local-history__note local-history__note--error">{error}</div>}
+      {loading && <div className="local-history__note md3-history-note">Loading…</div>}
+      {!loading && error && (
+        <div className="local-history__note local-history__note--error md3-history-note md3-history-note--error">
+          {error}
+        </div>
+      )}
       {!loading && !error && entries && entries.length === 0 && (
-        <div className="local-history__note">No history yet — it starts with the next change.</div>
+        <div className="local-history__note md3-history-note">No history yet — it starts with the next change.</div>
       )}
       {!loading && !error && entries && entries.length > 0 && filtered.length === 0 && (
-        <div className="local-history__note">Nothing matches this filter.</div>
+        <div className="local-history__note md3-history-note">Nothing matches this filter.</div>
       )}
 
       {filtered.length > 0 && (
@@ -307,30 +321,42 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
             onClear={() => setSelection(clearSelection())}
             actions={bulkActions}
           />
-          <ul className="local-history__rows">
-            {filtered.map((e) => (
-              <li key={e.sha} className="local-history__row">
-                <input
-                  type="checkbox"
-                  aria-label={`Select revision ${e.sha.slice(0, 7)}`}
-                  checked={isSelected(selection, e.sha)}
-                  onClick={(ev) => {
-                    if (ev.shiftKey) setSelection((s) => selectRange(s, e.sha, visibleIds))
-                    else setSelection((s) => toggleOne(s, e.sha))
-                  }}
-                  onChange={() => {}}
-                />
-                <span className="local-history__when">{new Date(e.timestamp).toLocaleString()}</span>
-                <span className={`local-history__action local-history__action--${e.action}`}>{e.action}</span>
-                <span className="local-history__label">{e.label}</span>
-                <span className="local-history__sha" title={e.sha}>
-                  {e.sha.slice(0, 7)}
-                </span>
-                <button type="button" className="local-history__restore" onClick={() => setRestoring(e)}>
-                  Restore
-                </button>
-              </li>
-            ))}
+          <ul className="local-history__rows md3-history-rows">
+            {filtered.map((e) => {
+              const isCurrent = e.sha === currentSha
+              return (
+                <li key={e.sha} className="local-history__row md3-history-row">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select revision ${e.sha.slice(0, 7)}`}
+                    checked={isSelected(selection, e.sha)}
+                    onClick={(ev) => {
+                      if (ev.shiftKey) setSelection((s) => selectRange(s, e.sha, visibleIds))
+                      else setSelection((s) => toggleOne(s, e.sha))
+                    }}
+                    onChange={() => {}}
+                  />
+                  <ActionChip action={e.action} />
+                  <div className="md3-history-row__body">
+                    <span className="local-history__label md3-history-row__label">{e.label}</span>
+                    <span className="md3-history-row__meta">
+                      <span className="local-history__when">{new Date(e.timestamp).toLocaleString()}</span>
+                      {' · '}
+                      <span className="local-history__sha" title={e.sha}>
+                        {e.sha.slice(0, 7)}
+                      </span>
+                    </span>
+                  </div>
+                  {isCurrent ? (
+                    <span className="md3-history-current-chip">CURRENT</span>
+                  ) : (
+                    <button type="button" className="local-history__restore md3-history-restore" onClick={() => setRestoring(e)}>
+                      Restore as new
+                    </button>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </>
       )}
@@ -344,7 +370,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
         />
       )}
       {restoreError && (
-        <div className="local-history__note local-history__note--error" role="alert">
+        <div className="local-history__note local-history__note--error md3-history-note md3-history-note--error" role="alert">
           {restoreError}
         </div>
       )}
