@@ -18,6 +18,7 @@ export function PhonePairPopover({
   const [state, setState] = useState<DeploymentState>('starting')
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
+  const [totpCode, setTotpCode] = useState('')
 
   const start = async (): Promise<void> => {
     setState('starting')
@@ -25,6 +26,7 @@ export function PhonePairPopover({
     const result = await window.nodeTerminal.serverDeployment.start()
     if (result.ok && result.url) {
       setUrl(result.url)
+      setTotpCode(result.totpCode ?? '')
       setState('ready')
     } else {
       setError(result.error ?? 'Server Edition could not be started.')
@@ -33,6 +35,15 @@ export function PhonePairPopover({
   }
 
   useEffect(() => { void start() }, [])
+  useEffect(() => {
+    if (state !== 'ready') return
+    const refresh = (): void => {
+      void window.nodeTerminal.serverDeployment.currentTotp().then(setTotpCode).catch(() => undefined)
+    }
+    refresh()
+    const timer = setInterval(refresh, 1_000)
+    return () => clearInterval(timer)
+  }, [state])
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => { if (event.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -59,6 +70,8 @@ export function PhonePairPopover({
           <>
             <div className="phone-pair__ok">✓ Server Edition is healthy and ready.</div>
             <div className="phone-pair__hint">Use the site from this PC now. Mobile access will appear here only after its protected TOTP transport is configured.</div>
+            {totpCode ? <div className="phone-pair__title" aria-label={`Current TOTP code ${totpCode}`}>{totpCode}</div> : null}
+            <div className="phone-pair__hint">Enter the current six-digit TOTP code in the site's password field. It changes every 30 seconds.</div>
             <button className="phone-pair__btn" onClick={() => void window.nodeTerminal.shell.openExternal(url)}>
               Open Server Edition
             </button>

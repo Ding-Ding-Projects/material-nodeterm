@@ -16,6 +16,10 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Added
 
+- **Deployment TOTP sign-in.** The desktop creates an owner-only TOTP secret for Server Edition,
+  mounts it read-only into the container, shows the current rotating six-digit code, and the site
+  accepts it through the same bounded lockout path as passwords with replay prevention.
+
 - **Deployment-first device access.** The top-right device button now starts the local Server
   Edition container stack, automatically installs Docker Desktop through Windows Package Manager
   when absent, starts its daemon, builds the local image when needed, waits for health, and opens
@@ -48,6 +52,11 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
   about the one thing it cannot do — it does not sandbox the terminal.
 
 ### Changed
+
+- Server Edition on phone-sized coarse-pointer browsers opens the full sessions/board experience
+  and removes the Canvas destination; files, chats, tools, alerts and settings remain available.
+- Payment checkout is disabled at the core boundary. License and paid-seat settings destinations,
+  Pro upgrade dialogs and the Remote Access purchase gate have been removed.
 
 - Mouse-wheel rotation now zooms the canvas by default, while dragging empty canvas pans it.
   Existing installations using the former untouched defaults migrate to the mouse-first behavior;

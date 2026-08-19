@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useEntitlement } from '../../state/entitlement'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { SettingsSearchContext } from './context'
 import { SettingsSidebar } from './SettingsSidebar'
@@ -24,10 +23,8 @@ import { NotificationsSection } from './sections/NotificationsSection'
 import { NarratorSection } from './sections/NarratorSection'
 import { CommitSection } from './sections/CommitSection'
 import { TmuxSection } from './sections/TmuxSection'
-import { LicenseSection } from './sections/LicenseSection'
 import { PresenceIdentitySection } from './sections/PresenceIdentitySection'
 import { RemoteSection } from './sections/RemoteSection'
-import { TeamAccessSection } from './sections/TeamAccessSection'
 import { SshSection } from './sections/SshSection'
 import { UpdatesSection } from './sections/UpdatesSection'
 import { PrivacySection } from './sections/PrivacySection'
@@ -61,7 +58,6 @@ export function SettingsPage({
    */
   initialQuery?: string
 }): React.JSX.Element {
-  const hydrate = useEntitlement((s) => s.hydrate)
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
   const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
   const languageFeaturesAllowed = schoolModeAllowsOptionalFeatures({
@@ -81,9 +77,6 @@ export function SettingsPage({
     [search.mode, search.query, search.pattern, search.flags]
   )
 
-  useEffect(() => {
-    void hydrate()
-  }, [hydrate])
 
   // Re-target when a caller opens settings to a specific section.
   useEffect(() => {
@@ -139,10 +132,8 @@ export function SettingsPage({
             <CommitSection isActive={active === 'commit'} />
             <TmuxSection isActive={active === 'tmux'} />
             <GitHubIssuesSection isActive={active === 'github-issues'} />
-            <LicenseSection isActive={active === 'license'} />
             <PresenceIdentitySection isActive={active === 'presence'} />
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />
-            <TeamAccessSection isActive={active === 'team-access'} onClose={onClose} />
             <SshSection isActive={active === 'ssh'} onNavigate={setActive} />
             <UpdatesSection isActive={active === 'updates'} />
             <PrivacySection isActive={active === 'privacy'} />

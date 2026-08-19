@@ -260,7 +260,7 @@ function loginPage(hasError: boolean, hasPasskey: boolean): string {
     ? `<div id="pk-wrap" hidden style="display:flex;flex-direction:column;gap:10px;margin-bottom:6px">
          <button style="${BUTTON_STYLE}" type="button" id="pk-btn">Unlock with a passkey</button>
          <p id="pk-err" style="${ERR_STYLE};display:none"></p>
-         <p style="${SUB_STYLE};margin:2px 0 0">or sign in with your password</p>
+         <p style="${SUB_STYLE};margin:2px 0 0">or sign in with your password or deployment TOTP code</p>
        </div>`
     : ''
   const script = hasPasskey
@@ -333,7 +333,7 @@ function loginPage(hasError: boolean, hasPasskey: boolean): string {
 })();
 </script>`
     : ''
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in — nodeterm</title>${PAGE_THEME_STYLE}</head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">nodeterm</h1><p style="${SUB_STYLE}">Sign in to continue</p>${errLine}${passkeyBlock}<form method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:10px"><input style="${INPUT_STYLE}" type="password" name="password" placeholder="Password" autocomplete="current-password"><button style="${BUTTON_STYLE}" type="submit">Sign in</button></form></div>${script}</body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in — nodeterm</title>${PAGE_THEME_STYLE}</head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">nodeterm</h1><p style="${SUB_STYLE}">Sign in to continue</p>${errLine}${passkeyBlock}<form method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:10px"><input style="${INPUT_STYLE}" type="password" name="password" placeholder="Password or 6-digit TOTP code" autocomplete="current-password"><button style="${BUTTON_STYLE}" type="submit">Sign in</button></form></div>${script}</body></html>`
 }
 
 /**

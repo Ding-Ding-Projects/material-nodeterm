@@ -472,7 +472,8 @@ export function buildRealApi(
       ok: false,
       state: 'failed' as const,
       error: 'Deployment is controlled by the Windows desktop app.'
-    })
+    }),
+    currentTotp: async () => ''
   }
   return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
 }

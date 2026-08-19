@@ -972,8 +972,10 @@ export interface ServerDeploymentApi {
     ok: boolean
     state: 'ready' | 'docker-restart-required' | 'failed'
     url?: string
+    totpCode?: string
     error?: string
   }>
+  currentTotp(): Promise<string>
 }
 
 export interface DialogApi {

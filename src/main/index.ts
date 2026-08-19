@@ -805,6 +805,7 @@ app.whenReady().then(async () => {
   const projectArchives = new ProjectArchiveService(localHistoryStore)
   const serverDeployment = new ServerDeploymentService(app.getAppPath())
   ipcMain.handle(IPC.serverDeploymentStart, () => serverDeployment.start())
+  ipcMain.handle(IPC.serverDeploymentTotp, () => serverDeployment.currentTotp())
   workspaceStore.setProjectHistoryRecorder((project, content) =>
     localHistoryStore.record({
       domain: `project_${project.id}`,

@@ -59,11 +59,13 @@ services:
       NODETERM_DATA_DIR: /data
       NODETERM_HOST: 0.0.0.0
       NODETERM_PORT: "8443"
+      NODETERM_TOTP_SECRET_FILE: /run/secrets/nodeterm-totp
     volumes:
       # Auth, the canvas, settings and scrollback snapshots. Without a deliberately reused volume,
       # a replacement/redeploy loses the password and workspace. A NAMED volume, not a bind mount:
       # the container writes as its own user and a host-path mount invites permission mismatches.
       - nodeterm-data:/data
+      - ./.nodeterm-server-totp:/run/secrets/nodeterm-totp:ro
     ports:
       # Loopback-only on purpose — see the note at the top. Direct Compose users can override the
       # host side, but the safety-focused host wrappers refuse any NODETERM_BIND other than this.

@@ -183,7 +183,8 @@ const api: NodeTerminalApi = {
     }
   },
   serverDeployment: {
-    start: () => ipcRenderer.invoke(IPC.serverDeploymentStart)
+    start: () => ipcRenderer.invoke(IPC.serverDeploymentStart),
+    currentTotp: () => ipcRenderer.invoke(IPC.serverDeploymentTotp)
   },
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),

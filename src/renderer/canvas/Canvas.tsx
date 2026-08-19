@@ -219,7 +219,6 @@ import { notify, useNotifications, selectUnreadCount } from '../state/notificati
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
-import { UpgradeDialog } from '../components/UpgradeDialog'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
 import { NotifyConsentDialog } from '../components/NotifyConsentDialog'
@@ -451,7 +450,7 @@ import { isHidden, tidySeparators } from '../lib/ui-visibility'
 import { presentAccount, type AccountPresentation } from '../lib/accountPresentation'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
-import { isKanbanOpen, useViewMode, viewFor } from '../state/viewMode'
+import { isKanbanOpen, isMobileServerEdition, useViewMode, viewFor } from '../state/viewMode'
 import { useFocusNode, FOCUS_SURFACE_ID } from '../state/focusNode'
 import { focusTargetId } from '../lib/focusTarget'
 import {
@@ -12320,8 +12319,9 @@ export function Canvas() {
           setSettingsOpen(false)
           setNotifCenterOpen(false)
         }
+        const mobileServer = isMobileServerEdition()
         const leaveBoard = () => {
-          if (kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
+          if (!mobileServer && kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
         }
         const enterBoard = () => {
           if (!kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
@@ -12354,7 +12354,7 @@ export function Canvas() {
             icon: <IconExplorer />,
             label: 'Files',
             active: explorerOpen || scOpen,
-            onClick: (anchor) => {
+            onClick: (anchor: HTMLElement) => {
               closeAllDrawers()
               leaveBoard()
               const r = anchor.getBoundingClientRect()
@@ -12381,7 +12381,7 @@ export function Canvas() {
             icon: <IconConvert />,
             label: 'Tools',
             active: converterOpen || ollamaOpen,
-            onClick: (anchor) => {
+            onClick: (anchor: HTMLElement) => {
               closeAllDrawers()
               leaveBoard()
               const r = anchor.getBoundingClientRect()
@@ -12419,7 +12419,7 @@ export function Canvas() {
               setSettingsOpen(true)
             }
           }
-        ]
+        ].filter((destination) => !(mobileServer && destination.id === 'canvas'))
         return (
           <NavRail
             destinations={destinations}
@@ -12994,7 +12994,6 @@ export function Canvas() {
         />
       )}
 
-      <UpgradeDialog />
 
       {remotePicker && (
         <RemotePicker

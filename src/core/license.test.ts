@@ -337,7 +337,7 @@ describe('license seats entitlement', () => {
     expect(licensedSeats()).toBe(0)
   })
 
-  it('upgrade opens the base Pro link by default and the add-seats link for target "seats"', async () => {
+  it('upgrade compatibility calls never open a payment link', async () => {
     process.env.NODETERM_CHECKOUT_URL = 'https://pay.test/pro'
     process.env.NODETERM_SEATS_CHECKOUT_URL = 'https://pay.test/seats'
     try {
@@ -346,18 +346,14 @@ describe('license seats entitlement', () => {
       await refreshed() // the launch refresh (rejecting → offline grace) is awaited, never raced
       await fake.handlers[IPC.licenseUpgrade]() // default → base Pro
       await fake.handlers[IPC.licenseUpgrade]('seats') // add-seats link
-      // Each carries this device's id for the device-bound webhook binding.
-      expect(fake.opened).toEqual([
-        'https://pay.test/pro?client_reference_id=test-device',
-        'https://pay.test/seats?client_reference_id=test-device'
-      ])
+      expect(fake.opened).toEqual([])
     } finally {
       delete process.env.NODETERM_CHECKOUT_URL
       delete process.env.NODETERM_SEATS_CHECKOUT_URL
     }
   })
 
-  it('the add-seats link uses its own built-in URL when the env override is unset', async () => {
+  it('does not retain a built-in payment fallback', async () => {
     process.env.NODETERM_CHECKOUT_URL = 'https://pay.test/pro'
     delete process.env.NODETERM_SEATS_CHECKOUT_URL
     try {
@@ -365,11 +361,7 @@ describe('license seats entitlement', () => {
       initLicense()
       await refreshed() // the launch refresh (rejecting → offline grace) is awaited, never raced
       await fake.handlers[IPC.licenseUpgrade]('seats')
-      // 'seats' opens the dedicated seats Payment Link — NOT the base Pro link — with the deviceId.
-      const opened = fake.opened[0]
-      expect(opened).not.toContain('pay.test/pro')
-      expect(opened).toContain('buy.stripe.com/')
-      expect(opened).toContain('client_reference_id=test-device')
+      expect(fake.opened).toEqual([])
     } finally {
       delete process.env.NODETERM_CHECKOUT_URL
     }

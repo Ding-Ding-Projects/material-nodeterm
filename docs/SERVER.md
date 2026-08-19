@@ -6,6 +6,17 @@ obtains Docker Desktop through Windows Package Manager when missing, invokes the
 the container health check, and offers the verified local URL. This route is free and has no Pro,
 seat, subscription, or purchase requirement.
 
+The deployment creates `.nodeterm-server-totp` with owner-only permissions and mounts it read-only
+at `/run/secrets/nodeterm-totp`. The desktop panel shows the current six-digit code and refreshes it
+every second. Enter it in the site's password field. Codes tolerate one 30-second clock step of
+drift, pass through the normal per-peer attempt and lockout limits, and an accepted counter is
+persisted so the same code cannot be replayed after a process restart.
+
+On phone-sized coarse-pointer browsers, Server Edition resolves every project to the sessions/board
+view and omits the Canvas navigation destination. This removes precision pan/zoom interaction while
+retaining the rest of the browser application, including sessions, chat/transcripts, files, source
+control, tools, alerts, settings and history.
+
 Run nodeterm's canvas in a browser, backed by a headless Node server on your own
 machine or box. The server serves the **same** built renderer the desktop app uses
 and speaks a WebSocket-RPC protocol to it; a browser-side `window.nodeTerminal`

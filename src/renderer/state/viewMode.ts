@@ -11,6 +11,17 @@ export const PROJECT_VIEW_KEY = 'nodeterm.projectView'
 
 export type ProjectView = 'canvas' | 'kanban'
 
+/** Server Edition on a phone deliberately has no canvas mode: sessions/cards, drawers, settings,
+ * chats and tools remain, while the precision pan/zoom surface is omitted. */
+export function isMobileServerEdition(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    !navigator.userAgent.includes('Electron') &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(max-width: 700px), (pointer: coarse)').matches
+  )
+}
+
 /** Parses the persisted map, keeping only valid canvas/kanban entries. Exported for tests. */
 export function parseViewMap(raw: string | null): Record<string, ProjectView> {
   try {
@@ -54,6 +65,7 @@ interface ViewModeState {
 
 /** The resolved view for a project: its explicit entry, or the default. */
 export function viewFor(s: Pick<ViewModeState, 'viewByProject' | 'defaultView'>, projectId: string): ProjectView {
+  if (isMobileServerEdition()) return 'kanban'
   return s.viewByProject[projectId] ?? s.defaultView
 }
 
