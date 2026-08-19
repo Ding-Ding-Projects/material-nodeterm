@@ -24,19 +24,15 @@ export function FieldRow({
   const vocabDescription = useVocabularyText(description)
   const vocabNote = useVocabularyText(note)
   return (
-    <div className="flex items-center justify-between gap-6">
-      <div className="min-w-0">
-        <label htmlFor={htmlFor} className="block text-sm font-medium text-text">
+    <div className="md3-settings-row">
+      <div className="md3-settings-row__body">
+        <label htmlFor={htmlFor} className="md3-settings-row__label">
           {vocabLabel}
         </label>
-        {vocabDescription ? (
-          <p className="mt-1 text-[13px] leading-relaxed text-muted">{vocabDescription}</p>
-        ) : null}
-        {vocabNote ? (
-          <p className="mt-1 text-[12px] leading-relaxed text-[color:var(--warn)]">{vocabNote}</p>
-        ) : null}
+        {vocabDescription ? <p className="md3-settings-row__desc">{vocabDescription}</p> : null}
+        {vocabNote ? <p className="md3-settings-row__note">{vocabNote}</p> : null}
       </div>
-      <div className="shrink-0">{control}</div>
+      <div className="md3-settings-row__control">{control}</div>
     </div>
   )
 }

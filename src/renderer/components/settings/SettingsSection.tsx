@@ -43,16 +43,12 @@ export function SettingsSection({
     return null
   }
   return (
-    <section id={id} data-settings-section={id} className="space-y-6">
-      <div className="border-b border-border pb-5">
-        <h2 className="text-[28px] font-bold leading-tight tracking-tight text-text">{vocabTitle}</h2>
-        {vocabDescription ? (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">{vocabDescription}</p>
-        ) : null}
+    <section id={id} data-settings-section={id} className="space-y-5">
+      <div className="md3-settings-header">
+        <h2 className="md3-settings-header__title">{vocabTitle}</h2>
+        {vocabDescription ? <p className="md3-settings-header__desc">{vocabDescription}</p> : null}
       </div>
-      <div className="divide-y divide-border/60 rounded-2xl border border-border bg-white/[0.02] px-6 shadow-sm [&>*]:py-5">
-        {children}
-      </div>
+      <div className="md3-settings-card">{children}</div>
     </section>
   )
 }
