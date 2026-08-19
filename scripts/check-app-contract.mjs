@@ -728,6 +728,25 @@ const FEATURES = [
     docs: ['docs/ollama-manager.md'],
   },
   {
+    id: 'minecraft-server-manager',
+    label: 'Local Minecraft server create-and-manage',
+    files: [
+      'src/renderer/components/minecraft/MinecraftServerPanel.tsx',
+      'src/core/minecraft/server-manager.ts',
+      'src/core/minecraft/version-resolve.ts',
+      'src/core/minecraft/java.ts',
+      'src/core/minecraft/register-ipc.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/components/minecraft/MinecraftServerPanel.tsx', 'export function MinecraftServerPanel'],
+      ['src/core/minecraft/server-manager.ts', 'export class MinecraftServerManager'],
+      // The EULA is only ever accepted by the user's own explicit call — never by create().
+      ['src/core/minecraft/server-manager.ts', 'eulaFileContent(false)'],
+    ],
+    wired: { file: 'src/renderer/nodes/ServiceNode.tsx', symbol: 'MinecraftServerPanel' },
+    docs: ['docs/minecraft-server-manager.md'],
+  },
+  {
     // Kids mode. The needles carry delimiters for the usual reason, and the BOTH-SHELLS rows are
     // the important ones: this repo has shipped a one-shell core change three times, and the
     // boundary tests cannot tell you a feature is missing from the other shell — only that what

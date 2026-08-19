@@ -534,6 +534,18 @@ export function buildStubApi(): Omit<
       chatSend: U('ollama.chatSend'),
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
+    },
+    minecraft: {
+      versions: U('minecraft.versions'),
+      status: U('minecraft.status'),
+      create: U('minecraft.create'),
+      acceptEula: U('minecraft.acceptEula'),
+      start: U('minecraft.start'),
+      stop: U('minecraft.stop'),
+      sendCommand: U('minecraft.sendCommand'),
+      remove: U('minecraft.remove'),
+      recentConsole: U('minecraft.recentConsole'),
+      onEvent: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,

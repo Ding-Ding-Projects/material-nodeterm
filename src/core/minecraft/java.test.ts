@@ -1,0 +1,33 @@
+import { describe, expect, it } from 'vitest'
+import { parseJavaMajorVersion } from './java'
+
+describe('parseJavaMajorVersion', () => {
+  it('reads the modern (Java 9+) three-part scheme', () => {
+    expect(
+      parseJavaMajorVersion('openjdk version "17.0.2" 2022-01-18\nOpenJDK Runtime Environment (build 17.0.2+8-86)')
+    ).toBe(17)
+  })
+
+  it('reads a bare modern major with no minor/patch (e.g. Java 21, 25)', () => {
+    expect(parseJavaMajorVersion('openjdk version "21" 2023-09-19')).toBe(21)
+    expect(parseJavaMajorVersion('java version "25" 2025-09-16')).toBe(25)
+  })
+
+  it('reads the legacy 1.x scheme, where the major is the SECOND dotted component', () => {
+    expect(parseJavaMajorVersion('java version "1.8.0_301"\nJava(TM) SE Runtime Environment')).toBe(8)
+  })
+
+  it('is case/vendor agnostic (openjdk vs java, oracle-style banners)', () => {
+    expect(parseJavaMajorVersion('java version "1.8.0_202"')).toBe(8)
+    expect(parseJavaMajorVersion('openjdk version "11.0.20" 2023-07-18')).toBe(11)
+  })
+
+  it('returns null rather than guessing on unrecognizable output', () => {
+    // A wrong major fed into checkJavaCompatibility would produce a confidently wrong verdict,
+    // which is worse than an honestly unknown one — so anything that doesn't match is refused.
+    expect(parseJavaMajorVersion('')).toBeNull()
+    expect(parseJavaMajorVersion('command not found')).toBeNull()
+    expect(parseJavaMajorVersion('bash: java: command not found')).toBeNull()
+    expect(parseJavaMajorVersion('version banner with no quoted version at all')).toBeNull()
+  })
+})

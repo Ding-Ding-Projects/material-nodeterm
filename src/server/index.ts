@@ -249,7 +249,7 @@ export async function startServer(
   // between the RPC side (which mints) and the HTTP side (which redeems) — one instance, so a
   // ticket minted over the socket is redeemable by the GET that follows it.
   const downloadTickets = new DownloadTickets()
-  const { gitService } = registerCoreHandlers(platform, {
+  const { gitService, minecraftServers } = registerCoreHandlers(platform, {
     getSettings: () => settingsStore.get(),
     downloadTickets,
     localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId),
@@ -623,6 +623,10 @@ export async function startServer(
         ptyPressure.stop()
         await contextLink.stop()
         await ptyManager.killAll()
+        // Fire-and-forget, same as the desktop app's before-quit — a managed Minecraft server is
+        // an ordinary child process that outlives this process quitting; see the method's own doc
+        // comment in server-manager.ts for why there is nothing to await here.
+        minecraftServers.requestGracefulStopAll()
         // Same native hazard as the desktop app: a whisper transcribe still running when the
         // node env is torn down aborts the process. See SpeechService.shutdown.
         await speechService.shutdown()
@@ -679,6 +683,8 @@ export async function startServer(
       ptyPressure.stop()
       await contextLink.stop()
       await ptyManager.killAll()
+      // Fire-and-forget, same as the desktop app's before-quit and the headless close() above.
+      minecraftServers.requestGracefulStopAll()
       // Same native hazard as the desktop app: a whisper transcribe still running when the node
       // env is torn down aborts the process. See SpeechService.shutdown.
       await speechService.shutdown()

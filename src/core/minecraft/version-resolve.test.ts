@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MinecraftMetadataError,
   checkJavaCompatibility,
+  parseLatestVersions,
   parseServerDownload,
   parseVersionManifest,
   resolveServerDownload,
@@ -59,6 +60,21 @@ describe('version manifest', () => {
     } catch (err) {
       expect((err as MinecraftMetadataError).field).toBe('versions')
     }
+  })
+})
+
+describe('latest pointer', () => {
+  it('reads the release and snapshot ids Mojang currently points at', () => {
+    // A default selection built from sorting the versions list would be a guess about ordering
+    // that is not documented contract; `latest` is Mojang's own answer and must be read verbatim.
+    expect(parseLatestVersions(MANIFEST)).toEqual({ release: '1.21.4', snapshot: '25w01a' })
+  })
+
+  it('is null rather than a guess when the manifest has no usable latest object', () => {
+    expect(parseLatestVersions({ versions: [] })).toBeNull()
+    expect(parseLatestVersions({ latest: { release: '1.21.4' } })).toBeNull()
+    expect(parseLatestVersions('nope')).toBeNull()
+    expect(parseLatestVersions(null)).toBeNull()
   })
 })
 
