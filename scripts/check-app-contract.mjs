@@ -1124,6 +1124,7 @@ const M3_ROLES = [
   '--md-surface-dim',
   '--md-surface-container-low',
   '--md-surface',
+  '--md-surface-container',
   '--md-surface-container-high',
   '--md-surface-container-highest',
   '--md-on-surface',

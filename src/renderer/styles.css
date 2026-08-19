@@ -76,6 +76,10 @@
   /* The monospace stack, defined once so the terminal, code blocks and the converter's byte
      previews cannot drift apart. */
   --mono-font: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  /* Bare alias for the two call sites that reach for the short name directly (the colour
+     popover's hex field, the service-manager node's meta text) -- same stack, just the name
+     they were written against. */
+  --mono: var(--mono-font);
   /* The raised knob on a switch or slider. White is the conventional answer on a coloured track
      in BOTH themes, so this is not a colour that changes — it is a colour that CAN change. Left
      as a bare `#fff` it is an un-themed near-white surface, which is exactly what
@@ -140,6 +144,12 @@
   --md-surface-dim: var(--md-tone-neutral-6);
   --md-surface-container-low: var(--md-tone-neutral-9);
   --md-surface: var(--md-tone-neutral-11);
+  /* Plain "container" has no legacy elevation hex of its own to measure -- the app's
+     original six-step ramp never had this rung, and --surface already sits in the gap
+     between -low and -high that M3's own spec reserves for a plain container step. Reusing
+     that same tone keeps this role inside the measured ramp instead of inventing an
+     unmeasured seventh hex. */
+  --md-surface-container: var(--md-tone-neutral-11);
   --md-surface-container-high: var(--md-tone-neutral-14);
   --md-surface-container-highest: var(--md-tone-neutral-18);
   --md-on-surface: var(--md-tone-neutral-90);
@@ -344,6 +354,28 @@
   --md-shape-large: var(--radius-xl); /* 16px */
   --md-shape-extra-large: var(--radius-xxl); /* 28px */
   --md-shape-full: var(--radius-full); /* pill / circular */
+  /* Bare alias onto the scale's own medium step -- every existing call site that reaches for
+     this short name already falls back to 12px (the colour popover, the service-manager node),
+     which is exactly what --md-shape-medium already is. */
+  --md-shape: var(--md-shape-medium);
+
+  /* ---- Material Design 3 -- motion -----------------------------------------------------------
+     Two tokens, not the full duration/easing grid the spec defines -- the only two this app
+     currently reaches for (a spatial transform, and a plain fade/scale effect), named so a
+     future motion consumer has somewhere to point instead of an inline literal. Theme-
+     independent like the shape scale above, so declared once here rather than restated in
+     the light block. */
+  --md-motion-spatial: 500ms cubic-bezier(0.38, 1.21, 0.22, 1);
+  --md-motion-effect: 200ms cubic-bezier(0.34, 0.80, 0.34, 1);
+
+  /* ---- Nav-shell geometry -------------------------------------------------------------------
+     Named constants for offsets that were previously spelled out as bare pixel literals at each
+     call site (the tab bar's own height, and every floating panel/overlay that positions itself
+     below it). Values are UNCHANGED -- this only gives the existing geometry a name so a later
+     nav-shell rewrite has one place to point instead of six copies of the same magic number.
+     `--nav-rail-w` is declared for that same future rewrite and is not yet consumed anywhere. */
+  --app-bar-h: 44px;
+  --nav-rail-w: 0px;
 
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue',
     sans-serif;
@@ -455,6 +487,8 @@
   --md-surface: var(--md-tone-neutral-97); /* tone 98/99 measured >=0.97 relative luminance, the
     "no light surface is pure white" floor styles.theme.test.ts asserts (the same anti-glare
     reason the pre-palette #fbf8f3 never reached 255 either) */
+  --md-surface-container: var(--md-tone-neutral-97); /* same reasoning as the dark block above:
+    no legacy hex to measure for a plain container step, so it reuses --surface's own tone */
   --md-surface-container-high: var(--md-tone-neutral-98);
   --md-surface-container-highest: var(--md-tone-neutral-98); /* same tone as container-high, same
     as the pre-palette --surface-raised/--surface-overlay pair this ramp aliases, which were also
@@ -514,7 +548,7 @@ body,
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 44px;
+  height: var(--app-bar-h);
   /* Leave room for the macOS traffic lights on the left (the default; Windows overrides this
      below — see the [data-platform='win'] rule). */
   padding: 0 12px 0 86px;
@@ -3893,7 +3927,7 @@ body,
 /* ---- Top-right controls cluster ---- */
 .controls-cluster {
   position: absolute;
-  top: 54px;
+  top: calc(var(--app-bar-h) + 10px);
   right: 14px;
   z-index: 26; /* above the kanban overlay (25) — the view toggle must stay reachable on the board */
   display: flex;
@@ -3924,7 +3958,7 @@ body,
 /* Stack of notification strips (update + announcements), just below the tab bar. */
 .top-banners {
   position: absolute;
-  top: 46px;
+  top: calc(var(--app-bar-h) + 2px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 27; /* above the kanban overlay (25) and the cluster (26), below the tab bar (30) */
@@ -7516,7 +7550,7 @@ body,
 /* Sessions sidebar — shell */
 .sessions-sidebar {
   position: absolute;
-  top: 54px;
+  top: calc(var(--app-bar-h) + 10px);
   left: 14px;
   z-index: 12;
   width: 300px;
@@ -7654,7 +7688,7 @@ body,
 .ss-group { position: relative; }
 .ss-group.is-drop-before::before { content: ''; position: absolute; top: -1px; left: 6px; right: 6px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; z-index: 1; }
 
-.sessions-icon-cluster { position: absolute; top: 54px; left: 14px; z-index: 11; }
+.sessions-icon-cluster { position: absolute; top: calc(var(--app-bar-h) + 10px); left: 14px; z-index: 11; }
 .sessions-icon-cluster button { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; background: rgba(var(--menu-rgb), 0.92); border: 1px solid var(--border); border-radius: 9px; color: var(--text); cursor: pointer; box-shadow: 0 6px 20px rgba(0, 0, 0, calc(0.3 * var(--shadow-k))); }
 .sessions-icon-cluster button:hover { background: var(--panel-header); }
 
@@ -8468,7 +8502,7 @@ body,
 /* ---- first-connect name/color prompt ---- */
 .presence-prompt {
   position: absolute;
-  top: 46px;
+  top: calc(var(--app-bar-h) + 2px);
   right: 12px;
   z-index: 14;
   width: 260px;
@@ -8679,7 +8713,7 @@ body,
 /* ---- Kanban view (full-page board over the canvas; the canvas stays mounted under it) ---- */
 .kanban-overlay {
   position: fixed;
-  top: 44px; /* below the tab bar (.tabbar height) */
+  top: var(--app-bar-h); /* below the tab bar (.tabbar height) */
   left: 0;
   right: 0;
   bottom: 0;
