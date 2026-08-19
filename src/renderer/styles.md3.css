@@ -765,9 +765,9 @@
    styles.css. Recipe source: design/v2/md3/HANDOFF.md + design/v2/MD3 Canvas.dc.html.
 
    Colours: only `var(--md-*)` tokens, with ONE documented exception — the "working" glow keeps
-   its literal Claude-clay hex because it is intentionally paired with the AgentMascot sprite's
-   clay pixel art (see styles.css's own comment on `.term-node.working`); there is no MD3 token
-   for that specific brand colour and substituting one would break the documented pairing.
+   its literal Claude-clay hex (#d97757) because it is intentionally paired with the AgentMascot
+   sprite's clay pixel art; there is no MD3 token for that specific brand colour and substituting
+   one would break the documented pairing.
    ============================================================================================ */
 
 /* styles.css's existing --md-* layer already carries every colour ROLE this file leans on
@@ -803,6 +803,12 @@
   transition:
     border-color var(--md-motion-effect),
     box-shadow var(--md-motion-effect);
+  container-type: inline-size;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .term-node.selected {
@@ -810,7 +816,10 @@
 }
 
 /* Unread glow: recoloured from the old macOS-blue accent to the MD3 primary, same opacity-pulse
-   technique (never animate box-shadow directly — see styles.css's note on this). */
+   technique as before — the pulse still animates OPACITY on the React Flow wrapper's ::after
+   pseudo-element (via :has, since .term-node is overflow:hidden and would clip its own ::after),
+   never box-shadow directly, because shadow animation forces a repaint of every glowing node
+   each frame. */
 .term-node.unread {
   border-color: var(--md-primary);
   box-shadow:
@@ -822,6 +831,15 @@
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--md-primary) 80%, transparent),
     0 0 26px 4px color-mix(in srgb, var(--md-primary) 55%, transparent);
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  animation: nt-unread-glow 2s ease-in-out infinite;
+  will-change: opacity;
 }
 
 /* Working glow keeps the literal Claude-clay colour on purpose — see file banner. Only the
@@ -847,6 +865,15 @@
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--md-error) 70%, transparent),
     0 0 22px 3px color-mix(in srgb, var(--md-error) 50%, transparent);
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.15;
+  animation: nt-attention-glow 1.8s ease-in-out infinite;
+  will-change: opacity;
 }
 
 /* Link handles (bridge-handle): MD3 primary, box-shadow kept (the one documented exception — a
@@ -875,6 +902,10 @@
   padding: 6px 10px;
   gap: 8px;
   background: var(--md-surface-container-high);
+  display: flex;
+  align-items: center;
+  cursor: grab;
+  user-select: none;
 }
 
 .term-node__collapse,
@@ -891,7 +922,45 @@
   transition:
     background var(--md-motion-effect),
     color var(--md-motion-effect);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
 }
+.term-node__find-btn {
+  font-size: 12px;
+  padding: 2px 5px;
+  flex-shrink: 0;
+}
+
+.term-node__collapse {
+  font-size: 11px;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.term-node__close {
+  font-size: 16px;
+  padding: 2px 6px;
+}
+
+.term-node__chat,
+.term-node__mic,
+.term-node__refresh,
+.term-node__search {
+  padding: 2px 5px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.term-node__ai,
+.term-node__move-worktree {
+  font-size: 13px;
+  padding: 2px 5px;
+  flex-shrink: 0;
+}
+
 
 /* Hover steps one surface-container level up from the header's own surface-container-high. */
 .term-node__collapse:hover,
@@ -914,12 +983,36 @@
 .term-node__title,
 .term-node__title-text {
   color: var(--md-on-surface);
+  font-size: 13px;
+  font-weight: 600;
 }
+.term-node__title-text {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: text;
+}
+
+.term-node__title {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  min-width: 0;
+}
+
 .term-node__title:focus,
 .term-node__title-text:hover {
   background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
   border-radius: var(--md-shape-xs);
 }
+.term-node__title:focus {
+  padding: 2px 4px;
+}
+
 
 .term-node__session,
 .term-ssh-chip,
@@ -927,7 +1020,18 @@
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface-variant);
   border-radius: var(--md-shape-full);
+  margin-left: 8px;
+  padding: 1px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
 }
+.term-node__session {
+  max-width: 180px;
+  flex-shrink: 1;
+}
+
 .node-account-chip--warning {
   color: var(--md-warning);
   background: color-mix(in srgb, var(--md-warning) 20%, transparent);
@@ -960,11 +1064,18 @@
   letter-spacing: 0.02em;
   color: var(--md-on-surface-variant);
   background: var(--md-surface-container-highest);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  flex-shrink: 0;
 }
 
 .term-node__status-dot {
   width: 7px;
   height: 7px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .term-node__status--busy {
@@ -973,6 +1084,7 @@
 }
 .term-node__status--busy .term-node__status-dot {
   background: var(--md-tertiary);
+  animation: nt-pulse 1.1s ease-in-out infinite;
 }
 
 .term-node__status--attention {
@@ -981,6 +1093,7 @@
 }
 .term-node__status--attention .term-node__status-dot {
   background: var(--md-error);
+  animation: nt-pulse 1.1s ease-in-out infinite;
 }
 
 .term-node__status--unread {
@@ -1002,15 +1115,37 @@
   color: var(--md-on-surface-variant);
   background: var(--md-surface-container-highest);
 }
+.term-node__status--sleeping {
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.term-node__status--queued {
+  gap: 4px;
+}
+
 .term-node__status--sleeping:hover {
   color: var(--md-on-surface);
 }
 .term-node__queued-run:hover {
   color: var(--md-primary);
+  opacity: 1;
 }
 
 .term-node__approve-btn {
   border-radius: var(--md-shape-full);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
 }
 .term-node__approve-btn--allow {
   color: var(--md-on-success-container);
@@ -1033,6 +1168,7 @@
    colours — the sprites themselves are raster assets and are untouched. */
 .term-node__mascot--pulse {
   color: var(--md-on-tertiary-container);
+  animation: mascot-pulse-brand 1.6s ease-in-out infinite;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -1041,23 +1177,40 @@
 .term-node__find {
   background: var(--md-surface-container-high);
   border-bottom: 1px solid var(--md-outline-variant);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
 }
 .term-node__find-input {
   background: var(--md-surface-container-highest);
   border: 1px solid var(--md-outline-variant);
   border-radius: var(--md-shape-xs);
   color: var(--md-on-surface);
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 3px 6px;
+  outline: none;
 }
 .term-node__find-input:focus {
   border-color: var(--md-primary);
 }
 .term-node__find-count {
   color: var(--md-on-surface-variant);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 .term-node__find-tag {
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface-variant);
   border-radius: var(--md-shape-xs);
+  flex-shrink: 0;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.4px;
+  padding: 1px 5px;
 }
 .term-node__find-tag--claude {
   background: var(--md-primary-container);
@@ -1065,6 +1218,8 @@
 }
 .term-node__find-error {
   color: var(--md-error);
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -1073,12 +1228,25 @@
    --------------------------------------------------------------------------------------------- */
 .term-node__body {
   background: var(--term-bg, var(--md-surface));
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 .term-node__upload {
   color: var(--md-primary);
   background: color-mix(in srgb, var(--md-surface) 60%, transparent);
   border-radius: var(--md-shape-xs);
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
 }
 .term-node__upload.failed {
   color: var(--md-error);
@@ -1086,6 +1254,11 @@
 .term-node__upload-spin {
   border-color: var(--md-outline-variant);
   border-top-color: var(--md-primary);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  animation: dictation-spin 0.8s linear infinite;
 }
 
 .term-copy-pill {
@@ -1105,22 +1278,55 @@
   background: color-mix(in srgb, var(--md-primary) 12%, transparent);
   border: 2px dashed var(--md-primary);
   border-radius: var(--md-shape-xs);
+  content: 'Drop to insert path';
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 /* Resting states: offscreen dispose (nothing to do) vs. closed/error (something to do). */
 .term-node__offscreen {
   color: var(--md-on-surface-variant);
   background: color-mix(in srgb, var(--md-surface-container) 92%, transparent);
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
 }
 .term-node__closed {
   color: var(--md-on-surface-variant);
   background: color-mix(in srgb, var(--md-surface-container) 96%, transparent);
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  flex-direction: column;
+  gap: 10px;
 }
 .term-node__reopen {
   border: 1px solid var(--md-outline);
   border-radius: var(--md-shape-full);
   background: transparent;
   color: var(--md-on-surface);
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
 }
 .term-node__reopen:hover {
   background: var(--md-surface-container-high);
@@ -1217,6 +1423,16 @@
   border: 1px solid var(--md-outline-variant);
   border-radius: var(--md-shape-md);
   box-shadow: none;
+  animation: kanban-slide-in 0.14s ease-out;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  bottom: 0;
+  margin-left: 10px;
+  width: 300px;
+  display: flex;
+  overflow: hidden;
+  z-index: 5;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -1739,20 +1955,41 @@
   border: none;
   border-radius: 24px;
   transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 288px;
+  width: 288px;
+  min-width: 0;
+  max-width: 288px;
+  max-height: 100%;
 }
 .kanban-col--drop {
   border: 2px solid var(--md-primary);
   background: color-mix(in srgb, var(--md-primary) 10%, var(--md-surface-container-low));
   box-shadow: none;
+  border-color: var(--accent);
 }
 .kanban-col__title {
   color: var(--md-on-surface);
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .kanban-col__count {
   color: var(--md-on-surface-variant);
+  font-size: 12px;
 }
 .kanban-col__close {
   color: var(--md-on-surface-variant);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
 }
 .kanban-col__close:hover {
   color: var(--md-error);
@@ -1762,9 +1999,21 @@
   border-color: var(--md-primary);
   border-radius: 8px;
   color: var(--md-on-surface);
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  font-size: 12px;
+  padding: 2px 6px;
+  outline: none;
 }
 .kanban-col__swatch {
   border-color: var(--md-outline-variant);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--tint-rgb), 0.25);
+  cursor: pointer;
+  padding: 0;
 }
 .kanban-col__dot--ungrouped {
   background: var(--md-outline);
@@ -1790,6 +2039,12 @@
   border: 1px dashed var(--md-outline-variant);
   border-radius: 8px;
   color: var(--md-on-surface-variant);
+  width: 100%;
+  font-size: 11px;
+  padding: 6px 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 .kanban-col__new:hover {
   color: var(--md-on-surface);
@@ -1801,14 +2056,35 @@
   border: none;
   border-radius: 16px;
   box-shadow: none;
+  position: absolute;
+  top: 100%;
+  left: 10px;
+  right: 10px;
+  margin-top: 4px;
+  padding: 4px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
 }
 /* Beats the `!important` already on this rule in styles.css. */
 .kanban-col__newback {
   border-bottom-color: var(--md-outline-variant) !important;
+  border-bottom: 1px solid rgba(var(--tint-rgb), 0.08) !important;
+  border-radius: 0 !important;
+  margin-bottom: 2px;
 }
 .kanban-col__newmenu button {
   color: var(--md-on-surface);
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  font-size: 12px;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
 }
 .kanban-col__newmenu button:hover {
   background: var(--md-secondary-container);
@@ -1819,16 +2095,26 @@
 }
 .kanban-col__newicon {
   color: var(--md-on-surface-variant);
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 .kanban-col__newreason {
   color: var(--md-on-surface-variant);
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.3;
 }
 .kanban-col__newchevron {
   color: var(--md-on-surface-variant);
+  margin-left: auto;
+  font-size: 16px;
 }
 .kanban-col__newmenu button[aria-disabled='true'] {
   color: var(--md-on-surface-variant);
   opacity: 0.55;
+  cursor: not-allowed;
 }
 .kanban-col__newmenu button[aria-disabled='true']:hover {
   background: transparent;
@@ -1846,6 +2132,10 @@
   border: none;
   border-radius: 16px;
   transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+  position: relative;
+  display: block;
+  padding: 8px 10px;
+  cursor: pointer;
 }
 .kanban-card:hover {
   background: var(--md-surface-container-highest);
@@ -1860,26 +2150,68 @@
 }
 .kanban-card__title {
   color: var(--md-on-surface);
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .kanban-card__detail {
   border-top-color: var(--md-outline-variant);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(var(--tint-rgb), 0.06);
+  min-height: 20px;
+  cursor: default;
 }
 /* The design bundle's "session chip r8 mono" — the session-id line in the card's detail row. */
 .kanban-card__session {
   color: var(--md-on-surface-variant);
   font-family: var(--mono-font);
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .kanban-card__kindlabel {
   color: var(--md-on-surface-variant);
+  flex: 1;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .kanban-card__kind {
   color: var(--md-on-surface-variant);
   border: none;
   border-radius: 8px;
   background: var(--md-surface-container-highest);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
 }
 .kanban-card__stickytext {
   color: var(--md-on-surface-variant);
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  white-space: pre-line;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
 }
 
 /* Terminal/agent profile chip (shell identity + availability), on the card and in the modal
@@ -1890,21 +2222,61 @@
   border-radius: 999px;
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
+.kanban-modal__profile {
+  min-width: 0;
+  max-width: 220px;
+  gap: 5px;
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+.kanban-card__profile {
+  max-width: 112px;
+  flex: 0 1 auto;
+  gap: 3px;
+  padding: 1px 5px;
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+
 .kanban-card__profile--unavailable,
 .kanban-modal__profile--unavailable {
   background: var(--md-error-container);
   color: var(--md-on-error-container);
+  border-color: rgba(var(--danger-rgb), 0.35);
 }
 .kanban-card__profile--unknown,
 .kanban-modal__profile--unknown {
   border: 1px dashed var(--md-outline);
   background: transparent;
+  border-style: dashed;
 }
+.kanban-modal__profile--unknown {
+  border-color: rgba(var(--tint-rgb), 0.25);
+}
+
+.kanban-card__profile--unknown {
+  border-color: rgba(var(--tint-rgb), 0.28);
+}
+
 .kanban-card__profile-status,
 .kanban-modal__profile-status {
   color: inherit;
+  flex: none;
 }
+.kanban-modal__profile-status {
+  font-size: 9px;
+  opacity: 0.82;
+}
+
+.kanban-card__profile-status {
+  font-weight: 800;
+}
+
 
 /* Reorder drop indicator: a thin primary line at the edge the drop will land on. No box-shadow
    glow (M3 elevation here is tonal only) — the line is thicker instead, for visibility. */
@@ -1913,7 +2285,21 @@
   height: 3px;
   background: var(--md-primary);
   box-shadow: none;
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 2px;
+  z-index: 2;
 }
+.kanban-card--drop-before::before {
+  top: -5px;
+}
+
+.kanban-card--drop-after::after {
+  bottom: -5px;
+}
+
 
 /* ---------------------------------------------------------------------------------------------
    Status badges (RUNNING / NEEDS YOU / SLEEPING) — 24px pill, per the design bundle's card-face
@@ -1967,6 +2353,10 @@
 }
 .kanban-card__unread {
   background: var(--md-primary);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -2146,30 +2536,66 @@
    --------------------------------------------------------------------------------------------- */
 .kanban-modal-scrim {
   background: var(--md-scrim);
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  animation: kanban-fade 0.14s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .kanban-modal {
   background: var(--md-surface-container-high);
   border: none;
   border-radius: 28px;
   box-shadow: none;
+  animation: kanban-pop 0.16s ease-out;
+  width: min(1040px, calc(100vw - 96px));
+  height: min(680px, calc(100vh - 120px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .kanban-modal__header {
   border-bottom-color: var(--md-outline-variant);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(var(--tint-rgb), 0.08);
 }
 .kanban-modal__title {
   color: var(--md-on-surface);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .kanban-modal__rename {
   background: var(--md-surface-container-highest);
   border-color: var(--md-primary);
   border-radius: 8px;
   color: var(--md-on-surface);
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  font-size: 13px;
+  padding: 3px 8px;
+  outline: none;
 }
 .kanban-modal__column {
   background: var(--md-surface-container-highest);
   border: none;
   border-radius: 8px;
   color: var(--md-on-surface-variant);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  margin-right: auto;
 }
 .kanban-modal__action {
   background: transparent;
@@ -2177,6 +2603,10 @@
   color: var(--md-on-surface-variant);
   transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
     color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+  border: none;
+  font-size: 13px;
+  padding: 4px 10px;
+  cursor: pointer;
 }
 .kanban-modal__action:hover {
   background: var(--md-surface-container-highest);
@@ -2188,16 +2618,41 @@
 }
 .kanban-modal__sticky {
   color: var(--md-on-surface);
+  flex: 1;
+  background: none;
+  border: none;
+  resize: none;
+  outline: none;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 14px 16px;
+  font-family: inherit;
 }
 .kanban-modal__placeholder {
   color: var(--md-on-surface-variant);
+  margin: auto;
+  font-size: 12px;
 }
 .kanban-modal__termwrap {
   background: var(--term-bg, var(--md-surface-container-high));
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
 }
 .kanban-modal__termwrap--drop::after {
   border-color: var(--md-primary);
   background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 3;
 }
 .kanban-modal__upload {
   /* A caption floating over whatever the terminal is currently drawing — like a scrim, black is
@@ -2205,6 +2660,15 @@
      yet, and this needs to stay readable over arbitrary terminal output either way). */
   border: none;
   border-radius: 8px;
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 4;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 6px 12px;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -2389,6 +2853,14 @@
 
 .palette-overlay {
   background: var(--md-scrim);
+  -webkit-app-region: no-drag;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
 }
 .palette {
   background: var(--md-surface-container-high);
@@ -2396,30 +2868,51 @@
   border-radius: 28px;
   box-shadow: none;
   animation: md3-pop-in var(--md3-motion-spatial);
+  width: 560px;
+  max-width: 90vw;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .palette--full {
   /* The expanded state keeps the same tonal surface + radius; only its size is special-cased. */
   border-radius: 28px !important;
+  width: min(1040px, calc(100vw - 40px)) !important;
+  height: calc(100vh - 80px) !important;
+  max-height: none !important;
 }
 .palette__header-row {
   min-height: 68px;
   padding: 0 14px 0 24px;
   gap: 14px;
   border-bottom: 1px solid var(--md-outline-variant);
+  display: flex;
+  align-items: center;
 }
 .palette__input {
   font-family: var(--md3-font-ui);
   font-size: 17px;
   padding: 16px 0;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: var(--md-on-surface);
+  outline: none;
 }
 .palette__error {
   padding: 8px 24px;
+  color: var(--md-error);
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 .palette__list {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 10px;
+  overflow-y: auto;
 }
 .palette__row {
   display: flex;
@@ -2428,6 +2921,10 @@
 .palette__section {
   padding: 10px 14px 4px;
   color: var(--md-on-surface-variant);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .palette__item {
   min-height: 58px;
@@ -2436,6 +2933,15 @@
   border-radius: 20px;
   font-family: var(--md3-font-ui);
   transition: background var(--md3-motion-effect);
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--md-on-surface);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
 }
 .palette__item.active {
   background: var(--md-surface-container-highest);
@@ -2451,6 +2957,10 @@
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 .palette__icon:empty {
   /* A row without a caller-supplied icon still keeps the 40px slot reserved (design uses a
@@ -2471,6 +2981,7 @@
 .palette__hint {
   font-size: 12px;
   color: var(--md-on-surface-variant);
+  margin-left: auto;
 }
 .palette__secondary {
   border-radius: 8px;
@@ -2479,21 +2990,39 @@
   font-weight: 600;
   padding: 3px 8px;
   transition: background var(--md3-motion-effect), color var(--md3-motion-effect);
+  margin-left: 8px;
+  color: var(--md-on-surface-variant);
+  flex-shrink: 0;
 }
 .palette__empty {
   font-family: var(--md3-font-ui);
+  padding: 16px;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+  text-align: center;
 }
 .palette__size-toggle {
   border-radius: 999px;
   background: transparent;
   border: 1px solid var(--md-outline);
   transition: background var(--md3-motion-effect), border-color var(--md3-motion-effect);
+  flex: none;
+  align-self: center;
+  margin-right: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
 }
 .palette__size-toggle:hover {
   background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
 }
 .palette__control {
   margin-left: 10px;
+  display: flex;
+  align-items: center;
 }
 .palette__switch {
   width: 36px;
@@ -2501,6 +3030,10 @@
   background: var(--md-surface-container-highest);
   border: 1px solid var(--md-outline);
   transition: background var(--md3-motion-effect), border-color var(--md3-motion-effect);
+  position: relative;
+  display: inline-block;
+  border-radius: var(--md-shape-full);
+  cursor: pointer;
 }
 .palette__switch.on {
   background: var(--md-primary);
@@ -2514,6 +3047,8 @@
   background: var(--md-outline);
   box-shadow: none;
   transition: transform var(--md3-motion-effect), background var(--md3-motion-effect), width var(--md3-motion-effect), height var(--md3-motion-effect);
+  position: absolute;
+  border-radius: 50%;
 }
 .palette__switch.on .palette__switch-thumb {
   width: 14px;
@@ -2521,6 +3056,7 @@
   top: 2px;
   left: 19px;
   background: var(--md-on-primary);
+  transform: translateX(15px);
 }
 .palette__cycle {
   border-radius: 999px;
@@ -2528,6 +3064,10 @@
   border: 1px solid var(--md-outline-variant);
   color: var(--md-on-surface);
   font-family: var(--md3-font-ui);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
 }
 .palette__cycle:hover {
   background: var(--md-secondary-container);

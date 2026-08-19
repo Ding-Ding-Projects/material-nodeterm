@@ -1160,55 +1160,13 @@ body,
   background: #ff5f55;
 }
 
-/* ---- Terminal node ---- */
-.term-node {
-  container-type: inline-size;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-top-width: 3px;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
-}
-
-.term-node.selected {
-  border-color: var(--accent);
-}
-
-/* Unread (agent finished while unfocused): a blue glow around the whole node so it's
-   obvious at a glance, not just the small header badge. Pulses gently to draw the eye.
-   Selecting the node clears unread, so this never fights the selection ring.
-   The pulse animates OPACITY on a pseudo-element, never box-shadow: shadow animation forces
-   a repaint of every glowing node each frame, which adds up with several unread agents. The
-   pseudo lives on the React Flow wrapper (via :has) because .term-node is overflow:hidden
-   and would clip its own ::after. */
-.term-node.unread {
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 1px rgba(10, 132, 255, 0.5),
-    0 0 16px 1px rgba(10, 132, 255, 0.35),
-    0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
-}
-
-.react-flow__node:has(.term-node.unread)::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  pointer-events: none;
-  z-index: -1;
-  box-shadow:
-    0 0 0 1px rgba(10, 132, 255, 0.8),
-    0 0 26px 4px rgba(10, 132, 255, 0.6);
-  opacity: 0;
-  animation: nt-unread-glow 2s ease-in-out infinite;
-  will-change: opacity;
-}
-
+/* ---- Terminal node ----
+   The card shell, its state glows and header/body layout now live in styles.md3.css
+   (`.term-node`, `.term-node.selected/.unread/.working/.attention`, the header and its icon
+   buttons, the title, session/status chips) as full MD3 replacements of what used to be here.
+   This section keeps the remaining term-node-family rules those replacements don't cover: the
+   glyphgrid/letterboxed xterm variants, collapsed state, mascot sprites, upload/drop overlays,
+   and the keyframes shared across states. */
 @keyframes nt-unread-glow {
   0%,
   100% {
@@ -1217,18 +1175,6 @@ body,
   50% {
     opacity: 1;
   }
-}
-
-/* Working (agent mid-turn): a soft clay glow — the spinner's #d97757 — behind the node.
-   Same opacity-pulse-on-wrapper-pseudo technique as the unread glow above (never animate
-   box-shadow), but calmer: lower intensity, slower cycle, and it never fully disappears so
-   the node reads "alive" rather than "blinking". Mutually exclusive with .unread (isUnread
-   is false while working). Shadows only — the top border keeps the node's own color. */
-.term-node.working {
-  box-shadow:
-    0 0 0 1px rgba(217, 119, 87, 0.35),
-    0 0 14px 1px rgba(217, 119, 87, 0.22),
-    0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
 }
 
 .react-flow__node:has(.term-node.working)::after {
@@ -1254,30 +1200,6 @@ body,
   50% {
     opacity: 1;
   }
-}
-
-/* Needs-you (waiting/blocked): the red twin of the glows above — same badge/bell red,
-   a touch more insistent than working (deeper pulse, faster cycle): it's asking for you. */
-.term-node.attention {
-  box-shadow:
-    0 0 0 1px rgba(255, 69, 58, 0.4),
-    0 0 14px 1px rgba(255, 69, 58, 0.25),
-    0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
-}
-
-.react-flow__node:has(.term-node.attention)::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  pointer-events: none;
-  z-index: -1;
-  box-shadow:
-    0 0 0 1px rgba(255, 69, 58, 0.55),
-    0 0 22px 3px rgba(255, 69, 58, 0.4);
-  opacity: 0.15;
-  animation: nt-attention-glow 1.8s ease-in-out infinite;
-  will-change: opacity;
 }
 
 @keyframes nt-attention-glow {
@@ -1347,16 +1269,6 @@ body,
   opacity: 1;
 }
 
-.term-node__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  background: var(--panel-header);
-  cursor: grab;
-  user-select: none;
-}
-
 .term-node__color {
   width: 12px;
   height: 12px;
@@ -1366,59 +1278,9 @@ body,
   flex-shrink: 0;
 }
 
-.term-node__title {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  outline: none;
-  min-width: 0;
-}
-
-.term-node__title:focus {
-  background: rgba(var(--tint-rgb), 0.06);
-  border-radius: 4px;
-  padding: 2px 4px;
-}
-
-/* Title shown as text; only the name itself is clickable to rename. */
-.term-node__title-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 2px 5px;
-  border-radius: 4px;
-  cursor: text;
-}
-
-.term-node__title-text:hover {
-  background: rgba(var(--tint-rgb), 0.06);
-}
-
 /* Pushes the AI / close buttons to the far right. */
 .term-node__spacer {
   flex: 1;
-}
-
-/* Claude session name shown beside the editable terminal title. */
-.term-node__session {
-  margin-left: 8px;
-  max-width: 180px;
-  padding: 1px 8px;
-  flex-shrink: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  color: var(--muted);
-  background: rgba(var(--tint-rgb), 0.06);
-  border-radius: 6px;
 }
 
 /* Shared account identity across settings, node chrome and menus. Storage implementation
@@ -1521,35 +1383,6 @@ body,
   background: rgba(255, 159, 10, 0.16);
 }
 
-/* Claude Code status: RUNNING badge while working, unread dot when finished. */
-.term-node__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-left: 8px;
-  flex-shrink: 0;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--success);
-}
-
-.term-node__status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-/* RUNNING matches the working spinner + node glow (clay #d97757), not the base green. */
-.term-node__status--busy {
-  color: #d97757;
-}
-
-.term-node__status--busy .term-node__status-dot {
-  animation: nt-pulse 1.1s ease-in-out infinite;
-}
-
 /* Walking mascot (docs/mascot-sprites.md): sits where the pulsing dot would, INSIDE the RUNNING
    badge, pure CSS spritesheet stepping — no per-node JS timers. Sizes come from lib/mascot.ts via
    the inline CSS vars so the animation and the rendered sheet can never desync. Fixed heights ≤
@@ -1569,18 +1402,6 @@ body,
   height: var(--mascot-h);
   background-size: calc(var(--mascot-w) * 2) var(--mascot-h);
   animation: mascot-walk-claude 0.8s steps(1) infinite;
-}
-
-/* Grok, gemini and opencode have no critter: their RUNNING indicator is the brand mark itself,
-   breathing. Deliberately NOT a sprite. For grok the glyph is an inline SVG painted in
-   `currentColor`, so the bloom is a drop-shadow of that same colour and needs no ink of its own —
-   that is what makes it correct in both themes: the halo is light-on-dark and dark-on-light, exactly
-   like the mark. A fixed glow colour would have vanished into one of the two backgrounds. The other
-   two are multi-colour ASSETS wrapped in a span, so their bloom is the badge's label colour rather
-   than their own ink — approximate, accepted, and cheaper than an ink table (see lib/brandPulse.ts).
-   Agent-neutral by design: no rule below names an agent. */
-.term-node__mascot--pulse {
-  animation: mascot-pulse-brand 1.6s ease-in-out infinite;
 }
 
 @keyframes mascot-pulse-brand {
@@ -1638,49 +1459,6 @@ body,
   }
 }
 
-/* NEEDS YOU is red everywhere (same as the sidebar attention dot). */
-.term-node__status--attention {
-  color: var(--danger);
-}
-
-.term-node__status--loop {
-  color: #bf7af0;
-}
-
-/* SLEEPING: the agent CLI was exited to reclaim its RAM (Eco); the session itself is fine, so
-   this is the quietest chip on the header — grey, no pulse. It is a <button> (click = resume),
-   which the base chip's styling does not cover. */
-.term-node__status--sleeping {
-  color: var(--muted);
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-}
-
-.term-node__status--sleeping:hover {
-  color: var(--text);
-}
-
-.term-node__status--attention .term-node__status-dot {
-  animation: nt-pulse 1.1s ease-in-out infinite;
-}
-
-.term-node__status--unread {
-  color: var(--accent);
-}
-
-/* QUEUED: a node armed with canvas-control `--after`, holding its launch until the stations it
-   waits on go idle. Grey — it is not an alert, it is "not started yet". */
-.term-node__status--queued {
-  color: #8e8e93;
-  gap: 4px;
-}
-
 /* Copy receipt (1.6 s) — green like the base chip, and deliberately quieter than RUNNING /
    NEEDS YOU: this is a receipt, not an alert. */
 .term-node__queued-run {
@@ -1695,42 +1473,11 @@ body,
   opacity: 0.7;
 }
 
-.term-node__queued-run:hover {
-  opacity: 1;
-  color: var(--accent);
-}
-
 /* Deterministic hook-reply approvals: compact Approve/Deny buttons beside the NEEDS YOU badge. */
 .term-node__approve {
   display: inline-flex;
   gap: 4px;
   align-items: center;
-}
-.term-node__approve-btn {
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  padding: 3px 7px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.term-node__approve-btn--allow {
-  color: var(--success);
-  border-color: rgba(48, 209, 88, 0.5);
-  background: rgba(48, 209, 88, 0.12);
-}
-.term-node__approve-btn--allow:hover {
-  background: rgba(48, 209, 88, 0.22);
-}
-.term-node__approve-btn--deny {
-  color: var(--danger);
-  border-color: rgba(255, 69, 58, 0.5);
-  background: rgba(255, 69, 58, 0.12);
-}
-.term-node__approve-btn--deny:hover {
-  background: rgba(255, 69, 58, 0.22);
 }
 
 @keyframes nt-pulse {
@@ -1765,170 +1512,15 @@ body,
   white-space: nowrap;
 }
 
-.term-node__ai {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.term-node__ai:hover:not(:disabled) {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
 .term-node__ai:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.term-node__move-worktree {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.term-node__move-worktree:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
-.term-node__search {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-}
-
-.term-node__search:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
-.term-node__refresh {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-}
-
-.term-node__refresh:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
-.term-node__mic {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-}
-
-.term-node__mic:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
-.term-node__chat {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-}
-
-.term-node__chat:hover {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
-}
-
-.term-node__find {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 8px;
-  background: var(--md-surface-container-high);
-  border-bottom: 1px solid rgba(var(--tint-rgb), 0.08);
 }
 
 .term-node__find-row {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.term-node__find-input {
-  flex: 1;
-  min-width: 0;
-  background: var(--md-surface);
-  border: 1px solid rgba(var(--tint-rgb), 0.12);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 3px 6px;
-  outline: none;
-}
-
-.term-node__find-input:focus {
-  border-color: var(--accent);
-}
-
-.term-node__find-count {
-  color: var(--muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
-
-.term-node__find-btn {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.term-node__find-btn:hover:not(:disabled) {
-  background: rgba(10, 132, 255, 0.18);
-  color: var(--accent-text);
 }
 
 .term-node__find-btn:disabled {
@@ -1950,73 +1542,6 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: monospace;
-}
-
-.term-node__find-tag {
-  flex-shrink: 0;
-  text-transform: uppercase;
-  font-size: 9px;
-  letter-spacing: 0.4px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(var(--tint-rgb), 0.1);
-  color: var(--muted);
-}
-
-.term-node__find-tag--claude {
-  background: rgba(10, 132, 255, 0.22);
-  color: var(--accent-text);
-}
-
-.term-node__find-error {
-  color: var(--danger);
-  font-size: 11px;
-  line-height: 1.3;
-}
-
-.term-node__close {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.term-node__close:hover {
-  background: rgba(247, 118, 142, 0.2);
-  color: var(--danger);
-}
-
-.term-node__body {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  /* The TERMINAL's background, not the app's: `.term-node__xterm` insets the xterm by a few px and
-   * a co-attach letterbox leaves unpainted space around it, so both bands show THIS rather than the
-   * theme — a mismatched frame around every terminal the moment a non-default theme is picked. Set
-   * from the active theme in App.tsx; the fallback is the app background, which is exactly what the
-   * default theme carries anyway. */
-  background: var(--term-bg, var(--md-surface));
-}
-
-/* Upload progress while dropped files scp to an SSH host (and a brief failure flash). */
-.term-node__upload {
-  position: absolute;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--md-surface) 60%, transparent);
-  border-radius: 6px;
-  pointer-events: none;
 }
 
 /* Copy receipt / selection hint, shared by BOTH terminal surfaces (the canvas node's
@@ -2062,37 +1587,6 @@ body,
     opacity: 1;
     transform: none;
   }
-}
-
-.term-node__upload.failed {
-  color: var(--danger);
-}
-
-.term-node__upload-spin {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  animation: dictation-spin 0.8s linear infinite;
-}
-
-/* Drop-target hint while dragging a file from Finder into the terminal. */
-.term-node__body.dropping::after {
-  content: 'Drop to insert path';
-  position: absolute;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border: 2px dashed var(--accent);
-  border-radius: 6px;
-  pointer-events: none;
 }
 
 .term-node__xterm {
@@ -2239,58 +1733,6 @@ body,
 
 .term-node__xterm.letterboxed .xterm {
   height: auto;
-}
-
-/* Offscreen dispose (terminal/offscreen-policy.ts): this node's view was released after sitting
-   out of the viewport; the tmux session keeps running and re-entering the viewport reattaches.
-   Same geometry as `.term-node__closed` — it covers the (now empty) terminal body — but a quieter
-   fill and no action, because there is nothing for the user to do and nothing has gone wrong. */
-.term-node__offscreen {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--muted);
-  background: rgba(var(--card-rgb), 0.94);
-}
-
-/* Another client permanently destroyed this node's session (tmux kill-session): the terminal is
-   dead and must never respawn — say so over the last screen. */
-.term-node__closed {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--muted);
-  background: rgba(var(--card-rgb), 0.88);
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* "Session ended — reopen to restart": the ONLY way a terminal whose session was recycled without
-   a replacement gets a shell back. Deliberately a manual action — an automatic respawn would use
-   this client's stale cwd and silently undo the worktree move (see CoState.ended). */
-.term-node__reopen {
-  padding: 4px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: rgba(var(--tint-rgb), 0.06);
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-}
-.term-node__reopen:hover {
-  background: rgba(var(--tint-rgb), 0.12);
 }
 
 /* "Reconnect" in the SSH connection banner. The banner paints its own dark-red background, so this
@@ -2592,23 +2034,6 @@ body,
 .term-node.collapsed .term-node__body,
 .term-node.collapsed .node-tags {
   display: none;
-}
-
-.term-node__collapse {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 11px;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.term-node__collapse:hover {
-  background: rgba(var(--tint-rgb), 0.08);
-  color: var(--text);
 }
 
 /* ---- Node tags ---- */
@@ -4162,7 +3587,6 @@ body,
 /* Overlays/menus that can overlap the macOS title-bar strip must opt out of window-drag,
    otherwise clicks on their top controls (×, ↻, …) drag the window instead. */
 .drawer-overlay,
-.palette-overlay,
 .sc-overlay,
 .confirm-overlay,
 .ctx-menu,
@@ -5634,35 +5058,10 @@ body,
   flex-shrink: 0;
 }
 
-/* ---- Command palette ---- */
-.palette-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 12vh;
-  background: rgba(10, 12, 18, 0.45); /* the app's shared scrim rgb (10,12,18 — see
-    .destgate-overlay, .drawer-overlay et al.), used at ~20 sites outside this scope; --md-scrim
-    is a different rgb (0,0,0) with no existing app analogue, so mapping only this one overlay
-    would desync it from every sibling scrim rather than relabel it — left, like --menu-rgb */
-}
-
-.palette {
-  width: 560px;
-  max-width: 90vw;
-  max-height: 60vh;
-  display: flex;
-  flex-direction: column;
-  background: rgba(var(--menu-rgb), 0.99); /* --menu-rgb: own floating-surface ramp, not
-    md-aliased */
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 14px; /* no exact --md-shape step (12/16) — left as its own authored radius */
-  box-shadow: 0 24px 64px rgba(0, 0, 0, calc(0.6 * var(--shadow-k)));
-  overflow: hidden;
-}
-
+/* ---- Command palette ----
+   The overlay, the card shell, the list/item/section/icon chrome and the size toggle now live
+   in styles.md3.css as full MD3 replacements of what used to be here. This section keeps the
+   remaining palette-family rules those replacements don't cover. */
 .palette__input-row {
   display: flex;
   align-items: center;
@@ -5670,98 +5069,12 @@ body,
   border-bottom: 1px solid var(--md-outline-variant);
   padding-right: 10px;
 }
-
-.palette__input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: none;
-  color: var(--md-on-surface);
-  font-size: 15px;
-  padding: 14px 16px;
-  outline: none;
-}
-
-.palette__error {
-  padding: 0 16px 8px;
-  color: var(--md-error);
-  font-size: 11.5px;
-  line-height: 1.4;
-}
-
-.palette__list {
-  overflow-y: auto;
-  padding: 6px;
-}
-
-.palette__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 12px;
-  background: transparent;
-  border: none;
-  border-radius: var(--md-shape-small); /* was a literal 8px — exact match to the shipped scale */
-  color: var(--md-on-surface);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.palette__item.active {
-  background: var(--panel-header); /* --panel-header (#323232) sits between --md-surface-container-
-    high (--surface-raised, #242424) and -highest (--surface-overlay, #2c2c2e) — no exact role
-    matches it, and mapping to the nearest would visibly darken/lighten every active palette row */
-}
-
-.palette__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  color: var(--md-on-surface-variant);
-}
-
-.palette__hint {
-  margin-left: auto;
-  color: var(--md-on-surface-variant);
-  font-size: 11px;
-}
-
-.palette__secondary {
-  margin-left: 8px;
-  padding: 1px 6px;
-  border-radius: 4px; /* no exact --md-shape step (the scale's smallest is extra-small at 6px) —
-    left as its own authored radius */
-  color: var(--md-on-surface-variant);
-  flex-shrink: 0;
-}
 .palette__secondary:hover {
   background: var(--md-primary-container); /* was a hardcoded dark-accent rgba (10,132,255,0.18)
     that never themed for light mode or a user-customized accent — the role tints the REAL
     --accent-rgb */
   color: var(--md-on-primary-container); /* was var(--accent-text) — byte-identical, that token
     IS --md-on-primary-container's alias, so this is the correctly paired on-container role */
-}
-
-.palette__section {
-  padding: 8px 12px 2px;
-  color: var(--muted-2); /* --muted-2 (0.25) sits between --md-outline-variant/--border (0.1) and
-    --md-outline (0.35) — no exact role fits, left */
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.palette__empty {
-  padding: 16px;
-  color: var(--md-on-surface-variant);
-  font-size: 13px;
-  text-align: center;
 }
 
 /* ---- Group frame node ---- */
@@ -8593,25 +7906,6 @@ body,
   height: fit-content;
   max-height: 100%;
 }
-.kanban-col {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 288px;
-  width: 288px;
-  min-width: 0;
-  max-width: 288px;
-  max-height: 100%;
-  background: rgba(var(--tint-rgb), 0.05);
-  border: 1px solid rgba(var(--tint-rgb), 0.08);
-  border-radius: 12px;
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-}
-/* Trello-style "this column will take the drop" state. */
-.kanban-col--drop {
-  border-color: var(--accent);
-  background: rgba(10, 132, 255, 0.07);
-  box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(0, 0, 0, calc(0.35 * var(--shadow-k)));
-}
 .kanban-col__header {
   display: flex;
   align-items: center;
@@ -8628,54 +7922,10 @@ body,
   padding: 0;
   flex: 0 0 auto;
 }
-.kanban-col__title {
-  flex: 1;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: rgba(var(--tint-rgb), 0.85);
-  cursor: text;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.kanban-col__rename {
-  flex: 1;
-  min-width: 0;
-  background: rgba(var(--tint-rgb), 0.08);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  color: var(--text-strong);
-  font-size: 12px;
-  padding: 2px 6px;
-  outline: none;
-}
-.kanban-col__count {
-  font-size: 12px;
-  color: rgba(var(--tint-rgb), 0.4);
-}
-.kanban-col__close {
-  background: none;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.35);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 0;
-}
-.kanban-col__close:hover {
-  color: var(--danger);
-}
 .kanban-col__swatches {
   display: flex;
   gap: 6px;
   padding: 0 12px 8px;
-}
-.kanban-col__swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1px solid rgba(var(--tint-rgb), 0.25);
-  cursor: pointer;
-  padding: 0;
 }
 .kanban-col__cards {
   flex: 1;
@@ -8686,15 +7936,6 @@ body,
   padding: 2px 10px;
   min-height: 24px;
 }
-.kanban-card {
-  position: relative;
-  display: block;
-  background: rgba(var(--tint-rgb), 0.08);
-  border: 1px solid rgba(var(--tint-rgb), 0.1);
-  border-radius: 8px;
-  padding: 8px 10px;
-  cursor: pointer; /* click = expand/collapse; drag still works via the draggable attr */
-}
 .kanban-card__row {
   display: flex;
   align-items: flex-start; /* chips align to the first line of a wrapped title */
@@ -8703,32 +7944,6 @@ body,
 }
 .kanban-card__row > .kanban-card__nodedot {
   margin-top: 5px; /* optically centers the dot on the first title line */
-}
-.kanban-card__detail {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 7px;
-  padding-top: 7px;
-  border-top: 1px solid rgba(var(--tint-rgb), 0.06);
-  min-height: 20px;
-  cursor: default;
-}
-.kanban-card__session {
-  flex: 1;
-  min-width: 0;
-  font-size: 10px;
-  color: rgba(var(--tint-rgb), 0.45);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.kanban-card__kindlabel {
-  flex: 1;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: rgba(var(--tint-rgb), 0.35);
 }
 .kanban-card__open {
   margin-left: auto;
@@ -8744,12 +7959,6 @@ body,
 .kanban-card__open:hover {
   background: var(--accent);
   color: #fff;
-}
-.kanban-card:hover {
-  border-color: rgba(var(--tint-rgb), 0.2);
-}
-.kanban-card--github {
-  border-left: 2px solid rgba(125, 133, 144, 0.7);
 }
 .github-issue-state {
   width: 9px;
@@ -8956,60 +8165,10 @@ body,
   border-radius: 50%;
   flex: 0 0 auto;
 }
-.kanban-card__title {
-  flex: 1;
-  min-width: 0;
-  font-size: 13.5px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: rgba(var(--tint-rgb), 0.94);
-  /* Long session names WRAP (max 2 lines) instead of inflating the row/column width. */
-  white-space: normal;
-  word-break: break-word;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.kanban-card__profile {
-  display: inline-flex;
-  max-width: 112px;
-  flex: 0 1 auto;
-  align-items: center;
-  gap: 3px;
-  border: 1px solid rgba(var(--tint-rgb), 0.16);
-  border-radius: 999px;
-  padding: 1px 5px;
-  color: rgba(var(--tint-rgb), 0.56);
-  font-size: 8.5px;
-  line-height: 1.4;
-  white-space: nowrap;
-}
 .kanban-card__profile-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.kanban-card__profile--unavailable {
-  border-color: rgba(var(--danger-rgb), 0.35);
-  color: var(--danger);
-}
-.kanban-card__profile--unknown {
-  border-color: rgba(var(--tint-rgb), 0.28);
-  border-style: dashed;
-}
-.kanban-card__profile-status {
-  flex: none;
-  font-weight: 800;
-}
-.kanban-card__kind {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: rgba(var(--tint-rgb), 0.4);
-  border: 1px solid rgba(var(--tint-rgb), 0.15);
-  border-radius: 4px;
-  padding: 1px 4px;
 }
 .kanban-badge {
   font-size: 9px;
@@ -9034,16 +8193,6 @@ body,
   color: var(--muted);
   background: rgba(var(--tint-rgb), 0.08);
 }
-.kanban-card__unread {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex: 0 0 auto;
-}
-.kanban-col__dot--ungrouped {
-  background: rgba(var(--tint-rgb), 0.25);
-}
 .kanban-add-col {
   align-self: flex-start;
   flex: 0 0 auto;
@@ -9064,7 +8213,6 @@ body,
   border-color: var(--accent);
   background: rgba(10, 132, 255, 0.06);
 }
-
 
 /* ---- Kanban column pill: half-pill flush against a session node's top edge (rendered as a
    sibling of the overflow:hidden node root, so it can poke above the border). ---- */
@@ -9098,25 +8246,6 @@ body,
   position: relative;
   padding: 6px 10px 10px;
 }
-.kanban-col__new {
-  width: 100%;
-  background: none;
-  border: 1px dashed rgba(var(--tint-rgb), 0.12);
-  border-radius: 6px;
-  color: rgba(var(--tint-rgb), 0.45);
-  font-size: 11px;
-  padding: 6px 8px;
-  cursor: pointer;
-  text-align: left;
-}
-.kanban-col__new {
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-}
-.kanban-col__new:hover {
-  color: var(--text-strong);
-  border-color: var(--accent);
-  background: rgba(10, 132, 255, 0.08);
-}
 /* GitHub Issues settings — the "Advanced" (token/provider) disclosure. Collapsed by default so the
    common gh-signed-in case shows no token noise. */
 .github-auth-advanced > summary {
@@ -9146,41 +8275,12 @@ body,
   outline-offset: 2px;
   border-radius: 4px;
 }
-
-.kanban-col__newmenu {
-  position: absolute;
-  top: 100%;
-  left: 10px;
-  right: 10px;
-  margin-top: 4px;
-  background: var(--md-surface-container-low);
-  border: 1px solid rgba(var(--tint-rgb), 0.12);
-  border-radius: 8px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, calc(0.5 * var(--shadow-k)));
-  padding: 4px;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-}
 /* Flipped up when the column sits near the window's bottom edge (see KanbanColumn's layout effect). */
 .kanban-col__newmenu--up {
   top: auto;
   bottom: 100%;
   margin-top: 0;
   margin-bottom: 4px;
-}
-.kanban-col__newmenu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: none;
-  border: none;
-  border-radius: 5px;
-  color: rgba(var(--tint-rgb), 0.85);
-  font-size: 12px;
-  text-align: left;
-  padding: 6px 8px;
-  cursor: pointer;
 }
 
 .palette__item[aria-disabled='true'] {
@@ -9198,78 +8298,15 @@ body,
   flex: 1;
   flex-direction: column;
 }
-.kanban-col__newreason {
-  margin-top: 2px;
-  color: rgba(var(--tint-rgb), 0.55);
-  font-size: 10px;
-  line-height: 1.3;
-}
-.kanban-col__newchevron {
-  margin-left: auto;
-  color: rgba(var(--tint-rgb), 0.55);
-  font-size: 16px;
-}
-.kanban-col__newmenu button[aria-disabled='true'] {
-  color: rgba(var(--tint-rgb), 0.45);
-  cursor: not-allowed;
-}
-.kanban-col__newmenu button[aria-disabled='true']:hover {
-  background: rgba(var(--tint-rgb), 0.05);
-  color: rgba(var(--tint-rgb), 0.45);
-}
-.kanban-col__newmenu button[aria-disabled='true']:hover .kanban-col__newicon {
-  color: rgba(var(--tint-rgb), 0.45);
-}
-.kanban-col__newback {
-  border-bottom: 1px solid rgba(var(--tint-rgb), 0.08) !important;
-  border-radius: 0 !important;
-  margin-bottom: 2px;
-}
-.kanban-col__newicon {
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-  color: rgba(var(--tint-rgb), 0.6);
-  flex: 0 0 auto;
-}
 .kanban-col__newicon svg {
   width: 14px;
   height: 14px;
-}
-.kanban-col__newmenu button:hover .kanban-col__newicon {
-  color: #fff;
-}
-.kanban-col__newmenu button:hover {
-  background: var(--accent);
-  color: #fff;
-}
-.kanban-card__stickytext {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  color: rgba(var(--tint-rgb), 0.6);
-  white-space: pre-line;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
 }
 
 /* ---- Kanban card modal (Trello-style popup over the board) ---- */
 @keyframes kanban-fade {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-.kanban-modal-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 55; /* above the board (25) + drawers (~40), below ConfirmDialog (70+) */
-  background: rgba(0, 0, 0, 0.55);
-  animation: kanban-fade 0.14s ease-out;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 @keyframes kanban-pop {
   from {
@@ -9281,99 +8318,9 @@ body,
     transform: none;
   }
 }
-.kanban-modal {
-  animation: kanban-pop 0.16s ease-out;
-  width: min(1040px, calc(100vw - 96px));
-  height: min(680px, calc(100vh - 120px));
-  display: flex;
-  flex-direction: column;
-  background: var(--md-surface-dim);
-  border: 1px solid rgba(var(--tint-rgb), 0.12);
-  border-radius: 12px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, calc(0.6 * var(--shadow-k)));
-  overflow: hidden;
-}
-.kanban-modal__header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(var(--tint-rgb), 0.08);
-}
-.kanban-modal__title {
-  font-size: 14px;
-  font-weight: 700;
-  color: rgba(var(--tint-rgb), 0.92);
-  cursor: text;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.kanban-modal__rename {
-  flex: 1;
-  min-width: 0;
-  background: rgba(var(--tint-rgb), 0.08);
-  border: 1px solid var(--accent);
-  border-radius: 5px;
-  color: var(--text-strong);
-  font-size: 13px;
-  padding: 3px 8px;
-  outline: none;
-}
-.kanban-modal__profile {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 220px;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid rgba(var(--tint-rgb), 0.18);
-  border-radius: 999px;
-  padding: 2px 7px;
-  color: rgba(var(--tint-rgb), 0.65);
-  font-size: 10px;
-  white-space: nowrap;
-}
 .kanban-modal__profile > span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.kanban-modal__profile--unavailable {
-  border-color: rgba(var(--danger-rgb), 0.35);
-  color: var(--danger);
-}
-.kanban-modal__profile--unknown {
-  border-color: rgba(var(--tint-rgb), 0.25);
-  border-style: dashed;
-}
-.kanban-modal__profile-status {
-  flex: none;
-  color: inherit;
-  font-size: 9px;
-  opacity: 0.82;
-}
-.kanban-modal__column {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: rgba(var(--tint-rgb), 0.45);
-  border: 1px solid rgba(var(--tint-rgb), 0.15);
-  border-radius: 4px;
-  padding: 2px 6px;
-  margin-right: auto;
-}
-.kanban-modal__action {
-  background: rgba(var(--tint-rgb), 0.06);
-  border: none;
-  border-radius: 6px;
-  color: rgba(var(--tint-rgb), 0.7);
-  font-size: 13px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-.kanban-modal__action:hover {
-  background: rgba(var(--tint-rgb), 0.14);
-  color: var(--text-strong);
 }
 .kanban-modal__body {
   flex: 1;
@@ -9386,28 +8333,11 @@ body,
   min-width: 0;
   display: flex;
 }
-.kanban-modal__sticky {
-  flex: 1;
-  background: none;
-  border: none;
-  resize: none;
-  outline: none;
-  color: rgba(var(--tint-rgb), 0.9);
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 14px 16px;
-  font-family: inherit;
-}
 .kanban-modal__pane {
   position: relative; /* anchors the markdown-view overlay */
   flex: 1;
   min-width: 0;
   display: flex;
-}
-.kanban-modal__placeholder {
-  margin: auto;
-  color: rgba(var(--tint-rgb), 0.35);
-  font-size: 12px;
 }
 /* The live co-attach terminal fills the pane; the ResizeObserver in ModalTerminal drives fit(). */
 .kanban-modal__term {
@@ -9536,23 +8466,6 @@ body,
   color: rgba(var(--tint-rgb), 0.55);
 }
 
-.kanban-modal__termwrap {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 8px; /* the terminal's inset — off the FitAddon-measured host (see .kanban-modal__term) */
-  /* Same reason as `.term-node__body`: this 8px inset would otherwise frame the terminal in the
-   * modal's own colour. The fallback is the modal surface, i.e. the pre-themes look. */
-  background: var(--term-bg, var(--md-surface-dim));
-}
-.kanban-modal__action[aria-pressed='true'] {
-  background: var(--accent);
-  color: #fff;
-}
-
 /* ---- Node comments flyout: the header 💬 expands the board-log feed to the node's right ---- */
 @keyframes kanban-slide-in {
   from {
@@ -9563,22 +8476,6 @@ body,
     opacity: 1;
     transform: none;
   }
-}
-.term-node__comments {
-  animation: kanban-slide-in 0.14s ease-out;
-  position: absolute;
-  left: 100%;
-  top: 0;
-  bottom: 0;
-  margin-left: 10px;
-  width: 300px;
-  display: flex;
-  background: var(--md-surface-dim);
-  border: 1px solid rgba(var(--tint-rgb), 0.12);
-  border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
-  overflow: hidden;
-  z-index: 5;
 }
 .term-node__comments .board-log {
   border-left: none;
@@ -11277,31 +10174,6 @@ body,
   background: transparent;
 }
 
-/* Modal terminal file-drop affordance (mirrors the canvas node's dropping state). */
-.kanban-modal__termwrap--drop::after {
-  content: '';
-  position: absolute;
-  inset: 6px;
-  border: 2px dashed var(--accent);
-  border-radius: 8px;
-  background: rgba(10, 132, 255, 0.06);
-  pointer-events: none;
-  z-index: 3;
-}
-.kanban-modal__upload {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  z-index: 4;
-  font-size: 12px;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.75);
-  border: 1px solid rgba(var(--tint-rgb), 0.15);
-  border-radius: 8px;
-  padding: 6px 12px;
-}
-
 /* Shared browser surface (canvas node + kanban card modal): toolbar on top, webview fills. */
 .browser-surface {
   flex: 1;
@@ -11322,24 +10194,6 @@ body,
 .kanban-card--drop-before,
 .kanban-card--drop-after {
   position: relative;
-}
-.kanban-card--drop-before::before,
-.kanban-card--drop-after::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 2px;
-  box-shadow: 0 0 6px var(--accent);
-  z-index: 2;
-}
-.kanban-card--drop-before::before {
-  top: -5px;
-}
-.kanban-card--drop-after::after {
-  bottom: -5px;
 }
 
 /* ---- Settings → Terminal: the live appearance preview ---- */
@@ -12113,89 +10967,16 @@ body,
   padding: 0 4px;
 }
 
-/* ---- Command palette: rich inline setting controls + size toggle ---- */
-.palette--full {
-  width: min(1040px, calc(100vw - 40px)) !important;
-  height: calc(100vh - 80px) !important;
-  max-height: none !important;
-}
-.palette__size-toggle {
-  flex: none;
-  align-self: center;
-  margin-right: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--md-on-surface-variant);
-  background: rgba(var(--tint-rgb), 0.07);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 7px; /* no exact --md-shape step (extra-small 6 / small 8) — left as its own
-    authored radius */
-  cursor: pointer;
-}
-.palette__size-toggle:hover {
-  color: var(--md-on-surface);
-  background: rgba(var(--tint-rgb), 0.12);
-}
-.palette__control {
-  display: flex;
-  align-items: center;
-  margin-left: 8px;
-}
+/* ---- Command palette: rich inline setting controls + size toggle ----
+   The full-size toggle, the size-toggle button and the switch now live in styles.md3.css as
+   full MD3 replacements of what used to be here; this row-level rule is what's left. */
 .palette__row--control {
   cursor: default;
-}
-.palette__switch {
-  position: relative;
-  display: inline-block;
-  width: 34px;
-  height: 19px;
-  border-radius: var(--md-shape-full); /* was a literal 999px — exact match to the shipped scale */
-  background: rgba(var(--tint-rgb), 0.14); /* own authored alpha step — sits between --border
-    (0.1) and --md-outline (0.35); mapping to either would visibly change the off-track, so left */
-  cursor: pointer;
-}
-.palette__switch.on {
-  background: var(--md-primary);
-}
-.palette__switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--knob); /* already correctly themed (white both themes); --md-on-primary would
-    be the same value but misdescribes the OFF state, where the thumb sits on a neutral track */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); /* fixed alpha, not the --shadow-k pattern the rest of
-    the sheet's box-shadows use — left rather than guess which convention it should adopt */
-  transition: transform 120ms ease;
 }
 @media (prefers-reduced-motion: reduce) {
   .palette__switch-thumb {
     transition: none;
   }
-}
-.palette__switch.on .palette__switch-thumb {
-  transform: translateX(15px);
-}
-.palette__cycle {
-  padding: 2px 8px;
-  border-radius: var(--md-shape-full); /* was a literal 999px — exact match to the shipped scale */
-  background: rgba(var(--tint-rgb), 0.08);
-  border: 1px solid var(--md-outline-variant);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--md-on-surface);
-  cursor: pointer;
-}
-.palette__cycle:hover {
-  background: rgba(var(--tint-rgb), 0.14);
-}
-.palette__header-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 .palette__header-row .palette__input {
   flex: 1;
