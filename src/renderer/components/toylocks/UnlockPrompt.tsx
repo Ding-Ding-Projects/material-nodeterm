@@ -85,9 +85,9 @@ export function UnlockPrompt({
 
   return createPortal(
     <>
-      <div className="toylock-wizard__backdrop" onClick={onClose} />
+      <div className="toylock-wizard__backdrop md3-toylock-wizard" onClick={onClose} />
       <div
-        className="toylock-wizard toylock-unlock"
+        className="toylock-wizard toylock-unlock md3-toylock-wizard"
         style={{ top: Math.max(8, top), left: Math.max(8, left) }}
         role="dialog"
         aria-modal="false"

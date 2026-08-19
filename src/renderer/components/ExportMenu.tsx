@@ -65,7 +65,7 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
   }
 
   return (
-    <div className="export-menu">
+    <div className="export-menu md3-export-menu">
       <button
         type="button"
         className="export-menu__toggle"
