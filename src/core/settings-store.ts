@@ -60,6 +60,13 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   // systemBlue loses that choice once, and can re-pick it from the swatch row (still shipped,
   // still reachable — see ColorPicker.tsx's QUICK_SWATCHES) after this one-time migration.
   if (saved?.accent === '#0a84ff') merged.accent = DEFAULT_ACCENT
+  // These were the old shipped canvas defaults and were persisted even when untouched. Carry
+  // existing installs to the mouse-first interaction: wheel rotation zooms and dragging empty
+  // canvas pans. Both remain ordinary Settings controls after this one-time default migration.
+  if (saved?.wheelZoom === false && saved?.canvasDragMode === 'select') {
+    merged.wheelZoom = true
+    merged.canvasDragMode = 'pan'
+  }
   return merged
 }
 

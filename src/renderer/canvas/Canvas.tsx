@@ -11308,6 +11308,35 @@ export function Canvas() {
     [commitActiveToStore, writeDisk, disposeRelayTabForProject]
   )
 
+  const exportProjectArchive = useCallback(
+    async (projectId: string) => {
+      if (projectId === useProjects.getState().activeProjectId) commitActiveToStore()
+      await writeDisk()
+      const project = useProjects.getState().projects.find((candidate) => candidate.id === projectId)
+      if (!project) return
+      const result = await api.workspace.exportProject(project)
+      notify(
+        result.ok
+          ? { kind: 'success', title: 'Project exported', body: result.path ?? 'The project archive was saved.' }
+          : result.canceled
+            ? { kind: 'info', title: 'Project export cancelled' }
+            : { kind: 'error', title: 'Project export failed', body: result.error }
+      )
+    },
+    [api, commitActiveToStore, writeDisk]
+  )
+
+  const importProjectArchive = useCallback(async () => {
+    const result = await api.workspace.importProject()
+    if (result.ok && result.project) {
+      useProjects.getState().adoptProject(result.project)
+      await writeDisk()
+      notify({ kind: 'success', title: 'Project imported', body: 'The project and its complete local history are ready.' })
+    } else if (!result.canceled) {
+      notify({ kind: 'error', title: 'Project import failed', body: result.error })
+    }
+  }, [api, writeDisk])
+
   // Right-click on a sidebar project header: mostly the same project actions as the tab caret
   // menu (plus a color swatch the tab caret menu doesn't have), in the shared ContextMenu shell.
   const onProjectContextMenu = useCallback(
@@ -11336,6 +11365,16 @@ export function Canvas() {
             }
           },
           { label: 'Set folder…', icon: <IconProject />, onClick: () => setProjectFolder(projectId) },
+          {
+            label: 'Export project with history…',
+            icon: <IconSave />,
+            onClick: () => void exportProjectArchive(projectId)
+          },
+          {
+            label: 'Import project with history…',
+            icon: <IconProject />,
+            onClick: () => void importProjectArchive()
+          },
           { type: 'separator' },
           // Seeded from the project's CURRENT colour: without `value` the full picker opened on
           // the first preset, so the first drag jumped the tab to a colour nowhere near the one
@@ -11351,7 +11390,7 @@ export function Canvas() {
         ]
       })
     },
-    [activeProjectId, switchProject, renameProject, setProjectFolder, setProjectColor, closeProject]
+    [activeProjectId, switchProject, renameProject, setProjectFolder, setProjectColor, closeProject, exportProjectArchive, importProjectArchive]
   )
 
   // Reopen a previously closed project and make it active — the active-project effect reloads its

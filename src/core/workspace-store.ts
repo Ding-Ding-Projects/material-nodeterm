@@ -100,6 +100,7 @@ async function writeAtomic(filePath: string, content: string): Promise<void> {
  * v2-shaped Workspace.
  */
 export class WorkspaceStore {
+  private projectHistoryRecorder?: (project: Project, content: string) => void | Promise<void>
   /** file path -> exact content of the file as we last WROTE or READ it (skip-unchanged + watcher
    *  self-write suppression). Always the RAW bytes, never a re-serialization: a project.json whose
    *  on-disk formatting differs from ours (a teammate's editor, a git checkout) would otherwise
@@ -130,6 +131,10 @@ export class WorkspaceStore {
   onPersist?: () => void
 
   constructor(private remoteIO?: RemoteWorkspaceIO) {}
+
+  setProjectHistoryRecorder(fn: (project: Project, content: string) => void | Promise<void>): void {
+    this.projectHistoryRecorder = fn
+  }
 
   private get indexPath(): string {
     return path.join(platform().userDataDir, 'workspace.json')
@@ -570,6 +575,22 @@ export class WorkspaceStore {
     // Compact index, atomic — same reasoning as the old single-file store.
     await writeAtomic(this.indexPath, JSON.stringify(index))
     this.index = index
+
+    // Every successful workspace save snapshots each project's canonical portable form into its
+    // own app-data Git repository. LocalHistoryStore suppresses identical trees, so the autosave
+    // cadence does not manufacture empty commits. History failures never fail the user's save.
+    if (this.projectHistoryRecorder) {
+      for (const project of workspace.projects.filter((candidate) => !candidate.unavailable)) {
+        const canonical = serializeProjectFile(
+          projectToFile(project, this.revs.get(project.id) ?? 0, savedAt)
+        )
+        try {
+          await this.projectHistoryRecorder(project, canonical)
+        } catch {
+          // The recorder is an audit/undo companion, never the authority for the live save.
+        }
+      }
+    }
 
     if (migrating) platform().broadcast(IPC.workspaceMigrated, 'v2')
     this.onPersist?.()

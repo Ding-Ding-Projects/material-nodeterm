@@ -142,7 +142,7 @@ documented gaps for a future pass — not silently assumed defaults.
 | --- | --- |
 | Network failure / bad HTTP status during download | `create()` reports the exact HTTP status or network error via `status().error`; no partial jar is ever installed. |
 | Checksum mismatch | The temp file is deleted; `status().error` names the mismatch. The published digest itself is not echoed back verbatim as something to "match against" — a mismatch means the artifact is wrong, not that the expectation needs adjusting. |
-| No Java found | `status().installedJavaMajor === null`; the UI shows "No Java runtime was found on this machine" rather than a generic "incompatible" message, and Start is disabled. |
+| No compatible Java found | The app downloads the matching Eclipse Temurin JRE into its private application-data runtime cache, verifies Adoptium's published SHA-256, and uses it without changing PATH or installing anything machine-wide. A download or verification failure is reported in the node and can be retried. |
 | Java present but too old | `status().javaOk === false` with `javaReason` naming both the required and installed major versions. Start is disabled. |
 | Server process exits unexpectedly (nonzero code, not requested) | `status()` reports `phase: 'error'` with the exit code; the console retains the server's own last output so the real cause is visible. |
 | `stop` doesn't exit within the grace window | Escalates to `SIGTERM`, then `SIGKILL`, so a stuck server can always be stopped. |

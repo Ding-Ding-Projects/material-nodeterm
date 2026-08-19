@@ -45,6 +45,7 @@ import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
+import { ProjectArchiveService } from '../core/project-archive'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
 import type { Settings } from '../shared/types'
@@ -800,6 +801,44 @@ app.whenReady().then(async () => {
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
+  const projectArchives = new ProjectArchiveService(localHistoryStore)
+  workspaceStore.setProjectHistoryRecorder((project, content) =>
+    localHistoryStore.record({
+      domain: `project_${project.id}`,
+      filename: 'project.json',
+      content,
+      label: `Saved project ${project.name}`,
+      action: 'updated'
+    })
+  )
+  ipcMain.handle(IPC.projectArchiveExport, async (_event, project: import('../shared/types').Project) => {
+    try {
+      const result = await dialog.showSaveDialog({
+        title: 'Export project with history',
+        defaultPath: `${project.name.replace(/[<>:"/\\|?*]+/g, '_') || 'project'}.nodeterm-project`,
+        filters: [{ name: 'nodeterm project archive', extensions: ['nodeterm-project'] }]
+      })
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+      await writeFile(result.filePath, await projectArchives.export(project), 'utf-8')
+      return { ok: true, path: result.filePath }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle(IPC.projectArchiveImport, async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: 'Import project with history',
+        properties: ['openFile'],
+        filters: [{ name: 'nodeterm project archive', extensions: ['nodeterm-project'] }]
+      })
+      if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true }
+      const raw = await readFile(result.filePaths[0], 'utf-8')
+      return { ok: true, project: await projectArchives.import(raw) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
   settingsStore.setHistoryRecorder(async (before, after, override) => {
     if (override) {
       await localHistoryStore.record({

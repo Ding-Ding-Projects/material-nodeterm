@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { BranchSelect } from './BranchSelect'
 import { isValidGitRef, type WorktreeCreateValue, type WorktreeEntry } from '@shared/worktree'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 interface Props {
   /** 'create' = the pane/palette entry point (a new group frame); 'bind' = an existing group's
@@ -41,6 +42,7 @@ export function WorktreeDialog({
   onBindExisting,
   onCancel
 }: Props) {
+  const vocabulary = useVocabularyMapper()
   const [mode, setMode] = useState<'new' | 'existing'>('new')
   const [branch, setBranch] = useState('feature/')
   // `feature/` is a head-start for typing, not a submittable value — it fails `isValidGitRef`
@@ -93,8 +95,8 @@ export function WorktreeDialog({
   // field (`branchEdited`): a fresh dialog must not accuse the user of a bad name they never typed.
   const branchInvalid = !!branch.trim() && !isValidGitRef(branch)
   const valid = !!repoPath.trim() && !!branch.trim() && !branchInvalid && !!path.trim() && !busy
-  const title = intent === 'bind' ? 'Bind to worktree' : 'New worktree'
-  const createLabel = intent === 'bind' ? 'Create & bind' : 'Create'
+  const title = vocabulary(intent === 'bind' ? 'Bind to worktree' : 'New worktree')
+  const createLabel = vocabulary(intent === 'bind' ? 'Create & bind' : 'Create')
 
   return createPortal(
     <div className="confirm-overlay" onClick={onCancel}>
@@ -102,12 +104,12 @@ export function WorktreeDialog({
         <p className="confirm__msg">{title}</p>
 
         <div className="bind-repo" title={repoPath}>
-          {repoPath || 'This project is not a git repository.'}
+          {repoPath || vocabulary('This project is not a git repository.')}
         </div>
 
         {existing.length > 0 && (
           <div className="bind-existing">
-            <div className="bind-existing__title">Existing worktrees</div>
+            <div className="bind-existing__title">{vocabulary('Existing worktrees')}</div>
             {existing.map((e) => (
               // A detached-HEAD worktree cannot be bound (there is no branch to merge or name the
               // group after), so the row is DISABLED and says why — clicking it used to be a
@@ -134,7 +136,7 @@ export function WorktreeDialog({
 
         <div className="bind-mode">
           <label>
-            <input type="radio" checked={mode === 'new'} onChange={() => setMode('new')} /> New branch
+            <input type="radio" checked={mode === 'new'} onChange={() => setMode('new')} /> {vocabulary('New branch')}
           </label>
           <label>
             <input
@@ -142,7 +144,7 @@ export function WorktreeDialog({
               checked={mode === 'existing'}
               onChange={() => setMode('existing')}
             />{' '}
-            Existing branch
+            {vocabulary('Existing branch')}
           </label>
         </div>
 
@@ -150,11 +152,11 @@ export function WorktreeDialog({
             one that DOES exist, so pick it from the dropdown (falls back to text if none were read). */}
         {mode === 'existing' && hasBranches ? (
           <div className="bind-field">
-            Branch
+            {vocabulary('Branch')}
             <BranchSelect
               value={branches.includes(branch) ? branch : ''}
               options={branches}
-              placeholder="Select a branch…"
+              placeholder={vocabulary('Select a branch…')}
               onChange={(v) => {
                 setBranch(v)
                 setBranchEdited(true)
@@ -163,7 +165,7 @@ export function WorktreeDialog({
           </div>
         ) : (
           <label className="bind-field">
-            Branch
+            {vocabulary('Branch')}
             <input
               value={branch}
               onChange={(e) => {
@@ -187,11 +189,11 @@ export function WorktreeDialog({
                 free-text field. If the branch list could not be read, degrade to a plain input. */}
             {hasBranches ? (
               <div className="bind-field">
-                Base
+                {vocabulary('Base')}
                 <BranchSelect
                   value={baseRef}
                   options={branches}
-                  placeholder="Select a base…"
+                  placeholder={vocabulary('Select a base…')}
                   allowCustom
                   customPlaceholder="or a tag, commit, origin/…"
                   onChange={(v) => {
@@ -202,7 +204,7 @@ export function WorktreeDialog({
               </div>
             ) : (
               <label className="bind-field">
-                Base
+                {vocabulary('Base')}
                 <input
                   value={baseRef}
                   placeholder="e.g. origin/main, a tag, or a commit"
@@ -217,7 +219,7 @@ export function WorktreeDialog({
         )}
 
         <label className="bind-field">
-          Worktree path
+          {vocabulary('Worktree path')}
           <input
             value={path}
             onChange={(e) => {
@@ -236,7 +238,7 @@ export function WorktreeDialog({
 
         <div className="confirm__actions">
           <button className="confirm__btn" onClick={onCancel} disabled={busy}>
-            Cancel
+            {vocabulary('Cancel')}
           </button>
           <button
             className="confirm__btn primary"
@@ -251,7 +253,7 @@ export function WorktreeDialog({
               })
             }
           >
-            {busy ? 'Creating…' : createLabel}
+            {busy ? vocabulary('Creating…') : createLabel}
           </button>
         </div>
       </div>

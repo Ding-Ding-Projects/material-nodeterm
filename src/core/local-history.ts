@@ -243,11 +243,76 @@ export class LocalHistoryStore {
     private readonly runGit: LocalHistoryGit = runLocalHistoryGit
   ) {}
 
+  /** Portable copy of one complete app-owned history repository. The caller embeds these bytes
+   * in a project archive; this never reads or bundles the user's own project `.git`. */
+  async exportBundle(domain: string): Promise<Buffer | null> {
+    if (!(await this.ensureRepo(domain))) return null
+    await this.drainJournals(domain)
+    const head = await this.headOid(domain)
+    if (!head) return null
+    const dir = this.domainDir(domain)
+    const bundle = path.join(dir, `.export-${process.pid}-${randomUUID()}.bundle`)
+    try {
+      await this.runGit(dir, ['bundle', 'create', bundle, '--all'])
+      return await fs.readFile(bundle)
+    } finally {
+      await fs.rm(bundle, { force: true }).catch(() => {})
+    }
+  }
+
+  /** Install a verified bundle into a fresh app-owned history domain. Existing history is never
+   * overwritten: import mints a new project identity before reaching this method. */
+  async importBundle(domain: string, bytes: Uint8Array): Promise<void> {
+    if (bytes.byteLength === 0 || bytes.byteLength > 128 * 1024 * 1024) {
+      throw new Error('The project history bundle is empty or exceeds 128 MB.')
+    }
+    const target = this.domainDir(domain)
+    try {
+      await fs.access(target)
+      throw new Error('A local history repository already exists for this project.')
+    } catch (error) {
+      if (codeOf(error) !== 'ENOENT') throw error
+    }
+    const parent = path.dirname(target)
+    const bundle = path.join(parent, `.import-${process.pid}-${randomUUID()}.bundle`)
+    const staging = `${target}.import-${process.pid}-${randomUUID()}`
+    await fs.mkdir(parent, { recursive: true, mode: 0o700 })
+    try {
+      await fs.writeFile(bundle, bytes, { mode: 0o600 })
+      await fs.mkdir(staging, { recursive: true, mode: 0o700 })
+      await this.runGit(staging, ['init', '--quiet'])
+      await this.runGit(staging, ['bundle', 'verify', bundle])
+      await fs.rm(staging, { recursive: true, force: true })
+      await this.runGit(parent, ['clone', '--quiet', bundle, staging])
+      await fs.rename(staging, target)
+      this.ready.delete(target)
+    } finally {
+      await fs.rm(bundle, { force: true }).catch(() => {})
+      await fs.rm(staging, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  async readHeadFile(domain: string, filename: string): Promise<string | null> {
+    if (!(await this.ensureRepo(domain))) return null
+    const head = await this.headOid(domain)
+    if (!head) return null
+    const { stdout } = await this.runGit(this.domainDir(domain), [
+      'show',
+      `${head}:${safeFilename(filename)}`
+    ])
+    return stdout
+  }
+
   private domainDir(domain: string): string {
     // `domain` is an internal literal ('settings' today), but sanitize so two future callers cannot
     // turn a renderer value into traversal. The resolved directory is also the in-process lane key.
     const safe = domain.replace(/[^a-zA-Z0-9_-]/g, '_') || 'default'
     return path.join(this.userDataDir, 'local-history', safe)
+  }
+
+  /** Exact app-owned path for rollback of a freshly imported domain. Never accepts a raw path. */
+  domainPath(domain: string): string {
+    return this.domainDir(domain)
   }
 
   private journalDir(domain: string): string {

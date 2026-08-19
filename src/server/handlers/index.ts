@@ -14,6 +14,7 @@ import { registerVsCodeHandlers } from '../../core/vscode-handlers'
 import { LocalHistoryStore } from '../../core/local-history'
 import { registerLocalHistoryHandlers } from '../../core/local-history-handlers'
 import type { SettingsStore } from '../../core/settings-store'
+import type { WorkspaceStore } from '../../core/workspace-store'
 import { describeSettingsChange } from '../../shared/settings-diff'
 import { claudeCliCaps, registerClaudeCliIpc } from '../../core/claude-cli'
 import { registerCodexIdentityIpc } from '../../core/codex-identity-caps'
@@ -40,6 +41,7 @@ export function registerCoreHandlers(
      *  (core/local-history.ts). Optional only for tests that construct this registrar without a
      *  real SettingsStore; the server's own boot (src/server/index.ts) always supplies it. */
     settingsStore?: SettingsStore
+    workspaceStore?: WorkspaceStore
   }
 ): { gitService: GitService; minecraftServers: MinecraftServerManager } {
   // Explorer downloads: mint a one-shot ticket over this (authenticated) channel; the transfer
@@ -74,6 +76,15 @@ export function registerCoreHandlers(
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).
   registerVsCodeHandlers(platform)
   const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
+  deps.workspaceStore?.setProjectHistoryRecorder((project, content) =>
+    localHistoryStore.record({
+      domain: `project_${project.id}`,
+      filename: 'project.json',
+      content,
+      label: `Saved project ${project.name}`,
+      action: 'updated'
+    })
+  )
   if (deps.settingsStore) {
     const settingsStore = deps.settingsStore
     settingsStore.setHistoryRecorder(async (before, after, override) => {

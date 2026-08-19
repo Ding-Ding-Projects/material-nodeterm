@@ -253,7 +253,8 @@ export async function startServer(
     getSettings: () => settingsStore.get(),
     downloadTickets,
     localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId),
-    settingsStore
+    settingsStore,
+    workspaceStore
   })
   const github = registerGitHubIntegration({
     platform,
