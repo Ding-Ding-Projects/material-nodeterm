@@ -517,6 +517,23 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // Local Minecraft server create-and-manage (docs/minecraft-server-manager.md). Registered on
+  // BOTH shells over the same `platform.handle`/`platform.broadcast` seam as Ollama above, so it
+  // manages whichever machine is actually running the shell. NOT carried over the relay (a peer
+  // must not provision or run processes on the host it joined) — see relay-rpc-policy.ts, which
+  // deliberately has no entries for this namespace.
+  minecraftVersions: 'minecraft:versions',
+  minecraftStatus: 'minecraft:status',
+  minecraftCreate: 'minecraft:create',
+  minecraftAcceptEula: 'minecraft:accept-eula',
+  minecraftStart: 'minecraft:start',
+  minecraftStop: 'minecraft:stop',
+  minecraftSendCommand: 'minecraft:send-command',
+  minecraftRemove: 'minecraft:remove',
+  minecraftRecentConsole: 'minecraft:recent-console',
+  // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
+  // Payload: MinecraftEvent. A listener filters to the instance id it owns.
+  minecraftEvent: 'minecraft:event',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

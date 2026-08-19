@@ -101,6 +101,25 @@ export function parseVersionManifest(doc: unknown): VersionSummary[] {
   return out
 }
 
+/** Which version id currently counts as "the release" and "the snapshot" — Mojang's own pointer,
+ *  not a guess derived from sorting the versions list (a manifest's ordering is not documented
+ *  contract; `latest` is). Kept separate from `parseVersionManifest` because a caller that only
+ *  wants a browsable list doesn't need it, while a caller choosing a sensible DEFAULT selection
+ *  does — and a hardcoded "latest version" string goes stale the moment Mojang ships a new one. */
+export interface LatestVersions {
+  release: string
+  snapshot: string
+}
+
+export function parseLatestVersions(doc: unknown): LatestVersions | null {
+  if (!isRecord(doc)) return null
+  const latest = doc.latest
+  if (!isRecord(latest)) return null
+  const { release, snapshot } = latest
+  if (typeof release !== 'string' || typeof snapshot !== 'string') return null
+  return { release, snapshot }
+}
+
 /**
  * Reads the per-version document — the SECOND fetch, and the one that carries everything that
  * matters.
