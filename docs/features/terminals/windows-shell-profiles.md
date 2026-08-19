@@ -124,8 +124,22 @@ replaced by resolver and spawn behaviour tests.
 Profile-specific Settings, creation, unavailable-state, restart, header, and recovery copy is
 registered for every shipped app language and passes through the local personal-vocabulary
 boundary; detected profile names, WSL distribution names, executable paths, and host diagnostics
-remain verbatim facts. Packaged-app interaction and capture evidence is recorded only after it has
-been exercised through the required cheap Lowlevel MCP headless Windows route. This article does not claim that the pending packaged interaction or capture verification has happened.
+remain verbatim facts. Capture evidence is recorded only after it has been exercised through the
+required cheap Lowlevel MCP headless Windows route.
+
+Packaged-app interaction **is** exercised, by `npm run check:wired` against the real built
+artifact. Three cases in `scripts/check-app-wired.mjs` drive this feature end to end over CDP in
+a disposable profile: `terminal-profile-picker` opens Settings → Shell, checks the picker offers
+exactly the catalog core detected and leaves selectable only what this machine actually has, then
+moves the default and reads it back out of main; `terminal-profile-spawn` creates a terminal from
+the canvas menu under a named profile, confirms the node reaches a live terminal under it, and
+confirms an unknown profile id is REFUSED rather than quietly becoming another shell;
+`terminal-profile-restart` takes a live node through **Restart with profile…** and its two-key
+destructive gate, and requires both the relaunched node and main’s workspace to agree on the new
+profile. Those three cases are win32-only and declare a skip, with its reason, on any other host.
+
+Capture evidence remains pending. This article does not claim that the pending capture
+verification has happened.
 
 ## Suggested articles
 

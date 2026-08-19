@@ -288,11 +288,42 @@ const FEATURES = [
       ['src/renderer/components/CommandPalette.terminal-creation.test.tsx', /^\s*describe\((['"])CommandPalette terminal creation funnel\1,\s*\(\)\s*=>\s*\{/m],
       ['src/renderer/components/ContextMenu.terminal-creation.test.tsx', /^\s*describe\((['"])ContextMenu terminal creation funnel\1,\s*\(\)\s*=>\s*\{/m],
       ['src/renderer/components/SessionsSidebar.terminal-creation.test.tsx', /^\s*describe\((['"])SessionsSidebar terminal creation\1,\s*\(\)\s*=>\s*\{/m],
-      ['src/core/windows-terminal-profiles.realwindows.test.ts', /^\s*suite\((['"])REAL Windows terminal profiles \(explicit Electron-as-Node acceptance\)\1,\s*\(\)\s*=>\s*\{/m],
+      // `\s*` after the paren, unlike its siblings above, because this title is long enough that
+      // the formatter puts it on its own line. The pattern was written for a single-line call that
+      // has never existed on disk — the row and the suite landed in the same commit and the row has
+      // never passed — so the shape, not the name, was the stale half. Everything that makes this a
+      // BOUNDARY assertion is unchanged: the title is still matched literally, still anchored to the
+      // start of a line, and still has to be a `suite(...)` call with an arrow-function body.
+      ['src/core/windows-terminal-profiles.realwindows.test.ts', /^\s*suite\(\s*(['"])REAL Windows terminal profiles \(explicit Electron-as-Node acceptance\)\1,\s*\(\)\s*=>\s*\{/m],
     ],
     builtArtifactInteraction: {
-      status: 'pending',
-      reason: 'the current built-artifact interaction harness has no Windows profile picker, spawn, restart, or relaunch assertion',
+      // Verified by `npm run check:wired` against the REAL built artifact: the three
+      // `terminal-profile-*` cases in that harness drive the Settings picker, an explicit-profile
+      // spawn, the fail-closed refusal of an unknown id, and a whole Restart with profile… through
+      // the two-key destructive gate. Each was watched failing first — the picker id, the header
+      // chip, the gate slider and the resolver were broken one at a time in the built bundles and
+      // every case went red for the right reason. They are win32-only and declare a skip with its
+      // reason elsewhere, so this row is evidence about the delivery target, not about every host.
+      status: 'verified',
+      files: ['scripts/check-app-wired.mjs'],
+      contentChecks: [
+        ['scripts/check-app-wired.mjs', /^\s*id: 'terminal-profile-picker',/m],
+        ['scripts/check-app-wired.mjs', /^\s*id: 'terminal-profile-spawn',/m],
+        ['scripts/check-app-wired.mjs', /^\s*id: 'terminal-profile-restart',/m],
+        // Never the ids alone: three cases renamed down to nothing would still carry them. And
+        // never a bare substring either — `completeDestructiveGate()` as plain text is satisfied by
+        // the line that DEFINES the helper, so deleting the call that drives it left this row
+        // green (watched, on this file). Every needle below is anchored to the start of the line
+        // that actually performs the step, which a comment-out or a rename cannot survive.
+        ['scripts/check-app-wired.mjs', /^\s*const listed = await settle\('__wiredProfileList',/m],
+        ['scripts/check-app-wired.mjs', /^\s*const stuck = await settingFromMain\('defaultTerminalProfileId', chosen\)/m],
+        ['scripts/check-app-wired.mjs', /^\s*const submenu = await openMenuSubmenu\('New terminal with profile…'\)/m],
+        ['scripts/check-app-wired.mjs', /^\s*const submenu = await openMenuSubmenu\('Restart with profile…'\)/m],
+        ['scripts/check-app-wired.mjs', /^\s*const gate = await completeDestructiveGate\(\)/m],
+        ['scripts/check-app-wired.mjs', /^\s*const bogus = await settle\(/m],
+        ['scripts/check-app-wired.mjs', /^\s*if \(bogus\.ok\) \{/m],
+        ['scripts/check-app-wired.mjs', /^\s*const relaunched = await until\(/m],
+      ],
     },
     captures: {
       status: 'pending',
@@ -303,7 +334,7 @@ const FEATURES = [
         'windows-terminal-profile-unavailable',
         'windows-terminal-profile-reattached',
       ],
-      reason: 'the capture manifest does not yet contain real packaged evidence for the required Windows profile states',
+      reason: 'the capture manifest holds no packaged, cheap-Lowlevel-headless evidence for these four states yet. npm run shots does now photograph the picker and the detected-availability list, but from the unpackaged out/ build over plain CDP, so those are filed under app-windows-terminal-profile* ids and deliberately cannot half-satisfy the ids above',
     },
     settingsSection: 'shell',
     wired: {
@@ -312,7 +343,11 @@ const FEATURES = [
     },
     docs: [
       ['docs/features/terminals/windows-shell-profiles.md', '## Verification status'],
-      ['docs/features/terminals/windows-shell-profiles.md', 'does not claim that the pending packaged interaction or capture verification has happened'],
+      // Interaction is no longer pending, so the article no longer disclaims it. One needle per
+      // LINE — the article wraps at ~100 columns and its line endings are CRLF, so a needle that
+      // spans the wrap matches nothing while looking perfectly correct.
+      ['docs/features/terminals/windows-shell-profiles.md', 'does not claim that the pending capture'],
+      ['docs/features/terminals/windows-shell-profiles.md', 'Packaged-app interaction **is** exercised, by `npm run check:wired` against the real built'],
     ],
   },
   {
