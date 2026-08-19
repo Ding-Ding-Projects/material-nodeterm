@@ -1335,6 +1335,7 @@ const NON_FEATURE_DOCS = new Map([
   ['ssh-agent-skills.md', 'agent internals on the remote-ssh surface'],
   ['shared-codex-node-identity.md', 'agent internals — the shared Codex app-server sharing/identity boundary behind the agent-support row, same class as codex-shared-identity.md'],
   ['github-issues-kanban.md', 'workflow note for maintainers, not an app surface'],
+  ['md3-render-verification.md', 'a one-time built-artifact render-verification report for the MD3 rewrite, not a shipped feature with its own implementation files'],
   ['ios-protocol-migration.md', 'the mobile companion lives in a separate repo'],
   ['mobile-usage-inbox.md', 'the mobile companion lives in a separate repo'],
   ['remote-sessions.md', 'design notes behind the remote-ssh row'],
