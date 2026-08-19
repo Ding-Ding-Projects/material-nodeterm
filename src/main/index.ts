@@ -542,8 +542,8 @@ function createWindow(): BrowserWindow {
   // equivalent for THIS app's Material title bar: `hidden` removes the native title bar text and
   // icon while keeping the native minimize/maximize/close buttons, and `titleBarOverlay` draws
   // those buttons as an overlay on top of our page instead of a separate native strip above it —
-  // so our `.tabbar` really is the only chrome, on every platform, not just macOS. Electron only
-  // honours `titleBarOverlay` on Windows/Linux; `hiddenInset` is macOS-only and is ignored
+  // so our `.md3-app-bar` really is the only chrome, on every platform, not just macOS. Electron
+  // only honours `titleBarOverlay` on Windows/Linux; `hiddenInset` is macOS-only and is ignored
   // elsewhere, which is why this was already safe to leave unconditional before this branch.
   const titleBarOptions: Pick<
     BrowserWindowConstructorOptions,
@@ -552,13 +552,14 @@ function createWindow(): BrowserWindow {
     process.platform === 'win32'
       ? {
           titleBarStyle: 'hidden',
-          // Colors match the tab bar's own panel background/text (styles.css `--panel`/`--text`
-          // at the time this was written) so the native caption buttons don't look like a
-          // different app's chrome pasted on top. Height matches `.tabbar`'s 44px so the overlay
-          // buttons line up with our own row instead of floating over the canvas below it.
-          titleBarOverlay: { color: '#1a1a1e', symbolColor: '#e6e6e6', height: 44 }
+          // Colors match the MD3 app bar's own dark surface-container / on-surface tokens
+          // (design/v2/md3/tokens.css: --md-surface-container / --md-on-surface, dark) so the
+          // native caption buttons don't look like a different app's chrome pasted on top.
+          // Height matches `.md3-app-bar`'s 64px so the overlay buttons line up with our own row
+          // instead of floating over the canvas below it.
+          titleBarOverlay: { color: '#211F26', symbolColor: '#E6E0E9', height: 64 }
         }
-      : { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 15 } }
+      : { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 26 } }
   const win = new BrowserWindow({
     width: 1400,
     height: 900,

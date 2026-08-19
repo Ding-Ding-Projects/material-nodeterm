@@ -98,8 +98,9 @@ import {
   validLoopInterval
 } from '../lib/nativeLoop'
 import { withNodeBoundary } from '../components/NodeBoundary'
-import { Dock } from '../components/Dock'
-import { TabBar } from '../components/TabBar'
+import { NavRail, type RailDestination } from '../components/NavRail'
+import { TopAppBar } from '../components/TopAppBar'
+import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -128,6 +129,7 @@ import {
   IconCanvasView,
   IconLock,
   IconMarkdown,
+  IconMic,
   IconReload,
   IconPower,
   IconNote,
@@ -459,7 +461,13 @@ import {
 } from '@shared/canvas-publish'
 import { createCanvasOrder, createReconnectWatch, type CanvasOrder } from '@shared/canvas-order'
 import { createMutationGuard, isEdgeMutation, type CanvasScene } from '@shared/canvas-mutations'
-import { chordHeld, isHoldChord, isModifierEventKey, matchesShortcut } from '@shared/shortcut'
+import {
+  chordHeld,
+  formatShortcut,
+  isHoldChord,
+  isModifierEventKey,
+  matchesShortcut
+} from '@shared/shortcut'
 import { dispatchDestructiveControl } from '../lib/controlDestructive'
 import { canvasSyncTarget } from './collab-sync'
 import { receiveActiveEdgeMutation } from './team-edge-receive'
@@ -11957,19 +11965,109 @@ export function Canvas() {
 
   return (
     <div className="canvas-root">
-      <TabBar
-        onSwitch={switchProject}
-        onReconnect={reconnectRelay}
-        onReorder={reorderProject}
-        onOpenWelcome={() => setWelcomeOpen(true)}
-        onRename={renameProject}
-        onSetFolder={setProjectFolder}
-        onCloseProject={closeProject}
-        onRemoteAccess={() => setRemoteDialogOpen(true)}
-        onSetDefaultAccount={setProjectDefaultAccount}
-        onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
-        onSetColor={setProjectColor}
-      />
+      <TopAppBar>
+        <ProjectSwitcher
+          onSwitch={switchProject}
+          onReconnect={reconnectRelay}
+          onReorder={reorderProject}
+          onOpenWelcome={() => setWelcomeOpen(true)}
+          onRename={renameProject}
+          onSetFolder={setProjectFolder}
+          onCloseProject={closeProject}
+          onRemoteAccess={() => setRemoteDialogOpen(true)}
+          onSetDefaultAccount={setProjectDefaultAccount}
+          onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
+          onSetColor={setProjectColor}
+        />
+        <div className="md3-app-bar__spacer" />
+        {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
+            driver script selects; re-themed, never renamed. */}
+        <button
+          className="cluster-search"
+          title="Command palette"
+          onClick={() => setPaletteOpen(true)}
+        >
+          <span className="cluster-search__icon">⌕</span>
+          <span className="kbd">{hintLabel('⌘K')}</span>
+        </button>
+        <div className="md3-app-bar__cluster">
+          {/* Mounted here unconditionally (the cluster always renders): the facepile is null
+              with no peers — taking no space — but must stay mounted to prune the presence face
+              cache (state/presence.ts → selectFaces). */}
+          <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />
+          <button
+            className="notif-bell"
+            title="Notifications"
+            aria-label={
+              unreadNotifCount > 0 ? `Notifications (${unreadNotifCount} unread)` : 'Notifications'
+            }
+            onClick={() => setNotifCenterOpen(true)}
+          >
+            <IconBellFilled />
+            {unreadNotifCount > 0 && (
+              <span className="notif-bell__badge" aria-hidden>
+                {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+              </span>
+            )}
+          </button>
+          {window.nodeTerminal.pairing.supported ? (
+            <button
+              className="md3-icon-btn"
+              title="Pair phone"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                setPhonePairAnchor((cur) => (cur ? null : { right: r.right, bottom: r.bottom }))
+              }}
+            >
+              <IconPhone />
+            </button>
+          ) : null}
+          {/* Dictation moved here from the old bottom dock — on-device Whisper, hold-to-talk by
+              default (⌘⌥ per settings.speech.shortcut). */}
+          <button
+            className={`md3-icon-btn${dictationOpen ? ' is-active' : ''}`}
+            title={
+              isHoldChord(settings.speech.shortcut)
+                ? `Dictate (hold ${formatShortcut(settings.speech.shortcut, isMac)})`
+                : `Dictate (${formatShortcut(settings.speech.shortcut, isMac)})`
+            }
+            onClick={toggleDictation}
+          >
+            <IconMic />
+          </button>
+          <button
+            className="md3-icon-btn"
+            title="Help"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              setMenu({
+                // Right-align the ~220px menu under the button; never off-screen left.
+                x: Math.max(8, r.right - 220),
+                y: r.bottom + 6,
+                items: [
+                  { label: 'Keyboard shortcuts', hint: hintLabel('⌘/'), onClick: () => setShortcutsOpen(true) },
+                  { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
+                  {
+                    label: 'Documentation',
+                    onClick: () => window.nodeTerminal.shell.openExternal(`${REPO_URL}#readme`)
+                  },
+                  {
+                    label: 'GitHub repository',
+                    onClick: () => window.nodeTerminal.shell.openExternal(REPO_URL)
+                  },
+                  { type: 'separator' },
+                  {
+                    type: 'label',
+                    label: `nodeterm${appVersion ? ` v${appVersion}` : ''} · ${describeOs(navigator.userAgent)}`
+                  }
+                ]
+              })
+            }}
+          >
+            ?
+          </button>
+        </div>
+      </TopAppBar>
 
       <div className="top-banners">
         <AnnouncementBanner />
@@ -12158,99 +12256,168 @@ export function Canvas() {
         </button>
       </div>
 
-      <div className="controls-cluster">
-        {/* First in the cluster so the "who's connected" faces sit to the LEFT of the toolbar on the
-            SAME row (flex, no hardcoded width) instead of colliding with it / hiding under the tab
-            bar. Mounted here unconditionally (the cluster always renders): the facepile is null with
-            no peers — taking no space — but must stay mounted to prune the presence face cache
-            (state/presence.ts → selectFaces). */}
-        <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />
-        <button
-          className="cluster-search"
-          title="Command palette"
-          onClick={() => setPaletteOpen(true)}
-        >
-          <span className="cluster-search__icon">⌕</span>
-          <span className="kbd">{hintLabel('⌘K')}</span>
-        </button>
-        <button title={hintLabel('Explorer (⌘⇧E)')} onClick={() => setExplorerOpen(true)}>
-          <IconExplorer />
-        </button>
-        <button title={hintLabel('Source Control (⌘⇧G)')} onClick={() => setScOpen(true)}>
-          <IconBranch />
-        </button>
-        <button title="File converter" onClick={() => setConverterOpen(true)}>
-          <IconConvert />
-        </button>
-        <button title="Ollama manager" onClick={() => setOllamaOpen(true)}>
-          <IconOllama />
-        </button>
-        <button
-          className="notif-bell"
-          title="Notifications"
-          aria-label={
-            unreadNotifCount > 0 ? `Notifications (${unreadNotifCount} unread)` : 'Notifications'
+      {/* The old floating `.controls-cluster` is gone — the search bar, facepile, notifications,
+          phone pairing, dictate and help all moved into the top app bar above; Explorer, Source
+          Control, the file converter and Ollama manager are now reached through the nav rail's
+          Files/Tools destinations (below), and Settings through its own rail destination. */}
+
+      {/* The nav rail is a REAL flex sibling of `.flow-wrap` (not a floating overlay drawn on top
+          of it), so the canvas area is genuinely narrower — fit-view never needs to treat the
+          rail as an obstacle (see fit-view.ts). Destinations are computed inline (an IIFE, not a
+          hook) because everything below `return (` is presentation, and every one of these
+          open/close states already lives in this component's hook body above. */}
+      <div className="md3-canvas-row">
+      {(() => {
+        const closeAllDrawers = () => {
+          setExplorerOpen(false)
+          setScOpen(false)
+          setConverterOpen(false)
+          setOllamaOpen(false)
+          setSettingsOpen(false)
+          setNotifCenterOpen(false)
+        }
+        const leaveBoard = () => {
+          if (kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
+        }
+        const enterBoard = () => {
+          if (!kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
+        }
+        const anyDrawerOpen =
+          explorerOpen || scOpen || converterOpen || ollamaOpen || settingsOpen || notifCenterOpen
+        const destinations: RailDestination[] = [
+          {
+            id: 'canvas',
+            icon: <IconCanvasView />,
+            label: 'Canvas',
+            active: !kanbanOpen && !anyDrawerOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+            }
+          },
+          {
+            id: 'board',
+            icon: <IconKanban />,
+            label: 'Board',
+            active: kanbanOpen,
+            onClick: () => {
+              closeAllDrawers()
+              enterBoard()
+            }
+          },
+          {
+            id: 'files',
+            icon: <IconExplorer />,
+            label: 'Files',
+            active: explorerOpen || scOpen,
+            onClick: (anchor) => {
+              closeAllDrawers()
+              leaveBoard()
+              const r = anchor.getBoundingClientRect()
+              setMenu({
+                x: r.right + 8,
+                y: r.top,
+                items: [
+                  {
+                    label: 'Explorer',
+                    hint: hintLabel('⌘⇧E'),
+                    onClick: () => setExplorerOpen(true)
+                  },
+                  {
+                    label: 'Source Control',
+                    hint: hintLabel('⌘⇧G'),
+                    onClick: () => setScOpen(true)
+                  }
+                ]
+              })
+            }
+          },
+          {
+            id: 'tools',
+            icon: <IconConvert />,
+            label: 'Tools',
+            active: converterOpen || ollamaOpen,
+            onClick: (anchor) => {
+              closeAllDrawers()
+              leaveBoard()
+              const r = anchor.getBoundingClientRect()
+              setMenu({
+                x: r.right + 8,
+                y: r.top,
+                items: [
+                  { label: 'File converter', onClick: () => setConverterOpen(true) },
+                  { label: 'Ollama manager', onClick: () => setOllamaOpen(true) }
+                ]
+              })
+            }
+          },
+          {
+            id: 'alerts',
+            icon: <IconBellFilled />,
+            label: 'Alerts',
+            active: notifCenterOpen,
+            badge: unreadNotifCount,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setNotifCenterOpen(true)
+            }
+          },
+          {
+            id: 'settings',
+            icon: <IconGear />,
+            label: 'Settings',
+            active: settingsOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setSettingsSection(undefined)
+              setSettingsOpen(true)
+            }
           }
-          onClick={() => setNotifCenterOpen(true)}
-        >
-          <IconBellFilled />
-          {unreadNotifCount > 0 && (
-            <span className="notif-bell__badge" aria-hidden>
-              {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
-            </span>
-          )}
-        </button>
-        {window.nodeTerminal.pairing.supported ? (
-          <button
-            title="Pair phone"
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect()
-              setPhonePairAnchor((cur) => (cur ? null : { right: r.right, bottom: r.bottom }))
+        ]
+        return (
+          <NavRail
+            destinations={destinations}
+            kidsLabel="Kids"
+            onOpenKids={() => openSettingsTo('kids-mode')}
+            onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
+            offersTerminalProfiles={offersTerminalProfiles}
+            terminalProfileChoices={terminalProfileMenuChoices}
+            terminalProfileEmptyState={{
+              label: terminalProfilesLoading
+                ? profileText('terminalProfiles.common.detectingProfiles', 'Detecting profiles…')
+                : profileText(
+                    'terminalProfiles.common.profilesUnavailable',
+                    'Profiles unavailable'
+                  ),
+              hint:
+                terminalProfilesDisplayError ??
+                (terminalProfilesInitialized
+                  ? profileText(
+                      'terminalProfiles.common.noProfilesDetected',
+                      'No Windows terminal profiles were detected.'
+                    )
+                  : profileText(
+                      'terminalProfiles.common.detectionPending',
+                      'Profile detection has not finished yet.'
+                    ))
             }}
-          >
-            <IconPhone />
-          </button>
-        ) : null}
-        <button
-          title={hintLabel('Settings (⌘,)')}
-          onClick={() => {
-            setSettingsSection(undefined)
-            setSettingsOpen(true)
-          }}
-        >
-          <IconGear />
-        </button>
-        <button
-          title="Help"
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            setMenu({
-              // Right-align the ~220px menu under the button; never off-screen left.
-              x: Math.max(8, r.right - 220),
-              y: r.bottom + 6,
-              items: [
-                { label: 'Keyboard shortcuts', hint: hintLabel('⌘/'), onClick: () => setShortcutsOpen(true) },
-                { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
-                {
-                  label: 'Documentation',
-                  onClick: () => window.nodeTerminal.shell.openExternal(`${REPO_URL}#readme`)
-                },
-                {
-                  label: 'GitHub repository',
-                  onClick: () => window.nodeTerminal.shell.openExternal(REPO_URL)
-                },
-                { type: 'separator' },
-                {
-                  type: 'label',
-                  label: `nodeterm${appVersion ? ` v${appVersion}` : ''} · ${describeOs(navigator.userAgent)}`
-                }
-              ]
-            })
-          }}
-        >
-          ?
-        </button>
-      </div>
+            onAddTerminalWithProfile={(profileId) =>
+              profileTerminalCreationHandler(addTerminal, profileId)()
+            }
+            onAddSticky={addSticky}
+            onAddLoop={addNativeLoop}
+            onAddDino={addDino}
+            onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
+            onOpenFile={() => void openFileDialog()}
+            onAddRemote={() =>
+              openRemotePicker({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+            }
+            onConnectRemote={() => void connectRemote()}
+          />
+        )
+      })()}
 
       <div
         className={`flow-wrap${drawTool.tool ? ' canvas-draw-active' : ''}`}
@@ -12404,7 +12571,31 @@ export function Canvas() {
               mounted in the experimental 'shared' renderer mode; nothing about it exists for the
               default modes. */}
           {glyphLayerActive && <SharedGlyphLayer />}
-          <Controls showInteractive={false} position="bottom-left" onFitView={fitAll}>
+          {/* zoom −/%/+ and Fit view merged in here from the old bottom dock — React Flow's own
+              built-in zoom/fit buttons are disabled so these MD3 buttons (with the live zoom
+              percentage between them) take their place instead of duplicating them. */}
+          <Controls
+            showZoom={false}
+            showFitView={false}
+            showInteractive={false}
+            position="bottom-left"
+          >
+            <ControlButton title="Zoom out" onClick={() => zoomOut({ duration: 150 })}>
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M5 12h14" />
+              </svg>
+            </ControlButton>
+            <span className="md3-zoom-pct" aria-hidden>
+              {zoomPct}%
+            </span>
+            <ControlButton title="Zoom in" onClick={() => zoomIn({ duration: 150 })}>
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </ControlButton>
+            <ControlButton title="Fit view" onClick={fitAll}>
+              <IconFit />
+            </ControlButton>
             <ControlButton
               className={`canvas-lock-btn${canvasLocked ? ' locked' : ''}`}
               title={canvasLocked ? 'Unlock view (pan/zoom)' : 'Lock view (pan/zoom) — nodes stay movable'}
@@ -12431,6 +12622,25 @@ export function Canvas() {
             `data-canvas-chrome` is fit-view's own documented opt-in: it makes the whole cluster ONE
             obstacle rect (instead of one per pill, overlapping after inflation), so fitView never
             parks a node underneath either pill. */}
+        {/* Undo/redo/save, moved here from the old bottom dock — stacked above the merged zoom
+            Controls row so the two bottom-left clusters don't collide. */}
+        <div className="md3-canvas-actions" data-canvas-chrome>
+          <button title={hintLabel('Undo (⌘Z)')} disabled={pastRef.current.length === 0} onClick={undo}>
+            <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2" />
+            </svg>
+          </button>
+          <button title={hintLabel('Redo (⌘⇧Z)')} disabled={futureRef.current.length === 0} onClick={redo}>
+            <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10h2" />
+            </svg>
+          </button>
+          <span className="md3-canvas-actions__sep" />
+          <button title="Save" onClick={persist}>
+            <IconSave />
+            <span className={`md3-canvas-actions__dirty${dirty ? ' dirty' : ''}`} />
+          </button>
+        </div>
         <CanvasPills>
           {/* `travelToNode`, not `focusNodeById`: the panel resolves sessions in CLOSED projects
               too (their tmux sessions keep running), and reaching one means reopening its tab
@@ -12474,6 +12684,7 @@ export function Canvas() {
           onClose={() => setCloneDialogOpen(false)}
           onCloned={onRepoCloned}
         />
+      </div>
       </div>
 
       {window.nodeTerminal.pairing.supported && phonePairAnchor && (
@@ -12882,55 +13093,10 @@ export function Canvas() {
         />
       )}
 
-      <Dock
-        dirty={dirty}
-        zoomPct={zoomPct}
-        canUndo={pastRef.current.length > 0}
-        canRedo={futureRef.current.length > 0}
-        onUndo={undo}
-        onRedo={redo}
-        onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
-        offersTerminalProfiles={offersTerminalProfiles}
-        terminalProfileChoices={terminalProfileMenuChoices}
-        terminalProfileEmptyState={{
-          label: terminalProfilesLoading
-            ? profileText(
-                'terminalProfiles.common.detectingProfiles',
-                'Detecting profiles…'
-              )
-            : profileText(
-                'terminalProfiles.common.profilesUnavailable',
-                'Profiles unavailable'
-              ),
-          hint:
-            terminalProfilesDisplayError ??
-            (terminalProfilesInitialized
-              ? profileText(
-                  'terminalProfiles.common.noProfilesDetected',
-                  'No Windows terminal profiles were detected.'
-                )
-              : profileText(
-                  'terminalProfiles.common.detectionPending',
-                  'Profile detection has not finished yet.'
-                ))
-        }}
-        onAddTerminalWithProfile={(profileId) =>
-          profileTerminalCreationHandler(addTerminal, profileId)()
-        }
-        onAddSticky={addSticky}
-        onAddLoop={addNativeLoop}
-        onAddDino={addDino}
-        onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
-        onOpenFile={() => void openFileDialog()}
-        onAddRemote={() => openRemotePicker({ x: window.innerWidth / 2, y: window.innerHeight / 2 })}
-        onConnectRemote={() => void connectRemote()}
-        onSave={persist}
-        onFitView={fitAll}
-        onZoomIn={() => zoomIn({ duration: 150 })}
-        onZoomOut={() => zoomOut({ duration: 150 })}
-        onDictate={toggleDictation}
-        dictateActive={dictationOpen}
-      />
+      {/* The old bottom dock is gone — node creation moved to the nav rail's FAB (rendered above,
+          beside `.flow-wrap`), undo/redo/save moved to the `.md3-canvas-actions` pill and the
+          zoom/fit controls merged into React Flow's own `<Controls>` (both inside `.flow-wrap`,
+          near the CanvasPills below), and dictate moved to the top app bar. */}
 
       {/* Focus mode surface (issue #78). ALWAYS mounted so the reparent target exists before the
           commit that moves a node into it, and OUTSIDE <ReactFlow> on purpose — the flow wrapper
