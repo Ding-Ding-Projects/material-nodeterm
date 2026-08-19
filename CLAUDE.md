@@ -286,10 +286,11 @@ project's nodes only.** The contract:
   another machine last saved, and restoring it mid-work teleported the camera (most visibly
   right after a cross-project sidebar focus, when the connect-time SSH reconcile landed a
   second after fitView centered the node).
-- **Project order = array order**, and it is ONE order shared by the tab bar and the sessions
-  sidebar (the sidebar no longer hoists the active project to the top). Both surfaces reorder
-  via drag-drop through `reorderProject(draggedId, beforeId|null)` (null = to the end; tab
-  strip empty area and sidebar body are the end-drop zones), persisted like any node reorder.
+- **Project order = array order**, and it is ONE order shared by the top app bar's project
+  switcher (`ProjectSwitcher.tsx`) and the sessions sidebar (the sidebar no longer hoists the
+  active project to the top). Both surfaces reorder via drag-drop through
+  `reorderProject(draggedId, beforeId|null)` (null = to the end; the switcher dropdown's list
+  body and the sidebar body are the end-drop zones), persisted like any node reorder.
   Sidebar disclosure is **persisted**, for group frames as well as projects:
   `settings.sidebarCollapsedItems` maps `project:<id>` / `project:<id>:group:<groupId>` → collapsed
   (`isGroupCollapsed`), and `settings.sidebarAutoCollapse` (default on) now only supplies the
@@ -309,9 +310,10 @@ project's nodes only.** The contract:
 - Switching away unmounts the old project's `TerminalNode`s → their persistent clients detach but
   the tmux/session-host sessions keep running; switching back reattaches. Session names are
   per-node-id (globally unique), so projects never collide.
-- The tab caret menu's **Close project** (`closeProject`) is **non-destructive**: it sets
-  `project.closed = true` (hidden from the tab bar, kept on disk with all nodes) and leaves the
-  persistent sessions running, so closing just detaches like a project switch. Closed projects are
+- The project switcher's per-row **⋮** actions panel's **Close project** (`closeProject`) is
+  **non-destructive**: it sets `project.closed = true` (hidden from the switcher, kept on disk
+  with all nodes) and leaves the persistent sessions running, so closing just detaches like a
+  project switch. Closed projects are
   reopenable from the **"Recently closed"** list on `WelcomeScreen` (`reopenProject` → restores
   nodes, which reattach warm or cold-restore). `hasProjects` counts only **open** projects, so
   closing the last open one shows the welcome screen. **Permanent** deletion (`deleteProject`:
@@ -1363,12 +1365,13 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
     service first, legacy unscoped fallback; popover lists a row per account with **System**
     first). **Remote (SSH host) accounts are included** — see **Remote usage** below.
   - **Pickers** — New Claude exposes an account **submenu** (pane menu; flat entries in
-    the dock; palette commands; TabBar sets the **per-project default**). A **local** project
-    lists local accounts, an **SSH** project lists only accounts whose `host` matches its
-    connection; both offer a **System account** option. An SSH project whose host has **no**
-    matching accounts gets a disabled hint row instead of a bare System-only list
-    (`sshAccountsHint` — pane submenu, dock, TabBar; the palette deliberately omits it: a
-    disabled row would surface as a search result) saying accounts for this host are added in
+    the nav rail's `FabMenu`; palette commands; `ProjectSwitcher` sets the **per-project
+    default**). A **local** project lists local accounts, an **SSH** project lists only accounts
+    whose `host` matches its connection; both offer a **System account** option. An SSH project
+    whose host has **no** matching accounts gets a disabled hint row instead of a bare
+    System-only list (`sshAccountsHint` — pane submenu, `FabMenu`, `ProjectSwitcher`; the
+    palette deliberately omits it: a disabled row would surface as a search result) saying
+    accounts for this host are added in
     Settings → Accounts while the project is connected — local accounts being invisible there is
     correct (their credentials aren't on the host) but read as "multi-account is broken on SSH".
   - **Remote accounts** — selection + login + env injection, plus **usage** (below); no
@@ -1728,6 +1731,36 @@ descriptor `chmod` for the managed root, token directories, and immediate single
 replace it with `lstat` followed by path `chmod` (a symlink-swap window), and never chmod a
 multiply-linked inode whose other name may be outside the staging tree.
 
+- **Chrome shell** (2026-08, replaces the old `TabBar.tsx` + `Dock.tsx`) — `TopAppBar.tsx` (64px,
+  flat `--md-surface-container`, no border/shadow) is the window's drag region and renders the
+  brand mark plus whatever the caller composes into it: the project switcher, the docked search
+  bar, the presence facepile, and the icon-button cluster (all owned by `Canvas.tsx`, which
+  already had their state/handlers — this only changed WHERE they render, not how they work).
+  `NavRail.tsx` (88px, left) replaces the old bottom `Dock.tsx`, and is a REAL flex sibling of
+  `.flow-wrap`, not a floating overlay drawn on top of it — the canvas area is genuinely
+  narrower, so `fit-view.ts` never needs to treat the rail as an obstacle. Its FAB
+  (`FabMenu.tsx`) owns node creation (same choices as the old dock `+`, same ⌘T/⌘⇧C, same
+  profile drill-in); the rail body lists the primary destinations — Canvas / Board / Files /
+  Tools / Alerts / Settings, computed inline in `Canvas.tsx` since every one of their open/close
+  states already lived there (Files opens a small anchored picker for Explorer/Source Control,
+  Tools one for the file converter/Ollama manager, reusing the same generic menu the old Help
+  button used) — and Kids mode is pinned to the bottom. `ProjectSwitcher.tsx` replaces
+  `TabBar.tsx` outright, including its `session`-duration toy-lock relock effect (which must
+  never go missing): a menu button naming the active project opens a dropdown listing every
+  project (click to switch, drag to reorder), each row expandable into a per-row **⋮** actions
+  panel carrying everything the old per-tab caret menu did (rename, appearance, colour, folder,
+  remote access, default Claude account, default permission mode, lock, close). The old floating
+  `.controls-cluster` is gone entirely: search, the presence facepile, notifications, phone
+  pairing, dictate and help all moved into the app bar; undo/redo/save became the floating
+  `.md3-canvas-actions` pill (stacked above the merged zoom `Controls` row so the two bottom-left
+  clusters don't collide), and zoom −/%/+ plus Fit view merged into React Flow's own
+  `<Controls>` (now horizontal) — every one of these still calls the exact same handlers as
+  before. `--app-bar-h` (64px) / `--nav-rail-w` (88px) / `APP_BAR_HEIGHT`
+  (`src/shared/layout.ts`, main's copy, feeding the win32 `titleBarOverlay` height) are the
+  three named sources for this geometry and move together; every floating overlay that assumed
+  the old 44px bar and no left rail (kanban, the sessions sidebar and its icon cluster, the
+  banner stack, the presence prompt) carries a matching offset in `styles.md3.css`.
+
 - **Context menus** (`components/ContextMenu.tsx`, portal, icons from `components/icons.tsx`):
   pane right-click = add nodes at cursor (terminal / Claude / sticky / open file) + select
   all + fit + **Tidy canvas** (`arrangeAllNodes` — packs every top-level node, including group
@@ -1801,10 +1834,14 @@ multiply-linked inode whose other name may be outside the staging tree.
   index (unchanged contract), but now also handles a `submenu` row: **Enter on a filtered submenu
   opens its flyout** (the same target `ArrowRight` already reaches) instead of silently no-op'ing,
   since submenu rows are keyboard-reachable through the filter for the first time.
-- **Add menu** = bottom dock (`Dock.tsx`) `+`, mirrored by the pane menu and command palette.
+- **Add menu** = the nav rail's FAB `+` (`NavRail.tsx` + `FabMenu.tsx`; the old bottom `Dock.tsx`
+  `+`, moved verbatim — same choices, same `⌘T`/`⌘⇧C`), mirrored by the pane menu and command
+  palette.
 - **Undo/redo**: debounced snapshot of the nodes array on settle (drag/edit), `pastRef`/
-  `futureRef` stacks, ⌘Z / ⌘⇧Z + dock buttons. History resets per project load; skipped
-  while typing in inputs/terminals.
+  `futureRef` stacks, ⌘Z / ⌘⇧Z + the floating `.md3-canvas-actions` cluster's buttons (moved off
+  the old bottom dock, stacked above the merged zoom `Controls` row so the two bottom-left
+  clusters don't collide). History resets per project load; skipped while typing in
+  inputs/terminals.
 - **Selection/pan**: box-select on left-drag (`SelectionMode.Partial` — touch to select);
   pan = middle-drag or trackpad two-finger (`panOnScroll`, `zoomOnScroll:false`); pinch
   zoom. Right mouse is free for the context menu.
@@ -1972,10 +2009,10 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
     nodes work fine). Deliberately out of scope here: both index a single root, and making them
     scope-aware is the same "which checkout am I looking at?" question Source Control already answers
     with `ScmScope` — that is the seam to reuse when it is built.
-- **Kanban view** (`components/kanban/KanbanView.tsx`; toggle is a Trello-style icon ON the
-  **active project tab** (`.tab__board-toggle`, after the name, before the caret — the view
-  belongs to the project; earlier homes were the tab-strip end, then the controls-cluster,
-  both rejected in use) plus ⌘⇧B / ⌘K): per-project
+- **Kanban view** (`components/kanban/KanbanView.tsx`; toggle is a Trello-style icon beside the
+  **project switcher's trigger button** in the top app bar (`.tab__board-toggle`, after the
+  name, before the caret — the view belongs to the project; earlier homes were the tab-strip
+  end, then the floating top-right controls cluster, both rejected in use) plus ⌘⇧B / ⌘K): per-project
   full-page SESSION board OVER the canvas — cards ARE the project's session nodes (React Flow
   type `terminal`), derived LIVE from the canvas nodes (title/color/kind/agentId), with
   RUNNING / NEEDS YOU badges + unread dot from the default `agentStatus` store; click = back to
@@ -1996,12 +2033,14 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   persists in localStorage, so a render throw would boot-loop). Pure transforms in
   `renderer/lib/kanban.ts`; view choice is personal (`state/viewMode.ts`, localStorage
   `nodeterm.projectView`). The board opens with a **title strip** (`.kanban-header`: project
-  dot + name) whose height clears the floating controls-cluster icons — columns never sit under
-  them. **Cards collapse/expand on single click** (transient state); the expanded detail row
+  dot + name) tall enough to clear the floating icon clusters that still sit over the canvas
+  (`sessions-icon-cluster`, the banner stack) — columns never sit under them. **Cards
+  collapse/expand on single click** (transient state); the expanded detail row
   reuses `ContextMeter` (model + % pill, per the node header) + session chip + an ↗
   open-on-canvas button; double-click opens the node directly. Z-order contract: overlay 25 <
-  `.controls-cluster` 26 (Explorer/SC/Settings stay clickable ON the board) < `.top-banners` 27
-  (a mandatory-update card must not hide behind the board) < tabbar 30. An assigned session
+  `.top-banners` 27 (a mandatory-update card must not hide behind the board) < the nav rail 28
+  (Files/Tools/Settings live there now — the old floating `.controls-cluster` is gone; see
+  "Chrome shell" above) < the top app bar 30. An assigned session
   node shows its column as a **half-pill flush on the node's TOP edge** — see the pill sentence
   below. A card's ↗ / double-click opens the **card modal** (`components/kanban/CardModal.tsx`, body
   portal on the dialog-stack, scrim z 55, scrim/Esc close — Esc in CAPTURE phase, and an Esc
@@ -2056,24 +2095,66 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   `seenShortcuts`.
 - **Shortcuts** (`ShortcutsPanel.tsx`, ? / ⌘/): shown once on first launch (`seenShortcuts`).
 - **Welcome** (`WelcomeScreen.tsx`): shown when no projects exist.
-- **Window chrome**: macOS integrated title bar (`titleBarStyle: 'hiddenInset'`); the tab
-  bar (`TabBar.tsx`) is the drag region with the `nodeterm` logo + a rounded pill of project
-  tabs. Cmd+M is intercepted in `main/index.ts` `before-input-event` (else macOS minimizes)
-  and forwarded to the renderer via `app:toggle-markdown`; Cmd+W (`app:close-node`) and Cmd+0
-  (`app:zoom-actual-size`) are taken back from the same default menu the same way. We never call
-  `Menu.setApplicationMenu`, so Electron's DEFAULT menu is live and owns every accelerator in it —
-  a chord that collides with one never reaches the renderer at all
+- **Window chrome**: macOS gets the traffic lights integrated into the app bar
+  (`titleBarStyle: 'hiddenInset'` + a custom `trafficLightPosition: {x:16,y:26}`); Windows gets
+  `titleBarStyle: 'hidden'` + a `titleBarOverlay` colored to match the app bar's dark
+  surface-container tokens at `height: APP_BAR_HEIGHT`, so the native caption buttons overlay
+  `.md3-app-bar` instead of floating a separate strip above it — `.md3-app-bar` really is the
+  only chrome, on every platform (see "Chrome shell" above for what renders inside it, and note
+  `TabBar.tsx` is deleted — its whole job, including the drag region, moved into
+  `ProjectSwitcher`/`TopAppBar`). Cmd+M is intercepted in `main/index.ts` `before-input-event`
+  (else macOS minimizes) and forwarded to the renderer via `app:toggle-markdown`; Cmd+W
+  (`app:close-node`) and Cmd+0 (`app:zoom-actual-size`) are taken back from the same default menu
+  the same way. We never call `Menu.setApplicationMenu`, so Electron's DEFAULT menu is live and
+  owns every accelerator in it — a chord that collides with one never reaches the renderer at all
   (`main/menu-accelerator-intercepts.test.ts` pins the three we steal).
-- **Theme**: macOS dark palette as CSS tokens in `styles.css` `:root` (`--accent` = systemBlue,
-  label/separator opacities, SF font stack). Canvas background is black with dot grid. A runtime
-  accent is expanded by `lib/accentTokens.ts`, not assigned as one isolated property: hover,
-  readable text, RGB tint and every Material primary/container foreground move with it and are
-  re-derived against the resolved light/dark panel. HSV and CMYK remain picker/copy formats, while
-  the value crossing into stored/live CSS is RGBA so Chromium accepts it and alpha survives.
-  Custom-logo processing is generation-owned: an older decode/crop/fit may not overwrite a newer
-  adjustment or synchronous preset choice, and shallow `appLogo` patches retain `customImage`
-  unless the explicit Remove action is used. Preset Blob exports share the 30-second delayed URL
-  revocation path; same-turn revocation can cancel Chromium before the download starts.
+- **Two stylesheets, load order matters** (`boot.tsx` imports `fonts.css`, then `styles.css`,
+  then `styles.md3.css`). `styles.css` holds the M3 token layer (`--md-*` roles, dark on bare
+  `:root`, light under `:root[data-theme='light']`, seed `#6750A4`) plus most of the app's
+  structural CSS; `styles.md3.css` is the newer chrome and component restyle — the app bar, nav
+  rail, switcher, kanban, canvas nodes, settings, tonal overlays, and more — and wins on source
+  order wherever the two disagree. Colours come only from `var(--md-*)` tokens — no hex
+  literals, no `box-shadow` (elevation is tonal; the one exception is React Flow's own
+  connection-handle ring, which needs a shadow because a transform there breaks React Flow's own
+  centering translate). `design/v2/md3/tokens.css` is the design bundle's token contract and
+  `design/v2/md3/HANDOFF.md` the component recipes both sheets were built from; the ten
+  `design/v2/MD3 *.dc.html` prototypes are the visual reference — all DATA the app was
+  implemented from, never files the running app reads.
+- **Fonts and icons are bundled, never fetched.** Three local `@font-face`s in `fonts.css`:
+  Outfit Variable (`--font-ui`), Roboto Mono (`--font-mono`, code/terminal), and Material Symbols
+  Rounded (icons) — every one committed as woff2 under `src/renderer/assets/fonts/`, regenerated
+  from pinned devDependencies by `scripts/build-fonts.mjs`. `check-app-contract.mjs` scans for
+  any font/icon CDN reference anywhere under `src/renderer`, including in a comment, and fails —
+  the CSP's `font-src 'self' data:` would silently drop a remote `@font-face` at runtime rather
+  than merely slow it down. The icon font is subsetted to the app's 92 used glyphs by CODEPOINT,
+  not ligature (ligature subsetting pulls in every other glyph built from the same letters), so
+  `MaterialSymbol` (`components/MaterialSymbol.tsx`, names typed against the generated
+  `materialSymbols.generated.ts` codepoint map — an unknown name is a compile error, not tofu)
+  renders each glyph's raw private-use-area codepoint directly, never the ligature name as text.
+- **Theme**: M3 dark is the default; light lives under `:root[data-theme='light']`. `--accent`
+  now resolves to `var(--md-primary)` rather than a literal systemBlue (see the accent-default
+  migration below). Canvas background is black with dot grid. A runtime accent is expanded by
+  `lib/accentTokens.ts`, not assigned as one isolated property: hover, readable text, RGB tint
+  and every Material primary/container foreground move with it and are re-derived against the
+  resolved light/dark panel. HSV and CMYK remain picker/copy formats, while the value crossing
+  into stored/live CSS is RGBA so Chromium accepts it and alpha survives. Custom-logo processing
+  is generation-owned: an older decode/crop/fit may not overwrite a newer adjustment or
+  synchronous preset choice, and shallow `appLogo` patches retain `customImage` unless the
+  explicit Remove action is used. Preset Blob exports share the 30-second delayed URL revocation
+  path; same-turn revocation can cancel Chromium before the download starts.
+  **The default accent migrated from systemBlue (`#0a84ff`) to the M3 baseline seed
+  (`DEFAULT_ACCENT`, `#6750a4` in `shared/types.ts`) — this changes the appearance of every
+  existing install, once.** `core/settings-store.ts`'s `mergeSettings` always persists the WHOLE
+  settings object, so an existing `settings.json` already has `#0a84ff` written into it
+  byte-for-byte — indistinguishable, on read, from a user who deliberately picked systemBlue. The
+  migration treats that old literal default as "never touched" and carries it forward
+  (`if (saved?.accent === '#0a84ff') merged.accent = DEFAULT_ACCENT`); a user who really did want
+  blue loses that choice once and can re-pick it from `ColorPicker.tsx`'s `QUICK_SWATCHES`
+  (`#0a84ff` is kept, one step behind the new `#6750a4` default, never deleted).
+  `accentTokens.ts`'s default-family bail-out (skip inline overrides and let the stylesheet's own
+  light/dark defaults win) compares against `DEFAULT_ACCENT` for the same reason — comparing
+  against the old literal would make every fresh install compute and inject an inline
+  purple-on-purple override for the colour the stylesheet already ships.
 
 ## Remote access (Docker-hosted relay) — free, not Pro
 
@@ -2494,8 +2575,8 @@ redirect the stack or bypass the loopback decision.
 **main process** calls `GET https://api.nodeterm.dev/v1/check?version=&os=&channel=stable` (so the
 renderer CSP stays `'self'`) on launch + every 6h, cached 5 min, returning `{ messages, update }`.
 Exposed split over two IPC handlers: `announcements.fetch()` → `messages`, `appUpdatePolicy` →
-`update`. `components/AnnouncementBanner.tsx` (stacked above `UpdateCard` under the tab bar in a
-`.top-banners` column) shows the newest message the user hasn't dismissed (dismissed `id`s persist
+`update`. `components/AnnouncementBanner.tsx` (stacked above `UpdateCard` under the top app bar in
+a `.top-banners` column) shows the newest message the user hasn't dismissed (dismissed `id`s persist
 in `localStorage`); `update.mandatory`/`minSupported` flips `UpdateCard` into a blocking required-
 update state. The call no-ops under `DO_NOT_TRACK`/`NODETERM_TELEMETRY_DISABLED` or in unpackaged
 builds (unless `NODETERM_API_BASE` targets a local server). Schema example:
