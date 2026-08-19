@@ -53,7 +53,7 @@ export function NativeLoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div className={`native-loop-node${selected ? ' selected' : ''}`}>
-      <NodeResizer minWidth={280} minHeight={230} isVisible={selected} color="#ffb340" />
+      <NodeResizer minWidth={280} minHeight={230} isVisible={selected} color="var(--md-warning)" />
       <Handle
         id="schedule-out"
         type="source"

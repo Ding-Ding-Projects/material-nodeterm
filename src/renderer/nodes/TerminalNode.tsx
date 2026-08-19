@@ -4773,7 +4773,7 @@ export function TerminalNode({
           minWidth={260}
           minHeight={160}
           isVisible={selected && !collapsed}
-          color="#0a84ff"
+          color="var(--md-primary)"
         />
         {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
         <Handle

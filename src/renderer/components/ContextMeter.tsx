@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useContextWindow } from '../state/contextWindow'
 import { formatModelLabel, formatTimeAgo } from '../lib/usageFormat'
 
-/** Fullness scale (inverse of the usage indicator): green low, yellow mid, red near-full. */
+/** Fullness scale (inverse of the usage indicator): success low, warning mid, error near-full.
+ *  Emits `var(--md-*)` token references rather than raw hex, so styles.md3.css stays the sole
+ *  colour authority for this component and the fill re-tints with the active theme/accent. */
 function meterColor(usedPercent: number): string {
-  if (usedPercent > 85) return '#ff453a'
-  if (usedPercent >= 60) return '#ffd60a'
-  return '#30d158'
+  if (usedPercent > 85) return 'var(--md-error)'
+  if (usedPercent >= 60) return 'var(--md-warning)'
+  return 'var(--md-success)'
 }
 
 /** Humanize a token count: 48000 → "48k", 1_000_000 → "1M", 850 → "850". */

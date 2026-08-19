@@ -52,7 +52,7 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div onPointerDownCapture={select} className={`loop-node${active ? ' working' : ''}`}>
-      <NodeResizer isVisible={selected} minWidth={180} minHeight={84} color="#bf7af0" />
+      <NodeResizer isVisible={selected} minWidth={180} minHeight={84} color="var(--md-primary)" />
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="loop-node__head nodrag" onClick={toggle} style={{ cursor: 'pointer' }}>
         <button
