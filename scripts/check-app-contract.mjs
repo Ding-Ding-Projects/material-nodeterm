@@ -690,6 +690,28 @@ const FEATURES = [
     docs: ['docs/local-history.md'],
   },
   {
+    id: 'changelog-viewer',
+    label: 'Changelog viewer (third History tab)',
+    files: [
+      'src/shared/changelog.ts',
+      'src/shared/changelog-data.ts',
+      'scripts/build-changelog.mjs',
+      'scripts/check-changelog.mjs',
+      'src/renderer/components/changelog/ChangelogPanel.tsx',
+      'src/renderer/components/changelog/ReleaseCard.tsx',
+      'src/renderer/components/HistoryScreen.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/changelog.ts', 'export function parseChangelog'],
+      ['src/shared/changelog-data.ts', 'export const CHANGELOG_RELEASES'],
+      ['scripts/check-changelog.mjs', 'renderChangelogModule'],
+      ['src/renderer/components/changelog/ChangelogPanel.tsx', 'export function ChangelogPanel'],
+    ],
+    wired: { file: 'src/renderer/components/HistoryScreen.tsx', symbol: 'ChangelogPanel' },
+    tests: [['src/shared/changelog.test.ts', "describe('parseChangelog'"]],
+    docs: ['docs/changelog-viewer.md'],
+  },
+  {
     id: 'file-converter',
     label: 'Universal file converter',
     files: ['src/renderer/components/converter/FileConverterPanel.tsx', 'src/core/converter/registry.ts'],
