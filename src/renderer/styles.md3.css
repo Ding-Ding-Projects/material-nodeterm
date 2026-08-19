@@ -9122,3 +9122,486 @@
   outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
+
+/* --------------------------------------------------------------------------------------------
+   In-app offline documentation browser (DocsBrowser.tsx) — the rail's "Docs" destination and the
+   Help menu's Documentation row. Same full-area host geometry as `.md3-history-host`: below the
+   app bar, right of the nav rail, so both stay usable while an article is open.
+
+   The article body is markdown rendered through the app's ONE shared renderer, so the element
+   rules below style plain `h1`/`p`/`pre`/`table` inside `.md3-docs-article__body` rather than
+   classed nodes — there is nothing to hang a class on and nothing should be teaching the shared
+   renderer to emit any.
+   -------------------------------------------------------------------------------------------- */
+
+.md3-docs-host {
+  position: fixed;
+  top: var(--app-bar-h);
+  left: var(--nav-rail-w);
+  right: 0;
+  bottom: 0;
+  z-index: 27;
+  background: var(--md-surface);
+}
+
+.md3-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  padding: 20px 24px 0;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  box-sizing: border-box;
+}
+
+.md3-docs__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.md3-docs__heading {
+  display: flex;
+  flex-direction: column;
+}
+.md3-docs__title {
+  font-size: 24px;
+  font-weight: 600;
+}
+.md3-docs__subtitle {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+
+/* Reuses `.md3-history-search` (the shared field + regex-trigger recipe); this only places it. */
+.md3-docs__search {
+  margin-left: auto;
+  min-width: 260px;
+  flex: 0 1 420px;
+}
+
+.md3-docs__error {
+  font-size: 12px;
+  color: var(--md-error);
+}
+
+.md3-docs__body {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- sidebar ---- */
+
+.md3-docs__nav {
+  width: 264px;
+  flex: 0 0 264px;
+  overflow-y: auto;
+  padding-bottom: 20px;
+  border-right: 1px solid var(--md-outline-variant);
+  padding-right: 12px;
+}
+
+.md3-docs__section + .md3-docs__section {
+  margin-top: 14px;
+}
+
+.md3-docs__section-label {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-docs__nav-item {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--md-shape-small);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-docs__nav-item:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-docs__nav-item--active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-weight: 600;
+}
+.md3-docs__nav-item:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
+.md3-docs__nav-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+/* ---- main pane ---- */
+
+.md3-docs__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.md3-docs__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.md3-docs__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
+}
+.md3-docs__button:hover:not(:disabled) {
+  background: var(--md-surface-container-high);
+}
+.md3-docs__button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.md3-docs__button:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.md3-docs__button--quiet {
+  border-color: transparent;
+  color: var(--md-on-surface-variant);
+}
+.md3-docs__button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.md3-docs__notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+.md3-docs__notice strong {
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono, var(--font-mono));
+}
+
+.md3-docs__pending {
+  padding: 24px 4px;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+.md3-docs__pending--error {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--md-on-surface);
+}
+.md3-docs__pending-detail {
+  font-family: var(--md-font-mono, var(--font-mono));
+  font-size: 12px;
+  color: var(--md-error);
+  word-break: break-word;
+}
+.md3-docs__pending-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ---- search results ---- */
+
+.md3-docs__results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+.md3-docs__results-count {
+  padding: 2px 0 10px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-docs__result {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  border-radius: var(--md-shape-medium);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
+}
+.md3-docs__result:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-docs__result:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.md3-docs__result-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.md3-docs__result-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.md3-docs__result-section,
+.md3-docs__result-count {
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-docs__snippet {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+.md3-docs__snippet-line {
+  flex: 0 0 auto;
+  min-width: 34px;
+  text-align: right;
+  font-family: var(--md-font-mono, var(--font-mono));
+  opacity: 0.7;
+}
+.md3-docs__snippet-text {
+  min-width: 0;
+  /* Two lines then ellipsis: a snippet is a hint that the article is the right one, not a reader. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.md3-docs__snippet--title {
+  font-style: italic;
+}
+
+/* ---- the rendered article ---- */
+
+.md3-docs__article,
+.md3-docs-article {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 40px;
+}
+
+.md3-docs-article__path {
+  font-family: var(--md-font-mono, var(--font-mono));
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+  margin-bottom: 6px;
+}
+
+.md3-docs-article__body {
+  max-width: 78ch;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--md-on-surface);
+}
+
+.md3-docs-article__body h1,
+.md3-docs-article__body h2,
+.md3-docs-article__body h3,
+.md3-docs-article__body h4,
+.md3-docs-article__body h5,
+.md3-docs-article__body h6 {
+  margin: 1.6em 0 0.5em;
+  line-height: 1.25;
+  font-weight: 600;
+  /* Scrolling to a `#heading` puts the target flush against the pane's top edge otherwise. */
+  scroll-margin-top: 12px;
+}
+.md3-docs-article__body h1 {
+  margin-top: 0;
+  font-size: 26px;
+}
+.md3-docs-article__body h2 {
+  font-size: 19px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md3-docs-article__body h3 {
+  font-size: 16px;
+}
+.md3-docs-article__body h4,
+.md3-docs-article__body h5,
+.md3-docs-article__body h6 {
+  font-size: 14px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-docs-article__body p,
+.md3-docs-article__body ul,
+.md3-docs-article__body ol,
+.md3-docs-article__body blockquote,
+.md3-docs-article__body table {
+  margin: 0 0 1em;
+}
+
+.md3-docs-article__body ul,
+.md3-docs-article__body ol {
+  padding-left: 1.4em;
+}
+.md3-docs-article__body li {
+  margin: 0.25em 0;
+}
+.md3-docs-article__body li > ul,
+.md3-docs-article__body li > ol {
+  margin: 0.25em 0;
+}
+
+.md3-docs-article__body a {
+  color: var(--md-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+.md3-docs-article__body a:hover {
+  text-decoration: underline;
+}
+/* A link out of the bundle still reads as a link, but says so before it is clicked rather than
+   only after — the click reports it honestly either way. */
+.md3-docs-article__body a[data-doc-link='missing'] {
+  color: var(--md-on-surface-variant);
+  text-decoration: underline dotted;
+}
+.md3-docs-article__body a:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.md3-docs-article__body code {
+  padding: 0.12em 0.36em;
+  border-radius: 4px;
+  background: var(--md-surface-container-high);
+  font-family: var(--md-font-mono, var(--font-mono));
+  font-size: 0.88em;
+}
+
+.md3-docs-article__body pre {
+  margin: 0 0 1em;
+  padding: 12px 14px;
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+  /* Wide code scrolls inside its own box; the article must never scroll sideways. */
+  overflow-x: auto;
+}
+.md3-docs-article__body pre code {
+  padding: 0;
+  background: none;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.md3-docs-article__body blockquote {
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+
+.md3-docs-article__body hr {
+  margin: 1.6em 0;
+  border: none;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+/* A table can be far wider than the prose column, so it gets its own horizontal scroll rather
+   than pushing the page sideways. */
+.md3-docs-article__body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.md3-docs-article__body th,
+.md3-docs-article__body td {
+  padding: 6px 12px;
+  border: 1px solid var(--md-outline-variant);
+  text-align: left;
+  vertical-align: top;
+}
+.md3-docs-article__body th {
+  background: var(--md-surface-container);
+  font-weight: 600;
+}
+
+.md3-docs-article__body img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Narrow windows: the sidebar becomes a short scrolling strip above the article rather than
+   competing with the prose for width. */
+@media (max-width: 900px) {
+  .md3-docs__body {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .md3-docs__nav {
+    width: auto;
+    flex: 0 0 auto;
+    max-height: 168px;
+    border-right: none;
+    border-bottom: 1px solid var(--md-outline-variant);
+    padding-right: 0;
+    padding-bottom: 8px;
+  }
+  .md3-docs__search {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}

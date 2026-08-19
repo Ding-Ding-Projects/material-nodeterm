@@ -14,9 +14,11 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "node scripts/check-vocabulary.mjs && node scripts/check-changelog.mjs && electron-vite build && npm run host:build",
+    "build": "node scripts/check-vocabulary.mjs && node scripts/check-changelog.mjs && node scripts/check-docs-bundle.mjs && electron-vite build && npm run host:build",
     "build-changelog": "node scripts/build-changelog.mjs",
     "check-changelog": "node scripts/check-changelog.mjs",
+    "build-docs": "node scripts/build-docs-bundle.mjs",
+    "check-docs": "node scripts/check-docs-bundle.mjs",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",

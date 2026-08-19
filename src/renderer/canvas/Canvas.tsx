@@ -218,6 +218,7 @@ import {
 } from '../lib/accountRemoval'
 import { NotificationCenter } from '../components/NotificationCenter'
 import { HistoryScreen } from '../components/HistoryScreen'
+import { DocsBrowser } from '../components/DocsBrowser'
 import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
@@ -1055,6 +1056,7 @@ export function Canvas() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [notifCenterOpen, setNotifCenterOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [docsOpen, setDocsOpen] = useState(false)
   const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
   const [phonePairAnchor, setPhonePairAnchor] = useState<{
@@ -1111,6 +1113,21 @@ export function Canvas() {
   // toggle-a-flag pattern as every other drawer/panel on this canvas.
   const [converterOpen, setConverterOpen] = useState(false)
   const [ollamaOpen, setOllamaOpen] = useState(false)
+  // Every full-area screen and drawer on this canvas is mutually exclusive: opening one closes
+  // the rest. Hoisted to component scope (from inside the nav-rail block below) because the Help
+  // menu's Documentation row opens the same docs screen and needs the same close -- a full-area
+  // host painted over a drawer that is still open hides it with no way to tell it is there.
+  // Every setter here is a stable useState setter, so the empty dependency list is complete.
+  const closeAllDrawers = useCallback(() => {
+    setExplorerOpen(false)
+    setScOpen(false)
+    setConverterOpen(false)
+    setOllamaOpen(false)
+    setSettingsOpen(false)
+    setNotifCenterOpen(false)
+    setHistoryOpen(false)
+    setDocsOpen(false)
+  }, [])
   // Reveal-in-Explorer target (relative to the active project cwd). The nonce makes each reveal
   // distinct so revealing the same file twice still re-fires the Explorer effect.
   const [reveal, setReveal] = useState<{ path: string; nonce: number } | null>(null)
@@ -12129,7 +12146,10 @@ export function Canvas() {
                   { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
                   {
                     label: 'Documentation',
-                    onClick: () => window.nodeTerminal.shell.openExternal(`${REPO_URL}#readme`)
+                    onClick: () => {
+                      closeAllDrawers()
+                      setDocsOpen(true)
+                    }
                   },
                   {
                     label: 'GitHub repository',
@@ -12348,15 +12368,6 @@ export function Canvas() {
           open/close states already lives in this component's hook body above. */}
       <div className="md3-canvas-row">
       {(() => {
-        const closeAllDrawers = () => {
-          setExplorerOpen(false)
-          setScOpen(false)
-          setConverterOpen(false)
-          setOllamaOpen(false)
-          setSettingsOpen(false)
-          setNotifCenterOpen(false)
-          setHistoryOpen(false)
-        }
         const mobileServer = isMobileServerEdition()
         const leaveBoard = () => {
           if (!mobileServer && kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
@@ -12365,7 +12376,14 @@ export function Canvas() {
           if (!kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
         }
         const anyDrawerOpen =
-          explorerOpen || scOpen || converterOpen || ollamaOpen || settingsOpen || notifCenterOpen || historyOpen
+          explorerOpen ||
+          scOpen ||
+          converterOpen ||
+          ollamaOpen ||
+          settingsOpen ||
+          notifCenterOpen ||
+          historyOpen ||
+          docsOpen
         const destinations: RailDestination[] = [
           {
             id: 'canvas',
@@ -12442,6 +12460,17 @@ export function Canvas() {
               closeAllDrawers()
               leaveBoard()
               setHistoryOpen(true)
+            }
+          },
+          {
+            id: 'docs',
+            icon: <IconMarkdown />,
+            label: 'Docs',
+            active: docsOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setDocsOpen(true)
             }
           },
           {
@@ -12906,6 +12935,11 @@ export function Canvas() {
           onGoToNode={travelToNode}
           onKillSession={killSessionById}
         />
+        </div>
+      )}
+      {docsOpen && (
+        <div className="md3-docs-host">
+          <DocsBrowser />
         </div>
       )}
       {notifCenterOpen && (
