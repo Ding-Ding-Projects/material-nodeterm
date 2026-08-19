@@ -1,6 +1,6 @@
 {
-  "commit": "f16535e9bd9117c8f82ff6c6e3d53843eee7c42d",
-  "capturedAt": "2026-08-19T07:14:20.773Z",
+  "commit": "fcc85093a2543362eec1220f009b318200736d31",
+  "capturedAt": "2026-08-19T18:40:55.808Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -11,7 +11,7 @@
     {
       "id": "app-01-launch",
       "title": "App at launch",
-      "bytes": 49409,
+      "bytes": 50169,
       "hadOpener": false
     },
     {
@@ -23,19 +23,19 @@
     {
       "id": "app-03-palette",
       "title": "Command palette",
-      "bytes": 72701,
+      "bytes": 73339,
       "hadOpener": true
     },
     {
       "id": "app-04-canvas",
       "title": "Canvas",
-      "bytes": 49409,
+      "bytes": 50169,
       "hadOpener": false
     },
     {
       "id": "app-05-kanban",
       "title": "Kanban board",
-      "bytes": 32536,
+      "bytes": 33226,
       "hadOpener": true
     },
     {
@@ -47,7 +47,7 @@
     {
       "id": "app-06-history",
       "title": "History — session memory, settings history, changelog",
-      "bytes": 38246,
+      "bytes": 38965,
       "hadOpener": true
     },
     {
@@ -87,9 +87,21 @@
       "hadOpener": true
     },
     {
+      "id": "app-windows-terminal-profiles",
+      "title": "Windows terminal profiles — the picker",
+      "bytes": 64522,
+      "hadOpener": true
+    },
+    {
+      "id": "app-windows-terminal-profile-availability",
+      "title": "Windows terminal profiles — detected availability",
+      "bytes": 96344,
+      "hadOpener": true
+    },
+    {
       "id": "app-kids-home",
       "title": "Kids mode — Home",
-      "bytes": 75781,
+      "bytes": 75457,
       "hadOpener": true
     },
     {
@@ -106,6 +118,10 @@
     }
   ],
   "skipped": [
+    {
+      "id": "app-windows-terminal-profile-node",
+      "why": "the spawned Windows session host outlives the app by design and holds the disposable capture sandbox open"
+    },
     {
       "id": "app-agent-running",
       "why": "needs a real agent CLI session"

@@ -270,14 +270,20 @@ enabling immediately, so a first-time user is never asked to remember a PIN they
 | Pages site | not applicable — no agents, no shell, unchanged from the rest of this document |
 | Mobile companion | not applicable — a Kids canvas node is a real terminal/agent node like any other, so it is reachable over the existing transport once created on desktop/server, but there is no Kids-specific mobile screen (follow-up in `nodeterm-ios`, same as every other mobile note in this document) |
 
-### Not verified against a running build
+### Captured against a running build — and what is still only reviewed
 
-Unlike the rest of this document's "Verified against a running build" section, the screens above
-were **not** captured or driven through a real packaged build as part of this pass — the task this
-work was done under is explicitly scoped to skip test runs, linting, static analysis and captures
-("a deliberate speed pass"). Everything above is stated as implemented and reviewed against the
-existing patterns it reuses (`TerminalNode`, `createAgentNode`, `activeAgentLaunchPlan`,
-`decideCanvasNarration`), not as observed on screen.
+This section used to say the Kids screens had never been photographed, because when they were
+written the pass that built them was explicitly scoped to skip captures. That is no longer true,
+and a heading that outlives its own facts is worse than no heading: everything below is now
+driven and captured by `npm run shots -- --launch` against the built artifact, as REQUIRED
+surfaces, so an unreachable one fails the run rather than quietly going missing again.
+
+What is still only *reviewed* rather than observed is what happens **behind** these screens: the
+six tiles opening their real nodes, the grown-up switches reaching `settings.claudePermissionMode`
+and `settings.narratorEnabled`, the sticker threshold, and the daily-limit ticker routing to the
+times-up screen. Those are stated as implemented and reviewed against the patterns they reuse
+(`TerminalNode`, `createAgentNode`, `activeAgentLaunchPlan`, `decideCanvasNarration`), not as
+watched working.
 
 The Settings section itself IS captured, and re-captured against the Material Design 3 chrome
 on 2026-08-19 (commit `8e37e640`) — this shot is current, not the pre-M3 one this paragraph
@@ -312,7 +318,9 @@ at all**. Both fixed; the second is pinned by
 `EnableKidsModeDialog.pinpad-reset.test.tsx`, whose dialog-level case goes red when the `key` is
 removed.
 
-Still uncaptured: the activity canvas, the stickers screen and the times-up screen.
+Still uncaptured: the activity canvas, the stickers screen and the times-up screen. Each needs a
+kid to have spent real time in an activity first, which the harness cannot manufacture without
+spawning the terminal those screens are counting.
 
 ## Still outstanding
 
@@ -334,8 +342,10 @@ Still uncaptured: the activity canvas, the stickers screen and the times-up scre
 - **Story time and Sounds are placeholders**, and **kid-canvas nodes do not persist across a full
   app restart** the way project nodes do. Both are explained, with the reasoning, in "The screens"
   above rather than left as a silent gap.
-- **The new screens were not captured or driven through a running build** — see "Not verified
-  against a running build" above.
+- **The behaviour behind the new screens is reviewed, not observed.** Home, the gate and the
+  grown-up screen are now captured from the built app on every `npm run shots` run; what has not
+  been watched working is the tiles, the switches, the sticker threshold and the daily-limit
+  ticker — see "Captured against a running build" above.
 - **Remote account removal is not proven end-to-end here.** The renderer authorization is covered,
   but a disconnected or ambiguous SSH-backed account cannot presently provide authoritative
   deletion evidence, and the browser edition exposes account management as unsupported. The current

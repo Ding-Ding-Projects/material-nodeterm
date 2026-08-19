@@ -122,6 +122,49 @@ const KIDS_PARENT_STEPS = `
 })()`
 
 // ---------------------------------------------------------------------
+// Shared driver for the Windows terminal-profile surfaces (see their entries below).
+// ---------------------------------------------------------------------
+// Same shape as KIDS_DRIVER, for the same reason: the picker is two clicks deep and profile
+// detection is on demand (`useTerminalProfiles.ensureLoaded`, kicked off by Canvas on mount),
+// so the menu can open a beat before it has anything to list. A fixed sleep here would be a
+// guess about how long probing PATH for four shells and enumerating WSL takes on this machine.
+const PROFILE_DRIVER = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  const until = async (fn, ms) => {
+    const end = Date.now() + ms
+    while (Date.now() < end) { const v = fn(); if (v) return v; await wait(150) }
+    return null
+  }
+  const byText = (needle) => [...document.querySelectorAll('button,[role=menuitem]')].find((e) =>
+    (e.textContent || '').trim() === needle)
+  const picker = () =>
+    document.querySelector('.md3-fab-menu[aria-label="Choose terminal profile"]')
+  // What the picker LISTS, minus the drill-out button that is always its first child.
+  const profileRows = () =>
+    picker() ? [...picker().querySelectorAll('[role=menuitem]')].slice(1) : []
+  const openPicker = async () => {
+    if (picker()) return true
+    const stale = document.querySelector('.md3-fab-backdrop')
+    if (stale) { stale.click(); await wait(250) }
+    const fab = document.querySelector('.md3-fab')
+    if (!fab) return false
+    fab.click()
+    const drill = await until(() => byText('New terminal with profile…'), 6000)
+    if (!drill) return false
+    drill.click()
+    return !!(await until(picker, 6000))
+  }
+`
+
+const PROFILE_PICKER_STEPS = `
+  if (!(await openPicker())) return false
+  // A picker showing its empty state is not a picker "listing detected profiles" — filing that
+  // screen under this id would be a confidently-wrong caption for one that says the opposite.
+  if (picker().querySelector('#fab-terminal-profile-empty-reason')) return false
+  return profileRows().length > 0
+})()`
+
+// ---------------------------------------------------------------------
 // The surface list. REQUIRED failures fail the run — see rule 2.
 // ---------------------------------------------------------------------
 // `verify` is the load-bearing field, and its absence was a real defect in the first version of
@@ -244,6 +287,36 @@ const SURFACES = [
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'ADHD modes'] },
       verify: '[class*="settings"]'
     },
+    // ── Windows terminal profiles ───────────────────────────────────────────────────────────────
+    // The `app-` prefix is load-bearing twice over. scripts/check-site-shots.mjs mirrors and
+    // byte-compares only `app-*.png`, so a capture outside it ships to the site with nothing
+    // asserting the two copies still agree. And the bare `windows-terminal-profile-*` ids belong
+    // to scripts/windows-profile-packaged-driver.mjs, which produces PACKAGED evidence over the
+    // cheap Lowlevel headless route for the contract row of the same name — writing those ids
+    // from here would half-satisfy that row with unpackaged out/ screenshots.
+    // Placed BEFORE the Kids block on purpose: Kids mode does not hide the canvas, it unmounts
+    // it (App.tsx routes to <KidsShell/>), so the rail FAB and the settings page are simply gone
+    // for every surface that follows it.
+    {
+      id: 'app-windows-terminal-profiles',
+      required: true,
+      title: 'Windows terminal profiles — the picker',
+      open: { script: PROFILE_DRIVER + PROFILE_PICKER_STEPS },
+      verify: '.md3-fab-menu[aria-label="Choose terminal profile"]',
+      // The settings overlay is `fixed inset-0`, and a programmatic click reaches the FAB straight
+      // through it, so without this a settings screen could be photographed under this name.
+      verifyAbsent: '.nt-settings'
+    },
+    {
+      id: 'app-windows-terminal-profile-availability',
+      required: true,
+      title: 'Windows terminal profiles — detected availability',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Shell'] },
+      // Not merely the availability list. The reason span exists ONLY on a row that is both
+      // unavailable and says why, so a machine where every profile resolved fails the run rather
+      // than filing an all-Available screenshot under a name promising the opposite.
+      verify: '#terminal-profile-availability li span.block'
+    },
     // ── The Kids screens ────────────────────────────────────────────────────────────────────────
     // These had no captures because they had no way in: `components/kids/entry.ts` has always
     // documented the rail's Kids destination as the caller of `enterKidsModeFromRail()`, but the
@@ -281,6 +354,13 @@ const SURFACES = [
       verify: '.md3-kids-parent'
     },
   // Optional: these need state the harness cannot manufacture.
+  // Measured, not assumed: driving the picker through to a real node spawns a Windows session
+  // host, and a session host OUTLIVES the app on purpose — that is the persistence contract. It
+  // then holds the disposable sandbox open, so `rmSync` fails with EPERM and the run exits
+  // non-zero with every capture already on disk. Reaching it needs either a scoped teardown of
+  // the exact host this run started, or driving the destructive-delete gate and waiting out the
+  // host's 30s empty-exit grace; neither is worth a flaky REQUIRED surface.
+  { id: 'app-windows-terminal-profile-node', required: false, title: 'Windows terminal profiles — a terminal opened with an explicit profile', why: 'the spawned Windows session host outlives the app by design and holds the disposable capture sandbox open' },
   { id: 'app-agent-running', required: false, title: 'Agent mid-turn', why: 'needs a real agent CLI session' },
   { id: 'app-ssh-project', required: false, title: 'SSH project', why: 'needs a reachable host and credentials' }
 ]
