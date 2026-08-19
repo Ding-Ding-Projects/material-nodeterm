@@ -6,28 +6,33 @@ import { ColumnPill } from '../components/kanban/ColumnPill'
 import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
+import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 
 /**
  * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
  * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
  * objects, so six near-identical components would be six copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
  *
- * This node is not connected to anything yet. CLAUDE.md is explicit that a control which is styled
- * as operable while being inert is a defect rather than a placeholder — "any icon, preview, mock
- * window, toolbar control, card, tab, badge, illustration, affordance ... presented as if it can be
- * used must perform its labeled action". So there is no greyed-out Connect button here, no fake
- * status lamp, and no mock console: the surface says plainly what it is and what it cannot do yet,
- * and both controls it draws — the name and the address — genuinely work and genuinely persist.
+ * Docker/Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
+ * explicit that a control which is styled as operable while being inert is a defect rather than a
+ * placeholder — "any icon, preview, mock window, toolbar control, card, tab, badge, illustration,
+ * affordance ... presented as if it can be used must perform its labeled action". So there is no
+ * greyed-out Connect button here, no fake status lamp, and no mock console: the surface says
+ * plainly what it is and what it cannot do yet, and both controls it draws — the name and the
+ * address — genuinely work and genuinely persist.
  *
  * The address is stored and validated but nothing DIALS it yet, and the copy says exactly that
  * rather than implying a connection. Storing where you would connect is a real, useful thing on
  * its own; pretending it connects would not be.
  *
- * When a lane wires a real connection, it adds real controls beside this copy. Until then the honest
- * empty state is the feature, and it is much easier to add a working button later than to explain
- * why an existing one never did anything.
+ * `minecraft` IS the lane that wires a real connection — see `MinecraftServerPanel`
+ * (docs/minecraft-server-manager.md). It runs a real local `java -jar server.jar` process on the
+ * machine this shell is running on, not a remote connection reached through an address, so it
+ * replaces the generic address field entirely rather than growing a fake "Connect" button beside
+ * it. When a future lane wires one of the other five kinds, it follows the same pattern: real
+ * controls that do exactly what they say, added beside this honest copy rather than instead of it.
  */
 /**
  * A realistic example per kind, so the field teaches its own format instead of demanding the user
@@ -219,7 +224,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           )}
         </div>
 
-        {!collapsed && (
+        {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+
+        {!collapsed && kind !== 'minecraft' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>

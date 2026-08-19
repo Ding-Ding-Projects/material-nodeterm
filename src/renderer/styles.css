@@ -14570,3 +14570,154 @@ body.focus-mode .dock:hover {
 .service-node__field:has(.service-node__input[aria-invalid='true']) + .service-node__note {
   color: var(--md-error, #ff453a);
 }
+
+/* Minecraft server create-and-manage (docs/minecraft-server-manager.md). Reuses every
+ * .service-node__* token above (field/input/note/state) and adds only what that shared surface
+ * doesn't already have: buttons, a progress bar, and the console. */
+.mc-body {
+  gap: 10px;
+}
+
+.mc-note--warn {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--md-tertiary, #ff9f0a);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.mc-note--error {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--md-error, #ff453a);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.mc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mc-path {
+  overflow: hidden;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-button {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  color: var(--md-on-surface, #f2f2f7);
+  background: var(--md-surface-container-highest, #2c2c2e);
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.mc-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.mc-button--primary {
+  color: var(--md-on-primary, #ffffff);
+  background: var(--md-primary, #0a84ff);
+  border-color: transparent;
+}
+
+.mc-link {
+  align-self: flex-start;
+  padding: 0;
+  color: var(--md-primary, #0a84ff);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.mc-link--danger {
+  color: var(--md-error, #ff453a);
+}
+
+.mc-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 12px;
+}
+
+.mc-progress {
+  overflow: hidden;
+  height: 8px;
+  background: var(--md-surface-container-highest, #2c2c2e);
+  border-radius: 999px;
+}
+
+.mc-progress__fill {
+  height: 100%;
+  background: var(--md-primary, #0a84ff);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+/* No known total, so no known percent — a real bar segment slides across instead of a fabricated
+ * fill amount. Static under reduced motion, per this app's accessibility rules. */
+.mc-progress--indeterminate .mc-progress__fill {
+  width: 40%;
+  animation: mc-indeterminate 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-progress--indeterminate .mc-progress__fill {
+    width: 100%;
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+@keyframes mc-indeterminate {
+  0% {
+    margin-left: 0%;
+  }
+  100% {
+    margin-left: 60%;
+  }
+}
+
+.mc-console {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 80px;
+  padding: 6px 8px;
+  color: var(--md-on-surface, #f2f2f7);
+  background: #000000;
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 8px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mc-console__empty {
+  margin: 0;
+  color: var(--md-on-surface-variant, #9a9a9e);
+}
+
+.mc-console__line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mc-console__line--stderr {
+  color: #ff6961;
+}
