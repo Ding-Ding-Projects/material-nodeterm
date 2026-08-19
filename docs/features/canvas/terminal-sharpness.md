@@ -180,3 +180,32 @@ Five minutes, and item 2 is a **stop-ship**.
 6. Many terminals at zoom > 1 — atlas cost is the square of the scale. Confirm no context loss or
    black nodes.
 7. macOS (dpr 2) should show **no change at all**. Any difference means the ceiling logic is wrong.
+
+## What the optics say, computed — before anyone looks at a screen
+
+Run with the module's own `resampleFactor` / `isPixelExact` / `safeRasterScale`, with **stock**
+modelled correctly as xterm rasterizing at `devicePixelRatio` (its scale *is* the dpr — modelling
+it as 1 gives a flattering and wrong table).
+
+| dpr | zoom | stock resample | patched resample | verdict |
+| --- | --- | --- | --- | --- |
+| any | 1.0 | 1.000 exact | 1.000 exact | **no change** — stock is already pixel-exact |
+| any | 0.83 | 0.830 | 0.830 | **no change** — minification, untouched by design |
+| 1 / 1.25 / 1.5 | 1.3 | 1.300 (up) | 0.650 (down) | upsampling → downsampling |
+| 1 / 1.25 / 1.5 | 1.5 | 1.500 (up) | 0.750 (down) | upsampling → downsampling |
+| 1 / 1.25 / 1.5 | 2.0 | 2.000 | **1.000 exact** | **provably fixed** |
+| **2 (macOS)** | any | — | identical | **no change at any zoom** |
+
+Three things fall out of that, and two of them retire questions that were on the owed list:
+
+1. **At zoom 1 nothing changes, at any dpr.** Stock is already pixel-exact there. So the "zoom 1
+   must look identical" check is not an open question — it is arithmetic, and it holds.
+2. **On macOS (dpr 2) the patch is inert at every zoom.** The doc's earlier claim was right, and is
+   now computed rather than reasoned.
+3. **At zoom 2 it is provably fixed** — `isPixelExact` goes false → true.
+
+What is left genuinely needs eyes, and it is now one narrow question rather than a vague one: at the
+**intermediate** zooms (1.3, 1.5) the patch converts *upsampling* into *downsampling from a denser
+raster*. Neither lands pixel-exact. Downsampling beats upsampling as a general result in
+resampling, but **how much** it beats it here — whether it is visible or marginal — is the part no
+calculation settles.
