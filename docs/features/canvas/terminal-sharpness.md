@@ -209,3 +209,38 @@ What is left genuinely needs eyes, and it is now one narrow question rather than
 raster*. Neither lands pixel-exact. Downsampling beats upsampling as a general result in
 resampling, but **how much** it beats it here — whether it is visible or marginal — is the part no
 calculation settles.
+
+## Measured: how much downsampling actually beats upsampling
+
+The section above says "how much it beats it here is the part no calculation settles". That was
+wrong, and this is the correction.
+
+The only thing that differs between stock and patched is the **density the glyph raster is built
+at** before the compositor resamples it. WebGL merely uploads that raster as a texture; the
+filtering is the compositor's. So the physics is renderer-independent and reproduces exactly in
+canvas 2D — which also reads back, where a WebGL drawing buffer would not.
+
+Ink coverage (share of ink pixels fully on — the metric `glyphgrid/raster.ts` quotes), at **dpr
+1.5**, 12 lines of mixed text:
+
+| zoom | stock | patched | change | mean luma |
+| --- | --- | --- | --- | --- |
+| 0.83 | 0.4520 | 0.4520 | **0%** | 149.4 → 149.4 |
+| 1.0 | 0.6315 | 0.6315 | **0%** | 175.3 → 175.3 |
+| 1.3 | 0.4687 | 0.5842 | **+24.6%** | 151.0 → 165.3 |
+| 1.5 | 0.4639 | 0.5969 | **+28.7%** | 150.2 → 166.7 |
+| 2.0 | 0.4634 | 0.7592 | **+63.8%** | 147.7 → 190.8 |
+
+Mean luma rises alongside coverage, which is the signature of less smearing rather than merely
+different thresholding: the same ink is landing on fewer, brighter pixels.
+
+Every prediction the arithmetic made is confirmed by the measurement — **identical at zoom 1**,
+**identical at 0.83**, and the largest gain at zoom 2 where `isPixelExact` flips true. The
+intermediate zooms, which the arithmetic could only call "downsampling, not exact", turn out to be
+worth roughly a quarter more ink coverage.
+
+**What this is not.** It is a faithful simulation of the resampling, not a photograph of the running
+app: Chromium's compositor filter may differ in detail from canvas 2D's, and it does not exercise
+xterm's atlas, the WebGL upload path, or subpixel antialiasing. It settles *how much the optics
+change*; it does not replace looking once at a real screen. But "is the improvement visible or
+marginal" is no longer the open question — a 24–64% coverage gain is not marginal.
