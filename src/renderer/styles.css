@@ -201,6 +201,13 @@
   --card-rgb: 29, 27, 32; /* --md-surface-container-low */
   /* Drop-shadow weight multiplier — unchanged, no M3 counterpart (tonal elevation, no shadows). */
   --shadow-k: 1;
+  /* Modal/drawer scrim. A bare rgba(10,12,18,a) was hardcoded at five overlay sites with no
+     light-theme override, so every scrim stayed near-black over a light page — measured by
+     sampling a real capture. Routed through a triple plus a weight multiplier, exactly as
+     --shadow-k already does, so each site keeps its own hand-judged alpha and the flip is one
+     declaration rather than five. */
+  --scrim-rgb: 10, 12, 18;
+  --scrim-k: 1;
 
   /* Canvas chrome that lives on a React Flow prop rather than a rule; now an alias onto the M3
      literal so Canvas.tsx's existing `var(--canvas-dot)` re-themes without that component
@@ -303,6 +310,10 @@
   --popover-rgb: 255, 255, 255; /* --md-surface-container-lowest */
   --card-rgb: 247, 242, 250; /* --md-surface-container-low */
   --shadow-k: 0.35; /* macOS light-mode shadows are about a third of the weight of dark ones */
+  /* A light page needs a neutral black scrim, and M3's own light scrim is roughly half the
+     weight of its dark one (0.32 vs 0.6) — so the same alphas, scaled. */
+  --scrim-rgb: 0, 0, 0;
+  --scrim-k: 0.55;
   --md-canvas-dot: #D8D0DE;
   --minimap-mask: rgba(251, 248, 243, 0.6);
 }
@@ -3970,7 +3981,7 @@ body,
   position: fixed;
   inset: 0;
   z-index: 55;
-  background: rgba(10, 12, 18, 0.4);
+  background: rgba(var(--scrim-rgb), calc(0.4 * var(--scrim-k)));
   display: flex;
   justify-content: flex-end;
 }
@@ -4847,7 +4858,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 12, 18, 0.55);
+  background: rgba(var(--scrim-rgb), calc(0.55 * var(--scrim-k)));
 }
 
 .confirm {
@@ -5361,7 +5372,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 12, 18, 0.5);
+  background: rgba(var(--scrim-rgb), calc(0.5 * var(--scrim-k)));
 }
 
 .shortcuts {
@@ -5438,10 +5449,7 @@ body,
   justify-content: center;
   align-items: flex-start;
   padding-top: 12vh;
-  background: rgba(10, 12, 18, 0.45); /* the app's shared scrim rgb (10,12,18 — see
-    .destgate-overlay, .drawer-overlay et al.), used at ~20 sites outside this scope; --md-scrim
-    is a different rgb (0,0,0) with no existing app analogue, so mapping only this one overlay
-    would desync it from every sibling scrim rather than relabel it — left, like --menu-rgb */
+  background: rgba(var(--scrim-rgb), calc(0.45 * var(--scrim-k))); /* the app's shared scrim, themed through --scrim-rgb/--scrim-k */
 }
 
 .palette {
@@ -11371,7 +11379,7 @@ body,
   position: fixed;
   inset: 0;
   z-index: 75; /* above every other dialog (.confirm-overlay is 70) */
-  background: rgba(10, 12, 18, 0.6);
+  background: rgba(var(--scrim-rgb), calc(0.6 * var(--scrim-k)));
 }
 /* Anchored variant: the scrim is still full-screen (click-outside-to-cancel + no interaction
    leaks through to whatever is behind it) but the CARD is positioned near the control that
