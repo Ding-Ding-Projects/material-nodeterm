@@ -9,4 +9,4 @@
  * with `.tabbar` instead of floating over the canvas below it. The two are independent CSS/TS
  * values with no shared build-time link — if you change one, change the other.
  */
-export const APP_BAR_HEIGHT = 44
+export const APP_BAR_HEIGHT = 64

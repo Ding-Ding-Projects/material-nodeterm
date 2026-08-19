@@ -97,8 +97,8 @@
   --md-shape-small: var(--radius); /* 8px */
   /* Bar geometry, named once so the stylesheet and src/shared/layout.ts cannot drift.
      The Windows titleBarOverlay height in src/main/index.ts reads the same constant. */
-  --app-bar-h: 44px;
-  --nav-rail-w: 0px;
+  --app-bar-h: 64px;
+  --nav-rail-w: 88px;
   --md-shape-medium: var(--radius-lg); /* 12px */
   --md-shape-large: var(--radius-xl); /* 16px */
   --md-shape-extra-large: var(--radius-xxl); /* 28px */

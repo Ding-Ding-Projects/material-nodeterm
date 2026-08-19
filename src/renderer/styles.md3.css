@@ -1,3 +1,757 @@
+/* ==============================================================================================
+   styles.md3.css — the Material Design 3 layer.
+
+   Loaded AFTER styles.css (see boot.tsx), so equal-specificity rules here win on source order.
+   Every lane of the MD3 rewrite appends its own banner-delimited section below; colours read
+   only `var(--md-*)` role tokens declared in styles.css's two token blocks, elevation is tonal
+   (no box-shadow), and the token contract lives in design/v2/md3/tokens.css.
+   ============================================================================================== */
+
+/* ============================================================================================
+   MD3: Nav shell — top app bar, project switcher, nav rail + FAB
+   ============================================================================================
+   Loaded AFTER styles.css (see boot.tsx), so every rule below wins the cascade at equal
+   specificity — this file overrides the legacy `.tabbar`/`.dock`/`.controls-cluster` chrome by
+   re-declaring the classes the new components actually render, plus geometry tweaks for the
+   handful of floating overlays that used to assume a 44px bar and no left rail.
+
+   Design source: design/v2/MD3 Canvas.dc.html + design/v2/md3/HANDOFF.md. Colours are `var(--md-*)`
+   tokens only (see design/v2/md3/tokens.css) — no hex literals, no box-shadow (the one exception
+   below is React Flow's own connection-handle ring, untouched here). */
+
+:root {
+  --app-bar-h: 64px;
+  --nav-rail-w: 88px;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Top app bar
+   --------------------------------------------------------------------------------------------- */
+
+.md3-app-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--app-bar-h);
+  flex-shrink: 0;
+  /* Room for the macOS traffic lights on the left, mirroring the old `.tabbar` padding. Windows
+     reserves the opposite edge for the native caption-button overlay instead — see below. */
+  padding: 0 20px 0 86px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  z-index: 30;
+  /* The bar itself is the window drag region — see the window-chrome section in CLAUDE.md. */
+  -webkit-app-region: drag;
+}
+:root[data-platform='win'] .md3-app-bar {
+  padding: 0 146px 0 20px;
+}
+.md3-app-bar button,
+.md3-app-bar input,
+.md3-switcher-menu,
+.md3-fab-menu {
+  -webkit-app-region: no-drag;
+}
+
+.md3-app-bar__brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.md3-app-bar__brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.md3-app-bar__brand-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.md3-app-bar__spacer {
+  flex: 1;
+}
+
+/* The docked search bar re-themes the EXISTING `.cluster-search` button (kept verbatim — same
+   class, same title="Command palette" — so the packaged-app driver script needs no changes). */
+.cluster-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 340px;
+  max-width: 38vw;
+  min-width: 160px;
+  height: 44px;
+  padding: 0 8px 0 18px;
+  border-radius: var(--md-shape-full);
+  border: none;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  transition: background var(--md-motion-effect);
+}
+.cluster-search:hover {
+  background: var(--md-surface-container-highest);
+}
+.cluster-search__icon {
+  font-size: 17px;
+  line-height: 1;
+}
+.cluster-search .kbd {
+  margin-left: auto;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+
+.md3-app-bar__cluster {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Shared 44px round icon button — every app-bar action (notifications, phone pairing, help). */
+.md3-icon-btn,
+.md3-app-bar__cluster .notif-bell {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--md-shape-full);
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background var(--md-motion-effect);
+}
+.md3-icon-btn:hover,
+.md3-app-bar__cluster .notif-bell:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-app-bar__cluster .notif-bell__badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--md-error);
+  color: var(--md-on-error);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Outlined chip beside the switcher for an SSH-connected project. */
+.md3-remote-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--md-shape-xs);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Project switcher
+   --------------------------------------------------------------------------------------------- */
+
+.md3-switcher {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  height: 44px;
+  border-radius: var(--md-shape-full);
+  overflow: hidden;
+  background: var(--md-secondary-container);
+}
+
+.md3-switcher__trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 0 4px 0 16px;
+  border: none;
+  background: transparent;
+  color: var(--md-on-secondary-container);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.md3-switcher__trigger:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-switcher__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--md-primary);
+  flex-shrink: 0;
+}
+.md3-switcher__name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md3-switcher__badge,
+.md3-switcher-row__badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--md-error);
+  color: var(--md-on-error);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.md3-switcher__more-badge {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* The board (kanban) toggle sits inside the switcher pill — after the name, before the caret —
+   per the handoff. Keep the exact class name; the kanban-view tests select it. */
+.tab__board-toggle {
+  height: 100%;
+  width: 34px;
+  border: none;
+  background: transparent;
+  color: var(--md-on-secondary-container);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  border-radius: 0;
+  transition: background var(--md-motion-effect);
+}
+.tab__board-toggle:hover {
+  opacity: 1;
+  background: var(--md-surface-container-highest);
+}
+
+.md3-switcher__caret {
+  height: 100%;
+  width: 30px;
+  border: none;
+  background: transparent;
+  color: var(--md-on-secondary-container);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--md-motion-effect);
+}
+.md3-switcher__caret:hover {
+  background: var(--md-surface-container-highest);
+}
+
+.md3-switcher-backdrop,
+.md3-fab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+.md3-switcher-menu {
+  position: fixed;
+  z-index: 40;
+  width: 300px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-lg);
+  overflow: hidden;
+}
+.md3-switcher-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.md3-switcher-row-wrap {
+  display: flex;
+  flex-direction: column;
+}
+.md3-switcher-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--md-shape-sm);
+  cursor: pointer;
+  color: var(--md-on-surface);
+  transition: background var(--md-motion-effect);
+}
+.md3-switcher-row:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-switcher-row.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-weight: 600;
+}
+.md3-switcher-row.is-unavailable {
+  opacity: 0.45;
+  cursor: default;
+}
+.md3-switcher-row.is-drop-before {
+  background: var(--md-primary-container);
+}
+.md3-switcher-row__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.md3-switcher-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+.md3-switcher-row__ssh {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 2px 6px;
+  border-radius: var(--md-shape-xs);
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+  flex-shrink: 0;
+}
+.md3-switcher-row__lock {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.md3-switcher-row__more {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--md-shape-full);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+.md3-switcher-row__more:hover {
+  opacity: 1;
+  background: var(--md-surface-container-high);
+}
+
+/* The per-row "⋮" actions panel — reuses the existing `.tab-menu__group` / `.tab-menu__sub` /
+   `.tab-menu__caret` / `.tab-menu__check` layout helpers from styles.css (bare selectors, so
+   they apply here too) for the expandable account/permission-mode sub-lists; only the buttons'
+   own colours are re-themed to MD3 tokens below. */
+.md3-switcher-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 6px 18px;
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid var(--md-outline-variant);
+}
+.md3-switcher-actions button {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--md-shape-xs);
+  color: var(--md-on-surface);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.md3-switcher-actions button:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.md3-switcher-actions button.danger {
+  color: var(--md-error);
+}
+.md3-switcher-actions button.danger:hover:not(:disabled) {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md3-switcher-actions button:disabled {
+  color: var(--md-outline);
+  cursor: not-allowed;
+}
+
+.md3-switcher-menu__add {
+  flex-shrink: 0;
+  margin-top: 6px;
+  height: 44px;
+  border: none;
+  border-radius: var(--md-shape-sm);
+  background: transparent;
+  color: var(--md-primary);
+  font-weight: 600;
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.md3-switcher-menu__add:hover {
+  background: var(--md-surface-container-highest);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Nav rail + FAB
+   --------------------------------------------------------------------------------------------- */
+
+/* Flex row holding the rail and the canvas pane — a genuine sibling of `.flow-wrap`, so the
+   canvas area is truly narrower rather than the rail floating on top of it (fit-view then never
+   needs to treat the rail as an obstacle). */
+.md3-canvas-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.md3-nav-rail {
+  flex: 0 0 var(--nav-rail-w);
+  width: var(--nav-rail-w);
+  position: relative;
+  z-index: 28; /* above .top-banners (27), below the app bar (30) */
+  background: var(--md-surface-container);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0 14px;
+  gap: 6px;
+}
+
+.md3-fab-wrap {
+  position: relative;
+  margin-bottom: 10px;
+}
+.md3-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--md-shape-md);
+  border: none;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform var(--md-motion-spatial),
+    background var(--md-motion-effect);
+}
+.md3-fab:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-fab.is-open {
+  transform: rotate(45deg);
+}
+
+.md3-fab-menu {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 0;
+  width: 280px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-lg);
+  padding: 10px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.md3-fab-menu button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border-radius: var(--md-shape-md);
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.md3-fab-menu button:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.md3-fab-menu button[aria-disabled='true'] {
+  color: var(--md-outline);
+  cursor: not-allowed;
+}
+.md3-fab-menu button[aria-disabled='true']:hover {
+  background: transparent;
+}
+.md3-fab-menu button svg {
+  flex-shrink: 0;
+  color: var(--md-on-surface-variant);
+}
+.md3-fab-menu__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.md3-fab-menu__hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--md-on-surface-variant);
+  white-space: normal;
+}
+
+.md3-nav-rail__items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.md3-rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 80px;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  font-family: inherit;
+}
+.md3-rail-item__pill {
+  width: 56px;
+  height: 32px;
+  border-radius: var(--md-shape-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: var(--md-on-surface-variant);
+  transition: background var(--md-motion-effect);
+}
+.md3-rail-item__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+}
+.md3-rail-item.is-active .md3-rail-item__pill {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-rail-item.is-active .md3-rail-item__label {
+  color: var(--md-on-surface);
+  font-weight: 600;
+}
+.md3-rail-badge {
+  position: absolute;
+  top: -2px;
+  right: 8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--md-error);
+  color: var(--md-on-error);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.md3-nav-rail__spacer {
+  flex: 1;
+}
+.md3-rail-item--kids {
+  margin-top: auto;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Bottom-left canvas chrome: undo/redo/save pill + the merged zoom/fit/lock Controls row
+   --------------------------------------------------------------------------------------------- */
+
+.md3-canvas-actions {
+  position: absolute;
+  left: 20px;
+  bottom: 76px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  padding: 0 6px;
+  gap: 2px;
+}
+.md3-canvas-actions button {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--md-shape-full);
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.md3-canvas-actions button:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.md3-canvas-actions button:disabled {
+  color: var(--md-outline);
+  cursor: not-allowed;
+}
+.md3-canvas-actions__sep {
+  width: 1px;
+  height: 22px;
+  background: var(--md-outline-variant);
+  margin: 0 4px;
+}
+.md3-canvas-actions__dirty {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+.md3-canvas-actions__dirty.dirty {
+  background: var(--md-error);
+}
+
+/* React Flow's built-in Controls is disabled for zoom/fit (`showZoom={false} showFitView={false}`
+   on <Controls>) and re-composed as MD3 buttons, horizontal per the handoff's zoom pill. Tonal
+   only — no box-shadow (rule: elevation here is tonal, not shadowed). */
+.react-flow__controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  box-shadow: none;
+  overflow: visible;
+}
+.react-flow__controls-button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  box-shadow: none;
+}
+.react-flow__controls-button:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-zoom-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--md-on-surface-variant);
+  padding: 0 6px;
+  min-width: 38px;
+  text-align: center;
+  user-select: none;
+}
+
+/* The bottom-left usage/RAM pill cluster used to clear a narrow vertical Controls column at
+   left:60px; the new horizontal zoom pill is wider, so give it more room. */
+.canvas-pills {
+  left: 232px;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Geometry: floating overlays that assumed a 44px bar and no left rail
+   --------------------------------------------------------------------------------------------- */
+
+.kanban-overlay {
+  top: var(--app-bar-h);
+  left: var(--nav-rail-w);
+}
+.sessions-sidebar {
+  top: calc(var(--app-bar-h) + 10px);
+  left: calc(var(--nav-rail-w) + 14px);
+  max-height: calc(100vh - var(--app-bar-h) - 52px);
+}
+.sessions-icon-cluster {
+  top: calc(var(--app-bar-h) + 10px);
+  left: calc(var(--nav-rail-w) + 14px);
+}
+.top-banners {
+  top: calc(var(--app-bar-h) + 2px);
+}
+.presence-prompt {
+  top: calc(var(--app-bar-h) + 2px);
+}
+
 /* ============================================================================================
    MD3: Canvas node kinds  (lane: nodes)
 
@@ -874,6 +1628,8 @@
 .dino-node__header {
   min-height: 52px;
 }
+
+/* ============================================================================================
    MD3: Kanban board (Board lane — design/v2/MD3 Board.dc.html)
 
    This file cascades AFTER styles.css (see boot.tsx import order), and every selector below
@@ -1392,66 +2148,6 @@
   background: var(--md-scrim);
 }
 .kanban-modal {
-/* =================================================================================================
- * Material Design 3 rewrite — OVERLAYS lane.
- *
- * Restyles: command palette, context menu (+ filterable-menu head), anchored popover + regex
- * trigger, tooltip, confirm/input dialog shell, clone-repo dialog, the destructive confirmation
- * gate, notification toasts, the notification centre, and bulk-action bar/preview.
- *
- * Loaded AFTER styles.css (see boot.tsx), so equal-specificity selectors here win by source
- * order — nothing is deleted from styles.css, this file only overrides. Colours come only from
- * var(--md-*) tokens (all already defined in styles.css's own token layer); shape/spacing follow
- * design/v2/MD3 Overlays.dc.html and design/v2/md3/HANDOFF.md exactly per screen (menus/dialogs
- * are NOT all the same radius — read the prototype, not just the recipe table). No box-shadow —
- * elevation here is tonal only (surface-container steps), never a drop shadow.
- * ================================================================================================= */
-
-:root {
-  /* Fallbacks only — if a later token pass adds these to styles.css's own :root, that
-     declaration wins automatically (var() re-resolves the live cascade, not a one-time copy),
-     so nothing here needs revisiting once it does. */
-  --md3-motion-spatial: var(--md-motion-spatial, 500ms cubic-bezier(0.38, 1.21, 0.22, 1));
-  --md3-motion-effect: var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-  --md3-font-ui: var(--md-font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif);
-  --md3-font-mono: var(--md-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --md3-motion-spatial: 1ms linear;
-    --md3-motion-effect: 1ms linear;
-  }
-}
-
-/* Shared spatial pop-in for a floating menu/dialog surface — an entrance, never applied to
-   anything that moves continuously (drag/zoom/scroll are explicitly out of scope for this
-   token). Kept as one keyframe so every overlay enters with the same character. */
-@keyframes md3-pop-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-@keyframes md3-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* ---- MD3: Command palette ---- */
-
-.palette-overlay {
-  background: var(--md-scrim);
-}
-.palette {
   background: var(--md-surface-container-high);
   border: none;
   border-radius: 28px;
@@ -1634,6 +2330,71 @@
 .github-issue-modal__body {
   color: var(--md-on-surface-variant);
 }
+
+/* =================================================================================================
+ * Material Design 3 rewrite — OVERLAYS lane.
+ *
+ * Restyles: command palette, context menu (+ filterable-menu head), anchored popover + regex
+ * trigger, tooltip, confirm/input dialog shell, clone-repo dialog, the destructive confirmation
+ * gate, notification toasts, the notification centre, and bulk-action bar/preview.
+ *
+ * Loaded AFTER styles.css (see boot.tsx), so equal-specificity selectors here win by source
+ * order — nothing is deleted from styles.css, this file only overrides. Colours come only from
+ * var(--md-*) tokens (all already defined in styles.css's own token layer); shape/spacing follow
+ * design/v2/MD3 Overlays.dc.html and design/v2/md3/HANDOFF.md exactly per screen (menus/dialogs
+ * are NOT all the same radius — read the prototype, not just the recipe table). No box-shadow —
+ * elevation here is tonal only (surface-container steps), never a drop shadow.
+ * ================================================================================================= */
+
+:root {
+  /* Fallbacks only — if a later token pass adds these to styles.css's own :root, that
+     declaration wins automatically (var() re-resolves the live cascade, not a one-time copy),
+     so nothing here needs revisiting once it does. */
+  --md3-motion-spatial: var(--md-motion-spatial, 500ms cubic-bezier(0.38, 1.21, 0.22, 1));
+  --md3-motion-effect: var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+  --md3-font-ui: var(--md-font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif);
+  --md3-font-mono: var(--md-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --md3-motion-spatial: 1ms linear;
+    --md3-motion-effect: 1ms linear;
+  }
+}
+
+/* Shared spatial pop-in for a floating menu/dialog surface — an entrance, never applied to
+   anything that moves continuously (drag/zoom/scroll are explicitly out of scope for this
+   token). Kept as one keyframe so every overlay enters with the same character. */
+@keyframes md3-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes md3-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- MD3: Command palette ---- */
+
+.palette-overlay {
+  background: var(--md-scrim);
+}
+.palette {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 28px;
+  box-shadow: none;
   animation: md3-pop-in var(--md3-motion-spatial);
 }
 .palette--full {
@@ -2462,6 +3223,8 @@
 }
 .bulk-preview__excluded-title {
   color: var(--md-warning);
+}
+
 /* nodeterm — Material Design 3 rewrite styles.
  * Each lane owns one clearly banner-delimited section below. New global classes only
  * (md3-<component> / md3-<component>__<part> / md3-<component>--<variant>), colours from
@@ -2502,75 +3265,6 @@
 }
 
 .md3-regex-trigger:focus-visible {
-/* nodeterm — Material Design 3 rewrite, per-screen chrome.
-   Loaded after styles.css / tailwind.css (see boot.tsx) so these rules win the cascade for the
-   selectors they redeclare. Every colour reads var(--md-*) (or the pre-existing themed
-   --canvas-bg / --canvas-dot / --mono-font tokens); no hex literals, no box-shadow — Material 3
-   elevation here is tonal (a step up the surface-container ladder), never a drop shadow.
-   design/v2/md3/HANDOFF.md is the recipe table this follows; design/v2/MD3 Welcome.dc.html is the
-   prototype for the welcome screen specifically. */
-
-/* =====================================================================================
-   MD3: Welcome / start screen  (design/v2/MD3 Welcome.dc.html)
-   ===================================================================================== */
-
-.md3-welcome {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  overflow: auto;
-  background: var(--canvas-bg);
-  background-image: radial-gradient(var(--md-canvas-dot, var(--canvas-dot)) 1.2px, transparent 1.2px);
-  background-size: 26px 26px;
-  color: var(--md-on-surface);
-}
-
-/* Opened via "+" while a project is in kanban view: the board overlay (z 25) is opaque and would
-   hide the default z-5 welcome screen. Lift it above the board + controls (26) + banners (27), but
-   keep it below the tab bar (30) so tabs stay reachable — same relative stacking as on the canvas. */
-.md3-welcome--over-board {
-  z-index: 28;
-}
-
-.md3-welcome__topbar {
-  position: absolute;
-  top: 14px;
-  left: 20px;
-  right: 64px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.md3-welcome__back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.md3-welcome__back svg {
-  flex: none;
-}
-.md3-welcome__back:hover {
-  background: var(--md-surface-container);
-}
-.md3-welcome__back:focus-visible {
   outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
@@ -2615,6 +3309,1129 @@
 }
 
 .md3-regex-builder *:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+/* -- palette column: token search + stacked, scrollable token/preset sections -- */
+.md3-regex-builder__palette {
+  width: 240px;
+  flex: 0 0 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 8px 14px 14px;
+  border-right: 1px solid var(--md-outline-variant);
+  max-height: min(76vh, 720px);
+}
+
+.md3-regex-builder__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.md3-regex-builder__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.md3-regex-builder__engine-chip {
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  color: var(--md-on-surface-variant);
+  cursor: help;
+  white-space: nowrap;
+}
+
+.md3-regex-builder__note {
+  margin: -2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__token-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__token-search svg {
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__token-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.md3-regex-builder__palette-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.md3-regex-builder__empty-note {
+  margin: 4px 0;
+  font-size: 11.5px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__token-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.md3-regex-builder__section-title {
+  margin: 0;
+  padding: 0 4px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__section-title--mt {
+  margin-top: 4px;
+}
+
+.md3-regex-builder__token-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.md3-regex-builder__token {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: var(--md-shape-xs, 8px);
+  background: transparent;
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.md3-regex-builder__token:hover {
+  /* One step below the glyph badge's own --highest tone, so the row highlight
+     stays visually distinct from the badge sitting inside it. */
+  background: var(--md-surface-container-high);
+}
+
+.md3-regex-builder__token-glyph {
+  flex: 0 0 auto;
+  min-width: 60px;
+  padding: 2px 6px;
+  border-radius: var(--md-shape-xs, 8px);
+  background: var(--md-surface-container-highest);
+  color: var(--md-primary);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.md3-regex-builder__token-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.md3-regex-builder__preset {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: var(--md-shape-xs, 8px);
+  background: transparent;
+  color: var(--md-on-surface);
+  cursor: pointer;
+}
+
+.md3-regex-builder__preset:hover {
+  background: var(--md-surface-container-high);
+}
+
+.md3-regex-builder__preset-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.md3-regex-builder__preset svg {
+  flex: 0 0 auto;
+  color: var(--md-outline);
+}
+
+/* -- main column: pattern / flags / sample / live highlight / substitution -- */
+.md3-regex-builder__main {
+  flex: 1 1 340px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  max-height: min(76vh, 720px);
+  overflow-y: auto;
+}
+
+.md3-regex-builder__row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.md3-regex-builder__row-head--mt {
+  margin-top: 6px;
+}
+
+.md3-regex-builder__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__spacer {
+  flex: 1;
+}
+
+.md3-regex-builder__count {
+  font-size: 10.5px;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full, 999px);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect, 160ms ease);
+}
+
+.md3-regex-builder__chip-btn svg {
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__chip-btn:hover {
+  background: var(--md-surface-container-high);
+}
+
+.md3-regex-builder__chip-btn--muted {
+  border-color: transparent;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__pattern-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+}
+
+.md3-regex-builder__pattern-pill--error {
+  border-color: var(--md-error);
+}
+
+.md3-regex-builder__slash {
+  color: var(--md-outline);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__pattern-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 14px;
+}
+
+.md3-regex-builder__flag-string {
+  flex: 0 0 auto;
+  color: var(--md-primary);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.md3-regex-builder__flag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.md3-regex-builder__flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-xs, 8px);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.md3-regex-builder__flag-letter {
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-weight: 700;
+}
+
+.md3-regex-builder__flag-chip--on {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.md3-regex-builder__banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--md-shape-sm, 12px);
+  padding: 8px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.md3-regex-builder__banner svg {
+  flex: 0 0 auto;
+}
+
+.md3-regex-builder__banner--error {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+
+.md3-regex-builder__banner--warn {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+
+.md3-regex-builder__sample {
+  resize: vertical;
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  padding: 9px 12px;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  outline: none;
+}
+
+.md3-regex-builder__sample:focus-visible {
+  border-color: var(--md-primary);
+}
+
+.md3-regex-builder__match-badge {
+  height: 20px;
+  padding: 0 9px;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  font-size: 10.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.md3-regex-builder__match-badge--hit {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+
+.md3-regex-builder__hint {
+  font-size: 10.5px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__hint--mono {
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+}
+
+.md3-regex-builder__highlight {
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container-lowest);
+  padding: 9px 12px;
+  min-height: 42px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.md3-regex-builder__muted {
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__error-text {
+  color: var(--md-error);
+}
+
+.md3-regex-builder__mark {
+  border-radius: 4px;
+  padding: 0 1px;
+}
+
+.md3-regex-builder__truncated-note {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__replacement {
+  height: 38px;
+  border-radius: var(--md-shape-sm, 12px);
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  padding: 0 12px;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  outline: none;
+}
+
+.md3-regex-builder__replacement:focus-visible {
+  border-color: var(--md-primary);
+}
+
+.md3-regex-builder__substituted {
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container-lowest);
+  padding: 9px 12px;
+  min-height: 22px;
+  max-height: 100px;
+  overflow-y: auto;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--md-on-surface-variant);
+}
+
+/* -- side column: matches & capture groups, explanation, info card -- */
+.md3-regex-builder__side {
+  width: 270px;
+  flex: 0 0 270px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 14px 12px;
+  border-left: 1px solid var(--md-outline-variant);
+  max-height: min(76vh, 720px);
+  overflow-y: auto;
+}
+
+.md3-regex-builder__match-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.md3-regex-builder__match-card {
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container);
+  padding: 8px 10px;
+}
+
+.md3-regex-builder__match-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.md3-regex-builder__match-num {
+  flex: 0 0 auto;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.md3-regex-builder__match-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.md3-regex-builder__match-at {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__group-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding-left: 4px;
+}
+
+.md3-regex-builder__group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.md3-regex-builder__group-name {
+  flex: 0 0 auto;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.md3-regex-builder__group-value {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+  word-break: break-all;
+}
+
+.md3-regex-builder__no-matches {
+  border-radius: var(--md-shape-md, 16px);
+  border: 1px dashed var(--md-outline-variant);
+  padding: 12px;
+  font-size: 11.5px;
+  color: var(--md-on-surface-variant);
+  text-align: center;
+}
+
+.md3-regex-builder__explain-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.md3-regex-builder__explain-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 2px;
+}
+
+.md3-regex-builder__explain-tok {
+  flex: 0 0 auto;
+  min-width: 56px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--md-surface-container-highest);
+  color: var(--md-primary);
+  font-family: var(--md-font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.md3-regex-builder__explain-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__info-card {
+  border-radius: var(--md-shape-md, 16px);
+  background: var(--md-surface-container);
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.md3-regex-builder__info-title {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-regex-builder__info-body {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+
+/* -- footer ("Done") -- */
+.md3-regex-builder__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.md3-regex-builder__done {
+  height: 34px;
+  padding: 0 18px;
+  border-radius: var(--md-shape-full, 999px);
+  border: none;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.md3-regex-builder__done:hover {
+  filter: brightness(1.05);
+}
+
+/* -- narrow-viewport fallback: stack the three columns instead of squeezing them -- */
+@media (max-width: 900px) {
+  .md3-regex-builder__columns {
+    flex-direction: column;
+  }
+  .md3-regex-builder__palette,
+  .md3-regex-builder__main,
+  .md3-regex-builder__side {
+    width: auto;
+    flex: 0 0 auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .md3-regex-builder__palette {
+    border-right: none;
+    border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .md3-regex-builder__side {
+    border-left: none;
+    border-top: 1px solid var(--md-outline-variant);
+  }
+}
+
+/* nodeterm — Material Design 3 rewrite stylesheet.
+ * Loaded after styles.css (see boot.tsx) so an equal-specificity rule here wins on the cascade.
+ * Every colour below reads a --md-* custom property from design/v2/md3/tokens.css's contract —
+ * never a literal, except a saturated-fill foreground that genuinely needs #fff. Tonal elevation
+ * only: no box-shadow anywhere in this file.
+ *
+ * Each lane appends its own banner-delimited section here. Do not edit another lane's section. */
+
+/* ================================================================================
+   MD3: Settings — SettingsPage.tsx, SettingsSidebar.tsx, SettingsSection.tsx,
+   FieldRow.tsx, ThemeSelect.tsx, TerminalPreview.tsx, ShortcutCaptureField.tsx,
+   AppearanceSection.tsx's accent card, ui/Switch.tsx
+   ================================================================================ */
+
+/* ---- Root shell: three tonal layers (sidebar > body > card), matching the nav-rail /
+   surface / surface-container-low ladder the rest of the app-bar rewrite uses. ---- */
+.md3-settings-shell {
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+
+/* ---- Sidebar ---- */
+.md3-settings-sidebar {
+  width: 300px;
+  background: var(--md-surface-container);
+  border-right: 1px solid var(--md-outline-variant);
+}
+
+.md3-settings-sidebar__back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-settings-sidebar__back:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+
+/* Docked search pill (recipe: "Search: docked bar 44px pill surface-container-high"). The Input
+   atom keeps its own component contract; this just gives it the pill housing and repaints its
+   text so it reads as one continuous field rather than a bare box floating on the pill. */
+.md3-settings-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 6px 0 14px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+}
+.md3-settings-search__icon {
+  flex: none;
+  color: var(--md-on-surface-variant);
+}
+.md3-settings-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13.5px;
+  padding: 0;
+}
+.md3-settings-search input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+.md3-settings-search input:focus {
+  outline: none;
+  border: none;
+}
+
+.md3-settings-sidebar__group-title {
+  padding: 0 14px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-settings-nav-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-settings-nav-row:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.md3-settings-nav-row[aria-current='page'] {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-weight: 600;
+}
+.md3-settings-nav-row--dimmed {
+  opacity: 0.35;
+}
+.md3-settings-nav-row__icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+.md3-settings-nav-row__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Section card + rows (the highest-leverage piece — every one of the 35 sections funnels
+   through SettingsSection + FieldRow, so this list-card is the whole MD3 rewrite for most of
+   them). Recipe: r28 surface-container-low card, rows r20 with a hover step to surface-container. */
+.md3-settings-header {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md3-settings-header__title {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--md-on-surface);
+}
+.md3-settings-header__desc {
+  margin-top: 6px;
+  max-width: 640px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container-low);
+  padding: 8px;
+}
+
+/* Every direct child of the card gets the row's padding/radius/hover — whether it is a bare
+   FieldRow (which sets its own internal flex layout via .md3-settings-row below), a raw two-item
+   row a section wrote by hand (already `display:flex` via its own Tailwind classes), or a
+   heading+FieldRow / heading+list GROUP (`<div className="space-y-3">`, or a bare unclassed
+   `<div>` — see AppearanceSection's "Node menu items" block). Deliberately NOT forcing `display`
+   here: a grouped block needs to stay block-level so its heading and list stack vertically by
+   plain flow, and overriding it to `flex` (even column) would have needed a second, narrower
+   selector just to undo it for THIS one case — simpler to only own what every child actually
+   shares (padding, radius, hover) and leave `display` to whichever child needs it. */
+.md3-settings-card > * {
+  border-radius: 20px;
+  padding: 12px 18px;
+  min-height: 64px;
+  box-sizing: border-box;
+  transition: background var(--md-motion-effect);
+}
+.md3-settings-card > *:hover {
+  background: var(--md-surface-container);
+}
+
+.md3-settings-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.md3-settings-row__body {
+  min-width: 0;
+}
+.md3-settings-row__label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+.md3-settings-row__desc {
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+  text-wrap: pretty;
+}
+.md3-settings-row__note {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--md-warning);
+}
+.md3-settings-row__control {
+  flex: none;
+}
+
+/* Small standalone hint/warning text — used outside FieldRow (e.g. FontPicker's "not
+   installed" note, which sits under a control rather than inside a labelled row). */
+.md3-settings-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+.md3-settings-warn-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--md-warning);
+}
+
+/* ---- Theme select (colour-theme dropdown) — self-contained so it never shares the shared
+   `.tab-menu` / `.bind-select` classes other lanes' surfaces (tab bar, source control) still own. */
+.md3-theme-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 260px;
+  height: 40px;
+  padding: 0 10px 0 14px;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--md-motion-effect);
+}
+.md3-theme-trigger:hover {
+  background: var(--md-surface-container);
+}
+.md3-theme-trigger__val {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md3-theme-trigger__chev {
+  flex: none;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-theme-swatch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  border-radius: var(--md-shape-xs);
+  border: 1px solid var(--md-outline-variant);
+}
+.md3-theme-swatch__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.md3-theme-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: var(--md-shape-lg);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-high);
+}
+.md3-theme-menu__group {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+.md3-theme-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.md3-theme-menu button:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-theme-menu__check {
+  flex: none;
+  width: 14px;
+  color: var(--md-primary);
+  font-weight: 700;
+}
+.md3-theme-menu__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Terminal preview card ---- */
+.md3-terminal-preview {
+  display: inline-block;
+  padding: 14px 18px;
+  border-radius: var(--md-shape-md);
+  outline: 1px solid var(--md-outline-variant);
+  outline-offset: -1px;
+  /* Terminal bodies stay dark in both themes — --term-bg is deliberately not a --md-* role. */
+  background: var(--term-bg);
+  overflow: hidden;
+}
+.md3-terminal-preview .xterm-viewport {
+  scrollbar-width: none;
+}
+.md3-terminal-preview .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ---- Shortcut capture field (was a hardcoded `hover:bg-[rgba(255,255,255,0.06)]`) ---- */
+.md3-shortcut-field {
+  min-width: 140px;
+  cursor: pointer;
+  border-radius: var(--md-shape-sm);
+  border: 1px solid var(--md-outline);
+  background: var(--md-surface-container-high);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-on-surface);
+  outline: none;
+  transition: background var(--md-motion-effect);
+}
+.md3-shortcut-field:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-shortcut-field:focus-visible {
+  border-color: var(--md-primary);
+}
+
+/* ---- Accent picker card (AppearanceSection.tsx) ---- */
+.md3-accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.md3-accent-swatch {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color var(--md-motion-effect);
+}
+.md3-accent-swatch--selected {
+  outline-color: var(--md-primary);
+}
+/* White check on a saturated accent fill — the one literal colour this file allows (see the
+   file banner): it must read against arbitrary user-picked hues, not against a themed surface. */
+.md3-accent-swatch__check {
+  color: #fff;
+}
+
+/* ---- Switch (ui/Switch.tsx) — shared across the app; recipe values from HANDOFF.md's
+   component table. Track 52x32, knob 24px on / 16px off, both eased on --md-motion-spatial. ---- */
+.md3-switch {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
+}
+.md3-switch[aria-checked='true'] {
+  border-color: var(--md-primary);
+  background: var(--md-primary);
+}
+.md3-switch__knob {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--md-outline);
+  transition:
+    top var(--md-motion-spatial),
+    left var(--md-motion-spatial),
+    width var(--md-motion-spatial),
+    height var(--md-motion-spatial),
+    background var(--md-motion-effect);
+}
+.md3-switch[aria-checked='true'] .md3-switch__knob {
+  top: 4px;
+  left: 24px;
+  width: 24px;
+  height: 24px;
+  background: var(--md-on-primary);
+}
+
+/* ============================================================================================
    Material Design 3 restyle — HISTORY lane (session memory, local settings history, changelog).
 
    Scope: this file adds a NEW stylesheet on top of styles.css rather than editing it — see
@@ -2712,6 +4529,845 @@
 }
 
 .sessmem-panel__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sessmem-row {
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-low);
+  padding: 6px 8px;
+  transition: background var(--md-motion-effect);
+}
+.sessmem-row:hover {
+  background: var(--md-surface-container);
+}
+
+.md3-sessmem-row__select {
+  accent-color: var(--md-primary);
+  cursor: pointer;
+}
+
+.sessmem-row__main {
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-small);
+}
+.sessmem-row__main:hover:not(:disabled) {
+  background: var(--md-surface-container-high);
+}
+.sessmem-row__main:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
+/* Status dot — the same working/waiting-or-blocked/idle vocabulary the terminal-node header uses,
+   restated in M3 role tokens (HANDOFF.md: "RUNNING = tertiary … NEEDS YOU = error"). */
+.sessmem-row__dot--working {
+  background: var(--md-tertiary);
+}
+.sessmem-row__dot--attention {
+  background: var(--md-error);
+}
+.sessmem-row__dot--idle {
+  background: var(--md-on-surface-variant);
+  opacity: 0.4;
+}
+.sessmem-row__dot--hollow {
+  background: transparent;
+  border: 1px solid var(--md-outline);
+  opacity: 1;
+}
+
+.sessmem-row__title {
+  color: var(--md-on-surface);
+  font-weight: 500;
+}
+
+.md3-sessmem-chip {
+  border-radius: var(--md-shape-small);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.sessmem-row__cmd {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-mono);
+}
+.sessmem-row__mb {
+  color: var(--md-on-surface);
+  font-weight: 600;
+}
+
+.sessmem-row__kill {
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+}
+.sessmem-row__kill:hover {
+  color: var(--md-error);
+  background: var(--md-error-container);
+}
+
+.sessmem-row__kids {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-mono);
+}
+.sessmem-row__kids span {
+  border-radius: var(--md-shape-small);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  padding: 0 6px;
+  margin-left: 4px;
+}
+
+.sessmem-panel__attrib {
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+
+.sessmem-panel__foot {
+  border-top: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+
+.sessmem-panel__refresh {
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.sessmem-panel__refresh:hover {
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-highest);
+}
+.sessmem-panel__refresh:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+/* Embedded (full-page History screen) rather than the RAM pill's floating popover: lay out in
+   normal flow instead of an anchored 380px box. Higher specificity than the bare `.sessmem-panel`
+   rule in styles.css, so it wins regardless of stylesheet load order. */
+.md3-history-screen .sessmem-panel {
+  position: static;
+  width: 100%;
+  max-width: 900px;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+.md3-history-screen .sessmem-panel__head {
+  padding: 0 0 12px;
+}
+.md3-history-screen .sessmem-panel__rows {
+  max-height: none;
+}
+.md3-history-screen .sessmem-row {
+  padding: 12px 14px;
+}
+
+/* --------------------------------------------------------------------------------------------
+   Local settings history (LocalHistoryPanel.tsx) — opened today from Settings → History, and
+   embedded as the History screen's second tab. Every original `.local-history*` class name is
+   kept (there is no test file pinning them, but the names are already good BEM and styles.css
+   already had rules for them, so keeping them avoids inventing a parallel naming scheme for the
+   same elements) with `.md3-history-*` companions for the restyled chrome.
+   -------------------------------------------------------------------------------------------- */
+
+.md3-history-panel {
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+}
+
+.md3-history-toolbar {
+  /* `.local-history__toolbar` in styles.css sets `flex-direction: column` (the pre-M3 stacked
+     layout) on the SAME element (both classes coexist on it) — set `row` explicitly here rather
+     than relying on the flex default, or that legacy declaration wins since it is the only one
+     touching this specific property. */
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.md3-history-dates {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* Shared by LocalHistoryPanel and ChangelogPanel — one "from/to" field recipe for both tabs. */
+.md3-history-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--md-on-surface-variant);
+}
+.md3-history-date-field input[type='date'] {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-small);
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  color-scheme: dark light;
+}
+.md3-history-date-field input[type='date']:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+.md3-history-date-field input[aria-invalid='true'] {
+  border-color: var(--md-error);
+}
+
+/* Shared date-range preset pill row (today/7d/30d/90d/all — LocalHistoryPanel; 30d/90d/all —
+   ChangelogPanel, matching the design's "Last 30 days · Last 90 days · All time" chips). */
+.md3-history-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.md3-history-preset {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-history-preset:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-history-preset--active {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-history-preset:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+.local-history__date-error {
+  width: 100%;
+  color: var(--md-error);
+  font-size: 12px;
+}
+
+/* Shared search field shell (from ExplorerPanel's own `.ex-filter-row`-style pattern): a text
+   input plus the `.*` anchored-regex-builder trigger button beside it. */
+.md3-history-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 6px 0 14px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+.md3-history-search:focus-within {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+.local-history__search,
+.md3-history-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  outline: none;
+}
+.local-history__search::placeholder,
+.md3-history-search__input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+
+.local-history__actions,
+.md3-history-action-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.local-history__action-chip,
+.md3-history-action-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline-variant);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.md3-history-action-toggle input[type='checkbox'] {
+  accent-color: var(--md-primary);
+}
+.md3-history-action-toggle--on {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  border-color: transparent;
+}
+
+.local-history__note,
+.md3-history-note {
+  padding: 14px 4px;
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+.local-history__note--error,
+.md3-history-note--error {
+  color: var(--md-error);
+}
+
+.local-history__rows,
+.md3-history-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 900px;
+}
+
+.local-history__row,
+.md3-history-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-low);
+  padding: 12px 16px;
+  transition: background var(--md-motion-effect);
+}
+.local-history__row:hover {
+  background: var(--md-surface-container);
+}
+.local-history__row input[type='checkbox'] {
+  accent-color: var(--md-primary);
+  flex: 0 0 auto;
+}
+
+.md3-history-chip {
+  flex: 0 0 auto;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: var(--md-shape-small);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.md3-history-chip--created {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.md3-history-chip--deleted {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md3-history-chip--restored {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.md3-history-chip--updated {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.md3-history-row__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.local-history__label,
+.md3-history-row__label {
+  color: var(--md-on-surface);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md3-history-row__meta {
+  color: var(--md-on-surface-variant);
+  font-size: 11.5px;
+}
+/* Both carry an OWN legacy `color: rgba(var(--tint-rgb), …)` declaration in styles.css that a
+   directly-declared property always beats, regardless of specificity — inheriting the new
+   `--md-on-surface-variant` from the `.md3-history-row__meta` wrapper above is not enough on its
+   own to re-theme them. */
+.local-history__when,
+.local-history__sha {
+  color: var(--md-on-surface-variant);
+}
+.local-history__sha {
+  font-family: var(--md-font-mono);
+}
+
+.md3-history-current-chip {
+  flex: 0 0 auto;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.local-history__restore,
+.md3-history-restore {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.local-history__restore:hover,
+.md3-history-restore:hover {
+  background: var(--md-surface-container-high);
+}
+.local-history__restore:focus-visible,
+.md3-history-restore:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+/* --------------------------------------------------------------------------------------------
+   Changelog viewer (src/renderer/components/changelog/*) — genuinely new UI, so it uses the
+   `md3-changelog*` naming the lane brief asks new chrome to use throughout. Shares the
+   `.md3-history-date-field` / `.md3-history-presets` / `.md3-history-search` chrome above with
+   LocalHistoryPanel, so the two sibling tabs stay visually consistent.
+   -------------------------------------------------------------------------------------------- */
+
+.md3-changelog {
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+}
+
+.md3-changelog__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.md3-changelog__dates {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.md3-changelog__error {
+  width: 100%;
+  color: var(--md-error);
+  font-size: 12px;
+}
+
+.md3-changelog__toast {
+  margin: 6px 0;
+  padding: 6px 12px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 12px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.md3-changelog-empty {
+  padding: 14px 4px;
+  color: var(--md-on-surface-variant);
+  line-height: 1.5;
+}
+.md3-changelog-empty--panel {
+  padding: 32px 4px;
+  text-align: center;
+}
+
+.md3-changelog-releases {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 900px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.md3-changelog-release {
+  border-radius: var(--md-shape-large);
+  background: var(--md-surface-container-low);
+  padding: 18px 22px;
+}
+
+.md3-changelog-release__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.md3-changelog-release__select {
+  accent-color: var(--md-primary);
+  cursor: pointer;
+}
+
+.md3-changelog-version {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 13px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-family: var(--md-font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+.md3-changelog-version--unreleased {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+
+.md3-changelog-date {
+  color: var(--md-on-surface-variant);
+  font-size: 12.5px;
+}
+
+.md3-changelog-commits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.md3-changelog-commit {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-small);
+  border: 1px solid var(--md-outline-variant);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-changelog-commit:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.md3-changelog-commit:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+.md3-changelog-commit--none {
+  cursor: default;
+  border-style: dashed;
+}
+.md3-changelog-commit--none:hover {
+  background: transparent;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-changelog-items {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.md3-changelog-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+/* Six deterministic tones, cycled by a hash of the category name (see ReleaseCard.tsx) — a new
+   `### ` heading in CHANGELOG.md gets SOME distinguishable tone without a code change here. */
+.md3-changelog-cat {
+  flex: 0 0 auto;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: var(--md-shape-small);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.md3-changelog-cat--a {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.md3-changelog-cat--b {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-changelog-cat--c {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.md3-changelog-cat--d {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.md3-changelog-cat--e {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.md3-changelog-cat--f {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+
+.md3-changelog-item__text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--md-on-surface);
+}
+/* Release notes render through the shared markdown pipeline (see ReleaseCard.tsx) — style what
+   that can actually produce: bold, inline code, links. */
+.md3-changelog-item__text strong {
+  font-weight: 700;
+}
+.md3-changelog-item__text code {
+  font-family: var(--md-font-mono);
+  font-size: 0.92em;
+  background: var(--md-surface-container-highest);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.md3-changelog-item__text a {
+  color: var(--md-primary);
+}
+.md3-changelog-item__text p {
+  margin: 0;
+  display: inline;
+}
+
+/* --------------------------------------------------------------------------------------------
+   History screen shell (HistoryScreen.tsx) — the three tabs as one surface. Not yet wired into a
+   rail/screen switcher (see the file's own header comment); this section is what makes it render
+   correctly wherever it does get mounted.
+   -------------------------------------------------------------------------------------------- */
+
+.md3-history-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 24px 28px;
+  overflow-y: auto;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  box-sizing: border-box;
+}
+
+.md3-history-screen__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.md3-history-screen__heading {
+  display: flex;
+  flex-direction: column;
+}
+
+.md3-history-screen__title {
+  font-size: 24px;
+  font-weight: 600;
+}
+.md3-history-screen__subtitle {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-history-screen__tabs {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.md3-history-screen__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect), border-color var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-history-screen__tab:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-history-screen__tab--active {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-history-screen__tab:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.md3-history-screen__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.md3-history-screen__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.md3-history-screen__panel[hidden] {
+  display: none;
+}
+
+/* Responsive: the toolbar rows and cards never force horizontal scroll on a narrow window. */
+@media (max-width: 720px) {
+  .md3-history-screen {
+    padding: 16px;
+  }
+  .md3-history-screen__tabs {
+    margin-left: 0;
+    width: 100%;
+  }
+  .md3-changelog-release__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .md3-changelog-commits {
+    margin-left: 0;
+  }
+}
+
+/* nodeterm — Material Design 3 rewrite, per-screen chrome.
+   Loaded after styles.css / tailwind.css (see boot.tsx) so these rules win the cascade for the
+   selectors they redeclare. Every colour reads var(--md-*) (or the pre-existing themed
+   --canvas-bg / --canvas-dot / --mono-font tokens); no hex literals, no box-shadow — Material 3
+   elevation here is tonal (a step up the surface-container ladder), never a drop shadow.
+   design/v2/md3/HANDOFF.md is the recipe table this follows; design/v2/MD3 Welcome.dc.html is the
+   prototype for the welcome screen specifically. */
+
+/* =====================================================================================
+   MD3: Welcome / start screen  (design/v2/MD3 Welcome.dc.html)
+   ===================================================================================== */
+
+.md3-welcome {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  overflow: auto;
+  background: var(--canvas-bg);
+  background-image: radial-gradient(var(--md-canvas-dot, var(--canvas-dot)) 1.2px, transparent 1.2px);
+  background-size: 26px 26px;
+  color: var(--md-on-surface);
+}
+
+/* Opened via "+" while a project is in kanban view: the board overlay (z 25) is opaque and would
+   hide the default z-5 welcome screen. Lift it above the board + controls (26) + banners (27), but
+   keep it below the tab bar (30) so tabs stay reachable — same relative stacking as on the canvas. */
+.md3-welcome--over-board {
+  z-index: 28;
+}
+
+.md3-welcome__topbar {
+  position: absolute;
+  top: 14px;
+  left: 20px;
+  right: 64px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.md3-welcome__back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__back svg {
+  flex: none;
+}
+.md3-welcome__back:hover {
+  background: var(--md-surface-container);
+}
+.md3-welcome__back:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
 .md3-welcome__back-note {
   font-size: 11.5px;
   color: var(--md-on-surface-variant);
@@ -2808,6 +5464,392 @@
 }
 
 .md3-welcome__cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .md3-welcome__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.md3-welcome__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 20px;
+  border: none;
+  border-radius: var(--md-shape-extra-large);
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--md-motion-spatial, 500ms cubic-bezier(0.38, 1.21, 0.22, 1)),
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__card:hover {
+  transform: translateY(-3px);
+  background: var(--md-surface-container-high);
+}
+.md3-welcome__card:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.md3-welcome__card--primary {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.md3-welcome__card--primary:hover {
+  background: var(--md-primary-container);
+  filter: brightness(1.06);
+}
+.md3-welcome__card-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+.md3-welcome__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.md3-welcome__card-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.md3-welcome__card-desc {
+  font-size: 12.5px;
+  opacity: 0.8;
+}
+
+/* ---- "Recently closed" projects list on the start screen ---- */
+.md3-welcome__recent {
+  border-radius: var(--md-shape-extra-large);
+  background: var(--md-surface-container-low);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.md3-welcome__recent-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+  padding: 0 4px 8px;
+}
+
+.md3-welcome__recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.md3-welcome__recent-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 52px;
+  padding: 0 16px;
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface);
+  cursor: pointer;
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__recent-item:hover {
+  background: var(--md-surface-container);
+}
+.md3-welcome__recent-item:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
+.md3-welcome__recent-icon {
+  color: var(--md-on-surface-variant);
+  flex: none;
+}
+
+.md3-welcome__recent-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  flex: none;
+}
+
+.md3-welcome__recent-path {
+  font-size: 12.5px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--mono-font);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md3-welcome__recent-spacer {
+  flex: 1;
+}
+
+.md3-welcome__recent-del {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__recent-item:hover .md3-welcome__recent-del,
+.md3-welcome__recent-del:focus-visible {
+  opacity: 1;
+}
+.md3-welcome__recent-del:hover {
+  background: var(--md-error-container);
+  color: var(--md-error);
+}
+
+.md3-welcome__recent-arrow {
+  flex: none;
+  color: var(--md-on-surface-variant);
+  opacity: 0;
+  transition: opacity var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.md3-welcome__recent-item:hover .md3-welcome__recent-arrow {
+  opacity: 1;
+}
+
+/* =====================================================================================
+   MD3: Onboarding tour — chrome only (cover, two-pane shell, buttons, progress, agent
+   picker, model list). The animated scenes themselves (`.onb-scene-canvas`, `.onb-node`,
+   `.onb-ghost`, `.onb-mic`, `.onb-kstage`, `.onb-lid`, `.onb-phone`, …) live in
+   scenes.tsx and are a DIFFERENT lane's classes — not touched here.
+   ===================================================================================== */
+
+.onb {
+  background: var(--canvas-bg);
+  background-image: radial-gradient(var(--md-canvas-dot, var(--canvas-dot)) 1.2px, transparent 1.2px);
+  background-size: 26px 26px;
+  color: var(--md-on-surface);
+}
+
+.onb-skip {
+  border-radius: var(--md-shape-full);
+  padding: 8px 14px;
+  color: var(--md-on-surface-variant);
+  transition:
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-skip:hover {
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+}
+.onb-skip:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* ---- step 0: cover ---- */
+.onb-cover__name {
+  color: var(--md-on-surface);
+}
+.onb-cover__tagline {
+  color: var(--md-on-surface-variant);
+}
+.onb-prop {
+  color: var(--md-on-surface-variant);
+}
+.onb-prop svg {
+  color: var(--md-primary);
+}
+
+/* ---- steps 1-N: two-pane card ---- */
+.onb-card {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-extra-large);
+  box-shadow: none; /* tonal elevation only — no drop shadow */
+}
+.onb-scene {
+  background:
+    radial-gradient(color-mix(in srgb, var(--md-on-surface-variant) 12%, transparent) 1px, transparent 1px) 0 0 /
+      22px 22px,
+    var(--md-surface-container-lowest);
+  border-right: 1px solid var(--md-outline-variant);
+}
+.onb-pane {
+  color: var(--md-on-surface);
+}
+.onb-step-no {
+  color: var(--md-on-surface-variant);
+}
+.onb-pane h2 {
+  color: var(--md-on-surface);
+}
+.onb-pane p {
+  color: var(--md-on-surface-variant);
+}
+.onb-label {
+  color: var(--md-on-surface-variant);
+}
+.onb-toggle-row {
+  color: var(--md-on-surface);
+}
+.onb-fineprint {
+  color: var(--md-on-surface-variant);
+}
+
+.onb-dots span {
+  background: var(--md-outline-variant);
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-dots span.is-active {
+  background: var(--md-primary);
+}
+
+.onb-btn {
+  height: 40px;
+  padding: 0 20px;
+  background: transparent;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-btn:hover {
+  background: var(--md-surface-container);
+}
+.onb-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.onb-btn--primary {
+  background: var(--md-primary);
+  border-color: transparent;
+  color: var(--md-on-primary);
+}
+.onb-btn--primary:hover {
+  background: var(--md-primary);
+  filter: brightness(1.08);
+}
+
+/* ---- agent picker ---- */
+.onb-agent {
+  background: var(--md-surface-container-high);
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface);
+  transition:
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    border-color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-agent:hover {
+  background: var(--md-surface-container-highest);
+}
+.onb-agent.is-selected {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.onb-agent:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* ---- dictation model list ---- */
+.onb-model {
+  background: var(--md-surface-container-high);
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface);
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-model:hover {
+  background: var(--md-surface-container-highest);
+}
+.onb-model.is-selected {
+  border-color: var(--md-primary);
+}
+.onb-model:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.onb-model__radio {
+  border-color: var(--md-outline);
+}
+.onb-model.is-selected .onb-model__radio {
+  border-color: var(--md-primary);
+  background: radial-gradient(circle at center, var(--md-primary) 0 4px, transparent 4.5px);
+}
+.onb-model__size {
+  color: var(--md-on-surface-variant);
+}
+.onb-model__ok {
+  color: var(--md-success);
+}
+.onb-model__bar {
+  background: var(--md-surface-container-highest);
+}
+.onb-model__bar span {
+  background: var(--md-tertiary);
+}
+
+/* ---- kanban try-it ---- */
+.onb-tryit {
+  border: 1px dashed var(--md-outline);
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface-variant);
+}
+.onb-tryit.is-done {
+  border-style: solid;
+  border-color: var(--md-success);
+  color: var(--md-success);
+}
+.onb-defaultview__label {
+  color: var(--md-on-surface-variant);
+}
+.onb-seg {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  overflow: hidden;
+}
+.onb-seg__btn {
+  color: var(--md-on-surface-variant);
+  transition:
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.onb-seg__btn + .onb-seg__btn {
+  border-left: 1px solid var(--md-outline-variant);
+}
+.onb-seg__btn.is-on {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.onb-seg__btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
+/* ============================================================================================
    MD3 rewrite — incremental per-lane stylesheet.
 
    Loaded after styles.css (see boot.tsx) so equal-specificity rules here win. Every lane appends
@@ -3246,1917 +6288,6 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
-@media (max-width: 900px) {
-  .md3-welcome__cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.md3-welcome__card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 22px 20px;
-  border: none;
-  border-radius: var(--md-shape-extra-large);
-  background: var(--md-surface-container);
-  color: var(--md-on-surface);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform var(--md-motion-spatial, 500ms cubic-bezier(0.38, 1.21, 0.22, 1)),
-    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.md3-welcome__card:hover {
-  transform: translateY(-3px);
-  background: var(--md-surface-container-high);
-}
-.md3-welcome__card:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-.md3-welcome__card--primary {
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-.md3-welcome__card--primary:hover {
-  background: var(--md-primary-container);
-  filter: brightness(1.06);
-}
-.md3-welcome__card-icon {
-  width: 30px;
-  height: 30px;
-  flex: none;
-}
-.md3-welcome__card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.md3-welcome__card-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-.md3-welcome__card-desc {
-  font-size: 12.5px;
-  opacity: 0.8;
-}
-
-/* ---- "Recently closed" projects list on the start screen ---- */
-.md3-welcome__recent {
-  border-radius: var(--md-shape-extra-large);
-  background: var(--md-surface-container-low);
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.sessmem-row {
-  border-radius: var(--md-shape-medium);
-  background: var(--md-surface-container-low);
-  padding: 6px 8px;
-  transition: background var(--md-motion-effect);
-}
-.sessmem-row:hover {
-  background: var(--md-surface-container);
-}
-
-.md3-sessmem-row__select {
-  accent-color: var(--md-primary);
-  cursor: pointer;
-}
-
-.sessmem-row__main {
-  color: var(--md-on-surface);
-  border-radius: var(--md-shape-small);
-}
-.sessmem-row__main:hover:not(:disabled) {
-  background: var(--md-surface-container-high);
-}
-.sessmem-row__main:focus-visible {
-.md3-welcome__recent-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--md-on-surface-variant);
-  padding: 0 4px 8px;
-}
-
-.md3-welcome__recent-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.md3-welcome__recent-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  height: 52px;
-  padding: 0 16px;
-  border-radius: var(--md-shape-large);
-  color: var(--md-on-surface);
-  cursor: pointer;
-  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.md3-welcome__recent-item:hover {
-  background: var(--md-surface-container);
-}
-.md3-welcome__recent-item:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: -2px;
-}
-
-/* Status dot — the same working/waiting-or-blocked/idle vocabulary the terminal-node header uses,
-   restated in M3 role tokens (HANDOFF.md: "RUNNING = tertiary … NEEDS YOU = error"). */
-.sessmem-row__dot--working {
-  background: var(--md-tertiary);
-}
-.sessmem-row__dot--attention {
-  background: var(--md-error);
-}
-.sessmem-row__dot--idle {
-  background: var(--md-on-surface-variant);
-  opacity: 0.4;
-}
-.sessmem-row__dot--hollow {
-  background: transparent;
-  border: 1px solid var(--md-outline);
-  opacity: 1;
-}
-
-.sessmem-row__title {
-  color: var(--md-on-surface);
-  font-weight: 500;
-}
-
-.md3-sessmem-chip {
-  border-radius: var(--md-shape-small);
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface-variant);
-  padding: 1px 7px;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.sessmem-row__cmd {
-  color: var(--md-on-surface-variant);
-  font-family: var(--md-font-mono);
-}
-.sessmem-row__mb {
-  color: var(--md-on-surface);
-  font-weight: 600;
-}
-
-.sessmem-row__kill {
-  color: var(--md-on-surface-variant);
-  border-radius: var(--md-shape-full);
-}
-.sessmem-row__kill:hover {
-  color: var(--md-error);
-  background: var(--md-error-container);
-}
-
-.sessmem-row__kids {
-  color: var(--md-on-surface-variant);
-  font-family: var(--md-font-mono);
-}
-.sessmem-row__kids span {
-  border-radius: var(--md-shape-small);
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface-variant);
-  padding: 0 6px;
-  margin-left: 4px;
-}
-
-.sessmem-panel__attrib {
-  color: var(--md-on-surface-variant);
-  line-height: 1.5;
-}
-
-.sessmem-panel__foot {
-  border-top: 1px solid var(--md-outline-variant);
-  color: var(--md-on-surface-variant);
-}
-
-.sessmem-panel__refresh {
-  color: var(--md-on-surface-variant);
-  border-radius: var(--md-shape-full);
-  transition: background var(--md-motion-effect), color var(--md-motion-effect);
-}
-.sessmem-panel__refresh:hover {
-  color: var(--md-on-surface);
-  background: var(--md-surface-container-highest);
-}
-.sessmem-panel__refresh:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
-}
-
-/* -- palette column: token search + stacked, scrollable token/preset sections -- */
-.md3-regex-builder__palette {
-  width: 240px;
-  flex: 0 0 240px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 8px 14px 14px;
-  border-right: 1px solid var(--md-outline-variant);
-  max-height: min(76vh, 720px);
-}
-
-.md3-regex-builder__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.md3-regex-builder__title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.md3-regex-builder__engine-chip {
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 9.5px;
-  color: var(--md-on-surface-variant);
-  cursor: help;
-  white-space: nowrap;
-}
-
-.md3-regex-builder__note {
-  margin: -2px 0 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__token-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: var(--md-shape-full, 999px);
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface-variant);
-  flex: 0 0 auto;
-}
-
-.md3-regex-builder__token-search svg {
-  flex: 0 0 auto;
-}
-
-.md3-regex-builder__token-search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: inherit;
-  font-size: 12px;
-  outline: none;
-}
-
-.md3-regex-builder__palette-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-right: 4px;
-}
-
-.md3-regex-builder__empty-note {
-  margin: 4px 0;
-  font-size: 11.5px;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__token-section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.md3-regex-builder__section-title {
-  margin: 0;
-  padding: 0 4px 4px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__section-title--mt {
-  margin-top: 4px;
-}
-
-.md3-regex-builder__token-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.md3-regex-builder__token {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 3px 6px;
-  border: none;
-  border-radius: var(--md-shape-xs, 8px);
-  background: transparent;
-  color: var(--md-on-surface);
-  text-align: left;
-  cursor: pointer;
-}
-
-.md3-regex-builder__token:hover {
-  /* One step below the glyph badge's own --highest tone, so the row highlight
-     stays visually distinct from the badge sitting inside it. */
-  background: var(--md-surface-container-high);
-}
-
-.md3-regex-builder__token-glyph {
-  flex: 0 0 auto;
-  min-width: 60px;
-  padding: 2px 6px;
-  border-radius: var(--md-shape-xs, 8px);
-  background: var(--md-surface-container-highest);
-  color: var(--md-primary);
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 11px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.md3-regex-builder__token-desc {
-  flex: 1;
-  min-width: 0;
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__preset-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.md3-regex-builder__preset {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 3px 6px;
-  border: none;
-  border-radius: var(--md-shape-xs, 8px);
-  background: transparent;
-  color: var(--md-on-surface);
-  cursor: pointer;
-}
-
-.md3-regex-builder__preset:hover {
-  background: var(--md-surface-container-high);
-}
-
-.md3-regex-builder__preset-name {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.md3-regex-builder__preset svg {
-  flex: 0 0 auto;
-  color: var(--md-outline);
-}
-
-/* -- main column: pattern / flags / sample / live highlight / substitution -- */
-.md3-regex-builder__main {
-  flex: 1 1 340px;
-  min-width: 300px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
-  max-height: min(76vh, 720px);
-  overflow-y: auto;
-}
-
-.md3-regex-builder__row-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.md3-regex-builder__row-head--mt {
-  margin-top: 6px;
-}
-
-.md3-regex-builder__label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__spacer {
-  flex: 1;
-}
-
-.md3-regex-builder__count {
-  font-size: 10.5px;
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__chip-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--md-shape-full, 999px);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect, 160ms ease);
-}
-
-.md3-regex-builder__chip-btn svg {
-  flex: 0 0 auto;
-}
-
-.md3-regex-builder__chip-btn:hover {
-  background: var(--md-surface-container-high);
-}
-
-.md3-regex-builder__chip-btn--muted {
-  border-color: transparent;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__pattern-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 46px;
-  padding: 0 14px;
-  border-radius: var(--md-shape-md, 16px);
-  background: var(--md-surface-container-lowest);
-  border: 1px solid var(--md-outline-variant);
-}
-
-.md3-regex-builder__pattern-pill--error {
-  border-color: var(--md-error);
-}
-
-.md3-regex-builder__slash {
-  color: var(--md-outline);
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 15px;
-  flex: 0 0 auto;
-}
-
-.md3-regex-builder__pattern-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  outline: none;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 14px;
-}
-
-.md3-regex-builder__flag-string {
-  flex: 0 0 auto;
-  color: var(--md-primary);
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.md3-regex-builder__flag-row {
-/* Embedded (full-page History screen) rather than the RAM pill's floating popover: lay out in
-   normal flow instead of an anchored 380px box. Higher specificity than the bare `.sessmem-panel`
-   rule in styles.css, so it wins regardless of stylesheet load order. */
-.md3-history-screen .sessmem-panel {
-  position: static;
-  width: 100%;
-  max-width: 900px;
-  padding: 0;
-  background: transparent;
-  border: none;
-}
-.md3-history-screen .sessmem-panel__head {
-  padding: 0 0 12px;
-}
-.md3-history-screen .sessmem-panel__rows {
-  max-height: none;
-}
-.md3-history-screen .sessmem-row {
-  padding: 12px 14px;
-}
-
-/* --------------------------------------------------------------------------------------------
-   Local settings history (LocalHistoryPanel.tsx) — opened today from Settings → History, and
-   embedded as the History screen's second tab. Every original `.local-history*` class name is
-   kept (there is no test file pinning them, but the names are already good BEM and styles.css
-   already had rules for them, so keeping them avoids inventing a parallel naming scheme for the
-   same elements) with `.md3-history-*` companions for the restyled chrome.
-   -------------------------------------------------------------------------------------------- */
-
-.md3-history-panel {
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-}
-
-.md3-history-toolbar {
-  /* `.local-history__toolbar` in styles.css sets `flex-direction: column` (the pre-M3 stacked
-     layout) on the SAME element (both classes coexist on it) — set `row` explicitly here rather
-     than relying on the flex default, or that legacy declaration wins since it is the only one
-     touching this specific property. */
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.md3-history-dates {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-/* Shared by LocalHistoryPanel and ChangelogPanel — one "from/to" field recipe for both tabs. */
-.md3-history-date-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--md-on-surface-variant);
-}
-.md3-history-date-field input[type='date'] {
-  height: 36px;
-  padding: 0 10px;
-  border-radius: var(--md-shape-small);
-  border: 1px solid var(--md-outline-variant);
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 13px;
-  color-scheme: dark light;
-}
-.md3-history-date-field input[type='date']:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
-}
-.md3-history-date-field input[aria-invalid='true'] {
-  border-color: var(--md-error);
-}
-
-/* Shared date-range preset pill row (today/7d/30d/90d/all — LocalHistoryPanel; 30d/90d/all —
-   ChangelogPanel, matching the design's "Last 30 days · Last 90 days · All time" chips). */
-.md3-history-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.md3-regex-builder__flag-chip {
-.md3-history-preset {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect), border-color var(--md-motion-effect), color var(--md-motion-effect);
-}
-.md3-history-preset:hover {
-  background: var(--md-surface-container-high);
-}
-.md3-history-preset--active {
-  border-color: transparent;
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
-.md3-history-preset:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
-}
-
-.local-history__date-error {
-  width: 100%;
-  color: var(--md-error);
-  font-size: 12px;
-}
-
-/* Shared search field shell (from ExplorerPanel's own `.ex-filter-row`-style pattern): a text
-   input plus the `.*` anchored-regex-builder trigger button beside it. */
-.md3-history-search {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 40px;
-  padding: 0 6px 0 14px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface-variant);
-  flex: 1 1 220px;
-  min-width: 180px;
-}
-.md3-history-search:focus-within {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
-}
-.local-history__search,
-.md3-history-search__input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 13px;
-  outline: none;
-}
-.local-history__search::placeholder,
-.md3-history-search__input::placeholder {
-  color: var(--md-on-surface-variant);
-}
-
-.local-history__actions,
-.md3-history-action-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.local-history__action-chip,
-.md3-history-action-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: var(--md-shape-xs, 8px);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.md3-regex-builder__flag-letter {
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-weight: 700;
-}
-
-.md3-regex-builder__flag-chip--on {
-  border-color: transparent;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline-variant);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.md3-history-action-toggle input[type='checkbox'] {
-  accent-color: var(--md-primary);
-}
-.md3-history-action-toggle--on {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-  border-color: transparent;
-}
-
-.local-history__note,
-.md3-history-note {
-  padding: 14px 4px;
-  color: var(--md-on-surface-variant);
-  line-height: 1.5;
-}
-.local-history__note--error,
-.md3-history-note--error {
-  color: var(--md-error);
-}
-
-.local-history__rows,
-.md3-history-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 900px;
-}
-
-.local-history__row,
-.md3-history-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  border-radius: var(--md-shape-medium);
-  background: var(--md-surface-container-low);
-  padding: 12px 16px;
-  transition: background var(--md-motion-effect);
-}
-.local-history__row:hover {
-  background: var(--md-surface-container);
-}
-.local-history__row input[type='checkbox'] {
-  accent-color: var(--md-primary);
-  flex: 0 0 auto;
-}
-
-.md3-history-chip {
-  flex: 0 0 auto;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  border-radius: var(--md-shape-small);
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface-variant);
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-.md3-history-chip--created {
-  background: var(--md-success-container);
-  color: var(--md-on-success-container);
-}
-.md3-history-chip--deleted {
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
-}
-.md3-history-chip--restored {
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-.md3-history-chip--updated {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
-
-.md3-regex-builder__banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: var(--md-shape-sm, 12px);
-  padding: 8px 12px;
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.md3-regex-builder__banner svg {
-  flex: 0 0 auto;
-}
-
-.md3-regex-builder__banner--error {
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
-}
-
-.md3-regex-builder__banner--warn {
-  background: var(--md-warning-container);
-  color: var(--md-on-warning-container);
-}
-
-.md3-regex-builder__sample {
-  resize: vertical;
-  border-radius: var(--md-shape-md, 16px);
-  background: var(--md-surface-container-lowest);
-  border: 1px solid var(--md-outline-variant);
-  padding: 9px 12px;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 12px;
-  line-height: 1.55;
-  outline: none;
-}
-
-.md3-regex-builder__sample:focus-visible {
-  border-color: var(--md-primary);
-}
-
-.md3-regex-builder__match-badge {
-  height: 20px;
-  padding: 0 9px;
-  border-radius: var(--md-shape-full, 999px);
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface-variant);
-  font-size: 10.5px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-}
-
-.md3-regex-builder__match-badge--hit {
-  background: var(--md-success-container);
-  color: var(--md-on-success-container);
-}
-
-.md3-regex-builder__hint {
-  font-size: 10.5px;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__hint--mono {
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-}
-
-.md3-regex-builder__highlight {
-  border-radius: var(--md-shape-md, 16px);
-  background: var(--md-surface-container-lowest);
-  padding: 9px 12px;
-  min-height: 42px;
-  max-height: 140px;
-  overflow-y: auto;
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 12px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.md3-regex-builder__muted {
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__error-text {
-  color: var(--md-error);
-}
-
-.md3-regex-builder__mark {
-  border-radius: 4px;
-  padding: 0 1px;
-}
-
-.md3-regex-builder__truncated-note {
-  margin-top: 6px;
-  font-size: 10.5px;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__replacement {
-  height: 38px;
-  border-radius: var(--md-shape-sm, 12px);
-  background: var(--md-surface-container-lowest);
-  border: 1px solid var(--md-outline-variant);
-  padding: 0 12px;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 12px;
-  outline: none;
-}
-
-.md3-regex-builder__replacement:focus-visible {
-  border-color: var(--md-primary);
-}
-
-.md3-regex-builder__substituted {
-  border-radius: var(--md-shape-md, 16px);
-  background: var(--md-surface-container-lowest);
-  padding: 9px 12px;
-  min-height: 22px;
-  max-height: 100px;
-  overflow-y: auto;
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--md-on-surface-variant);
-}
-
-/* -- side column: matches & capture groups, explanation, info card -- */
-.md3-regex-builder__side {
-  width: 270px;
-  flex: 0 0 270px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 14px 14px 12px;
-  border-left: 1px solid var(--md-outline-variant);
-  max-height: min(76vh, 720px);
-  overflow-y: auto;
-}
-
-.md3-regex-builder__match-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.md3-regex-builder__match-card {
-  border-radius: var(--md-shape-md, 16px);
-  background: var(--md-surface-container);
-  padding: 8px 10px;
-}
-
-.md3-regex-builder__match-card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.md3-regex-builder__match-num {
-  flex: 0 0 auto;
-  height: 18px;
-  padding: 0 7px;
-  border-radius: 6px;
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-  font-size: 9.5px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-}
-
-.md3-regex-builder__match-text {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 11.5px;
-  font-weight: 700;
-  word-break: break-all;
-}
-
-.md3-regex-builder__match-at {
-  flex: 0 0 auto;
-  font-size: 10px;
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__group-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
-  padding-left: 4px;
-}
-
-.md3-regex-builder__group-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.md3-regex-builder__group-name {
-  flex: 0 0 auto;
-  height: 17px;
-  padding: 0 6px;
-  border-radius: 5px;
-  background: var(--md-tertiary-container);
-  color: var(--md-on-tertiary-container);
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 9.5px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-}
-
-.md3-regex-builder__group-value {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 11px;
-  color: var(--md-on-surface-variant);
-  word-break: break-all;
-}
-
-.md3-regex-builder__no-matches {
-  border-radius: var(--md-shape-md, 16px);
-  border: 1px dashed var(--md-outline-variant);
-  padding: 12px;
-  font-size: 11.5px;
-  color: var(--md-on-surface-variant);
-  text-align: center;
-}
-
-.md3-regex-builder__explain-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.md3-regex-builder__explain-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 3px 2px;
-}
-
-.md3-regex-builder__explain-tok {
-  flex: 0 0 auto;
-  min-width: 56px;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--md-surface-container-highest);
-  color: var(--md-primary);
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 10.5px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.md3-regex-builder__explain-desc {
-  flex: 1;
-  min-width: 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__info-card {
-  border-radius: var(--md-shape-md, 16px);
-  background: var(--md-surface-container);
-  padding: 11px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 2px;
-}
-
-.md3-regex-builder__info-title {
-  font-size: 9.5px;
-/* nodeterm — Material Design 3 rewrite stylesheet.
- * Loaded after styles.css (see boot.tsx) so an equal-specificity rule here wins on the cascade.
- * Every colour below reads a --md-* custom property from design/v2/md3/tokens.css's contract —
- * never a literal, except a saturated-fill foreground that genuinely needs #fff. Tonal elevation
- * only: no box-shadow anywhere in this file.
- *
- * Each lane appends its own banner-delimited section here. Do not edit another lane's section. */
-
-/* ================================================================================
-   MD3: Settings — SettingsPage.tsx, SettingsSidebar.tsx, SettingsSection.tsx,
-   FieldRow.tsx, ThemeSelect.tsx, TerminalPreview.tsx, ShortcutCaptureField.tsx,
-   AppearanceSection.tsx's accent card, ui/Switch.tsx
-   ================================================================================ */
-
-/* ---- Root shell: three tonal layers (sidebar > body > card), matching the nav-rail /
-   surface / surface-container-low ladder the rest of the app-bar rewrite uses. ---- */
-.md3-settings-shell {
-  background: var(--md-surface);
-  color: var(--md-on-surface);
-}
-
-/* ---- Sidebar ---- */
-.md3-settings-sidebar {
-  width: 300px;
-  background: var(--md-surface-container);
-  border-right: 1px solid var(--md-outline-variant);
-}
-
-.md3-settings-sidebar__back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  border: none;
-  border-radius: var(--md-shape-full);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--md-motion-effect), color var(--md-motion-effect);
-}
-.md3-settings-sidebar__back:hover {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
-
-/* Docked search pill (recipe: "Search: docked bar 44px pill surface-container-high"). The Input
-   atom keeps its own component contract; this just gives it the pill housing and repaints its
-   text so it reads as one continuous field rather than a bare box floating on the pill. */
-.md3-settings-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 44px;
-  padding: 0 6px 0 14px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-high);
-}
-.md3-settings-search__icon {
-  flex: none;
-  color: var(--md-on-surface-variant);
-}
-.md3-settings-search input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface);
-  font-size: 13.5px;
-  padding: 0;
-}
-.md3-settings-search input::placeholder {
-  color: var(--md-on-surface-variant);
-}
-.md3-settings-search input:focus {
-  outline: none;
-  border: none;
-}
-
-.md3-settings-sidebar__group-title {
-  padding: 0 14px 6px;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-regex-builder__info-body {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--md-on-surface-variant);
-}
-
-/* -- footer ("Done") -- */
-.md3-regex-builder__footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 16px;
-  border-top: 1px solid var(--md-outline-variant);
-}
-
-.md3-regex-builder__done {
-  height: 34px;
-  padding: 0 18px;
-  border-radius: var(--md-shape-full, 999px);
-  border: none;
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.md3-regex-builder__done:hover {
-  filter: brightness(1.05);
-}
-
-/* -- narrow-viewport fallback: stack the three columns instead of squeezing them -- */
-@media (max-width: 900px) {
-  .md3-regex-builder__columns {
-    flex-direction: column;
-  }
-  .md3-regex-builder__palette,
-  .md3-regex-builder__main,
-  .md3-regex-builder__side {
-    width: auto;
-    flex: 0 0 auto;
-    max-height: none;
-    overflow: visible;
-  }
-  .md3-regex-builder__palette {
-    border-right: none;
-    border-bottom: 1px solid var(--md-outline-variant);
-  }
-  .md3-regex-builder__side {
-    border-left: none;
-    border-top: 1px solid var(--md-outline-variant);
-.md3-history-row__body {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.local-history__label,
-.md3-history-row__label {
-  color: var(--md-on-surface);
-  font-size: 14px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.md3-history-row__meta {
-  color: var(--md-on-surface-variant);
-  font-size: 11.5px;
-}
-/* Both carry an OWN legacy `color: rgba(var(--tint-rgb), …)` declaration in styles.css that a
-   directly-declared property always beats, regardless of specificity — inheriting the new
-   `--md-on-surface-variant` from the `.md3-history-row__meta` wrapper above is not enough on its
-   own to re-theme them. */
-.local-history__when,
-.local-history__sha {
-  color: var(--md-on-surface-variant);
-}
-.local-history__sha {
-  font-family: var(--md-font-mono);
-}
-
-.md3-history-current-chip {
-  flex: 0 0 auto;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 12px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.local-history__restore,
-.md3-history-restore {
-  flex: 0 0 auto;
-  height: 32px;
-  padding: 0 14px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect);
-}
-.local-history__restore:hover,
-.md3-history-restore:hover {
-  background: var(--md-surface-container-high);
-}
-.local-history__restore:focus-visible,
-.md3-history-restore:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
-}
-
-/* --------------------------------------------------------------------------------------------
-   Changelog viewer (src/renderer/components/changelog/*) — genuinely new UI, so it uses the
-   `md3-changelog*` naming the lane brief asks new chrome to use throughout. Shares the
-   `.md3-history-date-field` / `.md3-history-presets` / `.md3-history-search` chrome above with
-   LocalHistoryPanel, so the two sibling tabs stay visually consistent.
-   -------------------------------------------------------------------------------------------- */
-
-.md3-changelog {
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-}
-
-.md3-changelog__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.md3-changelog__dates {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-.md3-changelog__error {
-  width: 100%;
-  color: var(--md-error);
-  font-size: 12px;
-}
-
-.md3-changelog__toast {
-  margin: 6px 0;
-  padding: 6px 12px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-  font-size: 12px;
-  font-weight: 600;
-  width: fit-content;
-}
-
-.md3-changelog-empty {
-  padding: 14px 4px;
-  color: var(--md-on-surface-variant);
-  line-height: 1.5;
-}
-.md3-changelog-empty--panel {
-  padding: 32px 4px;
-  text-align: center;
-}
-
-.md3-changelog-releases {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-width: 900px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.md3-changelog-release {
-  border-radius: var(--md-shape-large);
-  background: var(--md-surface-container-low);
-  padding: 18px 22px;
-}
-
-.md3-changelog-release__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.md3-changelog-release__select {
-  accent-color: var(--md-primary);
-  cursor: pointer;
-}
-
-.md3-changelog-version {
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 13px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-  font-family: var(--md-font-mono);
-  font-size: 13px;
-  font-weight: 700;
-}
-.md3-changelog-version--unreleased {
-  background: var(--md-tertiary-container);
-  color: var(--md-on-tertiary-container);
-}
-
-.md3-changelog-date {
-  color: var(--md-on-surface-variant);
-  font-size: 12.5px;
-}
-
-.md3-changelog-commits {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-left: auto;
-}
-.md3-changelog-commit {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: var(--md-shape-small);
-  border: 1px solid var(--md-outline-variant);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font-family: var(--md-font-mono);
-  font-size: 11px;
-  cursor: pointer;
-  transition: background var(--md-motion-effect), color var(--md-motion-effect);
-}
-.md3-changelog-commit:hover {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
-.md3-changelog-commit:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
-}
-.md3-changelog-commit--none {
-  cursor: default;
-  border-style: dashed;
-}
-.md3-changelog-commit--none:hover {
-  background: transparent;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-changelog-items {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.md3-changelog-item {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-}
-
-/* Six deterministic tones, cycled by a hash of the category name (see ReleaseCard.tsx) — a new
-   `### ` heading in CHANGELOG.md gets SOME distinguishable tone without a code change here. */
-.md3-changelog-cat {
-  flex: 0 0 auto;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 8px;
-  border-radius: var(--md-shape-small);
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-.md3-changelog-cat--a {
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-.md3-changelog-cat--b {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
-.md3-changelog-cat--c {
-  background: var(--md-tertiary-container);
-  color: var(--md-on-tertiary-container);
-}
-.md3-changelog-cat--d {
-  background: var(--md-success-container);
-  color: var(--md-on-success-container);
-}
-.md3-changelog-cat--e {
-  background: var(--md-warning-container);
-  color: var(--md-on-warning-container);
-}
-.md3-changelog-cat--f {
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface-variant);
-}
-
-.md3-changelog-item__text {
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--md-on-surface);
-}
-/* Release notes render through the shared markdown pipeline (see ReleaseCard.tsx) — style what
-   that can actually produce: bold, inline code, links. */
-.md3-changelog-item__text strong {
-  font-weight: 700;
-}
-.md3-changelog-item__text code {
-  font-family: var(--md-font-mono);
-  font-size: 0.92em;
-  background: var(--md-surface-container-highest);
-  border-radius: 4px;
-  padding: 1px 4px;
-}
-.md3-changelog-item__text a {
-  color: var(--md-primary);
-}
-.md3-changelog-item__text p {
-  margin: 0;
-  display: inline;
-}
-
-/* --------------------------------------------------------------------------------------------
-   History screen shell (HistoryScreen.tsx) — the three tabs as one surface. Not yet wired into a
-   rail/screen switcher (see the file's own header comment); this section is what makes it render
-   correctly wherever it does get mounted.
-   -------------------------------------------------------------------------------------------- */
-
-.md3-history-screen {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  height: 100%;
-  min-height: 0;
-  padding: 24px 28px;
-  overflow-y: auto;
-  background: var(--md-surface);
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  box-sizing: border-box;
-}
-
-.md3-history-screen__head {
-  display: flex;
-  align-items: flex-end;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.md3-history-screen__heading {
-  display: flex;
-  flex-direction: column;
-}
-
-.md3-history-screen__title {
-  font-size: 24px;
-  font-weight: 600;
-}
-.md3-history-screen__subtitle {
-  margin-top: 3px;
-  font-size: 13px;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-history-screen__tabs {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-.md3-history-screen__tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 16px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect), border-color var(--md-motion-effect), color var(--md-motion-effect);
-}
-.md3-history-screen__tab:hover {
-  background: var(--md-surface-container-high);
-}
-.md3-history-screen__tab--active {
-  border-color: transparent;
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
-.md3-history-screen__tab:focus-visible {
-.md3-welcome__recent-icon {
-  color: var(--md-on-surface-variant);
-  flex: none;
-}
-
-.md3-welcome__recent-name {
-  font-size: 14.5px;
-  font-weight: 600;
-  flex: none;
-}
-
-.md3-welcome__recent-path {
-  font-size: 12.5px;
-  color: var(--md-on-surface-variant);
-  font-family: var(--mono-font);
-.md3-settings-nav-row {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 12px;
-  height: 40px;
-  padding: 0 16px;
-  border: none;
-  border-radius: var(--md-shape-full);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font-size: 13.5px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--md-motion-effect), color var(--md-motion-effect);
-}
-.md3-settings-nav-row:hover {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
-.md3-settings-nav-row[aria-current='page'] {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-  font-weight: 600;
-}
-.md3-settings-nav-row--dimmed {
-  opacity: 0.35;
-}
-.md3-settings-nav-row__icon {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  color: inherit;
-}
-.md3-settings-nav-row__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.md3-welcome__recent-spacer {
-  flex: 1;
-}
-
-.md3-welcome__recent-del {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface-variant);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.md3-welcome__recent-item:hover .md3-welcome__recent-del,
-.md3-welcome__recent-del:focus-visible {
-  opacity: 1;
-}
-.md3-welcome__recent-del:hover {
-  background: var(--md-error-container);
-  color: var(--md-error);
-}
-
-.md3-welcome__recent-arrow {
-  flex: none;
-  color: var(--md-on-surface-variant);
-  opacity: 0;
-  transition: opacity var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.md3-welcome__recent-item:hover .md3-welcome__recent-arrow {
-  opacity: 1;
-}
-
-/* =====================================================================================
-   MD3: Onboarding tour — chrome only (cover, two-pane shell, buttons, progress, agent
-   picker, model list). The animated scenes themselves (`.onb-scene-canvas`, `.onb-node`,
-   `.onb-ghost`, `.onb-mic`, `.onb-kstage`, `.onb-lid`, `.onb-phone`, …) live in
-   scenes.tsx and are a DIFFERENT lane's classes — not touched here.
-   ===================================================================================== */
-
-.onb {
-  background: var(--canvas-bg);
-  background-image: radial-gradient(var(--md-canvas-dot, var(--canvas-dot)) 1.2px, transparent 1.2px);
-  background-size: 26px 26px;
-  color: var(--md-on-surface);
-}
-
-.onb-skip {
-  border-radius: var(--md-shape-full);
-  padding: 8px 14px;
-  color: var(--md-on-surface-variant);
-  transition:
-    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.onb-skip:hover {
-  background: var(--md-surface-container);
-  color: var(--md-on-surface);
-}
-.onb-skip:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-
-.md3-history-screen__body {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.md3-history-screen__panel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.md3-history-screen__panel[hidden] {
-  display: none;
-}
-
-/* Responsive: the toolbar rows and cards never force horizontal scroll on a narrow window. */
-@media (max-width: 720px) {
-  .md3-history-screen {
-    padding: 16px;
-  }
-  .md3-history-screen__tabs {
-    margin-left: 0;
-    width: 100%;
-  }
-  .md3-changelog-release__head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .md3-changelog-commits {
-    margin-left: 0;
-  }
-/* ---- step 0: cover ---- */
-.onb-cover__name {
-  color: var(--md-on-surface);
-}
-.onb-cover__tagline {
-  color: var(--md-on-surface-variant);
-}
-.onb-prop {
-  color: var(--md-on-surface-variant);
-}
-.onb-prop svg {
-  color: var(--md-primary);
-}
-
-/* ---- steps 1-N: two-pane card ---- */
-.onb-card {
-  background: var(--md-surface-container-high);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-shape-extra-large);
-  box-shadow: none; /* tonal elevation only — no drop shadow */
-}
-.onb-scene {
-  background:
-    radial-gradient(color-mix(in srgb, var(--md-on-surface-variant) 12%, transparent) 1px, transparent 1px) 0 0 /
-      22px 22px,
-    var(--md-surface-container-lowest);
-  border-right: 1px solid var(--md-outline-variant);
-}
-.onb-pane {
-  color: var(--md-on-surface);
-}
-.onb-step-no {
-  color: var(--md-on-surface-variant);
-}
-.onb-pane h2 {
-  color: var(--md-on-surface);
-}
-.onb-pane p {
-  color: var(--md-on-surface-variant);
-}
-.onb-label {
-  color: var(--md-on-surface-variant);
-}
-.onb-toggle-row {
-  color: var(--md-on-surface);
-}
-.onb-fineprint {
-  color: var(--md-on-surface-variant);
-}
-
-.onb-dots span {
-  background: var(--md-outline-variant);
-  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.onb-dots span.is-active {
-  background: var(--md-primary);
-}
-
-.onb-btn {
-  height: 40px;
-  padding: 0 20px;
-  background: transparent;
-  border: 1px solid var(--md-outline);
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface);
-  font-size: 13.5px;
-  font-weight: 600;
-  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.onb-btn:hover {
-  background: var(--md-surface-container);
-}
-.onb-btn:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-.onb-btn--primary {
-  background: var(--md-primary);
-  border-color: transparent;
-  color: var(--md-on-primary);
-}
-.onb-btn--primary:hover {
-  background: var(--md-primary);
-  filter: brightness(1.08);
-}
-
-/* ---- agent picker ---- */
-.onb-agent {
-  background: var(--md-surface-container-high);
-  border: 1px solid transparent;
-  border-radius: var(--md-shape-large);
-  color: var(--md-on-surface);
-  transition:
-    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    border-color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.onb-agent:hover {
-  background: var(--md-surface-container-highest);
-}
-.onb-agent.is-selected {
-  border-color: var(--md-primary);
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-.onb-agent:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-
-/* ---- dictation model list ---- */
-.onb-model {
-  background: var(--md-surface-container-high);
-  border: 1px solid transparent;
-  border-radius: var(--md-shape-large);
-  color: var(--md-on-surface);
-  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.onb-model:hover {
-  background: var(--md-surface-container-highest);
-}
-.onb-model.is-selected {
-  border-color: var(--md-primary);
-}
-.onb-model:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-.onb-model__radio {
-  border-color: var(--md-outline);
-}
-.onb-model.is-selected .onb-model__radio {
-  border-color: var(--md-primary);
-  background: radial-gradient(circle at center, var(--md-primary) 0 4px, transparent 4.5px);
-}
-.onb-model__size {
-  color: var(--md-on-surface-variant);
-}
-.onb-model__ok {
-  color: var(--md-success);
-}
-.onb-model__bar {
-  background: var(--md-surface-container-highest);
-}
-.onb-model__bar span {
-  background: var(--md-tertiary);
-}
-
-/* ---- kanban try-it ---- */
-.onb-tryit {
-  border: 1px dashed var(--md-outline);
-  border-radius: var(--md-shape-large);
-  color: var(--md-on-surface-variant);
-}
-.onb-tryit.is-done {
-  border-style: solid;
-  border-color: var(--md-success);
-  color: var(--md-success);
-}
-.onb-defaultview__label {
-  color: var(--md-on-surface-variant);
-}
-.onb-seg {
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-shape-full);
-  overflow: hidden;
-}
-.onb-seg__btn {
-  color: var(--md-on-surface-variant);
-  transition:
-    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.onb-seg__btn + .onb-seg__btn {
-  border-left: 1px solid var(--md-outline-variant);
-}
-.onb-seg__btn.is-on {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-}
-.onb-seg__btn:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: -2px;
 .md3-kids-stat {
   border-radius: var(--md-shape-lg);
   background: var(--md-surface-container-low);
@@ -5282,293 +6413,6 @@
   padding: 0;
   cursor: pointer;
   transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
-}
-/* ---- Section card + rows (the highest-leverage piece — every one of the 35 sections funnels
-   through SettingsSection + FieldRow, so this list-card is the whole MD3 rewrite for most of
-   them). Recipe: r28 surface-container-low card, rows r20 with a hover step to surface-container. */
-.md3-settings-header {
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--md-outline-variant);
-}
-.md3-settings-header__title {
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  color: var(--md-on-surface);
-}
-.md3-settings-header__desc {
-  margin-top: 6px;
-  max-width: 640px;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-settings-card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border-radius: var(--md-shape-lg);
-  background: var(--md-surface-container-low);
-  padding: 8px;
-}
-
-/* Every direct child of the card gets the row's padding/radius/hover — whether it is a bare
-   FieldRow (which sets its own internal flex layout via .md3-settings-row below), a raw two-item
-   row a section wrote by hand (already `display:flex` via its own Tailwind classes), or a
-   heading+FieldRow / heading+list GROUP (`<div className="space-y-3">`, or a bare unclassed
-   `<div>` — see AppearanceSection's "Node menu items" block). Deliberately NOT forcing `display`
-   here: a grouped block needs to stay block-level so its heading and list stack vertically by
-   plain flow, and overriding it to `flex` (even column) would have needed a second, narrower
-   selector just to undo it for THIS one case — simpler to only own what every child actually
-   shares (padding, radius, hover) and leave `display` to whichever child needs it. */
-.md3-settings-card > * {
-  border-radius: 20px;
-  padding: 12px 18px;
-  min-height: 64px;
-  box-sizing: border-box;
-  transition: background var(--md-motion-effect);
-}
-.md3-settings-card > *:hover {
-  background: var(--md-surface-container);
-}
-
-.md3-settings-row {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-.md3-settings-row__body {
-  min-width: 0;
-}
-.md3-settings-row__label {
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--md-on-surface);
-}
-.md3-settings-row__desc {
-  margin-top: 3px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--md-on-surface-variant);
-  text-wrap: pretty;
-}
-.md3-settings-row__note {
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--md-warning);
-}
-.md3-settings-row__control {
-  flex: none;
-}
-
-/* Small standalone hint/warning text — used outside FieldRow (e.g. FontPicker's "not
-   installed" note, which sits under a control rather than inside a labelled row). */
-.md3-settings-hint {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--md-on-surface-variant);
-}
-.md3-settings-warn-text {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--md-warning);
-}
-
-/* ---- Theme select (colour-theme dropdown) — self-contained so it never shares the shared
-   `.tab-menu` / `.bind-select` classes other lanes' surfaces (tab bar, source control) still own. */
-.md3-theme-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 260px;
-  height: 40px;
-  padding: 0 10px 0 14px;
-  border-radius: var(--md-shape-sm);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-size: 13.5px;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  transition: background var(--md-motion-effect);
-}
-.md3-theme-trigger:hover {
-  background: var(--md-surface-container);
-}
-.md3-theme-trigger__val {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.md3-theme-trigger__chev {
-  flex: none;
-  color: var(--md-on-surface-variant);
-}
-
-.md3-theme-swatch {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 5px;
-  border-radius: var(--md-shape-xs);
-  border: 1px solid var(--md-outline-variant);
-}
-.md3-theme-swatch__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.md3-theme-menu {
-  position: fixed;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 340px;
-  overflow-y: auto;
-  padding: 6px;
-  border-radius: var(--md-shape-lg);
-  border: 1px solid var(--md-outline-variant);
-  background: var(--md-surface-container-high);
-}
-.md3-theme-menu__group {
-  padding: 8px 10px 4px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--md-on-surface-variant);
-}
-.md3-theme-menu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 14px;
-  background: transparent;
-  color: var(--md-on-surface);
-  font-size: 13.5px;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--md-motion-effect);
-}
-.md3-theme-menu button:hover {
-  background: var(--md-surface-container-highest);
-}
-.md3-theme-menu__check {
-  flex: none;
-  width: 14px;
-  color: var(--md-primary);
-  font-weight: 700;
-}
-.md3-theme-menu__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ---- Terminal preview card ---- */
-.md3-terminal-preview {
-  display: inline-block;
-  padding: 14px 18px;
-  border-radius: var(--md-shape-md);
-  outline: 1px solid var(--md-outline-variant);
-  outline-offset: -1px;
-  /* Terminal bodies stay dark in both themes — --term-bg is deliberately not a --md-* role. */
-  background: var(--term-bg);
-  overflow: hidden;
-}
-.md3-terminal-preview .xterm-viewport {
-  scrollbar-width: none;
-}
-.md3-terminal-preview .xterm-viewport::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-/* ---- Shortcut capture field (was a hardcoded `hover:bg-[rgba(255,255,255,0.06)]`) ---- */
-.md3-shortcut-field {
-  min-width: 140px;
-  cursor: pointer;
-  border-radius: var(--md-shape-sm);
-  border: 1px solid var(--md-outline);
-  background: var(--md-surface-container-high);
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--md-on-surface);
-  outline: none;
-  transition: background var(--md-motion-effect);
-}
-.md3-shortcut-field:hover {
-  background: var(--md-surface-container-highest);
-}
-.md3-shortcut-field:focus-visible {
-  border-color: var(--md-primary);
-}
-
-/* ---- Accent picker card (AppearanceSection.tsx) ---- */
-.md3-accent-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-.md3-accent-swatch {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  outline: 2px solid transparent;
-  outline-offset: 3px;
-  transition: outline-color var(--md-motion-effect);
-}
-.md3-accent-swatch--selected {
-  outline-color: var(--md-primary);
-}
-/* White check on a saturated accent fill — the one literal colour this file allows (see the
-   file banner): it must read against arbitrary user-picked hues, not against a themed surface. */
-.md3-accent-swatch__check {
-  color: #fff;
-}
-
-/* ---- Switch (ui/Switch.tsx) — shared across the app; recipe values from HANDOFF.md's
-   component table. Track 52x32, knob 24px on / 16px off, both eased on --md-motion-spatial. ---- */
-.md3-switch {
-  position: relative;
-  box-sizing: border-box;
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  width: 52px;
-  height: 32px;
-  padding: 0;
-  border: 2px solid var(--md-outline);
-  border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-highest);
-  cursor: pointer;
-  transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
-}
-.md3-switch[aria-checked='true'] {
-  border-color: var(--md-primary);
-  background: var(--md-primary);
 }
 .md3-switch__knob {
   position: absolute;
@@ -5778,759 +6622,5 @@
     grid-template-columns: 1fr;
     overflow: auto;
   }
-   MD3: Nav shell — top app bar, project switcher, nav rail + FAB
-   ============================================================================================
-   Loaded AFTER styles.css (see boot.tsx), so every rule below wins the cascade at equal
-   specificity — this file overrides the legacy `.tabbar`/`.dock`/`.controls-cluster` chrome by
-   re-declaring the classes the new components actually render, plus geometry tweaks for the
-   handful of floating overlays that used to assume a 44px bar and no left rail.
-
-   Design source: design/v2/MD3 Canvas.dc.html + design/v2/md3/HANDOFF.md. Colours are `var(--md-*)`
-   tokens only (see design/v2/md3/tokens.css) — no hex literals, no box-shadow (the one exception
-   below is React Flow's own connection-handle ring, untouched here). */
-
-:root {
-  --app-bar-h: 64px;
-  --nav-rail-w: 88px;
 }
 
-/* ---------------------------------------------------------------------------------------------
-   Top app bar
-   --------------------------------------------------------------------------------------------- */
-
-.md3-app-bar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  height: var(--app-bar-h);
-  flex-shrink: 0;
-  /* Room for the macOS traffic lights on the left, mirroring the old `.tabbar` padding. Windows
-     reserves the opposite edge for the native caption-button overlay instead — see below. */
-  padding: 0 20px 0 86px;
-  background: var(--md-surface-container);
-  color: var(--md-on-surface);
-  z-index: 30;
-  /* The bar itself is the window drag region — see the window-chrome section in CLAUDE.md. */
-  -webkit-app-region: drag;
-}
-:root[data-platform='win'] .md3-app-bar {
-  padding: 0 146px 0 20px;
-}
-.md3-app-bar button,
-.md3-app-bar input,
-.md3-switcher-menu,
-.md3-fab-menu {
-  -webkit-app-region: no-drag;
-}
-
-.md3-app-bar__brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.md3-app-bar__brand-mark {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--md-shape-md);
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.md3-app-bar__brand-name {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--md-on-surface);
-}
-
-.md3-app-bar__spacer {
-  flex: 1;
-}
-
-/* The docked search bar re-themes the EXISTING `.cluster-search` button (kept verbatim — same
-   class, same title="Command palette" — so the packaged-app driver script needs no changes). */
-.cluster-search {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 340px;
-  max-width: 38vw;
-  min-width: 160px;
-  height: 44px;
-  padding: 0 8px 0 18px;
-  border-radius: var(--md-shape-full);
-  border: none;
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface-variant);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 14px;
-  transition: background var(--md-motion-effect);
-}
-.cluster-search:hover {
-  background: var(--md-surface-container-highest);
-}
-.cluster-search__icon {
-  font-size: 17px;
-  line-height: 1;
-}
-.cluster-search .kbd {
-  margin-left: auto;
-  font-family: var(--md-font-mono, ui-monospace, monospace);
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: var(--md-shape-xs);
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface-variant);
-}
-
-.md3-app-bar__cluster {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-/* Shared 44px round icon button — every app-bar action (notifications, phone pairing, help). */
-.md3-icon-btn,
-.md3-app-bar__cluster .notif-bell {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--md-shape-full);
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  cursor: pointer;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  transition: background var(--md-motion-effect);
-}
-.md3-icon-btn:hover,
-.md3-app-bar__cluster .notif-bell:hover {
-  background: var(--md-surface-container-high);
-}
-.md3-app-bar__cluster .notif-bell__badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--md-error);
-  color: var(--md-on-error);
-  font-size: 10px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Outlined chip beside the switcher for an SSH-connected project. */
-.md3-remote-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: var(--md-shape-xs);
-  border: 1px solid var(--md-outline-variant);
-  color: var(--md-on-surface-variant);
-  font-size: 12.5px;
-  font-weight: 500;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* ---------------------------------------------------------------------------------------------
-   Project switcher
-   --------------------------------------------------------------------------------------------- */
-
-.md3-switcher {
-  display: flex;
-  align-items: stretch;
-  flex-shrink: 0;
-  height: 44px;
-  border-radius: var(--md-shape-full);
-  overflow: hidden;
-  background: var(--md-secondary-container);
-}
-
-.md3-switcher__trigger {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 100%;
-  padding: 0 4px 0 16px;
-  border: none;
-  background: transparent;
-  color: var(--md-on-secondary-container);
-  font-family: inherit;
-  font-size: 14.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect);
-}
-.md3-switcher__trigger:hover {
-  background: var(--md-surface-container-highest);
-}
-.md3-switcher__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--md-primary);
-  flex-shrink: 0;
-}
-.md3-switcher__name {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.md3-switcher__badge,
-.md3-switcher-row__badge {
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: var(--md-error);
-  color: var(--md-on-error);
-  font-size: 11px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.md3-switcher__more-badge {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-tertiary-container);
-  color: var(--md-on-tertiary-container);
-  font-size: 11px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
-/* The board (kanban) toggle sits inside the switcher pill — after the name, before the caret —
-   per the handoff. Keep the exact class name; the kanban-view tests select it. */
-.tab__board-toggle {
-  height: 100%;
-  width: 34px;
-  border: none;
-  background: transparent;
-  color: var(--md-on-secondary-container);
-  cursor: pointer;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 1;
-  border-radius: 0;
-  transition: background var(--md-motion-effect);
-}
-.tab__board-toggle:hover {
-  opacity: 1;
-  background: var(--md-surface-container-highest);
-}
-
-.md3-switcher__caret {
-  height: 100%;
-  width: 30px;
-  border: none;
-  background: transparent;
-  color: var(--md-on-secondary-container);
-  cursor: pointer;
-  font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--md-motion-effect);
-}
-.md3-switcher__caret:hover {
-  background: var(--md-surface-container-highest);
-}
-
-.md3-switcher-backdrop,
-.md3-fab-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 39;
-}
-
-.md3-switcher-menu {
-  position: fixed;
-  z-index: 40;
-  width: 300px;
-  max-height: 70vh;
-  display: flex;
-  flex-direction: column;
-  padding: 8px;
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-  border-radius: var(--md-shape-lg);
-  overflow: hidden;
-}
-.md3-switcher-menu__list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow-y: auto;
-  min-height: 0;
-}
-.md3-switcher-row-wrap {
-  display: flex;
-  flex-direction: column;
-}
-.md3-switcher-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 44px;
-  flex: 0 0 44px;
-  padding: 0 8px 0 10px;
-  border-radius: var(--md-shape-sm);
-  cursor: pointer;
-  color: var(--md-on-surface);
-  transition: background var(--md-motion-effect);
-}
-.md3-switcher-row:hover {
-  background: var(--md-surface-container-highest);
-}
-.md3-switcher-row.is-active {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-  font-weight: 600;
-}
-.md3-switcher-row.is-unavailable {
-  opacity: 0.45;
-  cursor: default;
-}
-.md3-switcher-row.is-drop-before {
-  background: var(--md-primary-container);
-}
-.md3-switcher-row__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.md3-switcher-row__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13.5px;
-}
-.md3-switcher-row__ssh {
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  padding: 2px 6px;
-  border-radius: var(--md-shape-xs);
-  background: var(--md-tertiary-container);
-  color: var(--md-on-tertiary-container);
-  flex-shrink: 0;
-}
-.md3-switcher-row__lock {
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.md3-switcher-row__more {
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  border-radius: var(--md-shape-full);
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.7;
-}
-.md3-switcher-row__more:hover {
-  opacity: 1;
-  background: var(--md-surface-container-high);
-}
-
-/* The per-row "⋮" actions panel — reuses the existing `.tab-menu__group` / `.tab-menu__sub` /
-   `.tab-menu__caret` / `.tab-menu__check` layout helpers from styles.css (bare selectors, so
-   they apply here too) for the expandable account/permission-mode sub-lists; only the buttons'
-   own colours are re-themed to MD3 tokens below. */
-.md3-switcher-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 2px 0 6px 18px;
-  padding: 4px 0 4px 10px;
-  border-left: 2px solid var(--md-outline-variant);
-}
-.md3-switcher-actions button {
-  display: flex;
-  align-items: center;
-  padding: 8px 10px;
-  background: transparent;
-  border: none;
-  border-radius: var(--md-shape-xs);
-  color: var(--md-on-surface);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-.md3-switcher-actions button:hover:not(:disabled) {
-  background: var(--md-surface-container-highest);
-}
-.md3-switcher-actions button.danger {
-  color: var(--md-error);
-}
-.md3-switcher-actions button.danger:hover:not(:disabled) {
-  background: var(--md-error-container);
-  color: var(--md-on-error-container);
-}
-.md3-switcher-actions button:disabled {
-  color: var(--md-outline);
-  cursor: not-allowed;
-}
-
-.md3-switcher-menu__add {
-  flex-shrink: 0;
-  margin-top: 6px;
-  height: 44px;
-  border: none;
-  border-radius: var(--md-shape-sm);
-  background: transparent;
-  color: var(--md-primary);
-  font-weight: 600;
-  font-size: 13.5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-}
-.md3-switcher-menu__add:hover {
-  background: var(--md-surface-container-highest);
-}
-
-/* ---------------------------------------------------------------------------------------------
-   Nav rail + FAB
-   --------------------------------------------------------------------------------------------- */
-
-/* Flex row holding the rail and the canvas pane — a genuine sibling of `.flow-wrap`, so the
-   canvas area is truly narrower rather than the rail floating on top of it (fit-view then never
-   needs to treat the rail as an obstacle). */
-.md3-canvas-row {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-.md3-nav-rail {
-  flex: 0 0 var(--nav-rail-w);
-  width: var(--nav-rail-w);
-  position: relative;
-  z-index: 28; /* above .top-banners (27), below the app bar (30) */
-  background: var(--md-surface-container);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 12px 0 14px;
-  gap: 6px;
-}
-
-.md3-fab-wrap {
-  position: relative;
-  margin-bottom: 10px;
-}
-.md3-fab {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--md-shape-md);
-  border: none;
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    transform var(--md-motion-spatial),
-    background var(--md-motion-effect);
-}
-.md3-fab:hover {
-  background: var(--md-surface-container-highest);
-}
-.md3-fab.is-open {
-  transform: rotate(45deg);
-}
-
-.md3-fab-menu {
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 0;
-  width: 280px;
-  max-height: 70vh;
-  overflow-y: auto;
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-  border-radius: var(--md-shape-lg);
-  padding: 10px;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.md3-fab-menu button {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 48px;
-  padding: 8px 14px;
-  border-radius: var(--md-shape-md);
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface);
-  font-size: 14px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-}
-.md3-fab-menu button:hover:not(:disabled) {
-  background: var(--md-surface-container-highest);
-}
-.md3-fab-menu button[aria-disabled='true'] {
-  color: var(--md-outline);
-  cursor: not-allowed;
-}
-.md3-fab-menu button[aria-disabled='true']:hover {
-  background: transparent;
-}
-.md3-fab-menu button svg {
-  flex-shrink: 0;
-  color: var(--md-on-surface-variant);
-}
-.md3-fab-menu__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.md3-fab-menu__hint {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--md-on-surface-variant);
-  white-space: normal;
-}
-
-.md3-nav-rail__items {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.md3-rail-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  width: 80px;
-  padding: 6px 0;
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  cursor: pointer;
-  font-family: inherit;
-}
-.md3-rail-item__pill {
-  width: 56px;
-  height: 32px;
-  border-radius: var(--md-shape-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  color: var(--md-on-surface-variant);
-  transition: background var(--md-motion-effect);
-}
-.md3-rail-item__label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--md-on-surface-variant);
-}
-.md3-rail-item.is-active .md3-rail-item__pill {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
-.md3-rail-item.is-active .md3-rail-item__label {
-  color: var(--md-on-surface);
-  font-weight: 600;
-}
-.md3-rail-badge {
-  position: absolute;
-  top: -2px;
-  right: 8px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--md-error);
-  color: var(--md-on-error);
-  font-size: 10px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.md3-nav-rail__spacer {
-  flex: 1;
-}
-.md3-rail-item--kids {
-  margin-top: auto;
-}
-
-/* ---------------------------------------------------------------------------------------------
-   Bottom-left canvas chrome: undo/redo/save pill + the merged zoom/fit/lock Controls row
-   --------------------------------------------------------------------------------------------- */
-
-.md3-canvas-actions {
-  position: absolute;
-  left: 20px;
-  bottom: 76px;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  height: 44px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-high);
-  padding: 0 6px;
-  gap: 2px;
-}
-.md3-canvas-actions button {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--md-shape-full);
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface);
-  cursor: pointer;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.md3-canvas-actions button:hover:not(:disabled) {
-  background: var(--md-surface-container-highest);
-}
-.md3-canvas-actions button:disabled {
-  color: var(--md-outline);
-  cursor: not-allowed;
-}
-.md3-canvas-actions__sep {
-  width: 1px;
-  height: 22px;
-  background: var(--md-outline-variant);
-  margin: 0 4px;
-}
-.md3-canvas-actions__dirty {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: transparent;
-}
-.md3-canvas-actions__dirty.dirty {
-  background: var(--md-error);
-}
-
-/* React Flow's built-in Controls is disabled for zoom/fit (`showZoom={false} showFitView={false}`
-   on <Controls>) and re-composed as MD3 buttons, horizontal per the handoff's zoom pill. Tonal
-   only — no box-shadow (rule: elevation here is tonal, not shadowed). */
-.react-flow__controls {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 2px;
-  padding: 4px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-high);
-  box-shadow: none;
-  overflow: visible;
-}
-.react-flow__controls-button {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface);
-  box-shadow: none;
-}
-.react-flow__controls-button:hover {
-  background: var(--md-surface-container-highest);
-}
-.md3-zoom-pct {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--md-on-surface-variant);
-  padding: 0 6px;
-  min-width: 38px;
-  text-align: center;
-  user-select: none;
-}
-
-/* The bottom-left usage/RAM pill cluster used to clear a narrow vertical Controls column at
-   left:60px; the new horizontal zoom pill is wider, so give it more room. */
-.canvas-pills {
-  left: 232px;
-}
-
-/* ---------------------------------------------------------------------------------------------
-   Geometry: floating overlays that assumed a 44px bar and no left rail
-   --------------------------------------------------------------------------------------------- */
-
-.kanban-overlay {
-  top: var(--app-bar-h);
-  left: var(--nav-rail-w);
-}
-.sessions-sidebar {
-  top: calc(var(--app-bar-h) + 10px);
-  left: calc(var(--nav-rail-w) + 14px);
-  max-height: calc(100vh - var(--app-bar-h) - 52px);
-}
-.sessions-icon-cluster {
-  top: calc(var(--app-bar-h) + 10px);
-  left: calc(var(--nav-rail-w) + 14px);
-}
-.top-banners {
-  top: calc(var(--app-bar-h) + 2px);
-}
-.presence-prompt {
-  top: calc(var(--app-bar-h) + 2px);
-  transition:
-    top var(--md-motion-spatial),
-    left var(--md-motion-spatial),
-    width var(--md-motion-spatial),
-    height var(--md-motion-spatial),
-    background var(--md-motion-effect);
-}
-.md3-switch[aria-checked='true'] .md3-switch__knob {
-  top: 4px;
-  left: 24px;
-  width: 24px;
-  height: 24px;
-  background: var(--md-on-primary);
-}
