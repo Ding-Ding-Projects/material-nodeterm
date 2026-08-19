@@ -360,6 +360,17 @@ const CHECKS = [
       // `color:var(--accent)` proves only that Chromium implements CSS variables — it stays green
       // if every app rule stops consuming the token. Ensure one real, visible switch is ON, move
       // the token, then restore both the exact prior inline declaration and the switch state.
+      //
+      // Post-M3 (`.md3-switch[aria-checked='true']`, styles.md3.css), the Switch's ON background
+      // is `var(--md-primary)`, not `var(--accent)` directly — `styles.md3.css` never references
+      // `--accent` at all (grep it). The two stay in sync only because a REAL accent change runs
+      // through `accentTokens.ts`'s `applyAccentTokens()`, which republishes the whole derived
+      // family (`--md-primary` included) in one call — see `CUSTOM_PROPERTIES` there. Moving
+      // `--accent` alone, as this check did pre-M3 when every rule read `var(--accent)` straight,
+      // now proves nothing: the CSS has no fallback chain back to it any more. Move both, exactly
+      // as `applyAccentTokens` does for a real user-picked colour, so this still exercises the
+      // actual consequence (a rendered control's paint) rather than an implementation detail that
+      // moved when the redesign landed.
       const target = await evaluate(`(function(){
         var switches = Array.prototype.slice.call(document.querySelectorAll('[role="switch"]'))
           .filter(function(x){ return !x.disabled && x.offsetParent !== null; });
@@ -379,8 +390,11 @@ const CHECKS = [
         var root = document.documentElement;
         window.__wiredAccentPrior = root.style.getPropertyValue('--accent');
         window.__wiredAccentPriority = root.style.getPropertyPriority('--accent');
+        window.__wiredPrimaryPrior = root.style.getPropertyValue('--md-primary');
+        window.__wiredPrimaryPriority = root.style.getPropertyPriority('--md-primary');
         var colour = getComputedStyle(control).backgroundColor;
         root.style.setProperty('--accent', 'rgb(1, 2, 3)');
+        root.style.setProperty('--md-primary', 'rgb(1, 2, 3)');
         return colour;
       })()`)
       // Switch has a deliberate 200 ms colour transition. Reading in the same JS turn measures its
@@ -395,6 +409,11 @@ const CHECKS = [
         } else {
           root.style.removeProperty('--accent');
         }
+        if (window.__wiredPrimaryPrior) {
+          root.style.setProperty('--md-primary', window.__wiredPrimaryPrior, window.__wiredPrimaryPriority);
+        } else {
+          root.style.removeProperty('--md-primary');
+        }
         return colour;
       })()`)
       if (!target.wasOn) {
@@ -407,10 +426,10 @@ const CHECKS = [
       if (before === after || !/rgb\(1, 2, 3\)/.test(after)) {
         return {
           ok: false,
-          why: `the real switch ignored --accent (${before} → ${after})`,
+          why: `the real switch ignored --accent/--md-primary (${before} → ${after})`,
         }
       }
-      return { ok: true, detail: `Switch background followed --accent (${accent} → ${after})` }
+      return { ok: true, detail: `Switch background followed --accent/--md-primary (${accent} → ${after})` }
     },
   },
   {
