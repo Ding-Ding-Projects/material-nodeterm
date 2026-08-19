@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rebuild the app's chrome on Material Design 3: a new top app bar and project switcher replace
+  the tab strip, a left nav rail with a FAB replaces the bottom dock, and every panel restyles
+  onto the same token set. The default accent colour also changes for every existing install —
+  see "Changed" below.
 - Add Global mode and complete per-project Settings overlays through the shared settings surface.
 - Replace the paid remote-host prompt with a free Docker-hosted relay flow while retaining
   end-to-end encryption and mutual pairing approval.
@@ -53,6 +57,22 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 - **Material 3 design tokens.** A full `--md-*` role set and a six-step shape scale in both light
   and dark themes, mapped onto the app's own palette rather than replacing it. Nothing was renamed
   or removed, so no existing surface changes appearance from this alone.
+- **Material Design 3 rewrite of the app's chrome and every panel.** Built on the token layer
+  above: a new 64px top app bar (`TopAppBar`) carries the brand mark, the docked search bar, the
+  presence facepile, and a `ProjectSwitcher` menu that replaces the old project tab strip
+  (`TabBar.tsx` is removed outright, including its per-tab caret menu — now a per-row expandable
+  actions panel in the switcher dropdown). An 88px left nav rail (`NavRail`) replaces the old
+  bottom dock: its FAB (`FabMenu`) keeps the exact same node-creation menu and shortcuts, and the
+  rail itself lists Canvas / Board / Files / Tools / Alerts / Settings as real flex-in-flow
+  destinations rather than a floating overlay. Every restyled surface — the canvas nodes, the
+  kanban board, Settings, the regex builder, every menu/dialog/toast, the welcome screen, session
+  memory and local history — moved onto the same token set through a second stylesheet,
+  `styles.md3.css`, layered after the existing `styles.css` and winning wherever the two
+  disagree. Three font families now ship as locally bundled, subsetted `woff2` assets (Outfit for
+  UI text, Roboto Mono for terminal/code, Material Symbols Rounded for icons via the new
+  `MaterialSymbol` component) — nothing is fetched from a font CDN. This is a chrome and styling
+  change only: every handler, keyboard path, persisted setting and `data-appearance-id` carried
+  over unchanged.
 - **Kids mode** — a friendlier, safer mode for a child, and the near-opposite of School mode: it
   keeps all the playfulness and adds limits instead. Agents cannot start in a mode that acts
   without asking, deleting a session from the board asks twice, and leaving the mode needs a
@@ -97,6 +117,22 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 - Retheme onto the M3 roles: the canvas zoom/lock rail, the minimap frame, the bottom dock, the
   settings switch, the welcome screen, the notification centre and the command palette. Visual
   only — no layout, markup or behaviour changed, and every surface kept its full feature set.
+- **The default accent colour changed from systemBlue (`#0a84ff`) to the Material 3 baseline seed
+  purple (`#6750a4`) — this changes the appearance of every existing install, once.** Every
+  settings file is written in full on every save, so an existing install's `#0a84ff` is
+  indistinguishable from a deliberate choice; the one-time migration treats the old shipped
+  default as "never touched" and carries it forward to the new default. systemBlue is not
+  removed — it stays reachable as the second swatch in Settings' colour picker, one step behind
+  the new purple default, so anyone who really did want blue can re-pick it in one click.
+- **The nav shell replaces the tab strip and the bottom dock.** `TabBar.tsx` and `Dock.tsx` are
+  deleted; their jobs move into the new `ProjectSwitcher`/`TopAppBar` and `NavRail`/`FabMenu`
+  respectively (see "Added" above). The top app bar grows from 44px to 64px and a new 88px rail
+  claims the left edge, so every floating panel that assumed the old geometry — the kanban
+  overlay, the sessions sidebar and its icon cluster, the announcement/update banner stack, the
+  presence prompt — carries a matching offset. The old floating top-right icon cluster
+  (`.controls-cluster`) is gone: search, the presence facepile, notifications, phone pairing,
+  dictation and help all moved into the top app bar; Explorer, Source Control, the file converter
+  and the Ollama manager are now reached through the rail's Files/Tools destinations.
 
 ### Fixed
 
