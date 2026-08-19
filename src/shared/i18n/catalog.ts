@@ -260,6 +260,42 @@ export const CATALOG: Catalog = {
     en: flat('Delete permanently (ends its sessions)'),
     yue: flat('永久刪除（會結束佢嘅工作階段）')
   },
+  'welcome.recent.deleteAria': {
+    en: flat('Delete permanently'),
+    yue: flat('永久刪除')
+  },
+  'welcome.subtitle': {
+    en: [
+      'Open a project to place shells, agents and notes on one canvas — every project is also a board of its live sessions.',
+      'Open a project to place shells, agents and notes on one canvas — every project is also a board of its live sessions.',
+      'Open a project and start dropping shells, agents and notes onto one canvas — it doubles as a board of your live sessions too.',
+      "Open a project, then throw shells, agents and notes onto one canvas — and yes, it's secretly a kanban board of your live sessions as well.",
+      "Open a project and start flinging shells, agents and notes onto one big canvas — which, plot twist, is also a kanban board of everything that's currently running."
+    ],
+    yue: [
+      '開個項目，就可以將終端機、AI 助手同筆記擺喺同一個畫布度 — 每個項目仲可以睇返做緊嘅工作階段嘅睇板。',
+      '開個項目，就可以將終端機、AI 助手同筆記擺喺同一個畫布度 — 每個項目仲可以睇返做緊嘅工作階段嘅睇板。',
+      '開個項目，隨便將終端機、AI 助手、筆記擺上同一個畫布 — 佢仲兼職做緊嘅工作階段嘅睇板。',
+      '開個項目，將終端機、AI 助手、筆記統統擺上一個畫布度 — 仲要偷偷做埋你啲工作階段嘅睇板。',
+      '開個項目，將終端機、AI 助手同筆記亂咁掟落一個大畫布度 — 原來佢仲兼職做緊你啲工作階段嘅睇板，一畫兩用。'
+    ]
+  },
+  'welcome.card.newProject.desc': {
+    en: flat('An empty canvas'),
+    yue: flat('一個空白畫布')
+  },
+  'welcome.card.openFolder.desc': {
+    en: flat('Point at a repo'),
+    yue: flat('揀返個 repo')
+  },
+  'welcome.card.cloneRepo.desc': {
+    en: flat('From GitHub or a URL'),
+    yue: flat('用 GitHub 或者網址')
+  },
+  'welcome.card.connectSsh.desc': {
+    en: flat('Work on a remote host'),
+    yue: flat('喺遠端主機度做嘢')
+  },
 
   // ---------------------------------------------------------------------------------------
   // Update card (UpdateCard.tsx). {version} / {minSupported} are filled in by the caller with
