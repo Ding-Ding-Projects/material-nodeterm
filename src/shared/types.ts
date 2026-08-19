@@ -3136,6 +3136,16 @@ export type PairingDoneResult = {
 }
 
 /** Phone-pairing (nodeterm iOS "scan a QR" flow) bridge. */
+/** Result of the Remote Login help action. `opened:'none'` is an honest answer, not a failure: it
+ *  means this platform has no settings surface worth opening and `command` is what to run. */
+export interface RemoteLoginHelp {
+  opened: 'settings' | 'none'
+  /** Which settings surface, when knowing matters for the copy (Windows: the OpenSSH feature). */
+  note?: 'openssh-server'
+  /** Present only when `opened` is 'none' — the exact command the user should run. */
+  command?: string
+}
+
 export interface PairingApi {
   /** False on Server Edition, where the browser is already attached to its host and no desktop
    *  LAN listener / OS SSH-key store exists. UI must show a deliberate degrade, not call stubs. */
@@ -3164,7 +3174,10 @@ export interface PairingApi {
   /** Open System Settings → General → Sharing (Remote Login). The deep link is a main-side
    *  constant — x-apple.* schemes never pass shellOpenExternal's http(s) allowlist. macOS-only;
    *  a no-op elsewhere. */
-  openRemoteLoginSettings(): Promise<void>
+  /** What the help action actually did, so the renderer can say so rather than guess.
+   *  macOS/Windows open a real settings surface; Linux has no settings URL that is right
+   *  across desktops, so it returns the command to run instead of misfiring a button. */
+  openRemoteLoginSettings(): Promise<RemoteLoginHelp>
   /** List paired devices from ~/.nodeterm/agent.json (never includes the token). */
   listDevices(): Promise<PairedDevice[]>
   /** Revoke a device: remove its registry entry and delete its authorized_keys line. */

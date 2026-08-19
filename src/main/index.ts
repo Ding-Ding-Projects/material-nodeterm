@@ -49,7 +49,7 @@ import { ProjectArchiveService } from '../core/project-archive'
 import { ServerDeploymentService } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
-import type { Settings } from '../shared/types'
+import type { RemoteLoginHelp, Settings } from '../shared/types'
 import {
   registerBrowserGuestRequest,
   type BrowserGuest
@@ -1137,16 +1137,32 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.pairingStop, (_event, attemptId: string) => pairingService.stop(attemptId))
   ipcMain.handle(IPC.pairingProbeSsh, () => pairingService.probeSsh())
   // Same pattern as appOpenNotificationSettings: a main-side constant deep link, NOT routed
-  // through shellOpenExternal's http(s)-only allowlist (which silently drops x-apple.* URLs —
-  // the "Open System Settings" button did nothing when it sent the URL from the renderer).
-  // The `Services_RemoteLogin` query selected the service in the pre-Ventura prefpane and is
-  // harmless on newer macOS, which opens the Sharing pane either way.
-  ipcMain.handle(IPC.pairingOpenRemoteLoginSettings, () => {
-    if (process.platform !== 'darwin') return
-    void shell.openExternal(
-      'x-apple.systempreferences:com.apple.preferences.sharing?Services_RemoteLogin'
-    )
-  })
+    // Returns what it actually DID, because the renderer has to tell the truth about it. This used
+    // to be `if (process.platform !== 'darwin') return` — a silent no-op on Windows and Linux,
+    // reached from a button the renderer only rendered on macOS anyway. So a Windows user was told
+    // "Remote Login is off, turn it on", handed no control, and the one control that did exist
+    // would have done nothing for them: a dead end at the exact moment they knew what they wanted.
+    ipcMain.handle(IPC.pairingOpenRemoteLoginSettings, async (): Promise<RemoteLoginHelp> => {
+      if (process.platform === 'darwin') {
+        // Must open from MAIN: shellOpenExternal's http(s)-only allowlist silently drops x-apple.*
+        // URLs, which is why this button once did nothing when the renderer sent it.
+        await shell.openExternal(
+          'x-apple.systempreferences:com.apple.preferences.sharing?Services_RemoteLogin'
+        )
+        return { opened: 'settings' }
+      }
+      if (process.platform === 'win32') {
+        // "Remote Login" on Windows is the OpenSSH Server optional feature plus its sshd service.
+        // Optional features is the right first stop: with the feature absent there is no service to
+        // start, so the Services console would send them somewhere with nothing in it.
+        await shell.openExternal('ms-settings:optionalfeatures')
+        return { opened: 'settings', note: 'openssh-server' }
+      }
+      // Linux has no settings URL that is right across desktops, and guessing one yields a button
+      // that opens the wrong thing or nothing. Hand back the command and let the renderer show it
+      // as copyable text — an honest instruction beats a control that misfires.
+      return { opened: 'none', command: 'sudo systemctl enable --now ssh' }
+    })
   ipcMain.handle(IPC.pairingListDevices, () => pairingService.listDevices())
   ipcMain.handle(IPC.pairingRevokeDevice, (_e, id: string) => pairingService.revokeDevice(id))
 
