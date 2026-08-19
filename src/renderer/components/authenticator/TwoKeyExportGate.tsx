@@ -4,6 +4,7 @@
 // operable; only dragging that slider all the way actually exports. An Emergency exit is always
 // one click away. See docs/authenticator.md.
 import { useState } from 'react'
+import { MaterialSymbol } from '../MaterialSymbol'
 
 export function TwoKeyExportGate({
   count,
@@ -31,9 +32,12 @@ export function TwoKeyExportGate({
   return (
     <div className="toylock-export-gate" role="group" aria-label="Confirm secrets export">
       <p className="toylock-export-gate__warning">
-        This downloads {count} usable, unencrypted authenticator secret{count === 1 ? '' : 's'} as
-        a plain-text file, to your browser or OS's default downloads location. Anyone who can read
-        that file can generate codes exactly as this app does.
+        <MaterialSymbol name="warning" size={18} />
+        <span>
+          This downloads {count} usable, unencrypted authenticator secret{count === 1 ? '' : 's'} as
+          a plain-text file, to your browser or OS's default downloads location. Anyone who can read
+          that file can generate codes exactly as this app does.
+        </span>
       </p>
       <label className="toylock-checkbox-row">
         <input type="checkbox" checked={keyA} onChange={(e) => setKeyA(e.target.checked)} disabled={busy} />

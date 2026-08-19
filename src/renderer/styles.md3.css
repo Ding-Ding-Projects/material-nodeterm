@@ -1,0 +1,1054 @@
+/* =================================================================================================
+ * MD3: Tools
+ * -------------------------------------------------------------------------------------------------
+ * Material Design 3 skin for the Tools surfaces: the Ollama suite manager, the universal file
+ * converter, the built-in authenticator + toy-lock wizard/unlock popovers, and the reusable
+ * export menu. See design/v2/md3/tokens.css + design/v2/md3/HANDOFF.md + "MD3 Tools.dc.html" for
+ * the source contract this follows.
+ *
+ * This file is ADDITIVE: it never edits styles.css, never removes an existing className, and
+ * every rule below is scoped under one of this lane's own marker classes so it cannot bleed into
+ * a screen owned by a different pass (Source Control's `.sc-btn`, the Settings screen's other
+ * `.toylock-btn` callers, ConfirmDialog's `.confirm`, etc. all keep whatever they had before).
+ * Scopes used here:
+ *   .md3-ollama          -- OllamaManagerPanel's portal root (wraps .drawer.ollama + its ConfirmDialog)
+ *   .md3-converter        -- FileConverterPanel's portal root (wraps .drawer.converter)
+ *   .md3-authenticator    -- AuthenticatorSection's content root (wraps AddEntryForm, the entry
+ *                            list, and TwoKeyExportGate when it's open)
+ *   .md3-toylock-wizard   -- LockWizard's + UnlockPrompt's backdrop/popover roots (wraps QrCode
+ *                            and RecoveryNotice, which are rendered only inside LockWizard)
+ *   .md3-export-menu      -- ExportMenu's root (already exclusive via `.export-menu`, kept scoped
+ *                            for symmetry with the rest of this file)
+ *
+ * Typography note: the design tokens name `--md-font-ui`/`--md-font-mono`, but this app already
+ * self-hosts its three families under different variable names that ALSO carry the CJK fallback
+ * stack the Cantonese language mode needs (`--font-ui`, `--font-mono` -- see fonts.css). Using the
+ * design doc's own `--md-font-ui` value here would silently drop the bundled "Outfit Variable"
+ * face (it isn't registered under the bare name "Outfit") and lose the CJK fallback outright, so
+ * this file deliberately spells typography through the app's real `--font-ui`/`--font-mono` while
+ * every colour still comes only from the `--md-*` token contract, per the design's own instruction
+ * that its font tokens are meant to be "the same names the app already speaks" -- they aren't,
+ * quite, and this is the reconciliation.
+ * ================================================================================================= */
+
+/* -------------------------------------------------------------------------------------------------
+ * Shared primitives -- Ollama + Converter drawers
+ * ------------------------------------------------------------------------------------------------- */
+
+.md3-ollama .drawer.ollama,
+.md3-converter .drawer.converter {
+  width: 640px;
+  max-width: 94vw;
+  background: var(--md-surface-container-low);
+  border-left: 1px solid var(--md-outline-variant);
+  box-shadow: none;
+  font-family: var(--font-ui);
+  color: var(--md-on-surface);
+}
+
+.md3-ollama .drawer__head,
+.md3-converter .drawer__head {
+  background: var(--md-surface-container);
+  border-bottom: 1px solid var(--md-outline-variant);
+  padding: 16px 20px;
+}
+
+.md3-ollama .drawer__head h2,
+.md3-converter .drawer__head h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.md3-ollama .drawer__close,
+.md3-converter .drawer__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  transition: background-color var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-ollama .drawer__close:hover,
+.md3-converter .drawer__close:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.md3-ollama .drawer__body,
+.md3-converter .drawer__body {
+  padding: 16px 20px 28px;
+}
+
+.md3-ollama .drawer__body section,
+.md3-converter .drawer__body section,
+.md3-ollama .om-body section,
+.md3-converter .cv-body section {
+  border-bottom: 1px solid var(--md-outline-variant);
+  padding: 16px 0;
+}
+.md3-ollama .drawer__body section:first-child,
+.md3-converter .drawer__body section:first-child {
+  padding-top: 0;
+}
+
+.md3-ollama .drawer__body h3,
+.md3-converter .drawer__body h3,
+.md3-ollama .om-body h3,
+.md3-converter .cv-body h3 {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+  margin: 0 0 10px;
+}
+
+.md3-ollama .om-empty-note,
+.md3-converter .cv-empty-note {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-ollama .om-actions,
+.md3-converter .cv-actions {
+  gap: 10px;
+}
+
+/* Buttons -- MD3 pill filled / outlined / text */
+.md3-ollama .sc-btn,
+.md3-converter .sc-btn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background-color var(--md-motion-effect), border-color var(--md-motion-effect);
+}
+.md3-ollama .sc-btn:hover:not(:disabled),
+.md3-converter .sc-btn:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.md3-ollama .sc-btn.primary,
+.md3-converter .sc-btn.primary {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border-color: transparent;
+}
+.md3-ollama .sc-btn.primary:hover:not(:disabled),
+.md3-converter .sc-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.md3-ollama .sc-btn:disabled,
+.md3-converter .sc-btn:disabled {
+  opacity: 0.45;
+}
+
+.md3-ollama .cv-item__link,
+.md3-converter .cv-item__link {
+  color: var(--md-primary);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.md3-ollama .cv-item__link:hover,
+.md3-converter .cv-item__link:hover {
+  color: var(--md-on-surface);
+}
+
+/* Text / search fields -- MD3 filled field on a tonal surface */
+.md3-ollama .om-search,
+.md3-converter .cv-cat__search,
+.md3-converter .cv-cat__search:focus {
+  font-family: var(--font-ui);
+}
+.md3-ollama .om-search,
+.md3-converter .cv-cat__search {
+  background: var(--md-surface-container-highest);
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  padding: 8px 16px;
+}
+.md3-ollama .om-search:focus,
+.md3-converter .cv-cat__search:focus {
+  outline: none;
+  border-color: var(--md-primary);
+}
+
+.md3-ollama select,
+.md3-converter select,
+.md3-ollama .om-actions input[type='text'],
+.md3-ollama .om-actions input[type='number'],
+.md3-converter .cv-concurrency input {
+  font-family: var(--font-ui);
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  color: var(--md-on-surface);
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.md3-ollama input[type='checkbox'],
+.md3-ollama input[type='radio'],
+.md3-ollama input[type='range'],
+.md3-converter input[type='checkbox'],
+.md3-converter input[type='radio'],
+.md3-converter input[type='range'] {
+  accent-color: var(--md-primary);
+}
+
+/* Item cards (Converter queue rows AND Ollama pull-queue cart rows share `.cv-item`) */
+.md3-ollama .cv-item,
+.md3-converter .cv-item {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-low);
+  padding: 12px 14px;
+}
+.md3-ollama .cv-item--failed,
+.md3-converter .cv-item--failed {
+  border-color: var(--md-error);
+}
+.md3-ollama .cv-item--needs-confirm,
+.md3-converter .cv-item--needs-confirm {
+  border-color: var(--md-warning);
+}
+.md3-ollama .cv-item--done,
+.md3-converter .cv-item--done {
+  opacity: 0.82;
+}
+.md3-ollama .cv-item__icon,
+.md3-converter .cv-item__icon {
+  display: inline-flex;
+  color: var(--md-on-surface-variant);
+}
+.md3-ollama .cv-item--done .cv-item__icon,
+.md3-converter .cv-item--done .cv-item__icon {
+  color: var(--md-success);
+}
+.md3-ollama .cv-item--failed .cv-item__icon,
+.md3-converter .cv-item--failed .cv-item__icon,
+.md3-ollama .cv-item--needs-confirm .cv-item__icon,
+.md3-converter .cv-item--needs-confirm .cv-item__icon {
+  color: var(--md-warning);
+}
+.md3-ollama .cv-item--running .cv-item__icon,
+.md3-converter .cv-item--running .cv-item__icon {
+  color: var(--md-primary);
+}
+.md3-ollama .cv-item__name,
+.md3-ollama .cv-item__dest,
+.md3-converter .cv-item__name,
+.md3-converter .cv-item__dest {
+  font-family: var(--font-mono);
+}
+.md3-ollama .cv-progress,
+.md3-converter .cv-progress {
+  background: var(--md-surface-container-highest);
+  border-radius: var(--md-shape-full);
+  overflow: hidden;
+}
+.md3-ollama .cv-progress__bar,
+.md3-converter .cv-progress__bar {
+  background: var(--md-primary);
+  transition: width var(--md-motion-effect);
+}
+.md3-ollama .cv-item__error,
+.md3-converter .cv-item__error {
+  color: var(--md-error);
+}
+.md3-ollama .cv-item__warning,
+.md3-converter .cv-item__warning {
+  color: var(--md-warning);
+}
+.md3-ollama .cv-queue-controls,
+.md3-converter .cv-queue-controls {
+  gap: 12px;
+}
+.md3-ollama .cv-concurrency,
+.md3-converter .cv-concurrency {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+.md3-ollama .cv-scanning,
+.md3-converter .cv-scanning {
+  color: var(--md-primary);
+  font-family: var(--font-ui);
+}
+.md3-ollama .cv-summary-counts,
+.md3-converter .cv-summary-counts {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+.md3-ollama .cv-confirm__row,
+.md3-converter .cv-confirm__row {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+  border-radius: var(--md-shape-sm);
+  padding: 8px 10px;
+}
+.md3-ollama .cv-confirm__row .sc-btn,
+.md3-converter .cv-confirm__row .sc-btn {
+  border-color: var(--md-on-warning-container);
+  color: var(--md-on-warning-container);
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Ollama suite manager
+ * ------------------------------------------------------------------------------------------------- */
+
+.md3-ollama .om-tabs {
+  display: flex;
+  gap: 6px;
+  background: var(--md-surface-container-highest);
+  border: none;
+  border-radius: var(--md-shape-full);
+  padding: 4px;
+  margin-bottom: 16px;
+  width: fit-content;
+}
+.md3-ollama .om-tab {
+  border: none;
+  border-bottom: none;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 16px;
+  transition: background-color var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-ollama .om-tab--active {
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  border-bottom-color: transparent;
+}
+
+.md3-ollama .om-health {
+  background: var(--md-surface-container-low);
+  border-radius: var(--md-shape-md);
+  padding: 12px 14px;
+  font-family: var(--font-ui);
+  color: var(--md-on-surface);
+}
+.md3-ollama .om-health__dot {
+  background: var(--md-outline);
+}
+.md3-ollama .om-health__dot--ok {
+  background: var(--md-success);
+}
+.md3-ollama .om-health__dot--bad {
+  background: var(--md-error);
+}
+.md3-ollama .om-health__dot--checking {
+  background: var(--md-warning);
+}
+
+.md3-ollama .om-hardware {
+  font-family: var(--font-ui);
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-low);
+  border-radius: var(--md-shape-sm);
+  padding: 8px 12px;
+}
+
+.md3-ollama .om-troubleshoot {
+  background: var(--md-surface-container-low);
+  border: none;
+  border-radius: var(--md-shape-md);
+  padding: 14px 16px;
+  font-family: var(--font-ui);
+  color: var(--md-on-surface);
+}
+.md3-ollama .om-troubleshoot pre {
+  background: var(--md-surface-container-lowest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  color: var(--md-on-surface);
+  font-family: var(--font-mono);
+}
+
+.md3-ollama .om-model-list,
+.md3-ollama .om-cart {
+  gap: 10px;
+}
+.md3-ollama .om-model {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container-low);
+  padding: 14px 18px;
+  transition: background-color var(--md-motion-effect);
+}
+.md3-ollama .om-model:hover {
+  background: var(--md-surface-container);
+}
+.md3-ollama .om-model__name {
+  font-family: var(--font-mono);
+  color: var(--md-on-surface);
+  font-size: 12.5px;
+}
+.md3-ollama .om-model__meta {
+  font-family: var(--font-ui);
+  color: var(--md-on-surface-variant);
+}
+
+/* Hardware-fit verdict chips -- evidence-backed, never decorative: the exact verdict word stays
+ * in the label text (this only recolours it), and "Unknown" remains a reachable, real state. */
+.md3-ollama .om-fit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--md-shape-full);
+  padding: 3px 10px 3px 8px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.md3-ollama .om-fit--runs-well {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.md3-ollama .om-fit--runs-with-limits {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.md3-ollama .om-fit--unlikely {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md3-ollama .om-fit--unknown {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+.md3-ollama .om-fit-detail {
+  background: var(--md-surface-container-lowest);
+  border-radius: var(--md-shape-sm);
+  padding: 8px 12px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+
+/* Model-store completeness banner -- state-coloured, never hidden. `unavailable` reads as an
+ * error (a load failure), never as "there is nothing here"; `unknown` stays neutral. */
+.md3-ollama .om-catalog-state {
+  border-radius: var(--md-shape-md);
+  padding: 12px 14px;
+}
+.md3-ollama .om-catalog-state--complete {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+.md3-ollama .om-catalog-state--partial {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.md3-ollama .om-catalog-state--unavailable {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md3-ollama .om-catalog-state--unknown {
+  background: var(--md-surface-container-low);
+  color: var(--md-on-surface-variant);
+}
+.md3-ollama .om-catalog-state .sc-btn {
+  border-color: currentColor;
+  color: inherit;
+}
+
+/* Local chat surface */
+.md3-ollama .om-chat__sessions {
+  gap: 8px;
+}
+.md3-ollama .om-chat__session {
+  background: var(--md-surface-container-highest);
+  border: none;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  padding: 6px 12px;
+}
+.md3-ollama .om-chat__session--active {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-ollama .om-chat__transcript {
+  background: var(--md-surface-container-low);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+}
+.md3-ollama .om-chat__msg {
+  font-family: var(--font-ui);
+  color: var(--md-on-surface);
+}
+.md3-ollama .om-chat__role {
+  color: var(--md-on-surface-variant);
+}
+.md3-ollama .om-chat__msg--user .om-chat__role {
+  color: var(--md-primary);
+}
+.md3-ollama .om-chat__msg--assistant .om-chat__role {
+  color: var(--md-tertiary);
+}
+.md3-ollama .om-chat__composer textarea {
+  font-family: var(--font-ui);
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  color: var(--md-on-surface);
+}
+.md3-ollama .om-chat__composer textarea:focus {
+  outline: none;
+  border-color: var(--md-primary);
+}
+.md3-ollama .om-chat__params {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+.md3-ollama .om-chat__params input {
+  font-family: var(--font-mono);
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  color: var(--md-on-surface);
+}
+.md3-ollama details summary {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+.md3-ollama details textarea {
+  font-family: var(--font-mono);
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+  color: var(--md-on-surface);
+  margin-top: 6px;
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * File converter
+ * ------------------------------------------------------------------------------------------------- */
+
+.md3-converter .cv-pending li {
+  background: var(--md-surface-container-low);
+  border-radius: var(--md-shape-sm);
+}
+.md3-converter .cv-pending__name {
+  font-family: var(--font-mono);
+  color: var(--md-on-surface);
+}
+.md3-converter .cv-pending__meta {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+
+/* Categorized adapter catalog -- every category renders, bundled or not, so a coverage gap is
+ * visible rather than silently hidden. */
+.md3-converter .cv-catalog {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+  overflow: hidden;
+}
+.md3-converter .cv-cat {
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md3-converter .cv-cat__head {
+  background: var(--md-surface-container-low);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  padding: 10px 14px;
+}
+.md3-converter .cv-cat__head:hover {
+  background: var(--md-surface-container);
+}
+.md3-converter .cv-cat__chevron {
+  color: var(--md-on-surface-variant);
+}
+.md3-converter .cv-cat__count {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+.md3-converter .cv-cat__body {
+  background: var(--md-surface-container-lowest);
+  padding: 10px 14px 12px;
+}
+.md3-converter .cv-row {
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  padding: 8px 12px;
+}
+.md3-converter .cv-row:hover:not(:disabled) {
+  background: var(--md-surface-container-high);
+}
+.md3-converter .cv-row--selected {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-converter .cv-row--suggested:not(.cv-row--selected) {
+  border-color: var(--md-tertiary);
+}
+.md3-converter .cv-row--disabled {
+  opacity: 0.45;
+}
+.md3-converter .cv-row__badge {
+  border-radius: var(--md-shape-xs);
+  text-transform: none;
+  font-family: var(--font-ui);
+  font-weight: 700;
+}
+.md3-converter .cv-row__badge--lossy {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.md3-converter .cv-row__badge--suggested {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.md3-converter .cv-row__reason {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+
+.md3-converter .cv-lossy {
+  border: none;
+  border-radius: var(--md-shape-md);
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+  font-family: var(--font-ui);
+}
+.md3-converter .cv-lossy p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.md3-converter .cv-lossy__ack {
+  color: var(--md-on-warning-container);
+}
+
+.md3-converter .cv-destdir,
+.md3-converter .cv-preflight {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Authenticator + toy locks
+ * ------------------------------------------------------------------------------------------------- */
+
+.md3-authenticator {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: var(--font-ui);
+}
+
+.md3-authenticator__filter {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--md-surface-container-highest);
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 9px 16px;
+}
+.md3-authenticator__filter:focus {
+  outline: none;
+  border-color: var(--md-primary);
+}
+.md3-authenticator__filter::placeholder {
+  color: var(--md-on-surface-variant);
+}
+
+.md3-authenticator__empty {
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-authenticator__export-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+  margin: 0;
+}
+.md3-authenticator__export-body {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+  margin: 6px 0 0;
+}
+
+.md3-authenticator .toylock-add-entry {
+  max-width: 460px;
+  background: var(--md-surface-container-low);
+  border-radius: var(--md-shape-lg);
+  padding: 16px 18px;
+  gap: 12px;
+}
+
+/* Per-entry avatar + countdown ring. Colour cycles by row position within the list, echoing the
+ * design's per-row colour variety without inventing a per-account colour scheme of its own. */
+.md3-authenticator .toylock-auth-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  grid-template-areas: 'avatar id code' 'avatar actions actions';
+  column-gap: 14px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container-low);
+  padding: 14px 16px;
+}
+/* The revealed-secret block and any renamed-in-place ConfirmDialog trigger are not named grid
+ * areas (same as before this pass): without an explicit span they'd auto-place into the narrow
+ * 44px avatar column now that one exists. Stretch every other direct child across the full row. */
+.md3-authenticator .toylock-auth-row > .toylock-manual-secret {
+  grid-column: 1 / -1;
+}
+.md3-auth-avatar {
+  grid-area: avatar;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 700;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+.md3-authenticator .toylock-auth-row:nth-of-type(3n + 2) .md3-auth-avatar {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.md3-authenticator .toylock-auth-row:nth-of-type(3n) .md3-auth-avatar {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.md3-authenticator .toylock-auth-row__issuer {
+  color: var(--md-on-surface);
+}
+.md3-authenticator .toylock-auth-row__account {
+  color: var(--md-on-surface-variant);
+}
+.md3-auth-ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  align-self: flex-end;
+  margin-bottom: 2px;
+  background: conic-gradient(var(--md-primary) var(--md3-ring-deg, 0deg), var(--md-surface-container-highest) 0);
+}
+.md3-authenticator .toylock-code-text {
+  font-family: var(--font-mono);
+  color: var(--md-on-surface);
+}
+.md3-authenticator .toylock-code-text:hover {
+  color: var(--md-primary);
+}
+
+.md3-authenticator .toylock-export-section {
+  border: none;
+  border-radius: var(--md-shape-lg);
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+  padding: 16px 18px;
+}
+.md3-authenticator .toylock-export-section .md3-authenticator__export-title,
+.md3-authenticator .toylock-export-section .md3-authenticator__export-body {
+  color: inherit;
+}
+.md3-authenticator .toylock-export-section .toylock-btn {
+  border-color: var(--md-on-warning-container);
+  color: var(--md-on-warning-container);
+}
+.md3-authenticator .toylock-export-gate__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: inherit;
+}
+.md3-authenticator .toylock-export-gate__slider {
+  accent-color: var(--md-primary);
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Toy-lock creation wizard + unlock popover (anchored, non-modal -- MD3 dialog recipe, but tonal
+ * only: no box-shadow, definition comes from the surface/outline contrast instead).
+ * ------------------------------------------------------------------------------------------------- */
+
+.toylock-wizard__backdrop.md3-toylock-wizard {
+  background: var(--md-scrim);
+}
+.toylock-wizard.md3-toylock-wizard {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+  box-shadow: none;
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  padding: 18px;
+}
+.md3-toylock-wizard .toylock-wizard__title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--md-on-surface);
+}
+.md3-toylock-wizard .toylock-success {
+  color: var(--md-on-surface);
+}
+.md3-toylock-wizard .toylock-qr-wrap {
+  padding: 8px 0;
+}
+.md3-toylock-wizard .toylock-qr {
+  border-radius: var(--md-shape-md);
+  /* theme-exempt: a QR code needs a light quiet zone to scan in either theme -- this only frames
+     the fixed white/black SVG QrCode.tsx renders, it never recolours it. */
+}
+.md3-toylock-wizard .toylock-qr--error {
+  background: var(--md-surface-container-low);
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-md);
+}
+.md3-toylock-wizard .toylock-manual-secret,
+.md3-authenticator .toylock-manual-secret {
+  background: var(--md-surface-container-low);
+  border-radius: var(--md-shape-sm);
+}
+.md3-toylock-wizard .toylock-secret-text,
+.md3-authenticator .toylock-secret-text {
+  font-family: var(--font-mono);
+  color: var(--md-on-surface);
+}
+.md3-toylock-wizard .toylock-recovery,
+.md3-authenticator .toylock-recovery {
+  background: var(--md-surface-container-low);
+  border: none;
+  border-radius: var(--md-shape-sm);
+}
+.md3-toylock-wizard .toylock-recovery__disclaimer,
+.md3-toylock-wizard .toylock-recovery__how,
+.md3-authenticator .toylock-recovery__disclaimer,
+.md3-authenticator .toylock-recovery__how {
+  color: var(--md-on-surface-variant);
+}
+.md3-toylock-wizard .toylock-recovery__path,
+.md3-authenticator .toylock-recovery__path {
+  background: var(--md-surface-container-highest);
+  border-radius: var(--md-shape-xs);
+  color: var(--md-on-surface);
+  font-family: var(--font-mono);
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Shared toy-lock primitives -- generic form controls used by BOTH the wizard/unlock popovers and
+ * the authenticator settings section. Written once against the combined scope so the two surfaces
+ * cannot visually drift from each other.
+ * ------------------------------------------------------------------------------------------------- */
+
+.md3-toylock-wizard .toylock-field__label,
+.md3-authenticator .toylock-field__label {
+  font-family: var(--font-ui);
+  color: var(--md-on-surface-variant);
+}
+.md3-toylock-wizard .toylock-radio-row,
+.md3-authenticator .toylock-radio-row,
+.md3-toylock-wizard .toylock-checkbox-row,
+.md3-authenticator .toylock-checkbox-row {
+  font-family: var(--font-ui);
+  color: var(--md-on-surface);
+}
+.md3-toylock-wizard .toylock-checkbox-row,
+.md3-authenticator .toylock-checkbox-row {
+  color: var(--md-on-surface-variant);
+}
+
+.md3-toylock-wizard .toylock-input,
+.md3-toylock-wizard .toylock-select,
+.md3-toylock-wizard .toylock-textarea,
+.md3-toylock-wizard .toylock-number,
+.md3-authenticator .toylock-input,
+.md3-authenticator .toylock-select,
+.md3-authenticator .toylock-textarea,
+.md3-authenticator .toylock-number {
+  font-family: var(--font-ui);
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  color: var(--md-on-surface);
+}
+.md3-toylock-wizard .toylock-input:focus,
+.md3-toylock-wizard .toylock-select:focus,
+.md3-toylock-wizard .toylock-textarea:focus,
+.md3-toylock-wizard .toylock-number:focus,
+.md3-authenticator .toylock-input:focus,
+.md3-authenticator .toylock-select:focus,
+.md3-authenticator .toylock-textarea:focus,
+.md3-authenticator .toylock-number:focus {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+  border-color: var(--md-primary);
+}
+.md3-toylock-wizard .toylock-input--code,
+.md3-authenticator .toylock-input--code {
+  font-family: var(--font-mono);
+}
+
+.md3-toylock-wizard .toylock-error,
+.md3-authenticator .toylock-error {
+  color: var(--md-error);
+  font-family: var(--font-ui);
+}
+.md3-toylock-wizard .toylock-warn,
+.md3-authenticator .toylock-warn {
+  color: var(--md-warning);
+  font-family: var(--font-ui);
+}
+.md3-toylock-wizard .toylock-hint,
+.md3-authenticator .toylock-hint {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+
+.md3-toylock-wizard .toylock-btn,
+.md3-authenticator .toylock-btn {
+  font-family: var(--font-ui);
+  border-radius: var(--md-shape-full);
+  border: 1px solid var(--md-outline);
+  background: transparent;
+  color: var(--md-on-surface);
+  padding: 8px 16px;
+  font-weight: 600;
+  transition: background-color var(--md-motion-effect);
+}
+.md3-toylock-wizard .toylock-btn:hover,
+.md3-authenticator .toylock-btn:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-toylock-wizard .toylock-btn:disabled,
+.md3-authenticator .toylock-btn:disabled {
+  opacity: 0.45;
+}
+.md3-toylock-wizard .toylock-btn--primary,
+.md3-authenticator .toylock-btn--primary {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border-color: transparent;
+}
+.md3-toylock-wizard .toylock-btn--primary:hover,
+.md3-authenticator .toylock-btn--primary:hover {
+  filter: brightness(1.06);
+}
+.md3-toylock-wizard .toylock-btn--sm,
+.md3-authenticator .toylock-btn--sm {
+  padding: 5px 12px;
+  font-size: 11.5px;
+}
+.md3-toylock-wizard .toylock-btn--link,
+.md3-authenticator .toylock-btn--link {
+  color: var(--md-primary);
+  font-family: var(--font-ui);
+}
+.md3-toylock-wizard input[type='checkbox'],
+.md3-toylock-wizard input[type='radio'],
+.md3-authenticator input[type='checkbox'],
+.md3-authenticator input[type='radio'] {
+  accent-color: var(--md-primary);
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Export menu -- the inline "Export..." disclosure used by Settings/history/notifications exports.
+ * ------------------------------------------------------------------------------------------------- */
+
+.md3-export-menu {
+  font-family: var(--font-ui);
+}
+.md3-export-menu .export-menu__toggle {
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  padding: 5px 14px;
+  transition: background-color var(--md-motion-effect);
+}
+.md3-export-menu .export-menu__toggle:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-export-menu .export-menu__panel {
+  background: var(--md-surface-container-low);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+}
+.md3-export-menu .export-menu__format-label {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+.md3-export-menu .export-menu__format {
+  font-family: var(--font-ui);
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  color: var(--md-on-surface);
+}
+.md3-export-menu .export-menu__format:focus {
+  outline: none;
+  border-color: var(--md-primary);
+}
+.md3-export-menu .export-menu__lossy {
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.md3-export-menu .export-menu__meta {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+.md3-export-menu .export-menu__save,
+.md3-export-menu .export-menu__open-vscode {
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  transition: background-color var(--md-motion-effect);
+}
+.md3-export-menu .export-menu__save {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border-color: transparent;
+}
+.md3-export-menu .export-menu__save:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.md3-export-menu .export-menu__open-vscode:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.md3-export-menu .export-menu__result {
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-ui);
+}
+.md3-export-menu .export-menu__result--error {
+  color: var(--md-error);
+}

@@ -149,6 +149,9 @@ function EntryRow({
   const [copied, setCopied] = useState(false)
 
   const secondsRemaining = code ? Math.max(0, code.periodStart + code.period - Math.floor(Date.now() / 1000)) : 0
+  // Purely presentational: how far around the period this code has already travelled, fed to a
+  // conic-gradient countdown ring below. Nothing reads this back for a timing decision.
+  const ringDegrees = code ? Math.round(((code.period - secondsRemaining) / code.period) * 360) : 0
 
   const copyCode = (): void => {
     if (!code) return
@@ -243,6 +246,9 @@ function EntryRow({
 
   return (
     <li className="toylock-auth-row">
+      <span className="md3-auth-avatar" aria-hidden="true">
+        {(entry.issuer.trim().charAt(0) || '?').toUpperCase()}
+      </span>
       <div className="toylock-auth-row__id">
         {renaming ? (
           <div className="toylock-manual-grid toylock-manual-grid--2col">
@@ -259,6 +265,11 @@ function EntryRow({
       <div className="toylock-auth-row__code">
         {code ? (
           <>
+            <span
+              className="md3-auth-ring"
+              aria-hidden="true"
+              style={{ '--md3-ring-deg': `${ringDegrees}deg` } as React.CSSProperties}
+            />
             <button
               className="toylock-code-text"
               onClick={copyCode}
@@ -414,7 +425,7 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
       searchEntries={[ROW]}
     >
       <SearchableRow {...ROW}>
-        <div className="space-y-4">
+        <div className="md3-authenticator">
           {loadError && (
             <div role="alert" className="toylock-error">
               {loadError} Existing entries could not be verified.
@@ -431,11 +442,11 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
             placeholder="Filter entries…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-full rounded-lg border border-border bg-transparent px-3 py-1.5 text-[13px] text-text placeholder:text-muted"
+            className="md3-authenticator__filter"
             aria-label="Filter authenticator entries"
           />
           {loadError ? null : filtered.length === 0 ? (
-            <p className="text-[13px] text-muted">No entries yet.</p>
+            <p className="md3-authenticator__empty">No entries yet.</p>
           ) : (
             <ul className="toylock-auth-list">
               {filtered.map((e) => (
@@ -455,8 +466,8 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
 
           {entries.length > 0 && (
             <div className="toylock-export-section">
-              <h4 className="text-[13px] font-medium text-text">Export secrets</h4>
-              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+              <h4 className="md3-authenticator__export-title">Export secrets</h4>
+              <p className="md3-authenticator__export-body">
                 Ordinary exports (backups, sharing) never include these secrets. This is the ONE
                 deliberate action that writes them out, in the clear, behind a real two-key gate.
               </p>
