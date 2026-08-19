@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { useI18n } from '@renderer/lib/i18n'
 import { Localized } from '@renderer/ui/Localized'
+import { useSettings } from '../state/settings'
+import { resolveAppDisplayName } from '@shared/appIdentity'
+import { resolveLogoPreset } from './appearance/BrandMark'
 
 /**
  * Whether the start screen may be dismissed back to whatever is behind it. `hasOpenProjects` is
@@ -61,6 +64,8 @@ export function WelcomeScreen({
   overBoard
 }: WelcomeScreenProps) {
   const { ts } = useI18n()
+  const appLogo = useSettings((s) => s.settings.appLogo)
+  const displayName = useSettings((s) => resolveAppDisplayName(s.settings.appDisplayName))
   useEffect(() => {
     if (!onClose) return
     const onKey = (e: KeyboardEvent) => {
@@ -72,7 +77,7 @@ export function WelcomeScreen({
 
   return (
     <div
-      className={overBoard ? 'welcome welcome--over-board' : 'welcome'}
+      className={overBoard ? 'md3-welcome md3-welcome--over-board' : 'md3-welcome'}
       onClick={onClose ? (e) => e.target === e.currentTarget && onClose() : undefined}
     >
       {onClose && (
@@ -84,35 +89,11 @@ export function WelcomeScreen({
               corner "×" and the keyboard/click-outside paths nobody could see. This button, plus
               the reassurance line beside it, is the fix: always visible, always labeled, and says
               plainly that nothing here touches the other projects. */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 14,
-              left: 20,
-              right: 64,
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 10
-            }}
-          >
+          <div className="md3-welcome__topbar">
             <button
+              className="md3-welcome__back"
               onClick={onClose}
               title={ts('welcome.back', 'Back to your projects')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '8px 14px',
-                background: 'rgba(235,235,245,0.08)',
-                border: '1px solid rgba(235,235,245,0.24)',
-                borderRadius: 999,
-                color: 'rgba(235,235,245,0.92)',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                flex: 'none'
-              }}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -129,139 +110,208 @@ export function WelcomeScreen({
               </svg>
               <span>{ts('welcome.back', 'Back to your projects')}</span>
             </button>
-            <span style={{ fontSize: 11.5, color: 'rgba(235,235,245,0.5)' }}>
+            <span className="md3-welcome__back-note">
               {ts('welcome.back.note', "They're untouched — nothing here changes them.")}
             </span>
           </div>
           {/* Secondary, conventional corner close — kept for anyone who already reaches for it by
               habit. The button above is the one this screen relies on being found. */}
           <button
+            className="md3-welcome__close"
             onClick={onClose}
             title={ts('welcome.close', 'Close')}
             aria-label={ts('welcome.close', 'Close')}
-            style={{
-              position: 'absolute',
-              top: 16,
-              right: 20,
-              background: 'transparent',
-              border: 'none',
-              color: 'rgba(235,235,245,0.6)',
-              fontSize: 26,
-              lineHeight: 1,
-              cursor: 'pointer'
-            }}
           >
             ×
           </button>
         </>
       )}
-      <div className="welcome__brand">
-        <svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true">
-          <defs>
-            <linearGradient id="wtg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#a38dff" />
-              <stop offset="1" stopColor="#622994" />
-            </linearGradient>
-          </defs>
-          <path
-            d="M13 12 L31 24 L13 36"
-            fill="none"
-            stroke="url(#wtg)"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <circle cx="13" cy="12" r="3.6" fill="#a38dff" />
-          <circle cx="13" cy="36" r="3.6" fill="#a38dff" />
-          <circle cx="31" cy="24" r="3.6" fill="#fff" />
-          <rect x="33.5" y="32.5" width="10.5" height="5" rx="2.5" fill="#a38dff" />
-        </svg>
-        <span className="welcome__name">nodeterm</span>
-      </div>
-      <Localized
-        id="welcome.tagline"
-        fallback="A canvas of terminals. Start a project to begin."
-        as="p"
-        className="welcome__tagline"
-      />
 
-      <div className="welcome__cards">
-        <button className="welcome__card" onClick={onNewProject}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-            <path d="M12 11v5M9.5 13.5h5" />
-          </svg>
-          <span>{ts('welcome.card.newProject', 'New project')}</span>
-        </button>
-
-        <button className="welcome__card" onClick={onOpenFolder}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          </svg>
-          <span>{ts('welcome.card.openFolder', 'Open folder…')}</span>
-        </button>
-
-        <button className="welcome__card" onClick={onCloneRepo}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 3v10M8 9l4 4 4-4" />
-            <path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
-          </svg>
-          <span>{ts('welcome.card.cloneRepo', 'Clone repo…')}</span>
-        </button>
-
-        <button className="welcome__card" onClick={onConnectSsh}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="5" width="18" height="14" rx="2" />
-            <path d="M7 10l3 2-3 2M13 14h4" />
-          </svg>
-          <span>{ts('welcome.card.connectSsh', 'Connect over SSH…')}</span>
-        </button>
-      </div>
-
-      {closedProjects.length > 0 && (
-        <div className="welcome__recent">
-          <div className="welcome__recent-title">
-            {ts('welcome.recent.title', 'Recently closed')}
-          </div>
-          <div className="welcome__recent-list">
-            {closedProjects.map((p) => (
-              <div
-                key={p.id}
-                className="welcome__recent-item"
-                role="button"
-                tabIndex={0}
-                title={p.cwd || p.name}
-                onClick={() => onReopen?.(p.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') onReopen?.(p.id)
-                }}
-              >
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                </svg>
-                <span className="welcome__recent-name">{p.name}</span>
-                {p.cwd && <span className="welcome__recent-path">{p.cwd}</span>}
-                {onDeleteClosed && (
-                  <button
-                    className="welcome__recent-del"
-                    title={ts('welcome.recent.deleteTitle', 'Delete permanently (ends its sessions)')}
-                    // The accessible name NAMES THE PROJECT: a screen-reader user moving down a
-                    // list of recent projects hears this button once per row, and an identical
-                    // label on every one of them says nothing about which project it destroys.
-                    aria-label={`${ts('welcome.recent.deleteAria', 'Delete permanently')} — ${p.name}`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDeleteClosed(p.id, p.name, e.currentTarget)
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+      <div className="md3-welcome__hero">
+        <div className="md3-welcome__brand">
+          <span className="md3-welcome__brand-mark" aria-hidden="true">
+            {appLogo.selection === 'custom' && appLogo.customImage ? (
+              <img
+                src={appLogo.customImage.dataUrl}
+                width={22}
+                height={22}
+                alt=""
+                style={{ borderRadius: 6, objectFit: 'contain' }}
+              />
+            ) : (
+              resolveLogoPreset(appLogo.selection).render(22)
+            )}
+          </span>
+          <span className="md3-welcome__brand-name">{displayName}</span>
         </div>
-      )}
+
+        <Localized
+          id="welcome.tagline"
+          fallback="A canvas of terminals. Start a project to begin."
+          as="h1"
+          className="md3-welcome__title"
+          secondaryClassName="md3-welcome__title-secondary"
+        />
+        <Localized
+          id="welcome.subtitle"
+          fallback="Open a project to place shells, agents and notes on one canvas — every project is also a board of its live sessions."
+          as="p"
+          className="md3-welcome__subtitle"
+          secondaryClassName="md3-welcome__subtitle-secondary"
+        />
+
+        <div className="md3-welcome__cards">
+          <button className="md3-welcome__card md3-welcome__card--primary" onClick={onNewProject}>
+            <svg
+              className="md3-welcome__card-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <path d="M12 11v5M9.5 13.5h5" />
+            </svg>
+            <span className="md3-welcome__card-body">
+              <span className="md3-welcome__card-title">{ts('welcome.card.newProject', 'New project')}</span>
+              <span className="md3-welcome__card-desc">{ts('welcome.card.newProject.desc', 'An empty canvas')}</span>
+            </span>
+          </button>
+
+          <button className="md3-welcome__card" onClick={onOpenFolder}>
+            <svg
+              className="md3-welcome__card-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            </svg>
+            <span className="md3-welcome__card-body">
+              <span className="md3-welcome__card-title">{ts('welcome.card.openFolder', 'Open folder…')}</span>
+              <span className="md3-welcome__card-desc">{ts('welcome.card.openFolder.desc', 'Point at a repo')}</span>
+            </span>
+          </button>
+
+          <button className="md3-welcome__card" onClick={onCloneRepo}>
+            <svg
+              className="md3-welcome__card-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 3v10M8 9l4 4 4-4" />
+              <path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+            </svg>
+            <span className="md3-welcome__card-body">
+              <span className="md3-welcome__card-title">{ts('welcome.card.cloneRepo', 'Clone repo…')}</span>
+              <span className="md3-welcome__card-desc">{ts('welcome.card.cloneRepo.desc', 'From GitHub or a URL')}</span>
+            </span>
+          </button>
+
+          <button className="md3-welcome__card" onClick={onConnectSsh}>
+            <svg
+              className="md3-welcome__card-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="M7 10l3 2-3 2M13 14h4" />
+            </svg>
+            <span className="md3-welcome__card-body">
+              <span className="md3-welcome__card-title">{ts('welcome.card.connectSsh', 'Connect over SSH…')}</span>
+              <span className="md3-welcome__card-desc">{ts('welcome.card.connectSsh.desc', 'Work on a remote host')}</span>
+            </span>
+          </button>
+        </div>
+
+        {closedProjects.length > 0 && (
+          <div className="md3-welcome__recent">
+            <div className="md3-welcome__recent-title">
+              {ts('welcome.recent.title', 'Recently closed')}
+            </div>
+            <div className="md3-welcome__recent-list">
+              {closedProjects.map((p) => (
+                <div
+                  key={p.id}
+                  className="md3-welcome__recent-item"
+                  role="button"
+                  tabIndex={0}
+                  title={p.cwd || p.name}
+                  onClick={() => onReopen?.(p.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') onReopen?.(p.id)
+                  }}
+                >
+                  <svg
+                    className="md3-welcome__recent-icon"
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  </svg>
+                  <span className="md3-welcome__recent-name">{p.name}</span>
+                  {p.cwd && <span className="md3-welcome__recent-path">{p.cwd}</span>}
+                  <span className="md3-welcome__recent-spacer" />
+                  {onDeleteClosed && (
+                    <button
+                      className="md3-welcome__recent-del"
+                      title={ts('welcome.recent.deleteTitle', 'Delete permanently (ends its sessions)')}
+                      // The accessible name NAMES THE PROJECT: a screen-reader user moving down a
+                      // list of recent projects hears this button once per row, and an identical
+                      // label on every one of them says nothing about which project it destroys.
+                      aria-label={`${ts('welcome.recent.deleteAria', 'Delete permanently')} — ${p.name}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeleteClosed(p.id, p.name, e.currentTarget)
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                  <svg
+                    className="md3-welcome__recent-arrow"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M7 17L17 7M9 7h8v8" />
+                  </svg>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
