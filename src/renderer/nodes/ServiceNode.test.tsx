@@ -44,6 +44,18 @@ vi.mock('@xyflow/react', () => ({
   })
 }))
 
+// `minecraft` is the one kind ServiceNode hands off entirely to MinecraftServerPanel (see
+// ServiceNode.tsx's own header comment — it "replaces the generic address field entirely" for
+// that kind), and that panel calls useSession() the moment it mounts, which throws outside a
+// SessionProvider this harness deliberately does not construct — the same category of provider
+// gap NodeResizer/useReactFlow are stubbed around above. Stubbed the same way and for the same
+// reason: this file's job is ServiceNode's OWN header/label/accessibility behavior, not
+// MinecraftServerPanel's session-backed internals (create/EULA/console — a real, separate
+// component that earns its own test file rather than a stand-in written to satisfy this one).
+vi.mock('../components/minecraft/MinecraftServerPanel', () => ({
+  MinecraftServerPanel: () => null
+}))
+
 /** The node data ServiceNode actually reads. Everything not passed in defaults to the same "no
  *  connection, no name, ordinary blue" shape a freshly created node would have. */
 const baseData = (overrides: Patch = {}): Patch => ({
@@ -314,8 +326,15 @@ describe('ServiceNode', () => {
       expect(label).toBe('Home Assistant, no name set')
     })
 
+    // `minecraft` used to exercise the generic address field like every other kind, back when
+    // one body served all six. It no longer does: `minecraft` is now the one kind wired to a real
+    // connection (MinecraftServerPanel — see ServiceNode.tsx's header comment), so it renders no
+    // `.service-node__input` at all and these two tests would fail for a reason that has nothing
+    // to do with what they are actually checking. The address-field accessibility wiring is
+    // identical across the five kinds that still show it, so `proxmox` (already exercised by the
+    // address-field describe block above) stands in for the generic behavior these tests pin.
     it('describes the address input with its own note element, and that element actually exists', () => {
-      const node = render('minecraft', baseData())
+      const node = render('proxmox', baseData())
       const input = addressInput(node)
       const note = describedNote(node, input)
       expect(note.tagName).toBe('P')
@@ -323,7 +342,7 @@ describe('ServiceNode', () => {
     })
 
     it('sets aria-invalid on an unparsable address and clears it once the address is valid', () => {
-      const node = render('minecraft', baseData())
+      const node = render('proxmox', baseData())
       const input = addressInput(node)
       setValue(input, 'nonsense')
       expect(input.getAttribute('aria-invalid')).toBe('true')
