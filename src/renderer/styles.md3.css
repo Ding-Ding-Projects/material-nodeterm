@@ -874,3 +874,703 @@
 .dino-node__header {
   min-height: 52px;
 }
+   MD3: Kanban board (Board lane — design/v2/MD3 Board.dc.html)
+
+   This file cascades AFTER styles.css (see boot.tsx import order), and every selector below
+   matches an existing `.kanban-*` / `.board-log__*` / `.label-picker__*` / `.github-issue-*`
+   class name one-for-one — the markup in src/renderer/components/kanban/ is untouched, only its
+   skin changes. Because the selectors are identical, equal specificity + later source order is
+   what wins; no `!important` anywhere except the two spots below that beat an existing
+   `!important` already in styles.css (called out at the site).
+
+   Rules followed throughout:
+   - Colour: `var(--md-*)` tokens only. Every token referenced here already exists in
+     styles.css's `:root` / `:root[data-theme='light']` blocks, so nothing needs a light-theme
+     override in this file — the token itself flips with the theme.
+   - Radius: literal px, not the app's pre-existing `--md-shape-*` scale (that scale's names
+     don't line up with design/v2/md3/tokens.css's `--md-shape-xs/sm/md/lg/full` — using a
+     literal keeps this file correct regardless of which scale is live). Column 24, card 16,
+     dialog/GitHub-issue-modal 28, floating menus 16, small chips 8, status badges/pills 999.
+   - Elevation: tonal only (the surface-container ladder) — no box-shadow anywhere in this file.
+   - Per-entity colours a user picked (column colour, label colour, avatar colour, session dot)
+     stay exactly as they are: those are data, not chrome, and untouched here.
+   ============================================================================================ */
+
+/* ---------------------------------------------------------------------------------------------
+   Overlay, title strip, source filter, label filter
+   --------------------------------------------------------------------------------------------- */
+.kanban-overlay {
+  background: var(--md-surface);
+}
+.kanban-header {
+  border-bottom-color: var(--md-outline-variant);
+}
+.kanban-header__name {
+  color: var(--md-on-surface);
+}
+
+/* All / GitHub / Sessions segmented control (mirrors the app-bar view switcher's pill). */
+.kanban-source-filter {
+  border: 1px solid var(--md-outline);
+  border-radius: 999px;
+  background: transparent;
+}
+.kanban-source-filter__button {
+  border-radius: 999px;
+  color: var(--md-on-surface-variant);
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.kanban-source-filter__button:hover {
+  color: var(--md-on-surface);
+}
+.kanban-source-filter__button.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.kanban-github-status {
+  color: var(--md-on-surface-variant);
+}
+.kanban-github-status--error {
+  color: var(--md-error);
+}
+
+/* Label filter chip + its popover menu. */
+.kanban-filter-btn {
+  background: transparent;
+  border: 1px solid var(--md-outline);
+  border-radius: 8px;
+  color: var(--md-on-surface-variant);
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    border-color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.kanban-filter-btn:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.kanban-filter-btn--on {
+  border-color: var(--md-primary);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.kanban-filter-menu {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 16px;
+  box-shadow: none;
+}
+.kanban-filter-row:hover {
+  background: var(--md-surface-container-highest);
+}
+.kanban-filter-group {
+  color: var(--md-on-surface-variant);
+}
+.kanban-filter-clear {
+  border-top-color: var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+.kanban-filter-clear:hover {
+  color: var(--md-on-surface);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Board + columns
+   --------------------------------------------------------------------------------------------- */
+.kanban-col {
+  background: var(--md-surface-container-low);
+  border: none;
+  border-radius: 24px;
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.kanban-col--drop {
+  border: 2px solid var(--md-primary);
+  background: color-mix(in srgb, var(--md-primary) 10%, var(--md-surface-container-low));
+  box-shadow: none;
+}
+.kanban-col__title {
+  color: var(--md-on-surface);
+}
+.kanban-col__count {
+  color: var(--md-on-surface-variant);
+}
+.kanban-col__close {
+  color: var(--md-on-surface-variant);
+}
+.kanban-col__close:hover {
+  color: var(--md-error);
+}
+.kanban-col__rename {
+  background: var(--md-surface-container-highest);
+  border-color: var(--md-primary);
+  border-radius: 8px;
+  color: var(--md-on-surface);
+}
+.kanban-col__swatch {
+  border-color: var(--md-outline-variant);
+}
+.kanban-col__dot--ungrouped {
+  background: var(--md-outline);
+}
+
+.kanban-add-col {
+  background: transparent;
+  border: 1px dashed var(--md-outline);
+  border-radius: 12px;
+  color: var(--md-on-surface-variant);
+}
+.kanban-add-col:hover {
+  color: var(--md-on-surface);
+  border-color: var(--md-primary);
+  background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   "+ New session" column footer menu
+   --------------------------------------------------------------------------------------------- */
+.kanban-col__new {
+  background: transparent;
+  border: 1px dashed var(--md-outline-variant);
+  border-radius: 8px;
+  color: var(--md-on-surface-variant);
+}
+.kanban-col__new:hover {
+  color: var(--md-on-surface);
+  border-color: var(--md-primary);
+  background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+}
+.kanban-col__newmenu {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 16px;
+  box-shadow: none;
+}
+/* Beats the `!important` already on this rule in styles.css. */
+.kanban-col__newback {
+  border-bottom-color: var(--md-outline-variant) !important;
+}
+.kanban-col__newmenu button {
+  color: var(--md-on-surface);
+  border-radius: 8px;
+}
+.kanban-col__newmenu button:hover {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.kanban-col__newmenu button:hover .kanban-col__newicon {
+  color: var(--md-on-secondary-container);
+}
+.kanban-col__newicon {
+  color: var(--md-on-surface-variant);
+}
+.kanban-col__newreason {
+  color: var(--md-on-surface-variant);
+}
+.kanban-col__newchevron {
+  color: var(--md-on-surface-variant);
+}
+.kanban-col__newmenu button[aria-disabled='true'] {
+  color: var(--md-on-surface-variant);
+  opacity: 0.55;
+}
+.kanban-col__newmenu button[aria-disabled='true']:hover {
+  background: transparent;
+  color: var(--md-on-surface-variant);
+}
+.kanban-col__newmenu button[aria-disabled='true']:hover .kanban-col__newicon {
+  color: var(--md-on-surface-variant);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Session cards (+ shared card chrome: row / detail / labels / meta)
+   --------------------------------------------------------------------------------------------- */
+.kanban-card {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 16px;
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.kanban-card:hover {
+  background: var(--md-surface-container-highest);
+  border-color: transparent;
+}
+/* Ghost look while a card is the drag source — no rule existed for this before. */
+.kanban-card--dragging {
+  opacity: 0.5;
+}
+.kanban-card--github {
+  border-left: 3px solid var(--md-outline);
+}
+.kanban-card__title {
+  color: var(--md-on-surface);
+}
+.kanban-card__detail {
+  border-top-color: var(--md-outline-variant);
+}
+/* The design bundle's "session chip r8 mono" — the session-id line in the card's detail row. */
+.kanban-card__session {
+  color: var(--md-on-surface-variant);
+  font-family: var(--mono-font);
+}
+.kanban-card__kindlabel {
+  color: var(--md-on-surface-variant);
+}
+.kanban-card__kind {
+  color: var(--md-on-surface-variant);
+  border: none;
+  border-radius: 8px;
+  background: var(--md-surface-container-highest);
+}
+.kanban-card__stickytext {
+  color: var(--md-on-surface-variant);
+}
+
+/* Terminal/agent profile chip (shell identity + availability), on the card and in the modal
+   header alike — pill-shaped, like the status badges, since it is itself a status indicator. */
+.kanban-card__profile,
+.kanban-modal__profile {
+  border: none;
+  border-radius: 999px;
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+.kanban-card__profile--unavailable,
+.kanban-modal__profile--unavailable {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.kanban-card__profile--unknown,
+.kanban-modal__profile--unknown {
+  border: 1px dashed var(--md-outline);
+  background: transparent;
+}
+.kanban-card__profile-status,
+.kanban-modal__profile-status {
+  color: inherit;
+}
+
+/* Reorder drop indicator: a thin primary line at the edge the drop will land on. No box-shadow
+   glow (M3 elevation here is tonal only) — the line is thicker instead, for visibility. */
+.kanban-card--drop-before::before,
+.kanban-card--drop-after::after {
+  height: 3px;
+  background: var(--md-primary);
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Status badges (RUNNING / NEEDS YOU / SLEEPING) — 24px pill, per the design bundle's card-face
+   spec, each with a leading dot; RUNNING's dot pulses (the whole chip no longer does).
+   --------------------------------------------------------------------------------------------- */
+@keyframes md3-badge-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+.kanban-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+}
+.kanban-badge--running {
+  color: var(--md-on-tertiary-container);
+  background: var(--md-tertiary-container);
+  animation: none; /* was a whole-chip pulse; the dot below carries it now */
+}
+.kanban-badge--needs {
+  color: var(--md-on-error-container);
+  background: var(--md-error-container);
+}
+.kanban-badge--sleeping {
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-highest);
+}
+.kanban-badge--running::before,
+.kanban-badge--needs::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.kanban-badge--running::before {
+  animation: md3-badge-pulse 1.4s ease-in-out infinite;
+}
+.kanban-card__unread {
+  background: var(--md-primary);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Card metadata row (labels / priority / due / avatars) — card face and the modal's meta bar
+   --------------------------------------------------------------------------------------------- */
+.kanban-meta {
+  border-bottom-color: var(--md-outline-variant);
+}
+.kanban-meta__label {
+  color: var(--md-on-surface-variant);
+}
+.kanban-avatar--add {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  border: 1px dashed var(--md-outline);
+}
+.kanban-avatar--add:hover {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  border-style: solid;
+  border-color: transparent;
+}
+.kanban-avatar--more {
+  background: var(--md-surface-container-highest);
+}
+.kanban-meta__picker {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 16px;
+  box-shadow: none;
+}
+.kanban-meta__picker > button {
+  color: var(--md-on-surface);
+  border-radius: 8px;
+}
+.kanban-meta__picker > button:hover {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.kanban-meta__check {
+  color: var(--md-success);
+}
+.kanban-meta__due {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 8px;
+  color: var(--md-on-surface);
+  /* The base rule hardcodes `color-scheme: dark`, so the native picker mismatches the light
+     theme. Follow the live theme instead — same fix as everywhere else that reads a token. */
+  color-scheme: dark;
+}
+:root[data-theme='light'] .kanban-meta__due {
+  color-scheme: light;
+}
+.kanban-meta__clear {
+  color: var(--md-on-surface-variant);
+}
+.kanban-meta__clear:hover {
+  color: var(--md-error);
+}
+.kanban-due {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  border-radius: 8px;
+}
+.kanban-due--overdue {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.kanban-prio {
+  background: transparent;
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  border-radius: 8px;
+  transition: border-color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.kanban-prio:hover {
+  border-color: var(--md-outline);
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-highest);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Labels + the label picker popover
+   --------------------------------------------------------------------------------------------- */
+.kanban-label-chip {
+  border-radius: 8px;
+}
+.label-picker {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 16px;
+  box-shadow: none;
+}
+.label-picker__input {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 8px;
+}
+.label-picker__search {
+  color: var(--md-on-surface);
+}
+.label-picker__hint {
+  color: var(--md-on-surface-variant);
+}
+.label-picker__row:hover {
+  background: var(--md-surface-container-highest);
+}
+.label-picker__rowcheck {
+  color: var(--md-primary);
+}
+.label-picker__more {
+  color: var(--md-on-surface-variant);
+}
+.label-picker__more:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.label-picker__create {
+  color: var(--md-on-surface);
+}
+.label-picker__create:hover {
+  background: var(--md-surface-container-highest);
+}
+.label-picker__createcolor {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 8px;
+}
+.label-picker__createcolor:hover {
+  background: var(--md-surface-container-high);
+}
+.label-picker__caret {
+  color: var(--md-on-surface-variant);
+}
+.label-picker__createcolors {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 12px;
+  box-shadow: none;
+}
+.label-picker__back {
+  color: var(--md-on-surface-variant);
+}
+.label-picker__renameinput {
+  /* Its background/colour are set inline from the label's own swatch (data, not chrome) — this
+     only harmonises the corner radius with the rest of the popover. */
+  border-radius: 8px;
+}
+.label-picker__delete {
+  color: var(--md-on-surface);
+}
+.label-picker__delete:hover {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.label-picker__colhead {
+  color: var(--md-on-surface-variant);
+}
+.label-picker__colorrow {
+  color: var(--md-on-surface);
+}
+.label-picker__colorrow:hover {
+  background: var(--md-surface-container-highest);
+}
+.label-picker__swatch {
+  border-color: var(--md-outline-variant);
+}
+.label-picker__check {
+  color: var(--md-primary);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Card modal (the live session popup)
+   --------------------------------------------------------------------------------------------- */
+.kanban-modal-scrim {
+  background: var(--md-scrim);
+}
+.kanban-modal {
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 28px;
+  box-shadow: none;
+}
+.kanban-modal__header {
+  border-bottom-color: var(--md-outline-variant);
+}
+.kanban-modal__title {
+  color: var(--md-on-surface);
+}
+.kanban-modal__rename {
+  background: var(--md-surface-container-highest);
+  border-color: var(--md-primary);
+  border-radius: 8px;
+  color: var(--md-on-surface);
+}
+.kanban-modal__column {
+  background: var(--md-surface-container-highest);
+  border: none;
+  border-radius: 8px;
+  color: var(--md-on-surface-variant);
+}
+.kanban-modal__action {
+  background: transparent;
+  border-radius: 999px;
+  color: var(--md-on-surface-variant);
+  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
+    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
+}
+.kanban-modal__action:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.kanban-modal__action[aria-pressed='true'] {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.kanban-modal__sticky {
+  color: var(--md-on-surface);
+}
+.kanban-modal__placeholder {
+  color: var(--md-on-surface-variant);
+}
+.kanban-modal__termwrap {
+  background: var(--term-bg, var(--md-surface-container-high));
+}
+.kanban-modal__termwrap--drop::after {
+  border-color: var(--md-primary);
+  background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+}
+.kanban-modal__upload {
+  /* A caption floating over whatever the terminal is currently drawing — like a scrim, black is
+     the theme-independent legible choice here (`--md-inverse-surface` isn't wired in styles.css
+     yet, and this needs to stay readable over arbitrary terminal output either way). */
+  border: none;
+  border-radius: 8px;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Board log (the modal's "Comments & activity" panel)
+   --------------------------------------------------------------------------------------------- */
+.board-log {
+  border-left-color: var(--md-outline-variant);
+  /* `--md-surface-container` (no suffix) isn't wired in styles.css yet — fall back to the
+     ladder's next rung down from the modal's `-high`, so this panel still reads one tone
+     apart from the pane beside it. */
+  background: var(--md-surface-container, var(--md-surface-container-low));
+}
+.board-log__title {
+  color: var(--md-on-surface-variant);
+}
+.board-log__composer {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  color: var(--md-on-surface);
+}
+.board-log__composer:focus {
+  border-color: var(--md-primary);
+}
+.board-log__hint {
+  color: var(--md-on-surface-variant);
+}
+.board-log__error {
+  color: var(--md-error);
+}
+.board-log__time {
+  color: var(--md-on-surface-variant);
+}
+.board-log__text {
+  color: var(--md-on-surface);
+}
+.board-log__event-body {
+  color: var(--md-on-surface-variant);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   GitHub issue cards + summary modal
+   --------------------------------------------------------------------------------------------- */
+.github-issue-state--open {
+  color: var(--md-success);
+}
+.github-issue-state--closed {
+  color: var(--md-primary);
+}
+.github-issue-source {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 6px;
+  color: var(--md-on-surface-variant);
+}
+.github-issue-card__number {
+  color: var(--md-on-surface-variant);
+}
+.github-issue-label {
+  border-radius: 999px;
+}
+.github-issue-card__footer {
+  color: var(--md-on-surface-variant);
+}
+.github-issue-conflict {
+  color: var(--md-warning);
+}
+.github-issue-card__status {
+  color: var(--md-on-surface-variant);
+}
+.github-issue-avatar {
+  border-color: var(--md-outline-variant);
+}
+.github-issue-avatar--initial {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.github-issue-move select {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 8px;
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+.kanban-github-more {
+  border: 1px dashed var(--md-outline);
+  border-radius: 8px;
+  color: var(--md-on-surface-variant);
+}
+.kanban-github-more:hover {
+  border-color: var(--md-primary);
+  color: var(--md-on-surface);
+}
+
+.github-issue-modal {
+  border: none;
+  border-radius: 28px;
+  background: var(--md-surface-container-high);
+  box-shadow: none;
+}
+.github-issue-modal__header {
+  border-bottom-color: var(--md-outline-variant);
+}
+.github-issue-modal__header h2 {
+  color: var(--md-on-surface);
+}
+.github-issue-modal__eyebrow {
+  color: var(--md-on-surface-variant);
+}
+.github-issue-modal__close {
+  color: var(--md-on-surface-variant);
+}
+.github-issue-modal__actions {
+  border-bottom-color: var(--md-outline-variant);
+}
+.github-issue-modal__actions label {
+  color: var(--md-on-surface-variant);
+}
+.github-issue-modal__warning {
+  border: 1px solid color-mix(in srgb, var(--md-warning) 40%, transparent);
+  border-radius: 8px;
+  background: var(--md-warning-container);
+  color: var(--md-on-warning-container);
+}
+.github-issue-modal__body {
+  color: var(--md-on-surface-variant);
+}
