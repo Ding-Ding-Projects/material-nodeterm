@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { cellWidthIsStable, safeRasterScale } from './device-pixel-fit'
+import { isWebglEnabled } from './webgl-budget'
 
 /**
  * THE SCALE HALF OF THE DE-BLUR: tell a terminal's renderer to rasterize at the density the canvas
@@ -176,11 +177,39 @@ function applyTo(client: Client, next: number): boolean {
   return true
 }
 
+/**
+ * The scale a client should be reporting right now — or its plain display dpr, when this fix does
+ * not apply to the renderer that currently owns the terminal's pixels.
+ *
+ * ONLY THE `webgl` MODE. The other two are not oversights:
+ *  - `dom`: the glyphs are real DOM text, which Chromium rasterizes at the composited scale, so a
+ *    DOM terminal is already sharp under zoom and there is nothing here to win.
+ *  - `shared`: the glyph layer sizes its atlas from xterm's `device` cell — which is computed from
+ *    exactly the dpr this module shadows — while drawing quads from the `css` cell and the REAL
+ *    ratio. Inflating one side of that pairing is the "atlas slot stretched over the quad"
+ *    mismatch `SharedGlyphLayer` calls out by name, and the shared camera already snaps itself, so
+ *    it has nothing to gain and a working renderer to lose.
+ *
+ * Evaluated per apply rather than latched at install, so a runtime renderer change (Settings →
+ * Terminal rendering) puts the reported dpr back where the new owner expects it.
+ */
+function targetScaleFor(client: Client): number {
+  const dpr = client.displayDpr()
+  if (!isWebglEnabled()) return dpr
+  return safeRasterScale(dpr, zoomFor(client.term).zoom)
+}
+
 function applyAll(): void {
-  for (const client of clients.values()) {
-    const { zoom } = zoomFor(client.term)
-    applyTo(client, safeRasterScale(client.displayDpr(), zoom))
-  }
+  for (const client of clients.values()) applyTo(client, targetScaleFor(client))
+}
+
+/** Re-settle every terminal's reported dpr. Called when the renderer mode changes, because that
+ *  changes the ANSWER without changing the camera — nothing else would schedule an apply. */
+export function resyncRasterScales(): void {
+  // Guarded so the common case — a mode applied at boot, before any terminal exists — does not arm
+  // a timer that has nothing to do.
+  if (clients.size === 0) return
+  scheduleApply()
 }
 
 function scheduleApply(): void {

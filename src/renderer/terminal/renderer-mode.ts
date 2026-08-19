@@ -1,4 +1,5 @@
 import type { TerminalRenderer } from '@shared/webgl'
+import { resyncRasterScales } from './raster-scale'
 
 /**
  * Applying the resolved terminal renderer to the two coordinators that own GPU state: the
@@ -36,8 +37,14 @@ export function applyRendererMode(mode: TerminalRenderer, sinks: RendererModeSin
   if (mode === 'shared') {
     sinks.setWebglEnabled(false)
     sinks.setSharedEnabled(true)
+    resyncRasterScales()
     return
   }
   sinks.setSharedEnabled(false)
   sinks.setWebglEnabled(mode === 'webgl')
+  // The canvas-aware raster scale applies to the `webgl` mode alone, so a mode change moves the
+  // dpr every live terminal should be reporting WITHOUT moving the camera — and the camera is the
+  // only thing that would otherwise schedule that work. Deliberately after the sinks, whose order
+  // is the contract above; a no-op when no terminal is registered.
+  resyncRasterScales()
 }

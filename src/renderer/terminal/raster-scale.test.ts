@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { applyRendererMode } from './renderer-mode'
 import {
   RASTER_APPLY_SETTLE_MS,
   __resetRasterScaleForTests,
@@ -8,6 +9,7 @@ import {
   parseTransformScale,
   patchTerminalRasterScale
 } from './raster-scale'
+import { __resetWebglBudgetForTests, setWebglEnabled } from './webgl-budget'
 
 /**
  * A stand-in for the exact xterm internals this patch reaches through, shaped from the real ones
@@ -104,10 +106,12 @@ beforeEach(() => {
   win.devicePixelRatio = 1.5
   document.body.innerHTML = ''
   __resetRasterScaleForTests()
+  __resetWebglBudgetForTests() // leaves the WebGL renderer enabled, i.e. the default 'webgl' mode
 })
 
 afterEach(() => {
   __resetRasterScaleForTests()
+  __resetWebglBudgetForTests()
   vi.useRealTimers()
 })
 
@@ -296,6 +300,44 @@ describe('patchTerminalRasterScale', () => {
     // A `dpr` that is a plain value rather than a prototype getter cannot be shadowed safely.
     const plain = { _core: { _coreBrowserService: { dpr: 1.5 } }, dispose(): void {} }
     expect(patchTerminalRasterScale(plain as unknown as Terminal)).toBe(false)
+  })
+
+  it('leaves the reported dpr alone when WebGL is not the renderer in charge', async () => {
+    // `dom` and `shared` both switch the budget off. The shared glyph layer in particular sizes its
+    // atlas from the `device` cell this dpr computes, while drawing quads from the `css` cell and
+    // the real ratio — inflating one side of that pairing is the stretched-slot mismatch it names.
+    const viewport = mountViewport(1)
+    const h = makeTerminal()
+    viewport.appendChild((h.fake.element = document.createElement('div')))
+    patchTerminalRasterScale(h.term)
+    setWebglEnabled(false)
+
+    setZoom(viewport, 1.3)
+    await settle()
+
+    expect(h.fake._core._coreBrowserService.dpr).toBeCloseTo(1.5, 10)
+    expect(h.rebuilds()).toBe(0)
+  })
+
+  it('re-settles when the renderer mode changes, which moves no camera', async () => {
+    const viewport = mountViewport(1.3)
+    const h = makeTerminal()
+    viewport.appendChild((h.fake.element = document.createElement('div')))
+    patchTerminalRasterScale(h.term)
+    setWebglEnabled(false)
+    await settle()
+    expect(h.fake._core._coreBrowserService.dpr).toBeCloseTo(1.5, 10)
+
+    // Switching INTO webgl at a zoom that was already set: nothing about the transform changes, so
+    // the mutation observer will never fire and only this path can put the scale right.
+    applyRendererMode('webgl', { setWebglEnabled, setSharedEnabled: () => {} })
+    await settle()
+    expect(h.fake._core._coreBrowserService.dpr).toBeCloseTo(3, 10)
+
+    // ...and back out of it, which must hand the shared layer an untouched device cell.
+    applyRendererMode('shared', { setWebglEnabled, setSharedEnabled: () => {} })
+    await settle()
+    expect(h.fake._core._coreBrowserService.dpr).toBeCloseTo(1.5, 10)
   })
 
   it('rolls back its reported dpr if driving the renderer throws', async () => {
