@@ -106,7 +106,7 @@ target and the lockable surface all follow from it. Then either add its id to th
 1. **Download-capture demo** shows the three surfaces (start decision → progress →
    completion) but transfers no bytes. A page cannot hand a transfer to an installed
    browser extension.
-2. **Fonts load from Google Fonts** (`Baloo 2`, `Nunito`). The @uh contract wants
+2. **Fonts load from Google Fonts** (`Baloo 2`, `Nunito`). The project contract wants
    everything local — swap to a system stack, or self-host the two families, to close it.
 3. **Regex safety** is bounded, not guaranteed. A hard ReDoS guarantee needs a worker with
    a kill timeout.
