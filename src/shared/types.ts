@@ -1610,6 +1610,15 @@ export interface Settings {
   shortcuts: ShortcutMap
 }
 
+/** The M3-baseline seed colour (design/v2/md3/tokens.css) — `--md-primary`'s literal value in
+ *  `styles.css`'s light block. `DEFAULT_SETTINGS.accent` reads it, and `accentTokens.ts`'s
+ *  `applyAccentTokens()` compares an incoming accent against it (lowercase, matching what
+ *  `toHex()` always produces) to decide whether to skip inline overrides and leave the two
+ *  authored dark/light `--md-primary` defaults in charge. Replaces the pre-M3 default,
+ *  `#0a84ff` (systemBlue) — see `mergeSettings`'s migration in `core/settings-store.ts` for the
+ *  one-time upgrade of an existing install's saved `#0a84ff`. */
+export const DEFAULT_ACCENT = '#6750a4'
+
 export const DEFAULT_SETTINGS: Settings = {
   fontSize: 13,
   fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace',
@@ -1646,7 +1655,7 @@ export const DEFAULT_SETTINGS: Settings = {
   trackpadPan: true,
   canvasDragMode: 'select',
   browserMemorySaver: true,
-  accent: '#0a84ff',
+  accent: DEFAULT_ACCENT,
   tmuxEnabled: true,
   ptyShadowClients: true,
   terminalGpuRendering: 'auto',
