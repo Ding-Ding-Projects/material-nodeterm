@@ -1119,11 +1119,20 @@ if (lightStartMatch) {
 // inventory in styles.theme.test.ts's M3_ROLES; kept as an independent
 // hand-typed list rather than imported, so the two checks cannot both go
 // blind to the same accidental deletion at once.
+//
+// Extended (2026-08, the M3-baseline re-seed) with the eight roles
+// design/v2/md3/tokens.css ships that the original 38-role landing did
+// not: the bare `--md-surface-container` step, `--md-surface-bright`,
+// the three "text/icon on a SOLID fill" pairs the app only needed on
+// primary before (`--md-on-secondary`, `--md-on-tertiary`,
+// `--md-on-error`), and the inverse triad.
 const M3_ROLES = [
   '--md-surface-container-lowest',
   '--md-surface-dim',
+  '--md-surface-bright',
   '--md-surface-container-low',
   '--md-surface',
+  '--md-surface-container',
   '--md-surface-container-high',
   '--md-surface-container-highest',
   '--md-on-surface',
@@ -1135,12 +1144,15 @@ const M3_ROLES = [
   '--md-primary-container',
   '--md-on-primary-container',
   '--md-secondary',
+  '--md-on-secondary',
   '--md-secondary-container',
   '--md-on-secondary-container',
   '--md-tertiary',
+  '--md-on-tertiary',
   '--md-tertiary-container',
   '--md-on-tertiary-container',
   '--md-error',
+  '--md-on-error',
   '--md-error-container',
   '--md-on-error-container',
   '--md-success',
@@ -1149,6 +1161,9 @@ const M3_ROLES = [
   '--md-warning',
   '--md-warning-container',
   '--md-on-warning-container',
+  '--md-inverse-surface',
+  '--md-inverse-on-surface',
+  '--md-inverse-primary',
   '--md-scrim',
   '--md-shadow',
   '--md-shape-none',
