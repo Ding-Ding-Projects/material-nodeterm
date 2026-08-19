@@ -110,7 +110,10 @@ describe('every CSS variable resolves', () => {
   // sites was a hardcoded white. A referenced-but-undefined variable is either that trap or a
   // typo — unless the renderer sets it at runtime.
   const SET_FROM_JS = new Set([
-    '--term-bg', // App.tsx, from the terminal theme
+    '--term-bg', // App.tsx, from the terminal theme — also now carries a real :root default (see
+    // the M3 foundation section), so this entry now covers only the runtime override, not a
+    // dangling reference; a hardcoded fallback at each of its three call sites is still fine.
+    '--nt-rainbow-duration', // App.tsx:66, from the user's rainbow-speed setting
     '--peer-color', // presence chips, per peer
     '--group-label-boost', // GroupNode, zoom-compensated label size
     '--mascot-w',
@@ -146,15 +149,12 @@ describe('the light theme overrides every themeable token', () => {
     )
 
     // The git-graph lane hues are branch IDENTITY, not chrome: they must stay the same colour in
-    // both themes or a graph would change meaning when the theme flips. `--md-tone-*` are the raw
-    // M3 tonal-palette scale (styles.css "Material Design 3 — tonal palettes"): HCT's "tone" is
-    // defined as the same quantity as Lab's L*, so a tonal SCALE is a fixed ladder of lightness
-    // steps for one hue/chroma — it does not have a "light theme value", any more than a ruler
-    // does. What changes per theme is which TONE a role picks (e.g. `--md-on-surface` reads tone
-    // 90 in dark and tone 10 in light), and those role tokens each carry their own literal
-    // restatement below — this predicate is only about the reference ladder itself.
-    const themeIndependent = (k: string): boolean =>
-      k.startsWith('--git-graph-') || k.startsWith('--md-tone-')
+    // both themes or a graph would change meaning when the theme flips.
+    // (The M3-baseline re-seed removed the `--md-tone-*` tonal-palette ladder this predicate used
+    // to also exempt: every `--md-*` role is now a literal restated per theme rather than a
+    // lightness-scale reference, so there is no longer a class of token that is "the same ruler in
+    // both themes" — only git-graph identity colours remain genuinely theme-independent.)
+    const themeIndependent = (k: string): boolean => k.startsWith('--git-graph-')
     // A token mixed ONLY from `--tint-rgb` already flips with the theme by construction — that
     // triple is itself overridden in the light block, which is the whole point of routing ~280
     // overlays through it. `--muted-2: rgba(var(--tint-rgb), 0.25)` is the live example: it is
@@ -163,8 +163,14 @@ describe('the light theme overrides every themeable token', () => {
     // would teach the next person to copy tokens that are already correct.
     const followsTint = (v: string): boolean =>
       /^\s*rgba?\(\s*var\(--tint-rgb\)[^)]*\)\s*$/.test(v)
+    // `--term-bg` is the one token that is genuinely meant to hold the SAME literal in both
+    // themes — CLAUDE.md: "terminal bodies stay dark in both themes" — so there is nothing to
+    // restate in light, and a `--tint-rgb`/alias exemption would be the wrong reason for the right
+    // answer. Its own runtime override (App.tsx, from the user's terminal theme) still applies to
+    // both themes identically, unaffected by this exemption.
+    const FIXED_IN_BOTH_THEMES = new Set(['--term-bg'])
     const missing = darkTokens
-      .filter(([k]) => !lightTokens.has(k) && !themeIndependent(k))
+      .filter(([k]) => !lightTokens.has(k) && !themeIndependent(k) && !FIXED_IN_BOTH_THEMES.has(k))
       .filter(([, v]) => !followsTint(v))
       .map(([k]) => k)
     expect(missing).toEqual([])
@@ -212,17 +218,27 @@ describe('the light theme overrides every themeable token', () => {
 
 describe('Material 3 token foundation', () => {
   // Hand-written inventory of every --md- role token the foundation landed with
-  // (src/renderer/styles.css `:root`, the "Material Design 3 — colour roles" +
-  // "shape scale" sections). Hand-written on purpose, per this repo's own completeness-guard
-  // rule: a check that only inspects tokens it finds by scanning the file cannot notice one that
-  // disappeared entirely — it would just quietly stop checking it. This list is what makes a
-  // deleted role a failure instead of a silent shrink.
+  // (src/renderer/styles.css `:root`, the "Material Design 3 — token foundation" section).
+  // Hand-written on purpose, per this repo's own completeness-guard rule: a check that only
+  // inspects tokens it finds by scanning the file cannot notice one that disappeared entirely —
+  // it would just quietly stop checking it. This list is what makes a deleted role a failure
+  // instead of a silent shrink.
+  //
+  // Extended (2026-08, the M3-baseline re-seed) with the eight roles the design's
+  // `design/v2/md3/tokens.css` ships that the original 38-role landing did not: the bare
+  // `--md-surface-container` step (the ramp used to jump straight from `-low` to `-high`), the
+  // `--md-surface-bright` step, and the three roles' "text/icon on a SOLID fill" pairs the app
+  // never needed until now (`--md-on-secondary`, `--md-on-tertiary`, `--md-on-error` — the app
+  // only ever needed the "on a container TINT" pairs before), plus the inverse triad
+  // (`--md-inverse-surface`, `--md-inverse-on-surface`, `--md-inverse-primary`).
   const M3_ROLES = [
     // surface ramp
     '--md-surface-container-lowest',
     '--md-surface-dim',
+    '--md-surface-bright',
     '--md-surface-container-low',
     '--md-surface',
+    '--md-surface-container',
     '--md-surface-container-high',
     '--md-surface-container-highest',
     '--md-on-surface',
@@ -236,14 +252,17 @@ describe('Material 3 token foundation', () => {
     '--md-on-primary-container',
     // secondary
     '--md-secondary',
+    '--md-on-secondary',
     '--md-secondary-container',
     '--md-on-secondary-container',
     // tertiary
     '--md-tertiary',
+    '--md-on-tertiary',
     '--md-tertiary-container',
     '--md-on-tertiary-container',
     // error
     '--md-error',
+    '--md-on-error',
     '--md-error-container',
     '--md-on-error-container',
     // custom: success / warning
@@ -253,6 +272,10 @@ describe('Material 3 token foundation', () => {
     '--md-warning',
     '--md-warning-container',
     '--md-on-warning-container',
+    // inverse
+    '--md-inverse-surface',
+    '--md-inverse-on-surface',
+    '--md-inverse-primary',
     // scrim / shadow
     '--md-scrim',
     '--md-shadow',
@@ -305,37 +328,38 @@ describe('Material 3 token foundation', () => {
     }
     expect(brokenForLight).toEqual([])
   })
-})
 
-describe('themed container roles stay derived from their theme\'s own RGB triple', () => {
-  // `--md-primary-container` / `--md-error-container` are neither a bare alias (`var(--x)` alone)
-  // nor a pure `--tint-rgb` mix, so the "every M3 role is DEFINED for light" test above only
-  // requires SOME declaration to exist in the light block — it would happily accept
-  // `--md-primary-container: rgba(10, 132, 255, 0.16);` there, a hardcoded copy of the DARK
-  // triple. That is the exact bug this M3 pass fixed at `.dock-btn.active`,
-  // `.canvas-lock-btn.locked` and `.welcome__recent-del:hover`: each previously carried a literal
-  // dark-tuned `rgba(10, 132, 255, …)` / `rgba(255, 69, 58, …)` background that never flipped for
-  // light, so a light-mode user saw the dark theme's blue/red tint baked in. A future edit that
-  // "restates" these container roles for light with a pasted-in fixed triple instead of
-  // `var(--accent-rgb)` / `var(--danger-rgb)` would reintroduce that bug and pass every other test
-  // in this file — this is the one check that would catch it.
-  const DERIVED_CONTAINERS: [string, string][] = [
-    ['--md-primary-container', '--accent-rgb'],
-    ['--md-error-container', '--danger-rgb']
+  // Motion and type are NOT colour roles, so they do not belong in M3_ROLES above: the light-theme
+  // test right above this one requires every entry to be either restated, a bare alias, or a
+  // `--tint-rgb` mix — a category that simply does not apply to a cubic-bezier duration or a font
+  // stack, which have no "light theme value" to restate and are not colours to begin with. Tracked
+  // here instead, as their own hand-written inventory, so a deleted one still fails loudly rather
+  // than silently passing an M3_ROLES check it was never a legitimate member of.
+  const M3_DARK_ONLY_ROLES = [
+    '--md-motion-spatial',
+    '--md-motion-effect',
+    '--md-font-ui',
+    '--md-font-mono'
   ]
 
-  it.each(DERIVED_CONTAINERS)('%s stays wired to var(%s) in both themes', (role, rgbToken) => {
-    const re = new RegExp(`^\\s*${role}\\s*:\\s*([^;]+);`, 'm')
-    for (const [label, block] of [['dark', DARK], ['light', LIGHT]] as const) {
-      const m = re.exec(block)
-      expect(m, `${role} has no declaration in the ${label} block`).toBeTruthy()
-      expect(
-        m![1],
-        `${role} in the ${label} block should read var(${rgbToken}), not a hardcoded triple`
-      ).toContain(`var(${rgbToken})`)
-    }
+  it('every non-colour M3 role (motion, type) is declared once, in the dark block', () => {
+    const missing = M3_DARK_ONLY_ROLES.filter((name) => !definedIn(DARK, name))
+    expect(missing).toEqual([])
   })
 })
+
+// `--md-primary-container` / `--md-error-container` used to be an authored TINT of the app's own
+// live accent (`rgba(var(--accent-rgb), 0.16)`), so a custom accent re-tinted them for free just
+// by the CSS cascade — a former "themed container roles stay derived from their theme's own RGB
+// triple" suite lived here to guard exactly that wiring. The M3-baseline re-seed makes both roles
+// OPAQUE LITERALS from the design instead (see styles.css's M3 foundation section), so that
+// cascade relationship no longer exists: a user-selected accent now reaches `--md-primary-container`
+// only because `accentTokens.ts`'s `applyAccentTokens()` sets it explicitly, inline, alongside
+// every other member of the primary family. That is a stronger and more direct guarantee than a
+// regex over this stylesheet could ever give, so the invariant moved to where the guarantee
+// actually lives: `lib/accentTokens.test.ts`, "a custom accent republishes the whole primary
+// family" — asserting `applyAccentTokens` itself sets every one of its eight custom properties,
+// not that a stylesheet declaration happens to reference the right variable name.
 
 describe('the theme selector uses this app\'s convention, not the design doc\'s literal one', () => {
   // The design file this foundation was implemented from used `data-md-theme` as its selector.
@@ -356,11 +380,14 @@ describe('the theme selector uses this app\'s convention, not the design doc\'s 
 /**
  * Contrast floors for the LIGHT palette.
  *
- * The light theme was re-tuned warm because pure white surfaces with pure black ink read as glare.
- * Warmth costs contrast — brown on cream is a shorter range than black on white — so the numbers
- * that made the re-tune safe are asserted here rather than claimed in a comment. Nudging a surface
- * a few points paler, or an ink alpha down, is exactly the kind of change that looks harmless and
- * quietly drops body text under the floor.
+ * The light theme was originally re-tuned away from pure white surfaces with pure black ink, which
+ * read as glare — first toward a warm brown ink over cream surfaces, then (2026-08, the
+ * M3-baseline re-seed) toward `--md-on-surface`'s own cooler violet-grey ink over the design's own
+ * off-white `surface-container` scheme. Neither pure-white surfaces nor pure-black/white ink is the
+ * maximum-contrast pairing they look like, so the numbers that made each re-tune safe are asserted
+ * here rather than claimed in a comment. Nudging a surface a few points paler, or an ink alpha
+ * down, is exactly the kind of change that looks harmless and quietly drops body text under the
+ * floor.
  */
 describe('light palette contrast', () => {
   /**
@@ -461,8 +488,21 @@ describe('light palette contrast', () => {
     }
   })
 
-  it('the canvas sits below the panels, so nodes keep their edges', () => {
-    expect(luminance(hex(resolve('--canvas-bg')))).toBeLessThan(luminance(hex(resolve('--bg'))))
+  it('the canvas and the panels stay visually distinguishable, in whichever direction the theme requires', () => {
+    // Was a strict "canvas is darker than the panel" floor — true for the app's pre-M3 palette in
+    // BOTH themes. Under the M3 baseline scheme `--canvas-bg` now resolves to `--md-surface`
+    // (#FEF7FF light) while `--bg`/`--panel` resolve to `--md-surface-container` (#F3EDF7 light),
+    // and M3's own light ramp runs the other way (see this describe block's own comment): the
+    // canvas is BRIGHTER than the panel in light, and stays darker in dark — both correct, in
+    // opposite directions. The rejected alternative (`--canvas-bg: var(--md-surface-dim)` for
+    // light) drops `--caution` to 4.06:1 against it, under this palette's 4.3 floor — that is why
+    // this direction was chosen, not because "canvas below panels" survived as a rule. What still
+    // has to hold, either way, is that the two are actually distinguishable — measured here rather
+    // than assumed, same as every other floor in this file. Measured: dark Δ≈0.008, light Δ≈0.085.
+    const delta = Math.abs(
+      luminance(hex(resolve('--canvas-bg'))) - luminance(hex(resolve('--bg')))
+    )
+    expect(delta).toBeGreaterThan(0.005)
   })
 })
 
@@ -510,44 +550,39 @@ describe('measured contrast floors', () => {
   const rgbTriple = (block: string, name: string): number[] =>
     token(block, name).split(',').map((n) => parseInt(n.trim(), 10))
 
-  /** The container alpha, read from the stylesheet rather than hardcoded here. */
-  const containerAlpha = (): number => {
-    const m = /--md-primary-container:\s*rgba\(var\(--accent-rgb\),\s*([\d.]+)\)/.exec(DARK)
-    if (!m) throw new Error('--md-primary-container is no longer an --accent-rgb tint')
-    return +m[1]
-  }
+  // `--md-primary-container` was an authored TINT of the live `--accent-rgb` before the M3-baseline
+  // re-seed (`rgba(var(--accent-rgb), 0.16)`), which is why the two tests below used to composite
+  // an accent-tinted WASH over a panel colour before measuring it — `containerAlpha()` read that
+  // tint's alpha straight out of the stylesheet. The re-seed makes `--md-primary-container` an
+  // OPAQUE LITERAL from the design instead (see styles.css's M3 foundation section), so there is no
+  // wash and no alpha to extract any more: both tests below now measure a plain two-flat-colour
+  // pair — the glyph/text role directly against the container colour it actually paints on.
 
   it('the palette secondary label clears 4.5:1 — it is real clickable text', () => {
     // <span className="palette__secondary" onClick=...> in CommandPalette.tsx: interactive text,
     // so the text floor applies, not 1.4.11's 3:1.
-    const a = containerAlpha()
-    const cases: Array<[string, string, number[], string]> = [
-      ['dark', resolved(DARK, '--md-on-primary-container'), rgbTriple(DARK, '--accent-rgb'), token(DARK, '--menu-rgb')],
-      ['light', resolved(LIGHT, '--md-on-primary-container'), rgbTriple(LIGHT, '--accent-rgb'), token(LIGHT, '--menu-rgb')]
-    ]
-    for (const [theme, onC, accent, menu] of cases) {
-      const bg = over(accent, a, String(menu).split(',').map((n) => parseInt(n.trim(), 10)))
-      const ratio = contrast(hex(onC), bg)
-      expect(ratio, `${theme}: on-primary-container on its container`).toBeGreaterThanOrEqual(4.5)
+    for (const [theme, block] of [['dark', DARK], ['light', LIGHT]] as const) {
+      const onContainer = hex(resolved(block, '--md-on-primary-container'))
+      const container = hex(resolved(block, '--md-primary-container'))
+      expect(
+        contrast(onContainer, container),
+        `${theme}: on-primary-container on its container`
+      ).toBeGreaterThanOrEqual(4.5)
     }
   })
 
-  it('the canvas lock glyph clears 3:1 against its own wash', () => {
+  it('the canvas lock glyph clears 3:1 against its own container', () => {
     // A non-text element identifying a control (1.4.11). It must be the ON-role, not --md-primary:
-    // as --md-primary it measured 2.87:1 in light, and no container alpha can rescue that — a tint
-    // of the accent over the same panel only reaches 1.52:1 against the panel even at 0.32.
+    // as --md-primary it measured 2.87:1 in light under the old app-accent palette, and no
+    // container tint could rescue that. Both roles are now opaque M3 literals — measured here
+    // directly, not composited over a hardcoded panel hex the way the old --accent-rgb wash was.
     expect(RULES).toMatch(
       /\.canvas-lock-btn\.locked\s*\{[^}]*color:\s*var\(--md-on-primary-container\)/
     )
-    const a = containerAlpha()
-    for (const [theme, block, panelHex] of [
-      ['dark', DARK, '#282828'],
-      ['light', LIGHT, '#f3efe7']
-    ] as const) {
-      const panel = hex(panelHex)
-      const wash = over(rgbTriple(block, '--accent-rgb'), a, panel)
+    for (const [theme, block] of [['dark', DARK], ['light', LIGHT]] as const) {
       const glyph = hex(resolved(block, '--md-on-primary-container'))
-      expect(contrast(glyph, wash), `${theme}: lock glyph on its wash`).toBeGreaterThanOrEqual(3)
+      const container = hex(resolved(block, '--md-primary-container'))
+      expect(contrast(glyph, container), `${theme}: lock glyph on its container`).toBeGreaterThanOrEqual(3)
     }
   })
 
