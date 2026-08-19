@@ -216,19 +216,10 @@ export function TabBar({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- lockForProject reads lockRecords, listed here
   }, [unlockPrompt, lockRecords])
-  // A 'session' duration lock re-locks the moment its tab is LEFT (switched away from) — see
-  // ToyLockDurationMode's doc comment in shared/toylock.ts. Minutes/until-close locks expire on
-  // their own (isUnlocked re-evaluates the timestamp every read), so only 'session' needs this.
-  const prevActiveIdRef = useRef<string | undefined>(activeId ?? undefined)
-  useEffect(() => {
-    const prev = prevActiveIdRef.current
-    if (prev && prev !== activeId) {
-      const lock = lockForProject(prev)
-      if (lock && lock.duration === 'session') useToyLocks.getState().relock(lock.id)
-    }
-    prevActiveIdRef.current = activeId ?? undefined
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- lockForProject reads lockRecords
-  }, [activeId, lockRecords])
+  // The 'session'-duration re-lock-on-tab-leave behaviour that used to live here moved to
+  // `useSessionRelock` (state/useSessionRelock.ts), mounted once from Canvas.tsx — it is a
+  // session-lifecycle rule, not tab-bar UI, and this component's own lockForProject/lockRecords
+  // above already cover everything this file still needs from the lock store.
 
   const closeMenu = () => {
     setMenuId(null)
