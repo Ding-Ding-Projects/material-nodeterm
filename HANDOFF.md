@@ -11,6 +11,11 @@ no second direct `settings.save(base)` bypass. Build/package evidence belongs to
 for this section; no tests, lint, type checking, runtime interaction, installer execution, or
 screenshots were performed in the ultra-speed lane.
 
+The same lane repaired the pre-push identity checker to forward every revision argument supplied
+by the hook. New-branch ranges now retain `--not --remotes`, so already-published placeholder
+history is excluded without bypassing the hook or rewriting history; newly introduced reserved
+addresses remain refused.
+
 ## 2026-08-19 runtime, project history, deployment and device-access pass
 
 Three milestones were implemented and pushed to `main` during this session:
