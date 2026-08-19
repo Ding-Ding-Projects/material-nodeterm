@@ -119,6 +119,54 @@ const SURFACES = [
     open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Kids mode'] },
     verify: '[class*="settings"]'
   },
+    {
+      // The History destination existed as a fully-built screen that nothing imported — reachable
+      // only by reading the source. REQUIRED here so an unreachable screen fails the run rather
+      // than quietly going missing again.
+      id: 'app-06-history',
+      required: true,
+      title: 'History — session memory, settings history, changelog',
+      open: { click: '[aria-label*="History" i],[title*="History" i]' },
+      verify: '.md3-history-screen'
+    },
+    // These five were last taken 2026-08-15 — BEFORE the Material 3 rewrite — and the README
+    // embedded them as current, so it published the old blue-accent interface. Required now so a
+    // stale settings shot fails the run instead of quietly outliving the design it shows.
+    {
+      id: 'app-settings-language',
+      required: true,
+      title: 'Settings — Language',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Language'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      id: 'app-settings-narrator',
+      required: true,
+      title: 'Settings — Narrator',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Narrator'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      id: 'app-settings-schedule',
+      required: true,
+      title: 'Settings — Schedule',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Schedule'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      id: 'app-settings-app-identity',
+      required: true,
+      title: 'Settings — App name & logo',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'App name & logo'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      id: 'app-settings-appearance-editor',
+      required: true,
+      title: 'Settings — Appearance editor',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Appearance editor'] },
+      verify: '[class*="settings"]'
+    },
   // Optional: these need state the harness cannot manufacture.
   { id: 'app-agent-running', required: false, title: 'Agent mid-turn', why: 'needs a real agent CLI session' },
   { id: 'app-ssh-project', required: false, title: 'SSH project', why: 'needs a reachable host and credentials' }

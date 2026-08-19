@@ -1,6 +1,6 @@
 {
-  "commit": "38280b0b7d3d7a22641464984225c07c4df833f8",
-  "capturedAt": "2026-08-19T04:26:50.276Z",
+  "commit": "8e37e640a207919f4954511bb47273658a9116ba",
+  "capturedAt": "2026-08-19T06:05:50.257Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -11,37 +11,73 @@
     {
       "id": "app-01-launch",
       "title": "App at launch",
-      "bytes": 47463,
+      "bytes": 49409,
       "hadOpener": false
     },
     {
       "id": "app-02-settings",
       "title": "Settings",
-      "bytes": 117332,
+      "bytes": 112449,
       "hadOpener": true
     },
     {
       "id": "app-03-palette",
       "title": "Command palette",
-      "bytes": 70934,
+      "bytes": 72701,
       "hadOpener": true
     },
     {
       "id": "app-04-canvas",
       "title": "Canvas",
-      "bytes": 47463,
+      "bytes": 49409,
       "hadOpener": false
     },
     {
       "id": "app-05-kanban",
       "title": "Kanban board",
-      "bytes": 30531,
+      "bytes": 32536,
       "hadOpener": true
     },
     {
       "id": "app-settings-kids-mode",
       "title": "Settings — Kids mode",
       "bytes": 103465,
+      "hadOpener": true
+    },
+    {
+      "id": "app-06-history",
+      "title": "History — session memory, settings history, changelog",
+      "bytes": 38246,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-language",
+      "title": "Settings — Language",
+      "bytes": 75996,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-narrator",
+      "title": "Settings — Narrator",
+      "bytes": 84897,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-schedule",
+      "title": "Settings — Schedule",
+      "bytes": 72703,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-app-identity",
+      "title": "Settings — App name & logo",
+      "bytes": 82305,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-appearance-editor",
+      "title": "Settings — Appearance editor",
+      "bytes": 87013,
       "hadOpener": true
     }
   ],
