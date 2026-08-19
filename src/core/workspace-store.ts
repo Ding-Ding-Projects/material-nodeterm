@@ -680,6 +680,11 @@ export class WorkspaceStore {
     return this.index?.entries.find((e) => e.id === projectId && e.cwd)?.cwd
   }
 
+  settingsOverridesForProject(projectId: string): Project['settingsOverrides'] {
+    const entry = this.index?.entries.find((candidate) => candidate.id === projectId)
+    return entry?.settingsOverrides ?? entry?.project?.settingsOverrides
+  }
+
   /** Resolve the shared project together with its machine-local trust identity. The approval id
    *  never enters the shared project object or project.json. */
   async githubProject(projectId: string): Promise<{

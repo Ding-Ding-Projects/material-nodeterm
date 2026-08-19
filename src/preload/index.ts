@@ -629,6 +629,7 @@ const api: NodeTerminalApi = {
     setPhoneAccess: (enabled) => ipcRenderer.send(IPC.remoteStandingHostSet, enabled)
   },
   relayHost: {
+    dockerContexts: () => ipcRenderer.invoke(IPC.relayHostDockerContexts),
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),
     invite: (opts?: { projectId?: string; email?: string }) =>
       ipcRenderer.invoke(IPC.relayHostInvite, opts ?? {}),

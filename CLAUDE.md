@@ -2083,6 +2083,15 @@ entitlement requirement. The pairing request omits legacy entitlement metadata w
 it never invents a credential. Packaged builds use the configured relay, while development still
 requires an explicit `NODETERM_RELAY_URL`.
 
+`main/remote/docker-host-runtime.ts` is the execution boundary. It discovers contexts with
+`docker context ls --format {{json .}}`, validates bounded settings at point of use, and starts one
+labelled random-name container per host seat using `execFile` argument arrays. The container is
+never privileged, receives no Docker socket, drops all capabilities, has no-new-privileges,
+read-only root, bounded CPU/memory/PIDs, a tmpfs `/tmp`, no network by default, and a read-only
+project bind by default. `RelayPtyCreateSource.docker` makes the trusted relay PTY authorizer replace
+all host/profile execution with `docker exec -i <owned-container> /bin/sh`. Revoke, socket close,
+stop, cancellation, and failed startup remove only that task-owned container; bind data survives.
+
 **LAN pairing is encrypted or it does not start.** `pairing-service.ts` loads the host's persistent
 NaCl key before binding the one-shot HTTP listener and advertises that public key as `hostKey` in
 the QR. `/pair` accepts only `{epk,box}`: the request (one-time token + SSH public key) and the

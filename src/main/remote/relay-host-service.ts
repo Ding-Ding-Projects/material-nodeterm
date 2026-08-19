@@ -35,6 +35,8 @@ import { loadOrCreatePeerKeyPair } from './peer-identity'
 import { getStoredEntitlement, licensedSeats as licenseSeats } from '../../core/license'
 import { RELAY_URL, relayAllowed as hostRelayAllowed, mintPairingToken } from './host-service'
 import { canAcceptSeat } from './seat-cap'
+import { discoverDockerContexts, startDockerHostRuntime, type DockerHostRuntime } from './docker-host-runtime'
+import type { DockerHostSettings } from '../../shared/types'
 
 /** Thrown (as an Error message) when a new invite would exceed the licensed seat cap. The renderer
  *  maps it to "All seats in use — add a seat." Host-side/UX enforcement only (see below). */
@@ -58,6 +60,7 @@ export interface RelayHostDeps {
   licensedSeats?: () => number
   /** TEST ONLY: override the wire-up (defaults to `connectRelayHost`). */
   connect?: typeof connectRelayHost
+  dockerSettingsFor?: (projectId: string) => { settings: DockerHostSettings; cwd: string } | null
 }
 
 /** Metadata options for a new seat. `email` is a DISPLAY label only (never trust/identity — the SAS
@@ -100,7 +103,9 @@ export function initRelayHost(
   // peer-pending/open/close and revoke, so a stray IPC event can only ever act on the seat it names,
   // and a pending-never-connected seat is revocable from the moment it is minted. Replaces the old
   // dual `byId`/`pool` bookkeeping — one map keyed by the id the UI and revoke already use.
-  const byId = new Map<string, { session: RelayHostSession | null; email?: string }>()
+  const byId = new Map<string, { session: RelayHostSession | null; docker: DockerHostRuntime | null; email?: string }>()
+
+  ipcMain.handle(IPC.relayHostDockerContexts, () => discoverDockerContexts())
 
   function send(channel: string, ...args: unknown[]): void {
     if (!win.isDestroyed()) win.webContents.send(channel, ...args)
@@ -132,9 +137,19 @@ export function initRelayHost(
     // pending-never-connected seat is revocable from the moment it's minted (Finding 2). `session` is
     // filled in once `connect()` wires the listener below.
     const rendererId = randomUUID()
-    byId.set(rendererId, { session: null, email })
+    byId.set(rendererId, { session: null, docker: null, email })
 
     try {
+      if (!projectId) throw new Error('Choose a local project before starting Docker host.')
+      const dockerConfig = deps.dockerSettingsFor?.(projectId)
+      if (!dockerConfig) throw new Error('The selected project has no local Docker workspace.')
+      const docker = await startDockerHostRuntime(dockerConfig.settings, dockerConfig.cwd)
+      const reservation = byId.get(rendererId)
+      if (!reservation) {
+        await docker.stop()
+        throw new Error('Docker host start was cancelled.')
+      }
+      reservation.docker = docker
       // A locked keyring surfaces here as a rejected invite (PeerKeyLockedError / E_PEER_KEY_LOCKED):
       // the identity on disk is intact and must not be rotated — the renderer tells the human to unlock.
       const keys = await loadKeys()
@@ -148,6 +163,7 @@ export function initRelayHost(
         transport: deps.transport,
         // The single project this hosting session shares with the peer. Absent → unscoped, as before.
         sharedProjectId: projectId,
+        docker: { context: docker.context, containerName: docker.containerName },
         // The SAS is known — ask the human to compare it. NOTHING is served yet. Reuse the reserved
         // id (do NOT mint a fresh one) so onOpen/onClose/revoke all name the same seat.
         onPeerPending: (s) => {
@@ -166,7 +182,9 @@ export function initRelayHost(
         },
         // The relay socket dropped (the peer is already torn down when this fires). Free the seat.
         onClose: () => {
+          const removed = byId.get(rendererId)
           byId.delete(rendererId)
+          void removed?.docker?.stop()
           send(IPC.relayHostClosed, { id: rendererId })
         }
       })
@@ -175,7 +193,10 @@ export function initRelayHost(
       // entry is gone — don't leak a live listener; close it.
       const entry = byId.get(rendererId)
       if (entry) entry.session = session
-      else session.close()
+      else {
+        session.close()
+        await docker.stop()
+      }
 
       return {
         offer: encodeOffer({
@@ -188,7 +209,9 @@ export function initRelayHost(
     } catch (err) {
       // Mint/keyring/connect failed after we reserved the slot — roll the reservation back so a failed
       // invite doesn't leak a seat.
+      const removed = byId.get(rendererId)
       byId.delete(rendererId)
+      void removed?.docker?.stop()
       throw err
     }
   }
@@ -235,11 +258,15 @@ export function initRelayHost(
     // drop, not a local close), so free the seat and notify the renderer here.
     if (peerKeyB64) killRelayHostsByPeerKey(peerKeyB64)
     byId.delete(msg.id!)
+    void entry.docker?.stop()
     send(IPC.relayHostClosed, { id: msg.id })
   })
 
   const stop = (): void => {
-    for (const { session } of byId.values()) session?.close()
+    for (const { session, docker } of byId.values()) {
+      session?.close()
+      void docker?.stop()
+    }
     byId.clear()
   }
 

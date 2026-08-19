@@ -5,6 +5,8 @@
 - Add Global mode and complete per-project Settings overlays through the shared settings surface.
 - Replace the paid remote-host prompt with a free Docker-hosted relay flow while retaining
   end-to-end encryption and mutual pairing approval.
+- Run hosted relay terminals inside bounded, least-privileged, task-owned Docker containers with
+  guided context/image/resource controls and deterministic teardown.
 
 All notable changes to nodeterm are recorded here, generated from the project's
 Git history. Each entry names the released version, its date, its categorized changes,

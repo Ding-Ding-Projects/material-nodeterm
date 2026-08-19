@@ -563,6 +563,12 @@ Remote-access UI calls the free encrypted flow **Docker host**. Preserve single-
 mutual SAS approval. Never add a purchase or entitlement check to the first host connection, and
 never fabricate a credential for an anonymous free pairing request.
 
+Docker host execution belongs behind `docker-host-runtime.ts`: use `execFile` argv, keep context and
+image selections guided, validate again at use, bound CPU/memory/PIDs, drop capabilities, prohibit
+privileged and socket mounts, default network to none and the project bind to read-only, and remove
+only the labelled random-name container the session created. Relay PTYs must be `docker exec`, never
+the local profile with a Docker-looking label painted over it.
+
 Two files, two audiences:
 
 - **`CONTRIBUTING.md`** (this file) — what another human needs before touching the code.

@@ -399,6 +399,7 @@ export function buildStubApi(): Omit<
     // the affordance. Because those never yield a live connection, the gate/frame void members are
     // inert no-ops (there is no connectionId to act on) and the subscriptions are no-op unsubscribes.
     relayHost: {
+      dockerContexts: U('relayHost.dockerContexts'),
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),

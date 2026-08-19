@@ -1263,8 +1263,23 @@ export interface AppLogoSettings {
   customImage?: AppLogoCustomImage
 }
 
+export interface DockerHostSettings {
+  /** Docker CLI context name. Empty means Docker's current context. */
+  context: string
+  /** Allowlisted image reference selected by the guided host surface. */
+  image: string
+  containerPrefix: string
+  mountMode: 'readonly' | 'writable'
+  cpus: number
+  memoryMb: number
+  pidsLimit: number
+  network: 'none' | 'bridge'
+  workdir: '/workspace'
+}
+
 /** User-configurable application settings (settings.json). */
 export interface Settings {
+  dockerHost: DockerHostSettings
   fontSize: number
   fontFamily: string
   cursorBlink: boolean
@@ -1629,6 +1644,17 @@ export interface Settings {
 export const DEFAULT_ACCENT = '#6750a4'
 
 export const DEFAULT_SETTINGS: Settings = {
+  dockerHost: {
+    context: '',
+    image: 'node:24-bookworm-slim',
+    containerPrefix: 'nodeterm-host',
+    mountMode: 'readonly',
+    cpus: 1,
+    memoryMb: 1024,
+    pidsLimit: 256,
+    network: 'none',
+    workdir: '/workspace'
+  },
   fontSize: 13,
   fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace',
   cursorBlink: true,
@@ -2961,9 +2987,10 @@ export interface RelayPeerPending {
  * the Server Edition browser build degrades every member to `E_UNSUPPORTED`/no-op.
  */
 export interface RelayHostApi {
+  dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
-   * Rejects if the device is not entitled (or a dev build without the relay URL). `projectId` is the
+   * Rejects when Docker or the configured relay is unavailable. `projectId` is the
    * single project this hosting session shares with the peer; omit for the legacy whole-workspace view.
    */
   start(projectId?: string): Promise<{ offer: string; id: string }>

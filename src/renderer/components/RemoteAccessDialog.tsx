@@ -23,6 +23,7 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
   const [hostBusy, setHostBusy] = useState(false)
   const [error, setError] = useState('')
   const [clientCode, setClientCode] = useState('')
+  const [dockerStatus, setDockerStatus] = useState('Checking Docker…')
 
   // Which project this host shares with the joiner. Default = the active project (hoisted first
   // by hostShareOptions); the user can pick any other OPEN project before minting the offer.
@@ -47,6 +48,14 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [isTop, onClose])
+
+  useEffect(() => {
+    let live = true
+    window.nodeTerminal.relayHost.dockerContexts()
+      .then((contexts) => { if (live) setDockerStatus(contexts.length ? 'Docker is ready.' : 'No Docker context was found. Open Settings → Docker host to retry.') })
+      .catch((error) => { if (live) setDockerStatus(`Docker is unavailable: ${error instanceof Error ? error.message : String(error)}`) })
+    return () => { live = false }
+  }, [])
 
   // HOST side — the NEW relay tunnel (`relayHost`). `start()` returns the single-use pairing offer;
   // a connecting peer's approval + canvas sync are handled globally by Canvas (`relayHost.onPeerPending`
@@ -95,6 +104,7 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
         </p>
 
         <h4 className="remote-dialog__head4">Allow remote access</h4>
+        <p className="remote-dialog__hint" role="status">{dockerStatus}</p>
         {hostOffer ? (
             <div className="remote-dialog__block">
               <p className="remote-dialog__hint">
