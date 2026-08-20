@@ -12039,6 +12039,19 @@ export function Canvas() {
         run: toggleFocusMode
       },
       { id: 'fit', label: 'Fit view', icon: <IconFit />, run: fitAll },
+      {
+        id: 'show-test-notification',
+        label: 'Show a test notification',
+        hint: 'preview toast low stimulation quiet',
+        section: 'Settings',
+        icon: <IconBellFilled />,
+        run: () =>
+          notify({
+            kind: 'info',
+            title: 'Test notification',
+            body: 'This is what a notification looks like — useful while you tune Settings → Notifications.'
+          })
+      },
       // Hidden below 2 top-level nodes — see arrangeAllNodes.
       ...(hasArrangeableNodes()
         ? [

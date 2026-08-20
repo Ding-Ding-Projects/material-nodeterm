@@ -35,11 +35,16 @@ export interface AppNotification {
   /** ms until auto-dismiss. Errors and warnings default to `null` (persist until the user
    *  dismisses them) — every other kind gets a sensible default in `push`. */
   autoDismissMs?: number | null
+  /** True only for an item pushed already-dismissed by ADHD low stimulation (`silent: true` at
+   *  construction, `lib/adhdNotify.ts`). Set once, at push, and never changed afterward — it is
+   *  NOT derived from `dismissedAt`, because an ordinary user dismissal also sets that field and
+   *  would otherwise be indistinguishable from a quieted delivery in the history panel. */
+  deliveredSilently: boolean
 }
 
 export type PushNotificationInput = Omit<
   AppNotification,
-  'id' | 'createdAt' | 'dismissedAt' | 'read'
+  'id' | 'createdAt' | 'dismissedAt' | 'read' | 'deliveredSilently'
 > & {
   id?: string
   /** Land in history without ever appearing as a toast — pushed already dismissed, still unread,
@@ -117,7 +122,8 @@ export const useNotifications = create<NotificationsState>((set) => ({
       // still says there is something to look at, which is what keeps "quieter" from becoming
       // "hidden".
       dismissedAt: input.silent ? Date.now() : null,
-      read: false
+      read: false,
+      deliveredSilently: input.silent === true
     }
     set((s) => ({ items: trim([item, ...s.items]) }))
     return id

@@ -211,7 +211,7 @@ export function NotificationCenter({
           {filtered.map((n) => (
             <div
               key={n.id}
-              className={`notif-center__row${n.read ? '' : ' unread'}`}
+              className={`notif-center__row${n.read ? '' : ' unread'}${n.deliveredSilently ? ' quieted' : ''}`}
               role="option"
               aria-selected={selected.has(n.id)}
             >
@@ -228,6 +228,7 @@ export function NotificationCenter({
                   <span>{n.kind}</span>
                   <span>{relTime(n.createdAt)}</span>
                   <span>{n.dismissedAt == null ? 'active' : 'dismissed'}</span>
+                  {n.deliveredSilently && <span className="notif-center__row-quieted">quieted</span>}
                 </div>
               </div>
               {n.dismissedAt == null ? (

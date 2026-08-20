@@ -75,6 +75,18 @@ describe('with low stimulation off, nothing changes at all', () => {
     notify({ kind: 'info', title: 'still here' })
     expect(liveToasts().map((n) => n.title)).toEqual(['still here'])
   })
+
+  it('a manually dismissed notification is never marked as quieted', () => {
+    // dismissedAt alone cannot distinguish the two cases, so an ordinary user dismissal must not
+    // set deliveredSilently — the notification centre relies on that separation to render the
+    // right marker.
+    notify({ kind: 'info', title: 'dismiss me' })
+    const id = useNotifications.getState().items[0].id
+    useNotifications.getState().dismiss(id)
+    const item = useNotifications.getState().items.find((n) => n.id === id)!
+    expect(item.dismissedAt).not.toBeNull()
+    expect(item.deliveredSilently).toBe(false)
+  })
 })
 
 describe('with low stimulation on, the interruption goes but the information does not', () => {
@@ -95,6 +107,16 @@ describe('with low stimulation on, the interruption goes but the information doe
     // Quieter, not hidden: the bell still counts it, so nothing is lost by turning the mode on.
     expect(items[0].read).toBe(false)
     expect(items[0].dismissedAt).not.toBeNull()
+  })
+
+  it('marks a quieted delivery distinctly from an ordinary user dismissal', () => {
+    // A quieted push and a user dismissal both end up with dismissedAt != null — that alone is
+    // not enough to tell them apart in the notification centre. `deliveredSilently` is the field
+    // that actually distinguishes them, and it must be true here and stay true.
+    notify({ kind: 'info', title: 'quieted one' })
+    const item = useNotifications.getState().items[0]
+    expect(item.deliveredSilently).toBe(true)
+    expect(item.dismissedAt).not.toBeNull()
   })
 
   it('never renders a quieted notification as a toast in any intermediate state', () => {

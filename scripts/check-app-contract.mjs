@@ -1039,7 +1039,14 @@ const FEATURES = [
       ['src/renderer/lib/adhdNotify.ts', 'allowsNotification('],
       // …and the OS notification for a blocked agent is gated on the kind the call site already
       // carries, so 'needs-you' is threaded through rather than re-decided.
-      ['src/renderer/canvas/Canvas.tsx', /sound === 'needsYou' \? 'needs-you' : 'done'/]
+      ['src/renderer/canvas/Canvas.tsx', /sound === 'needsYou' \? 'needs-you' : 'done'/],
+      // A quietable info/success notification must be reachable without an OS dialog, or low
+      // stimulation's quieted state can never be captured.
+      ['src/renderer/canvas/Canvas.tsx', "id: 'show-test-notification'"],
+      // A quieted delivery must render distinguishably from an ordinary user dismissal — both set
+      // dismissedAt, so the field that actually separates them is the one to look for here.
+      ['src/renderer/state/notifications.ts', /deliveredSilently: input\.silent === true/],
+      ['src/renderer/components/NotificationCenter.tsx', "n.deliveredSilently ? ' quieted' : ''"]
     ]
   },
   {
