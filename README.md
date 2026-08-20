@@ -346,6 +346,48 @@ capture harness skips them loudly and records why. The canvas shot shows a real,
 whose pane is empty — [the manifest](./docs/assets/shots/README.md) explains that, and lists the
 captures that were taken and discarded rather than shipped.
 
+## Working conventions (sanitized mirror)
+
+> **This section is a mirror, not a source.** It is a sanitized summary of the shared working
+> conventions that live in [`CLAUDE.md`](./CLAUDE.md), [`CONTRIBUTING.md`](./CONTRIBUTING.md) and
+> [`AGENTS.md`](./AGENTS.md), kept here so they are visible from the repository's front door.
+> Edit those files first when a rule changes — this copy is refreshed from them, never edited in
+> place — and it deliberately contains no machine-, account- or infrastructure-specific details
+> (`scripts/check-instruction-mirror.mjs` enforces both halves of that).
+
+- **Process boundaries are enforced, not advisory.** Platform-free service logic lives in
+  `src/core` behind a small platform interface; the desktop shell (`src/main`), the
+  browser-edition shell (`src/server`), the one typed preload bridge (`src/preload`) and the
+  React UI (`src/renderer`) each stay on their own side, and dedicated tests fail the build on
+  an illegal import. Put new service logic in the platform-free core — logic left in a shell
+  silently doesn't exist on the other one.
+- **Design for three surfaces, every time** — the desktop app, the self-hosted Server Edition,
+  and the separately maintained mobile companion. A feature is not finished until each surface
+  has a real implementation or a deliberate, visibly documented "not applicable here"; a stub
+  that compiles but does nothing is worse than an explicit "not supported".
+- **House rules** (each one earned by a real shipped bug): a failed read is never evidence of
+  absence; degrade to nothing, never to something wrong; re-validate hand-editable values at the
+  point of use, not by their type alone; test generated shell scripts under a real shell;
+  credentials never travel as command-line arguments — use a locked-down file or standard input;
+  keep parallel shell implementations in sync deliberately; comments explain *why* and name the
+  failure they prevent.
+- **Testing.** `npm run typecheck` is the fastest correctness gate and `npm test` runs the
+  suite. Mutation-test your own guards — deliberately reintroduce the mistake a new check exists
+  to catch and watch it go red before trusting it — and never pin behavior by asserting on
+  source text.
+- **Autonomous work.** Inside an already-authorized task, keep going through natural checkpoints
+  without asking permission to continue; when genuinely blocked, state exactly what blocks, what
+  is finished, and the smallest unblocking step.
+- **Git and commit conventions.** `type(scope): subject` commit subjects (the changelog is
+  generated from them); explain *why* a change was made; say plainly what you did **not**
+  verify; post PR updates as new comments rather than editing old ones; never commit secrets,
+  tokens or credentials.
+- **Security boundaries.** Never disclose or characterize anyone's credentials, and never place
+  secrets or private infrastructure details — internal hostnames, private IP addresses, account
+  names, machine-specific paths — into source, comments, commits or documentation. Where a rule
+  cannot be stated without such a detail, describe the *kind* of thing instead of naming the
+  specific one.
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for setup, the process-boundary rules
