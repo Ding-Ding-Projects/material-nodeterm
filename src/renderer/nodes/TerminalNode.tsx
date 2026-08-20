@@ -141,6 +141,8 @@ import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
 import { ContextMeter } from '../components/ContextMeter'
+import { AdhdElapsedChip, AdhdMomentumNote } from '../components/AdhdNodeSurfaces'
+import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
 import { AccountIdentityPills } from '../components/AccountIdentityPills'
 import { presentAccount } from '../lib/accountPresentation'
 import { isZoomModifierHeld } from '../lib/zoomModifier'
@@ -1722,6 +1724,14 @@ export function TerminalNode({
     !remoteSession &&
     (data.cwd as string | undefined) !== parentWtPath
   const status = useAgentStatus((s) => s.byId[id])
+  // ADHD time awareness / momentum need a "when did this node start" and a "when did anything last
+  // happen here". Recording it is unconditional and free (one Map write; nothing subscribes, so
+  // nothing re-renders) — the MODES decide whether anybody ever looks. Idempotent by design: this
+  // effect re-runs on an offscreen release and revive, and restarting the clock there would erase
+  // exactly the idle stretch momentum exists to notice.
+  useEffect(() => {
+    markNodeOpened(id)
+  }, [id])
   // Transient, per-launch: what this node's Codex launcher reported it actually got. Undefined for
   // every non-codex node and for a codex node whose launcher never spoke.
   const codexIdentity = useCodexIdentity((s) => s.byId[id])
@@ -3262,6 +3272,11 @@ export function TerminalNode({
             // still count towards `pending`, so a flood during the gap pauses the source.
             const gate = createDataGate(writeChunk)
             offData = transport.onData(sid, (chunk) => {
+              // "Something changed here" for ADHD time awareness / momentum. Deliberately on the
+              // hottest path in the app, because output IS the change — and deliberately cheap
+              // enough to sit there: one Map lookup and one number, no allocation, no store write
+              // and no render. A store would re-render the canvas per chunk on a flooding terminal.
+              markNodeActivity(id)
               pending += chunk.length
               if (!paused && pending > HIGH_WATER) {
                 paused = true
@@ -3377,6 +3392,10 @@ export function TerminalNode({
             )
             cleanups.push(
               term.onData((input) => {
+                // Typing counts as activity too. A person can sit reading and composing a long
+                // prompt in a pane that has produced no output for half an hour, and nudging them
+                // about it would be the feature interrupting the exact work it exists to protect.
+                markNodeActivity(id)
                 // Lone Esc / Ctrl-C while the agent works: Claude Code fires NO hook on a user
                 // interrupt, so probe the cancelled turn (still-silent working → done). Exact
                 // match — arrow keys etc. arrive as multi-byte \x1b[… sequences.
@@ -4948,6 +4967,9 @@ export function TerminalNode({
             </span>
           ) : null}
           {showUsage && <ContextMeter sessionId={status?.sessionId ?? null} />}
+          {/* ADHD time awareness — beside the session chip, because a clock in a menu does nothing
+            for time blindness. Renders nothing at all while the mode is off. */}
+          <AdhdElapsedChip nodeId={id} />
           {/* Who else is in this node. Subscribes to presence itself — see PresenceChips. */}
           <PresenceChips nodeId={id} />
           {status?.state === 'working' && (
@@ -5213,6 +5235,13 @@ export function TerminalNode({
               {copy.feedback.label}
             </div>
           )}
+          {/* ADHD momentum — floated over the TOP of the terminal, not inserted above it: a strip
+            in the layout would change the body's height, and a terminal that resizes because a
+            note appeared sends SIGWINCH to whatever is running in it. Top rather than bottom
+            because every agent CLI writes its input line bottom-left, and the container ignores
+            the pointer entirely (only "Not now" takes a click) so a drag through it still selects
+            text. Renders nothing at all while the mode is off, or while a "not now" stands. */}
+          <AdhdMomentumNote nodeId={id} />
           {/* Offscreen-disposed: the xterm and the PTY client are gone, the tmux session is not.
             Deliberately above the overlays below it in the DOM but the least insistent of them —
             it states a resting state, not a failure. Nobody is ever looking at it as it appears

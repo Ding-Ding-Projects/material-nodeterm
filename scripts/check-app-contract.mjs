@@ -854,6 +854,11 @@ const FEATURES = [
     files: [
       'src/renderer/lib/adhdModes.ts',
       'src/renderer/lib/adhdModes.test.ts',
+      'src/renderer/lib/adhdNotify.ts',
+      'src/renderer/lib/adhdNotify.test.ts',
+      'src/renderer/lib/nodeActivity.ts',
+      'src/renderer/components/AdhdNodeSurfaces.tsx',
+      'src/renderer/components/AdhdNodeSurfaces.test.tsx',
       'src/renderer/components/settings/sections/AdhdModesSection.tsx'
     ],
     contentChecks: [
@@ -876,7 +881,30 @@ const FEATURES = [
       // Published on <html> by App, or none of the CSS applies.
       ['src/renderer/App.tsx', /^\s*const modes = normalizeAdhdModes\(adhdModes\)/m],
       // Not medical, said on the surface rather than only in the docs.
-      ['src/renderer/components/settings/sections/AdhdModesSection.tsx', 'not a diagnosis']
+      ['src/renderer/components/settings/sections/AdhdModesSection.tsx', 'not a diagnosis'],
+      // WIRED, not merely decided. Two of these modes shipped as switches connected to nothing:
+      // the decision functions existed, the CSS was finished, and the renderer between them was
+      // never written, so the docs described behaviour no code executed. Every needle below carries
+      // a delimiter (`(`, `<`, `/>`) so a rename or a commented-out line cannot satisfy it.
+      //
+      // Time awareness renders where the work is — on the node, and in the card modal, which is the
+      // same live session seen twice.
+      ['src/renderer/nodes/TerminalNode.tsx', '<AdhdElapsedChip nodeId={id} />'],
+      ['src/renderer/components/kanban/CardModal.tsx', '<AdhdElapsedChip nodeId={session.id} />'],
+      // Momentum reaches a render, and its "not now" writes a real timestamp.
+      ['src/renderer/nodes/TerminalNode.tsx', '<AdhdMomentumNote nodeId={id} />'],
+      ['src/renderer/components/AdhdNodeSurfaces.tsx', 'momentumNudge('],
+      ['src/renderer/components/AdhdNodeSurfaces.tsx', 'snoozeUntil('],
+      // ONE shared minute ticker for the whole canvas, fed by the PTY data path.
+      ['src/renderer/lib/nodeActivity.ts', 'export function subscribeActivityTick'],
+      ['src/renderer/nodes/TerminalNode.tsx', 'markNodeActivity(id)'],
+      // Low stimulation's notification half: Canvas raises notifications through the funnel that
+      // applies allowsNotification(), never the raw store push.
+      ['src/renderer/canvas/Canvas.tsx', /^import \{ notify \} from '\.\.\/lib\/adhdNotify'$/m],
+      ['src/renderer/lib/adhdNotify.ts', 'allowsNotification('],
+      // …and the OS notification for a blocked agent is gated on the kind the call site already
+      // carries, so 'needs-you' is threaded through rather than re-decided.
+      ['src/renderer/canvas/Canvas.tsx', /sound === 'needsYou' \? 'needs-you' : 'done'/]
     ]
   },
   {

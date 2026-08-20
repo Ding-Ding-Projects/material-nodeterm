@@ -109,7 +109,11 @@ import {
 import { withNodeBoundary } from '../components/NodeBoundary'
 import { NavRail, type RailDestination } from '../components/NavRail'
 import { enterKidsModeFromRail } from '../components/kids/entry'
-import { focusTargetId as adhdFocusTarget, normalizeAdhdModes } from '../lib/adhdModes'
+import {
+  allowsNotification,
+  focusTargetId as adhdFocusTarget,
+  normalizeAdhdModes
+} from '../lib/adhdModes'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { type MenuItem } from '../components/ContextMenu'
@@ -230,7 +234,13 @@ import { NotificationCenter } from '../components/NotificationCenter'
 import { HistoryScreen } from '../components/HistoryScreen'
 import { DocsBrowser } from '../components/DocsBrowser'
 import { StatusSurface } from '../components/StatusSurface'
-import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
+import { useNotifications, selectUnreadCount } from '../state/notifications'
+// Every in-app notification raised on this surface goes through the ADHD-aware funnel rather than
+// the raw store push, so LOW STIMULATION can quiet the ones that do not need a person. Aliased at
+// the import so the ~16 call sites below read as they always did and none of them can opt itself
+// out by reaching past it; the classification is made once, in adhdNotify.ts, from the `kind` each
+// call site already declares. A quieted notification still lands in the notification centre unread.
+import { notify } from '../lib/adhdNotify'
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
@@ -11000,6 +11010,19 @@ export function Canvas() {
         // OS notification only when the whole window is in the background.
         if (document.hasFocus()) return
         const s = useSettings.getState().settings
+        // ADHD low stimulation, on the notification that matters most. `sound` is the real kind
+        // this call site already carries — 'needsYou' is an agent stopped on a permission prompt,
+        // 'done' is a turn that ended — so nothing is reclassified here; it is threaded straight
+        // into the decision. A blocked agent is NEVER silenced: dropping that one would make the
+        // mode cost the user work rather than save them noise, which is the whole line it must
+        // not cross.
+        if (
+          !allowsNotification(
+            normalizeAdhdModes(s.adhdModes),
+            sound === 'needsYou' ? 'needs-you' : 'done'
+          )
+        )
+          return
         if (!(s.notifyOnClaudeDone && s.notifyConsentAsked)) return
         const now = Date.now()
         if (now - (notifyCooldownRef.current[e.nodeId] ?? 0) < 5000) return // dedup/cooldown
@@ -13461,6 +13484,11 @@ export function Canvas() {
         <NotifyConsentDialog
           onEnable={() => {
             useSettings.getState().update({ notifyOnClaudeDone: true })
+            // Deliberately NOT filtered by ADHD low stimulation, unlike the agent-status alert
+            // above: this is the confirmation of the button the person is looking at, fired by
+            // their own click a moment ago (and `force: true` for the same reason). A permission
+            // switch that silently proves nothing when flipped reads as broken, and the mode is
+            // about unsolicited interruptions — this is the opposite of one.
             void window.nodeTerminal.notify({
               title: 'Notifications enabled',
               body: "You'll be told when Claude Code finishes in the background.",
