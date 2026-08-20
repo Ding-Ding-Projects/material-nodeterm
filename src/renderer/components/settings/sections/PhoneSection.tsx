@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
+import {
+  detectHelpPlatform,
+  remoteLoginCopyFor,
+  showsCommandInstead
+} from '../../../lib/remoteLoginHelp'
+import type { RemoteLoginHelp } from '../../../../shared/types'
 import type { PairedDevice } from '@shared/types'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
@@ -39,6 +45,9 @@ function formatPairedAt(ms: number): string {
 
 /** The pairing host is this machine, so the renderer's own UA answers "is this a Mac?". */
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+// Copy is chosen from the platform; the ROUTE is whatever the handler reports it did.
+const helpPlatform = detectHelpPlatform(navigator)
+const remoteLoginCopy = remoteLoginCopyFor(helpPlatform)
 
 export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   if (!window.nodeTerminal.pairing.supported) {
@@ -67,6 +76,19 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [pendingRevoke, setPendingRevoke] = useState<PairedDevice | null>(null)
   const [revokeError, setRevokeError] = useState('')
+  // What the handler reported it DID. Null until asked — the button is still offered then,
+  // because pressing it is what asks; rendering nothing until an answer arrives would
+  // reproduce the dead end this replaced.
+  const [remoteLoginHelp, setRemoteLoginHelp] = useState<RemoteLoginHelp | null>(null)
+  const openRemoteLogin = async (): Promise<void> => {
+    try {
+      setRemoteLoginHelp(await window.nodeTerminal.pairing.openRemoteLoginSettings())
+    } catch {
+      // Server Edition answers 'unsupported' here. Falling back to the command keeps a
+      // route on screen instead of a button that has already failed once.
+      setRemoteLoginHelp({ opened: 'none', command: 'sudo systemctl enable --now ssh' })
+    }
+  }
 
   const phoneAccessEnabled = useSettings((s) => s.settings.phoneAccessEnabled)
   const updateSettings = useSettings((s) => s.update)
@@ -177,9 +199,13 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
         <div className="space-y-4">
           <h4 className="text-[13px] font-medium text-text">Pair a device</h4>
           <p className="text-sm text-muted">
-            Open <strong>nodeterm mobile</strong> on your iPhone and scan this QR. The phone
-            generates and keeps its own key; the pairing request and returned credentials are
-            encrypted to the host key inside this QR.
+            {/* Said in the future tense on purpose. This paragraph renders in BOTH states, and when
+                Remote Login is off there is no QR below it — the old copy read "scan this QR" and
+                "inside this QR" over an empty space, telling the reader to scan something that was not
+                there. Every fact it carried is kept; only the tense moved. */}
+            Open <strong>nodeterm mobile</strong> on your iPhone and scan the QR below. The phone
+            generates and keeps its own key; the pairing request and the credentials sent back are
+            encrypted to the host key carried in that QR.
           </p>
 
           {phase === 'idle' || phase === 'timeout' || phase === 'failed' ? (
@@ -204,17 +230,23 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                 // The live probe (usePhonePairing) flips sshOpen and the QR appears by itself.
                 <div className="space-y-2">
                   <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                    <strong>Remote Login</strong> is off, so your phone wouldn&apos;t be able to
-                    connect after pairing. Turn it on — the QR appears here the moment it is
-                    {isMac ? ' (watching, no need to restart pairing).' : '.'}
+                    {remoteLoginCopy.what} is off, so your phone wouldn&apos;t be able to connect
+                    after pairing. Turn it on — the QR appears here the moment it is, with no need to
+                    restart pairing.
                   </p>
-                  {isMac ? (
-                    <Button
-                      onClick={() => void window.nodeTerminal.pairing.openRemoteLoginSettings()}
-                    >
-                      Open System Settings
-                    </Button>
-                  ) : null}
+                  {/* Rendered from what the handler RETURNS, never from the platform we guessed. The
+                      button was mac-only and the handler was `if (platform !== 'darwin') return` — so a
+                      Windows reader was told to turn something on, given no control, and the one control
+                      that existed elsewhere would have done nothing for them. Where a platform has no
+                      settings surface worth opening, show the command instead of a button that misfires. */}
+                  {remoteLoginHelp?.opened === 'none' && remoteLoginHelp.command ? (
+                    <p className="text-sm text-muted">
+                      Run <code className="select-all">{remoteLoginHelp.command}</code>, then come back —
+                      this page is watching.
+                    </p>
+                  ) : (
+                    <Button onClick={() => void openRemoteLogin()}>{remoteLoginCopy.button}</Button>
+                  )}
                 </div>
               ) : (
                 <>
