@@ -231,9 +231,13 @@ Explicit rather than accidental:
   ([`app-adhd-modes.png`](./assets/shots/app-adhd-modes.png)).
 
 **Not yet verified, stated rather than implied:** that built-artifact run and that capture cover the
-settings section and focus dimming. The elapsed chip, the momentum note and the notification filter
-have their behaviour proven by the suites above and their presence proven by the contract rows, but
-nothing has yet photographed them in a packaged build — so no claim is made that they have been seen
-running. Three states are owed a capture: a node carrying the elapsed chip, a node carrying the
-momentum note with its "Not now", and the notification centre holding a quieted notification while
-low stimulation is on.
+settings section and focus dimming. Three states were owed a capture beyond that: a node carrying
+the elapsed chip, a node carrying the momentum note with its "Not now", and the notification centre
+holding a quieted notification while low stimulation is on. The first two now have entries in
+`scripts/capture-shots.mjs` (`app-adhd-elapsed-chip` — required, reachable in seconds since "just
+now" renders the instant a node opens — and `app-adhd-momentum-note`, which genuinely cannot render
+sooner than the real five-minute floor on `momentumMinutes` and is therefore gated behind
+`NT_SHOTS_SLOW=1` and skipped, not failed, on an ordinary run). Neither has actually been run by this
+change, so there is no capture file to point to yet and no claim that either has been *seen*
+rendering in a packaged build — only that the harness now knows how to reach and photograph them.
+The notification filter is still owed a capture entirely; nothing here drives that state.
