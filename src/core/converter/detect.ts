@@ -100,15 +100,23 @@ function sniffTextContent(buf: Buffer, filename: string): SniffResult {
     return { kind: 'json', confidence: 'medium', note: 'Starts with { or [' }
   }
 
-  if (text.startsWith('<?xml') || (text[0] === '<' && /^<[a-zA-Z!?]/.test(text))) {
-    return { kind: 'xml', confidence: 'high', note: 'Starts with an XML/HTML-style tag' }
+  // An XML declaration is unambiguous even when the filename has a different extension.
+  if (text.startsWith('<?xml')) {
+    return { kind: 'xml', confidence: 'high', note: 'Starts with an XML declaration' }
   }
 
+  // Markdown permits raw HTML blocks, so a generic leading tag cannot outrank a known Markdown
+  // extension. Keep this ahead of the broader XML/HTML-style heuristic without special-casing a
+  // particular filename such as README.md.
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
     return { kind: 'markdown', confidence: 'medium', note: 'Markdown extension' }
   }
   if (/^#{1,6}\s+\S/m.test(text) && /\n\n/.test(text)) {
     return { kind: 'markdown', confidence: 'low', note: 'Looks like Markdown (heading + blank line)' }
+  }
+
+  if (text[0] === '<' && /^<[a-zA-Z!?]/.test(text)) {
+    return { kind: 'xml', confidence: 'high', note: 'Starts with an XML/HTML-style tag' }
   }
 
   if (text.startsWith('---\n') || text.startsWith('---\r\n')) {
