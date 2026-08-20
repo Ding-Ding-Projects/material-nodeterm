@@ -50,6 +50,26 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
 }
 
 /**
+ * The address of "the Docker daemon on this machine", for the one kind where that shortcut is
+ * common enough to earn a button (`dockerhost`).
+ *
+ * This is NOT the button it looks like it should be. Docker's actual local transports are a Unix
+ * domain socket (`/var/run/docker.sock`) on macOS/Linux and a named pipe
+ * (`//./pipe/docker_engine`) on Windows — the "differs by platform" case the request that shipped
+ * this button called out by name. Neither is representable here: `safeServiceEndpoint` accepts
+ * only `http:`, `https:` and `ssh:`, on purpose (see its own comment) — `unix:`/`npipe:` were never
+ * on that list, and adding a fifth just for this button would mean the field promises to store
+ * something the connection boundary would then silently discard the moment anything reads it.
+ *
+ * `ssh://localhost` IS representable, and it is the same address on every platform: bare `ssh://`
+ * with no `user@` defaults, exactly like the bare `ssh` command, to whoever is currently logged in
+ * — there is no per-OS branch to get wrong, and no username to go and ask the shell for. It is
+ * honest about being an SSH hop to the local Docker CLI rather than a claim about the daemon's own
+ * transport, which is the whole reason a platform-specific pipe/socket path was never on the table.
+ */
+const LOCAL_DOCKER_ENDPOINT = 'ssh://localhost'
+
+/**
  * Why an address was refused, in words that say what to do next.
  *
  * The password case is the one that has to be explicit. Somebody who pasted a URL with credentials
@@ -105,8 +125,11 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
   const [endpointDraft, setEndpointDraft] = useState(data.serviceConnection?.endpoint ?? '')
   const endpointOk = safeServiceEndpoint(endpointDraft)
 
-  const commitEndpoint = (): void => {
-    const trimmed = endpointDraft.trim()
+  /** `overrideValue` lets the "Use localhost" button commit its own value in one click rather than
+   *  writing into the draft and hoping a render lands before the user notices — same commit path,
+   *  same validation, just fed a value that did not come from the input's own onChange. */
+  const commitEndpoint = (overrideValue?: string): void => {
+    const trimmed = (overrideValue ?? endpointDraft).trim()
     if (trimmed === '') {
       if (data.serviceConnection) updateNodeData(id, { serviceConnection: undefined })
       return
@@ -115,10 +138,14 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
     // the store then refused would produce a node that looks configured and is not — the exact
     // silent half-state this component exists to avoid.
     if (!safeServiceEndpoint(trimmed)) return
+    if (overrideValue !== undefined) setEndpointDraft(overrideValue)
     updateNodeData(id, {
       serviceConnection: { ...data.serviceConnection, endpoint: trimmed }
     })
   }
+
+  const localEndpoint = kind === 'dockerhost' ? LOCAL_DOCKER_ENDPOINT : undefined
+  const isLocalEndpointSet = localEndpoint !== undefined && endpointDraft.trim() === localEndpoint
   // Derived once: the root colours its BORDER, the header a translucent wash of the same value,
   // and rainbow has to reach both or the node animates on one edge and not the other.
   const rootBorder = nodeBorderStyle(data.color)
@@ -230,27 +257,50 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>
-              <input
-                id={`${id}-endpoint`}
-                className="service-node__input nodrag"
-                type="text"
-                spellCheck={false}
-                placeholder={ENDPOINT_PLACEHOLDER[kind ?? 'proxmox']}
-                value={endpointDraft}
-                aria-invalid={endpointDraft !== '' && !endpointOk}
-                aria-describedby={`${id}-endpoint-note`}
-                onChange={(e) => setEndpointDraft(e.target.value)}
-                onBlur={commitEndpoint}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    commitEndpoint()
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault()
-                    setEndpointDraft(data.serviceConnection?.endpoint ?? '')
-                  }
-                }}
-              />
+              <div className="service-node__field-row">
+                <input
+                  id={`${id}-endpoint`}
+                  className="service-node__input nodrag"
+                  type="text"
+                  spellCheck={false}
+                  placeholder={ENDPOINT_PLACEHOLDER[kind ?? 'proxmox']}
+                  value={endpointDraft}
+                  aria-invalid={endpointDraft !== '' && !endpointOk}
+                  aria-describedby={`${id}-endpoint-note`}
+                  onChange={(e) => setEndpointDraft(e.target.value)}
+                  onBlur={() => commitEndpoint()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commitEndpoint()
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setEndpointDraft(data.serviceConnection?.endpoint ?? '')
+                    }
+                  }}
+                />
+                {/* Fills the field with the local Docker daemon's address in one click — it never
+                    dials anything itself, per the honesty rule this whole node lives by (see the
+                    hint paragraph and LOCAL_DOCKER_ENDPOINT's own comment). Disabled once the field
+                    already holds that exact value, so the control never claims there is a further
+                    action to take when there is not. The field stays editable afterwards; this is a
+                    shortcut into it, not a lock on it. */}
+                {localEndpoint !== undefined && (
+                  <button
+                    type="button"
+                    className="service-node__local-btn nodrag"
+                    disabled={isLocalEndpointSet}
+                    title={
+                      isLocalEndpointSet
+                        ? 'Address is already set to the local Docker host'
+                        : 'Fill the address with the local Docker host, reached over SSH'
+                    }
+                    onClick={() => commitEndpoint(localEndpoint)}
+                  >
+                    Use localhost
+                  </button>
+                )}
+              </div>
             </label>
 
             {/* Says what is wrong AND what to do about it. A bare red border teaches nothing, and

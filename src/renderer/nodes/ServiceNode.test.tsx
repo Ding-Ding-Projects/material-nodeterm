@@ -306,6 +306,66 @@ describe('ServiceNode', () => {
   })
 
   // ---------------------------------------------------------------------------------------------
+  // 3b. "Use localhost" — dockerhost only, fills the field, never dials anything.
+  // ---------------------------------------------------------------------------------------------
+
+  describe('"Use localhost" shortcut (dockerhost only)', () => {
+    const localhostButton = (node: HTMLElement): HTMLButtonElement | null =>
+      [...node.querySelectorAll('button')].find((b) => b.textContent === 'Use localhost') ?? null
+
+    it('is present on dockerhost and fills+commits ssh://localhost on click', () => {
+      const node = render('dockerhost', baseData())
+      const btn = localhostButton(node)
+      expect(btn).not.toBeNull()
+      act(() => btn!.click())
+      expect(addressInput(node).value).toBe('ssh://localhost')
+      expect(latestData?.serviceConnection).toEqual({ endpoint: 'ssh://localhost' })
+    })
+
+    it('is absent on every other kind', () => {
+      for (const kind of ['minecraft', 'proxmox', 'gitlab', 'homeassistant', 'freepbx']) {
+        const node = render(kind, baseData())
+        expect(localhostButton(node), `kind "${kind}" should have no localhost button`).toBeNull()
+      }
+    })
+
+    it('is disabled once the address already holds the local value', () => {
+      const node = render(
+        'dockerhost',
+        baseData({ serviceConnection: { endpoint: 'ssh://localhost' } })
+      )
+      const btn = localhostButton(node)
+      expect(btn).not.toBeNull()
+      expect(btn!.disabled).toBe(true)
+    })
+
+    it('re-enables once the field is changed away from the local value', () => {
+      const node = render(
+        'dockerhost',
+        baseData({ serviceConnection: { endpoint: 'ssh://localhost' } })
+      )
+      setValue(addressInput(node), 'ssh://docker@192.168.1.10')
+      expect(localhostButton(node)!.disabled).toBe(false)
+    })
+
+    it('the field stays editable after the shortcut is used', () => {
+      const node = render('dockerhost', baseData())
+      act(() => localhostButton(node)!.click())
+      const input = addressInput(node)
+      setValue(input, 'ssh://docker@10.0.0.5')
+      blur(input)
+      expect(latestData?.serviceConnection).toEqual({ endpoint: 'ssh://docker@10.0.0.5' })
+    })
+
+    it('never mentions "connect" — it fills a field, it does not dial anything', () => {
+      const node = render('dockerhost', baseData())
+      const btn = localhostButton(node)!
+      const spoken = [btn.textContent ?? '', btn.getAttribute('title') ?? ''].join(' ')
+      expect(spoken).not.toMatch(/connect/i)
+    })
+  })
+
+  // ---------------------------------------------------------------------------------------------
   // 4. Accessibility.
   // ---------------------------------------------------------------------------------------------
 
