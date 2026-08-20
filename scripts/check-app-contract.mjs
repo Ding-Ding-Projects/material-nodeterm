@@ -1447,6 +1447,7 @@ const NON_FEATURE_DOCS = new Map([
   ['site.md', 'the Pages site has its own guard: scripts/check-site-contract.mjs'],
   ['site-features.md', 'the Pages site has its own guard: scripts/check-site-contract.mjs'],
   ['troubleshooting-codex-snap.md', 'troubleshooting note'],
+  ['uh-feature-inventory.md', 'the canonical-feature inventory itself — a register OF the contracts, not one of them; guarded by scripts/check-uh-inventory.mjs'],
   ['windows.md', 'platform guide for users'],
   ['windows-support.md', 'platform guide for contributors']
 ])
