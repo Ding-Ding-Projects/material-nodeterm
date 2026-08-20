@@ -582,7 +582,21 @@ async function createProfileNode(profile, catalog, onNodeDiscovered) {
 
 async function resizeRepresentative(result, profile, catalog) {
   const selector = `.react-flow__node[data-id=${JSON.stringify(result.nodeId)}]`
-  await clickElement(`document.querySelector(${JSON.stringify(selector)})`, 'representative terminal node')
+  // Click the HEADER, not the node. `clickElement` aims at an element's centre, and the centre of
+  // a terminal node is its body — measured on a live packaged build, `elementFromPoint` there
+  // returns `DIV.term-hover-guard nowheel`, the overlay that exists precisely so a click in the
+  // body does not behave like a click on the node. The header is the node's designated drag
+  // handle and is what a person clicks to select it.
+  //
+  // Selection is not cosmetic here: React Flow renders NO resize controls on an unselected node.
+  // Measured on the same build — `.react-flow__resize-control.handle.bottom.right` is absent
+  // before selection and present after, and a header-click → drag then grew the node from
+  // 640x440 to 760x520, exactly the requested delta.
+  await clickElement(
+    `document.querySelector(${JSON.stringify(`${selector} .term-node__header`)})`,
+    'representative terminal node header'
+  )
+  await waitFor(`!!document.querySelector(${JSON.stringify(`${selector}.selected`)})`, 'representative node selected')
   const handleSelector = `${selector} .react-flow__resize-control.handle.bottom.right`
   const before = await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});
     if(!n)return null;var r=n.getBoundingClientRect();return {width:r.width,height:r.height};})()`, 'node dimensions')
@@ -615,9 +629,24 @@ async function resizeRepresentative(result, profile, catalog) {
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased', x: point.x + 120, y: point.y + 80, button: 'left', buttons: 0, clickCount: 1
   })
-  await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});if(!n)return false;
-    var r=n.getBoundingClientRect();return r.width>${before.width + 60} && r.height>${before.height + 30};})()`,
-    'resized terminal dimensions')
+  try {
+    await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});if(!n)return false;
+      var r=n.getBoundingClientRect();return r.width>${before.width + 60} && r.height>${before.height + 30};})()`,
+      'resized terminal dimensions')
+  } catch (error) {
+    // Report the measurement, not just the timeout. "did not become true" is the same sentence
+    // whether the drag did nothing, moved the node instead of resizing it, or grew it slightly
+    // less than the threshold — three different bugs with three different fixes, and the bare
+    // message distinguishes none of them.
+    const after = await evaluate(`(function(){var n=document.querySelector(${JSON.stringify(selector)});
+      if(!n)return null;var r=n.getBoundingClientRect();
+      return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)};})()`).catch(() => null)
+    throw new Error(
+      `${error.message} — before ${before.width}x${before.height}, after ` +
+        `${after ? `${after.width}x${after.height} at ${after.x},${after.y}` : '(unreadable)'}, ` +
+        `needed >${before.width + 60}x>${before.height + 30}`
+    )
+  }
   const resizedProbe = buildProfileProbe(profile, catalog, { token: `${runId}-resized`, customDialect })
   await sendPtyText(result.nodeId, resizedProbe.command)
   let resized
