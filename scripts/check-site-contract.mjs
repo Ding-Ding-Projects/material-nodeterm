@@ -249,7 +249,9 @@ const FEATURES = [
     file: 'site/app/features/narrator.js',
     exportName: 'registerNarrator',
     contentChecks: [
-      ['site/app/features/narrator.js', 'voiceschanged'],
+      // The subscription lives in main.js, not the narrator module — the old needle here was
+    // satisfied by a COMMENT in narrator.js while the real listener could be deleted unseen.
+    ['site/app/main.js', "addEventListener('voiceschanged'"],
       ['site/app/shared/narrator-state.js', 'voiceUri'],
     ],
   },

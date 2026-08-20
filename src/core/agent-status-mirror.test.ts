@@ -790,6 +790,13 @@ describe('activity mapping (toolActivity + recordRawToolEvent)', () => {
     expect(toolActivity('Write', { file_path: 'x/bar.py' })).toBe('Editing bar.py')
     expect(toolActivity('NotebookEdit', { notebook_path: '/n/nb.ipynb' })).toBe('Editing nb.ipynb')
     expect(toolActivity('Read', { file_path: '/a/baz.md' })).toBe('Reading baz.md')
+    // Cross-dialect rule, from core/path-basename.ts: a recorded path with no owner metadata
+    // treats an unqualified backslash as filename TEXT, because a POSIX file may legally be
+    // named notes\\draft.md. The old local split reported draft.md — a file that does not
+    // exist on that host — and the mistake was invisible on Windows, where the same split gives
+    // the right answer. A drive-anchored Windows path still splits as structure.
+    expect(toolActivity('Read', { file_path: '/home/dev/notes\\draft.md' })).toBe('Reading notes\\draft.md')
+    expect(toolActivity('Read', { file_path: 'C:\\Users\\x\\file.txt' })).toBe('Reading file.txt')
     expect(toolActivity('Bash', { command: 'npm test' })).toBe('Running npm test')
     expect(toolActivity('Grep', { pattern: 'foo.*bar' })).toBe('Searching foo.*bar')
     expect(toolActivity('Glob', { pattern: '**/*.ts' })).toBe('Searching **/*.ts')

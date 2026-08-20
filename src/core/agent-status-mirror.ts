@@ -1,3 +1,4 @@
+import { basenameForPathSyntax } from './path-basename'
 import fs from 'fs'
 import path from 'path'
 import { platform } from './platform'
@@ -503,10 +504,15 @@ export function firstLine(msg: string | undefined, max: number): string {
   return clip(line, max)
 }
 
-/** Basename of a slash- or backslash-separated path (no `path` import: works on remote paths too). */
+/**
+ * Basename of a RECORDED path — a hook tool-input field written by whichever agent ran, on
+ * whichever host. Delegates to the sanctioned cross-dialect helper rather than splitting on both
+ * separators locally: the local split treated an unqualified backslash as structure, so a legal
+ * POSIX filename like notesdraft.md displayed as draft.md — a file that does not exist on that
+ * host. Invisible on Windows, which is exactly why it survived. See core/path-basename.ts.
+ */
 function basename(p: string): string {
-  const parts = p.split(/[\\/]/)
-  return parts[parts.length - 1] || p
+  return basenameForPathSyntax(p) || p
 }
 
 /**

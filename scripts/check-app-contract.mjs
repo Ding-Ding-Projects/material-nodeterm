@@ -1027,7 +1027,7 @@ const FEATURES = [
       ['src/renderer/App.tsx', /^\s*void useKidsMode\.getState\(\)\.init\(\)/m],
       // The disclosure is RENDERED from the shared constant, not retyped. A second copy of that
       // wording is one edit away from promising more than the mode delivers.
-      ['src/renderer/components/settings/sections/KidsModeSection.tsx', 'KIDS_DISCLOSURE'],
+      ['src/renderer/components/settings/sections/KidsModeSection.tsx', '{KIDS_DISCLOSURE}'],
       ['src/renderer/components/settings/SettingsPage.tsx', '<KidsModeSection isActive=']
     ],
     // Asserts the section is reachable from a VISIBLE settings group and has a sidebar icon — a
