@@ -665,11 +665,14 @@ describe('session-host continuity and cleanup precedence', () => {
     let match: RegExpExecArray | null
     while ((match = call.exec(driver)) !== null) {
       const body = match[1]
-      // Scoped to the case that actually broke: a MOVE is what a drag is made of, and a move that
-      // names a real button without holding one is the malformed event. Plain clicks are left
-      // alone — they demonstrably work in this driver, and widening this to them would be a guess
-      // dressed as a rule.
-      if (!/type:\s*'mouseMoved'/u.test(body)) continue
+      // Widened from moves to presses on evidence, not on principle. The first version of this
+      // guard deliberately exempted clicks, reasoning that they "demonstrably work in this
+      // driver" — and they did, for every palette button, because an ordinary DOM button fires on
+      // `click` and does not care what `buttons` says. A React Flow node does care: it is selected
+      // through d3-drag, whose pointerdown handler reads the mask, so a press without it selected
+      // nothing and the run failed two steps later. The exemption was the wrong call and this is
+      // what corrects it.
+      if (!/type:\s*'mouse(Moved|Pressed)'/u.test(body)) continue
       if (/button:\s*'none'/u.test(body)) continue
       if (/buttons:/u.test(body)) continue
       const line = driver.slice(0, match.index).split(/\r?\n/).length

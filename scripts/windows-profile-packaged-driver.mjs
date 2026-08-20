@@ -269,10 +269,20 @@ async function key(key, code, virtualKey, modifiers = 0) {
   }
 }
 
+/** CDP bitmask for a held button, matching `MouseEvent.buttons`. */
+const BUTTONS_MASK = { left: 1, right: 2, middle: 4, none: 0 }
+
 async function clickPoint(x, y, button = 'left') {
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none' })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, clickCount: 1 })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, clickCount: 1 })
+  // `buttons` matters for a CLICK too, not just a drag, and its absence here is why selecting a
+  // React Flow node did nothing. An ordinary DOM button fires on the `click` event and does not
+  // care; a React Flow node is selected through d3-drag, whose pointerdown handler checks which
+  // buttons are held. Without the mask the press arrives as `buttons === 0` — nothing held — so
+  // no drag starts and no selection happens, while every palette click in this file kept working
+  // and made the omission look harmless.
+  const mask = BUTTONS_MASK[button] ?? 1
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 })
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, buttons: mask, clickCount: 1 })
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, buttons: 0, clickCount: 1 })
 }
 
 async function elementPoint(expression, description) {
