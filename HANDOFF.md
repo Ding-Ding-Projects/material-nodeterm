@@ -1,5 +1,74 @@
 # Handoff
 
+## 2026-08-20, second pass — a hunt that found real defects, and the fixes that landed
+
+`main` moved `f5caf128 -> f0a0453e`. Suite fully green at the tip: **717 files, 8,852 tests,
+0 failed**. Three read-only hunters swept the repository's own documented failure families;
+everything below was verified by command before being believed, and fixed in four isolated
+lanes, each proven red-then-green and re-proven here independently before merging.
+
+### Shipped
+
+- **Word separators** (`0b59782a`, upstream #349) — double-click now keeps identifiers, paths
+  and package names whole. One setting reaches THREE writers (xterm, local tmux conf, remote
+  tmux conf) because tmux owns the mouse and an xterm-only change is a no-op; the value is
+  re-validated at the interpolation site since it lands in a config written onto SSH hosts.
+  Bonus fix: SSH projects had ignored `tmuxScrollback` forever (hardcoded 50000) — the new
+  settings seam in `SshProjectManager` closes that too.
+- **Three dead ADHD modes wired** (`d697f78f`). Time awareness renders an elapsed chip in the
+  node header and the kanban card modal (ONE module-level ticker, started by the first
+  subscriber); Momentum floats its dismissible note over the terminal top (never resizing the
+  body — a resize is a SIGWINCH); Low stimulation's notification half now actually filters,
+  with needs-you provably never silenced and quieted items landing pre-dismissed in the centre
+  rather than vanishing. Worth reading in that lane's history: its first gate break stayed
+  GREEN because two independent gates covered the same render — the duplicate was removed so
+  the gate has one owner.
+- **Server Edition transcript search** (`82bc8b19`) — `transcript:search` moved from an inline
+  main-only registration into `core/transcript-ipc.ts`, which both shells call; the browser
+  palette's transcript results now exist. The textbook 'logic left in src/main silently does
+  not exist on the server' case, in a file that otherwise did it right.
+- **Server Edition transfer menu** (`15d6cb6e`) — was visible, enabled, and threw into a
+  voided promise. Now follows the house `supported`-bit pattern (the PairingApi precedent):
+  hidden where absent, caught with an honest toast as the second boundary, documented in
+  SERVER.md.
+- **Four bare Windows renames fixed and the guard taught to see them** (`63407c1a`).
+  `windows-installer.mjs` published metadata with a bare rename on the `dist:win` path — the
+  exact Defender-EPERM case `renameAtomic` exists for, in the Windows installer itself. A
+  shared bounded-retry helper now lives at `scripts/lib/rename-atomic.mjs`; the fs-atomic
+  guard scans `scripts/` and non-.ts files (it could not see any of this before); its lazy
+  import-strip hole is closed with the arming input pinned as a fixture; both `no-electron`
+  guards now catch dynamic `await import('electron')` and carry non-empty floors; and the
+  theme test's `s`-collapsed-to-`s` regex is repaired.
+
+### Corrected guard needles, each watched failing
+
+`check-app-contract.mjs`'s session-memory needle was the two-letter string `ok` (satisfied by
+'looking'); the AnchoredRegexBuilder row's needle was the bare keyword `export` and its
+`wiredInAny` counted import lines and comments; the docs inventory sweep read `docs/`
+non-recursively — 58 of 94 docs, none of `docs/features/`. All fixed and independently
+re-broken here before being believed: collapsing the session-memory discriminator now goes
+red on a line-anchored return-shape regex; planting a bare rename in `scripts/` goes red;
+planting a dynamic electron import in core goes red.
+
+### Still open from the hunt
+
+- `check-site-contract.mjs:252`'s `voiceschanged` needle points at a file whose only match is
+  a comment; the real subscription is `site/app/main.js:440`. Site guard — not fixed in this
+  pass, which took only app-side lanes.
+- `hook-identity-enforcement.test.ts:426`'s whole-file needles survive commenting out the one
+  wiring line.
+- The `KIDS_DISCLOSURE` needle is comment-satisfiable.
+- `agent-status-mirror.ts:507` still rolls its own cross-dialect basename against the
+  sanctioned `core/path-basename.ts` verdict.
+- The ADHD surfaces owe a packaged capture (three states named in `docs/adhd-modes.md`), and a
+  visual check at narrow widths / 200% scale.
+- **The blur verdict, for whoever picks this up**: PHASE is fixed on `main`; the SCALE branch
+  helps only zoomed IN (0% at zoom 1.0 and out); the zoom-out case needs supersampling, which
+  `RASTER_SCALE_MIN_FACTOR = 1` forbids — one of its two stated reasons is now disproven
+  (measured: the mip chain engages zero levels above a 0.5 ratio), the other (rebuild cost on
+  zoom-in) stands and is the open trade. A device eyeball at 150% remains the gate for both.
+
+
 ## 2026-08-20 — six branches integrated, and the stale-failure list retracted
 
 `main` moved `289fcb47 -> baf67860`. Six of the eight open branches are merged and **proven
