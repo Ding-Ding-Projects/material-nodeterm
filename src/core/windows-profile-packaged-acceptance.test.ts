@@ -617,6 +617,38 @@ describe('session-host continuity and cleanup precedence', () => {
     expect(canvas).toContain('cluster-search')
   })
 
+  it('never asks the page for a DOM node when it wants a value', () => {
+    // `evaluate` serializes by value, so an expression whose final term is `querySelector(...)`
+    // returns a node CDP cannot serialize: "Object reference chain is too long", on every poll.
+    // `waitFor` catches that as a transient (a reload really does invalidate the context), so the
+    // bad expression does not fail fast — it burns its whole timeout and is then reported as
+    // "did not become true", which reads as the app never reaching the state. One line like this
+    // cost a full package-and-run to diagnose.
+    const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, '')), '../..')
+    const driver = fs.readFileSync(path.join(root, 'scripts/windows-profile-packaged-driver.mjs'), 'utf8')
+
+    const offenders: string[] = []
+    driver.split(/\r?\n/).forEach((line, index) => {
+      const match = /return\s+(.+?);\s*\}\)\(\)/u.exec(line)
+      if (!match) return
+      const returned = match[1].trim()
+      // A coercion wrapping the WHOLE expression settles it, and checking only the final `&&`
+      // term does not see one — the first version of this guard flagged `!!(a && b.querySelector(c))`
+      // as an offender, i.e. it went red on the very fix it exists to enforce.
+      if (/^(?:!!|Boolean\()/u.test(returned)) return
+      const finalTerm = returned.split('&&').pop()!.trim()
+      // A comparison, a length, an explicit coercion — all fine. A bare node lookup is not.
+      if (!/querySelector\(|querySelectorAll\(|\.find\(/u.test(finalTerm)) return
+      if (/===|!==|>|<|\.length|!!|Boolean\(/u.test(finalTerm)) return
+      offenders.push(`line ${index + 1}: ${finalTerm}`)
+    })
+
+    expect(offenders, 'expressions must end in a value, not a DOM node — wrap them in !!( )').toEqual([])
+
+    // And the fast-fail itself, so the diagnosis stays one run rather than two.
+    expect(driver).toMatch(/^\s*if \(\/reference chain is too long\/i\.test/m)
+  })
+
   it('never promotes final evidence until cleanup has succeeded', async () => {
     const promote = vi.fn((value: string) => `promoted:${value}`)
     await expect(

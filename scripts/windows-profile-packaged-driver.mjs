@@ -199,6 +199,17 @@ async function evaluate(expression) {
   return result.result?.value
 }
 
+/**
+ * Poll `expression` until it yields something truthy.
+ *
+ * The expression must evaluate to a VALUE, not a DOM node. `evaluate` serializes by value, and a
+ * node's reference graph is unserializable — CDP answers `Object reference chain is too long`,
+ * every time, forever. Because that throw is caught below as a transient, an expression ending in
+ * `querySelector(...)` does not fail fast: it spins for the whole timeout and is then reported as
+ * `did not become true`, which reads as the app never reaching the state rather than as a bug in
+ * the question being asked. One such expression cost a full packaged run. End predicates with
+ * `!!(...)`.
+ */
 async function waitFor(expression, description, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs
   let lastError
@@ -207,7 +218,16 @@ async function waitFor(expression, description, timeoutMs = 15_000) {
       const value = await evaluate(expression)
       if (value) return value
     } catch (error) {
-      // A reload destroys the current execution context. Retry against the replacement context.
+      // A reload destroys the current execution context, and retrying against the replacement is
+      // the whole reason this is caught. But an unserializable RESULT is not transient — it will
+      // fail identically on every poll — so surface it immediately instead of spending the
+      // timeout proving it again and then blaming the application.
+      if (/reference chain is too long/i.test(String(error?.message ?? ''))) {
+        throw new Error(
+          `${description}: the expression returned a DOM node rather than a value ` +
+            `(${error.message}). Wrap the predicate in !!(...).`
+        )
+      }
       lastError = error
     }
     await sleep(100)
@@ -500,7 +520,7 @@ async function createProfileNode(profile, catalog, onNodeDiscovered) {
     var c=n&&n.querySelector('.term-profile-chip'); return c&&c.textContent.trim()===${JSON.stringify(profile.label)};})()`,
     `profile label ${profile.label}`)
   await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(nodeSelector)});
-    return n && !n.querySelector('.term-node__closed') && n.querySelector('.term-node__xterm');})()`,
+    return !!(n && !n.querySelector('.term-node__closed') && n.querySelector('.term-node__xterm'));})()`,
     `running terminal for ${profile.id}`, 30_000)
 
   const probe = buildProfileProbe(profile, catalog, { token: runId, customDialect })
