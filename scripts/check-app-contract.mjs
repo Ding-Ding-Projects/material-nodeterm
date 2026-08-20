@@ -350,14 +350,22 @@ const FEATURES = [
     },
     captures: {
       status: 'pending',
-      manifest: 'docs/assets/shots/capture-manifest.json',
+      // NOT docs/assets/shots/capture-manifest.json, and the distinction is the whole reason this
+      // row stayed stuck. capture-shots.mjs rewrites that file wholesale on every `npm run shots`,
+      // so a hand-added entry is erased by the next capture run with nothing to warn you; and one
+      // manifest declares one `method`, which there is the unpackaged Electron+CDP sweep. Packaged
+      // evidence living in that file would have to sit under a method string describing a different
+      // route against a different artifact — a false provenance claim in the exact field this
+      // checker reads to prevent one. So packaged evidence gets its own committed manifest, written
+      // only by scripts/promote-packaged-captures.mjs, at a path the capture sweep never touches.
+      manifest: 'docs/assets/shots/packaged-capture-manifest.json',
       requiredIds: [
         'windows-terminal-profile-picker',
         'windows-terminal-profile-terminal',
         'windows-terminal-profile-unavailable',
         'windows-terminal-profile-reattached',
       ],
-      reason: 'the capture manifest holds no packaged, cheap-Lowlevel-headless evidence for these four states yet. npm run shots does now photograph the picker and the detected-availability list, but from the unpackaged out/ build over plain CDP, so those are filed under app-windows-terminal-profile* ids and deliberately cannot half-satisfy the ids above',
+      reason: 'the packaged cheap-Lowlevel-headless run has not happened yet, so no evidence exists to promote. What changed is that there is now somewhere for it to land: scripts/run-windows-profile-packaged-acceptance.mjs --execute writes its evidence to a task root, and `node scripts/promote-packaged-captures.mjs --evidence <that file>` validates it (schemaVersion, routeStatus passed, the cheap-headless method needle, every required id present, every PNG opened and checked against the real signature, the 6000-byte blank-frame floor and its own recorded sha256, and a gitHead that is a real commit here) before copying it into the committed manifest above. It refuses on the first unmet condition and writes nothing. Until somebody runs the harness on a Windows box against a packaged build of this commit, this row is honestly pending: the mechanism exists, the evidence does not. npm run shots does photograph the picker and the detected-availability list, but from the unpackaged out/ build over plain CDP, so those stay filed under app-windows-terminal-profile* ids and deliberately cannot half-satisfy the ids above',
     },
     settingsSection: 'shell',
     wired: {

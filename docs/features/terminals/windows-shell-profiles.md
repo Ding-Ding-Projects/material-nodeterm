@@ -141,6 +141,28 @@ profile. Those three cases are win32-only and declare a skip, with its reason, o
 Capture evidence remains pending. This article does not claim that the pending capture
 verification has happened.
 
+What changed is *why* it is pending. Until recently the blocker was structural rather than
+practical: `scripts/run-windows-profile-packaged-acceptance.mjs` produced real packaged evidence
+but wrote it to a disposable task root, and the contract read a committed manifest, and nothing
+carried one to the other. Somebody could have done the whole run and still had nowhere to put the
+result. The obvious shortcut — hand-adding the ids to `docs/assets/shots/capture-manifest.json` —
+is self-erasing (`capture-shots.mjs` rewrites that file wholesale on every `npm run shots`) and
+dishonest besides, since one manifest declares one `method` and that file's method describes the
+unpackaged CDP sweep against a different artifact.
+
+So packaged evidence now has its own committed manifest,
+`docs/assets/shots/packaged-capture-manifest.json`, written only by
+`node scripts/promote-packaged-captures.mjs --evidence <acceptance manifest>` and untouched by the
+capture sweep. That promoter is deliberately hostile: it verifies the schema version, that the
+route passed, that the method names the cheap headless route, that every required id is present,
+that every referenced PNG opens and carries the real PNG signature, clears the 6000-byte
+blank-frame floor and matches its own recorded `sha256`, and that the recorded `gitHead` is a real
+commit in this repository. It refuses on the first unmet condition and writes nothing — a
+half-promoted manifest is worse than none, because it reads as evidence.
+
+The mechanism exists; the evidence does not. What is left is running the harness on a Windows
+machine against a packaged build of the commit under test.
+
 ## Suggested articles
 
 - [Session continuity](./session-continuity.md) — persistent session behaviour across detach,
