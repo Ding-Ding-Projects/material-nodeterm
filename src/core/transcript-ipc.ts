@@ -1,10 +1,10 @@
-// The two transcript READ channels — the ⌘M chat view (`chat:read-transcript`) and the find-bar's
-// full-transcript index (`claude:read-transcript`) — registered through the CorePlatform seam so
-// BOTH shells serve them.
+// Transcript search plus the two READ channels — the command-palette search (`transcript:search`),
+// the ⌘M chat view (`chat:read-transcript`) and the full-transcript reader
+// (`claude:read-transcript`) — registered through the CorePlatform seam so BOTH shells serve them.
 //
-// This lived inline in `src/main/index.ts`, which is exactly the failure mode the seam exists to
-// prevent: the Server Edition had no handler at all, its bridge stub rejected, and the chat panel
-// (which never caught the rejection) presented every browser session as an empty conversation.
+// The read handlers used to live inline in `src/main/index.ts`; transcript search remained there
+// after they moved. Either split recreates the same failure mode: the Server Edition has no
+// handler, and its bridge silently degrades a real host-side feature into an empty result.
 //
 // The remote (SSH-project) leg stays an injected dep: it needs a ControlMaster, which only the
 // Electron shell has. Absent deps ⇒ local-only, which is the correct and complete answer on the
@@ -12,6 +12,7 @@
 import { IPC } from '../shared/ipc'
 import type { ChatTranscriptResult, TranscriptLine } from '../shared/types'
 import { platform } from './platform'
+import { searchTranscripts } from './transcript-index'
 import {
   parseChatMessages,
   parseTranscriptLines,
@@ -62,6 +63,8 @@ export async function resolveTranscript(
 export function registerTranscriptIpc(deps: TranscriptIpcDeps = {}): void {
   const remoteText = (q: TranscriptQuery): Promise<string | null> =>
     deps.readRemote ? deps.readRemote(q) : Promise.resolve(null)
+
+  platform().handle(IPC.transcriptSearch, (query: string) => searchTranscripts(query))
 
   platform().handle(
     IPC.claudeReadTranscript,
