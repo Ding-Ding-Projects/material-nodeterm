@@ -165,6 +165,146 @@ const PROFILE_PICKER_STEPS = `
 })()`
 
 // ---------------------------------------------------------------------
+// Shared driver for the ADHD node-surfaces — the elapsed-time chip and the momentum note (see
+// docs/adhd-modes.md and src/renderer/components/AdhdNodeSurfaces.tsx).
+// ---------------------------------------------------------------------
+// Both surfaces are decisions made by `lib/adhdModes.ts` and `lib/nodeActivity.ts` from real
+// clock time, not a flag the harness can flip from outside — there is no test-only backdoor that
+// backdates a node's `lastActivityAt`, and adding one here would mean these captures show a state
+// the app can never actually reach on its own. So this driver does what a person does: opens
+// Settings, flips the real switch, creates a real terminal node through the real FAB, and (for
+// momentum) waits out the real idle window. Every step operates the app's own controls; nothing
+// reaches past the UI into store or module state.
+const ADHD_DRIVER = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  const until = async (fn, ms) => {
+    const end = Date.now() + ms
+    while (Date.now() < end) { const v = fn(); if (v) return v; await wait(150) }
+    return null
+  }
+  const byLabel = (needle) => [...document.querySelectorAll('button,a,[role=button],li')].find((e) =>
+    (e.textContent || '').trim() === needle)
+  // A React-controlled <input> ignores a plain \`.value = x\` assignment (React's own value
+  // setter shadows it), so the number field for "after how long" needs the native setter — the
+  // same trick a real browser extension or automation tool uses to drive a controlled input.
+  const setControlledValue = (input, value) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    setter.call(input, String(value))
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const openAdhdModesSection = async () => {
+    const settingsBtn = document.querySelector('[title*="Settings" i],[aria-label*="Settings" i]')
+    if (!settingsBtn) return false
+    settingsBtn.click()
+    const sectionBtn = await until(() => byLabel('ADHD modes'), 6000)
+    if (!sectionBtn) return false
+    sectionBtn.click()
+    return !!(await until(() => document.querySelector('[aria-label="Time awareness mode"]'), 6000))
+  }
+  const closeSettings = async () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))
+    await wait(500)
+  }
+  // Creates one plain terminal node through the nav rail's FAB (the same "+" a person uses) and
+  // returns its node id, discovered by diffing the canvas before/after — the same technique the
+  // profile driver above uses for the same reason: a freshly created node has no id known in
+  // advance.
+  const createTerminalNode = async () => {
+    const liveTerminalIds = () => [...document.querySelectorAll('.react-flow__node[data-id]')]
+      .filter((n) => n.querySelector('.term-node')).map((n) => n.dataset.id)
+    const before = new Set(liveTerminalIds())
+    const fab = document.querySelector('.md3-fab')
+    if (!fab) return null
+    fab.click()
+    const item = await until(() => byLabel('Terminal'), 4000)
+    if (!item) return null
+    item.click()
+    return await until(() => liveTerminalIds().find((id) => !before.has(id)) || null, 8000)
+  }
+  // Every node this driver creates is a real tmux/session-host session that OUTLIVES the app by
+  // design (see the terminal session continuity section of CLAUDE.md) — it must be destroyed
+  // before the sandbox is torn down, or cleanup fails with EPERM while every capture already sits
+  // on disk. Tracked here so the harness can find and destroy them after this surface is done,
+  // regardless of whether the capture itself succeeded.
+  window.__adhdCreatedNodeIds = window.__adhdCreatedNodeIds || []
+`
+
+const ADHD_ELAPSED_STEPS = `
+  if (!(await openAdhdModesSection())) return false
+  const sw = document.querySelector('[aria-label="Time awareness mode"]')
+  if (sw.getAttribute('aria-checked') !== 'true') sw.click()
+  await closeSettings()
+  const nodeId = await createTerminalNode()
+  if (!nodeId) return false
+  window.__adhdCreatedNodeIds.push(nodeId)
+  const nodeEl = await until(() => document.querySelector('.react-flow__node[data-id="' + nodeId + '"]'), 8000)
+  if (!nodeEl) return false
+  // "just now" renders the instant the node's own mount records its opened time — no wait needed.
+  return !!(await until(() => nodeEl.querySelector('.adhd-elapsed'), 8000))
+})()`
+
+// Momentum cannot fire before real idle time has genuinely passed — `momentumMinutes` is clamped
+// to a 5-minute floor (`MOMENTUM_MIN_MINUTES`, lib/adhdModes.ts) precisely so a person cannot be
+// nagged sooner than that, and there is no way to shorten it from outside the app. So this driver
+// sets the field to that floor, spawns one idle terminal, and returns immediately — the multi-
+// minute wait happens on the NODE side (see MOMENTUM_POLL_MS below), never inside one
+// `Runtime.evaluate` call, which times out at 30s (see cdp()'s send()).
+const ADHD_MOMENTUM_STEPS = `
+  if (!(await openAdhdModesSection())) return false
+  const momentumSw = document.querySelector('[aria-label="Momentum mode"]')
+  if (!momentumSw) return false
+  if (momentumSw.getAttribute('aria-checked') !== 'true') momentumSw.click()
+  const minutesInput = await until(
+    () => document.querySelector('[aria-label="Minutes untouched before the momentum note appears"]'),
+    4000
+  )
+  if (!minutesInput) return false
+  setControlledValue(minutesInput, 5)
+  await closeSettings()
+  const nodeId = await createTerminalNode()
+  if (!nodeId) return false
+  window.__adhdCreatedNodeIds.push(nodeId)
+  // The node is created and left untouched from here — the harness polls for the note from Node
+  // side while genuine idle time elapses. Nothing further happens in this script.
+  return true
+})()`
+// Real wait: 5 minutes (the clamped floor) plus one full activity tick (60s, ACTIVITY_TICK_MS —
+// the momentum readout only re-evaluates when the shared minute clock wakes it) plus a margin for
+// the poll's own 150ms step and process scheduling jitter.
+const MOMENTUM_POLL_MS = 5 * 60_000 + 90_000 + 30_000
+
+const slowShots = process.env.NT_SHOTS_SLOW === '1'
+
+// Always reachable and fast — no gating needed.
+const ADHD_ELAPSED_SURFACE = {
+  id: 'app-adhd-elapsed-chip',
+  required: true,
+  title: 'ADHD modes — the time-awareness elapsed chip',
+  open: { script: ADHD_DRIVER + ADHD_ELAPSED_STEPS },
+  verify: '.adhd-elapsed'
+}
+
+// Gated behind NT_SHOTS_SLOW=1: genuinely takes several real minutes (the momentum window cannot
+// be shortened — see ADHD_MOMENTUM_STEPS above), so it must not block an ordinary run. Skipped
+// (not failed) otherwise, with an honest reason, per rule 2 — this is a real, reachable surface,
+// just an expensive one to prove, so it is optional rather than required.
+const ADHD_MOMENTUM_SURFACE = slowShots
+  ? {
+      id: 'app-adhd-momentum-note',
+      required: true,
+      title: 'ADHD modes — the momentum note',
+      open: { script: ADHD_DRIVER + ADHD_MOMENTUM_STEPS },
+      verify: '.adhd-momentum[role="status"]',
+      pollMs: MOMENTUM_POLL_MS
+    }
+  : {
+      id: 'app-adhd-momentum-note',
+      required: false,
+      title: 'ADHD modes — the momentum note',
+      why: 'the momentum window has a real 5-minute floor that cannot be shortened from outside the app; run with NT_SHOTS_SLOW=1 to capture it (adds several real minutes to the run)'
+    }
+
+// ---------------------------------------------------------------------
 // The surface list. REQUIRED failures fail the run — see rule 2.
 // ---------------------------------------------------------------------
 // `verify` is the load-bearing field, and its absence was a real defect in the first version of
@@ -331,6 +471,13 @@ const SURFACES = [
       // than filing an all-Available screenshot under a name promising the opposite.
       verify: '#terminal-profile-availability li span.block'
     },
+    // ── ADHD node-surfaces ──────────────────────────────────────────────────────────────────────
+    // Placed before the Kids block for the same reason the profile entries above are: Kids mode
+    // unmounts the canvas (App.tsx routes to <KidsShell/>), so the FAB and Settings are gone once
+    // it is entered. See ADHD_DRIVER above for why these are driven rather than asserted from
+    // source, and docs/adhd-modes.md for the three surfaces the feature owes captures of.
+    ADHD_ELAPSED_SURFACE,
+    ADHD_MOMENTUM_SURFACE,
     // ── The Kids screens ────────────────────────────────────────────────────────────────────────
     // These had no captures because they had no way in: `components/kids/entry.ts` has always
     // documented the rail's Kids destination as the caller of `enterKidsModeFromRail()`, but the
@@ -765,11 +912,13 @@ for (const s of SURFACES) {
     // THE CHECK THAT MAKES THIS HARNESS WORTH ANYTHING. Without it a chord that did nothing
     // still yields a screenshot of the previous screen, filed under the new surface's name.
     if (s.verify) {
-      const seen = await send('Runtime.evaluate', {
-        returnByValue: true,
-        expression: `!!document.querySelector(${JSON.stringify(s.verify)})${s.verifyAbsent ? ` && !document.querySelector(${JSON.stringify(s.verifyAbsent)})` : ''}`
-      })
-      if (seen.result.value !== true) {
+      const verifyExpr = `!!document.querySelector(${JSON.stringify(s.verify)})${s.verifyAbsent ? ` && !document.querySelector(${JSON.stringify(s.verifyAbsent)})` : ''}`
+      // `pollMs` is for a surface whose real state takes minutes to arrive (the ADHD momentum
+      // note) — the opener already returned, and this polls repeatedly from the NODE side
+      // (`until`, defined above) rather than inside one `Runtime.evaluate` call, which times out
+      // at 30s regardless of `awaitPromise`.
+      const ok = s.pollMs ? await until(verifyExpr, s.pollMs) : (await evaluate(verifyExpr))
+      if (ok !== true) {
         failures.push({
           id: s.id,
           why: `surface never opened — "${s.verify}" is not in the DOM, so any capture here would be the previous screen under this name`
@@ -795,6 +944,64 @@ for (const s of SURFACES) {
     await sleep(500)
   } catch (err) {
     failures.push({ id: s.id, why: err.message })
+  }
+}
+
+// The ADHD surfaces above each create a real terminal node, which is a real tmux/session-host
+// session that OUTLIVES THE APP BY DESIGN (see the terminal session continuity section of
+// CLAUDE.md). On Windows that is a standalone session host process — it must be destroyed here,
+// before the disposable sandbox is torn down in the `finally` block, or `rmSync` fails with EPERM
+// while every capture already sits safely on disk (measured with the near-identical Windows
+// terminal-profile node, which this same trap is why that one is optional rather than required).
+// Destruction happens whether or not the surfaces above succeeded — a failed capture must not
+// leave an orphaned session behind either.
+{
+  const createdIds = await evaluate(`window.__adhdCreatedNodeIds || []`)
+  for (const nodeId of Array.isArray(createdIds) ? createdIds : []) {
+    try {
+      await evaluate(
+        `window.nodeTerminal.pty.destroy(${JSON.stringify(nodeId)}, {everySocket: true}); true`
+      )
+      // `destroy` is a one-way renderer cast; its CONSEQUENCE is the trustworthy boundary, not the
+      // cast's own return value — poll for the session actually being gone (three consecutive
+      // negative reads), the same discipline scripts/windows-profile-packaged-driver.mjs uses for
+      // the identical cleanup. Each check is its own `awaitPromise: true` call rather than a
+      // single long-lived one, because `send()` hard-times-out at 30s regardless.
+      const deadline = Date.now() + 30000
+      let consecutiveAbsent = 0
+      let destroyed = false
+      while (Date.now() < deadline) {
+        try {
+          const result = await send('Runtime.evaluate', {
+            returnByValue: true,
+            awaitPromise: true,
+            expression: `Promise.all([
+              window.nodeTerminal.pty.sendText(${JSON.stringify(nodeId)}, '', {enter: false}),
+              window.nodeTerminal.pty.capture(${JSON.stringify(nodeId)}, true)
+            ]).then((values) => ({ writable: values[0], screen: String(values[1] || '') }))`
+          })
+          const { writable, screen } = result.result.value || {}
+          if (writable === false && screen === '') {
+            consecutiveAbsent += 1
+            if (consecutiveAbsent >= 3) {
+              destroyed = true
+              break
+            }
+          } else {
+            consecutiveAbsent = 0
+          }
+        } catch {
+          // A transport error is not proof of absence — keep polling for explicit negatives.
+          consecutiveAbsent = 0
+        }
+        await sleep(150)
+      }
+      if (!destroyed) {
+        console.warn(`  ! ADHD capture session ${nodeId} did not report destroyed within 30s`)
+      }
+    } catch (err) {
+      console.warn(`  ! could not destroy ADHD capture session ${nodeId}: ${err.message}`)
+    }
   }
 }
 
