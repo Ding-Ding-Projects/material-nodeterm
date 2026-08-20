@@ -26,6 +26,15 @@ function baseStatus(overrides: Partial<MinecraftServerStatus> = {}): MinecraftSe
     downloadedBytes: null,
     totalBytes: null,
     downloadPercent: null,
+    // Connect-address fields. These arrived from the canvas-banner work after this fixture was
+    // written, and the type requires them — a default here rather than making them optional on
+    // the real status, because a running server always HAS a port, and softening the type to keep
+    // one test compiling would push the uncertainty out to every consumer.
+    port: 25565,
+    localAddress: '127.0.0.1',
+    // null is the honest default: this machine may have no usable LAN IPv4, and the banner is
+    // required to say so rather than invent one.
+    lanAddress: null,
     ...overrides
   }
 }
