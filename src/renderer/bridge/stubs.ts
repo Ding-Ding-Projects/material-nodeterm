@@ -421,6 +421,11 @@ export function buildStubApi(): Omit<
       disconnect: noop
     },
     handoff: {
+      // `handoff:build` is registered in src/main only — no core service, no server handler — so
+      // there is nothing here to bridge to. Same explicit capability bit as `pairing` below: the
+      // transfer affordance is hidden on this bit (renderer/lib/transferGates.ts), and the
+      // rejecting method stays as the second boundary for any caller that ignores it.
+      supported: false,
       build: U('handoff.build')
     },
     pairing: {

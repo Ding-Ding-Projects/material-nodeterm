@@ -3024,6 +3024,10 @@ export interface ClaudeApi {
 export type HandoffResult = { filePath: string } | { error: string }
 
 export interface HandoffApi {
+  /** False on Server Edition: `handoff:build` is registered only in `src/main`, so the browser
+   *  bridge has nothing to call and its stub rejects. UI must hide the transfer affordance rather
+   *  than offer a menu item whose rejection escapes the resolved-result contract below. */
+  readonly supported: boolean
   /**
    * Render the source agent's full conversation transcript (located by `sessionId`)
    * to a portable Markdown file under `<cwd>/.nodeterm/` and return its absolute path.

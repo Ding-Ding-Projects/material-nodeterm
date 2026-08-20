@@ -521,6 +521,18 @@ Two intentional departures from `docs/superpowers/specs/2026-07-10-server-editio
   bridge declares `pairing.supported = false`; the quick action is hidden and Settings → Phone
   shows the deliberate desktop-only route. Headless mobile push uses the separate SSH-possession
   grant flow documented above.
+- **"Transfer conversation to…" is unavailable.** The handoff file that a transfer hands the target
+  agent is rendered by `src/main/handoff` behind the `handoff:build` IPC channel, which is
+  registered in `src/main` only — no core service, no server handler, so the bridge has nothing to
+  call. The bridge declares `handoff.supported = false` and the node context-menu section is
+  **absent** rather than an enabled item that silently does nothing (which is exactly what it was
+  until this was gated: the stub's rejection threw past the call site's resolved-`{ error }` check
+  into a `void`ed promise, so clicking it produced no file, no toast and no console entry).
+  `buildTransferHandoff` in `renderer/lib/transferGates.ts` keeps that second boundary — any route
+  that still reaches a rejection now reports it in the normal "Transfer failed" toast. Branching a
+  conversation is unaffected; transferring is done from the desktop app on the host. Wiring it
+  properly means moving the builder into `src/core` behind `CorePlatform` so both shells register
+  it — the ordinary route for a deferred feature here.
 - **Terminal-only.** Terminal nodes work (spawn, I/O, resize, tmux continuity). The
   git panel, source control, Monaco editor/diff nodes, SDK chat node, agent-status
   badges/hooks, and the folder picker are **not** wired into the server bridge yet —
