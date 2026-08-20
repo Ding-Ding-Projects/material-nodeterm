@@ -14,6 +14,7 @@ import process from 'node:process'
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import WebSocket from 'ws'
+import { renameAtomicSync } from './lib/rename-atomic.mjs'
 
 const require = createRequire(import.meta.url)
 const {
@@ -595,9 +596,18 @@ function readSessionHostState(userDataDir) {
 
 function writeState(state) {
   fs.mkdirSync(path.dirname(stateFile), { recursive: true })
-  const temporary = `${stateFile}.${process.pid}.tmp`
-  fs.writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`)
-  fs.renameSync(temporary, stateFile)
+  const temporary = `${stateFile}.${crypto.randomUUID()}.tmp`
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, { flag: 'wx' })
+    renameAtomicSync(temporary, stateFile)
+  } catch (error) {
+    try {
+      fs.rmSync(temporary, { force: true })
+    } catch {
+      // Retain the primary write failure.
+    }
+    throw error
+  }
 }
 
 async function startContinuity(profileResult) {
