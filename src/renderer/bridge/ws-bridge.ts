@@ -1057,9 +1057,9 @@ export function buildClaudeApi(client: RpcClient, stub: ClaudeApi): ClaudeApi {
 }
 
 /**
- * The two transcript READ channels, now that `registerTranscriptIpc` serves them in the server
- * shell too. Before this the browser had no handler at all: the stub rejected, the ⌘M panel never
- * caught it, and every Server Edition session read as an empty conversation.
+ * The transcript search and two READ channels, now that `registerTranscriptIpc` serves all three
+ * in the server shell too. Before this the browser search stayed on the stub while the read stubs
+ * rejected, so command-palette search returned nothing and every session looked empty.
  *
  * Server Edition ONLY (see buildClaudeApi's note): the server runs on the machine whose
  * transcripts these are, so no `nodeId` remote leg is needed — the argument still rides along
@@ -1067,8 +1067,12 @@ export function buildClaudeApi(client: RpcClient, stub: ClaudeApi): ClaudeApi {
  */
 export function buildTranscriptApi(
   client: RpcClient
-): Pick<NodeTerminalApi, 'chat'> & { claudeReadTranscript: ClaudeApi['readTranscript'] } {
+): Pick<NodeTerminalApi, 'chat' | 'transcripts'> & { claudeReadTranscript: ClaudeApi['readTranscript'] } {
   return {
+    transcripts: {
+      search: (query) =>
+        client.request(IPC.transcriptSearch, query) as ReturnType<NodeTerminalApi['transcripts']['search']>
+    },
     chat: {
       readTranscript: (sessionId, cwd, accountId, nodeId) =>
         client.request(
@@ -1224,6 +1228,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...(() => {
       const t = buildTranscriptApi(client)
       return {
+        transcripts: t.transcripts,
         chat: t.chat,
         claude: { ...buildClaudeApi(client, stubApi.claude), readTranscript: t.claudeReadTranscript }
       }

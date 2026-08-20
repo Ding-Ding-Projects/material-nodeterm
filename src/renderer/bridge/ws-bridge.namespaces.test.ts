@@ -7,6 +7,7 @@ import {
   buildRealApi,
   buildServerFilesApi,
   buildSessionMemoryApi,
+  buildTranscriptApi,
   saveUploadBlobOverHttp,
   saveUploadOverHttp
 } from './ws-bridge'
@@ -234,6 +235,19 @@ describe('buildFilesApi', () => {
         method: IPC.filesSaveUpload,
         args: ['relay.bin', 'cmVsYXk=']
       }
+    ])
+  })
+})
+
+describe('buildTranscriptApi', () => {
+  it('routes transcript search through the real server channel', async () => {
+    const c = fakeClient()
+    const api = buildTranscriptApi(c as never)
+
+    await api.transcripts.search('browser query')
+
+    expect(c.calls).toEqual([
+      { kind: 'request', method: IPC.transcriptSearch, args: ['browser query'] }
     ])
   })
 })

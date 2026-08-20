@@ -36,6 +36,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { isExcluded, listDocsMarkdown } from './build-docs-bundle.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -123,6 +124,19 @@ function requireFileContains(relPath, needle, label) {
 // once in what remains — that is a real reference, not a second sighting of
 // the same import.
 const IMPORT_STATEMENT_RE = /import\s+[\s\S]*?\bfrom\s+['"][^'"]+['"]/g
+const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g
+const LINE_COMMENT_RE = /(^|[^:])\/\/[^\r\n]*/gm
+
+function sourceWithoutImportsAndComments(text) {
+  const withoutComments = text
+    .replace(BLOCK_COMMENT_RE, '')
+    .replace(LINE_COMMENT_RE, '$1')
+  return {
+    importStatements: withoutComments.match(IMPORT_STATEMENT_RE) || [],
+    executableSource: withoutComments.replace(IMPORT_STATEMENT_RE, ''),
+  }
+}
+
 function requireWiredSymbol(relPath, symbol, label) {
   checkedCount += 1
   const text = readText(relPath)
@@ -130,11 +144,10 @@ function requireWiredSymbol(relPath, symbol, label) {
     fail(`${label}: cannot read consumer file ${relPath} to verify ${symbol} is wired in`)
     return false
   }
-  const importStatements = text.match(IMPORT_STATEMENT_RE) || []
+  const { importStatements, executableSource } = sourceWithoutImportsAndComments(text)
   const symbolPattern = new RegExp(`\\b${symbol}\\b`)
   const hasImport = importStatements.some((stmt) => symbolPattern.test(stmt))
-  const withoutImports = text.replace(IMPORT_STATEMENT_RE, '')
-  const realUses = (withoutImports.match(new RegExp(`\\b${symbol}\\b`, 'g')) || []).length
+  const realUses = (executableSource.match(new RegExp(`\\b${symbol}\\b`, 'g')) || []).length
   if (!hasImport) {
     fail(`${label}: ${symbol} is not imported in ${relPath} at all`)
     return false
@@ -199,6 +212,16 @@ const FEATURES = [
     contentChecks: [['src/core/pty-manager.ts', 'export function tmuxConf']],
     settingsSection: 'tmux',
     docs: ['docs/features/terminals/session-continuity.md'],
+  },
+  {
+    id: 'terminal-word-separators',
+    label: 'Terminal word separators',
+    files: ['src/shared/word-separators.ts', 'src/core/pty-manager.ts', 'src/shared/ssh.ts'],
+    contentChecks: [
+      ['src/shared/word-separators.ts', 'export function resolveWordSeparators('],
+      ['src/shared/word-separators.ts', 'export function tmuxWordSeparatorsLine('],
+    ],
+    docs: ['docs/features/terminals/word-separators.md'],
   },
   {
     id: 'windows-session-host',
@@ -358,6 +381,26 @@ const FEATURES = [
     docs: ['docs/features/projects/projects-and-tabs.md'],
   },
   {
+    id: 'global-project-settings',
+    label: 'Global and project settings overlays',
+    files: ['src/renderer/state/settings.ts', 'src/renderer/components/settings/SettingsPage.tsx'],
+    contentChecks: [
+      ['src/renderer/state/settings.ts', 'export const useSettings ='],
+      ['src/renderer/components/settings/SettingsPage.tsx', 'Reset all to Global'],
+    ],
+    docs: ['docs/features/global-and-project-settings.md'],
+  },
+  {
+    id: 'project-history-archives',
+    label: 'Project history and single-file archives',
+    files: ['src/core/project-archive.ts', 'src/core/project-archive-container.ts'],
+    contentChecks: [
+      ['src/core/project-archive.ts', 'export class ProjectArchiveService'],
+      ['src/core/project-archive-container.ts', 'export function packContainer('],
+    ],
+    docs: ['docs/features/projects/project-history-and-archives.md'],
+  },
+  {
     id: 'node-kinds',
     label: 'Node kinds (terminal / sticky / group / editor / diff)',
     files: [
@@ -368,6 +411,17 @@ const FEATURES = [
       'src/renderer/nodes/DiffNode.tsx',
     ],
     docs: ['docs/features/canvas/node-kinds.md'],
+  },
+  {
+    id: 'service-nodes',
+    label: 'Service manager nodes',
+    files: ['src/renderer/nodes/ServiceNode.tsx', 'src/renderer/state/workspace.ts', 'src/shared/types.ts'],
+    contentChecks: [
+      ['src/renderer/nodes/ServiceNode.tsx', 'export function ServiceNode('],
+      ['src/renderer/state/workspace.ts', 'export function createServiceNode('],
+      ['src/shared/types.ts', 'export const SERVICE_NODE_KINDS ='],
+    ],
+    docs: ['docs/features/integrations/service-nodes.md'],
   },
   {
     id: 'agent-support',
@@ -417,6 +471,31 @@ const FEATURES = [
     docs: ['docs/SERVER.md', 'docs/features/remote/server-edition.md'],
   },
   {
+    id: 'docker-host',
+    label: 'Docker-hosted encrypted project sharing',
+    files: ['src/main/remote/docker-host-runtime.ts', 'src/main/remote/relay-host-service.ts'],
+    contentChecks: [
+      ['src/main/remote/docker-host-runtime.ts', 'export async function startDockerHostRuntime('],
+      ['src/main/remote/relay-host-service.ts', 'export function initRelayHost('],
+    ],
+    docs: ['docs/features/remote/docker-host.md'],
+  },
+  {
+    id: 'offline-docs-browser',
+    label: 'In-app offline documentation browser',
+    files: [
+      'src/shared/docs.ts',
+      'src/renderer/components/docs/DocsArticleView.tsx',
+      'src/renderer/components/docs/useDocsBundle.ts',
+    ],
+    contentChecks: [
+      ['src/shared/docs.ts', 'export function searchArticles('],
+      ['src/renderer/components/docs/DocsArticleView.tsx', 'export function DocsArticleView('],
+      ['src/renderer/components/docs/useDocsBundle.ts', 'export function useDocsBundle('],
+    ],
+    docs: ['docs/features/help/in-app-documentation.md'],
+  },
+  {
     id: 'speech-dictation',
     label: 'Speech / dictation',
     files: ['src/core/speech/speech-service.ts', 'src/renderer/components/DictationOverlay.tsx'],
@@ -464,7 +543,7 @@ const FEATURES = [
     label: 'Regex builder',
     files: ['src/renderer/components/regex/AnchoredRegexBuilder.tsx'],
     contentChecks: [
-      ['src/renderer/components/regex/AnchoredRegexBuilder.tsx', 'export']
+      ['src/renderer/components/regex/AnchoredRegexBuilder.tsx', 'export function AnchoredRegexBuilder(']
     ],
     // The builder must actually be reachable from more than one search
     // surface, not merely exist as an unused component — this is the
@@ -593,7 +672,8 @@ const FEATURES = [
       ['src/renderer/components/SessionMemoryPanel.tsx', 'export function SessionMemoryPanel'],
       // "could not measure" and "there is nothing here" must stay distinguishable — the rule the
       // whole feature exists to honour.
-      ['src/core/session-memory.ts', 'ok'],
+      ['src/core/session-memory.ts', /^\s*return \{ ok: true, rows, mem \}\s*$/m],
+      ['src/core/session-memory.ts', /^\s*if \(!bin\) return \{ ok: false, rows: \[\], mem \}\s*$/m],
     ],
     docs: ['docs/session-memory.md'],
   },
@@ -1177,7 +1257,9 @@ for (const feature of FEATURES) {
     const { symbol, files } = feature.wiredInAny
     const hits = files.filter((f) => {
       const text = readText(f)
-      return text != null && text.includes(symbol)
+      if (text == null) return false
+      const { executableSource } = sourceWithoutImportsAndComments(text)
+      return new RegExp(`\\b${symbol}\\b`).test(executableSource)
     })
     if (hits.length < 2) {
       fail(
@@ -1508,7 +1590,23 @@ const NON_FEATURE_DOCS = new Map([
   ['troubleshooting-codex-snap.md', 'troubleshooting note'],
   ['uh-feature-inventory.md', 'the canonical-feature inventory itself — a register OF the contracts, not one of them; guarded by scripts/check-uh-inventory.mjs'],
   ['windows.md', 'platform guide for users'],
-  ['windows-support.md', 'platform guide for contributors']
+  ['windows-support.md', 'platform guide for contributors'],
+  ['features/README.md', 'feature-documentation category index, not an individual feature contract'],
+  ['features/agents/README.md', 'agent-feature category index; the agent-support article is inventoried separately'],
+  ['features/appearance/README.md', 'appearance-documentation category index, not an individual feature contract'],
+  ['features/appearance/material-3-migration-status.md', 'measured migration report and historical design analysis, not a standalone shipped feature'],
+  ['features/canvas/README.md', 'canvas-feature category index; its linked feature articles are inventoried separately'],
+  ['features/help/README.md', 'help-documentation category index; the offline documentation browser article is inventoried separately'],
+  ['features/integrations/README.md', 'integration category index and planning status, not an individual feature contract'],
+  ['features/integrations/minecraft-server.md', 'research-only constraints for an unimplemented integration, not the shipped Minecraft manager contract'],
+  ['features/integrations/research-findings.md', 'research notes and implementation cautions, not a user-facing feature contract'],
+  ['features/kanban/README.md', 'kanban-documentation category index; the board article is inventoried separately'],
+  ['features/packaging/README.md', 'packaging-documentation category index; packaging and update behavior is inventoried separately'],
+  ['features/projects/README.md', 'project-feature category index; project tabs and archives are inventoried separately'],
+  ['features/remote/README.md', 'remote-feature category index; SSH, server, and Docker-host articles are inventoried separately'],
+  ['features/source-control/README.md', 'source-control documentation category index; the worktree article is inventoried separately'],
+  ['features/speech/README.md', 'speech-documentation category index; dictation is inventoried separately'],
+  ['features/terminals/README.md', 'terminal-feature category index; continuity, profiles, and word separators are inventoried separately']
 ])
 
 {
@@ -1518,7 +1616,9 @@ const NON_FEATURE_DOCS = new Map([
   }
   let docFiles = []
   try {
-    docFiles = readdirSync(join(REPO_ROOT, 'docs')).filter((f) => f.endsWith('.md'))
+    docFiles = listDocsMarkdown(REPO_ROOT)
+      .filter((f) => !isExcluded(f))
+      .map((f) => f.replace(/^docs\//, ''))
   } catch {
     fail('Inventory completeness: cannot read docs/ — the scan below would pass vacuously')
   }

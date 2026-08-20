@@ -68,6 +68,7 @@ import { initCanvasSync } from '../core/canvas-sync'
 import { wireAgentStatus } from './agent-status'
 import { initServerContextLink } from './context-link'
 import { registerTranscriptIpc } from '../core/transcript-ipc'
+import { initTranscriptIndex } from '../core/transcript-index'
 import { IPC } from '@shared/ipc'
 import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
@@ -343,6 +344,7 @@ export async function startServer(
   // leg: the Server Edition runs ON the host whose transcripts it reads, so local resolution is
   // the complete answer (an SSH-project node is a desktop-only concept here).
   registerTranscriptIpc({ pathFor: (sessionId) => contextTail.pathFor(sessionId) })
+  initTranscriptIndex(() => settingsStore.get().claudeAccounts ?? [])
   // Deterministic hook-reply approvals (docs/hook-reply-approvals.md): the browser canvas answers a
   // held Claude permission hook here. The Server Edition runs ON the host, so a local project's
   // answer file is written right there (under os.homedir(), which the hook uses as $HOME). SSH

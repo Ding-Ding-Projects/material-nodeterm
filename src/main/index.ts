@@ -171,7 +171,7 @@ import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
 import { initCanvasControl, installCanvasSkillInto } from './canvas-control'
-import { initTranscriptIndex, searchTranscripts } from '../core/transcript-index'
+import { initTranscriptIndex } from '../core/transcript-index'
 import { initTelemetry } from './telemetry'
 import { initClaudeUsage } from './claude-usage'
 import { remoteUsageTargets } from '../core/usage/remote-claude-usage'
@@ -2099,7 +2099,6 @@ app.whenReady().then(async () => {
   })
 
   initTranscriptIndex(() => settingsStore.get().claudeAccounts ?? [])
-  corePlatform.handle(IPC.transcriptSearch, (query: string) => searchTranscripts(query))
   // Populate the context meter without a live hook event: the renderer calls this on mount
   // (the continuing session may be idle after a restart). Track under the sessionId (the key
   // the meter looks up); cwd is only a path fallback. contextTail.track reads immediately and
