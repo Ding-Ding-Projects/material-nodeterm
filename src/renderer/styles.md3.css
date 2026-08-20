@@ -9098,6 +9098,27 @@
   outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
+/* Placement inside a terminal node. The note FLOATS over the terminal rather than sitting above it
+   in the layout: a strip that took real height would change the body's size, and a terminal that
+   resizes because a note appeared sends SIGWINCH to whatever is running in it.
+
+   Top, not bottom — every agent CLI writes its input line bottom-left. The container ignores the
+   pointer so a drag through it still selects terminal text (the same rule `.term-copy-pill`
+   follows); only the dismiss button takes a click. Slightly translucent so nothing underneath is
+   truly lost: momentum quiets, it never hides. */
+.term-node__body > .adhd-momentum {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 6;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--md-surface-container-high) 92%, transparent);
+  border: 1px solid var(--md-outline-variant);
+}
+.term-node__body > .adhd-momentum .adhd-momentum__dismiss {
+  pointer-events: auto;
+}
 
 /* The ADHD section's own range and number inputs. Authored CSS rather than a Tailwind arbitrary
    value (`accent-[var(--accent)]`, the idiom used by the funny-level sliders): styles.theme.test.ts

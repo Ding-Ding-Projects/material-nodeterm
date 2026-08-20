@@ -40,7 +40,14 @@ export interface AppNotification {
 export type PushNotificationInput = Omit<
   AppNotification,
   'id' | 'createdAt' | 'dismissedAt' | 'read'
-> & { id?: string }
+> & {
+  id?: string
+  /** Land in history without ever appearing as a toast — pushed already dismissed, still unread,
+   *  still counted by the bell. Used by ADHD low stimulation (`lib/adhdNotify.ts`) to remove the
+   *  interruption without removing the information. Set at construction rather than by pushing and
+   *  then dismissing, so the item is never briefly a live toast in any render. */
+  silent?: boolean
+}
 
 interface NotificationsState {
   items: AppNotification[]
@@ -106,7 +113,10 @@ export const useNotifications = create<NotificationsState>((set) => ({
       actions: input.actions,
       autoDismissMs,
       createdAt: Date.now(),
-      dismissedAt: null,
+      // Already dismissed = in history, never a toast. `read` stays false either way: the bell
+      // still says there is something to look at, which is what keeps "quieter" from becoming
+      // "hidden".
+      dismissedAt: input.silent ? Date.now() : null,
       read: false
     }
     set((s) => ({ items: trim([item, ...s.items]) }))
@@ -150,7 +160,12 @@ export const useNotifications = create<NotificationsState>((set) => ({
 }))
 
 /** Convenience: push from anywhere without importing the store's setter shape. Used by
- *  non-React code (banners migrated to toasts, IPC-driven notices). */
+ *  non-React code (banners migrated to toasts, IPC-driven notices).
+ *
+ *  **Prefer `lib/adhdNotify.ts`'s `notify` over this one for anything a person sees.** That is the
+ *  same function with ADHD low stimulation applied, and it is what every current call site uses —
+ *  this raw export has no production callers left. Importing it directly opts the new call site out
+ *  of the mode silently, which is the whole failure the funnel exists to prevent. */
 export function notify(input: PushNotificationInput): string {
   return useNotifications.getState().push(input)
 }

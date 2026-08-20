@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from '../dialog-stack'
 import { IconChat, IconMic, IconSearch } from '../icons'
 import { ContextMeter } from '../ContextMeter'
+import { AdhdElapsedChip } from '../AdhdNodeSurfaces'
 import { useAgentStatus } from '../../state/agentStatus'
 import { useCardPanel } from '../../state/cardPanel'
 import { useSession } from '../../session/session'
@@ -192,6 +193,12 @@ export function CardModal({
             <>
               {/* Same context-window pill + popover as the node header (null until usage data). */}
               <ContextMeter sessionId={agentSessionId ?? null} />
+              {/* ADHD time awareness. The card modal is a second live view of the SAME session, and
+                it is a place work actually happens — so the readout belongs here for the same
+                reason it belongs on the node: a clock the user has to go and look for does nothing
+                for time blindness. The MOMENTUM note deliberately does not follow it here; see
+                docs/adhd-modes.md. */}
+              <AdhdElapsedChip nodeId={session.id} />
               <button
                 className="kanban-modal__action"
                 title="Search this terminal"

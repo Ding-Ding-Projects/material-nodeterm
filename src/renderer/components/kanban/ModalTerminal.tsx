@@ -7,6 +7,7 @@ import { hasPermissionMode, reportsOwnCopy } from '@shared/agents/config'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentLaunchIntent } from '@shared/types'
 import { readsClaudeTranscript } from '../../lib/transcriptGates'
+import { markNodeActivity } from '../../lib/nodeActivity'
 import { liveProjectJumpTarget } from '../../lib/projectJump'
 import { FindBar } from '../FindBar'
 import { useAgentStatus } from '../../state/agentStatus'
@@ -347,7 +348,16 @@ export function ModalTerminal({
             'This host did not confirm the trusted agent launch. Open the canvas terminal to recover.'
         )
       }
-      cleanups.push(transport.onData(res.sessionId, (d) => term.write(d)))
+      // Activity for ADHD time awareness / momentum. Recorded from THIS viewer too, not only from
+      // the canvas node: the modal is a live second client, and a session whose canvas node is
+      // offscreen-released while the card is open would otherwise look untouched while the user is
+      // sitting in it. One Map write — see lib/nodeActivity.ts.
+      cleanups.push(
+        transport.onData(res.sessionId, (d) => {
+          markNodeActivity(nodeId)
+          term.write(d)
+        })
+      )
       cleanups.push(
         transport.onExit(res.sessionId, () => term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n'))
       )
@@ -368,7 +378,10 @@ export function ModalTerminal({
       // the rest (the canvas node votes independently — the modal's smaller pane may shrink it).
       if (transport.onSize)
         cleanups.push(transport.onSize(res.sessionId, (size) => term.resize(size.cols, size.rows)))
-      term.onData((d) => sessionId && transport.write(sessionId, d))
+      term.onData((d) => {
+        markNodeActivity(nodeId)
+        if (sessionId) transport.write(sessionId, d)
+      })
       // DELIBERATELY omitted vs. TerminalNode: no flow-control pause (transport.setFlow) and no
       // onResync handler. The pty's pacing/backpressure comes from the canvas node's client — the
       // modal is a transient, always-on-top second view and never drives the shared session's flow.
