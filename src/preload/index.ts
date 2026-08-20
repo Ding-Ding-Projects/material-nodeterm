@@ -676,6 +676,7 @@ const api: NodeTerminalApi = {
     disconnect: (connectionId) => ipcRenderer.send(IPC.relayClientDisconnect, connectionId)
   },
   handoff: {
+    supported: true,
     build: (sessionId, agentId, sourceNodeId, cwd, accountId) =>
       ipcRenderer.invoke(IPC.handoffBuild, sessionId, agentId, sourceNodeId, cwd, accountId)
   },

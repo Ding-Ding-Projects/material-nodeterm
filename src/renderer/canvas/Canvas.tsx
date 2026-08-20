@@ -182,6 +182,7 @@ import { CloneRepoDialog } from '../components/CloneRepoDialog'
 import type { DictationTarget } from '../components/DictationOverlay'
 import { describeOs, REPO_URL } from '../lib/bugReport'
 import { shouldReleasePaneFocus } from '../lib/paneFocus'
+import { buildTransferHandoff, canOfferTransfer } from '../lib/transferGates'
 import { viewportAtZoom1 } from '../lib/zoomReset'
 import { isSpaceRelease, spacePanKeydown } from '../lib/spacePan'
 import { UpdateCard } from '../components/UpdateCard'
@@ -382,7 +383,6 @@ import {
   canBranch,
   canControlCanvas,
   canRename,
-  canTransferFrom,
   canContextLink,
   createdAgentId,
   explicitCodexResumeSession,
@@ -6860,12 +6860,19 @@ export function Canvas() {
         notify({ kind: 'warning', title: 'Conversation not ready to transfer yet.' })
         return
       }
-      const res = await window.nodeTerminal.handoff.build(
-        sessionId,
-        sourceAgentId,
-        sourceNodeId,
-        source.data.cwd,
-        source.data.accountId
+      // `build` is expected to RESOLVE `{ filePath } | { error }`, but a bridge that has no
+      // handler for it rejects instead (the Server Edition stub does exactly that), and a
+      // rejection here would throw straight past the `'error' in res` check below into a `void`ed
+      // promise — no toast, no console entry, nothing. `buildTransferHandoff` never throws, so a
+      // refusal reports itself through the same error toast every other failure uses.
+      const res = await buildTransferHandoff(() =>
+        window.nodeTerminal.handoff.build(
+          sessionId,
+          sourceAgentId,
+          sourceNodeId,
+          source.data.cwd,
+          source.data.accountId
+        )
       )
       if ('error' in res) {
         notify({ kind: 'error', title: 'Transfer failed', body: res.error })
@@ -7378,8 +7385,15 @@ export function Canvas() {
         : []),
       ...(ids.length === 1 &&
       (() => {
-        const a = agentIdOf(ids[0])
-        return !!a && canTransferFrom(a) && !!useAgentStatus.getState().byId[ids[0]]?.sessionId
+        // The handoff FILE is rendered by `src/main`; a bridge without that handler (Server
+        // Edition) declares `handoff.supported = false`, and the section is absent there rather
+        // than an enabled menu item that silently does nothing. Same capability-bit pattern as
+        // `pairing.supported` further down this file.
+        return canOfferTransfer({
+          agentId: agentIdOf(ids[0]),
+          sessionId: useAgentStatus.getState().byId[ids[0]]?.sessionId,
+          handoffSupported: window.nodeTerminal.handoff.supported
+        })
       })()
         ? (() => {
             const src = agentIdOf(ids[0]) as AgentId
