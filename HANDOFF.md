@@ -1,5 +1,84 @@
 # Handoff
 
+## 2026-08-20 — six branches integrated, and the stale-failure list retracted
+
+`main` moved `289fcb47 -> baf67860`. Six of the eight open branches are merged and **proven
+ancestors of the dewed `main`** with `git merge-base --is-ancestor`, not assumed:
+`feat/suites-a`, `feat/suites-b`, `feat/openrows`, `feat/uh-feature-inventory`,
+`fix/pairing-no-qr-dead-end`, `feat/project-single-file`. All six merged with zero conflicts.
+
+### Retraction: the seven failing test files are all green, and were before this pass started
+
+The section below headed "The seven failing test files, with cause" is **stale**, and it is worth
+saying plainly because the next reader would otherwise spend an afternoon re-diagnosing fixed bugs.
+Every one of those seven files passes at `main`, measured by running them rather than by reading:
+
+| File the addendum listed as failing | Measured now |
+|---|---|
+| `src/renderer/styles.theme.test.ts` | passes |
+| `src/core/fs-atomic.guard.test.ts` | passes |
+| `src/renderer/state/permissionMode.funnel.test.ts` | passes |
+| `src/renderer/nodes/ServiceNode.test.tsx` | passes |
+| `src/renderer/terminal/webgl-addon-pair.test.ts` | passes |
+| `src/core/build-bat.test.ts` | passes |
+| `src/main/remote/relay-host-service.test.ts` | passes |
+
+147 tests across those seven files, 0 failures. The 51 commits that landed between `38280b0b`
+and `289fcb47` fixed them; the document was simply never updated. The named `.mc-console`,
+`--mono`, bare-`fs.rename` and Kids-mode funnel defects are all closed.
+
+### Verified at the integration tip
+
+| Check | Command | Result |
+|---|---|---|
+| Full suite | `npx vitest run` (alone, uncontended) | **706 files: 700 passed, 6 skipped. 8,912 tests: 8,720 passed, 192 skipped, 0 failed.** 121.24 s, exit 0. Measured at `2cb5882d`, the merge tip. |
+| Type checking | `npm run typecheck` | Clean on both projects, exit 0. |
+| Production build | `npm run build` | exit 0. |
+| Feature inventory | `node scripts/check-uh-inventory.mjs` | 37 shipped, 2 not-applicable, 5 open; all 44 required features present, every shipped path exists. |
+| App contract | `node scripts/check-app-contract.mjs` | 835 assertions across 49 features, **1 failure** — the pre-existing Windows terminal-profile row still owing packaged headless capture evidence. |
+| Site contract | `node scripts/check-site-contract.mjs` | 366 assertions, all clear. |
+| Instruction mirror | `node scripts/check-instruction-mirror.mjs` | OK, 8 markers in each of README.md and AGENTS.md, no leak pattern matched. |
+| Vocabulary lock | `node scripts/check-vocabulary.mjs` | Passed (re-locked at the start of this pass — the dictionary had changed and the build correctly refused until it was re-read). |
+
+### Three defects the integration itself surfaced, all fixed here
+
+1. **A shipped article that never entered the docs bundle.** `feat/uh-feature-inventory` added
+   `docs/uh-feature-inventory.md` and never regenerated `src/shared/docs-data.ts`, so the in-app
+   documentation browser had 89 articles and no route to the 90th. The docs-bundle guard failed
+   the first build after integration — exactly the job it exists for. Regenerated to 90 articles.
+2. **A fail-closed guard with nothing to run it.** `scripts/check-uh-inventory.mjs` arrived on the
+   same branch as the guard over all 44 canonical features, and nothing called it: no npm script,
+   no build step, no workflow. Its only two references in the whole tree were its own header
+   comment and the document describing it. It is now wired into `build` beside the vocabulary,
+   changelog and docs-bundle checks, and `check:uh-inventory` / `check:site-contract` exist as
+   runnable scripts. Both passed at the time of wiring, so this costs nothing today and catches
+   the next drift.
+3. **The new inventory document had no contract row.** The app contract's completeness sweep asked
+   where its feature row was; the honest answer is that it is the register OF the contracts rather
+   than a forty-fifth one, so it is now exempted in `NON_FEATURE_DOCS` **with that reason stated**.
+
+### Still open
+
+- **`feat/status-hub-surface`** (`3e96ad78`) — unmerged, owes a packaged capture of its screen.
+- **`fix/blur-scale-wiring`** (`f003a05d`) — unmerged, owes a device eyeball. `CLAUDE.md` forbids
+  shipping it without one, and none has been taken. It already contains all of `main`.
+- The Windows terminal-profile contract row still owes packaged, cheap-headless capture evidence.
+  `npm run shots` photographs the picker from the unpackaged `out/` build over plain CDP, which is
+  deliberately filed under different ids and cannot half-satisfy the packaged row.
+- **The addendum's "nobody has launched the built app and looked at it" is also retracted.**
+  `docs/md3-render-verification.md` records exactly that work, done at `38280b0b` by launching the
+  real built `out/` artifact in a real Electron process and driving it over CDP: `check:wired`
+  reached 6/6, `npm run shots -- --launch` ran, and it found and fixed a real light-mode scrim
+  defect. What that document itself still lists as unverified is the narrower set: OS-level window
+  frame capture against a live HWND (CDP only sees an emulated viewport), the two surfaces needing
+  a live agent CLI or a reachable SSH host, Roboto Mono's glyphs with a terminal actually open,
+  and a light-theme sweep of every remaining dialog beyond the six selectors named. Neither
+  `check:wired` nor `shots` was re-run in THIS pass, so those results bind to `38280b0b`, not to
+  `main`.
+
+---
+
+
 ## Release timing, dim-sum link, and Pages trigger repair
 
 The release workflow now requires GitHub's run start time, records a post-publication completion
