@@ -1058,9 +1058,9 @@ const FEATURES = [
       'src/shared/kids-mode-name.ts'
     ],
     contentChecks: [
-      ['src/core/kids-mode.ts', 'export class KidsModeStore {'],
+      ['src/core/kids-mode.ts', /^export class KidsModeStore \{/m],
       // The honesty line is the reason this feature is defensible at all.
-      ['src/shared/kids-mode-policy.ts', 'export const KIDS_DISCLOSURE ='],
+      ['src/shared/kids-mode-policy.ts', /^export const KIDS_DISCLOSURE =/m],
       ['src/shared/kids-mode-policy.ts', 'does NOT sandbox'],
       // bypassPermissions must stay refused, and the refusal must carry a reason.
       ['src/shared/kids-mode-policy.ts', 'bypassPermissions:'],
@@ -1078,12 +1078,18 @@ const FEATURES = [
       ['src/main/index.ts', /^\s*await kidsModeStore\.init\(\)/m],
       ['src/server/index.ts', /^\s*await kidsModeStore\.init\(\)/m],
       // A real bridge implementation, not a stub.
-      ['src/renderer/bridge/ws-bridge.ts', 'const kidsMode: KidsModeApi = {'],
+      ['src/renderer/bridge/ws-bridge.ts', /^\s*const kidsMode: KidsModeApi = \{/m],
       ['src/renderer/App.tsx', /^\s*void useKidsMode\.getState\(\)\.init\(\)/m],
       // The disclosure is RENDERED from the shared constant, not retyped. A second copy of that
       // wording is one edit away from promising more than the mode delivers.
-      ['src/renderer/components/settings/sections/KidsModeSection.tsx', '{KIDS_DISCLOSURE}'],
-      ['src/renderer/components/settings/SettingsPage.tsx', '<KidsModeSection isActive=']
+      //
+      // These four were left as bare substrings when the two registerIpc rows above were anchored,
+      // and the comment three lines up already spelled out why that is unsafe. Commenting out the
+      // real Settings render of {KIDS_DISCLOSURE} — the honesty line, on the surface where a
+      // parent enables the mode — left this whole scan green. Watched, on this file. Anchoring one
+      // pair and leaving its neighbours is how the same trap survives its own fix.
+      ['src/renderer/components/settings/sections/KidsModeSection.tsx', /^\s*<p className="md3-kids-disclosure[^"]*">\{KIDS_DISCLOSURE\}<\/p>/m],
+      ['src/renderer/components/settings/SettingsPage.tsx', /^\s*<KidsModeSection isActive=/m]
     ],
     // Asserts the section is reachable from a VISIBLE settings group and has a sidebar icon — a
     // section file on disk that no group lists is invisible to a user, which is the same as absent.

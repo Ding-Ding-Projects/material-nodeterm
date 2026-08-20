@@ -249,9 +249,19 @@ const FEATURES = [
     file: 'site/app/features/narrator.js',
     exportName: 'registerNarrator',
     contentChecks: [
-      // The subscription lives in main.js, not the narrator module — the old needle here was
-    // satisfied by a COMMENT in narrator.js while the real listener could be deleted unseen.
-    ['site/app/main.js', "addEventListener('voiceschanged'"],
+      // The subscription lives in main.js, not the narrator module — the ORIGINAL needle here was
+      // satisfied by a COMMENT in narrator.js while the real listener could be deleted unseen.
+      //
+      // Moving it to the right file was only half the repair, and the half that was missing is the
+      // one this repository keeps relearning: as a bare substring it was STILL satisfied by
+      // `// window.speechSynthesis.addEventListener('voiceschanged', readVoices)`, so commenting
+      // the real subscription out left the site contract fully green. Watched, on this file.
+      //
+      // Anchored to the start of the line, which a `//` prefix cannot survive. Optional whitespace
+      // only, and the receiver is named so the listener cannot be moved onto some other object and
+      // still match. Without this, the site silently reverts to the documented empty-voice-list bug
+      // — reporting "no voices installed" on a machine with forty.
+      ['site/app/main.js', /^\s*window\.speechSynthesis\.addEventListener\('voiceschanged'/m],
       ['site/app/shared/narrator-state.js', 'voiceUri'],
     ],
   },
