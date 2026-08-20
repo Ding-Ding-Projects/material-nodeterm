@@ -12778,8 +12778,16 @@ body.focus-mode .dock:hover {
   letter-spacing: 0.04em;
 }
 
+.service-node__field-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
 .service-node__input {
   width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
   padding: 6px 8px;
   color: var(--md-on-surface, #f2f2f7);
   background: var(--md-surface-container-highest, #2c2c2e);
@@ -12787,6 +12795,32 @@ body.focus-mode .dock:hover {
   border-radius: 8px;
   font-family: var(--mono-font);
   font-size: 12px;
+}
+
+/* The one-click "fill the local Docker address in" shortcut. It never dials anything — see
+ * LOCAL_DOCKER_ENDPOINT's own comment in ServiceNode.tsx — so it is styled as a plain secondary
+ * button, not as a call-to-action that would read as "connect". */
+.service-node__local-btn {
+  flex: none;
+  padding: 0 10px;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  background: var(--md-surface-container-highest, #2c2c2e);
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.service-node__local-btn:hover:not(:disabled) {
+  background: var(--md-surface-container-high, #333335);
+  color: var(--md-on-surface, #f2f2f7);
+}
+
+.service-node__local-btn:disabled {
+  color: var(--md-on-surface-variant, #9a9a9e);
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* The invalid state is a border AND the sentence beneath it, never the border alone: a colour is

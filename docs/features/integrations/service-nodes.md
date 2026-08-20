@@ -183,6 +183,22 @@ keystroke would either flicker the node through a dozen invalid states while som
 or, worse, write a half-typed value into the machine-local index where a later read would find it,
 refuse it, and silently drop the connection the user believed they had already set.
 
+### "Use localhost" (`dockerhost` only)
+
+The `dockerhost` node's address field carries one extra control beside the input: a **Use
+localhost** button that fills the field with `ssh://localhost` and commits it through the exact
+same `commitEndpoint`/`safeServiceEndpoint` path the input itself uses. It is disabled once the
+field already holds that value, and it never becomes a "Connect" button — clicking it changes what
+is *typed in the field*, nothing more, matching the honesty rule the rest of this document states.
+
+`ssh://localhost` rather than a platform-specific socket path is a deliberate choice, not an
+oversight. Docker's real local transports are a Unix domain socket (`/var/run/docker.sock`) on
+macOS/Linux and a named pipe (`//./pipe/docker_engine`) on Windows — but `safeServiceEndpoint`
+accepts only `http:`, `https:` and `ssh:` (see "Endpoint rules" above), so neither is a value this
+field could ever store. `ssh://localhost` is: bare `ssh://` with no `user@` defaults, on every
+platform and every OS the same way the plain `ssh` command does, to whoever is currently logged in
+— there is nothing to branch on per platform and nothing to go and ask the OS for.
+
 ## What does not work yet
 
 State this plainly, because CLAUDE.md's rule against decorative controls cuts both ways: it forbids
