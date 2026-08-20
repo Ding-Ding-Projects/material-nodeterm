@@ -772,17 +772,36 @@ function selectHeadlessWindow(payload, expectedPid) {
     fail('Headless window enumeration returned an invalid payload.')
   }
   const pid = Number(expectedPid)
+  // A NON-EMPTY TITLE is the discriminator, and leaving it out made this refuse every real run.
+  //
+  // Measured on this app's packaged build, one PID, on a headless desktop: 13 top-level windows,
+  // of which TWO passed the class-and-size filter alone —
+  //
+  //   Chrome_WidgetWin_1   1416x908   title "nodeterm"   <- the application window
+  //   Chrome_WidgetWin_0   1440x753   title ""           <- a same-PID helper
+  //
+  // The helper is not zero-sized, so the size floor cannot separate them, and it shares the class
+  // prefix. Size and class together are simply not enough. The repository's own recorded lesson
+  // says so in as many words — resolve by title AND class, never by index or by size — and this
+  // filter predated that note by asking for neither.
+  //
+  // Titles are still not trusted to IDENTIFY the window: an exact match on "nodeterm" would break
+  // the moment somebody renames the app, which this product explicitly lets a user do. Emptiness
+  // is the honest test, because a window with no title is not the one a person is looking at. If a
+  // future Electron gives the helper a title, two will match again and the count check below fails
+  // LOUDLY rather than silently driving the wrong window.
   const matches = payload.windows.filter((window) => {
     const className = String(window.class ?? '')
     return (
       Number(window.process_id) === pid &&
       /^Chrome_WidgetWin_/u.test(className) &&
       Number(window.width) > 0 &&
-      Number(window.height) > 0
+      Number(window.height) > 0 &&
+      String(window.title ?? '').trim() !== ''
     )
   })
   if (matches.length !== 1) {
-    fail(`Expected exactly one PID ${pid} Chromium HWND; found ${matches.length}.`)
+    fail(`Expected exactly one PID ${pid} titled Chromium HWND; found ${matches.length}.`)
   }
   const handle = Number(matches[0].handle)
   if (!Number.isSafeInteger(handle) || handle <= 0) fail('Headless window returned an invalid HWND.')

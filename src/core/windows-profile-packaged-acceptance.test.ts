@@ -284,7 +284,17 @@ describe('task ownership and dynamic UI identity', () => {
   })
 
   it('rejects stale, ambiguous, or non-Chromium PID/HWND matches', () => {
-    const good = { handle: 101, process_id: 44, class: 'Chrome_WidgetWin_1', width: 1000, height: 700 }
+    // The fixture carries a title because the real application window has one. Without it this
+    // fixture was describing a window the app never produces, which is how the selector shipped
+    // with a filter that could not tell the app window from its own same-PID helper.
+    const good = {
+      handle: 101,
+      process_id: 44,
+      class: 'Chrome_WidgetWin_1',
+      width: 1000,
+      height: 700,
+      title: 'nodeterm',
+    }
     expect(core.selectHeadlessWindow({ ok: true, windows: [good] }, 44)).toMatchObject({ hwnd: 101, pid: 44 })
     expect(() => core.selectHeadlessWindow({ ok: true, windows: [good] }, 45)).toThrow(/found 0/)
     expect(() => core.selectHeadlessWindow({ ok: true, windows: [good, { ...good, handle: 102 }] }, 44)).toThrow(
@@ -293,6 +303,27 @@ describe('task ownership and dynamic UI identity', () => {
     expect(() =>
       core.selectHeadlessWindow({ ok: true, windows: [{ ...good, class: 'Notepad' }] }, 44)
     ).toThrow(/found 0/)
+
+    // The case that actually happened, transcribed from a real headless enumeration of this app's
+    // packaged build: one PID, thirteen top-level windows, and TWO that pass on class and size —
+    // the app window, and a same-PID Chrome_WidgetWin_0 at 1440x753 with no title. Before the
+    // title requirement this threw "found 2" and every acceptance run died at launch.
+    const helper = { handle: 102, process_id: 44, class: 'Chrome_WidgetWin_0', width: 1440, height: 753, title: '' }
+    expect(core.selectHeadlessWindow({ ok: true, windows: [good, helper] }, 44)).toMatchObject({
+      hwnd: 101,
+      title: 'nodeterm',
+    })
+    // Order must not decide it. A filter that took the first match would pass the line above and
+    // still drive the wrong window whenever the enumeration came back the other way round.
+    expect(core.selectHeadlessWindow({ ok: true, windows: [helper, good] }, 44)).toMatchObject({ hwnd: 101 })
+    // Whitespace is not a title.
+    expect(() =>
+      core.selectHeadlessWindow({ ok: true, windows: [{ ...good, title: '   ' }] }, 44)
+    ).toThrow(/found 0/)
+    // Two genuinely titled windows stay a loud failure rather than a coin toss.
+    expect(() =>
+      core.selectHeadlessWindow({ ok: true, windows: [good, { ...helper, title: 'nodeterm' }] }, 44)
+    ).toThrow(/found 2/)
 
     const candidate = path.resolve('C:\\artifact path\\nodeterm.exe')
     expect(core.validateProcessIdentity({ exists: true, pid: 44, executable: candidate, parentPid: 1 }, 44, candidate)).toMatchObject({
