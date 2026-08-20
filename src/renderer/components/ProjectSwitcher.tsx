@@ -14,6 +14,11 @@ import { useMenuFlip } from '../ui/useMenuFlip'
 import { IconCanvasView, IconKanban } from './icons'
 import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
+import {
+  SAVE_PROJECT_ARCHIVE_ACTION,
+  OPEN_PROJECT_ARCHIVE_ACTION,
+  EDIT_TAB_APPEARANCE_ACTION
+} from '../lib/projectMenuActions'
 import { AccountIdentityPills } from './AccountIdentityPills'
 import { presentAccount } from '../lib/accountPresentation'
 import { sshHostKey } from '@shared/ssh'
@@ -51,6 +56,18 @@ interface ProjectSwitcherProps {
   /** Set the project's colour — the switcher dot, the kanban header dot, the sidebar monogram.
    *  Called LIVE while the picker is dragged, so it must be a cheap, coalescing writer. */
   onSetColor: (id: string, color: string) => void
+  /** {@link SAVE_PROJECT_ARCHIVE_ACTION} — pack this project into one archive file. Shared with
+   *  the sidebar project-header menu (`Canvas.tsx`'s `onProjectContextMenu`); see
+   *  `lib/projectMenuActions.ts`. */
+  onSaveArchive: (id: string) => void
+  /** {@link OPEN_PROJECT_ARCHIVE_ACTION} — restore a project from a previously saved archive
+   *  file. Not scoped to a row (it creates a new project), but lives in the per-row panel because
+   *  that is where a user goes looking for "save/open this as a file". */
+  onOpenArchive: () => void
+  /** Whether an archive save/open is already running elsewhere — disables both archive rows so a
+   *  second click doesn't race the first (`Canvas.tsx`'s `projectArchiveBusyRef`, read fresh on
+   *  every render since the panel re-renders on its own state anyway). */
+  archiveBusy: () => boolean
 }
 
 /**
@@ -86,7 +103,10 @@ export function ProjectSwitcher({
   onRemoteAccess,
   onSetDefaultAccount,
   onSetDefaultPermissionMode,
-  onSetColor
+  onSetColor,
+  onSaveArchive,
+  onOpenArchive,
+  archiveBusy
 }: ProjectSwitcherProps) {
   // Select the raw array and filter in a memo, a `.filter()` inside the selector returns a fresh
   // array every store snapshot, which would re-render on EVERY projects change.
@@ -565,7 +585,7 @@ export function ProjectSwitcher({
                             }
                           }}
                         >
-                          Edit tab appearance…
+                          {EDIT_TAB_APPEARANCE_ACTION.label}
                         </button>
                         <button
                           onClick={() => {
@@ -597,6 +617,24 @@ export function ProjectSwitcher({
                           }}
                         >
                           Set folder…
+                        </button>
+                        <button
+                          disabled={archiveBusy()}
+                          onClick={() => {
+                            closeMenu()
+                            onSaveArchive(p.id)
+                          }}
+                        >
+                          {SAVE_PROJECT_ARCHIVE_ACTION.label}
+                        </button>
+                        <button
+                          disabled={archiveBusy()}
+                          onClick={() => {
+                            closeMenu()
+                            onOpenArchive()
+                          }}
+                        >
+                          {OPEN_PROJECT_ARCHIVE_ACTION.label}
                         </button>
                         <button
                           onClick={() => {
