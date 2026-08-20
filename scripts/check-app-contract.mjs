@@ -1747,6 +1747,92 @@ const NON_FEATURE_DOCS = new Map([
 }
 
 // ---------------------------------------------------------------------
+// Server Edition one-click deployment packaging (ServerDeploymentService)
+//
+// The bug this guards: host.bat, docker-compose.yml and Dockerfile all live at the repo root
+// and were never in `build.files` or `build.extraResources`, so `startOnce()` in
+// server-deployment.ts always found no host.bat in a packaged install and reported "The Server
+// Edition deployment files are missing." A JSON.parse of package.json rather than a regex is
+// deliberate here: `build.extraResources` is structured config, and a regex anchored on
+// "server-deployment" would pass on an entry that merely mentions the string without actually
+// shipping the files host.bat/docker-compose.yml/Dockerfile need.
+// ---------------------------------------------------------------------
+{
+  let manifest = null
+  try {
+    manifest = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+  } catch (err) {
+    fail(`Server Edition deployment packaging: cannot read/parse package.json (${err.message})`)
+  }
+  if (manifest) {
+    checkedCount += 1
+    const extraResources = Array.isArray(manifest.build?.extraResources) ? manifest.build.extraResources : []
+    const entry = extraResources.find(
+      (e) => e && typeof e === 'object' && e.from === '.' && e.to === 'server-deployment'
+    )
+    if (!entry) {
+      fail(
+        'Server Edition deployment packaging: package.json build.extraResources has no ' +
+          '{ from: ".", to: "server-deployment" } entry — a packaged build ships no host.bat, ' +
+          'so ServerDeploymentService always reports the deployment files missing'
+      )
+    } else {
+      pass('Server Edition deployment packaging: build.extraResources ships a server-deployment/ resources directory')
+      checkedCount += 1
+      const filter = Array.isArray(entry.filter) ? entry.filter : []
+      // Every path host.bat/docker-compose.yml/Dockerfile reference by relative lookup (grepped
+      // from those files directly, not guessed), plus the source tree the Docker build context
+      // needs (docker-compose.yml's build.context is ".", i.e. this same packaged directory).
+      const requiredFilterEntries = [
+        'host.bat',
+        'docker-compose.yml',
+        'Dockerfile',
+        '.dockerignore',
+        'package.json',
+        'package-lock.json',
+        'src/**/*'
+      ]
+      const missingFromFilter = requiredFilterEntries.filter((needed) => !filter.includes(needed))
+      if (missingFromFilter.length) {
+        fail(
+          `Server Edition deployment packaging: build.extraResources' server-deployment filter is missing ${missingFromFilter.join(', ')} — ` +
+            'host.bat/docker-compose.yml/Dockerfile need these to run `docker compose up -d --build`'
+        )
+      } else {
+        pass('Server Edition deployment packaging: the server-deployment filter carries every file host.bat/docker-compose.yml/Dockerfile reference')
+      }
+    }
+  }
+
+  // The three files the filter above claims to ship must actually exist at the repo root, or the
+  // filter entry is packaging nothing (electron-builder silently skips a from-pattern match with
+  // zero hits rather than failing the build).
+  for (const rel of ['host.bat', 'docker-compose.yml', 'Dockerfile', '.dockerignore']) {
+    requireFileExists(rel, 'Server Edition deployment packaging')
+  }
+
+  // The writable-state redirect (docs/features/remote — a packaged install's project directory
+  // is a Squirrel version folder replaced wholesale on every update, so the generated .env and
+  // TOTP secret must not live beside host.bat there). Line-anchored/delimited needles so a
+  // rename cannot leave a toothless substring match, per this file's own stated discipline.
+  requireFileContains(
+    'host.bat',
+    /^if defined NODETERM_SERVER_ENV_DIR \($/m,
+    'Server Edition deployment packaging (writable state)'
+  )
+  requireFileContains(
+    'docker-compose.yml',
+    /\$\{NODETERM_TOTP_SECRET_FILE_HOST:-\.\/\.nodeterm-server-totp\}/,
+    'Server Edition deployment packaging (writable state)'
+  )
+  requireFileContains(
+    'src/main/server-deployment.ts',
+    /^export function resolveServerDeploymentRoot\(/m,
+    'Server Edition deployment packaging (resourcesPath/repoRoot resolver)'
+  )
+}
+
+// ---------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------
 console.log('')

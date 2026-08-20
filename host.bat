@@ -9,7 +9,16 @@ rem   host.bat --status     show health, URL, and password-file location
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "ENV_FILE=%CD%\.env"
+rem NODETERM_SERVER_ENV_DIR is set by the desktop app's deployment service so the generated
+rem .env (first-boot password) lives outside the install directory - a packaged install sits in
+rem a Squirrel version folder that is replaced wholesale on every update, and anything written
+rem beside this script there would be silently lost on the next update. Unset (the normal manual
+rem `host.bat` invocation) keeps the historical behavior of writing .env next to this script.
+if defined NODETERM_SERVER_ENV_DIR (
+  set "ENV_FILE=%NODETERM_SERVER_ENV_DIR%\.env"
+) else (
+  set "ENV_FILE=%CD%\.env"
+)
 call :preflight
 if errorlevel 1 exit /b 1
 
