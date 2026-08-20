@@ -3539,6 +3539,16 @@ body,
   justify-content: flex-end;
 }
 
+/* Explorer is a side tool, not a modal: canvas nodes must remain reachable so an agent can be
+   dragged into the tree and a folder can be dragged back onto the empty pane. */
+.drawer-overlay.explorer-overlay {
+  background: transparent;
+  pointer-events: none;
+}
+.drawer-overlay.explorer-overlay .drawer {
+  pointer-events: auto;
+}
+
 /* Overlays/menus that can overlap the macOS title-bar strip must opt out of window-drag,
    otherwise clicks on their top controls (×, ↻, …) drag the window instead. */
 .drawer-overlay,
@@ -4243,6 +4253,28 @@ body,
 
 .ex-row.selected:hover {
   background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.ex-row.ex-row--agent-drop {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.flow-wrap.explorer-folder-drop-target::after {
+  content: 'Drop to open a terminal here';
+  position: absolute;
+  inset: 12px;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--md-primary);
+  border-radius: var(--md-shape-extra-large);
+  background: color-mix(in srgb, var(--md-primary-container) 72%, transparent);
+  color: var(--md-on-primary-container);
+  font: 600 16px/1.4 var(--font-ui);
+  pointer-events: none;
 }
 
 /* Git-ignored entries: dimmed + italic. */

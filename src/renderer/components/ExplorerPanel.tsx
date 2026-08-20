@@ -19,12 +19,35 @@ import { isBrowserRuntime } from '../bridge/runtime'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { MaterialSymbol, type MaterialSymbolName } from './MaterialSymbol'
+import {
+  AGENT_NODE_DRAG_MIME,
+  hasDragType,
+  readAgentNodeDrag,
+  writeExplorerFolderDrag
+} from '../lib/explorerNodeDrag'
+
+export interface ExplorerAgentFolderDrop {
+  nodeId: string
+  projectId: string
+  path: string
+}
+
+export interface ExplorerFolderAction {
+  projectId: string
+  path: string
+}
 
 export interface ExplorerPanelProps {
   onClose: () => void
   /** Open a file as an editor node. `sshFs` is true for SSH projects (the path is remote, read/
    *  written over the project's ControlMaster fs); false/omitted for local + relay projects. */
   onOpenFile: (path: string, sshFs?: boolean) => void
+  /** Spawn a same-type sibling for the dragged/keyboard-selected agent in this folder. */
+  onAgentNodeDrop?: (drop: ExplorerAgentFolderDrop) => void
+  /** Keyboard/context-menu equivalent for dropping this folder onto empty canvas. */
+  onOpenTerminalAtFolder?: (folder: ExplorerFolderAction) => void
+  /** Agent prepared by the node header's keyboard-operable Explorer action. */
+  keyboardAgentNodeId?: string | null
   /** File to reveal (expand ancestors + select + scroll). `path` is relative to the active project
    *  cwd; `nonce` increments per request so revealing the same file twice still re-fires. */
   reveal?: { path: string; nonce: number } | null
@@ -34,6 +57,7 @@ type ContextFn = (x: number, y: number, path: string, isDir: boolean, ignored?: 
 type OpenFn = (path: string) => void
 type SelectFn = (path: string) => void
 type DownloadFn = (path: string, isDir: boolean) => void
+type AgentFolderDropFn = (drop: ExplorerAgentFolderDrop) => void
 
 /** What a tree row's download button is showing right now. */
 type RowDownloadState = 'running' | 'done' | 'error'
@@ -98,7 +122,8 @@ function TreeEntry({
   onSelect,
   onDownload,
   rowDl,
-  filterTest
+  filterTest,
+  onAgentNodeDrop
 }: {
   entry: DirEntry
   path: string
@@ -116,6 +141,7 @@ function TreeEntry({
   /** Download state per path — the whole map, so a row deep in the tree sees its own entry
    *  without every level having to thread a single value down. */
   rowDl: Record<string, RowDownloadState>
+  onAgentNodeDrop?: AgentFolderDropFn
   /**
    * The Explorer's own filter/regex field, or undefined when the filter is empty (no filtering
    * at all — the common case). Applied to FILE rows only: the tree is lazy-loaded, so a
@@ -129,6 +155,7 @@ function TreeEntry({
   const [children, setChildren] = useState<DirEntry[] | null>(null)
   const rowRef = useRef<HTMLDivElement>(null)
   const dl = rowDl[path]
+  const [agentDragOver, setAgentDragOver] = useState(false)
 
   const toggleDir = useCallback(() => {
     useExplorer.getState().setExpanded(projectId, path, !open)
@@ -185,9 +212,59 @@ function TreeEntry({
     <>
       <div
         ref={rowRef}
-        className={`ex-row md3-explorer__row${entry.ignored ? ' ignored' : ''}${selected === path ? ' selected' : ''}`}
+        className={`ex-row md3-explorer__row${entry.ignored ? ' ignored' : ''}${selected === path ? ' selected' : ''}${agentDragOver ? ' ex-row--agent-drop' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
+        role="treeitem"
+        aria-expanded={entry.dir ? open : undefined}
+        tabIndex={0}
+        draggable={entry.dir}
+        onDragStart={(event) => {
+          if (!entry.dir) return
+          event.stopPropagation()
+          event.dataTransfer.effectAllowed = 'copy'
+          writeExplorerFolderDrag(event.dataTransfer, { projectId, path })
+        }}
+        onDragOver={(event) => {
+          if (
+            !entry.dir ||
+            !onAgentNodeDrop ||
+            !hasDragType(event.dataTransfer, AGENT_NODE_DRAG_MIME)
+          ) {
+            return
+          }
+          event.preventDefault()
+          event.stopPropagation()
+          event.dataTransfer.dropEffect = 'copy'
+          setAgentDragOver(true)
+        }}
+        onDragLeave={(event) => {
+          const related = event.relatedTarget as Node | null
+          if (!related || !event.currentTarget.contains(related)) setAgentDragOver(false)
+        }}
+        onDrop={(event) => {
+          if (!entry.dir || !onAgentNodeDrop) return
+          const payload = readAgentNodeDrag(event.dataTransfer)
+          if (!payload) return
+          event.preventDefault()
+          event.stopPropagation()
+          setAgentDragOver(false)
+          onAgentNodeDrop({ nodeId: payload.nodeId, projectId, path })
+        }}
         onClick={onClick}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onClick()
+            return
+          }
+          if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+            event.preventDefault()
+            const rect = event.currentTarget.getBoundingClientRect()
+            onSelect(path)
+            onContext(rect.left + 16, rect.top + 16, path, entry.dir, entry.ignored)
+          }
+        }}
         onContextMenu={(e) => {
           e.preventDefault()
           onSelect(path)
@@ -247,6 +324,7 @@ function TreeEntry({
             onDownload={onDownload}
             rowDl={rowDl}
             filterTest={filterTest}
+            onAgentNodeDrop={onAgentNodeDrop}
           />
         ))}
     </>
@@ -261,7 +339,14 @@ function TreeEntry({
  * NOTE (relay): a relay session's Explorer is still rooted at the local project's `cwd` — the host's
  * root cwd isn't known client-side. A relay tab reaches the host fs through its bridged session api
  * (the same seam TerminalNode/EditorNode use), not a separate per-connection fs client. */
-export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProps) {
+export function ExplorerPanel({
+  onClose,
+  onOpenFile,
+  onAgentNodeDrop,
+  onOpenTerminalAtFolder,
+  keyboardAgentNodeId,
+  reveal
+}: ExplorerPanelProps) {
   // Filters visible FILE rows by name (plain text, or regex via the `.*` trigger). See the
   // `filterTest` doc comment on TreeEntry for why directories are never hidden by it.
   const filter = useRegexSearchField()
@@ -484,7 +569,7 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
   )
 
   return createPortal(
-    <div className="drawer-overlay" onClick={onClose}>
+    <div className="drawer-overlay explorer-overlay">
       <aside className="drawer md3-explorer" onClick={(e) => e.stopPropagation()}>
         <div className="drawer__head">
           <h2>{project?.name || 'Explorer'}</h2>
@@ -525,6 +610,8 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
             )}
             <div
               className="drawer__body ex-body"
+              role="tree"
+              aria-label={`${project?.name || 'Project'} folders and files`}
               onContextMenu={(e) => {
                 if (e.target !== e.currentTarget || !cwd) return
                 e.preventDefault()
@@ -548,6 +635,7 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
                   onDownload={onDownload}
                   rowDl={rowDl}
                   filterTest={filterTest}
+                  onAgentNodeDrop={onAgentNodeDrop}
                 />
               ))}
             </div>
@@ -631,6 +719,37 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
               >
                 New Folder…
               </button>
+              {menu.dir && onOpenTerminalAtFolder && (
+                <>
+                  <div className="ctx-sep" />
+                  <button
+                    className="ctx-item"
+                    onClick={() => {
+                      const folder = { projectId: project!.id, path: menu.path }
+                      setMenu(null)
+                      onOpenTerminalAtFolder(folder)
+                    }}
+                  >
+                    Open terminal here
+                  </button>
+                  {keyboardAgentNodeId && onAgentNodeDrop && (
+                    <button
+                      className="ctx-item"
+                      onClick={() => {
+                        const path = menu.path
+                        setMenu(null)
+                        onAgentNodeDrop({
+                          nodeId: keyboardAgentNodeId,
+                          projectId: project!.id,
+                          path
+                        })
+                      }}
+                    >
+                      Open selected agent here
+                    </button>
+                  )}
+                </>
+              )}
               {route !== 'none' && (
                 <>
                   <div className="ctx-sep" />

@@ -49,8 +49,17 @@ import { codexAccountSwitchStillEligible } from './codex-account-switch'
 import {
   canvasImagePasteArmedAfterKey,
   guardedCanvasImagePlacements,
-  isCanvasImageDropTarget
+  isCanvasImageDropTarget,
+  isEmptyCanvasDropTarget
 } from './canvas-image-import'
+import {
+  EXPLORER_FOLDER_DRAG_MIME,
+  OPEN_EXPLORER_FOR_AGENT_EVENT,
+  createAgentNodeForExplorerFolder,
+  createTerminalNodeForExplorerFolder,
+  hasDragType,
+  readExplorerFolderDrag
+} from '../lib/explorerNodeDrag'
 import {
   SharedGlyphLayer,
   flushOpaqueNodeIds,
@@ -1135,6 +1144,11 @@ export function Canvas() {
       .catch(() => {})
   }, [])
   const [explorerOpen, setExplorerOpen] = useState(false)
+  const [explorerAgentNodeId, setExplorerAgentNodeId] = useState<string | null>(null)
+  const [explorerFolderDropActive, setExplorerFolderDropActive] = useState(false)
+  useEffect(() => {
+    if (!explorerOpen) setExplorerAgentNodeId(null)
+  }, [explorerOpen])
   // File converter + Ollama manager panels (docs/file-converter.md, docs/ollama-manager.md) — same
   // toggle-a-flag pattern as every other drawer/panel on this canvas.
   const [converterOpen, setConverterOpen] = useState(false)
@@ -1538,6 +1552,19 @@ export function Canvas() {
     [terminalProfiles, profileText]
   )
   nodesRef.current = nodes
+  useEffect(() => {
+    const onPrepareAgentFolder = (event: Event): void => {
+      const nodeId = (event as CustomEvent<{ nodeId?: unknown }>).detail?.nodeId
+      if (typeof nodeId !== 'string') return
+      const source = nodesRef.current.find((node) => node.id === nodeId)
+      if (!source || !createdAgentId(source.data)) return
+      setExplorerAgentNodeId(nodeId)
+      closeAllDrawers()
+      setExplorerOpen(true)
+    }
+    window.addEventListener(OPEN_EXPLORER_FOR_AGENT_EVENT, onPrepareAgentFolder)
+    return () => window.removeEventListener(OPEN_EXPLORER_FOR_AGENT_EVENT, onPrepareAgentFolder)
+  }, [closeAllDrawers])
   /**
    * ONE confirm dialog at a time — mirrored into a ref so the []-dep agent-control effect sees the
    * CURRENT dialogs (it closes over a stale `confirm`).
@@ -4477,6 +4504,127 @@ export function Canvas() {
     },
     [setNodes, markDirty, activeProjectId, emptyNodePos, cwdForNewNodeIn, parentInto]
   )
+
+  const openAgentAtExplorerFolder = useCallback(
+    (drop: { nodeId: string; projectId: string; path: string }): void => {
+      const projects = useProjects.getState()
+      if (projects.activeProjectId !== drop.projectId) {
+        notify({
+          kind: 'warning',
+          title: 'Folder drop cancelled',
+          body: 'The active project changed before the drop completed.'
+        })
+        return
+      }
+      const project = projects.getProject(drop.projectId)
+      const source = nodesRef.current.find((node) => node.id === drop.nodeId)
+      const agentId = source ? createdAgentId(source.data) : undefined
+      if (!project || !source || !agentId) {
+        notify({
+          kind: 'warning',
+          title: 'Agent drop cancelled',
+          body: 'The source agent is no longer available.'
+        })
+        return
+      }
+
+      const launchPlan = activeAgentLaunchPlan('explorer-drop-agent', agentId)
+      const settings = useSettings.getState().settings
+      const accountId =
+        agentId === 'claude'
+          ? resolveNewNodeAccount(undefined, project, settings.claudeAccounts)
+          : undefined
+      setNodes((current) => {
+        const liveSource = current.find((node) => node.id === drop.nodeId)
+        if (!liveSource || createdAgentId(liveSource.data) !== agentId) return current
+        const created = createAgentNodeForExplorerFolder({
+          source: liveSource,
+          index: current.length,
+          project,
+          path: drop.path,
+          accountId,
+          launchPlan,
+          options: terminalCreationOptionsFor(drop.projectId)
+        })
+        return created ? [...current, placeSpawned(created, besideNode(liveSource))] : current
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, placeSpawned, besideNode]
+  )
+
+  const openTerminalAtExplorerFolder = useCallback(
+    (
+      folder: { projectId: string; path: string },
+      center: { x: number; y: number } | undefined = emptyNodePos()
+    ): void => {
+      const projects = useProjects.getState()
+      if (projects.activeProjectId !== folder.projectId) {
+        notify({
+          kind: 'warning',
+          title: 'Folder drop cancelled',
+          body: 'The active project changed before the drop completed.'
+        })
+        return
+      }
+      const project = projects.getProject(folder.projectId)
+      if (!project) return
+      setNodes((current) => [
+        ...current,
+        createTerminalNodeForExplorerFolder({
+          index: current.length,
+          project,
+          path: folder.path,
+          center,
+          options: terminalCreationOptionsFor(folder.projectId)
+        })
+      ])
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos]
+  )
+
+  useEffect(() => {
+    const wrap = flowWrapRef.current
+    if (!wrap) return
+    const onDragOver = (event: DragEvent): void => {
+      if (!hasDragType(event.dataTransfer, EXPLORER_FOLDER_DRAG_MIME)) return
+      if (!isEmptyCanvasDropTarget(event.target, wrap)) {
+        setExplorerFolderDropActive(false)
+        return
+      }
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+      setExplorerFolderDropActive(true)
+    }
+    const clearDropState = (): void => setExplorerFolderDropActive(false)
+    const onDragLeave = (event: DragEvent): void => {
+      const related = event.relatedTarget as Element | null
+      if (!related || !wrap.contains(related)) clearDropState()
+    }
+    const onDrop = (event: DragEvent): void => {
+      clearDropState()
+      if (!isEmptyCanvasDropTarget(event.target, wrap)) return
+      const folder = readExplorerFolderDrag(event.dataTransfer)
+      if (!folder) return
+      event.preventDefault()
+      event.stopPropagation()
+      openTerminalAtExplorerFolder(
+        folder,
+        screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      )
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('dragend', clearDropState)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('dragend', clearDropState)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [openTerminalAtExplorerFolder, screenToFlowPosition])
 
   // Open a terminal node that ssh's into a saved server. `screenPos` (a pane/dock cursor) is
   // converted to a flow position; otherwise the node lands at the view center. The new node is
@@ -12617,7 +12765,7 @@ export function Canvas() {
       })()}
 
       <div
-        className={`flow-wrap${drawTool.tool ? ' canvas-draw-active' : ''}`}
+        className={`flow-wrap${drawTool.tool ? ' canvas-draw-active' : ''}${explorerFolderDropActive ? ' explorer-folder-drop-target' : ''}`}
         ref={flowWrapRef}
       >
         {/* Live preview of the annotation drag in progress (issue #145) — screen-space `fixed`
@@ -13086,6 +13234,9 @@ export function Canvas() {
         <ExplorerPanel
           onClose={() => setExplorerOpen(false)}
           onOpenFile={(path, isSsh) => openFile(path, undefined, isSsh)}
+          onAgentNodeDrop={openAgentAtExplorerFolder}
+          onOpenTerminalAtFolder={(folder) => openTerminalAtExplorerFolder(folder)}
+          keyboardAgentNodeId={explorerAgentNodeId}
           reveal={reveal}
         />
       )}

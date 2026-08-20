@@ -1,5 +1,5 @@
-/** True only for the actual React Flow pane, never flow-wrap overlays such as Welcome/Usage. */
-export function isCanvasImageDropTarget(target: EventTarget | null, wrap: Element): boolean {
+/** True only for the actual empty React Flow pane, never nodes, controls, or wrap overlays. */
+export function isEmptyCanvasDropTarget(target: EventTarget | null, wrap: Element): boolean {
   const element = target instanceof Element ? target : null
   return !!(
     element &&
@@ -7,6 +7,11 @@ export function isCanvasImageDropTarget(target: EventTarget | null, wrap: Elemen
     element.closest('.react-flow__pane') &&
     !element.closest('.react-flow__node, .react-flow__controls, .react-flow__minimap')
   )
+}
+
+/** Image drops share the same empty-pane boundary as other canvas-native drop gestures. */
+export function isCanvasImageDropTarget(target: EventTarget | null, wrap: Element): boolean {
+  return isEmptyCanvasDropTarget(target, wrap)
 }
 
 export interface CanvasImagePlacement {
