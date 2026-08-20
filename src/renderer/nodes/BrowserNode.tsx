@@ -1,5 +1,6 @@
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
+import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { BrowserSurface } from './BrowserSurface'
 
 /**
@@ -9,6 +10,7 @@ import { BrowserSurface } from './BrowserSurface'
  */
 export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { deleteElements, updateNodeData } = useReactFlow()
+  const headerFill = nodeHeaderFillStyle(data.color)
 
   return (
     <div className={`term-node browser-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
@@ -30,7 +32,12 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         style={{ opacity: 0, pointerEvents: 'none', bottom: 0 }}
       />
 
-      <div className="term-node__header">
+      <div
+        className={`term-node__header ${headerFill.className}${
+          headerFill.filled ? ' term-node__header--filled' : ''
+        }`}
+        style={headerFill.style}
+      >
         <span className="term-node__title-text" title={(data.url as string) || ''}>
           {(data.title as string) || 'Browser'}
         </span>

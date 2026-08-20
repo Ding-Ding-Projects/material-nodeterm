@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
+import { nodeHeaderFillStyle } from '../lib/nodeColor'
 
 /**
  * A video player node. A local file is served over the `nt-media://` protocol (allowlisted on
@@ -64,6 +65,8 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, remote])
 
+  const headerFill = nodeHeaderFillStyle(data.color)
+
   return (
     <div
       className={`term-node video-node${selected ? ' selected' : ''}`}
@@ -79,7 +82,12 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
         style={{ opacity: 0, pointerEvents: 'none', top: 0 }}
       />
 
-      <div className="term-node__header">
+      <div
+        className={`term-node__header ${headerFill.className}${
+          headerFill.filled ? ' term-node__header--filled' : ''
+        }`}
+        style={headerFill.style}
+      >
         <span className="term-node__title-text" title={filePath}>
           {fileName}
         </span>

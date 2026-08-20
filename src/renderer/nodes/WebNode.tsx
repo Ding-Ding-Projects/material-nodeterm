@@ -4,6 +4,7 @@ import type { CanvasNode } from '../state/workspace'
 import { httpUrl } from './webUrl'
 import { useDiscardWhenHidden, webviewAudible, type AudibleWebview } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
+import { nodeHeaderFillStyle } from '../lib/nodeColor'
 
 /**
  * A web view node. When `data.url` is set it loads that live URL; otherwise it serves the
@@ -95,6 +96,8 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
     }
   })
 
+  const headerFill = nodeHeaderFillStyle(data.color)
+
   return (
     <div
       ref={rootRef}
@@ -111,7 +114,12 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         style={{ opacity: 0, pointerEvents: 'none', top: 0 }}
       />
 
-      <div className="term-node__header">
+      <div
+        className={`term-node__header ${headerFill.className}${
+          headerFill.filled ? ' term-node__header--filled' : ''
+        }`}
+        style={headerFill.style}
+      >
         <span className="term-node__title-text" title={url || filePath}>
           {title}
         </span>
