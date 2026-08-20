@@ -9978,3 +9978,78 @@
     flex-basis: 100%;
   }
 }
+
+/* MinecraftConnectBanner — the running server's connect address, shown in the same top-banners
+   strip as every other in-app notice. Tonal (M3 primary-container), never a hex literal or a
+   box-shadow: elevation here is the tonal surface change, matching the rest of this sheet. */
+.mc-connect-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(680px, calc(100vw - 40px));
+}
+
+.mc-connect-banner__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--md-primary-container);
+  border-radius: 10px;
+}
+
+.mc-connect-banner__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--md-on-primary-container);
+  white-space: nowrap;
+}
+
+.mc-connect-banner__note {
+  font-size: 12px;
+  color: var(--md-on-primary-container);
+  opacity: 0.75;
+}
+
+.mc-connect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--md-surface-container-high);
+  border: none;
+  border-radius: 999px;
+  color: var(--md-on-surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mc-connect-chip:hover {
+  background: var(--md-surface-container-highest);
+}
+
+.mc-connect-chip:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.mc-connect-chip__label {
+  color: var(--md-on-surface-variant);
+}
+
+.mc-connect-chip__address {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.mc-connect-chip__copy {
+  color: var(--md-on-surface-variant);
+}
+
+@media (max-width: 720px) {
+  .mc-connect-banner__row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

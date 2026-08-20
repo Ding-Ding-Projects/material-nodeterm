@@ -82,6 +82,21 @@ export interface MinecraftServerStatus {
   downloadedBytes: number | null
   totalBytes: number | null
   downloadPercent: number | null
+  /**
+   * The connect address a player types into their Minecraft client, resolved from the real
+   * `server.properties` `server-port` key (falling back to vanilla's own 25565 default when the
+   * key is absent or invalid) plus this machine's own network identity. Populated once the
+   * instance is installed (any phase from `stopped` onward), not only while `running` — a player
+   * usually wants to know the address before they hit Start. `null` fields mean "not known yet",
+   * never a guess: `lanAddress` is null when this machine has no non-loopback IPv4 to offer.
+   */
+  port: number
+  /** What THIS machine uses to reach its own server — always `127.0.0.1`. Never presented as
+   *  something another device on the network can use. */
+  localAddress: string
+  /** A real LAN IPv4 another device on the same network can use to connect, or null when this
+   *  machine has none (offline, loopback-only). Never a loopback or link-local address. */
+  lanAddress: string | null
 }
 
 export interface MinecraftCreateInput {
