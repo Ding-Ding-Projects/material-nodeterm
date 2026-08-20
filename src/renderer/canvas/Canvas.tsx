@@ -126,6 +126,7 @@ import {
   IconCollapse,
   IconBellFilled,
   IconBranch,
+  IconCircleCheck,
   IconDuplicate,
   IconEditor,
   IconColor,
@@ -228,6 +229,7 @@ import {
 import { NotificationCenter } from '../components/NotificationCenter'
 import { HistoryScreen } from '../components/HistoryScreen'
 import { DocsBrowser } from '../components/DocsBrowser'
+import { StatusSurface } from '../components/StatusSurface'
 import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
@@ -1092,6 +1094,7 @@ export function Canvas() {
   const [notifCenterOpen, setNotifCenterOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [docsOpen, setDocsOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
   const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
   const [phonePairAnchor, setPhonePairAnchor] = useState<{
@@ -1167,6 +1170,7 @@ export function Canvas() {
     setNotifCenterOpen(false)
     setHistoryOpen(false)
     setDocsOpen(false)
+    setStatusOpen(false)
   }, [])
   // Reveal-in-Explorer target (relative to the active project cwd). The nonce makes each reveal
   // distinct so revealing the same file twice still re-fires the Explorer effect.
@@ -12597,7 +12601,8 @@ export function Canvas() {
           settingsOpen ||
           notifCenterOpen ||
           historyOpen ||
-          docsOpen
+          docsOpen ||
+          statusOpen
         const destinations: RailDestination[] = [
           {
             id: 'canvas',
@@ -12677,14 +12682,14 @@ export function Canvas() {
             }
           },
           {
-            id: 'docs',
-            icon: <IconMarkdown />,
-            label: 'Docs',
-            active: docsOpen,
+            id: 'status',
+            icon: <IconCircleCheck />,
+            label: 'Status',
+            active: statusOpen,
             onClick: () => {
               closeAllDrawers()
               leaveBoard()
-              setDocsOpen(true)
+              setStatusOpen(true)
             }
           },
           {
@@ -13154,6 +13159,11 @@ export function Canvas() {
       {docsOpen && (
         <div className="md3-docs-host">
           <DocsBrowser />
+        </div>
+      )}
+      {statusOpen && (
+        <div className="md3-status-host">
+          <StatusSurface />
         </div>
       )}
       {notifCenterOpen && (
