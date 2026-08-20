@@ -239,6 +239,20 @@ const SURFACES = [
       open: { click: '[aria-label*="History" i],[title*="History" i]' },
       verify: '.md3-history-screen'
     },
+    {
+      // The Status destination is what feat/status-hub-surface owed and never had: a capture
+      // of the real screen from the built artifact. Its host is imported, stated and
+      // reachable, and during integration the render site was dropped while typecheck stayed
+      // green — so REQUIRED here, because a screen whose button opens nothing must fail this
+      // run rather than go missing quietly a second time.
+      id: 'app-status-surface',
+      required: true,
+      title: 'Status surface',
+      open: { click: '.md3-rail-item[title="Status" i]' },
+      // .md3-status-screen exists ONLY inside StatusSurface. The host div alone would not do:
+      // it is rendered by Canvas, so it would be present even if the component drew nothing.
+      verify: '.md3-status-screen'
+    },
     // These five were last taken 2026-08-15 — BEFORE the Material 3 rewrite — and the README
     // embedded them as current, so it published the old blue-accent interface. Required now so a
     // stale settings shot fails the run instead of quietly outliving the design it shows.

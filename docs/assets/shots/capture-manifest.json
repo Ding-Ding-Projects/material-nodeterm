@@ -1,6 +1,6 @@
 {
-  "commit": "fcc85093a2543362eec1220f009b318200736d31",
-  "capturedAt": "2026-08-19T18:40:55.808Z",
+  "commit": "74cdac7fb8b1e3031166295ab302011f3a0a2d58",
+  "capturedAt": "2026-08-20T17:13:18.513Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -11,7 +11,7 @@
     {
       "id": "app-01-launch",
       "title": "App at launch",
-      "bytes": 50169,
+      "bytes": 50482,
       "hadOpener": false
     },
     {
@@ -23,19 +23,19 @@
     {
       "id": "app-03-palette",
       "title": "Command palette",
-      "bytes": 73339,
+      "bytes": 73643,
       "hadOpener": true
     },
     {
       "id": "app-04-canvas",
       "title": "Canvas",
-      "bytes": 50169,
+      "bytes": 50482,
       "hadOpener": false
     },
     {
       "id": "app-05-kanban",
       "title": "Kanban board",
-      "bytes": 33226,
+      "bytes": 33546,
       "hadOpener": true
     },
     {
@@ -47,7 +47,13 @@
     {
       "id": "app-06-history",
       "title": "History — session memory, settings history, changelog",
-      "bytes": 38965,
+      "bytes": 39254,
+      "hadOpener": true
+    },
+    {
+      "id": "app-status-surface",
+      "title": "Status surface",
+      "bytes": 108730,
       "hadOpener": true
     },
     {
@@ -89,7 +95,7 @@
     {
       "id": "app-windows-terminal-profiles",
       "title": "Windows terminal profiles — the picker",
-      "bytes": 64522,
+      "bytes": 64112,
       "hadOpener": true
     },
     {
@@ -101,7 +107,7 @@
     {
       "id": "app-kids-home",
       "title": "Kids mode — Home",
-      "bytes": 75457,
+      "bytes": 75880,
       "hadOpener": true
     },
     {
