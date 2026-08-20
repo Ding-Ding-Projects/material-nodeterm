@@ -769,6 +769,12 @@ async function bootstrap() {
     userDataDir,
     projectDirectory,
     catalog,
+    // Node ids journaled the INSTANT the renderer reports them, before any probe can fail.
+    // `state.profiles` only ever gains a node that completed every probe, so a node created for a
+    // profile whose probe then throws would never appear there — and its session would outlive the
+    // run, which is the one thing a Windows session host is designed to do. `cleanup()` reads both
+    // lists through `journaledNodeIds`, so a half-created node is still destroyed.
+    pendingNodeIds: [],
     profiles: [],
     captures: []
   }
@@ -776,7 +782,16 @@ async function bootstrap() {
   await openProfileSettingsAndCapture(state.captures, catalog)
   writeState(state)
   for (const profile of catalog.filter((candidate) => candidate.available)) {
-    const result = await createProfileNode(profile, catalog)
+    // The third argument is not optional, and omitting it was a real defect rather than a style
+    // choice: `createProfileNode` awaits `onNodeDiscovered(nodeId)` the moment the renderer hands
+    // back the new node id, so calling it with two arguments threw
+    // `TypeError: onNodeDiscovered is not a function` on the FIRST profile — two captures into a
+    // five-capture run, every time, since the refactor that introduced the parameter. The journal
+    // write is the whole point of the callback: it happens before any probe can fail.
+    const result = await createProfileNode(profile, catalog, async (nodeId) => {
+      state.pendingNodeIds.push(nodeId)
+      writeState(state)
+    })
     state.profiles.push(result)
     writeState(state)
     if (state.profiles.length === 1) {
@@ -910,15 +925,15 @@ async function cleanup() {
     ) {
       throw new Error('Cleanup state provenance does not match this invocation.')
     }
-    const ids = [...new Set((state.profiles ?? []).map((profile) => profile.nodeId))]
-    for (const nodeId of ids) {
-      if (typeof nodeId !== 'string' || nodeId === '') throw new Error('Cleanup journal contains an invalid node id.')
-      await rendererPromise(
-        `(function(){window.nodeTerminal.pty.destroy(${JSON.stringify(nodeId)},{everySocket:true}); return true;})()`,
-        `destroy journaled session ${nodeId}`
-      )
-      destroyed += 1
-    }
+    // `journaledNodeIds` unions pendingNodeIds with the completed profiles and validates every
+    // entry, so a node created for a profile whose probe later threw is destroyed too. Deriving
+    // the list from `state.profiles` alone — as this did — leaks exactly the sessions a failed run
+    // creates, and a Windows session host outlives the app on purpose, so the leak is permanent.
+    const ids = journaledNodeIds(state)
+    // `destroyJournaledSessions` is the intended implementation and was defined but never called.
+    // It does not trust the one-way `destroy` cast: it waits for send AND capture to report the
+    // session absent, then removes the nodes from the workspace.
+    destroyed = await destroyJournaledSessions(ids)
     await sleep(500)
   }
   await closeWindow()
