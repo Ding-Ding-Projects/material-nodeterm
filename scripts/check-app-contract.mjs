@@ -732,6 +732,65 @@ const FEATURES = [
     docs: ['docs/local-history.md'],
   },
   {
+    // The Status surface — the Status rail destination between History and Alerts. Every datum it
+    // renders is committed repository data bundled at build time (the capture manifest, the
+    // generated changelog, package.json), so there is no main-process read and no CorePlatform
+    // seam that could silently not exist server-side: the same built bundle behaves identically
+    // on Desktop and in the Server Edition. Hence no settingsSection either — this is a rail
+    // destination, not a settings page.
+    //
+    // Every needle carries a delimiter (a trailing `(`, a `:`, or a line-anchored `<`), because a
+    // bare substring is toothless against exactly the edit it is meant to catch. Probed on this
+    // file: delete the `<AnchoredRegexBuilder …/>` render and keep the import, and the plain
+    // string `AnchoredRegexBuilder` still matches — the module path inside the import line
+    // supplies it all on its own, which is trap 1 from this file's own header, one level down.
+    //
+    // The honesty rule is asserted by name rather than by counting cards: a gate whose verdict
+    // the repository does not record must render UNRUN, so the hand-written UNRECORDED_GATES list
+    // and the ❔ that must never be traded for a friendlier glyph are both pinned. A card-count
+    // assertion stays green through precisely the edit that upgrades an unverified state.
+    //
+    // No `captures` column, deliberately — matching every row here except the Windows terminal
+    // profiles one. docs/assets/shots/capture-manifest.json does record `app-status-surface`, but
+    // its method is plain CDP against the unpackaged out/ build, which is the exact route that
+    // row's pending reason says cannot stand as packaged headless capture evidence.
+    id: 'status-surface',
+    label: 'Status surface (project gates + recorded evidence)',
+    files: [
+      'src/renderer/components/StatusSurface.tsx',
+      'src/shared/project-status.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/components/StatusSurface.tsx', 'export function StatusSurface('],
+      ['src/shared/project-status.ts', 'export function buildProjectStatus('],
+      // Malformed evidence is never half-parsed into a friendlier verdict.
+      ['src/shared/project-status.ts', 'export function parseCaptureManifest('],
+      // The gates nobody records a verdict for are UNRUN by construction, and the emoji beside a
+      // state is scanability, never authority.
+      ['src/shared/project-status.ts', 'export const UNRECORDED_GATES:'],
+      ['src/shared/project-status.ts', "unrun: { emoji: '❔', label: 'Unrun' }"],
+      // The card search is a real search bar, so it carries its own anchored builder like every
+      // other one in the app. Anchored to the RENDER, not the import — see the note above.
+      ['src/renderer/components/StatusSurface.tsx', /^\s*<AnchoredRegexBuilder /m],
+      // Reachable as a rail destination: a surface no destination opens is invisible to a user,
+      // which is the same as absent. `id: 'status',` occurs exactly once in Canvas.tsx. No `$`
+      // anchor — every file in this tree is CRLF, so a trailing anchor matches nothing while
+      // looking perfectly correct.
+      ['src/renderer/canvas/Canvas.tsx', /^\s*id: 'status',/m],
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'StatusSurface' },
+    tests: [
+      ['src/shared/project-status.test.ts', "describe('buildProjectStatus'"],
+      ['src/renderer/components/status/StatusSurface.test.tsx', "describe('StatusSurface'"],
+    ],
+    docs: [
+      ['docs/status-surface.md', '## Verification'],
+      // One needle per LINE — the article is CRLF and wraps at ~100 columns, so a needle that
+      // spans the wrap matches nothing.
+      ['docs/status-surface.md', 'A check that has not run is UNRUN, not passed.'],
+    ],
+  },
+  {
     id: 'changelog-viewer',
     label: 'Changelog viewer (third History tab)',
     files: [
