@@ -29,10 +29,13 @@ import type {
   MinecraftConsoleLine,
   MinecraftCreateInput,
   MinecraftEvent,
+  MinecraftPlayerLists,
   MinecraftServerStatus,
   MinecraftVersionList
 } from '../../shared/minecraft'
 import { detectInstalledJava, ensureJavaRuntime, type JavaProbe } from './java'
+import { applyPropertyUpdates, propertiesToRecord, parseProperties } from './properties'
+import { parseBannedEntries, parsePlayerEntries } from './players'
 import {
   checkJavaCompatibility,
   parseLatestVersions,
@@ -458,6 +461,65 @@ export class MinecraftServerManager {
 
   async recentConsole(id: string): Promise<MinecraftConsoleLine[]> {
     return [...(this.runtime.get(id)?.console ?? [])]
+  }
+
+  async readProperties(id: string): Promise<Record<string, string> | null> {
+    const record = await this.readRecord(id)
+    if (!record) return null
+    try {
+      const raw = await readFile(path.join(record.dir, 'server.properties'), 'utf-8')
+      return propertiesToRecord(parseProperties(raw))
+    } catch {
+      // Not installed yet, or the file genuinely isn't there (e.g. never started once, since
+      // vanilla itself writes the full default file on first launch) — either way, nothing to
+      // show is not an error.
+      return null
+    }
+  }
+
+  async writeProperties(id: string, updates: Record<string, string>): Promise<MinecraftServerStatus> {
+    const runtime = this.runtime.get(id)
+    if (runtime?.proc) {
+      return this.oneShotError(
+        id,
+        'server.properties is only read at startup — stop the server before editing it, then start it again.'
+      )
+    }
+    const record = await this.readRecord(id)
+    if (!record) return this.oneShotError(id, 'No server has been created for this node yet.')
+    const propsPath = path.join(record.dir, 'server.properties')
+    let raw = ''
+    try {
+      raw = await readFile(propsPath, 'utf-8')
+    } catch {
+      // No file yet (a version installed but never started) — start from an empty document; every
+      // updated key is simply appended.
+    }
+    await writeFileAtomic(propsPath, applyPropertyUpdates(raw, updates))
+    return this.emitStatus(id)
+  }
+
+  async readPlayerLists(id: string): Promise<MinecraftPlayerLists> {
+    const record = await this.readRecord(id)
+    const empty: MinecraftPlayerLists = { whitelist: [], ops: [], banned: [] }
+    if (!record) return empty
+    const readJson = async (name: string): Promise<unknown> => {
+      try {
+        return JSON.parse(await readFile(path.join(record.dir, name), 'utf-8'))
+      } catch {
+        return null
+      }
+    }
+    const [whitelist, ops, banned] = await Promise.all([
+      readJson('whitelist.json'),
+      readJson('ops.json'),
+      readJson('banned-players.json')
+    ])
+    return {
+      whitelist: parsePlayerEntries(whitelist),
+      ops: parsePlayerEntries(ops),
+      banned: parseBannedEntries(banned)
+    }
   }
 
   async create(input: MinecraftCreateInput): Promise<MinecraftServerStatus> {

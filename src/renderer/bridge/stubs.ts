@@ -552,6 +552,9 @@ export function buildStubApi(): Omit<
       sendCommand: U('minecraft.sendCommand'),
       remove: U('minecraft.remove'),
       recentConsole: U('minecraft.recentConsole'),
+      readProperties: U('minecraft.readProperties'),
+      writeProperties: U('minecraft.writeProperties'),
+      readPlayerLists: U('minecraft.readPlayerLists'),
       onEvent: noopUnsub
     }
   } satisfies Omit<

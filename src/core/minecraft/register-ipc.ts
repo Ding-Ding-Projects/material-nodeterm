@@ -7,6 +7,7 @@ import type { CorePlatform } from '../platform'
 import type {
   MinecraftConsoleLine,
   MinecraftCreateInput,
+  MinecraftPlayerLists,
   MinecraftServerStatus,
   MinecraftVersionList
 } from '../../shared/minecraft'
@@ -54,6 +55,19 @@ export function registerMinecraftIpc(
   platform.handle(
     IPC.minecraftRecentConsole,
     (id: string): Promise<MinecraftConsoleLine[]> => manager.recentConsole(id)
+  )
+  platform.handle(
+    IPC.minecraftPropertiesRead,
+    (id: string): Promise<Record<string, string> | null> => manager.readProperties(id)
+  )
+  platform.handle(
+    IPC.minecraftPropertiesWrite,
+    (id: string, updates: Record<string, string>): Promise<MinecraftServerStatus> =>
+      manager.writeProperties(id, updates)
+  )
+  platform.handle(
+    IPC.minecraftPlayerLists,
+    (id: string): Promise<MinecraftPlayerLists> => manager.readPlayerLists(id)
   )
 
   return { manager }

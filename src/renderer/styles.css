@@ -12958,3 +12958,107 @@ body.focus-mode .dock:hover {
 .mc-console__line--stderr {
   color: #ff6961;
 }
+
+/* Management tabs (server.properties editor + player lists) — see
+ * MinecraftPropertiesEditor.tsx / MinecraftPlayersPanel.tsx. */
+.mc-mgmt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--md-outline-variant, #3a3a3c);
+}
+
+.mc-mgmt__tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.mc-mgmt__tab {
+  padding: 5px 10px;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  background: transparent;
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mc-mgmt__tab--active {
+  color: var(--md-on-secondary-container, #f2f2f7);
+  background: var(--md-secondary-container, #3a3a3c);
+  border-color: transparent;
+}
+
+.mc-note--saved {
+  color: var(--md-tertiary, #34c759);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mc-properties__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+@media (max-width: 480px) {
+  .mc-properties__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mc-players {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mc-players__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mc-players__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mc-players__heading {
+  margin: 0;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.mc-players__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mc-players__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  background: var(--md-surface-container-highest, #2c2c2e);
+  border-radius: 6px;
+}
+
+.mc-players__name {
+  overflow: hidden;
+  flex: 1;
+  color: var(--md-on-surface, #f2f2f7);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

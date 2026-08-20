@@ -537,6 +537,9 @@ export const IPC = {
   minecraftSendCommand: 'minecraft:send-command',
   minecraftRemove: 'minecraft:remove',
   minecraftRecentConsole: 'minecraft:recent-console',
+  minecraftPropertiesRead: 'minecraft:properties-read',
+  minecraftPropertiesWrite: 'minecraft:properties-write',
+  minecraftPlayerLists: 'minecraft:player-lists',
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',

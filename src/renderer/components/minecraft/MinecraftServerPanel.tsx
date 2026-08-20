@@ -6,6 +6,8 @@ import type {
 } from '@shared/minecraft'
 import { useSession } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
+import { MinecraftPropertiesEditor } from './MinecraftPropertiesEditor'
+import { MinecraftPlayersPanel } from './MinecraftPlayersPanel'
 
 const CONSOLE_CAP = 400
 
@@ -92,6 +94,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
   const [busy, setBusy] = useState(false)
   const [consoleLines, setConsoleLines] = useState<MinecraftConsoleLine[]>([])
   const [commandDraft, setCommandDraft] = useState('')
+  const [mgmtTab, setMgmtTab] = useState<'properties' | 'players' | null>(null)
   const consoleRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -400,6 +403,41 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             Stop server
           </button>
         </>
+      )}
+
+      {configured && !showInstallForm && (
+        <div className="mc-mgmt">
+          <div className="mc-mgmt__tabs" role="tablist" aria-label="Server management">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mgmtTab === 'properties'}
+              className={`mc-mgmt__tab nodrag${mgmtTab === 'properties' ? ' mc-mgmt__tab--active' : ''}`}
+              onClick={() => setMgmtTab((cur) => (cur === 'properties' ? null : 'properties'))}
+            >
+              server.properties
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mgmtTab === 'players'}
+              className={`mc-mgmt__tab nodrag${mgmtTab === 'players' ? ' mc-mgmt__tab--active' : ''}`}
+              onClick={() => setMgmtTab((cur) => (cur === 'players' ? null : 'players'))}
+            >
+              Players
+            </button>
+          </div>
+          {mgmtTab === 'properties' && (
+            <div role="tabpanel" aria-label="server.properties editor">
+              <MinecraftPropertiesEditor nodeId={nodeId} phase={status.phase} />
+            </div>
+          )}
+          {mgmtTab === 'players' && (
+            <div role="tabpanel" aria-label="Players">
+              <MinecraftPlayersPanel nodeId={nodeId} phase={status.phase} />
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
