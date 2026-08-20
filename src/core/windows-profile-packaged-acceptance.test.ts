@@ -649,6 +649,39 @@ describe('session-host continuity and cleanup precedence', () => {
     expect(driver).toMatch(/^\s*if \(\/reference chain is too long\/i\.test/m)
   })
 
+  it('never synthesises a drag without saying which button is held', () => {
+    // CDP's `button` names the button that CHANGED; `buttons` is the bitmask of what is HELD. A
+    // mouseMoved carrying `button: 'left'` but no `buttons` arrives at the page as
+    // `event.buttons === 0` — a hover — and d3-drag, which React Flow's NodeResizer is built on,
+    // ignores it. The press and release land, nothing drags, and the failure reads as the app
+    // refusing to resize rather than as a malformed input event.
+    const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, '')), '../..')
+    const driver = fs.readFileSync(path.join(root, 'scripts/windows-profile-packaged-driver.mjs'), 'utf8')
+
+    // Scan whole CALLS, not lines: these object literals are routinely wrapped across several
+    // lines, and a line-based version of this guard flagged the very fix it exists to enforce.
+    const offenders: string[] = []
+    const call = /cdp\.send\(\s*'Input\.dispatchMouseEvent'\s*,\s*\{([\s\S]*?)\}\s*\)/gu
+    let match: RegExpExecArray | null
+    while ((match = call.exec(driver)) !== null) {
+      const body = match[1]
+      // Scoped to the case that actually broke: a MOVE is what a drag is made of, and a move that
+      // names a real button without holding one is the malformed event. Plain clicks are left
+      // alone — they demonstrably work in this driver, and widening this to them would be a guess
+      // dressed as a rule.
+      if (!/type:\s*'mouseMoved'/u.test(body)) continue
+      if (/button:\s*'none'/u.test(body)) continue
+      if (/buttons:/u.test(body)) continue
+      const line = driver.slice(0, match.index).split(/\r?\n/).length
+      offenders.push(`line ${line}: ${body.replace(/\s+/gu, ' ').trim().slice(0, 110)}`)
+    }
+
+    expect(
+      offenders,
+      'a mouseMoved naming a real button must also state `buttons` — without it the page sees event.buttons === 0 and no drag happens',
+    ).toEqual([])
+  })
+
   it('never promotes final evidence until cleanup has succeeded', async () => {
     const promote = vi.fn((value: string) => `promoted:${value}`)
     await expect(

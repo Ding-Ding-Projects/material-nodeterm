@@ -587,9 +587,34 @@ async function resizeRepresentative(result, profile, catalog) {
   const before = await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});
     if(!n)return null;var r=n.getBoundingClientRect();return {width:r.width,height:r.height};})()`, 'node dimensions')
   const point = await elementPoint(`document.querySelector(${JSON.stringify(handleSelector)})`, 'terminal resize handle')
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x + 120, y: point.y + 80, button: 'left' })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x + 120, y: point.y + 80, button: 'left', clickCount: 1 })
+  // `buttons: 1` is the load-bearing field, and its absence is why this drag did nothing.
+  //
+  // CDP's `button` names the button that CHANGED; `buttons` is the bitmask of what is currently
+  // HELD. A mouseMoved without it arrives at the page with `event.buttons === 0` — a hover. The
+  // resize control is React Flow's NodeResizer, which is d3-drag underneath, and d3-drag ignores a
+  // move with no button held. So the press and release landed, nothing dragged, and the run failed
+  // on "resized terminal dimensions did not become true" as though the app had refused to resize.
+  //
+  // Intermediate steps rather than one jump: a drag implementation is entitled to expect a motion
+  // sequence, and a single teleport is the shape least likely to be honoured. Hover first, exactly
+  // as `clickPoint` does, so the handle is the element under the pointer when the press arrives.
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', buttons: 0 })
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1
+  })
+  for (const step of [0.25, 0.5, 0.75, 1]) {
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: point.x + 120 * step,
+      y: point.y + 80 * step,
+      button: 'left',
+      buttons: 1
+    })
+    await sleep(30)
+  }
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased', x: point.x + 120, y: point.y + 80, button: 'left', buttons: 0, clickCount: 1
+  })
   await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});if(!n)return false;
     var r=n.getBoundingClientRect();return r.width>${before.width + 60} && r.height>${before.height + 30};})()`,
     'resized terminal dimensions')
