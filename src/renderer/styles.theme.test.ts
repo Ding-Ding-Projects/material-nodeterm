@@ -14,6 +14,19 @@ import { join } from 'node:path'
 const CSS = readFileSync(join(__dirname, 'styles.css'), 'utf8')
 
 /**
+ * `fonts.css` is imported by `boot.tsx` immediately BEFORE `styles.css` and defines exactly two
+ * tokens: `--font-ui` and `--font-mono`. They are as real as anything in styles.css, and are used
+ * ~75 times across styles.md3.css, so a styles.css rule referencing one is correct code rather
+ * than the dangling-token trap this suite exists to catch.
+ *
+ * Only its DEFINITIONS are merged below. The file is deliberately NOT added to the corpus the
+ * literal-colour and theme-block suites scan: it carries no colours and no theme blocks, so
+ * widening those would cost teeth for nothing. It does not define `--mono`, so the historical
+ * `.mc-console` dangling-token defect stays catchable.
+ */
+const FONTS_CSS = readFileSync(join(__dirname, 'fonts.css'), 'utf8')
+
+/**
  * Where the light block actually starts. This MUST be anchored to the selector at the start of a
  * line: a plain `indexOf(":root[data-theme='light']")` matches the *doc comment* inside the `:root`
  * block that points at it (styles.css line ~6), which is 90 lines too early. That is not a
@@ -126,7 +139,10 @@ describe('every CSS variable resolves', () => {
   ])
 
   it('references no variable that is never defined', () => {
-    const defined = new Set(Array.from(CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1]))
+    const defined = new Set([
+      ...Array.from(CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1]),
+      ...Array.from(FONTS_CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1])
+    ])
     const used = new Set(Array.from(CSS.matchAll(/var\(\s*(--[a-z0-9-]+)/g), (x) => x[1]))
     const dangling = [...used].filter((v) => !defined.has(v) && !SET_FROM_JS.has(v)).sort()
     expect(dangling).toEqual([])
