@@ -552,10 +552,14 @@ describe('measured contrast floors', () => {
 
   /** Read a token's literal value out of one theme block. */
   const token = (block: string, name: string): string => {
-    const m = new RegExp(`${name}:\s*([^;]+);`).exec(block)
+    const m = new RegExp(`${name}:\\s*([^;]+);`).exec(block)
     if (!m) throw new Error(`${name} not found in that theme block`)
     return m[1].trim()
   }
+  it('keeps an s-leading token value when no space follows the colon', () => {
+    expect(token('--probe:salmon;', '--probe')).toBe('salmon')
+    expect(token('--probe:   salmon;', '--probe')).toBe('salmon')
+  })
   /** Resolve one level of `var(--other)` aliasing — the dark block's on-primary-container is an
    *  alias, the light block's is a literal, and a helper that only understood literals reported
    *  the alias as a parse failure rather than as the value it plainly is. */

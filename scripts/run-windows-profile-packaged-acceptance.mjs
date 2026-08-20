@@ -8,12 +8,14 @@
  * runner never launches an app directly and never falls back to the visible desktop or a kill.
  */
 import fs from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import net from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
+import { renameAtomicSync } from './lib/rename-atomic.mjs'
 
 const require = createRequire(import.meta.url)
 const {
@@ -94,11 +96,11 @@ function optionalAbsolute(name, fallback) {
 }
 
 function atomicJson(file, value) {
-  const temporary = `${file}.${process.pid}.tmp`
+  const temporary = `${file}.${randomUUID()}.tmp`
   fs.mkdirSync(path.dirname(file), { recursive: true })
   try {
     fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx' })
-    fs.renameSync(temporary, file)
+    renameAtomicSync(temporary, file)
   } catch (error) {
     try {
       fs.rmSync(temporary, { force: true })

@@ -10,13 +10,15 @@ function walk(dir: string): string[] {
 }
 
 // Catches: bare `electron`, electron subpaths (`electron/main`), and any reach-back
-// into the Electron shell (`../main/`, `../../main/`) — via import or require.
+// into the Electron shell (`../main/`, `../../main/`) — via static/dynamic import or require.
 const OFFENDERS =
-  /from ['"]electron(\/[^'"]*)?['"]|require\(['"]electron(\/[^'"]*)?['"]\)|from ['"](\.\.\/)+main\//
+  /from\s+['"]electron(\/[^'"]*)?['"]|require\(\s*['"]electron(\/[^'"]*)?['"]\s*\)|import\s*\(\s*['"]electron(\/[^'"]*)?['"]|^[ \t]*import\s+['"]electron(\/[^'"]*)?['"]|from\s+['"](\.\.\/)+main\/|import\s*\(\s*['"](\.\.\/)+main\//m
 
 describe('core boundary', () => {
   it('no file under src/core imports electron or reaches back into ../main', () => {
-    const offenders = walk(__dirname)
+    const files = walk(__dirname)
+    expect(files.length).toBeGreaterThan(100)
+    const offenders = files
       // This test file itself contains sample offender strings (below) to prove the regex.
       .filter((f) => f !== __filename)
       .filter((f) => OFFENDERS.test(fs.readFileSync(f, 'utf8')))
@@ -28,10 +30,13 @@ describe('core boundary', () => {
     for (const bad of [
       `import { app } from 'electron'`,
       `import { BrowserWindow } from "electron"`,
+      `import 'electron'`,
+      `const shell = await import('electron')`,
       `const { ipcMain } = require('electron')`,
       `import { x } from 'electron/main'`,
       `const y = require("electron/common")`,
       `import { PtyManager } from '../main/pty-manager'`,
+      `const pty = await import('../main/pty-manager')`,
       `import { z } from '../../main/index'`
     ]) {
       expect(OFFENDERS.test(bad), bad).toBe(true)
