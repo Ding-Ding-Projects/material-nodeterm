@@ -883,6 +883,12 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
     remove: (id, deleteFiles) => client.request(IPC.minecraftRemove, id, deleteFiles) as Promise<void>,
     recentConsole: (id) =>
       client.request(IPC.minecraftRecentConsole, id) as ReturnType<MinecraftApi['recentConsole']>,
+    readProperties: (id) =>
+      client.request(IPC.minecraftPropertiesRead, id) as ReturnType<MinecraftApi['readProperties']>,
+    writeProperties: (id, updates) =>
+      client.request(IPC.minecraftPropertiesWrite, id, updates) as ReturnType<MinecraftApi['writeProperties']>,
+    readPlayerLists: (id) =>
+      client.request(IPC.minecraftPlayerLists, id) as ReturnType<MinecraftApi['readPlayerLists']>,
     onEvent: (listener) => client.subscribe(IPC.minecraftEvent, listener as Listener)
   }
   return { minecraft }

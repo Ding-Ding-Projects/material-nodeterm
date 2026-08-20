@@ -99,6 +99,100 @@ export interface MinecraftServerStatus {
   lanAddress: string | null
 }
 
+export type MinecraftPropertyFieldKind = 'string' | 'boolean' | 'integer' | 'enum'
+
+export interface MinecraftPropertyFieldSpec {
+  key: string
+  label: string
+  kind: MinecraftPropertyFieldKind
+  /** Only for kind:'enum'. */
+  options?: readonly string[]
+  /** Only for kind:'integer'. Inclusive. */
+  min?: number
+  max?: number
+  help: string
+}
+
+/** The subset of server.properties the GUI renders a typed control for, in display order — see
+ *  core/minecraft/properties.ts for the parser/serializer this describes the shape of. Shared
+ *  (rather than core-only) because the renderer needs it to build the properties editor and the
+ *  renderer may only ever import `@shared/*`, never `core/*` directly. */
+export const MANAGED_PROPERTY_FIELDS: readonly MinecraftPropertyFieldSpec[] = [
+  { key: 'motd', label: 'Message of the day', kind: 'string', help: 'Shown in the server list on the multiplayer screen.' },
+  {
+    key: 'gamemode',
+    label: 'Default game mode',
+    kind: 'enum',
+    options: ['survival', 'creative', 'adventure', 'spectator'],
+    help: 'Applied to a player the first time they join.'
+  },
+  {
+    key: 'difficulty',
+    label: 'Difficulty',
+    kind: 'enum',
+    options: ['peaceful', 'easy', 'normal', 'hard'],
+    help: 'Peaceful disables hostile mobs and hunger.'
+  },
+  { key: 'hardcore', label: 'Hardcore', kind: 'boolean', help: 'A player is banned instead of respawning on death.' },
+  { key: 'pvp', label: 'Player vs player', kind: 'boolean', help: 'Whether players can damage each other.' },
+  { key: 'white-list', label: 'Whitelist enabled', kind: 'boolean', help: 'Only players on the whitelist may join.' },
+  {
+    key: 'online-mode',
+    label: 'Online mode',
+    kind: 'boolean',
+    help: 'Verifies players against Mojang accounts. Turn off only for a fully offline/LAN server.'
+  },
+  { key: 'enable-command-block', label: 'Command blocks', kind: 'boolean', help: 'Whether command blocks are functional.' },
+  { key: 'allow-nether', label: 'Allow the Nether', kind: 'boolean', help: '' },
+  {
+    key: 'allow-flight',
+    label: 'Allow flight',
+    kind: 'boolean',
+    help: 'Without this, a flying survival player is kicked as cheating.'
+  },
+  {
+    key: 'spawn-protection',
+    label: 'Spawn protection radius',
+    kind: 'integer',
+    min: 0,
+    max: 1000,
+    help: 'Blocks around spawn only ops may edit. 0 disables it.'
+  },
+  { key: 'max-players', label: 'Max players', kind: 'integer', min: 1, max: 2000, help: '' },
+  { key: 'view-distance', label: 'View distance (chunks)', kind: 'integer', min: 3, max: 32, help: '' },
+  { key: 'simulation-distance', label: 'Simulation distance (chunks)', kind: 'integer', min: 3, max: 32, help: '' },
+  {
+    key: 'level-name',
+    label: 'World folder name',
+    kind: 'string',
+    help: 'Renaming this points the server at a different (or new) world folder.'
+  },
+  { key: 'level-seed', label: 'World seed', kind: 'string', help: 'Only used the first time a world is generated.' }
+] as const
+
+export function minecraftFieldSpec(key: string): MinecraftPropertyFieldSpec | undefined {
+  return MANAGED_PROPERTY_FIELDS.find((f) => f.key === key)
+}
+
+export interface MinecraftPlayerEntry {
+  name: string
+  uuid: string
+}
+
+export interface MinecraftBannedPlayerEntry extends MinecraftPlayerEntry {
+  reason: string | null
+  expires: string | null
+}
+
+/** Read from vanilla's own whitelist.json / ops.json / banned-players.json — see
+ *  core/minecraft/players.ts for why these are read-only from this side; every mutation goes
+ *  through `sendCommand` against the running server's console instead. */
+export interface MinecraftPlayerLists {
+  whitelist: MinecraftPlayerEntry[]
+  ops: MinecraftPlayerEntry[]
+  banned: MinecraftBannedPlayerEntry[]
+}
+
 export interface MinecraftCreateInput {
   /** The canvas node id this instance belongs to. One instance per node. */
   id: string
@@ -149,5 +243,23 @@ export interface MinecraftApi {
   remove(id: string, deleteFiles: boolean): Promise<void>
   /** Console history already buffered, for a node that remounts after the stream has some. */
   recentConsole(id: string): Promise<MinecraftConsoleLine[]>
+  /**
+   * The instance's server.properties as a flat key/value map, or `null` when nothing has been
+   * installed for this node yet (there is no file to read). Every key present in the real file is
+   * returned, not only the ones the GUI renders a typed control for — see
+   * `core/minecraft/properties.ts`'s `MANAGED_PROPERTY_FIELDS`.
+   */
+  readProperties(id: string): Promise<Record<string, string> | null>
+  /**
+   * Writes `updates` into server.properties, preserving every other line exactly as it was.
+   * Refused (reported as `phase: 'error'`, never thrown) while the server is running — the file is
+   * only read at startup, so a live edit would silently do nothing until a restart, and reporting
+   * success would be a lie about what just happened.
+   */
+  writeProperties(id: string, updates: Record<string, string>): Promise<MinecraftServerStatus>
+  /** The current whitelist/ops/ban lists straight from vanilla's own JSON files on disk. Always
+   *  safe to call — an instance that has never run has none of these files, which reads as three
+   *  empty lists rather than an error. */
+  readPlayerLists(id: string): Promise<MinecraftPlayerLists>
   onEvent(listener: (event: MinecraftEvent) => void): () => void
 }

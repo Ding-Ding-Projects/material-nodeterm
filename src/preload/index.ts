@@ -849,6 +849,9 @@ const api: NodeTerminalApi = {
     sendCommand: (id, command) => ipcRenderer.invoke(IPC.minecraftSendCommand, id, command),
     remove: (id, deleteFiles) => ipcRenderer.invoke(IPC.minecraftRemove, id, deleteFiles),
     recentConsole: (id) => ipcRenderer.invoke(IPC.minecraftRecentConsole, id),
+    readProperties: (id) => ipcRenderer.invoke(IPC.minecraftPropertiesRead, id),
+    writeProperties: (id, updates) => ipcRenderer.invoke(IPC.minecraftPropertiesWrite, id, updates),
+    readPlayerLists: (id) => ipcRenderer.invoke(IPC.minecraftPlayerLists, id),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
   }
 }
