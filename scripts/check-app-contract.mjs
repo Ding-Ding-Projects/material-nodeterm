@@ -812,6 +812,53 @@ const FEATURES = [
     docs: ['docs/local-history.md'],
   },
   {
+    // Terminal text sharpness on a fractional device-pixel ratio — Windows at 125% / 150%, which
+    // is the delivery platform's normal state. Two independent causes, both MEASURED on real
+    // pixels rather than reasoned about: PHASE (an arbitrary pan lands the fixed-resolution
+    // terminal raster between device pixels, and bilinear resampling smears every glyph) and
+    // SCALE (the raster is built at dpr and displayed at dpr × zoom, so any zoom ≠ 1 resamples).
+    //
+    // This row exists because the recursive docs sweep flagged the article the moment the lane
+    // landed — which is the sweep working. Before it recursed, a feature documented under
+    // docs/features/ was invisible to the completeness mechanism while the identical feature
+    // documented at docs/ top level went red.
+    //
+    // Needles anchor to declarations, never bare identifiers. RASTER_SCALE_MIN_FACTOR is the floor
+    // that currently forbids supersampling, and it is pinned deliberately: it is the reason the
+    // zoom-out case is still open, so a renamed RASTER_SCALE_MIN_FACTOR_V2 must not satisfy the
+    // row that documents the trade-off it represents.
+    id: 'terminal-sharpness',
+    label: 'Terminal text sharpness (device-pixel phase and raster scale)',
+    files: [
+      'src/renderer/terminal/device-pixel-fit.ts',
+      'src/renderer/terminal/raster-scale.ts',
+      'src/renderer/terminal/renderer-mode.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/terminal/device-pixel-fit.ts', 'export const RASTER_SCALE_STEP'],
+      ['src/renderer/terminal/device-pixel-fit.ts', 'export const RASTER_SCALE_MIN_FACTOR'],
+      ['src/renderer/terminal/raster-scale.ts', 'export function patchTerminalRasterScale('],
+      ['src/renderer/terminal/raster-scale.ts', 'export function resyncRasterScales('],
+      // The PHASE half, wired at the viewport: snapped on gesture END, never per-frame, because
+      // fighting d3-zoom mid-drag stutters the pan.
+      // Anchored to the CALL, not the bare name. Written loose first, and the break test caught
+      // it immediately: renaming the symbol to devicePixelSnapOffsetREMOVED left the substring
+      // intact and the row stayed green over a deleted wiring. The trailing ( is what a rename
+      // cannot carry with it — the same trap this file's own header records.
+      ['src/renderer/canvas/Canvas.tsx', 'devicePixelSnapOffset('],
+    ],
+    tests: [
+      ['src/renderer/terminal/device-pixel-fit.test.ts', "describe('terminalRasterScale'"],
+      ['src/renderer/terminal/raster-scale.test.ts', "describe('patchTerminalRasterScale'"],
+      // The wiring guard specifically: deleting the raster patch used to stay green.
+      ['src/renderer/terminal/raster-scale-wired.test.ts', 'raster'],
+    ],
+    docs: [
+      ['docs/features/canvas/terminal-sharpness.md', '## The two causes'],
+      ['docs/features/canvas/terminal-sharpness.md', '## What the app does about each'],
+    ],
+  },
+  {
     // The Status surface — the Status rail destination between History and Alerts. Every datum it
     // renders is committed repository data bundled at build time (the capture manifest, the
     // generated changelog, package.json), so there is no main-process read and no CorePlatform
