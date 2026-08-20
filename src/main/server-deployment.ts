@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { access, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import crypto from 'node:crypto'
 import path from 'node:path'
 import { base32Decode, base32Encode, totp } from '../core/toylocks/totp'
@@ -12,9 +13,40 @@ export interface ServerDeploymentResult {
   error?: string
 }
 
-function run(executable: string, args: string[], cwd: string, timeoutMs: number): Promise<string> {
+/**
+ * Where `host.bat` + `docker-compose.yml` + `Dockerfile` (and the rest of the source tree the
+ * Docker build context needs) actually live, mirroring `resolveSessionHostScript` in
+ * `session-host-launcher.ts`: a packaged build ships them as a real extraResources directory
+ * (asar cannot be executed by `cmd.exe`/Docker, so they must be plain files on disk), while a dev
+ * checkout uses the repo root directly. First existing candidate wins.
+ */
+export function resolveServerDeploymentRoot(opts: {
+  isPackaged: boolean
+  resourcesPath?: string | null
+  repoRoot: string
+  exists?: (p: string) => boolean
+}): string {
+  const exists = opts.exists ?? existsSync
+  if (opts.isPackaged && opts.resourcesPath) {
+    const packaged = path.join(opts.resourcesPath, 'server-deployment')
+    try {
+      if (exists(path.join(packaged, 'host.bat'))) return packaged
+    } catch {
+      /* unreadable — fall through to the repo root */
+    }
+  }
+  return opts.repoRoot
+}
+
+function run(
+  executable: string,
+  args: string[],
+  cwd: string,
+  timeoutMs: number,
+  extraEnv?: Record<string, string>
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const env = { ...process.env }
+    const env = { ...process.env, ...extraEnv }
     for (const key of ['COMPOSE_FILE', 'COMPOSE_PROJECT_NAME', 'COMPOSE_PROFILES', 'COMPOSE_ENV_FILES']) delete env[key]
     const child = spawn(executable, args, { cwd, windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
     let output = ''
@@ -38,10 +70,21 @@ async function commandWorks(executable: string, args: string[], cwd: string): Pr
 }
 
 /** Deployment-first phone route. The existing host wrapper remains the authority for Compose
- * endpoint validation, image build/reuse, named-volume persistence and health polling. */
+ * endpoint validation, image build/reuse, named-volume persistence and health polling.
+ *
+ * `projectRoot` is where `host.bat`/`docker-compose.yml`/`Dockerfile` live — the packaged
+ * `server-deployment` resources directory, or the repo root in dev (see
+ * `resolveServerDeploymentRoot`). `stateDir` is a writable, per-user location for the generated
+ * `.env` (the first-boot password) and the TOTP secret. It MUST be outside `projectRoot`: a
+ * packaged install lives under a Squirrel version directory that is replaced wholesale on every
+ * update, so anything written beside `host.bat` there is silently lost on the next update and the
+ * paired phone stops working with no explanation. `stateDir` is threaded through to `host.bat` and
+ * `docker-compose.yml` via environment variables the wrapper/compose file read with a fallback to
+ * their historical (repo-root-relative) behavior, so a dev checkout run without `stateDir` set is
+ * unchanged. */
 export class ServerDeploymentService {
   private inFlight: Promise<ServerDeploymentResult> | null = null
-  constructor(private readonly projectRoot: string) {}
+  constructor(private readonly projectRoot: string, private readonly stateDir: string = projectRoot) {}
 
   start(): Promise<ServerDeploymentResult> {
     if (!this.inFlight) this.inFlight = this.startOnce().finally(() => (this.inFlight = null))
@@ -49,7 +92,7 @@ export class ServerDeploymentService {
   }
 
   async currentTotp(): Promise<string> {
-    const secret = (await readFile(path.join(this.projectRoot, '.nodeterm-server-totp'), 'utf-8')).trim()
+    const secret = (await readFile(path.join(this.stateDir, '.nodeterm-server-totp'), 'utf-8')).trim()
     return totp(base32Decode(secret))
   }
 
@@ -57,13 +100,14 @@ export class ServerDeploymentService {
     if (process.platform !== 'win32') return { ok: false, state: 'failed', error: 'Automatic Server Edition deployment is currently available on Windows only.' }
     const wrapper = path.join(this.projectRoot, 'host.bat')
     try { await access(wrapper) } catch { return { ok: false, state: 'failed', error: 'The Server Edition deployment files are missing.' } }
-    const totpFile = path.join(this.projectRoot, '.nodeterm-server-totp')
+    await mkdir(this.stateDir, { recursive: true })
+    const totpFile = path.join(this.stateDir, '.nodeterm-server-totp')
     let secretBase32 = ''
     try { secretBase32 = (await readFile(totpFile, 'utf-8')).trim() } catch { /* first deployment */ }
     if (!/^[A-Z2-7]{32}$/.test(secretBase32)) {
       secretBase32 = base32Encode(crypto.randomBytes(20))
       await writeFile(totpFile, `${secretBase32}\n`, { mode: 0o600 })
-      await run('icacls.exe', [totpFile, '/inheritance:r', '/grant:r', `${process.env.USERDOMAIN}\\${process.env.USERNAME}:(R,W)`], this.projectRoot, 15_000)
+      await run('icacls.exe', [totpFile, '/inheritance:r', '/grant:r', `${process.env.USERDOMAIN}\\${process.env.USERNAME}:(R,W)`], this.stateDir, 15_000)
     }
 
     if (!(await commandWorks('docker.exe', ['compose', 'version'], this.projectRoot))) {
@@ -91,7 +135,14 @@ export class ServerDeploymentService {
     }
 
     try {
-      await run('cmd.exe', ['/d', '/c', wrapper, '--start'], this.projectRoot, 30 * 60_000)
+      // NODETERM_SERVER_ENV_DIR redirects host.bat's .env (first-boot password) out of the
+      // (update-replaced) install directory; NODETERM_TOTP_SECRET_FILE_HOST is read by
+      // docker-compose.yml's totp volume mount for the same reason. `docker compose` reads real
+      // process environment for `${VAR}` interpolation, so neither has to be persisted into .env.
+      await run('cmd.exe', ['/d', '/c', wrapper, '--start'], this.projectRoot, 30 * 60_000, {
+        NODETERM_SERVER_ENV_DIR: this.stateDir,
+        NODETERM_TOTP_SECRET_FILE_HOST: totpFile
+      })
       return {
         ok: true,
         state: 'ready',

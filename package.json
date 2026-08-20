@@ -82,6 +82,24 @@
       {
         "from": "dist/.pack-resources/codex-relay.js",
         "to": "codex-relay.js"
+      },
+      {
+        "from": ".",
+        "to": "server-deployment",
+        "filter": [
+          "host.bat",
+          "docker-compose.yml",
+          "Dockerfile",
+          ".dockerignore",
+          "package.json",
+          "package-lock.json",
+          "electron.vite.config.ts",
+          "tsconfig.json",
+          "tsconfig.node.json",
+          "tsconfig.web.json",
+          "deploy/**/*",
+          "src/**/*"
+        ]
       }
     ],
     "linux": {

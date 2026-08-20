@@ -47,7 +47,7 @@ import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
-import { ServerDeploymentService } from './server-deployment'
+import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
 import type { RemoteLoginHelp, Settings } from '../shared/types'
@@ -804,7 +804,20 @@ app.whenReady().then(async () => {
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
   const projectArchives = new ProjectArchiveService(localHistoryStore)
-  const serverDeployment = new ServerDeploymentService(app.getAppPath())
+  // The packaged extraResources directory in a production install, the repo root in dev (see
+  // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
+  // the matching `server-deployment/` directory). Writable state (the generated .env password,
+  // the TOTP secret) lives under userData instead, since a packaged install's project directory
+  // sits in a Squirrel version folder that is replaced wholesale on every update.
+  const serverDeploymentRoot = resolveServerDeploymentRoot({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    repoRoot: app.getAppPath()
+  })
+  const serverDeployment = new ServerDeploymentService(
+    serverDeploymentRoot,
+    join(app.getPath('userData'), 'server-deployment')
+  )
   ipcMain.handle(IPC.serverDeploymentStart, () => serverDeployment.start())
   ipcMain.handle(IPC.serverDeploymentTotp, () => serverDeployment.currentTotp())
   workspaceStore.setProjectHistoryRecorder((project, content) =>
