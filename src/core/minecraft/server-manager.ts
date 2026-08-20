@@ -22,9 +22,11 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { networkInterfaces } from 'node:os'
 import path from 'node:path'
 import { Writable } from 'node:stream'
 import { renameAtomic, tempNameFor, writeFileAtomic } from '../fs-atomic'
+import { DEFAULT_MINECRAFT_PORT, parseServerPort, pickLanIPv4 } from '../lan-address'
 import type {
   MinecraftConsoleLine,
   MinecraftCreateInput,
@@ -157,6 +159,18 @@ async function readEulaAccepted(dir: string): Promise<boolean> {
   }
 }
 
+/** The real `server-port` this instance will listen on. `server.properties` is written by the
+ *  vanilla server itself on its first run, so an instance that has never started yet has no such
+ *  file — that is exactly the vanilla default (25565), not a fact worth erroring over. */
+async function readServerPort(dir: string): Promise<number> {
+  try {
+    const raw = await readFile(path.join(dir, 'server.properties'), 'utf-8')
+    return parseServerPort(raw)
+  } catch {
+    return DEFAULT_MINECRAFT_PORT
+  }
+}
+
 /** Mojang's own eula.txt shape (comment lines + one `eula=` key), so a user who opens the folder
  *  directly sees the file they already recognize rather than something nodeterm invented. */
 function eulaFileContent(accepted: boolean): string {
@@ -262,6 +276,8 @@ export class MinecraftServerManager {
     const versionId = record?.versionId ?? runtime?.transientVersionId ?? null
     const requiredJavaMajor = record?.requiredJavaMajor ?? null
     const compat = checkJavaCompatibility(requiredJavaMajor, java.major)
+    const port = dir ? await readServerPort(dir) : DEFAULT_MINECRAFT_PORT
+    const lanAddress = dir ? pickLanIPv4(networkInterfaces()) : null
 
     const status: MinecraftServerStatus = {
       id,
@@ -279,7 +295,10 @@ export class MinecraftServerManager {
       startedAt: runtime?.startedAt ?? null,
       downloadedBytes: null,
       totalBytes: null,
-      downloadPercent: null
+      downloadPercent: null,
+      port,
+      localAddress: '127.0.0.1',
+      lanAddress
     }
 
     if (runtime?.downloading) {
@@ -359,7 +378,10 @@ export class MinecraftServerManager {
         startedAt: null,
         downloadedBytes,
         totalBytes,
-        downloadPercent: percent
+        downloadPercent: percent,
+        port: DEFAULT_MINECRAFT_PORT,
+        localAddress: '127.0.0.1',
+        lanAddress: null
       }
     })
   }

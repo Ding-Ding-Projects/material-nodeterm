@@ -264,6 +264,7 @@ import {
 } from '../lib/zoomShortcut'
 import { UsageIndicator } from '../components/UsageIndicator'
 import { SystemResourcePill } from '../components/SystemResourcePill'
+import { MinecraftConnectBanner } from '../components/MinecraftConnectBanner'
 import { PresenceLayer } from '../components/PresenceLayer'
 import { Facepile } from '../components/Facepile'
 import { PresenceNamePrompt } from '../components/PresenceNamePrompt'
@@ -1304,6 +1305,19 @@ export function Canvas() {
   // Every group on this canvas that owns a worktree — the one derivation the worktree dialog, the
   // store refresh and the Source Control scope list all read.
   const boundGroupList = useMemo(() => boundGroups(nodes), [nodes])
+  // Every Minecraft server manager node on THIS project's canvas — what MinecraftConnectBanner
+  // needs to know which live statuses are ours to show. A stable-content key (rather than `nodes`
+  // itself, which changes identity on every drag) keeps the banner's subscriptions from tearing
+  // down and rebuilding on unrelated canvas edits.
+  const minecraftIdsKey = nodes
+    .filter((n) => n.type === 'minecraft')
+    .map((n) => n.id)
+    .sort()
+    .join(',')
+  const minecraftNodeIds = useMemo(
+    () => (minecraftIdsKey ? minecraftIdsKey.split(',') : []),
+    [minecraftIdsKey]
+  )
   const boundWorktreePaths = useMemo(
     () => new Set(boundGroupList.map((b) => normWorktreePath(b.worktree.path))),
     [boundGroupList]
@@ -12459,6 +12473,7 @@ export function Canvas() {
       </TopAppBar>
 
       <div className="top-banners">
+        <MinecraftConnectBanner minecraftNodeIds={minecraftNodeIds} />
         <AnnouncementBanner />
         <TmuxBanner onInstall={runInTerminal} />
         {/* This MACHINE is running out of pty devices — subscribes for itself; a failed
