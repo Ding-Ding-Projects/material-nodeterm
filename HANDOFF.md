@@ -151,6 +151,63 @@ After the status surface merged, a full run came back **entirely green**: **711 
 single-failure runs recorded above as contention rather than regression — they are left in the
 record anyway, because the honest version of “it passes now” includes the runs where it did not.
 
+### The Windows packaged-capture row is blocked on a MISSING PROMOTION PATH, not on the capture
+
+This was investigated properly rather than guessed at, and the answer is more useful than
+“still pending”. Everything upstream of the last step is ready, verified by running commands:
+the tree is clean, `HEAD` is byte-identical to the hui's `main` tip, the immutable icon is
+publicly fetchable at that SHA (HTTP 200, 15633 bytes matching the committed blob), the
+Spectre-mitigated MSVC libraries are installed, no process from this checkout holds a native
+addon, and the cheap headless executable is exactly where the orchestrator demands it. A
+purpose-built harness for precisely these four capture ids
+(`windows-terminal-profile-picker` / `-terminal` / `-unavailable` / `-reattached`) has been
+sitting unrun since `a4e3b13d`.
+
+**The blocker is that the harness writes its evidence where the contract does not read.**
+`run-windows-profile-packaged-acceptance.mjs` emits its manifest to the TASK ROOT, and it is the
+only place in the tree carrying the required `cheap Lowlevel MCP headless` needle. The contract
+reads `docs/assets/shots/capture-manifest.json` — a file `capture-shots.mjs` **regenerates
+wholesale** on every run with a hard-coded `method: 'Electron + CDP ... out/ artifact'` and
+`app-*` ids only. So a hand-merge is both unearned and self-erasing: the next `npm run shots`
+deletes it. The generic promotion tooling the `promote-ui-evidence` skill assumes
+(`scripts/stage-evidence.mjs`, `scripts/verify-evidence-receipt.mjs`) **does not exist in this
+repository**.
+
+That missing promotion path is the actual defect, and it is the thing to build. Either teach
+`capture-shots.mjs` to MERGE a packaged-acceptance block rather than overwrite, or add a
+promotion script that copies the PNGs in, verifies each against the SHA-256 the driver recorded,
+and writes a manifest whose `method` names the cheap route. Whichever way, **`npm run shots` must
+stop being able to erase it** — without that, the row can be made green once and will go red
+again for reasons nobody will connect to the capture run.
+
+Two further traps worth carrying, both found by reading the code rather than by running it:
+
+- **Existing `dist/` artifacts can never be reused.** `createBuildProvenance` fails any artifact
+  whose mtime predates the frozen source snapshot, so `npm run dist:win` must run AFTER the
+  snapshot step, not before. `REQUIRED_ARTIFACT_ROLES` also demands the full Squirrel set exist
+  and be hashed even though the run only ever launches `win-unpacked/nodeterm.exe`.
+- **Flipping the status is a three-file change, not a one-liner.** The same feature row requires
+  a docs needle matching `does not claim that the pending capture`, which is a real sentence in
+  `windows-shell-profiles.md`. Marking captures verified while that sentence stands would be
+  self-contradictory, so the article, the needle and the status must move together — and the
+  acceptance manifest self-declares `acceptanceComplete: false` with `installer: blocked`, so
+  closing the capture row must not be described as installed-artifact proof.
+
+### An adversarial audit of this session's own merges found nothing
+
+Two independent auditors were pointed at `289fcb47..HEAD` and told to assume it was broken —
+one hunting code wired at one end and consumed at neither, the other hunting the merge-semantic
+shapes this document already records (dropped symbols, silently merged same-named interfaces, a
+guard whose scaffolding survived while its body did not). They raised **eleven** candidates.
+Each faced two independent judges, one trying to refute it and one asking whether it would
+matter even if real, with a finding surviving only if both agreed. **Zero survived.**
+
+That is recorded as a result rather than skipped as a non-event. The `<StatusSurface />` drop
+earlier the same day proved this repository can ship a clean typecheck over a missing screen, so
+“we looked hard and found nothing” is worth exactly as much as a finding would have been — and
+it is now the difference between an integration nobody re-checked and one that survived being
+attacked.
+
 ### Still open
 
 - **`fix/blur-scale-wiring`** (`f003a05d`) — the ONLY branch still out, and it is blocked on a
