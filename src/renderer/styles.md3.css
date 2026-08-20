@@ -914,6 +914,58 @@
   user-select: none;
 }
 
+/* Full-colour header (`.term-node__header--filled`, from `nodeHeaderFillStyle`): the node's own
+   colour fills the whole bar via an inline `background`/`color` pair, computed for guaranteed
+   contrast against every colour the picker can produce (see the function's own doc comment). This
+   is what a "full colour title bar" — not just a thin coloured outline — actually looks like.
+
+   Everything that would otherwise read its colour from a token instead inherits the computed
+   foreground, so text and icons stay legible on the fill rather than clashing with whatever the
+   token happened to be against a dark or light bar. */
+.term-node__header--filled,
+.term-node__header--filled .term-node__title,
+.term-node__header--filled .term-node__title-text,
+.term-node__header--filled .term-node__session,
+.term-node__header--filled .term-node__collapse,
+.term-node__header--filled .term-node__folder-drag,
+.term-node__header--filled .term-node__ai,
+.term-node__header--filled .term-node__move-worktree,
+.term-node__header--filled .term-node__search,
+.term-node__header--filled .term-node__refresh,
+.term-node__header--filled .term-node__mic,
+.term-node__header--filled .term-node__chat,
+.term-node__header--filled .term-node__find-btn {
+  color: inherit;
+}
+
+/* Hover/focus on a filled header: a translucent wash of the CURRENT (computed) foreground, rather
+   than the token-based `surface-container-highest` step above — that step is tuned for the
+   header's default dark/light background and can vanish or invert against an arbitrary fill. */
+.term-node__header--filled .term-node__collapse:hover,
+.term-node__header--filled .term-node__folder-drag:hover,
+.term-node__header--filled .term-node__ai:hover:not(:disabled),
+.term-node__header--filled .term-node__move-worktree:hover,
+.term-node__header--filled .term-node__search:hover,
+.term-node__header--filled .term-node__refresh:hover,
+.term-node__header--filled .term-node__mic:hover,
+.term-node__header--filled .term-node__chat:hover,
+.term-node__header--filled .term-node__find-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  color: inherit;
+}
+
+.term-node__header--filled .term-node__title:focus,
+.term-node__header--filled .term-node__title-text:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+/* Close stays the MD3 error colour even on a filled header — it's a destructive action, not part
+   of the colour theme, and error-red must keep meaning the same thing everywhere in the app. */
+.term-node__header--filled .term-node__close:hover {
+  background: color-mix(in srgb, var(--md-error) 25%, white 10%);
+  color: var(--md-error);
+}
+
 .term-node__collapse,
 .term-node__folder-drag,
 .term-node__ai,

@@ -28,6 +28,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 // here. `lazy` + a null fallback — the panel replaces the terminal body on a keypress, and a
 // one-frame spinner in that slot reads as a glitch.
 const ChatPanel = lazy(() => import('./ChatPanel').then((m) => ({ default: m.ChatPanel })))
+import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { LocalTransport } from '../terminal/local-transport'
 import { clipboardImages, droppedPaths, pasteHasText, pastedFiles } from '../terminal/file-drop'
 import type { TerminalTransport } from '../terminal/transport'
@@ -4778,6 +4779,8 @@ export function TerminalNode({
     status?.state !== 'waiting' &&
     status?.state !== 'blocked'
 
+  const headerFill = nodeHeaderFillStyle(data.color)
+
   return (
     <>
       {/* Sibling of the root: .term-node is overflow:hidden and would clip the half-pill. */}
@@ -4841,7 +4844,12 @@ export function TerminalNode({
           }
         />
 
-        <div className="term-node__header">
+        <div
+          className={`term-node__header ${headerFill.className}${
+            headerFill.filled ? ' term-node__header--filled' : ''
+          }`}
+          style={headerFill.style}
+        >
           <button
             className="term-node__collapse"
             title={collapsed ? 'Expand' : 'Collapse'}
