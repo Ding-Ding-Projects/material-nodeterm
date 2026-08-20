@@ -47,4 +47,42 @@ describe('ensureJavaRuntime', () => {
     expect(probe).toEqual({ path: 'C:/Java/bin/java.exe', major: 25 })
     expect(fetched).toBe(false)
   })
+
+  it('never consults the platform when an already-compatible Java is detected, even off Windows', async () => {
+    // Auto-install is Windows-only, but "does this machine already have Java?" is a question every
+    // platform can answer. Checking the platform first meant a macOS/Linux machine with a perfectly
+    // good Java on PATH was refused with "Windows only" instead of just being left alone.
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    try {
+      const probe = await ensureJavaRuntime({
+        userDataDir: 'unused',
+        requiredMajor: 21,
+        detect: async () => ({ path: '/usr/bin/java', major: 21 }),
+        fetchJson: async () => {
+          throw new Error('should not reach the network when Java is already compatible')
+        }
+      })
+      expect(probe).toEqual({ path: '/usr/bin/java', major: 21 })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform })
+    }
+  })
+
+  it('reports the exact platform limitation, and what to do instead, when installation is actually needed off Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    try {
+      await expect(
+        ensureJavaRuntime({
+          userDataDir: 'unused',
+          requiredMajor: 21,
+          detect: async () => ({ path: null, major: null }),
+          fetchJson: async () => []
+        })
+      ).rejects.toThrow(/Windows only.*install a java runtime yourself/is)
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform })
+    }
+  })
 })

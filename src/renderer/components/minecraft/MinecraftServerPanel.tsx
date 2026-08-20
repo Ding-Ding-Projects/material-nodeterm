@@ -6,6 +6,13 @@ import type {
 } from '@shared/minecraft'
 import { useSession } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
+import {
+  acceptEulaDisabledReason,
+  createServerDisabledReason,
+  sendCommandDisabledReason,
+  startServerDisabledReason,
+  stopServerDisabledReason
+} from '../../lib/minecraftDisabledReasons'
 
 const CONSOLE_CAP = 400
 
@@ -249,6 +256,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
           type="button"
           className="mc-button mc-button--primary nodrag"
           disabled={busy || !selectedVersion || !selectedDir}
+          title={createServerDisabledReason({ busy, selectedVersion, selectedDir }) ?? undefined}
           onClick={() => void handleCreate()}
         >
           {configured ? 'Reinstall server' : 'Create server'}
@@ -258,6 +266,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             type="button"
             className="mc-button nodrag"
             disabled={busy}
+            title={busy ? 'Wait for the current operation to finish.' : undefined}
             onClick={() => setShowInstallForm(false)}
           >
             Cancel
@@ -321,6 +330,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             type="button"
             className="mc-button mc-button--primary nodrag"
             disabled={busy || !eulaChecked}
+            title={acceptEulaDisabledReason({ busy, eulaChecked }) ?? undefined}
             onClick={() => void handleAcceptEula()}
           >
             Accept and continue
@@ -339,11 +349,18 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
               type="button"
               className="mc-button mc-button--primary nodrag"
               disabled={busy || !status.javaOk}
+              title={startServerDisabledReason({ busy, status }) ?? undefined}
               onClick={() => void handleStart()}
             >
               Start server
             </button>
-            <button type="button" className="mc-button nodrag" disabled={busy} onClick={() => setShowInstallForm(true)}>
+            <button
+              type="button"
+              className="mc-button nodrag"
+              disabled={busy}
+              title={busy ? 'Wait for the current operation to finish.' : undefined}
+              onClick={() => setShowInstallForm(true)}
+            >
               Install a different version
             </button>
           </div>
@@ -379,6 +396,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
               className="service-node__input nodrag"
               value={commandDraft}
               disabled={status.phase !== 'running'}
+              title={status.phase !== 'running' ? 'The server is not running.' : undefined}
               onChange={(e) => setCommandDraft(e.target.value)}
               placeholder="Type a server command…"
               aria-label="Server console command"
@@ -387,6 +405,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
               type="submit"
               className="mc-button nodrag"
               disabled={status.phase !== 'running' || !commandDraft.trim()}
+              title={sendCommandDisabledReason({ phase: status.phase, commandDraft }) ?? undefined}
             >
               Send
             </button>
@@ -395,6 +414,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             type="button"
             className="mc-button nodrag"
             disabled={status.phase !== 'running'}
+            title={stopServerDisabledReason({ phase: status.phase }) ?? undefined}
             onClick={requestStop}
           >
             Stop server
