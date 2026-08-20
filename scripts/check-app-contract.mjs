@@ -409,6 +409,22 @@ const FEATURES = [
     docs: ['docs/features/projects/project-history-and-archives.md'],
   },
   {
+    // The sessions-sidebar project-header right-click menu and the project switcher's per-row
+    // actions panel are two independently-typed menus that drifted apart (the switcher had no
+    // archive save/open, the sidebar menu had no appearance editor). Both must consume the one
+    // shared label/id module rather than re-typing the label, or the drift comes back the moment
+    // either file is edited without the other.
+    id: 'project-menu-actions-shared-source',
+    label: 'Project menu actions (sidebar + switcher share one source)',
+    files: ['src/renderer/lib/projectMenuActions.ts'],
+    contentChecks: [
+      ['src/renderer/lib/projectMenuActions.ts', 'export const SHARED_PROJECT_ACTIONS'],
+      ['src/renderer/canvas/Canvas.tsx', "from '../lib/projectMenuActions'"],
+      ['src/renderer/components/ProjectSwitcher.tsx', "from '../lib/projectMenuActions'"],
+    ],
+    docs: ['docs/features/projects/projects-and-tabs.md'],
+  },
+  {
     id: 'node-kinds',
     label: 'Node kinds (terminal / sticky / group / editor / diff)',
     files: [

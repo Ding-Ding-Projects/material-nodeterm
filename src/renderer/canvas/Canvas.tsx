@@ -122,6 +122,11 @@ import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
 import { seedColor } from '../components/color/seedColor'
 import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
+import {
+  SAVE_PROJECT_ARCHIVE_ACTION,
+  OPEN_PROJECT_ARCHIVE_ACTION,
+  EDIT_TAB_APPEARANCE_ACTION
+} from '../lib/projectMenuActions'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import {
   IconAgent,
@@ -11644,6 +11649,10 @@ export function Canvas() {
       e.stopPropagation()
       const project = useProjects.getState().projects.find((p) => p.id === projectId)
       if (!project) return
+      // Captured now (the row that was right-clicked) — MenuItem.onClick takes no argument, and
+      // by the time a menu item is clicked the pointer is over the ContextMenu portal, not the
+      // sidebar row, so `e.currentTarget` has to be grabbed here instead of inside the item.
+      const anchor = e.currentTarget as HTMLElement
       setMenu({
         x: e.clientX,
         y: e.clientY,
@@ -11665,16 +11674,25 @@ export function Canvas() {
           },
           { label: 'Set folder…', icon: <IconProject />, onClick: () => setProjectFolder(projectId) },
           {
-            label: 'Save project as one file…',
+            label: SAVE_PROJECT_ARCHIVE_ACTION.label,
             icon: <IconSave />,
             disabled: projectArchiveBusyRef.current,
             onClick: () => void exportProjectArchive(projectId)
           },
           {
-            label: 'Open project from file…',
+            label: OPEN_PROJECT_ARCHIVE_ACTION.label,
             icon: <IconProject />,
             disabled: projectArchiveBusyRef.current,
             onClick: () => void importProjectArchive()
+          },
+          {
+            // Same target the project switcher's "Edit tab appearance…" opens — the appearance
+            // registry keys this by `appearanceId('tab', projectId)` regardless of which row
+            // anchors the popover, so the sidebar and the switcher edit the SAME appearance.
+            label: EDIT_TAB_APPEARANCE_ACTION.label,
+            icon: <IconEditor />,
+            onClick: () =>
+              openAppearanceEditor(appearanceId('tab', projectId), project.name, 'tab', anchor)
           },
           { type: 'separator' },
           // Seeded from the project's CURRENT colour: without `value` the full picker opened on
@@ -12342,6 +12360,9 @@ export function Canvas() {
           onSetDefaultAccount={setProjectDefaultAccount}
           onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
           onSetColor={setProjectColor}
+          onSaveArchive={(id) => void exportProjectArchive(id)}
+          onOpenArchive={() => void importProjectArchive()}
+          archiveBusy={() => projectArchiveBusyRef.current}
         />
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
