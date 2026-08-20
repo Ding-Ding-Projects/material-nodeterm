@@ -150,6 +150,9 @@ export interface NodeData {
   url?: string
   /** Browser-only: agent node allowed to control this tab through the Browser Plugin. */
   browserOwnerNodeId?: string
+  /** Browser-only: which of the project's browserProfiles this node's webview session uses.
+   *  Undefined = the app's default (unpartitioned) session — see @shared/browser-profiles. */
+  browserProfileId?: string
   diffStaged?: boolean
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
@@ -834,7 +837,8 @@ export function createBrowserNode(
   index: number,
   url: string,
   center?: { x: number; y: number },
-  ownerNodeId?: string
+  ownerNodeId?: string,
+  profileId?: string
 ): CanvasNode {
   const title = url ? url.replace(/^https?:\/\//, '').slice(0, 40) : 'Browser'
   return {
@@ -849,7 +853,8 @@ export function createBrowserNode(
       color: '#0a84ff',
       group: null,
       ...(url ? { url } : {}),
-      ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {})
+      ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {}),
+      ...(profileId ? { browserProfileId: profileId } : {})
     }
   }
 }
@@ -1747,6 +1752,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         filePath: n.filePath,
         fileMissing: n.fileMissing,
         url: n.url,
+        browserProfileId: n.browserProfileId,
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
@@ -1812,6 +1818,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
+        browserProfileId: n.data.browserProfileId,
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,

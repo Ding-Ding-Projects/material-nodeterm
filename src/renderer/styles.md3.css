@@ -998,6 +998,68 @@
   color: var(--md-error);
 }
 
+/* Browser node header — profile picker trigger (see nodes/BrowserProfilePicker.tsx). */
+.browser-profile-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 140px;
+  padding: 3px 8px;
+  border-radius: var(--md-shape-full);
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+
+.browser-profile-trigger:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.browser-profile-trigger:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+.browser-profile-trigger__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-profile-picker__rename {
+  padding: 8px 12px;
+}
+
+.browser-profile-picker__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The profile row is a role="menuitemradio" <div>, not a <button> (its trailing rename/delete
+   IconButtons are real interactive controls, and a button cannot contain a button) — restore the
+   affordances `.mdx-row`'s own :hover/:focus normally get from being a real button element. */
+div.mdx-row[role='menuitemradio'] {
+  cursor: pointer;
+}
+
+div.mdx-row[role='menuitemradio']:hover {
+  background: var(--md-surface-container-highest);
+}
+
+div.mdx-row[role='menuitemradio']:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
 .term-node__title,
 .term-node__title-text {
   color: var(--md-on-surface);

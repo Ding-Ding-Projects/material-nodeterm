@@ -76,6 +76,10 @@ export interface KanbanSession {
   text?: string
   /** Browser node URL (kind 'browser' only) — shown on the card, opened in the modal webview. */
   url?: string
+  /** Browser node profile id (kind 'browser' only) — the modal's live webview must use the same
+   *  isolated session (cookies/storage) the canvas node uses, or navigating in one view would not
+   *  be the same login as the other. See `shared/browser-profiles.ts`. */
+  browserProfileId?: string
   /** The subset of the node's `data` the card modal's co-attach terminal needs to spawn/join the
    *  same session (kind 'terminal' only; sticky passes `{}`). */
   spawn: ModalSpawn
@@ -898,6 +902,7 @@ export const KanbanView = memo(function KanbanView({
       {modalNodeId && byId.has(modalNodeId) && (
         <CardModal
           session={byId.get(modalNodeId)!}
+          projectId={projectId}
           columnTitle={columnForNode(board, modalNodeId)?.title ?? null}
           board={board}
           onChangeBoard={commit}

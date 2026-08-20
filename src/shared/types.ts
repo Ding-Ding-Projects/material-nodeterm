@@ -488,6 +488,17 @@ export interface CanvasNodeState {
   fileMissing?: boolean
   /** web-only: when set, the web node loads this live URL (else it loads `filePath` as local html). */
   url?: string
+  /**
+   * browser-only: which of the project's `browserProfiles` (see `Project.browserProfiles`) this
+   * node's webview session uses. Undefined = the app's default (unpartitioned) session — the
+   * pre-feature behavior, and the default for every new browser node until the user picks one.
+   * References `BrowserProfile.id`; a dangling reference (profile since removed) still derives a
+   * stable partition — see `browserPartitionFor` — so the node keeps its own isolated cookie jar
+   * rather than silently falling back to the default session's. User-changeable at any time from
+   * the node's profile picker (unlike `accountId`, which is immutable) — the webview remounts
+   * onto the new partition when it changes.
+   */
+  browserProfileId?: string
   /** diff-only: true = staged diff (HEAD vs index), false = unstaged (index vs working). */
   diffStaged?: boolean
   /** diff-only: when set, the diff shows parent (<oid>^) vs commit (<oid>) for a file from history. */
@@ -565,6 +576,21 @@ export interface BridgeLink {
   id: string
   source: string
   target: string
+}
+
+/**
+ * A named browser profile for one project. Browser nodes assigned to the same profile id share
+ * that profile's cookies/localStorage/session state (an isolated Electron session partition
+ * derived from `projectId + profileId` — see `shared/browser-profiles.ts`); nodes on different
+ * profiles are isolated from each other. The profile's NAME is shareable (it rides
+ * `Project.browserProfiles` into the git-shared project file, like `KanbanColumn.title`); the
+ * cookie jar itself is not — it lives only in this machine's Electron partition storage and is
+ * never persisted or exported here.
+ */
+export interface BrowserProfile {
+  id: string
+  name: string
+  color: string
 }
 
 /** One kanban board column. Column order = array order in ProjectKanban.columns. */
@@ -725,6 +751,13 @@ export interface Project {
   dinoHighScore?: number
   /** Kanban task board — shared via .nodeterm/project.json like nodes. */
   kanban?: ProjectKanban
+  /**
+   * Named browser profiles for this project — shared via .nodeterm/project.json like nodes/kanban.
+   * See `BrowserProfile`. Absent = no profiles defined yet; browser nodes with no `browserProfileId`
+   * use the app's default (unpartitioned) Electron session, which is bit-for-bit the pre-feature
+   * behavior.
+   */
+  browserProfiles?: BrowserProfile[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
