@@ -841,6 +841,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
       color: (n.data.color as string) ?? NODE_COLORS[0],
       kind: 'browser',
       url: n.data.url as string | undefined,
+      browserProfileId: n.data.browserProfileId as string | undefined,
       spawn: {}
     }
   }

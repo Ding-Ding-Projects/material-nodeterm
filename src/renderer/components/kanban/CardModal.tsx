@@ -8,6 +8,7 @@ import { useAgentStatus } from '../../state/agentStatus'
 import { useCardPanel } from '../../state/cardPanel'
 import { useSession } from '../../session/session'
 import type { ProjectKanban } from '@shared/types'
+import { browserPartitionFor } from '@shared/browser-profiles'
 import type { KanbanSession } from './KanbanView'
 import { BoardLogPanel } from './BoardLogPanel'
 import { CardMetaBar } from './CardMetaBar'
@@ -18,6 +19,10 @@ import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLoca
 
 interface CardModalProps {
   session: KanbanSession
+  /** The active project id — resolves the browser node's `browserProfileId` (kind 'browser' only)
+   *  into the same Electron session partition the canvas node's own webview uses. See
+   *  `shared/browser-profiles.ts`. */
+  projectId: string
   /** Column title shown as a chip; null = Ungrouped. */
   columnTitle: string | null
   /** The live board + its pruned commit — the Members/Due strip edits through them. */
@@ -84,6 +89,7 @@ export function CardModalTerminalProfile({
  *  search / dictate / AI-name / markdown view (the node itself is hidden under the board). */
 export function CardModal({
   session,
+  projectId,
   columnTitle,
   board,
   onChangeBoard,
@@ -273,11 +279,16 @@ export function CardModal({
                   // A live browser webview seeded with the node's URL; navigation persists back to
                   // the node (the canvas node picks it up on its next mount).
                   <BrowserSurface
-                    key={session.id}
+                    // Same partition the canvas node's own webview uses — see
+                    // shared/browser-profiles.ts. Keyed on it too, for the same reason BrowserNode
+                    // is: a profile switch made on the canvas must remount this view onto the new
+                    // session rather than reading stale cookies from the old one.
+                    key={`${session.id}:${browserPartitionFor(projectId, session.browserProfileId) ?? 'default'}`}
                     nodeId={session.id}
                     url={session.url ?? ''}
                     onUrlChange={(u) => onBrowserNav({ url: u })}
                     onTitleChange={(t) => onBrowserNav({ title: t })}
+                    partition={browserPartitionFor(projectId, session.browserProfileId)}
                   />
                 ) : (
                   <div className="kanban-modal__placeholder">Open on the canvas.</div>

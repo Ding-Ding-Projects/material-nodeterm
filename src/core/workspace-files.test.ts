@@ -414,6 +414,53 @@ describe('kanban board persistence', () => {
   })
 })
 
+describe('browser profile persistence', () => {
+  const profiles = [
+    { id: 'profile-1', name: 'Work', color: '#0a84ff' },
+    { id: 'profile-2', name: 'Personal', color: '#ff9f0a' }
+  ]
+  it('rides the project file round-trip', () => {
+    const f = projectToFile(project({ browserProfiles: profiles }), 1, '2026-08-20T00:00:00.000Z')
+    expect(f.browserProfiles).toEqual(profiles)
+    expect(fileToProject(f, { id: 'p1' }).browserProfiles).toEqual(profiles)
+  })
+  it('absent stays absent — no key is written', () => {
+    const f = projectToFile(project(), 1, '2026-08-20T00:00:00.000Z')
+    expect('browserProfiles' in f).toBe(false)
+    expect('browserProfiles' in fileToProject(f, { id: 'p1' })).toBe(false)
+  })
+  it('an empty array is treated as absent, not an empty written key', () => {
+    const f = projectToFile(project({ browserProfiles: [] }), 1, '2026-08-20T00:00:00.000Z')
+    expect('browserProfiles' in f).toBe(false)
+  })
+  it('survives splitWorkspace (both shells + ssh cache)', () => {
+    const ws: Workspace = {
+      version: 2,
+      activeProjectId: 'p1',
+      projects: [project({ cwd: '/a/b', browserProfiles: profiles })]
+    }
+    const { files } = splitWorkspace(ws, () => 1, '2026-08-20T00:00:00.000Z')
+    expect(files.get('/a/b')?.browserProfiles).toEqual(profiles)
+  })
+  it('a malformed shape from a hand-edited file drops the whole list', () => {
+    const f = projectToFile(project(), 1, '2026-08-20T00:00:00.000Z')
+    const evil1 = { ...f, browserProfiles: {} } as unknown as ProjectFileV1
+    const evil2 = { ...f, browserProfiles: [{ id: 'a' }] } as unknown as ProjectFileV1
+    const evil3 = { ...f, browserProfiles: 'nope' } as unknown as ProjectFileV1
+    expect('browserProfiles' in fileToProject(evil1, { id: 'p1' })).toBe(false)
+    expect('browserProfiles' in fileToProject(evil2, { id: 'p1' })).toBe(false)
+    expect('browserProfiles' in fileToProject(evil3, { id: 'p1' })).toBe(false)
+  })
+  it('drops only the malformed entry, keeping the real profiles beside it', () => {
+    const f = projectToFile(project(), 1, '2026-08-20T00:00:00.000Z')
+    const mixed = {
+      ...f,
+      browserProfiles: [profiles[0], { id: 'bad' }, profiles[1]]
+    } as unknown as ProjectFileV1
+    expect(fileToProject(mixed, { id: 'p1' }).browserProfiles).toEqual(profiles)
+  })
+})
+
 describe('the shared file carries content, not machine identity', () => {
   const p = project({
     id: 'project-mridky20-11', cwd: '/a/foo', name: 'shared', defaultAccountId: 'acct-1',
