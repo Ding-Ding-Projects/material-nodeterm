@@ -63,10 +63,17 @@ planting a dynamic electron import in core goes red.
 - The ADHD surfaces owe a packaged capture (three states named in `docs/adhd-modes.md`), and a
   visual check at narrow widths / 200% scale.
 - **The blur verdict, for whoever picks this up**: PHASE is fixed on `main`; the SCALE branch
-  helps only zoomed IN (0% at zoom 1.0 and out); the zoom-out case needs supersampling, which
-  `RASTER_SCALE_MIN_FACTOR = 1` forbids — one of its two stated reasons is now disproven
-  (measured: the mip chain engages zero levels above a 0.5 ratio), the other (rebuild cost on
-  zoom-in) stands and is the open trade. A device eyeball at 150% remains the gate for both.
+  helps only zoomed IN (0% at zoom 1.0 and out). Correction to an earlier version of this line:
+  the zoom-out case is NOT "needs supersampling" — at zoom < 1 the raster is already denser than
+  the display needs (built at `dpr`, display needs `dpr × zoom < dpr`), so the loss is
+  RESAMPLING (the compositor bilinearly shrinking an already-big-enough raster), not a resolution
+  shortfall a denser raster would fix. What `RASTER_SCALE_MIN_FACTOR = 1` actually forbids is the
+  raster getting COARSER to match the display exactly, i.e. letting the font rasterizer draw the
+  smaller glyphs directly with real hinting/AA instead of the GPU downsampling. One of its two
+  stated reasons for the floor is disproven (measured: the mip chain engages zero levels above a
+  0.5 ratio); the other (a rebuild on every zoom OUT, not just in) stands, and the column-reflow
+  proof (`cellWidthIsStable`) has only ever been derived for the zoom-IN direction — going
+  coarser is unproven, not merely un-shipped. A device eyeball at 150% remains the gate for both.
 
 
 ## 2026-08-20 — six branches integrated, and the stale-failure list retracted

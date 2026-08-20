@@ -274,9 +274,31 @@ been a change that shipped, measured nothing, and left the original complaint in
 advantages are elsewhere and unaffected by this: PHASE immunity via its own camera snapping, and
 the recorded 17% ink advantage at zoom 1.
 
-**What would actually address it**, for whoever takes it on: the loss at zoom < 1 is that a
-dpr-density raster is being *minified*, and the only thing that recovers detail is having built it
-denser — supersampling. `RASTER_SCALE_MIN_FACTOR = 1` currently forbids exactly that, for two
-stated reasons (a rebuild during zoom-in, and the mip chain being "already built for it"). The
-second reason is now disproven. The first still stands and is a real cost. That trade is a genuine
-design decision, not an oversight — and it is the open question here, not the renderer default.
+**What the candidate fix actually is — correction to an earlier version of this section, which had
+the mechanism backwards.** It is not "build the raster denser" (supersampling). At zoom < 1 the
+raster is already denser than the display needs: it is built at `dpr` device px per CSS px, and
+the display only needs `dpr × zoom`, which is strictly *less* than `dpr` whenever zoom < 1. So the
+loss here is not a resolution shortfall a denser raster would fix — it is a **resampling** loss:
+the compositor is bilinearly shrinking a raster that was already built bigger than the screen will
+show, instead of the font rasterizer drawing the glyphs directly at their true (smaller) on-screen
+size, with real hinting and anti-aliasing at that size.
+
+The candidate that actually matches display density is therefore the opposite move: let the
+raster get **coarser** as zoom drops below 1, down toward `dpr × zoom`, instead of it staying
+pinned at `dpr`. `RASTER_SCALE_MIN_FACTOR = 1` is exactly what forbids that today — read literally,
+it is a *floor*, never letting the raster scale drop below the display's own `dpr` regardless of
+how far zoomed out the canvas is.
+
+`RASTER_SCALE_MIN_FACTOR` gave two stated reasons for that floor. The mip-chain reason above is
+now disproven by measurement. The other — a rebuild cost — still stands, and going coarser makes
+it worse in a specific way: today's scale change only fires crossing zoom = 1 on the way IN, so
+zooming out re-rasterizes nothing (see Cost, above); letting the raster track zoom down as well
+would rebuild the atlas on every zoom-OUT step too, on every visible terminal. And a second,
+more serious point that "the earlier wording didn't have to reckon with": `cellWidthIsStable` and
+`safeRasterScale`'s whole-multiple-of-`dpr` proof were derived for scales *at or above* `dpr` — the
+zoom-IN side of this module. A raster that is asked to be *coarser* than `dpr` measures a
+different cell width than the one `quantizeCharSize` locked the display grid onto, and nobody has
+re-derived (or disproven) the reflow-safety proof in that direction. So going coarser is not a
+missing default sitting behind a single constant — it is an unproven change to the exact guard
+that exists to stop a camera movement from SIGWINCH-ing somebody's live tmux session. That is the
+open question here, kept open on purpose.

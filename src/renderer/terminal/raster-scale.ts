@@ -328,3 +328,113 @@ export function __resetRasterScaleForTests(): void {
     applyTimer = null
   }
 }
+
+/**
+ * DIAGNOSTIC ONLY — `window.__rasterProbe`. This changes no default, no setting and no
+ * terminal's behaviour unless something calls it; it exists purely to answer one open question,
+ * left open in `docs/features/canvas/terminal-sharpness.md` and `HANDOFF.md`, that arithmetic
+ * alone cannot settle:
+ *
+ * `cellWidthIsStable` is a STATIC proof, and it is deliberately conservative — it refuses any
+ * `rasterScale` that is not a whole multiple of the display `dpr`, because that is the only case
+ * `safeRasterScale` can prove `floor(width * rasterScale) / rasterScale` lands on the same value
+ * as `floor(width * dpr) / dpr`. But the thing that actually decides whether a terminal reflows is
+ * `RenderService.handleDevicePixelRatioChange()`, which does not consult that proof at all — it
+ * RE-MEASURES through xterm's own `charSizeService`, and (when `quantizeCharSize` is installed)
+ * that re-measurement is itself quantized onto the DISPLAY grid before `addon-fit` derives `cols`
+ * from it. So a scale the static guard refuses MAY still leave the live column count untouched;
+ * the static proof is sufficient but not shown to be necessary. Only a measurement decides which
+ * it is — this probe takes that measurement.
+ *
+ * `list()` is read-only. `force(scale)` mutates exactly one thing per client — `client.applied` —
+ * and re-drives its renderer the same way `applyTo` does, deliberately BYPASSING
+ * `cellWidthIsStable` (that bypass is the whole point: it lets you ask "what actually happens" for
+ * a scale the guard would have refused before anything ran). It rolls back `client.applied` on
+ * throw, exactly as `applyTo` does. Nothing here schedules an `applyAll()`, arms the mutation
+ * observer, or survives one: the very next real viewport transform (or a mode change through
+ * `resyncRasterScales`) recomputes `targetScaleFor` from scratch and overwrites whatever `force()`
+ * left behind. It is not gated by a debug flag, in the same spirit as `__glyphgridSnap` in
+ * `SharedGlyphLayer.tsx` — the question it answers can only be answered by someone looking at a
+ * real device, and there is nothing here to protect: it can move a terminal's column count for as
+ * long as `force()`'s effect lasts, on the terminal you pointed it at, which is exactly the
+ * one-terminal blast radius the question requires you to accept to answer it.
+ */
+export interface RasterProbeEntry {
+  dpr: number
+  applied: number
+  cols: number
+  rows: number
+  measuredCellWidth: number | undefined
+  zoom: number
+}
+
+export interface RasterProbeForceResult extends RasterProbeEntry {
+  /** What the static guard says about `scale`, for the width measured BEFORE the force ran. */
+  wouldBeStable: boolean
+  before: { cols: number; measuredCellWidth: number | undefined }
+  /** `null` when the renderer could not be driven at all (no `_renderService` on this terminal). */
+  after: { cols: number; measuredCellWidth: number | undefined } | null
+  /** Set when `handleDevicePixelRatioChange` threw and `applied` was rolled back to its prior value. */
+  error: string | null
+}
+
+function rasterProbeEntry(client: Client): RasterProbeEntry {
+  return {
+    dpr: client.displayDpr(),
+    applied: client.applied,
+    cols: client.term.cols,
+    rows: client.term.rows,
+    measuredCellWidth: client.core._charSizeService?.width,
+    zoom: zoomFor(client.term).zoom
+  }
+}
+
+function rasterProbeForce(scale: number): RasterProbeForceResult[] {
+  const results: RasterProbeForceResult[] = []
+  if (!(typeof scale === 'number' && Number.isFinite(scale) && scale > 0)) return results
+  for (const client of clients.values()) {
+    const dpr = client.displayDpr()
+    const measuredBefore = client.core._charSizeService?.width
+    const before = { cols: client.term.cols, measuredCellWidth: measuredBefore }
+    const wouldBeStable =
+      typeof measuredBefore === 'number' && measuredBefore > 0
+        ? cellWidthIsStable(measuredBefore, dpr, scale)
+        : false
+    const render = client.core._renderService
+    const previous = client.applied
+    let after: { cols: number; measuredCellWidth: number | undefined } | null = null
+    let error: string | null = null
+    if (!render || typeof render.handleDevicePixelRatioChange !== 'function') {
+      error = 'no _renderService.handleDevicePixelRatioChange on this terminal'
+    } else {
+      client.applied = scale
+      try {
+        render.handleDevicePixelRatioChange()
+        after = { cols: client.term.cols, measuredCellWidth: client.core._charSizeService?.width }
+      } catch (e) {
+        client.applied = previous
+        error = e instanceof Error ? e.message : String(e)
+      }
+    }
+    results.push({ ...rasterProbeEntry(client), before, after, wouldBeStable, error })
+  }
+  return results
+}
+
+function installRasterProbe(): void {
+  if (typeof window === 'undefined') return
+  const w = window as unknown as Record<string, unknown>
+  if (w.__rasterProbe) return
+  w.__rasterProbe = {
+    list: (): RasterProbeEntry[] => Array.from(clients.values()).map(rasterProbeEntry),
+    force: rasterProbeForce
+  }
+}
+installRasterProbe()
+
+/** Test seam: drop the installed `window.__rasterProbe` (a fresh module import would otherwise
+ *  find `w.__rasterProbe` already set and skip re-installing over a torn-down module state). */
+export function __resetRasterProbeForTests(): void {
+  if (typeof window === 'undefined') return
+  delete (window as unknown as Record<string, unknown>).__rasterProbe
+}
