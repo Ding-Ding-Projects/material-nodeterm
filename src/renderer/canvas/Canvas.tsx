@@ -83,7 +83,7 @@ import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
-import { SERVICE_NODE_KINDS, type ServiceNodeKind } from '@shared/types'
+import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import { normalizeAddress } from '../nodes/browserUrl'
@@ -672,6 +672,32 @@ interface PendingPeerState {
 const WORKTREE_SSH_HINT = 'Not supported in SSH projects yet'
 const WORKTREE_SSH_NOTICE = 'Worktrees are not supported in SSH projects yet.'
 const FOCUS_NO_TARGET_NOTICE = 'Select a terminal or agent node to focus.'
+
+const archiveBytesLabel = (n: number): string => {
+  if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${n} B`
+}
+
+/** The save-file result in one honest sentence: what went in, what stayed out and why. Exclusions
+ *  are never silent — the count and bytes always appear when anything was left behind. */
+const archiveContentsSummary = (contents: ProjectArchiveContents | undefined): string => {
+  if (!contents) return ''
+  const parts: string[] = []
+  if (contents.workingFiles > 0) {
+    parts.push(`${contents.workingFiles.toLocaleString()} files (${archiveBytesLabel(contents.workingBytes)})`)
+  }
+  if (contents.repository === 'git-bundle') parts.push('full Git history')
+  const head = parts.length > 0 ? `Included: ${parts.join(' + ')}.` : ''
+  const note = contents.repositoryNote ? ` ${contents.repositoryNote}` : ''
+  const atLeast = contents.excluded.some((e) => e.atLeast) ? 'at least ' : ''
+  const excluded =
+    contents.excludedFiles > 0 || contents.excluded.length > 0
+      ? ` Excluded (listed in the file's archive.json): ${atLeast}${contents.excludedFiles.toLocaleString()} ignored/skipped files (${archiveBytesLabel(contents.excludedBytes)}).`
+      : ''
+  return `${head}${note}${excluded}`.trim()
+}
 
 // The webview's file loader renders off the LOCAL disk and has no remote counterpart, so a host
 // path from a remote agent could only resolve to a same-named local file — or nothing. Refuse and
@@ -11354,32 +11380,70 @@ export function Canvas() {
     [commitActiveToStore, writeDisk, disposeRelayTabForProject]
   )
 
+  // ONE archive operation at a time. The ref is the real renderer-side guard (a keyboard-driven
+  // second activation walks straight past a disabled menu row), the main process refuses re-entry
+  // independently, and the menu rows read the same ref for their disabled state.
+  const projectArchiveBusyRef = useRef(false)
   const exportProjectArchive = useCallback(
     async (projectId: string) => {
-      if (projectId === useProjects.getState().activeProjectId) commitActiveToStore()
-      await writeDisk()
-      const project = useProjects.getState().projects.find((candidate) => candidate.id === projectId)
-      if (!project) return
-      const result = await api.workspace.exportProject(project)
-      notify(
-        result.ok
-          ? { kind: 'success', title: 'Project exported', body: result.path ?? 'The project archive was saved.' }
-          : result.canceled
-            ? { kind: 'info', title: 'Project export cancelled' }
-            : { kind: 'error', title: 'Project export failed', body: result.error }
-      )
+      if (projectArchiveBusyRef.current) {
+        notify({ kind: 'info', title: 'Project save already running', body: 'Wait for the current save or open to finish.' })
+        return
+      }
+      projectArchiveBusyRef.current = true
+      try {
+        if (projectId === useProjects.getState().activeProjectId) commitActiveToStore()
+        await writeDisk()
+        const project = useProjects.getState().projects.find((candidate) => candidate.id === projectId)
+        if (!project) return
+        // Progress where the action started: packing a repository takes real time, and there is no
+        // byte-progress channel — so the copy is honestly indeterminate, never a fabricated %.
+        notify({
+          kind: 'info',
+          title: 'Saving project…',
+          body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`
+        })
+        const result = await api.workspace.exportProject(project)
+        notify(
+          result.ok
+            ? {
+                kind: 'success',
+                title: 'Project saved as one file',
+                body: [result.path, archiveContentsSummary(result.contents)].filter(Boolean).join(' — ')
+              }
+            : result.canceled
+              ? { kind: 'info', title: 'Project save cancelled' }
+              : { kind: 'error', title: 'Project save failed', body: result.error }
+        )
+      } finally {
+        projectArchiveBusyRef.current = false
+      }
     },
     [api, commitActiveToStore, writeDisk]
   )
 
   const importProjectArchive = useCallback(async () => {
-    const result = await api.workspace.importProject()
-    if (result.ok && result.project) {
-      useProjects.getState().adoptProject(result.project)
-      await writeDisk()
-      notify({ kind: 'success', title: 'Project imported', body: 'The project and its complete local history are ready.' })
-    } else if (!result.canceled) {
-      notify({ kind: 'error', title: 'Project import failed', body: result.error })
+    if (projectArchiveBusyRef.current) {
+      notify({ kind: 'info', title: 'Project open already running', body: 'Wait for the current save or open to finish.' })
+      return
+    }
+    projectArchiveBusyRef.current = true
+    try {
+      const result = await api.workspace.importProject()
+      if (result.ok && result.project) {
+        useProjects.getState().adoptProject(result.project)
+        await writeDisk()
+        const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
+        notify({
+          kind: 'success',
+          title: 'Project opened from file',
+          body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.'
+        })
+      } else if (!result.canceled) {
+        notify({ kind: 'error', title: 'Project open failed', body: result.error })
+      }
+    } finally {
+      projectArchiveBusyRef.current = false
     }
   }, [api, writeDisk])
 
@@ -11412,13 +11476,15 @@ export function Canvas() {
           },
           { label: 'Set folder…', icon: <IconProject />, onClick: () => setProjectFolder(projectId) },
           {
-            label: 'Export project with history…',
+            label: 'Save project as one file…',
             icon: <IconSave />,
+            disabled: projectArchiveBusyRef.current,
             onClick: () => void exportProjectArchive(projectId)
           },
           {
-            label: 'Import project with history…',
+            label: 'Open project from file…',
             icon: <IconProject />,
+            disabled: projectArchiveBusyRef.current,
             onClick: () => void importProjectArchive()
           },
           { type: 'separator' },

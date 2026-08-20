@@ -1,8 +1,9 @@
 import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { readFile, writeFile } from 'fs/promises'
+import { readFile, writeFile, rm as rmFile } from 'fs/promises'
 import { statSync } from 'fs'
+import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
 import {
@@ -815,32 +816,75 @@ app.whenReady().then(async () => {
       action: 'updated'
     })
   )
+  // ONE export/import at a time, enforced HERE and not only by disabled renderer controls — a
+  // keyboard-driven second submit (or a second window) walks straight past a disabled button, and
+  // two concurrent archive operations could interleave dialogs and history-domain writes.
+  let projectArchiveBusy = false
   ipcMain.handle(IPC.projectArchiveExport, async (_event, project: import('../shared/types').Project) => {
+    if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
+    projectArchiveBusy = true
     try {
       const result = await dialog.showSaveDialog({
-        title: 'Export project with history',
+        title: 'Save project as one file',
         defaultPath: `${project.name.replace(/[<>:"/\\|?*]+/g, '_') || 'project'}.nodeterm-project`,
-        filters: [{ name: 'nodeterm project archive', extensions: ['nodeterm-project'] }]
+        filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
       })
       if (result.canceled || !result.filePath) return { ok: false, canceled: true }
-      await writeFile(result.filePath, await projectArchives.export(project), 'utf-8')
-      return { ok: true, path: result.filePath }
+      // The OS save dialog's own "replace?" prompt is the overwrite confirmation; the write itself
+      // is temp + atomic rename (binary — the V2 archive is a ZIP container, never utf-8 text), so
+      // an interrupted save can never tear an existing save file.
+      const exported = await projectArchives.export(project)
+      const tmp = tempNameFor(result.filePath)
+      try {
+        await writeFile(tmp, exported.bytes)
+        await renameAtomic(tmp, result.filePath)
+      } catch (error) {
+        await rmFile(tmp, { force: true }).catch(() => {})
+        throw error
+      }
+      return { ok: true, path: result.filePath, contents: exported.contents }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      projectArchiveBusy = false
     }
   })
   ipcMain.handle(IPC.projectArchiveImport, async () => {
+    if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
+    projectArchiveBusy = true
     try {
       const result = await dialog.showOpenDialog({
-        title: 'Import project with history',
+        title: 'Open a project file',
         properties: ['openFile'],
-        filters: [{ name: 'nodeterm project archive', extensions: ['nodeterm-project'] }]
+        filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
       })
       if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true }
-      const raw = await readFile(result.filePaths[0], 'utf-8')
-      return { ok: true, project: await projectArchives.import(raw) }
+      const raw = await readFile(result.filePaths[0])
+      const inspection = projectArchives.inspect(raw)
+      let destination: string | undefined
+      if (inspection.needsDestination) {
+        // The file carries the repository and working files — they need a place on disk. Only an
+        // EMPTY folder is accepted (the service enforces it), so import can never overwrite.
+        const dest = await dialog.showOpenDialog({
+          title: `Choose an EMPTY folder for ${inspection.projectName ?? 'the imported project'}`,
+          buttonLabel: 'Import here',
+          properties: ['openDirectory', 'createDirectory']
+        })
+        if (dest.canceled || !dest.filePaths[0]) return { ok: false, canceled: true }
+        destination = dest.filePaths[0]
+      }
+      const outcome = await projectArchives.import(raw, { destination })
+      return {
+        ok: true,
+        project: outcome.project,
+        archiveVersion: outcome.archiveVersion,
+        contents: outcome.contents,
+        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {})
+      }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      projectArchiveBusy = false
     }
   })
   settingsStore.setHistoryRecorder(async (before, after, override) => {

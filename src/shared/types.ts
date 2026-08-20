@@ -951,15 +951,85 @@ export interface PtyApi {
 
 export type WorkspaceMigrationKind = 'v2' | 'exec'
 
+/**
+ * Why one path inside the project folder was left OUT of a `.nodeterm-project` save file.
+ * NOTHING is dropped silently: every exclusion appears here (gitignored trees are grouped per
+ * ignored root — `path` ends with '/' and `files`/`bytes` sum what the group holds).
+ */
+export interface ProjectArchiveExclusion {
+  /** Project-folder-relative path, '/'-separated. A grouped directory ends with '/'. */
+  path: string
+  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable'
+  /** File count under a grouped directory exclusion. Absent for a single file. */
+  files?: number
+  bytes?: number
+  /** True when an enormous ignored tree hit the bounded scan cap — `files`/`bytes` are then
+   *  honest lower bounds, not totals. */
+  atLeast?: boolean
+}
+
+/**
+ * What a `.nodeterm-project` save file actually carries (or carried, on import) — shown to the
+ * user so the inclusion rule is stated rather than guessed at.
+ */
+export interface ProjectArchiveContents {
+  /**
+   * How the project's own repository travelled:
+   * - 'git-bundle'       — full history as a `git bundle --all` inside the file.
+   * - 'files-only'       — working files but no bundle (repo has no commits yet, or the folder
+   *                        sits inside a larger repository that was not dragged along).
+   * - 'no-repository'    — folder has no git repo; every regular file was included instead.
+   * - 'remote-project'   — SSH project: the folder lives on the remote host; canvas+history only.
+   * - 'no-folder'        — inline (cwd-less) project; canvas+history only.
+   * - 'folder-missing'   — the project's folder no longer exists on disk; canvas+history only.
+   * - 'not-in-archive'   — a V1 archive: the format carried no repository or working files.
+   */
+  repository:
+    | 'git-bundle'
+    | 'files-only'
+    | 'no-repository'
+    | 'remote-project'
+    | 'no-folder'
+    | 'folder-missing'
+    | 'not-in-archive'
+  /** Plain-words caveat when `repository` is not 'git-bundle' (why, and what that means). */
+  repositoryNote?: string
+  /** Working files included under `files/` (count and raw bytes before compression). */
+  workingFiles: number
+  workingBytes: number
+  /** Every excluded path, each with its reason. Empty when nothing was excluded. */
+  excluded: ProjectArchiveExclusion[]
+  /** Sums over `excluded` (lower bounds when any entry is `atLeast`). */
+  excludedFiles: number
+  excludedBytes: number
+}
+
 export interface WorkspaceApi {
   load(): Promise<Workspace>
   save(workspace: Workspace): Promise<void>
   /** Reads <folder>/.nodeterm/project.json and returns the assembled Project (cwd resolved), or null. */
   probeFolder(folder: string): Promise<Project | null>
-  /** Save one portable project snapshot plus its complete app-owned local Git history as one file. */
-  exportProject(project: Project): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>
-  /** Open and validate a one-file project archive, restoring a fresh project and its history. */
-  importProject(): Promise<{ ok: boolean; project?: Project; canceled?: boolean; error?: string }>
+  /** Save the whole project as ONE file: canvas snapshot, app-owned local history, the project's
+   *  git repository (as a bundle) and its working files, in a ZIP container. `contents` states
+   *  exactly what was included and every exclusion with its reason. */
+  exportProject(project: Project): Promise<{
+    ok: boolean
+    path?: string
+    canceled?: boolean
+    error?: string
+    contents?: ProjectArchiveContents
+  }>
+  /** Open and validate a one-file project archive, restoring a fresh project, its history and —
+   *  for a V2 archive — its repository and working files into `restoredTo`. */
+  importProject(): Promise<{
+    ok: boolean
+    project?: Project
+    canceled?: boolean
+    error?: string
+    archiveVersion?: 1 | 2
+    contents?: ProjectArchiveContents
+    restoredTo?: string
+  }>
   /** Fired once after an on-disk migration: `v2` = a v2→v3 migration wrote .nodeterm/ dirs into the
    *  project folders; `exec` = the custom shell / advanced ssh args of already-open projects moved
    *  out of the shared project file into this machine's own workspace index (@shared/node-exec). */
