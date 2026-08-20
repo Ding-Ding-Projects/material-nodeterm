@@ -57,6 +57,64 @@ and `289fcb47` fixed them; the document was simply never updated. The named `.mc
    where its feature row was; the honest answer is that it is the register OF the contracts rather
    than a forty-fifth one, so it is now exempted in `NON_FEATURE_DOCS` **with that reason stated**.
 
+### Three delegated lanes, landed
+
+Run as isolated workers in their own Gerk Tong Huis, each reviewed and independently re-verified
+here rather than accepted on its own report.
+
+**Converter defects** (`913bffe9`). `README.md` was detected as `xml` because the file opens with
+an embedded HTML block and the generic leading-tag heuristic ran *before* the Markdown extension
+check. Fixed in the producer, with no filename special case: an explicit `<?xml` declaration stays
+authoritative, a known Markdown extension now outranks a merely generic tag, and the broad
+XML/HTML heuristic moved below both. Separately, `ConverterService.detect()` called `stat()` and
+never asked `isFile()`, so a directory opened to an empty sample and came back as
+`detectedKind: text, sizeBytes: 0`; every non-regular entry is now refused before it is opened.
+Proven red-then-green by reverting the two producers with the tests in place: 2 failed, then 2
+passed on restore.
+
+**Release documentation** (`d4fbc627`). `docs/ci-and-releases.md` claimed the workflow was
+manual-dispatch-only with automatic publication disabled; `release.yml` actually declares both
+`push: branches: [main]` and `workflow_dispatch`, and its own header says every push to `main`
+releases. Corrected, with the 2026-08-15 tag-loop incident and its counts preserved as history
+and the restoration recorded rather than the lesson deleted.
+
+  The same lane **refused** the other half of its brief, correctly. This document had claimed
+  `CLAUDE.md` still described `TabBar.tsx` as the drag region; `CLAUDE.md:2104` already says that
+  file is deleted and that its job moved to `ProjectSwitcher`/`TopAppBar`. That claim was stale
+  too, and is retracted here rather than acted on.
+
+**Explorer drag and drop** (`d1b7da3a`) — a new feature, not a repair. Dropping an agent node on
+an Explorer folder row opens a NEW agent of the same kind rooted there, leaving the dragged
+session untouched; dragging a folder the other way onto empty canvas opens a terminal at the drop
+point. A terminal's cwd is fixed at spawn, so spawning a sibling is the only honest way to open
+in a folder without killing a session mid-turn, and the reverse direction is deliberately a
+terminal because a folder drag carries no agent identity. Each direction uses its own namespaced
+MIME type so neither collides with an OS file drop or the sessions-sidebar reorder drag. The agent
+path goes through the branded launch-plan funnel under a new `explorer-drop-agent` row in
+`AGENT_LAUNCH_SURFACES`, so `permissionMode.funnel.test.ts` now exercises it. SSH projects stamp
+the remote cwd. Keyboard and context-menu equivalents ship with it.
+
+### One guard corrected, and watched failing first
+
+The new drop indicator is the first rule in `styles.css` to reference `var(--font-ui)`, and
+`styles.theme.test.ts` went red. The guard was right by its own logic and wrong about the world:
+that token is defined in `fonts.css`, which `boot.tsx` imports immediately *before* `styles.css`,
+and `styles.md3.css` already uses it about seventy-five times. Its corpus was a single file.
+`fonts.css`'s **definitions** are now merged in and nothing else — it carries no colours and no
+theme blocks, so adding it to the literal-colour or theme-block corpora would have cost teeth for
+nothing, and it does not define `--mono`, so the historical `.mc-console` defect stays catchable.
+Verified by appending a genuinely undefined token: red, naming it; green again on removal.
+
+### Suite state, stated honestly
+
+Two full runs at effectively the same tree each reported **one** failure, and **a different one
+each time** — `styles.theme.test.ts` in the first, `src/core/ollama/catalog-store.test.ts` in the
+second. The Ollama file passes in isolation twice. Two different single failures across two runs
+is nondeterminism under load rather than a deterministic regression, which is exactly the
+contention shape this document already records elsewhere. Final measured figures: **709 files,
+702 passed, 6 skipped; 8,925 tests, 8,732 passed, 192 skipped**, with the one contended failure
+above. Typecheck clean, build exit 0.
+
 ### Still open
 
 - **`feat/status-hub-surface`** (`3e96ad78`) — unmerged, owes a packaged capture of its screen.
