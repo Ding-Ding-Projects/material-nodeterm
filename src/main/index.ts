@@ -2924,7 +2924,13 @@ app.whenReady().then(async () => {
         // best-effort: a failed resync leaves the stale sweep as the backstop, exactly as today
       })
     },
-    () => readFile(codexRelayScript, 'utf8')
+    () => readFile(codexRelayScript, 'utf8'),
+    // The remote tmux conf reads these, so an SSH project honours the same scrollback and
+    // word-separator settings a local one does.
+    () => ({
+      tmuxScrollback: settingsStore.get().tmuxScrollback,
+      terminalWordSeparators: settingsStore.get().terminalWordSeparators
+    })
   )
   // Wake-from-sleep: re-validate every SSH master NOW instead of letting ServerAlive discover the
   // dead TCP ~60s later — until it does, every remote terminal looks alive and is dead (no echo,

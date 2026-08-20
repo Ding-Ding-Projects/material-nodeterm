@@ -1,3 +1,4 @@
+import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
 // Types shared across the main, preload, and renderer processes.
 
@@ -1531,6 +1532,10 @@ export interface Settings {
    *  renderer. See `resolveTerminalRenderer` (shared/webgl.ts) for the full history. */
   terminalGpuRendering: 'auto' | 'on' | 'off' | 'shared'
   tmuxScrollback: number
+  /** Characters that END a word on double-click. See src/shared/word-separators.ts — this one
+   *  setting reaches THREE writers (xterm, local tmux, remote tmux), because tmux owns the mouse
+   *  and an xterm-only change would be a no-op for the common case. */
+  terminalWordSeparators: string
   /** Minutes a terminal may sit fully offscreen before its xterm+PTY client is torn down in
    *  place (tmux keeps the session; re-approach reattaches and redraws). 0 = never. */
   offscreenTerminalMinutes: number
@@ -1825,6 +1830,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ptyShadowClients: true,
   terminalGpuRendering: 'auto',
   tmuxScrollback: 50000,
+  terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
   offscreenTerminalMinutes: 10,
   commitAgent: 'claude',
   commitAgentCommand: '',
