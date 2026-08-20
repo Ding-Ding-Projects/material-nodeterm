@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { displayDprOf, patchTerminalRasterScale } from './raster-scale'
 
 /**
  * Make the DOM and WebGL renderers agree on the cell width, so a renderer swap (budget grant or
@@ -28,6 +29,13 @@ import type { Terminal } from '@xterm/xterm'
  *    guarded, fail-open style as TerminalNode's `restoreDomRenderer`: if any field is missing
  *    on a future xterm, the wrap silently does not install and both renderers keep xterm's
  *    stock behaviour — nothing regresses but the swap parity.
+ *
+ * ALSO INSTALLS THE CANVAS-AWARE RASTER SCALE (`raster-scale.ts`), because this is the moment its
+ * precondition is established. That patch tells the renderers to rasterize at `dpr × n` so a
+ * zoomed-in terminal is not a magnified raster; it is only safe while the cell width provably
+ * survives the change, and a grid-aligned measurement — the thing this function has just
+ * guaranteed — is what makes it provable. Both halves are fail-open and independent: either can be
+ * absent and the terminal still draws.
  *
  * Idempotent per terminal (a marker on the strategy), safe to call on every mount/adopt. Returns
  * whether the quantizing wrap is installed.
@@ -64,7 +72,13 @@ export function quantizeCharSize(
     const original = strategy.measure.bind(strategy)
     strategy.measure = () => {
       const result = original()
-      const dpr = core?._coreBrowserService?.dpr || win?.devicePixelRatio || 1
+      // The DISPLAY grid, never the raster grid. `raster-scale.ts` shadows
+      // `_coreBrowserService.dpr` with `dpr × n` so the renderers supersample at canvas zoom, and
+      // quantizing onto THAT would move the CSS cell width — which moves `cols`, which SIGWINCHes
+      // the user's session on every zoom step. `displayDprOf` returns the shadowed-over original
+      // for a patched terminal and falls straight through to this same expression for every other
+      // one, so the precedence documented above is unchanged.
+      const dpr = displayDprOf(term, core?._coreBrowserService?.dpr || win?.devicePixelRatio || 1)
       if (!result || !Number.isFinite(result.width) || !Number.isFinite(dpr) || dpr <= 0) return result
       const quantized = Math.floor(result.width * dpr) / dpr
       // A sub-device-pixel font would quantize to 0 and invalidate the whole char size — keep
@@ -77,6 +91,12 @@ export function quantizeCharSize(
     // that measurement is live. The service change-gates internally, so this fires its
     // char-size-change event (renderers recompute dimensions) only when the width actually moves.
     svc.measure()
+    // Now that the measurement sits on the display grid, the canvas-aware raster scale is safe to
+    // install: `safeRasterScale`'s multiple-of-dpr rule is a proof only against a grid-aligned
+    // width, and this is the one call site (shared by the canvas node, the card-modal viewer and
+    // the settings preview) that has just established one. Fail-open — a terminal that does not
+    // take the patch simply keeps rasterizing at the display dpr, which is today's behaviour.
+    patchTerminalRasterScale(term)
     return true
   } catch {
     return false

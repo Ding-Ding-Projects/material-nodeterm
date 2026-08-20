@@ -107,6 +107,19 @@ export function getWebglBudget(): number {
 }
 
 /**
+ * Is the per-terminal WebGL renderer the one in charge?
+ *
+ * `applyRendererMode` drives this flag, and it is true for exactly the `webgl` mode: `dom` and
+ * `shared` both switch it off. That makes it the cheapest honest answer to "which renderer owns
+ * this terminal's pixels", which `raster-scale.ts` needs — its supersampling inflates xterm's
+ * reported dpr, and in `shared` mode the glyph layer sizes its own atlas from the `device` cell
+ * that same dpr computes.
+ */
+export function isWebglEnabled(): boolean {
+  return enabled
+}
+
+/**
  * THE GESTURE LATCH — the load-bearing rule of this coordinator: renderer swaps NEVER run
  * while the user is panning/zooming.
  *
