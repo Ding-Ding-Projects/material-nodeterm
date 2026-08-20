@@ -657,26 +657,50 @@ async function resizeRepresentative(result, profile, catalog) {
         `needed >${before.width + 60}x>${before.height + 30}`
     )
   }
-  const resizedProbe = buildProfileProbe(profile, catalog, { token: `${runId}-resized`, customDialect })
-  await sendPtyText(result.nodeId, resizedProbe.command)
-  let resized
-  const screen = await ptyCaptureUntil(
-    result.nodeId,
-    (value) => {
-      try {
-        resized = parseProfileProbeOutput(resizedProbe, value, projectDirectory)
-        return resized.markerVerified && resized.cwdVerified && resized.sizeVerified
-      } catch {
-        return false
-      }
-    },
-    'resized PTY report'
-  )
-  resized = parseProfileProbeOutput(resizedProbe, screen, projectDirectory)
-  const next = resized.size
-  if (!next) throw new Error('Resized PTY did not report its new size.')
-  if (result.size && next.cols === result.size.cols && next.rows === result.size.rows) {
-    throw new Error('Node resize did not change the child PTY size.')
+  // The DOM node is bigger; the CHILD is not, yet. Nothing here is synchronous: a ResizeObserver
+  // notices the element, the fit addon recomputes cols/rows, and only then does a resize reach the
+  // pty. Asking the shell its size the instant the drag ends reports the size it had BEFORE — and
+  // the run then failed with "Node resize did not change the child PTY size", which is a true
+  // sentence about a false conclusion: the resize was fine, the question was early.
+  //
+  // So ask again until the answer changes. Each attempt carries its OWN token, because a repeated
+  // token would let the parser match the first attempt's still-on-screen output and conclude
+  // nothing had changed no matter how long we waited.
+  let next = null
+  let resized = null
+  const resizeDeadline = Date.now() + 30_000
+  for (let attempt = 1; Date.now() < resizeDeadline; attempt += 1) {
+    const resizedProbe = buildProfileProbe(profile, catalog, {
+      token: `${runId}-resized-${attempt}`,
+      customDialect
+    })
+    await sendPtyText(result.nodeId, resizedProbe.command)
+    let parsedAttempt
+    const screen = await ptyCaptureUntil(
+      result.nodeId,
+      (value) => {
+        try {
+          parsedAttempt = parseProfileProbeOutput(resizedProbe, value, projectDirectory)
+          return parsedAttempt.markerVerified && parsedAttempt.cwdVerified && parsedAttempt.sizeVerified
+        } catch {
+          return false
+        }
+      },
+      `resized PTY report (attempt ${attempt})`
+    )
+    resized = parseProfileProbeOutput(resizedProbe, screen, projectDirectory)
+    next = resized.size
+    if (!next) throw new Error('Resized PTY did not report its new size.')
+    if (!result.size || next.cols !== result.size.cols || next.rows !== result.size.rows) break
+    next = null
+    await sleep(1_000)
+  }
+  if (!next) {
+    throw new Error(
+      `Node resize did not change the child PTY size within 30000ms — still ` +
+        `${result.size ? `${result.size.cols}x${result.size.rows}` : '(unknown)'} after the node grew ` +
+        `to ${before.width + 120}x${before.height + 80}.`
+    )
   }
   result.resizeVerified = true
   result.resizedSize = next
