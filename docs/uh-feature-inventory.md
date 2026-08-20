@@ -19,6 +19,28 @@ means adding its row; deleting a feature means deleting its row deliberately, in
   The instructions permit this and require the reason; they do not permit a silent gap.
 - **open** — applies, and is not done. An open row is a defect with a name, not an oversight.
 
+**How to read the `Closes when` column, and why it exists.** Four rows in the Open table were
+stale for a day: the work landed and nobody came back to move the row. The guard could not
+notice, because it validates that *shipped* rows point at real files and checks nothing about
+whether an open row is still open — Open-row validation was a prose-length check. Worse, the
+stale table is bundled into the shipped app, so nodeterm spent that day telling its own users
+that four shipped features were missing.
+
+So every open row now carries one machine-evaluable exit condition, and
+`scripts/check-uh-inventory.mjs` fails when a blocker has dissolved:
+
+- `absent:<path>` — red once that file exists.
+- `fails:<command>` — red once that command starts exiting 0.
+- `contract:<id>` — red once `scripts/check-app-contract.mjs` has a passing row with that id.
+- `manual:<reason>` — the escape hatch for a blocker no script can observe. The reason is
+  mandatory and is **printed on every run**, so a lazily-written one is visible to a reviewer
+  rather than hiding behind a green tick.
+
+The honest limit: this only catches what the row author thought to declare. It is not a
+substitute for the rule that a commit closing a blocker closes its row in the same commit —
+the discipline `380a8df5` almost had, since it was titled "close the three inventory rows"
+and then never edited this file.
+
 ---
 
 ## Shipped
@@ -62,6 +84,10 @@ means adding its row; deleting a feature means deleting its row deliberately, in
 | Vocabulary hash lock | `scripts/check-vocabulary.mjs` | `scripts/check-vocabulary.mjs` (the script's own header is the documentation, deliberately — the subject is private and no separate docs article covers it) | `scripts/check-vocabulary.mjs` |
 | Dim-sum release code names | `scripts/dim-sum-code-name.mjs` | `docs/ci-and-releases.md` | `scripts/dim-sum-code-name.test.mjs` |
 | Design-reference parity app | `design/v2-preview/main.js` | `docs/md3-render-verification.md` | `scripts/capture-shots.mjs` |
+| In-app documentation browser | `src/renderer/components/DocsBrowser.tsx` | `docs/features/help/README.md` | `scripts/check-docs-bundle.mjs` |
+| External-editor handoff | `src/core/vscode-detect.ts` | `docs/exports.md` | `src/core/vscode-detect.test.ts` |
+| Line count in every release | `scripts/count-lines.mjs` | `docs/ci-and-releases.md` | `scripts/release-notes.test.mjs` |
+| Sanitized instruction mirror | `scripts/check-instruction-mirror.mjs` | `scripts/check-instruction-mirror.mjs` (the script header is the documentation, same precedent as the vocabulary lock row) | `scripts/check-instruction-mirror.test.mjs` |
 
 ## Not applicable, with the reason
 
@@ -72,13 +98,9 @@ means adding its row; deleting a feature means deleting its row deliberately, in
 
 ## Open
 
-| Feature | What is missing | Notes |
-| --- | --- | --- |
-| Status Hub | Both halves. The project does not register with the shared Hub, and the app ships no status surface of its own. | The contract has two parts: the project reports into the shared Hub, and the app carries its own status surface with the same M3 card set, emoji-bearing states and evidence-behind-each-claim rule, so somebody looking at the app sees what the Hub sees. Neither exists. Recorded here rather than left implicit; this is the one canonical contract that genuinely applies to nodeterm and is genuinely absent. |
-| In-app documentation browser | Bundled articles, in-app link resolution, its own regex-wired search, and the build-failing completeness guard. | 56 `docs/*.md` files are unbundled and Help's Documentation row opens an external link. Under active work; the row stays here until the guard it needs is red-then-green. |
-| External-editor handoff | A focused test. | Implemented (`src/core/vscode-detect.ts`, `src/core/vscode-handlers.ts` — detection verified by running `--version`, folder opens as a workspace root) and documented (`docs/exports.md`). But no test file imports either module and `scripts/check-app-contract.mjs` has no row for it, so nothing goes red if the handoff disappears. The row previously pointed at `src/core/exec-path.ts` + `docs/troubleshooting-codex-snap.md`, which are executable-PATH resolution and codex-snap troubleshooting — unrelated modules that made the row report coverage that was never there. |
-| Line count in every release | A focused test. | Implemented (`scripts/count-lines.mjs`, embedded into notes by `scripts/release-notes.mjs`) and documented (`docs/ci-and-releases.md` §"count-lines"). But no test covers the counter or asserts the count reaches the notes: `scripts/check-changelog.mjs` names `count-lines.mjs` only in a comment, and `scripts/check-release-workflow.mjs` pins only that `release-notes.mjs` runs in the workflow. |
-| Sanitized instruction mirror | The README half, and any guard. | `AGENTS.md` carries a labelled sanitized mirror ("This file is a mirror, not a source"), but `README.md` carries no mirror section, and no script fails when the mirror goes stale or disappears — `scripts/check-app-contract.mjs` never reads `AGENTS.md`. |
+| Feature | What is missing | Closes when | Notes |
+| --- | --- | --- | --- |
+| Status Hub | The registration half only. | `manual:the shared Hub is an external service; nothing in this repository can observe whether registration happened` | **Narrowed 2026-08-20, and the app half is now in the Shipped table above as its own contract row.** The surface shipped in `3e96ad78` — `src/renderer/components/StatusSurface.tsx`, `src/shared/project-status.ts`, `docs/status-surface.md`, 31 tests in `src/shared/project-status.test.ts`, and a `status-surface` row in `scripts/check-app-contract.mjs`. What remains is reporting *into* the shared Hub, which is a service outside this tree — hence the `manual:` predicate rather than a machine-checkable one. |
 
 ---
 

@@ -117,10 +117,10 @@ function renderTimingSection() {
   return lines.join('\n')
 }
 
-async function renderLineCountSection() {
+export async function renderLineCountSection(compute = computeLineCounts) {
   let data
   try {
-    data = await computeLineCounts({ ref: process.env.GITHUB_SHA ?? 'HEAD' })
+    data = await compute({ ref: process.env.GITHUB_SHA ?? 'HEAD' })
   } catch (err) {
     return [
       '## Line count',
