@@ -433,12 +433,37 @@ async function ptyCaptureUntil(nodeId, predicate, description, timeoutMs = 30_00
   throw new Error(`${description} did not appear in PTY ${nodeId}. Tail: ${JSON.stringify(last.slice(-1200))}`)
 }
 
-async function sendPtyText(nodeId, text) {
-  const sent = await rendererPromise(
-    `window.nodeTerminal.pty.sendText(${JSON.stringify(nodeId)},${JSON.stringify(text)},{enter:false})`,
-    `send text to PTY ${nodeId}`
+/**
+ * Type into a node's session, waiting for the session to exist first.
+ *
+ * `.term-node__xterm` in the DOM proves the node MOUNTED, not that its persistent session has
+ * finished attaching — the gap is acknowledged in this file's own capture loop ("The node can
+ * mount before its persistent session finishes attaching"). `sendText` addresses the session by
+ * NAME, so during that gap it finds nothing and answers false, exactly as it answers false for a
+ * locked node: one bare boolean for every refusal, which is right for the product and gives a
+ * caller nothing to distinguish "not yet" from "never".
+ *
+ * Measured: sending the instant the xterm appears returns false and fails the run; the identical
+ * call against the same build a few seconds later returns true.
+ *
+ * So retry, but BOUNDED. A permanent refusal still fails — it just costs the deadline first — and
+ * the message says both things that could have caused it rather than only the one that did not.
+ */
+async function sendPtyText(nodeId, text, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs
+  let sent = false
+  while (Date.now() < deadline) {
+    sent = await rendererPromise(
+      `window.nodeTerminal.pty.sendText(${JSON.stringify(nodeId)},${JSON.stringify(text)},{enter:false})`,
+      `send text to PTY ${nodeId}`
+    )
+    if (sent === true) return
+    await sleep(250)
+  }
+  throw new Error(
+    `PTY ${nodeId} rejected acceptance input for ${timeoutMs}ms — its session never became ` +
+      `writable (no live session by that name, or a write gate refused it).`
   )
-  if (sent !== true) throw new Error(`PTY ${nodeId} rejected acceptance input.`)
 }
 
 async function waitForPtyDestroyed(nodeId, timeoutMs = 30_000) {
