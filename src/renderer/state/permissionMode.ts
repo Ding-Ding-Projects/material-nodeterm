@@ -25,6 +25,7 @@ import { withPermissionMode } from '@shared/agents/approval-mode'
 export const AGENT_LAUNCH_SURFACES = [
   'source-control-explain',
   'canvas-new-agent',
+  'explorer-drop-agent',
   'branch-conversation',
   'handoff-transfer',
   'kanban-new-agent',

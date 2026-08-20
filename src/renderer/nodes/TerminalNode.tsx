@@ -223,6 +223,11 @@ import { runPendingLaunchOnce } from '../lib/pendingLaunch'
 import { coldAgentLaunchIntent } from '../terminal/agent-launch-intent'
 import { executePendingLaunchForSession } from '../terminal/pending-launch-executor'
 import { ColorMenu } from '../components/color/ColorMenu'
+import { MaterialSymbol } from '../components/MaterialSymbol'
+import {
+  OPEN_EXPLORER_FOR_AGENT_EVENT,
+  writeAgentNodeDrag
+} from '../lib/explorerNodeDrag'
 
 /** How long a remote terminal waits for its project's ControlMaster before giving up and showing
  *  the offline overlay. Sized for the SLOW-but-fine case (a cold app load whose connect is still
@@ -4842,6 +4847,27 @@ export function TerminalNode({
               onPick={(c: string) => updateNodeData(id, { color: c })}
               onClose={() => setColorAnchor(null)}
             />
+          )}
+          {agentId && (
+            <button
+              className="term-node__folder-drag nodrag"
+              draggable
+              title={`Drag to an Explorer folder to open a new ${data.title} there`}
+              aria-label={`Choose an Explorer folder for a new ${data.title} agent`}
+              onDragStart={(event) => {
+                event.stopPropagation()
+                event.dataTransfer.effectAllowed = 'copy'
+                writeAgentNodeDrag(event.dataTransfer, id)
+              }}
+              onClick={(event) => {
+                event.stopPropagation()
+                window.dispatchEvent(
+                  new CustomEvent(OPEN_EXPLORER_FOR_AGENT_EVENT, { detail: { nodeId: id } })
+                )
+              }}
+            >
+              <MaterialSymbol name="folder_open" size={16} />
+            </button>
           )}
           {editingTitle ? (
             <input
