@@ -12,9 +12,12 @@
 // to go missing). Gates whose verdicts the repo does not record render as UNRUN, on purpose:
 // a check that has not run is unrun, not passed, and the emoji never upgrades a state.
 //
-// The pure derivation lives in ./status/project-status.ts — a byte-identical mirror of
-// src/core/project-status.ts, where its tests live (see that file's header for why the composite
-// tsconfig projects force the two homes, and the parity test that keeps them from drifting).
+// The pure derivation lives in @shared/project-status — ONE home, not two. It shipped briefly as a
+// canonical copy under src/core plus a byte-identical renderer mirror kept honest by a parity test,
+// because the composite tsconfig projects share only src/shared and a renderer import of src/core
+// fails with TS6307. Putting the module in src/shared instead removes the second copy rather than
+// policing it, so the mirror and its guard are both gone. A parity test never stopped drift; it
+// only reported drift after someone had already edited one copy.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CHANGELOG_RELEASES } from '@shared/changelog-data'

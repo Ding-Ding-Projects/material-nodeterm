@@ -91,6 +91,35 @@ function markdownLinkTargets(body) {
   return out
 }
 
+/**
+ * Every backticked repository path an article cites, with any `:line` or `:line-line` suffix
+ * stripped.
+ *
+ * This exists because a document that names a file which no longer exists is this repository’s
+ * named disease, and these articles are BUNDLED — a dead path here is not a private
+ * embarrassment, it ships to users in the documentation browser and tells them to open
+ * something that is not there. When this was first measured: 594 cited paths, 10 dead.
+ *
+ * Deliberately narrow about what counts as a citation:
+ *   - only the five real source roots, so prose like `npm run build` or `main` is not a path;
+ *   - nothing containing a space, a glob, or an angle-bracket placeholder such as
+ *     `src/foo/<id>.ts`, because those name a SHAPE rather than a file;
+ *   - the excluded trees are whatever the bundle already excludes, which is the point: agent
+ *     working plans are historical records and SHOULD cite files that have since been deleted.
+ */
+function citedRepoPaths(body) {
+  const out = []
+  const re = /`([^`]+)`/g
+  let m
+  while ((m = re.exec(body)) !== null) {
+    const raw = m[1].trim()
+    if (!/^(src|scripts|site|design|test)\//.test(raw)) continue
+    if (/[\s*?<>|]/.test(raw)) continue
+    out.push(raw.replace(/:\d+(-\d+)?$/, ""))
+  }
+  return out
+}
+
 async function main() {
   const docsDirPath = join(REPO_ROOT, DOCS_DIR)
   if (!existsSync(docsDirPath)) {
@@ -190,6 +219,28 @@ async function main() {
       )
     } else {
       pass(`${DOCS_DATA_PATH} matches what ${DOCS_DIR}/ generates`)
+    }
+  }
+
+  // --- 6. no bundled article cites a repository path that does not exist ------
+  checkedCount += 1
+  {
+    const dead = []
+    let citedCount = 0
+    for (const a of articles) {
+      for (const cited of citedRepoPaths(a.body)) {
+        citedCount += 1
+        if (!existsSync(join(REPO_ROOT, cited))) dead.push(`${a.path} → ${cited}`)
+      }
+    }
+    if (dead.length > 0) {
+      fail(
+        `${dead.length} of ${citedCount} cited repository path(s) do not exist — these articles are ` +
+          `bundled, so this ships to users as an instruction to open a file that is not there:` +
+          `\n    ${dead.join("\n    ")}`
+      )
+    } else {
+      pass(`all ${citedCount} backticked repository path(s) cited by bundled articles exist on disk`)
     }
   }
 

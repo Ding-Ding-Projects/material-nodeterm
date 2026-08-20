@@ -6,8 +6,8 @@ the last capture run photograph, what is the newest recorded release — each ca
 emoji, an honest one-line summary, and the recorded evidence behind the claim.
 
 Files: `src/renderer/components/StatusSurface.tsx` (the screen),
-`src/core/project-status.ts` (the pure derivation — see "Two homes" below),
-`src/core/project-status.test.ts` (behavior + parity tests),
+`src/shared/project-status.ts` (the pure derivation — see "One home" below),
+`src/shared/project-status.test.ts` (behavior tests),
 `src/renderer/components/status/StatusSurface.test.tsx` (interaction tests against the rendered
 component). Host CSS follows the `.md3-history-host` pattern (`.md3-status-host` in
 `styles.md3.css`): inset behind the app bar and the nav rail at z 27, so the rail stays clickable
@@ -53,7 +53,7 @@ Cards sort worst-first (`GATE_STATE_ORDER`), so a failure can never hide below a
   construction, each naming its command (`npm run typecheck`, `npm test`,
   `npm run build && npm run check:wired`, `node scripts/check-app-contract.mjs`,
   `node scripts/check-site-shots.mjs`). If one of these ever starts writing a committed verdict,
-  teach `src/core/project-status.ts` to read it — never compute a state the repo cannot evidence.
+  teach `src/shared/project-status.ts` to read it — never compute a state the repo cannot evidence.
 
 All of it is **committed repository data bundled into the renderer at build time** (the manifest
 and `package.json` through Vite `?raw` imports, the changelog through its generated module).
@@ -87,20 +87,27 @@ Everything that looks like a control is one (the decorative-UI rule):
 Colour is never the only signal (every state carries its emoji **and** its text label), tokens are
 `var(--md-*)` only, elevation is tonal (no `box-shadow`), and focus is visible on every control.
 
-## Two homes for one pure module (and the guard that keeps them one)
+## One home for the pure module
 
 `tsconfig.node.json` and `tsconfig.web.json` are composite projects whose only shared include is
-`src/shared`. A renderer import of `src/core` fails `tsc -p tsconfig.web.json` with **TS6307**
-(measured on this tree, 2026-08-19), and the reverse fails the node project the same way. The pure
-derivation therefore exists byte-for-byte at two paths:
+`src/shared`. A renderer import of `src/core` fails `tsc -p tsconfig.web.json` with **TS6307**,
+and the reverse fails the node project the same way — so a module both shells need cannot live in
+either one.
 
-- `src/core/project-status.ts` — canonical, where the tests live
-- `src/renderer/components/status/project-status.ts` — the renderer's importable mirror
+This shipped briefly as *two* homes: a canonical copy under `src/core`, a byte-identical mirror
+under the renderer, and a parity test to stop them drifting. `3e96ad78` collapsed that to one
+file at `src/shared/project-status.ts`, which both composite projects already include, so the
+mirror and its parity guard were deleted rather than maintained.
 
-The parity test in `src/core/project-status.test.ts` reads both files and fails on any difference
-(line endings normalized), so the mirror cannot drift silently. **Edit the core copy, then copy it
-verbatim over the mirror.** Both copies import only via the `@shared` alias, which resolves
-identically from either home.
+That is the right shape and it is worth saying why, because the two-copy version looked
+reasonable: a parity test does not stop drift, it only reports drift after someone has already
+edited one copy. `src/shared` removes the second copy instead of policing it, which is the
+difference between a guard and a design.
+
+**This document described the deleted arrangement for a day after it was deleted** — the commit
+that removed the mirror said so in its own message and shipped the article unchanged, and the
+article is bundled, so it reached users telling them to edit two files that do not exist. The
+dead-path sweep in `scripts/check-docs-bundle.mjs` now fails the build on exactly that.
 
 ## Three surfaces
 
@@ -128,15 +135,15 @@ identically from either home.
 
 ## Verification
 
-- `npx vitest run src/core/project-status.test.ts` — 31 tests: manifest parse fail-closed cases
+- `npx vitest run src/shared/project-status.test.ts` — 31 tests: manifest parse fail-closed cases
   (including the REAL committed manifest, so schema drift between the file and the parser is red),
-  every gate-state decision, the never-verified invariants, and the two-homes parity guard.
+  and every gate-state decision, plus the never-verified invariants.
 - `npx vitest run src/renderer/components/status/StatusSurface.test.tsx` — 4 tests rendering the
   real component through the real Vite pipeline (which also proves the `?raw` imports resolve):
   card inventory, the evidence toggle, filter chips + expansion-survives-filtering, and the search
   field with its regex-builder affordance.
 - Both suites were deliberately broken and watched go red before being trusted: inverting the
-  captures failure branch turned the behavior test *and* the parity guard red; no-op'ing the
+  captures failure branch turned the behavior test red; no-op'ing the
   expand button turned both interaction tests red. Restoring turned everything green.
 
 ## Known gaps (deliberate, recorded)
@@ -145,6 +152,9 @@ identically from either home.
   over these newer screens is a shared follow-up, not a per-surface exemption.
 - The surface shows what the repository records; it does not (and must not) run checks itself.
   Gates without committed verdicts stay ❔ until something starts recording one.
-- `scripts/check-app-contract.mjs` needs a `status-surface` feature row registering this doc and
-  the implementation files; that script is owned by a different change lane, so until the row
-  lands its docs-inventory sweep reports this file as an orphan doc.
+- ~~`scripts/check-app-contract.mjs` needs a `status-surface` feature row.~~ **Closed** — the row
+  exists and carries 19 assertions, anchored to line boundaries rather than bare substrings so a
+  rename or a commented-out line cannot satisfy them. It is proven red-then-green against the
+  defect that actually happened here: replacing the rendered `<StatusSurface />` with a `<div />`
+  while leaving the import alone fails with "a component imported but never rendered is not
+  shipped" — which a clean `tsc` did not catch.
