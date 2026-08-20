@@ -115,10 +115,19 @@ export interface EnsureJavaOptions {
 
 function runtimePlatform(): { os: string; arch: string; executable: string } {
   if (process.platform !== 'win32') {
-    throw new Error('Automatic Java installation is currently available on Windows only.')
+    throw new Error(
+      'Automatic Java installation is available on Windows only. Install a Java ' +
+      'runtime yourself (e.g. from adoptium.net) and make sure it is on your PATH or ' +
+      'that JAVA_HOME points at it, then try again.'
+    )
   }
   const arch = process.arch === 'arm64' ? 'aarch64' : process.arch === 'x64' ? 'x64' : null
-  if (!arch) throw new Error(`Automatic Java installation does not support ${process.arch}.`)
+  if (!arch) {
+    throw new Error(
+      `Automatic Java installation does not support this machine's architecture (${process.arch}). ` +
+      'Install a Java runtime yourself and make sure it is on your PATH or that JAVA_HOME points at it.'
+    )
+  }
   return { os: 'windows', arch, executable: 'java.exe' }
 }
 
@@ -151,12 +160,21 @@ async function findManagedJava(root: string, executable: string): Promise<string
  * machine-wide toolchain change. Adoptium supplies both the archive URL and SHA-256; neither a
  * filename nor a successful HTTP response is accepted as integrity evidence. */
 export async function ensureJavaRuntime(opts: EnsureJavaOptions): Promise<JavaProbe> {
+  // Detect BEFORE checking whether this platform can auto-install: a user who already has a
+  // compatible `java` on PATH/JAVA_HOME needs nothing installed, on any OS. Checking the
+  // platform first meant a machine with a perfectly good Java 21 on PATH still got refused with
+  // "Windows only" the moment a version bump raised `requiredMajor` past what was cached.
+  const detect = opts.detect ?? (() => detectInstalledJava())
+  const existing = await detect()
+  if (existing.path && existing.major !== null && existing.major >= opts.requiredMajor) return existing
+
   const platform = runtimePlatform()
   const root = path.join(opts.userDataDir, 'runtimes', 'java', String(opts.requiredMajor), `${platform.os}-${platform.arch}`)
   const cached = await findManagedJava(root, platform.executable)
-  const detect = opts.detect ?? (() => detectInstalledJava(() => resolveJavaExecutable(cached ? [cached] : [])))
-  const existing = await detect()
-  if (existing.path && existing.major !== null && existing.major >= opts.requiredMajor) return existing
+  if (cached) {
+    const managed = await detectInstalledJava(() => cached)
+    if (managed.path && managed.major !== null && managed.major >= opts.requiredMajor) return managed
+  }
 
   const fetchJson = opts.fetchJson ?? (async (url: string) => {
     const response = await fetch(url)
