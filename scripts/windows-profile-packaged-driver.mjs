@@ -289,13 +289,28 @@ async function openPaletteCommand(label) {
   await waitFor(`!!document.querySelector('.palette__input')`, 'command palette')
   await setInput('.palette__input', label)
   const labelJson = JSON.stringify(label)
-  await clickElement(
-    `Array.from(document.querySelectorAll('.palette__item')).find(function(row){
-      var label=row.querySelector('.palette__label');
-      return label && label.textContent.trim()===${labelJson} && row.getAttribute('aria-disabled')!=='true';
-    })`,
-    `enabled palette command ${label}`
-  )
+  try {
+    await clickElement(
+      `Array.from(document.querySelectorAll('.palette__item')).find(function(row){
+        var label=row.querySelector('.palette__label');
+        return label && label.textContent.trim()===${labelJson} && row.getAttribute('aria-disabled')!=='true';
+      })`,
+      `enabled palette command ${label}`
+    )
+  } catch (error) {
+    // Say what WAS on offer. A palette label is a user-facing string that gets renamed by ordinary
+    // UI work, and the bare timeout ("did not become true within 15000ms") is indistinguishable
+    // from the app failing to boot — it cost a whole packaged run to learn that `Settings` had
+    // become `Open Settings`. Listing the rows turns the next rename into a one-run diagnosis.
+    const offered = await evaluate(
+      `Array.from(document.querySelectorAll('.palette__item')).map(function(row){
+         var l=row.querySelector('.palette__label');
+         return (l ? l.textContent.trim() : '(no label)') + (row.getAttribute('aria-disabled')==='true' ? ' [disabled]' : '');
+       })`
+    ).catch(() => null)
+    const seen = Array.isArray(offered) && offered.length > 0 ? offered.join(', ') : '(none)'
+    throw new Error(`${error.message} — palette offered: ${seen}`)
+  }
 }
 
 async function closeTransientUi() {
@@ -622,7 +637,10 @@ async function startContinuity(profileResult) {
 }
 
 async function openProfileSettingsAndCapture(captures, catalog) {
-  await openPaletteCommand('Settings')
+  // 'Open Settings', not 'Settings'. The palette command is built in Canvas.tsx's `buildCommands`
+  // and the nav-rail DESTINATION beside it is the one labelled plain 'Settings' — two different
+  // surfaces, one of which the palette does not search. Verified against the shipped list.
+  await openPaletteCommand('Open Settings')
   await waitFor(`!!document.querySelector('[class*="settings"]')`, 'Settings')
   await clickElement(
     `Array.from(document.querySelectorAll('button')).find(function(button){return button.textContent.trim()==='Shell'})`,

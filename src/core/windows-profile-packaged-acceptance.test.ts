@@ -589,6 +589,34 @@ describe('session-host continuity and cleanup precedence', () => {
     ).rejects.toThrow(/cleanup-only failure/)
   })
 
+  it('drives palette commands that the app actually offers', () => {
+    // The driver types a label into the command palette and clicks the row that matches it
+    // EXACTLY. That makes an ordinary UI rename a silent breakage of a harness nobody runs on
+    // every commit — and it already happened: the palette command became 'Open Settings' while
+    // the driver still asked for 'Settings', so every packaged run died fifteen seconds in with a
+    // timeout that read like the app had failed to boot. It cost a full build-and-run to find.
+    //
+    // Cheap static agreement instead. Anchored to the real declarations, so a rename on either
+    // side turns this red in a second rather than after a twenty-minute package.
+    // The real checkout, not the temp fixture root the rest of this file builds.
+    const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, '')), '../..')
+    const driver = fs.readFileSync(path.join(root, 'scripts/windows-profile-packaged-driver.mjs'), 'utf8')
+    const canvas = fs.readFileSync(path.join(root, 'src/renderer/canvas/Canvas.tsx'), 'utf8')
+
+    expect(driver).toMatch(/^\s*await openPaletteCommand\('Open Settings'\)/m)
+    expect(canvas).toMatch(/^\s*label: 'Open Settings',/m)
+
+    // The other label the driver drives is a template the app fills in per profile. Assert the
+    // stem rather than a rendered instance, since the profile name is machine-dependent.
+    expect(driver).toContain('`New terminal — ${profile.label}`')
+    expect(canvas).toContain("'New terminal — {profile}'")
+
+    // And the button it clicks to open the palette at all. The 2026-08 chrome rework moved this
+    // cluster into the app bar; a future move would strand every palette-driven step.
+    expect(driver).toContain(`.cluster-search[title="Command palette"]`)
+    expect(canvas).toContain('cluster-search')
+  })
+
   it('never promotes final evidence until cleanup has succeeded', async () => {
     const promote = vi.fn((value: string) => `promoted:${value}`)
     await expect(
