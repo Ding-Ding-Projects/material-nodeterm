@@ -115,11 +115,49 @@ contention shape this document already records elsewhere. Final measured figures
 702 passed, 6 skipped; 8,925 tests, 8,732 passed, 192 skipped**, with the one contended failure
 above. Typecheck clean, build exit 0.
 
+### The status surface, and the capture it owed
+
+`feat/status-hub-surface` was held out of `main` for one reason: no packaged capture of its own
+screen. It has one now — `docs/assets/shots/app-status-surface.png`, taken from the real built
+artifact driven over CDP **on an off-screen Win32 desktop**, so nothing appeared on anyone's
+display while it ran. The manifest binds it to the exact commit rather than to "recently".
+19 surfaces captured, 3 skipped for stated reasons, 0 failed.
+
+**Three conflicts, and the third is the one worth reading.** `closeAllDrawers` existed twice —
+`main` had grown a `useCallback` while the branch added an inline copy that shadowed it for every
+call site below; collapsed to one definition now closing all eight drawers. `anyDrawerOpen` had to
+become the union of both lists rather than either one. And the stylesheet conflict was git
+mis-aligning two disjoint blocks (`.md3-docs*` against `.md3-status*`); resolving it by
+concatenation broke brace balance because one hunk cut a rule in half, so it was redone by taking
+`main`'s file whole and appending the branch's self-balanced 340-line block.
+
+**Then the one that matters: the merge dropped `<StatusSurface />` entirely.** The import survived,
+the rail destination survived, the `useState` survived, and **`tsc` passed** — a whole screen
+reachable by a button that rendered nothing. It was found by grepping for the render site rather
+than by trusting the green typecheck, and recovered from the branch rather than reinvented. This
+is the identical shape this document already records under “the convergence dropped working
+code”, and the identical warning that a clean typecheck is not evidence. It happened again, in
+the same repository, to an agent that had just finished reading the warning.
+
+The capture row is therefore **required**, not optional, and verifies `.md3-status-screen` — a
+selector that exists only inside the component. The host div would not do: `Canvas` renders that
+even when the component draws nothing, which is exactly the broken state that has to stay
+catchable.
+
+### Suite, re-measured clean
+
+After the status surface merged, a full run came back **entirely green**: **711 files, 705 passed,
+6 skipped; 8,959 tests, 8,767 passed, 192 skipped, 0 failed**, exit 0. That settles the two
+single-failure runs recorded above as contention rather than regression — they are left in the
+record anyway, because the honest version of “it passes now” includes the runs where it did not.
+
 ### Still open
 
-- **`feat/status-hub-surface`** (`3e96ad78`) — unmerged, owes a packaged capture of its screen.
-- **`fix/blur-scale-wiring`** (`f003a05d`) — unmerged, owes a device eyeball. `CLAUDE.md` forbids
-  shipping it without one, and none has been taken. It already contains all of `main`.
+- **`fix/blur-scale-wiring`** (`f003a05d`) — the ONLY branch still out, and it is blocked on a
+  person rather than on work. `CLAUDE.md` forbids shipping it without a device eyeball at zoom 1
+  and at a fractional zoom, on each renderer, and no agent can supply that. It already contains
+  all of `main`.
+- **`feat/status-hub-surface` is now merged** (`05df0a4f`) — see below.
 - The Windows terminal-profile contract row still owes packaged, cheap-headless capture evidence.
   `npm run shots` photographs the picker from the unpackaged `out/` build over plain CDP, which is
   deliberately filed under different ids and cannot half-satisfy the packaged row.
