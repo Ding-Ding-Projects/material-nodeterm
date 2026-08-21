@@ -206,6 +206,21 @@ function requireSettingsSection(sectionId, label) {
 // ---------------------------------------------------------------------
 const FEATURES = [
   {
+    id: 'browser-extensions',
+    label: 'Browser extensions (unpacked) + WebAuthn',
+    files: [
+      'src/main/browser-extensions.ts',
+      'src/main/browser-extensions-core.ts',
+      'src/main/browser-extensions-store.ts',
+      'src/renderer/nodes/BrowserExtensionsPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/main/browser-extensions-core.ts', 'export function browserExtensionsKeyFor('],
+      ['src/renderer/nodes/BrowserExtensionsPanel.tsx', 'export function BrowserExtensionsPanel('],
+    ],
+    docs: ['docs/features/browser/extensions-and-webauthn.md'],
+  },
+  {
     id: 'terminal-sessions-tmux',
     label: 'Terminal sessions + tmux continuity',
     files: ['src/core/pty-manager.ts'],
@@ -2071,6 +2086,107 @@ function posixResolve(fromFile, specifier) {
 // Summary
 // ---------------------------------------------------------------------
 console.log('')
+// ---------------------------------------------------------------------
+// Every stylesheet's braces balance
+//
+// Measured, and self-inflicted. Resolving a merge in styles.md3.css by "keeping both sides" was
+// correct in intent — the two lanes' selector sets were completely disjoint — but the conflict
+// boundary fell MID-RULE, so the resolution spliced the head of one rule onto the body of another
+// and left two rules unterminated. Checking the selector lists is what made it look safe; nothing
+// typechecks CSS, so the file shipped into a commit.
+//
+// The damage did surface, but as styles.split.test.ts reporting two "stale exceptions" — because
+// its parser desynced at the break and stopped seeing every selector after it. That is a true
+// symptom pointing at completely the wrong cause, and it cost a real detour. One brace count says
+// the actual thing.
+// ---------------------------------------------------------------------
+{
+  for (const rel of ['src/renderer/styles.css', 'src/renderer/styles.md3.css']) {
+    checkedCount += 1
+    let css = ''
+    try {
+      css = readFileSync(join(REPO_ROOT, rel), 'utf8')
+    } catch (err) {
+      fail(`Stylesheet brace balance: cannot read ${rel} (${err.message})`)
+      continue
+    }
+    let depth = 0
+    let line = 1
+    let firstNegativeLine = null
+    for (const ch of css) {
+      if (ch === '\n') line += 1
+      else if (ch === '{') depth += 1
+      else if (ch === '}') {
+        depth -= 1
+        if (depth < 0 && firstNegativeLine === null) firstNegativeLine = line
+      }
+    }
+    if (firstNegativeLine !== null) {
+      fail(`Stylesheet brace balance: ${rel} closes a rule that was never opened, at line ${firstNegativeLine}`)
+    } else if (depth !== 0) {
+      fail(
+        `Stylesheet brace balance: ${rel} ends with ${depth} unterminated rule(s). A merge ` +
+          'resolution that split a rule is the usual cause — every selector after the break stops ' +
+          'being parsed, so the symptom shows up somewhere unrelated.'
+      )
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
+// No unresolved merge-conflict marker reaches a commit
+//
+// Measured, and it reached one: resolving two lane merges with a regex anchored on `^=======\n`
+// left the marker in place on a CRLF checkout, because the line is actually `=======\r\n`. The
+// sibling `<<<<<<<`/`>>>>>>>` patterns absorbed the \r through `[^\n]*` and were removed, so the
+// file LOOKED resolved. types.ts failed typecheck immediately — but styles.md3.css carried two of
+// them into a commit silently, because nothing typechecks CSS and `=======` in a stylesheet is
+// just an ignored parse error.
+//
+// One `git grep` would have caught it in a second, which is exactly why it is worth a permanent
+// check rather than a resolution habit nobody can enforce.
+// ---------------------------------------------------------------------
+{
+  const MARKER = /^(?:<{7} |={7}$|>{7} )/m
+  const scanRoots = ['src', 'scripts']
+  let scanned = 0
+  for (const root of scanRoots) {
+    const walk = (dir) => {
+      let entries = []
+      try {
+        entries = readdirSync(join(REPO_ROOT, dir), { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        const rel = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name !== 'node_modules' && !entry.name.startsWith('.')) walk(rel)
+          continue
+        }
+        if (!/\.(ts|tsx|js|jsx|mjs|cjs|css|html|json|md|yml|yaml)$/i.test(entry.name)) continue
+        scanned += 1
+        let body = ''
+        try {
+          body = readFileSync(join(REPO_ROOT, rel), 'utf8')
+        } catch {
+          continue
+        }
+        if (MARKER.test(body)) {
+          checkedCount += 1
+          fail(`Unresolved merge conflict: ${rel.split(sep).join('/')} still contains a conflict marker`)
+        }
+      }
+    }
+    walk(root)
+  }
+  // Tripwire: a broken walk would make this report clean while scanning nothing.
+  checkedCount += 1
+  if (scanned < 200) {
+    fail(`Merge-conflict scan reached only ${scanned} files — the walker has broken and this guard is inert`)
+  }
+}
+
 console.log(`Checked ${checkedCount} contract assertions across ${FEATURES.length} features.`)
 if (failures > 0) {
   console.error(`\n${failures} FAILURE(S). This is a local tool, not a CI gate — fix these before considering the app change complete.`)
@@ -2079,3 +2195,4 @@ if (failures > 0) {
   console.log('\nAll contract features present and wired. ✓')
   process.exit(0)
 }
+

@@ -19,6 +19,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { quantizeCharSize } from '../terminal/char-size-quantize'
 import { LocalTransport } from '../terminal/local-transport'
+import { localSession } from '../session/localSession'
 import { useSettings } from '../state/settings'
 import { activateUnicode11 } from '../terminal/unicode-width'
 import { parseOsc52 } from '../terminal/osc52'
@@ -134,7 +135,11 @@ export default function WidgetApp(): React.JSX.Element {
         }
         return true
       })
-      const snapshot = res.fresh ? await window.nodeTerminal.pty.readScrollback(nodeId) : null
+      // `localSession`, not the bare global: the widget is deliberately local-only (it builds its
+      // own LocalTransport above), and routing through the session layer is what SAYS so instead
+      // of leaving it as an incidental property of which object happened to be in scope. The
+      // escape button in TerminalNode.tsx will not offer a widget for a remote node at all.
+      const snapshot = res.fresh ? await localSession.api.pty.readScrollback(nodeId) : null
       if (dead) return
       const paint = seedPaint({
         replay: attachReplay({ parked: false, fresh: res.fresh, hasInitialCommand: false }),

@@ -3595,7 +3595,6 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
-=======
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
   canvasWidget: CanvasWidgetApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */

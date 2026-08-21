@@ -1742,7 +1742,10 @@ div.mdx-row[role='menuitemradio']:focus-visible {
 }
 .browser-node__tab-title {
   flex: 1;
-=======
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .browser-ext-panel__anchor {
   position: relative;
 }
@@ -1853,7 +1856,7 @@ div.mdx-row[role='menuitemradio']:focus-visible {
 .browser-node__tab-new:hover {
   background: var(--md-surface-container-high);
   color: var(--md-on-surface);
-=======
+}
 .browser-ext-panel__add {
   width: 100%;
   background: var(--md-primary-container);

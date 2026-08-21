@@ -88,6 +88,7 @@ import {
   planParkEviction,
   type ParkTimer
 } from '../terminal/park-budget'
+import { canEscapeToWidget } from '../terminal/widget-escape'
 import {
   mayDisposeOffscreen,
   offscreenCoreIsRemote,
@@ -5137,7 +5138,15 @@ export function TerminalNode({
             browser tab has no OS window to open, so this button is simply absent there rather
             than present-and-refusing (`isBrowserRuntime()`, the same seam `shell.reveal`'s
             desktop-only affordance uses). */}
-          {!isBrowserRuntime() && (
+          {/* LOCAL sessions only, and this gate is load-bearing rather than tidy: WidgetApp
+            builds its own `new LocalTransport()`, so escaping a REMOTE node would hand a remote
+            node id to the LOCAL core. That is the `requireRemote` hole this repo already paid
+            for once — an SSH node quietly becoming a local shell in the local $HOME, with the
+            remote session's scrollback replayed into it. `remoteSession` covers an SSH project
+            and an SSH-project terminal; `offscreenCoreIsRemote(session.source)` covers a
+            relay/server tab, whose core is another machine entirely and which `data.remote`
+            does not report (nothing sets that field). */}
+          {canEscapeToWidget({ browserRuntime: isBrowserRuntime(), remoteSession, sessionSource: session.source }) && (
             <Tooltip label="Escape to widget — always-on-top window, same live session">
               <button
                 className="term-node__widget-escape nodrag"
