@@ -1783,40 +1783,53 @@ const NON_FEATURE_DOCS = new Map([
   if (manifest) {
     checkedCount += 1
     const extraResources = Array.isArray(manifest.build?.extraResources) ? manifest.build.extraResources : []
-    const entry = extraResources.find(
-      (e) => e && typeof e === 'object' && e.from === '.' && e.to === 'server-deployment'
-    )
-    if (!entry) {
+    // Each deployment asset gets its OWN entry, and this guard asserts them one by one rather
+    // than accepting a single root-scoped one.
+    //
+    // The first version shipped { from: '.', to: 'server-deployment', filter: [...] }, which
+    // packages nothing at all: a root-scoped extraResources pattern set bleeds into the APP file
+    // set, package.json stopped being packed into app.asar, and electron-builder aborted with
+    // 'Application "package.json" in the ... app.asar is corrupted'. Every dist:win failed from
+    // the moment that entry landed, and it was not caught because the lane that wrote it was
+    // forbidden from running a build — a real cost of that constraint, recorded here.
+    //
+    // Explicit froms cannot reach the app file set, so the shape IS the fix, and asserting the
+    // shape is what stops it coming back.
+    const requiredAssets = [
+      'host.bat',
+      'docker-compose.yml',
+      'Dockerfile',
+      '.dockerignore',
+      'package.json',
+      'package-lock.json',
+      'src'
+    ]
+    const rootScoped = extraResources.filter((e) => e && typeof e === 'object' && e.from === '.')
+    if (rootScoped.length > 0) {
       fail(
-        'Server Edition deployment packaging: package.json build.extraResources has no ' +
-          '{ from: ".", to: "server-deployment" } entry — a packaged build ships no host.bat, ' +
-          'so ServerDeploymentService always reports the deployment files missing'
+        'Server Edition deployment packaging: build.extraResources contains a root-scoped ' +
+          '{ from: "." } entry — that corrupts app.asar by dropping package.json from the app ' +
+          'file set, and every dist:win fails. Give each asset its own explicit from.'
       )
     } else {
-      pass('Server Edition deployment packaging: build.extraResources ships a server-deployment/ resources directory')
-      checkedCount += 1
-      const filter = Array.isArray(entry.filter) ? entry.filter : []
-      // Every path host.bat/docker-compose.yml/Dockerfile reference by relative lookup (grepped
-      // from those files directly, not guessed), plus the source tree the Docker build context
-      // needs (docker-compose.yml's build.context is ".", i.e. this same packaged directory).
-      const requiredFilterEntries = [
-        'host.bat',
-        'docker-compose.yml',
-        'Dockerfile',
-        '.dockerignore',
-        'package.json',
-        'package-lock.json',
-        'src/**/*'
-      ]
-      const missingFromFilter = requiredFilterEntries.filter((needed) => !filter.includes(needed))
-      if (missingFromFilter.length) {
-        fail(
-          `Server Edition deployment packaging: build.extraResources' server-deployment filter is missing ${missingFromFilter.join(', ')} — ` +
-            'host.bat/docker-compose.yml/Dockerfile need these to run `docker compose up -d --build`'
-        )
-      } else {
-        pass('Server Edition deployment packaging: the server-deployment filter carries every file host.bat/docker-compose.yml/Dockerfile reference')
-      }
+      pass('Server Edition deployment packaging: no root-scoped extraResources entry (which would corrupt app.asar)')
+    }
+    checkedCount += 1
+    const shipped = new Set(
+      extraResources
+        .filter((e) => e && typeof e === 'object' && typeof e.to === 'string' && e.to.startsWith('server-deployment/'))
+        .map((e) => e.from)
+    )
+    const missingAssets = requiredAssets.filter((needed) => !shipped.has(needed))
+    if (missingAssets.length) {
+      fail(
+        'Server Edition deployment packaging: build.extraResources ships no server-deployment/ entry for ' +
+          missingAssets.join(', ') +
+          ' — host.bat/docker-compose.yml/Dockerfile need these, and without host.bat ' +
+          'ServerDeploymentService always reports the deployment files missing'
+      )
+    } else {
+      pass('Server Edition deployment packaging: every asset those scripts reference has its own extraResources entry')
     }
   }
 

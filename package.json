@@ -84,22 +84,52 @@
         "to": "codex-relay.js"
       },
       {
-        "from": ".",
-        "to": "server-deployment",
-        "filter": [
-          "host.bat",
-          "docker-compose.yml",
-          "Dockerfile",
-          ".dockerignore",
-          "package.json",
-          "package-lock.json",
-          "electron.vite.config.ts",
-          "tsconfig.json",
-          "tsconfig.node.json",
-          "tsconfig.web.json",
-          "deploy/**/*",
-          "src/**/*"
-        ]
+        "from": "host.bat",
+        "to": "server-deployment/host.bat"
+      },
+      {
+        "from": "docker-compose.yml",
+        "to": "server-deployment/docker-compose.yml"
+      },
+      {
+        "from": "Dockerfile",
+        "to": "server-deployment/Dockerfile"
+      },
+      {
+        "from": ".dockerignore",
+        "to": "server-deployment/.dockerignore"
+      },
+      {
+        "from": "package.json",
+        "to": "server-deployment/package.json"
+      },
+      {
+        "from": "package-lock.json",
+        "to": "server-deployment/package-lock.json"
+      },
+      {
+        "from": "electron.vite.config.ts",
+        "to": "server-deployment/electron.vite.config.ts"
+      },
+      {
+        "from": "tsconfig.json",
+        "to": "server-deployment/tsconfig.json"
+      },
+      {
+        "from": "tsconfig.node.json",
+        "to": "server-deployment/tsconfig.node.json"
+      },
+      {
+        "from": "tsconfig.web.json",
+        "to": "server-deployment/tsconfig.web.json"
+      },
+      {
+        "from": "deploy",
+        "to": "server-deployment/deploy"
+      },
+      {
+        "from": "src",
+        "to": "server-deployment/src"
       }
     ],
     "linux": {
