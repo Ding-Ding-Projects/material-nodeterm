@@ -440,7 +440,7 @@ async function ptyCaptureUntil(nodeId, predicate, description, timeoutMs = 30_00
     }
     await sleep(150)
   }
-  throw new Error(`${description} did not appear in PTY ${nodeId}. Tail: ${JSON.stringify(last.slice(-1200))}`)
+  throw new Error(`${typeof description === 'function' ? description() : description} did not appear in PTY ${nodeId}. Tail: ${JSON.stringify(last.slice(-1200))}`)
 }
 
 /**
@@ -561,17 +561,25 @@ async function createProfileNode(profile, catalog, onNodeDiscovered) {
   const probe = buildProfileProbe(profile, catalog, { token: runId, customDialect })
   await sendPtyText(nodeId, probe.command)
   let parsed
+  // The probe demands FOUR independent verifications and the timeout named NONE of them, so a
+  // git-bash run satisfying marker, unicode and cwd but not size reported the identical "did not
+  // appear in PTY" as one where nothing ran at all. That cost an hour of guessing, with only a
+  // base64 tail of the echoed command as evidence. Recording the last decode makes the failure
+  // say which leg is red — a measurement instead of a guess.
+  let lastVerdict = 'no decode succeeded'
   const screen = await ptyCaptureUntil(
     nodeId,
     (value) => {
       try {
         parsed = parseProfileProbeOutput(probe, value, projectDirectory)
+        lastVerdict = `marker=${parsed.markerVerified} unicode=${parsed.unicodeVerified} cwd=${parsed.cwdVerified} size=${parsed.sizeVerified} cwdSeen=${JSON.stringify(parsed.cwd)}`
         return parsed.markerVerified && parsed.unicodeVerified && parsed.cwdVerified && parsed.sizeVerified
-      } catch {
+      } catch (decodeError) {
+        lastVerdict = `decode failed: ${decodeError && decodeError.message ? decodeError.message : String(decodeError)}`
         return false
       }
     },
-    `profile probe for ${profile.id}`
+    () => `profile probe for ${profile.id} [${lastVerdict}]`
   )
   parsed = parseProfileProbeOutput(probe, screen, projectDirectory)
   return {

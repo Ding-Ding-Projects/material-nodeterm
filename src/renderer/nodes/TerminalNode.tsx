@@ -5133,7 +5133,7 @@ export function TerminalNode({
               </button>
             </Tooltip>
           )}
-          {/* "Escape to widget" (docs/canvas-widget.md): pop this node's live session into its
+          {/* "Escape to widget" (docs/features/terminals/canvas-widget.md): pop this node's live session into its
             own always-on-top-configurable desktop window. Electron-only — a Server Edition
             browser tab has no OS window to open, so this button is simply absent there rather
             than present-and-refusing (`isBrowserRuntime()`, the same seam `shell.reveal`'s
