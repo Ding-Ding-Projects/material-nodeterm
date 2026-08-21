@@ -3,9 +3,10 @@ import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
-import { DEFAULT_ACCENT, DEFAULT_SETTINGS, type Settings } from '../shared/types'
+import { DEFAULT_ACCENT, DEFAULT_SETTINGS, type CanvasWidgetState, type Settings } from '../shared/types'
 import { normalizeLanguageMode } from '../shared/i18n'
 import type { HistoryAction } from '../shared/local-history'
+import { mergeCanvasWidgetState } from './canvas-widget'
 
 /**
  * Merge a possibly-partial/legacy `Settings` object over `DEFAULT_SETTINGS`. A plain
@@ -142,6 +143,30 @@ export class SettingsStore {
 
   get(): Settings {
     return this.cache
+  }
+
+  /**
+   * Machine-local mutation for one node's canvas-widget state (bounds moved/resized,
+   * always-on-top toggled) — called directly from the main process's widget-window manager
+   * (`main/canvas-widget-window.ts`), NOT over the renderer's `settings:save` IPC round trip,
+   * because the widget window's own move/resize events fire in main and the canvas that owns the
+   * node's other settings may not even be the focused window. Reuses the exact same save chain
+   * and atomic-write discipline as `registerIpc`'s handler above, so a widget move save can never
+   * race or clobber a concurrent renderer save.
+   */
+  async updateCanvasWidget(nodeId: string, patch: Partial<CanvasWidgetState>): Promise<void> {
+    const run = this.saveChain.then(() => {
+      const next: Settings = {
+        ...this.cache,
+        canvasWidgets: {
+          ...this.cache.canvasWidgets,
+          [nodeId]: mergeCanvasWidgetState(this.cache.canvasWidgets[nodeId], patch)
+        }
+      }
+      return this.saveNow(next)
+    })
+    this.saveChain = run.catch(() => {})
+    return run
   }
 
   registerIpc(): void {

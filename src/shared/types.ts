@@ -1427,6 +1427,22 @@ export interface AdhdModes {
   snoozeUntilMs: number | null
 }
 
+/**
+ * One terminal node "escaped" from the canvas into its own always-on-top-configurable desktop
+ * widget window (see `main/canvas-widget-window.ts`, `renderer/widget/WidgetApp.tsx`). The widget
+ * is a SECOND live view of the SAME tmux/session-host session the canvas node owns — the exact
+ * viewer-identity co-attach mechanism the kanban card modal already uses (`ModalTerminal.tsx`) —
+ * never a copy, and closing it never destroys the underlying session (see the widget-open/close
+ * IPC handlers in `main/canvas-widget-window.ts`, which call no pty destroy/kill on window close).
+ */
+export interface CanvasWidgetState {
+  /** Stay above other windows while the widget is open. User-configurable, both when opening the
+   *  widget and while it is open; persists per node. */
+  alwaysOnTop: boolean
+  /** Window bounds in OS screen coordinates, persisted per node so re-opening the SAME node's
+   *  widget reuses its last position/size. Absent until the widget has been moved/resized once. */
+  bounds?: { x: number; y: number; width: number; height: number }
+}
 
 /** User-configurable application settings (settings.json). */
 export interface Settings {
@@ -1487,6 +1503,16 @@ export interface Settings {
   /** Fallback view for projects the user hasn't explicitly toggled (canvas or the kanban board).
    *  Personal machine-local preference; per-project explicit choices override it. */
   defaultProjectView: 'canvas' | 'kanban'
+  /**
+   * Persisted state for a terminal node "escaped" from the canvas into its own desktop widget
+   * window (Windows/Linux/macOS — see `main/canvas-widget-window.ts`). Keyed by node id.
+   * Machine-local UI chrome, exactly like `sidebarCollapsedItems` above: never written into the
+   * git-shared `project.json` (see `core/workspace-files.ts`'s `ProjectFileV1`/`projectToFile`),
+   * because a widget's screen position on THIS machine means nothing on somebody else's. Pruned
+   * against live node ids on every write (`pruneCanvasWidgets` in `core/canvas-widget.ts`) so a
+   * deleted node's widget state doesn't grow settings.json forever.
+   */
+  canvasWidgets: Record<string, CanvasWidgetState>
   /** ms to dwell over a terminal before it takes pointer focus (pan-across guard). */
   panHoverDelay: number
   /**
@@ -1850,6 +1876,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarAutoCollapse: true,
   sidebarCollapsedItems: {},
   defaultProjectView: 'canvas',
+  canvasWidgets: {},
   panHoverDelay: 600,
   rainbowSpeed: 3,
   doubleClickFocus: true,
