@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import crypto from 'node:crypto'
 import path from 'node:path'
 import { base32Decode, base32Encode, totp } from '../core/toylocks/totp'
+import type { ServerDeploymentStage } from '../shared/types'
 
 export interface ServerDeploymentResult {
   ok: boolean
@@ -11,6 +12,34 @@ export interface ServerDeploymentResult {
   url?: string
   totpCode?: string
   error?: string
+}
+
+const DEPLOYED_URL = 'http://127.0.0.1:8443'
+
+/** Turns a raw `docker compose`/host.bat failure into a message that names WHICH thing went
+ *  wrong and what to do about it, rather than the generic "it failed" a user cannot act on
+ *  (CLAUDE.md: "Honest failure states... each says which, and what to do — never a generic
+ *  'try again'"). The raw message is preserved as the tail of the friendly one so nothing is
+ *  lost for anyone who needs the real log line. */
+export function classifyComposeFailure(rawMessage: string): string {
+  const message = rawMessage.trim()
+  const lower = message.toLowerCase()
+  if (lower.includes('address already in use') || lower.includes('port is already allocated')) {
+    return `Port 8443 is already in use by another program on this machine. Close whatever is using it, then try again. (${message.split('\n').filter(Boolean).pop() ?? message})`
+  }
+  if (
+    lower.includes('failed to solve') ||
+    lower.includes('failed to build') ||
+    lower.includes('copy failed') ||
+    lower.includes('dockerfile')
+  ) {
+    const lastLine = message.split('\n').filter(Boolean).slice(-1)[0] ?? message
+    return `The server image failed to build: ${lastLine}`
+  }
+  if (lower.includes('permission denied') || lower.includes('access is denied')) {
+    return `Docker refused a required action (permission denied). Make sure Docker Desktop is running as the current user, then try again. (${message.split('\n').filter(Boolean).pop() ?? message})`
+  }
+  return message || 'The server deployment failed for an unknown reason.'
 }
 
 /**
@@ -84,6 +113,11 @@ async function commandWorks(executable: string, args: string[], cwd: string): Pr
  * unchanged. */
 export class ServerDeploymentService {
   private inFlight: Promise<ServerDeploymentResult> | null = null
+  /** In-memory only, per app process — see `status()`'s doc comment on `ServerDeploymentApi` for
+   *  why that is the right scope for the always-visible canvas indicator. Cleared to `null` on
+   *  any failed `start()` so a stale address can never be shown as reachable. */
+  private lastReady: { url: string } | null = null
+  private progressListeners = new Set<(stage: ServerDeploymentStage) => void>()
   constructor(private readonly projectRoot: string, private readonly stateDir: string = projectRoot) {}
 
   start(): Promise<ServerDeploymentResult> {
@@ -96,10 +130,28 @@ export class ServerDeploymentService {
     return totp(base32Decode(secret))
   }
 
+  status(): { running: boolean; url?: string } {
+    return this.lastReady ? { running: true, url: this.lastReady.url } : { running: false }
+  }
+
+  /** Progress subscription for whatever `start()` call is currently in flight (or the next one).
+   *  Returns an unsubscribe function. Never called with the TOTP code or the deployment URL —
+   *  those are credentials/results, not progress, and must not ride a fire-and-forget broadcast. */
+  onProgress(cb: (stage: ServerDeploymentStage) => void): () => void {
+    this.progressListeners.add(cb)
+    return () => this.progressListeners.delete(cb)
+  }
+
+  private emitStage(stage: ServerDeploymentStage): void {
+    for (const listener of this.progressListeners) listener(stage)
+  }
+
   private async startOnce(): Promise<ServerDeploymentResult> {
     if (process.platform !== 'win32') return { ok: false, state: 'failed', error: 'Automatic Server Edition deployment is currently available on Windows only.' }
     const wrapper = path.join(this.projectRoot, 'host.bat')
-    try { await access(wrapper) } catch { return { ok: false, state: 'failed', error: 'The Server Edition deployment files are missing.' } }
+    try { await access(wrapper) } catch { return { ok: false, state: 'failed', error: 'The Server Edition deployment files are missing from this install. Reinstall nodeterm.' } }
+
+    this.emitStage('preparing-secrets')
     await mkdir(this.stateDir, { recursive: true })
     const totpFile = path.join(this.stateDir, '.nodeterm-server-totp')
     let secretBase32 = ''
@@ -110,10 +162,12 @@ export class ServerDeploymentService {
       await run('icacls.exe', [totpFile, '/inheritance:r', '/grant:r', `${process.env.USERDOMAIN}\\${process.env.USERNAME}:(R,W)`], this.stateDir, 15_000)
     }
 
+    this.emitStage('checking-docker')
     if (!(await commandWorks('docker.exe', ['compose', 'version'], this.projectRoot))) {
       if (!(await commandWorks('winget.exe', ['--version'], this.projectRoot))) {
-        return { ok: false, state: 'failed', error: 'Docker Desktop is missing and Windows Package Manager is unavailable.' }
+        return { ok: false, state: 'failed', error: 'Docker is not installed, and Windows Package Manager (winget) is unavailable to install it automatically. Install Docker Desktop yourself, then try again.' }
       }
+      this.emitStage('installing-docker')
       try {
         await run('winget.exe', ['install', '--id', 'Docker.DockerDesktop', '--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements'], this.projectRoot, 20 * 60_000)
       } catch (error) {
@@ -123,17 +177,19 @@ export class ServerDeploymentService {
     }
 
     if (!(await commandWorks('docker.exe', ['info'], this.projectRoot))) {
+      this.emitStage('starting-docker-daemon')
       const desktop = path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Docker', 'Docker', 'Docker Desktop.exe')
       try { await access(desktop); spawn(desktop, [], { detached: true, windowsHide: true, stdio: 'ignore' }).unref() }
-      catch { return { ok: false, state: 'failed', error: 'Docker Desktop is installed but its daemon is not running.' } }
+      catch { return { ok: false, state: 'failed', error: 'Docker Desktop is installed but its daemon is not running, and it could not be started automatically. Start Docker Desktop yourself, then try again.' } }
       let ready = false
       for (let attempt = 0; attempt < 60 && !ready; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 2_000))
         ready = await commandWorks('docker.exe', ['info'], this.projectRoot)
       }
-      if (!ready) return { ok: false, state: 'failed', error: 'Docker Desktop did not become ready within two minutes.' }
+      if (!ready) return { ok: false, state: 'failed', error: 'Docker Desktop did not become ready within two minutes. Open Docker Desktop yourself and wait for it to finish starting, then try again.' }
     }
 
+    this.emitStage('building-and-starting')
     try {
       // NODETERM_SERVER_ENV_DIR redirects host.bat's .env (first-boot password) out of the
       // (update-replaced) install directory; NODETERM_TOTP_SECRET_FILE_HOST is read by
@@ -143,14 +199,17 @@ export class ServerDeploymentService {
         NODETERM_SERVER_ENV_DIR: this.stateDir,
         NODETERM_TOTP_SECRET_FILE_HOST: totpFile
       })
+      this.lastReady = { url: DEPLOYED_URL }
+      this.emitStage('ready')
       return {
         ok: true,
         state: 'ready',
-        url: 'http://127.0.0.1:8443',
+        url: DEPLOYED_URL,
         totpCode: totp(base32Decode(secretBase32))
       }
     } catch (error) {
-      return { ok: false, state: 'failed', error: (error as Error).message }
+      this.lastReady = null
+      return { ok: false, state: 'failed', error: classifyComposeFailure((error as Error).message) }
     }
   }
 }

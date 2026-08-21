@@ -266,6 +266,7 @@ import {
 } from '../lib/zoomShortcut'
 import { UsageIndicator } from '../components/UsageIndicator'
 import { SystemResourcePill } from '../components/SystemResourcePill'
+import { ServerDeploymentPill } from '../components/ServerDeploymentPill'
 import { MinecraftConnectBanner } from '../components/MinecraftConnectBanner'
 import { PresenceLayer } from '../components/PresenceLayer'
 import { Facepile } from '../components/Facepile'
@@ -13286,6 +13287,7 @@ export function Canvas() {
           />
         
           <UsageIndicator overBoard={kanbanOpen} />
+          <ServerDeploymentPill overBoard={kanbanOpen} />
         </CanvasPills>
 
         <PresenceNamePrompt />

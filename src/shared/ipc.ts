@@ -235,6 +235,10 @@ export const IPC = {
   projectArchiveImport: 'project-archive:import',
   serverDeploymentStart: 'server-deployment:start',
   serverDeploymentTotp: 'server-deployment:totp',
+  serverDeploymentStatus: 'server-deployment:status',
+  /** Main → renderer event (not invoke/handle): one `ServerDeploymentStage` per emission, sent
+   *  while a `serverDeployment.start()` call is in flight. */
+  serverDeploymentProgress: 'server-deployment:progress',
   // main → renderer events
   workspaceMigrated: 'workspace:migrated',
   /** Payload: the `workspace.json.corrupt-<ts>` filename the unreadable index was preserved as. */

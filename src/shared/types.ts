@@ -1120,6 +1120,19 @@ export interface WorkspaceApi {
   onExternalChange(cb: (project: Project) => void): () => void
 }
 
+/** One step of an in-flight `serverDeployment.start()` call, in the order they can occur. Not
+ *  every deployment passes through every stage (an already-installed Docker skips
+ *  `installing-docker`; an already-running daemon skips `starting-docker-daemon`) — a listener
+ *  must not assume a fixed sequence, only that stages move forward and end in either `ready` or
+ *  the promise rejecting/resolving with `ok:false`. */
+export type ServerDeploymentStage =
+  | 'preparing-secrets'
+  | 'checking-docker'
+  | 'installing-docker'
+  | 'starting-docker-daemon'
+  | 'building-and-starting'
+  | 'ready'
+
 export interface ServerDeploymentApi {
   start(): Promise<{
     ok: boolean
@@ -1129,6 +1142,15 @@ export interface ServerDeploymentApi {
     error?: string
   }>
   currentTotp(): Promise<string>
+  /** Cheap, in-memory status: whether THIS app process has a deployment it believes is up, and if
+   *  so its connect URL. It does not re-probe Docker — it reflects the last successful `start()`
+   *  in this run, which is what the always-visible canvas indicator needs (it must never do a
+   *  multi-second Docker round trip just to decide whether to render). */
+  status(): Promise<{ running: boolean; url?: string }>
+  /** Subscribes to progress stages for whichever `start()` call is currently in flight (there is
+   *  at most one — `start()` dedupes concurrent callers onto a single run). Returns an
+   *  unsubscribe function. */
+  onProgress(cb: (stage: ServerDeploymentStage) => void): () => void
 }
 
 export interface DialogApi {

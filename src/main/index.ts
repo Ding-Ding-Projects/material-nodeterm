@@ -842,6 +842,14 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC.serverDeploymentStart, () => serverDeployment.start())
   ipcMain.handle(IPC.serverDeploymentTotp, () => serverDeployment.currentTotp())
+  ipcMain.handle(IPC.serverDeploymentStatus, () => serverDeployment.status())
+  // Forwarded to every window (not just the one that started it) so the always-visible canvas
+  // indicator in a second window reflects a deployment kicked off from the first one.
+  serverDeployment.onProgress((stage) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send(IPC.serverDeploymentProgress, stage)
+    }
+  })
   workspaceStore.setProjectHistoryRecorder((project, content) =>
     localHistoryStore.record({
       domain: `project_${project.id}`,

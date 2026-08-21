@@ -5900,6 +5900,55 @@ body,
     linear-gradient(rgba(var(--tint-rgb), 0.08), rgba(var(--tint-rgb), 0.08)),
     rgba(var(--card-rgb), 0.92);
 }
+
+/* ---- Server Edition deployment pill (bottom-left cluster; only rendered while a deployment is
+   up) ---- Shares the usage/sysres pills' shell so it reads as the same cluster, not a new one. */
+.server-deploy-indicator {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+}
+/* Mirrors `.usage-indicator--board` / `.sysres-indicator--board`: rise above the kanban board's
+   opaque overlay (z 25) while it is open. */
+.server-deploy-indicator--board {
+  z-index: 26;
+}
+.server-deploy-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 13px;
+  background: rgba(var(--card-rgb), 0.92);
+  border: 1px solid rgba(var(--tint-rgb), 0.08);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.server-deploy-pill:hover {
+  background:
+    linear-gradient(rgba(var(--tint-rgb), 0.08), rgba(var(--tint-rgb), 0.08)),
+    rgba(var(--card-rgb), 0.92);
+}
+.server-deploy-pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  /* A steady green dot, not a pulse: unlike the usage/sysres pills' loading pulse, this pill's
+     mere presence already means "healthy and running" — nothing here is still loading. */
+  background: #34c759;
+  flex: none;
+}
+.server-deploy-pill__detail {
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+.server-deploy-pill__copy {
+  color: rgba(var(--tint-rgb), 0.6);
+}
 .usage-refresh {
   display: inline-flex;
   align-items: center;
@@ -7694,6 +7743,41 @@ body,
   cursor: pointer;
 }
 .phone-pair__footer { align-self: flex-start; }
+/* One-shot deployment progress checklist (CLAUDE.md: real progress, not a spinner). Rows only
+   ever grow forward — a stage the deployment skipped simply never appears. */
+.phone-pair__progress {
+  align-self: stretch;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.phone-pair__progress li {
+  font-size: 12px;
+  text-align: left;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.phone-pair__progress-done {
+  color: var(--success);
+}
+.phone-pair__progress-active {
+  color: var(--text-strong);
+}
+.phone-pair__copy {
+  background: none;
+  border: 1px solid rgba(var(--tint-rgb), 0.14);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--text-strong);
+  cursor: pointer;
+  flex: none;
+}
+.phone-pair__copy:hover { background: rgba(var(--tint-rgb), 0.1); }
 
 /* ---- Toy-lock overlay for the active tab (docs/toy-locks.md) — covers the canvas AND the
    kanban view (both are just views of the same project's nodes); the project's sessions stay
