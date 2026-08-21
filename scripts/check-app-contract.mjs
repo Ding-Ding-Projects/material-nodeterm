@@ -221,6 +221,66 @@ const FEATURES = [
     docs: ['docs/features/browser/extensions-and-webauthn.md'],
   },
   {
+    id: 'password-manager',
+    label: 'Per-project password managers',
+    files: [
+      'src/shared/password-manager.ts',
+      'src/core/password-manager/crypto.ts',
+      'src/core/password-manager/vault.ts',
+      'src/core/password-manager/vault-store.ts',
+      'src/core/password-manager/password-manager-handlers.ts',
+      'src/renderer/components/passwordManager/PasswordManagerPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/core/password-manager/crypto.ts', 'export function deriveVaultKey('],
+      ['src/core/password-manager/vault.ts', 'export function releaseGroupBinding('],
+    ],
+    docs: ['docs/features/projects/password-manager.md'],
+  },
+  {
+    id: 'canvas-widget-mode',
+    label: 'Canvas widget mode (escape to widget)',
+    files: [
+      'src/main/canvas-widget-window.ts',
+      'src/renderer/terminal/widget-escape.ts',
+      'src/core/canvas-widget.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/terminal/widget-escape.ts', 'export function canEscapeToWidget('],
+    ],
+    docs: ['docs/features/terminals/canvas-widget.md'],
+  },
+  {
+    id: 'browser-node-tabs',
+    label: 'Browser node tabs',
+    files: ['src/renderer/nodes/BrowserNode.tsx'],
+    contentChecks: [
+      ['src/renderer/nodes/BrowserNode.tsx', 'defaultBrowserTabs'],
+    ],
+    docs: ['docs/features/browser/browser-tabs.md'],
+  },
+  {
+    id: 'minecraft-backups',
+    label: 'Minecraft world backups',
+    files: [
+      'src/core/minecraft/backups.ts',
+      'src/renderer/components/minecraft/MinecraftBackupsPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/core/minecraft/backups.ts', 'export async function restoreBackup('],
+    ],
+    docs: ['docs/features/integrations/minecraft-backups.md'],
+  },
+  {
+    id: 'group-picker',
+    label: 'Group picker (move into group)',
+    files: ['src/renderer/components/canvas/GroupPickerDialog.tsx'],
+    contentChecks: [
+      ['src/renderer/components/canvas/GroupPickerDialog.tsx', 'export function GroupPickerDialog('],
+    ],
+    docs: ['docs/features/canvas/group-picker.md'],
+  },
+  {
     id: 'terminal-sessions-tmux',
     label: 'Terminal sessions + tmux continuity',
     files: ['src/core/pty-manager.ts'],
