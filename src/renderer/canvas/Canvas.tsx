@@ -11721,17 +11721,40 @@ export function Canvas() {
           body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`
         })
         const result = await api.workspace.exportProject(project)
-        notify(
-          result.ok
-            ? {
-                kind: 'success',
-                title: 'Project saved as one file',
-                body: [result.path, archiveContentsSummary(result.contents)].filter(Boolean).join(' — ')
-              }
-            : result.canceled
+        if (result.ok) {
+          // The archive packs the project's OWN git-tracked working files verbatim (see
+          // project-archive.ts), and a password-manager vault (core/password-manager/vault-store.ts)
+          // is deliberately a git-tracked sibling of project.json — so a vault the user committed
+          // travels inside the save file too, encrypted envelopes and all. That is by design (it is
+          // how the vault survives a clone on another machine), but it means the ONE save file is now
+          // exactly as sensitive as the vault's own password: whoever gets the file and the password
+          // gets every secret in it. Say so, every time a vault exists, whether locked or unlocked —
+          // "unlocked" here is only THIS process's cached key, never the presence of a vault.
+          let vaultKind: 'uninitialized' | 'locked' | 'unlocked' = 'uninitialized'
+          try {
+            vaultKind = (await api.passwordManager.status(projectId)).state.kind
+          } catch {
+            // Status is best-effort here — a failed read must never block reporting a save that
+            // already succeeded, and a missed warning is strictly safer than a false one.
+          }
+          const vaultWarning =
+            vaultKind !== 'uninitialized'
+              ? ' This project has a password-manager vault: its encrypted secrets travel inside this file too, and they are only as safe as the vault password.'
+              : ''
+          notify({
+            kind: vaultKind !== 'uninitialized' ? 'warning' : 'success',
+            title: 'Project saved as one file',
+            body:
+              [result.path, archiveContentsSummary(result.contents)].filter(Boolean).join(' — ') +
+              vaultWarning
+          })
+        } else {
+          notify(
+            result.canceled
               ? { kind: 'info', title: 'Project save cancelled' }
               : { kind: 'error', title: 'Project save failed', body: result.error }
-        )
+          )
+        }
       } finally {
         projectArchiveBusyRef.current = false
       }
