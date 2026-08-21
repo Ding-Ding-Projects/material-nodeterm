@@ -97,7 +97,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
     <SettingsSection
       id="appearance-editor"
       title="Appearance editor"
-      description="Every rendered element can be re-typeset — right-click it and choose Edit appearance… (Shift+right-click on a tab opens it directly). This page manages what's already customized, plus the app-chrome elements that don't have their own visible element to right-click."
+      description="Every rendered element can be re-typeset — right-click it and choose Edit appearance… (Shift+right-click on a tab or a terminal/agent node opens it directly; the command palette also lists Edit appearance for the open node). This page manages what's already customized, plus the app-chrome elements that don't have their own visible element to right-click."
       isActive={isActive}
       searchEntries={ENTRIES}
     >
