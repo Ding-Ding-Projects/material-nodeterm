@@ -36,6 +36,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, sep } from 'node:path'
+import { createHash } from 'node:crypto'
 import { isExcluded, listDocsMarkdown } from './build-docs-bundle.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -424,7 +425,7 @@ const FEATURES = [
       ],
     },
     captures: {
-      status: 'pending',
+      status: 'verified',
       // NOT docs/assets/shots/capture-manifest.json, and the distinction is the whole reason this
       // row stayed stuck. capture-shots.mjs rewrites that file wholesale on every `npm run shots`,
       // so a hand-added entry is erased by the next capture run with nothing to warn you; and one
@@ -439,8 +440,9 @@ const FEATURES = [
         'windows-terminal-profile-terminal',
         'windows-terminal-profile-unavailable',
         'windows-terminal-profile-reattached',
+        'windows-terminal-profile-restart-warning',
       ],
-      reason: 'the packaged cheap-Lowlevel-headless run has not happened yet, so no evidence exists to promote. What changed is that there is now somewhere for it to land: scripts/run-windows-profile-packaged-acceptance.mjs --execute writes its evidence to a task root, and `node scripts/promote-packaged-captures.mjs --evidence <that file>` validates it (schemaVersion, routeStatus passed, the cheap-headless method needle, every required id present, every PNG opened and checked against the real signature, the 6000-byte blank-frame floor and its own recorded sha256, and a gitHead that is a real commit here) before copying it into the committed manifest above. It refuses on the first unmet condition and writes nothing. Until somebody runs the harness on a Windows box against a packaged build of this commit, this row is honestly pending: the mechanism exists, the evidence does not. npm run shots does photograph the picker and the detected-availability list, but from the unpackaged out/ build over plain CDP, so those stay filed under app-windows-terminal-profile* ids and deliberately cannot half-satisfy the ids above',
+      reason: 'promoted from a real packaged cheap-Lowlevel-headless run at a8a0d3bb: all five required ids, five profiles (auto, windows-powershell, cmd, git-bash, wsl:docker-desktop) each verified on input/output, unicode, cwd and terminal size, plus session-host continuity across an app relaunch. Two blockers remain declared rather than hidden — copy-paste-lossless-clipboard-restore and installed-squirrel-artifact-proof — and the run reports them itself.',
     },
     settingsSection: 'shell',
     wired: {
@@ -1396,6 +1398,49 @@ function requireCaptureEvidence(evidence, label) {
     fail(`${label}: ${problems.join('; ')}`)
   } else {
     pass(`${label}: required exact capture ids and cheap headless method are recorded`)
+  }
+
+  // The manifest is a CLAIM about files. Verify the files.
+  //
+  // Caught by breaking it: with the row freshly flipped to `verified`, deleting a promoted PNG
+  // outright left this check completely green, because it only ever read ids and a method string
+  // out of the JSON. A manifest asserting captures that are not on disk is precisely the
+  // decorative evidence this whole row exists to refuse, and it would have shipped as "verified".
+  //
+  // promote-packaged-captures.mjs already checks all of this at promotion time — but promotion
+  // happens once and the tree lives on, so a later delete, a truncation or a corrupt copy would
+  // go unnoticed forever. Re-checking here costs five file reads.
+  const manifestDir = manifestPath.split('/').slice(0, -1).join('/')
+  for (const entry of Array.isArray(manifest.captured) ? manifest.captured : []) {
+    if (!entry || typeof entry.id !== 'string') continue
+    if (!(evidence.requiredIds || []).includes(entry.id)) continue
+    checkedCount += 1
+    const rel = `${manifestDir}/packaged/${String(entry.file || '').split('/').pop()}`
+    let bytes = null
+    try {
+      bytes = readFileSync(join(REPO_ROOT, rel))
+    } catch {
+      fail(`${label}: ${entry.id} claims ${rel}, which cannot be read`)
+      continue
+    }
+    // Real PNG signature, not merely a file with the right extension.
+    const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    if (bytes.length < 8 || !bytes.subarray(0, 8).equals(signature)) {
+      fail(`${label}: ${entry.id} at ${rel} is not a PNG`)
+      continue
+    }
+    // A blank or near-blank frame is the failure mode a screenshot harness produces when it
+    // photographs the wrong thing, so the floor is a real assertion rather than a formality.
+    if (bytes.length < 6000) {
+      fail(`${label}: ${entry.id} at ${rel} is ${bytes.length} bytes — below the blank-frame floor`)
+      continue
+    }
+    if (typeof entry.sha256 === 'string' && entry.sha256) {
+      const actual = createHash('sha256').update(bytes).digest('hex')
+      if (actual !== entry.sha256) {
+        fail(`${label}: ${entry.id} at ${rel} does not match its recorded sha256`)
+      }
+    }
   }
 }
 
