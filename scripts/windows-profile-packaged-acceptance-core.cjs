@@ -1144,7 +1144,16 @@ function buildProfileProbe(profile, catalog, options) {
       `ntcwd="$(${cwdExpression})"; ` +
       `ntcwdhex=$(printf '%s' "$ntcwd" | od -An -tx1 | tr -d ' \\n'); ` +
       `printf '%s%s%s\\n' ${shellSingleQuote(cwdPrefix)} "$ntcwdhex" ${shellSingleQuote(cwdSuffix)}; ` +
-      `set -- $(stty size); printf '%s%sx%s\\n' ${shellSingleQuote(sizePrefix)} "$2" "$1"`
+      // `stty size` reads STDIN, and this script is delivered as `... | base64 -d | sh`, so sh's
+      // stdin is the PIPE — it was asking a pipe for a window size and getting "Inappropriate
+      // ioctl for device" every time. Not a ConPTY or MSYS quirk: it fails the same way on any
+      // platform, and the other dialects escape it only by not using the piped form.
+      //
+      // Measured before this fix: marker=true unicode=true cwd=true size=FALSE, with the cwd
+      // decoding perfectly — so `pwd -W` and `od` were fine and this one line was the whole
+      // failure. Read the terminal directly, keeping the bare form as a fallback for a shell
+      // with no /dev/tty rather than losing the probe entirely there.
+      `set -- $(stty size < /dev/tty 2>/dev/null || stty size 2>/dev/null); printf '%s%sx%s\\n' ${shellSingleQuote(sizePrefix)} "$2" "$1"`
     const encoded = Buffer.from(script, 'utf8').toString('base64')
     command = `printf '%s' ${shellSingleQuote(encoded)} | base64 -d | sh\r`
   }
