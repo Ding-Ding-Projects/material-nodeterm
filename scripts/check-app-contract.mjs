@@ -35,7 +35,7 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { isExcluded, listDocsMarkdown } from './build-docs-bundle.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -1901,9 +1901,17 @@ const NON_FEATURE_DOCS = new Map([
     // context root, which for a bare directory name means the same thing here; a "!" line is a
     // re-include and must NOT be treated as an exclusion.
     const excluded = new Set()
+    const reincluded = new Set()
     for (const raw of dockerignore.split(/\r?\n/)) {
       const line = raw.trim()
-      if (!line || line.startsWith('#') || line.startsWith('!')) continue
+      if (!line || line.startsWith('#')) continue
+      if (line.startsWith('!')) {
+        // A `!` line is a re-include and is the ONLY reason a path under an excluded directory can
+        // still reach the build context. Recording them is what keeps the import scan below from
+        // reporting a deliberate exception as a break.
+        reincluded.add(line.slice(1).replace(/^\/+/, ''))
+        continue
+      }
       const first = line.replace(/^\/+/, '').split('/')[0]
       // Only whole-name directory entries can be resolved this cheaply; a glob like *.md cannot be
       // matched against a path token without reimplementing Docker's matcher, and guessing there
@@ -1966,7 +1974,70 @@ const NON_FEATURE_DOCS = new Map([
         }
       }
     }
+
+    // A SECOND way the container build breaks, and the one the first masks completely: production
+    // renderer/main source importing a path under an excluded directory. StatusSurface.tsx does a
+    // Vite `?raw` import of docs/assets/shots/capture-manifest.json, reached from Canvas.tsx, so
+    // `electron-vite build` cannot resolve it inside the container — but `npm run build` died on a
+    // missing scripts/ gate long before bundling, so nobody ever saw it. Same shape as this repo's
+    // recorded "the locked DLL hid the missing Spectre libs": fixing the loud break is what makes
+    // the quiet one reachable, which is exactly when a guard has to already exist.
+    //
+    // Test files are excluded deliberately — they are not bundled, so their scripts/ imports are
+    // correct and flagging them would be noise that gets this switched off.
+    // listRendererFiles joins with the platform separator, so on Windows it hands back a path
+    // whose separators are backslashes, which can never match a POSIX .dockerignore entry.
+    // Normalise once here rather than at each comparison, and keep the ORIGINAL native path for
+    // the actual file read.
+    const productionSources = listRendererFiles('src').filter(
+      (rel) => /\.(ts|tsx)$/.test(rel) && !/\.test\.(ts|tsx)$/.test(rel)
+    )
+    // Tripwire: an empty list makes this whole scan vanish silently while still reporting clean,
+    // the same shape as an it.each([]) that generates no tests. Assert it found something.
+    checkedCount += 1
+    if (productionSources.length < 100) {
+      fail(
+        `Docker build context: the production-source scan found only ${productionSources.length} ` +
+          'files under src/ — the walker has broken and this guard is no longer guarding anything'
+      )
+    }
+
+    for (const nativeRel of productionSources) {
+      const rel = nativeRel.split(sep).join('/')
+      let body = ''
+      try {
+        body = readFileSync(join(REPO_ROOT, nativeRel), 'utf8')
+      } catch {
+        continue
+      }
+      for (const m of body.matchAll(/from '((?:\.\.\/)+[^']+)'/g)) {
+        // Resolve the relative specifier against the importing file to a repo-root path.
+        const resolved = posixResolve(rel, m[1]).replace(/\?.*$/, '')
+        const top = resolved.split('/')[0]
+        if (!excluded.has(top)) continue
+        if (reincluded.has(resolved)) continue
+        checkedCount += 1
+        fail(
+          `Docker build context: ${rel} imports ${resolved}, but .dockerignore excludes ` +
+            `${top} and there is no \`!${resolved}\` re-include — the container build cannot ` +
+            `resolve that import. Either add the exception or move the file under src/.`
+        )
+      }
+    }
+    checkedCount += 1
   }
+}
+
+/** Resolve a relative import specifier against the importing file, POSIX-style. Deliberately does
+ *  not use node:path — the repo-root paths compared here are always POSIX, and path.win32 would
+ *  produce backslashes that never match a .dockerignore entry. */
+function posixResolve(fromFile, specifier) {
+  const parts = fromFile.split('/').slice(0, -1)
+  for (const seg of specifier.split('/')) {
+    if (seg === '..') parts.pop()
+    else if (seg !== '.' && seg !== '') parts.push(seg)
+  }
+  return parts.join('/')
 }
 
 // ---------------------------------------------------------------------
