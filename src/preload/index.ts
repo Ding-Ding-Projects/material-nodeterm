@@ -905,6 +905,10 @@ const api: NodeTerminalApi = {
     readProperties: (id) => ipcRenderer.invoke(IPC.minecraftPropertiesRead, id),
     writeProperties: (id, updates) => ipcRenderer.invoke(IPC.minecraftPropertiesWrite, id, updates),
     readPlayerLists: (id) => ipcRenderer.invoke(IPC.minecraftPlayerLists, id),
+    listBackups: (id) => ipcRenderer.invoke(IPC.minecraftBackupsList, id),
+    createBackup: (id) => ipcRenderer.invoke(IPC.minecraftBackupCreate, id),
+    restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
+    deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
   }
 }

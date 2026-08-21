@@ -575,6 +575,10 @@ export function buildStubApi(): Omit<
       readProperties: U('minecraft.readProperties'),
       writeProperties: U('minecraft.writeProperties'),
       readPlayerLists: U('minecraft.readPlayerLists'),
+      listBackups: U('minecraft.listBackups'),
+      createBackup: U('minecraft.createBackup'),
+      restoreBackup: U('minecraft.restoreBackup'),
+      deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
     }
   } satisfies Omit<

@@ -15,6 +15,7 @@ import {
 } from '../../lib/minecraftDisabledReasons'
 import { MinecraftPropertiesEditor } from './MinecraftPropertiesEditor'
 import { MinecraftPlayersPanel } from './MinecraftPlayersPanel'
+import { MinecraftBackupsPanel } from './MinecraftBackupsPanel'
 
 const CONSOLE_CAP = 400
 
@@ -101,7 +102,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
   const [busy, setBusy] = useState(false)
   const [consoleLines, setConsoleLines] = useState<MinecraftConsoleLine[]>([])
   const [commandDraft, setCommandDraft] = useState('')
-  const [mgmtTab, setMgmtTab] = useState<'properties' | 'players' | null>(null)
+  const [mgmtTab, setMgmtTab] = useState<'properties' | 'players' | 'backups' | null>(null)
   const consoleRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -446,6 +447,15 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             >
               Players
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mgmtTab === 'backups'}
+              className={`mc-mgmt__tab nodrag${mgmtTab === 'backups' ? ' mc-mgmt__tab--active' : ''}`}
+              onClick={() => setMgmtTab((cur) => (cur === 'backups' ? null : 'backups'))}
+            >
+              Backups
+            </button>
           </div>
           {mgmtTab === 'properties' && (
             <div role="tabpanel" aria-label="server.properties editor">
@@ -455,6 +465,11 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
           {mgmtTab === 'players' && (
             <div role="tabpanel" aria-label="Players">
               <MinecraftPlayersPanel nodeId={nodeId} phase={status.phase} />
+            </div>
+          )}
+          {mgmtTab === 'backups' && (
+            <div role="tabpanel" aria-label="Backups">
+              <MinecraftBackupsPanel nodeId={nodeId} phase={status.phase} />
             </div>
           )}
         </div>

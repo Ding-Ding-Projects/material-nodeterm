@@ -5,6 +5,7 @@
 import { IPC } from '../../shared/ipc'
 import type { CorePlatform } from '../platform'
 import type {
+  MinecraftBackupSummary,
   MinecraftConsoleLine,
   MinecraftCreateInput,
   MinecraftPlayerLists,
@@ -68,6 +69,22 @@ export function registerMinecraftIpc(
   platform.handle(
     IPC.minecraftPlayerLists,
     (id: string): Promise<MinecraftPlayerLists> => manager.readPlayerLists(id)
+  )
+  platform.handle(
+    IPC.minecraftBackupsList,
+    (id: string): Promise<MinecraftBackupSummary[]> => manager.listBackups(id)
+  )
+  platform.handle(
+    IPC.minecraftBackupCreate,
+    (id: string): Promise<MinecraftServerStatus> => manager.createBackup(id)
+  )
+  platform.handle(
+    IPC.minecraftBackupRestore,
+    (id: string, backupId: string): Promise<MinecraftServerStatus> => manager.restoreBackup(id, backupId)
+  )
+  platform.handle(
+    IPC.minecraftBackupDelete,
+    (id: string, backupId: string): Promise<void> => manager.deleteBackup(id, backupId)
   )
 
   return { manager }
