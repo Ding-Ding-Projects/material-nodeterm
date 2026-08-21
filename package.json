@@ -100,7 +100,7 @@
         "to": "server-deployment/.dockerignore"
       },
       {
-        "from": "package.json",
+        "from": "dist/.pack-resources/server-deployment/package.json",
         "to": "server-deployment/package.json"
       },
       {

@@ -1804,21 +1804,27 @@ const NON_FEATURE_DOCS = new Map([
       'package-lock.json',
       'src'
     ]
-    const rootScoped = extraResources.filter((e) => e && typeof e === 'object' && e.from === '.')
+    const rootScoped = extraResources.filter(
+      (e) => e && typeof e === 'object' && (e.from === '.' || e.from === 'package.json')
+    )
     if (rootScoped.length > 0) {
       fail(
         'Server Edition deployment packaging: build.extraResources contains a root-scoped ' +
-          '{ from: "." } entry — that corrupts app.asar by dropping package.json from the app ' +
+          '{ from: "." } or { from: "package.json" } entry — either corrupts app.asar by dropping package.json from the app ' +
           'file set, and every dist:win fails. Give each asset its own explicit from.'
       )
     } else {
       pass('Server Edition deployment packaging: no root-scoped extraResources entry (which would corrupt app.asar)')
     }
     checkedCount += 1
+    // Keyed on the DESTINATION, not the source. package.json must be shipped from a STAGED copy
+    // (scripts/before-pack.cjs) rather than referenced in place — electron-builder excludes an
+    // extraResources source from the app package, so naming the real package.json here deletes it
+    // from app.asar. What this guard cares about is that server-deployment/<asset> arrives.
     const shipped = new Set(
       extraResources
         .filter((e) => e && typeof e === 'object' && typeof e.to === 'string' && e.to.startsWith('server-deployment/'))
-        .map((e) => e.from)
+        .map((e) => e.to.slice('server-deployment/'.length))
     )
     const missingAssets = requiredAssets.filter((needed) => !shipped.has(needed))
     if (missingAssets.length) {
