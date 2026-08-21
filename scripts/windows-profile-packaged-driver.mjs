@@ -224,7 +224,7 @@ async function waitFor(expression, description, timeoutMs = 15_000) {
       // timeout proving it again and then blaming the application.
       if (/reference chain is too long/i.test(String(error?.message ?? ''))) {
         throw new Error(
-          `${description}: the expression returned a DOM node rather than a value ` +
+          `${typeof description === 'function' ? '(evidence pending)' : description}: the expression returned a DOM node rather than a value ` +
             `(${error.message}). Wrap the predicate in !!(...).`
         )
       }
@@ -232,7 +232,11 @@ async function waitFor(expression, description, timeoutMs = 15_000) {
     }
     await sleep(100)
   }
-  throw new Error(`${description} did not become true within ${timeoutMs}ms${lastError ? `: ${lastError.message}` : '.'}`)
+  // `description` may be a function — including an async one — so a failure can report live
+  // screen state gathered at the moment it gave up rather than a fixed string decided before
+  // the wait even started.
+  const detail = typeof description === 'function' ? await description() : description
+  throw new Error(`${detail} did not become true within ${timeoutMs}ms${lastError ? `: ${lastError.message}` : '.'}`)
 }
 
 async function rendererPromise(expression, description, timeoutMs = 30_000) {
@@ -928,7 +932,27 @@ async function chooseRestartProfile(nodeId, label) {
     })`,
     `restart profile ${label}`
   )
-  await waitFor(`!!document.querySelector('.destgate[role="alertdialog"]')`, 'restart destructive gate')
+  // Same lesson as the profile probe: a bare "did not become true" names nothing, and the
+  // handler's early-return path raises a NOTIFICATION rather than the gate — so the evidence
+  // that distinguishes "click missed" from "handler refused" is already on screen and was
+  // simply never read. Report it instead of guessing at a fifth hypothesis.
+  const restartGateEvidence = async () => {
+    try {
+      return String(
+        await rendererPromise(
+          `JSON.stringify({gate:!!document.querySelector('.destgate'),`
+            + `submenuOpen:!!document.querySelector('.ctx-submenu'),`
+            + `menuOpen:!!document.querySelector('.ctx-menu'),`
+            + `toasts:Array.from(document.querySelectorAll('.toast,.notif-row')).map(function(t){return t.textContent.trim().slice(0,180)}),`
+            + `submenuRows:Array.from(document.querySelectorAll('.ctx-submenu .ctx-item')).map(function(r){var l=r.querySelector('.ctx-item__label');return (l?l.textContent.trim():'?')+(r.getAttribute('aria-disabled')==='true'?' [disabled]':'')})})`,
+          'restart gate evidence'
+        )
+      )
+    } catch (error) {
+      return `evidence unavailable: ${error && error.message ? error.message : String(error)}`
+    }
+  }
+  await waitFor(`!!document.querySelector('.destgate[role="alertdialog"]')`, async () => `restart destructive gate (screen: ${await restartGateEvidence()})`)
 }
 
 async function restartWithProfile(state, captures) {
