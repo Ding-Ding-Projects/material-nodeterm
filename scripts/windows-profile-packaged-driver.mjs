@@ -613,6 +613,20 @@ async function resizeRepresentative(result, profile, catalog) {
   // So ask the PAGE which point is really the header: walk candidate offsets and take the first
   // whose elementFromPoint is the header element (or a non-interactive descendant of it).
   const headerSelector = `${selector} .term-node__header`
+  // Bring the node ON SCREEN first, through the app's own Fit view command.
+  //
+  // This is why two plausible fixes in a row changed nothing. `elementFromPoint` returns null for
+  // coordinates outside the viewport, so every click computed from an off-screen node's rect was
+  // dispatched into empty space — indistinguishable, from the outside, from a click that landed on
+  // the wrong element. The probe's own diagnostic settled it: it reported "every sampled point was
+  // interactive" with an EMPTY list of sampled elements, i.e. it never saw an element at all.
+  //
+  // The canvas pans; nothing had ever scrolled this node into view. Fit view is the control a user
+  // would reach for, and driving it keeps this on the app's own surface rather than reaching past
+  // the UI to set a viewport transform.
+  await openPaletteCommand('Fit view')
+  await sleep(900)
+
   // Sweep the whole header, both axes, and REPORT what it saw when nothing qualifies.
   //
   // A single mid-line sweep found no bare-header point at all: at that height the strip is wall
@@ -640,13 +654,22 @@ async function resizeRepresentative(result, profile, catalog) {
            if(seen.indexOf(tag)<0 && seen.length<14) seen.push(tag);
          }
        }
-       return {ok:false, why:'every sampled point was interactive', seen:seen};
+       var onScreen = r.right>0 && r.bottom>0 && r.left<window.innerWidth && r.top<window.innerHeight;
+       return {ok:false, why: onScreen ? 'every sampled point was interactive'
+         : 'the header is OFF SCREEN, so elementFromPoint sees nothing there',
+         rect:{left:Math.round(r.left),top:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height)},
+         viewport:{w:window.innerWidth,h:window.innerHeight}, seen:seen};
      })()`
   )
   if (!headerProbe || headerProbe.ok !== true) {
     throw new Error(
       `No draggable point on the node header: ${headerProbe ? headerProbe.why : 'probe failed'}` +
-        (headerProbe && headerProbe.seen ? ` — elements sampled: ${headerProbe.seen.join(', ')}` : '')
+        (headerProbe && headerProbe.rect
+          ? ` — header at ${headerProbe.rect.left},${headerProbe.rect.top} ${headerProbe.rect.width}x${headerProbe.rect.height}`
+            + ` in a ${headerProbe.viewport.w}x${headerProbe.viewport.h} viewport`
+          : '') +
+        (headerProbe && headerProbe.seen && headerProbe.seen.length
+          ? ` — elements sampled: ${headerProbe.seen.join(', ')}` : '')
     )
   }
   const headerPoint = { x: headerProbe.x, y: headerProbe.y }
