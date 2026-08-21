@@ -8357,6 +8357,21 @@ export function Canvas() {
   const onNodeContextMenu = useCallback(
     (e: React.MouseEvent, node: Node) => {
       e.preventDefault()
+      // Shift+right-click on a node whose header carries a `data-appearance-id` (terminal/agent
+      // nodes) opens Edit appearance… directly — same convention as the project switcher's tab
+      // trigger — instead of routing through the ordinary context menu. A node with no anchor yet
+      // (a group frame, an ephemeral subagent/loop card) falls through to the normal menu rather
+      // than silently doing nothing.
+      if (e.shiftKey) {
+        const anchor = document.querySelector<HTMLElement>(
+          `[data-appearance-id="${appearanceId('node', node.id)}"]`
+        )
+        if (anchor) {
+          const nodeLabel = nodesRef.current.find((n) => n.id === node.id)?.data.title || 'Node'
+          openAppearanceEditor(appearanceId('node', node.id), nodeLabel, 'node', anchor)
+          return
+        }
+      }
       lastNodeMenuPosRef.current = { x: e.clientX, y: e.clientY }
       lastMenuScreenPosRef.current = { x: e.clientX, y: e.clientY }
       // For a group frame, remember WHERE inside it the user right-clicked so "New …" creation
@@ -12389,6 +12404,27 @@ export function Canvas() {
           content: bufferCache[n.id],
           run: () => goToNode(n)
         })
+        // Keyboard-reachable equivalent to right-click → Edit appearance… (only terminal/agent
+        // nodes carry a `data-appearance-id` anchor today — see TerminalNode.tsx). Focus the
+        // node first so its header is actually mounted before the anchor lookup, matching the
+        // right-click path's own "don't open on a node that visibly has nowhere to land" rule.
+        if (n.type === 'terminal') {
+          cmds.push({
+            id: `node-appearance-${n.id}`,
+            label: `Edit appearance — ${n.data.title}`,
+            section: 'Opened terminals',
+            icon: <IconColor />,
+            run: () => {
+              goToNode(n)
+              requestAnimationFrame(() => {
+                const anchor = document.querySelector<HTMLElement>(
+                  `[data-appearance-id="${appearanceId('node', n.id)}"]`
+                )
+                if (anchor) openAppearanceEditor(appearanceId('node', n.id), n.data.title || 'Node', 'node', anchor)
+              })
+            }
+          })
+        }
       })
     const kanbanId = useProjects.getState().activeProjectId
     if (kanbanId) {
