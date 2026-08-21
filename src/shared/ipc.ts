@@ -576,5 +576,25 @@ export const IPC = {
   authenticatorCode: 'authenticator:code',
   authenticatorCodes: 'authenticator:codes',
   authenticatorReveal: 'authenticator:reveal',
-  authenticatorExportSecrets: 'authenticator:export-secrets'
+  authenticatorExportSecrets: 'authenticator:export-secrets',
+  // Real per-project password managers (docs pending) — core-bound, registered by BOTH shells
+  // (core/password-manager/password-manager-handlers.ts), same pattern as toylocks/authenticator
+  // above. Unlike those, credentials live in a project-scoped file (<cwd>/.nodeterm/vault.json),
+  // not machine-local userData — see vault-store.ts's header.
+  passwordManagerStatus: 'password-manager:status',
+  passwordManagerCreateVault: 'password-manager:create-vault',
+  passwordManagerUnlock: 'password-manager:unlock',
+  passwordManagerLock: 'password-manager:lock',
+  passwordManagerChangePassword: 'password-manager:change-password',
+  passwordManagerCreateManager: 'password-manager:create-manager',
+  passwordManagerRenameManager: 'password-manager:rename-manager',
+  passwordManagerBindManagerGroup: 'password-manager:bind-manager-group',
+  passwordManagerReleaseGroupBinding: 'password-manager:release-group-binding',
+  passwordManagerDeleteManager: 'password-manager:delete-manager',
+  passwordManagerCreateCredential: 'password-manager:create-credential',
+  passwordManagerRenameCredential: 'password-manager:rename-credential',
+  passwordManagerUpdateCredentialSecret: 'password-manager:update-credential-secret',
+  passwordManagerRemoveCredential: 'password-manager:remove-credential',
+  passwordManagerRevealCredential: 'password-manager:reveal-credential',
+  passwordManagerCredentialCode: 'password-manager:credential-code'
 } as const
