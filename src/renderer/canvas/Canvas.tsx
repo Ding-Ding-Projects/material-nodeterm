@@ -522,6 +522,7 @@ import {
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
+  defaultBrowserTabs,
   createDinoNode,
   createDiffNode,
   createEditorNode,
@@ -8819,15 +8820,19 @@ export function Canvas() {
   const presence = presenceForProject(activeProjectId || '')
   useEffect(() => presence.connect(), [presence])
 
-  // A browser guest's new-window (target=_blank / window.open) request → open another browser node
-  // (never a real popup; main denies the real one) roped below/right of the source. Reads the
-  // latest nodes via nodesRef so the deps stay []. Rope is display-only (controlEdges, not persisted).
+  // A browser guest's new-window (target=_blank / window.open) request → opens a NEW TAB in the
+  // SAME browser node (never a real popup; main denies the real one, and never a sibling canvas
+  // node either — that used to spawn a whole roped node per link click, which is the "big poke
+  // guy" the tab strip replaces). Falls back to spawning a roped sibling node only for a source
+  // that is not a browser-kind node (shouldn't happen: only BrowserSurface registers a guest, and
+  // it always backs a 'browser' node — kept as a safety net, not a designed path). Reads the
+  // latest nodes via nodesRef so the deps stay [].
   useEffect(() => {
     return window.nodeTerminal.browser.onBrowserNewWindow(({ url, sourceNodeId }) => {
       const src = nodesRef.current.find((n) => n.id === sourceNodeId)
       if (!src) return
-      // Guard against a hostile/careless page flooding the canvas with real Chromium nodes
-      // (ad loops, setInterval(window.open)). Prune old records, then dedup + rate-cap.
+      // Guard against a hostile/careless page flooding the canvas/tab strip (ad loops,
+      // setInterval(window.open)). Prune old records, then dedup + rate-cap.
       const now = Date.now()
       const recent = browserPopupSpawnsRef.current.filter((r) => now - r.t < 10000)
       const isDup = recent.some((r) => r.url === url && r.source === sourceNodeId && now - r.t < 2000)
@@ -8838,6 +8843,24 @@ export function Canvas() {
       }
       recent.push({ url, source: sourceNodeId, t: now })
       browserPopupSpawnsRef.current = recent
+
+      if (src.type === 'browser') {
+        const existing =
+          (src.data.browserTabs as { id: string; url: string; title: string }[] | undefined) ??
+          defaultBrowserTabs(sourceNodeId, src.data.url as string | undefined, (src.data.title as string) || 'New Tab')
+        const newTab = { id: `${sourceNodeId}-tab-${Date.now().toString(36)}`, url, title: url }
+        const nextTabs = [...existing, newTab]
+        setNodes((ns) =>
+          ns.map((n) =>
+            n.id === sourceNodeId
+              ? { ...n, data: { ...n.data, browserTabs: nextTabs, browserActiveTabId: newTab.id } }
+              : n
+          )
+        )
+        markDirty()
+        return
+      }
+
       const srcW = src.measured?.width ?? (src.width as number) ?? 800
       const srcH = src.measured?.height ?? (src.height as number) ?? 560
       // src.position is group-relative when the opener sits in a group frame: place in absolute

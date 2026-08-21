@@ -1708,6 +1708,75 @@ div.mdx-row[role='menuitemradio']:focus-visible {
   color: var(--md-on-error);
 }
 
+/* Browser node tab strip — one node, several navigable pages. */
+.browser-node__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 2px 4px 0;
+  background: var(--md-surface-container);
+  border-bottom: 1px solid var(--md-outline-variant);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.browser-node__tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 72px;
+  max-width: 160px;
+  padding: 4px 6px;
+  border-radius: var(--md-shape-xs) var(--md-shape-xs) 0 0;
+  background: var(--md-surface-container-low);
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  font-size: 11px;
+  border: none;
+}
+.browser-node__tab:hover {
+  background: var(--md-surface-container-high);
+}
+.browser-node__tab--active {
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+.browser-node__tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browser-node__tab-close {
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.browser-node__tab-close:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.browser-node__tab-new {
+  color: var(--md-on-surface-variant);
+  border-radius: var(--md-shape-full);
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.browser-node__tab-new:hover {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+
 .startpage {
   background: var(--md-surface);
 }

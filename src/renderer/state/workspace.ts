@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import type { AgentLaunchIntent, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import {
@@ -153,6 +153,10 @@ export interface NodeData {
   /** Browser-only: which of the project's browserProfiles this node's webview session uses.
    *  Undefined = the app's default (unpartitioned) session — see @shared/browser-profiles. */
   browserProfileId?: string
+  /** Browser-only: the node's open tabs (git-shared project content — see `CanvasNodeState`). */
+  browserTabs?: BrowserTab[]
+  /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
+  browserActiveTabId?: string
   diffStaged?: boolean
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
@@ -1683,6 +1687,16 @@ export function reorderNodeBefore(
 }
 
 /** Converts persisted node states into live React Flow nodes (parents first). */
+/**
+ * Synthesizes a one-tab `browserTabs` array from a legacy/fresh browser node's `url`/`title`.
+ * Shared by the persisted-load migration below and by `BrowserNode` for a node that has no
+ * `data.browserTabs` yet (a freshly created node, or one loaded before this field existed) —
+ * one definition so the two paths cannot drift on what "no tabs yet" defaults to.
+ */
+export function defaultBrowserTabs(nodeId: string, url: string | undefined, title: string): BrowserTab[] {
+  return [{ id: `${nodeId}-tab-0`, url: url ?? '', title: title || 'New Tab' }]
+}
+
 export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
   // React Flow requires a parent node to appear before its children. With nested frames a flat
   // "groups first" sort is not enough (two frames compare equal), so `groupsFirst` re-emits the
@@ -1717,6 +1731,16 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
     // tag. Backfill agentId so saved workspaces keep working.
     let agentId = n.agentId
     if (!agentId && Array.isArray(n.tags) && n.tags.includes('claude')) agentId = 'claude'
+    // Legacy migration: a browser node saved before tabs existed carries only `url`/`title`.
+    // Synthesize a single tab from them so the tab strip has something to show — this is a
+    // read-side migration only (not written back to disk until the user actually edits a tab).
+    const browserTabs =
+      n.browserTabs && n.browserTabs.length > 0
+        ? n.browserTabs
+        : (n.kind ?? 'terminal') === 'browser'
+          ? defaultBrowserTabs(n.id, n.url, n.title)
+          : undefined
+    const browserActiveTabId = n.browserActiveTabId ?? browserTabs?.[0]?.id
     return {
       id: n.id,
       // Default to 'terminal' for nodes saved before the kind field existed.
@@ -1753,6 +1777,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         fileMissing: n.fileMissing,
         url: n.url,
         browserProfileId: n.browserProfileId,
+        browserTabs,
+        browserActiveTabId,
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
@@ -1819,6 +1845,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,
+        browserTabs: n.data.browserTabs,
+        browserActiveTabId: n.data.browserActiveTabId,
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,

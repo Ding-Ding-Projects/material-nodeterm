@@ -1,16 +1,32 @@
+import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
-import type { BrowserProfile } from '@shared/types'
+import type { BrowserProfile, BrowserTab } from '@shared/types'
 import { browserPartitionFor } from '@shared/browser-profiles'
-import type { CanvasNode } from '../state/workspace'
+import { defaultBrowserTabs, type CanvasNode } from '../state/workspace'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useProjects } from '../state/projects'
 import { BrowserSurface } from './BrowserSurface'
 import { BrowserProfilePicker } from './BrowserProfilePicker'
 
+/** Debounce for persisting a tab's live URL/title while the user navigates — matches the SSH
+ *  mirror's 5s write-throttle intent (this repo's established pattern for "don't rewrite the
+ *  project file on every navigation event"), scaled down since this is a purely local write. */
+const NAV_PERSIST_DEBOUNCE_MS = 800
+
 /**
- * A navigable Chromium browser node: node chrome (frame/header/resize/close) wrapping the shared
- * {@link BrowserSurface} (webview + toolbar). The last top-level URL persists to `data.url` so the
- * node reopens where it was; the same surface backs the kanban card modal's browser popup.
+ * A navigable Chromium browser node with its own **tab strip** (2026-08): several pages share one
+ * node, one Electron profile/partition, and one set of node chrome (frame/header/resize/close).
+ * Each tab wraps the shared {@link BrowserSurface} (webview + toolbar); only the ACTIVE tab's
+ * surface is mounted — switching tabs tears down the previous webview (its guest process ends)
+ * and mounts the newly active one, which reopens at its last persisted URL. Tabs persist to
+ * `data.browserTabs`/`data.browserActiveTabId` (project content, git-shared — see
+ * `CanvasNodeState`'s doc comment; cookies/storage stay in the Electron partition and are never
+ * written here). `data.url`/`data.title` are kept mirroring the ACTIVE tab for any older code path
+ * that still reads a browser node's single `url`/`title` (e.g. the new-window sibling-node
+ * fallback in Canvas, the header tooltip).
+ *
+ * A link opened with `target=_blank` / `window.open` no longer spawns a roped sibling node on the
+ * canvas — it opens as a new TAB in this same node (see Canvas's `onBrowserNewWindow` listener).
  *
  * Multiple browser profiles per project (2026-08): the header's {@link BrowserProfilePicker} lets
  * the user switch which of the project's named `browserProfiles` this node uses — two nodes on
@@ -28,6 +44,96 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
 
   const browserProfileId = data.browserProfileId as string | undefined
   const partition = browserPartitionFor(activeProjectId, browserProfileId)
+
+  // ── Tabs ────────────────────────────────────────────────────────────────────────────────────
+  // `tabs`/`activeTabId` are a LOCAL mirror of `data.browserTabs`/`data.browserActiveTabId`,
+  // initialized once and then reconciled from outside changes (see the sync effect below) rather
+  // than read fresh on every render — a fresh read would clobber an in-flight debounced edit the
+  // moment `updateNodeData` fires for an unrelated field.
+  const [tabs, setTabsState] = useState<BrowserTab[]>(
+    () => data.browserTabs ?? defaultBrowserTabs(id, data.url as string | undefined, (data.title as string) || 'New Tab')
+  )
+  const [activeTabId, setActiveTabIdState] = useState<string>(
+    () => data.browserActiveTabId ?? tabs[0]?.id ?? `${id}-tab-0`
+  )
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestRef = useRef<{ tabs: BrowserTab[]; activeTabId: string }>({ tabs, activeTabId })
+  latestRef.current = { tabs, activeTabId }
+
+  // Reconcile local tabs against `data.browserTabs` set from OUTSIDE this component — the only
+  // external writer today is Canvas's new-window handler, appending a tab and activating it.
+  // Merge by id rather than replacing wholesale, so an in-flight local edit (a navigation not yet
+  // debounce-flushed) is never clobbered by a stale external snapshot.
+  useEffect(() => {
+    const incoming = data.browserTabs
+    if (!incoming || incoming.length === 0) return
+    const localIds = new Set(latestRef.current.tabs.map((t) => t.id))
+    const added = incoming.filter((t) => !localIds.has(t.id))
+    if (added.length === 0) return
+    setTabsState((prev) => [...prev, ...added])
+    if (data.browserActiveTabId && added.some((t) => t.id === data.browserActiveTabId)) {
+      setActiveTabIdState(data.browserActiveTabId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.browserTabs, data.browserActiveTabId])
+
+  // Flush any pending debounced persist on unmount so a navigation right before closing the node
+  // isn't silently lost.
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current)
+        persistImmediate(latestRef.current.tabs, latestRef.current.activeTabId)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const persistImmediate = (nextTabs: BrowserTab[], nextActiveTabId: string): void => {
+    const active = nextTabs.find((t) => t.id === nextActiveTabId) ?? nextTabs[0]
+    updateNodeData(id, {
+      browserTabs: nextTabs,
+      browserActiveTabId: nextActiveTabId,
+      // Legacy mirror — see the component doc comment.
+      ...(active ? { url: active.url, title: active.title } : {})
+    })
+  }
+
+  const schedulePersist = (nextTabs: BrowserTab[], nextActiveTabId: string): void => {
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null
+      persistImmediate(nextTabs, nextActiveTabId)
+    }, NAV_PERSIST_DEBOUNCE_MS)
+  }
+
+  const selectTab = (tabId: string): void => {
+    setActiveTabIdState(tabId)
+    persistImmediate(tabs, tabId)
+  }
+
+  const newTab = (): void => {
+    const created: BrowserTab = { id: `${id}-tab-${Date.now().toString(36)}`, url: '', title: 'New Tab' }
+    const next = [...tabs, created]
+    setTabsState(next)
+    setActiveTabIdState(created.id)
+    persistImmediate(next, created.id)
+  }
+
+  const closeTab = (tabId: string, e: React.MouseEvent): void => {
+    e.stopPropagation()
+    let next = tabs.filter((t) => t.id !== tabId)
+    if (next.length === 0) {
+      // Closing the last tab never closes the node — it resets to one fresh blank tab.
+      next = [{ id: `${id}-tab-${Date.now().toString(36)}`, url: '', title: 'New Tab' }]
+    }
+    const nextActive = activeTabId === tabId ? next[next.length - 1].id : activeTabId
+    setTabsState(next)
+    setActiveTabIdState(nextActive)
+    persistImmediate(next, nextActive)
+  }
+
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
 
   return (
     <div className={`term-node browser-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
@@ -55,7 +161,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         }`}
         style={headerFill.style}
       >
-        <span className="term-node__title-text" title={(data.url as string) || ''}>
+        <span className="term-node__title-text" title={activeTab?.url || ''}>
           {(data.title as string) || 'Browser'}
         </span>
         <span className="term-node__spacer" />
@@ -88,19 +194,70 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         </button>
       </div>
 
+      <div className="browser-node__tabs nodrag" role="tablist" aria-label="Browser tabs">
+        {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={tab.id === activeTabId}
+              className={`browser-node__tab${tab.id === activeTabId ? ' browser-node__tab--active' : ''}`}
+              title={tab.url || tab.title}
+              onClick={() => selectTab(tab.id)}
+            >
+              <span className="browser-node__tab-title">{tab.title || tab.url || 'New Tab'}</span>
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={`Close tab ${tab.title || 'New Tab'}`}
+                className="browser-node__tab-close"
+                onClick={(e) => closeTab(tab.id, e)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    closeTab(tab.id, e as unknown as React.MouseEvent)
+                  }
+                }}
+              >
+                ×
+              </span>
+            </button>
+        ))}
+        <button
+          type="button"
+          className="browser-node__tab-new"
+          title="New tab"
+          aria-label="New tab"
+          onClick={newTab}
+        >
+          +
+        </button>
+      </div>
+
       <div className="editor-node__body">
-        <BrowserSurface
-          // Keyed by partition: switching profiles must tear down and rebuild the <webview> onto
-          // the new Electron session rather than trying to reparent a live guest across sessions —
-          // see BrowserSurfaceProps.partition's doc comment.
-          key={partition ?? 'default'}
-          nodeId={id}
-          ownerNodeId={data.browserOwnerNodeId as string | undefined}
-          url={(data.url as string) ?? ''}
-          onUrlChange={(u) => updateNodeData(id, { url: u })}
-          onTitleChange={(t) => updateNodeData(id, { title: t })}
-          partition={partition}
-        />
+        {activeTab && (
+          <BrowserSurface
+            // Keyed by tab id AND partition: switching tabs must tear down and rebuild the
+            // <webview> onto the new tab's live URL, and switching profiles must rebuild onto
+            // the new Electron session rather than trying to reparent a live guest across
+            // sessions — see BrowserSurfaceProps.partition's doc comment.
+            key={`${activeTab.id}::${partition ?? 'default'}`}
+            nodeId={id}
+            ownerNodeId={data.browserOwnerNodeId as string | undefined}
+            url={activeTab.url}
+            onUrlChange={(u) => {
+              const next = tabs.map((t) => (t.id === activeTabId ? { ...t, url: u } : t))
+              setTabsState(next)
+              schedulePersist(next, activeTabId)
+            }}
+            onTitleChange={(t) => {
+              const next = tabs.map((tab) => (tab.id === activeTabId ? { ...tab, title: t } : tab))
+              setTabsState(next)
+              schedulePersist(next, activeTabId)
+            }}
+            partition={partition}
+          />
+        )}
       </div>
     </div>
   )
