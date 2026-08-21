@@ -499,6 +499,16 @@ export interface CanvasNodeState {
    * onto the new partition when it changes.
    */
   browserProfileId?: string
+  /**
+   * browser-only: the node's open tabs. Project content (git-shared) — a tab's URL/title are not
+   * secrets; cookies/localStorage stay in the Electron partition (`browserProfileId`) and are
+   * never mirrored here. Absent/empty on a legacy node = migrate the single `url`/`title` pair
+   * into a one-tab array (done once by `nodeStatesToFlow`, never persisted back until the user
+   * actually edits a tab).
+   */
+  browserTabs?: BrowserTab[]
+  /** browser-only: which `browserTabs[].id` is currently shown. Absent = the first tab. */
+  browserActiveTabId?: string
   /** diff-only: true = staged diff (HEAD vs index), false = unstaged (index vs working). */
   diffStaged?: boolean
   /** diff-only: when set, the diff shows parent (<oid>^) vs commit (<oid>) for a file from history. */
@@ -591,6 +601,18 @@ export interface BrowserProfile {
   id: string
   name: string
   color: string
+}
+
+/**
+ * One tab in a browser node's tab strip. Project content (git-shared, see `BrowserProfile`'s doc
+ * comment above) — the URL and title are not secrets. What is NOT here on purpose: cookies,
+ * localStorage, session state — those stay in the node's Electron partition
+ * (`CanvasNodeState.browserProfileId`) and are never duplicated into the project file.
+ */
+export interface BrowserTab {
+  id: string
+  url: string
+  title: string
 }
 
 /** One kanban board column. Column order = array order in ProjectKanban.columns. */
