@@ -7,6 +7,7 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
 /**
  * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
@@ -102,11 +103,6 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
   /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
   *  boolean because ColorMenu is a body portal. */
   const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
-  /** The title is a plain span until clicked, matching StickyNode and TerminalNode — a permanently
-   *  live input covers the whole header strip and leaves nothing to grab the node by. */
-  const [editingLabel, setEditingLabel] = useState(false)
-  /** The value editing started with, so Escape can put it back. */
-  const [labelBefore, setLabelBefore] = useState('')
   const collapsed = !!data.collapsed
 
   /**
@@ -215,40 +211,18 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
           <span className="service-node__product">{productName}</span>
 
-          {editingLabel ? (
-            <input
-              className="term-node__title nodrag"
-              value={label}
-              spellCheck={false}
-              autoFocus
-              aria-label={`Name for this ${productName}`}
-              onChange={(e) => updateNodeData(id, { serviceLabel: e.target.value })}
-              // Every exit commits what is on screen — the edits are live, so there is nothing to
-              // save — except Escape, which puts back the value editing started with.
-              onBlur={() => setEditingLabel(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  setEditingLabel(false)
-                } else if (e.key === 'Escape') {
-                  e.preventDefault()
-                  updateNodeData(id, { serviceLabel: labelBefore })
-                  setEditingLabel(false)
-                }
-              }}
-            />
-          ) : (
-            <button
-              className="service-node__label-text nodrag"
-              title="Rename"
-              onClick={() => {
-                setLabelBefore(label)
-                setEditingLabel(true)
-              }}
-            >
-              {label || <span className="service-node__label-empty">Name this {productName.toLowerCase()}…</span>}
-            </button>
-          )}
+          <EditableNodeTitle
+            value={label}
+            onChange={(next) => updateNodeData(id, { serviceLabel: next })}
+            ariaLabel={`Name for this ${productName}`}
+            title="Rename"
+            baseTriggerClassName=""
+            triggerClassName="service-node__label-text"
+            emptyLabel={
+              <span className="service-node__label-empty">Name this {productName.toLowerCase()}…</span>
+            }
+            rejectEmpty={false}
+          />
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}

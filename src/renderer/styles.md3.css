@@ -1142,6 +1142,20 @@ div.mdx-row[role='menuitemradio']:focus-visible {
   border-radius: 4px;
   cursor: text;
 }
+/* EditableNodeTitle renders the display trigger as a real <button> so it's keyboard-reachable
+   (Tab + Enter/Space) without a separate tabindex/role dance — this resets the browser's default
+   button chrome so it reads identically to the plain <span> callers used before it. */
+button.term-node__title-text {
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+button.term-node__title-text:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
 
 .term-node__title {
   flex: 1;

@@ -5,6 +5,7 @@ import { httpUrl } from './webUrl'
 import { useDiscardWhenHidden, webviewAudible, type AudibleWebview } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
 /**
  * A web view node. When `data.url` is set it loads that live URL; otherwise it serves the
@@ -13,7 +14,7 @@ import { nodeHeaderFillStyle } from '../lib/nodeColor'
  * The frame/header mirror {@link VideoNode}/EditorNode for consistent drag/resize/close behavior.
  */
 export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
-  const { deleteElements } = useReactFlow()
+  const { deleteElements, updateNodeData } = useReactFlow()
   const [src, setSrc] = useState('')
   const [error, setError] = useState('')
   const url = (data.url as string) ?? ''
@@ -120,9 +121,14 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         }`}
         style={headerFill.style}
       >
-        <span className="term-node__title-text" title={url || filePath}>
-          {title}
-        </span>
+        <EditableNodeTitle
+          value={(data.title as string) ?? ''}
+          onChange={(next) => updateNodeData(id, { title: next })}
+          emptyLabel={title}
+          title={url || filePath || 'Click to rename'}
+          ariaLabel="Web page name"
+          rejectEmpty={false}
+        />
         <span className="term-node__spacer" />
         {url && (
           <button
