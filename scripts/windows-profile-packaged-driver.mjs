@@ -613,26 +613,43 @@ async function resizeRepresentative(result, profile, catalog) {
   // So ask the PAGE which point is really the header: walk candidate offsets and take the first
   // whose elementFromPoint is the header element (or a non-interactive descendant of it).
   const headerSelector = `${selector} .term-node__header`
-  const headerPoint = await waitFor(
+  // Sweep the whole header, both axes, and REPORT what it saw when nothing qualifies.
+  //
+  // A single mid-line sweep found no bare-header point at all: at that height the strip is wall
+  // to wall controls. The header IS the node's drag handle, so a draggable pixel must exist —
+  // it just is not where the first guess looked. Rather than move the guess again, this returns
+  // the elements it rejected, so one failed run names the answer instead of costing another.
+  const headerProbe = await evaluate(
     `(function(){
        var h=document.querySelector(${JSON.stringify(headerSelector)});
-       if(!h) return null;
+       if(!h) return {ok:false, why:'header not found'};
        var r=h.getBoundingClientRect();
-       if(!(r.width>0 && r.height>0)) return null;
-       var y=Math.round(r.top + r.height/2);
-       // Sweep left-to-right across the strip rather than trusting one offset: which side is free
-       // depends on how many action buttons this particular node is showing.
-       for (var f=0.05; f<=0.95; f+=0.05) {
-         var x=Math.round(r.left + r.width*f);
-         var el=document.elementFromPoint(x,y);
-         if(!el) continue;
-         if(el===h) return {x:x,y:y};
-         if(h.contains(el) && !el.closest('button,input,a,[role=button],.nodrag')) return {x:x,y:y};
+       if(!(r.width>0 && r.height>0)) return {ok:false, why:'header has no box'};
+       var seen=[];
+       for (var yf=0.15; yf<=0.85; yf+=0.2) {
+         var y=Math.round(r.top + r.height*yf);
+         for (var xf=0.02; xf<=0.98; xf+=0.04) {
+           var x=Math.round(r.left + r.width*xf);
+           var el=document.elementFromPoint(x,y);
+           if(!el) continue;
+           if(el===h) return {ok:true, x:x, y:y, hit:'header'};
+           if(h.contains(el) && !el.closest('button,input,a,[role=button],.nodrag')) {
+             return {ok:true, x:x, y:y, hit:(el.tagName+'.'+String(el.className||'').slice(0,40))};
+           }
+           var tag=el.tagName+'.'+String(el.className||'').slice(0,40);
+           if(seen.indexOf(tag)<0 && seen.length<14) seen.push(tag);
+         }
        }
-       return null;
-     })()`,
-    'a clickable point on the node header that is not one of its buttons'
+       return {ok:false, why:'every sampled point was interactive', seen:seen};
+     })()`
   )
+  if (!headerProbe || headerProbe.ok !== true) {
+    throw new Error(
+      `No draggable point on the node header: ${headerProbe ? headerProbe.why : 'probe failed'}` +
+        (headerProbe && headerProbe.seen ? ` — elements sampled: ${headerProbe.seen.join(', ')}` : '')
+    )
+  }
+  const headerPoint = { x: headerProbe.x, y: headerProbe.y }
   await clickPoint(headerPoint.x, headerPoint.y)
   try {
     await waitFor(`!!document.querySelector(${JSON.stringify(`${selector}.selected`)})`, 'representative node selected')
