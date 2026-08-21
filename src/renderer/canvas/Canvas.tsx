@@ -252,6 +252,7 @@ import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
+import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
 import { NotifyConsentDialog } from '../components/NotifyConsentDialog'
 import { SessionsSidebar } from '../components/SessionsSidebar'
 import type { SessionNodeInput } from '../lib/sessionList'
@@ -1267,6 +1268,10 @@ export function Canvas() {
   // project's saved viewport. Set by reloadActiveProject (in-place external-change reload).
   const preserveViewportRef = useRef(false)
   const [consentOpen, setConsentOpen] = useState(false)
+  // Drives GroupPickerDialog ("Add to existing group…" — the node/selection context menu's
+  // move-into-group action). `ids` is the selection being moved; `groups` is the eligible-target
+  // list computed at click time (only frames addSelectionToGroup would actually change).
+  const [groupPicker, setGroupPicker] = useState<{ ids: string[]; groups: GroupPickerOption[] } | null>(null)
   // Drives WorktreeDialog. `groupId` null = create the group frame around the new worktree;
   // set = bind an existing group (the group context menu). `at` is the pane cursor, if any.
   const [worktreeDialog, setWorktreeDialog] = useState<{
@@ -7334,23 +7339,24 @@ export function Canvas() {
           (nid) => !!nodesRef.current.find((nd) => nd.id === nid)?.parentId
         )
         const items: MenuItem[] = []
-        if (targetGroups.length === 1 && !isHidden('group', hidden)) {
-          const targetGroup = targetGroups[0]
+        // "Add to existing group…" opens a searchable listbox dialog rather than inlining one
+        // menu row per group — see GroupPickerDialog.tsx and docs/appearance.md's move-into-group
+        // contract. The ellipsis is deliberate: this row always opens a further surface, whether
+        // there's one eligible frame or several.
+        if (targetGroups.length > 0 && !isHidden('group', hidden)) {
           items.push({
-            label: `Add selection to ${targetGroup.data.title || 'group'}`,
+            label: 'Add to existing group…',
             icon: <IconGroup />,
-            onClick: () => addToExistingGroup(ids, targetGroup.id)
-          })
-        } else if (targetGroups.length > 1 && !isHidden('group', hidden)) {
-          items.push({
-            type: 'submenu',
-            label: 'Add selection to group',
-            icon: <IconGroup />,
-            children: targetGroups.map((targetGroup) => ({
-              label: targetGroup.data.title || 'Group',
-              icon: <IconGroup />,
-              onClick: () => addToExistingGroup(ids, targetGroup.id)
-            }))
+            onClick: () =>
+              setGroupPicker({
+                ids,
+                groups: targetGroups.map((targetGroup) => ({
+                  id: targetGroup.id,
+                  title: targetGroup.data.title || 'Group',
+                  color: targetGroup.data.color,
+                  memberCount: nodesRef.current.filter((n) => n.parentId === targetGroup.id).length
+                }))
+              })
           })
         }
         if (groupable && !isHidden('group', hidden))
@@ -7767,6 +7773,7 @@ export function Canvas() {
   }, [
     groupSelection,
     addToExistingGroup,
+    setGroupPicker,
     removeFromGroup,
     setNodesColor,
     duplicateNodes,
@@ -13429,6 +13436,18 @@ export function Canvas() {
             setSettingsOpen(true)
           }}
           onClose={() => setRemotePicker(null)}
+        />
+      )}
+
+      {groupPicker && (
+        <GroupPickerDialog
+          count={groupPicker.ids.length}
+          groups={groupPicker.groups}
+          onPick={(groupId) => {
+            addToExistingGroup(groupPicker.ids, groupId)
+            setGroupPicker(null)
+          }}
+          onCancel={() => setGroupPicker(null)}
         />
       )}
 
