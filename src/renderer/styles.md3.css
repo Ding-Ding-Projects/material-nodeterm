@@ -1693,6 +1693,106 @@ div.mdx-row[role='menuitemradio']:focus-visible {
   color: var(--md-on-error);
 }
 
+.browser-ext-panel__anchor {
+  position: relative;
+}
+.browser-ext-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  max-width: min(320px, 80vw);
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  box-shadow: none;
+  padding: 12px;
+  z-index: 20;
+}
+.browser-ext-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--md-on-surface);
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.browser-ext-panel__note {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  margin: 0 0 10px;
+}
+.browser-ext-panel__error {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+  border-radius: var(--md-shape-xs);
+  padding: 6px 8px;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.browser-ext-panel__list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.browser-ext-panel__empty {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+.browser-ext-panel__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--md-surface-container-highest);
+  border-radius: var(--md-shape-xs);
+  padding: 6px 8px;
+}
+.browser-ext-panel__item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.browser-ext-panel__item-name {
+  color: var(--md-on-surface);
+  font-size: 12px;
+}
+.browser-ext-panel__item-version {
+  color: var(--md-on-surface-variant);
+  font-size: 10.5px;
+}
+.browser-ext-panel__item-path {
+  color: var(--md-on-surface-variant);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browser-ext-panel__add {
+  width: 100%;
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  border: none;
+  border-radius: var(--md-shape-xs);
+  padding: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.browser-ext-panel__add:hover:not(:disabled) {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.browser-ext-panel__add:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .startpage {
   background: var(--md-surface);
 }
