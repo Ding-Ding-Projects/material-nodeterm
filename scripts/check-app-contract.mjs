@@ -1992,6 +1992,33 @@ const NON_FEATURE_DOCS = new Map([
     const productionSources = listRendererFiles('src').filter(
       (rel) => /\.(ts|tsx)$/.test(rel) && !/\.test\.(ts|tsx)$/.test(rel)
     )
+    // A THIRD way in, and the most direct: a COPY whose source the context throws away.
+    // Docker does error loudly on a missing COPY source, but that failure arrives minutes into a
+    // build on a machine that is not this one, so catching it at desk cost is worth ten lines.
+    // `--from=<stage>` copies read a previous STAGE, not the build context, and are out of scope.
+    for (const line of dockerfile.split(/\r?\n/)) {
+      const instruction = line.trim()
+      if (!/^(COPY|ADD)\s/i.test(instruction)) continue
+      if (/--from=/i.test(instruction)) continue
+      const args = instruction
+        .split(/\s+/)
+        .slice(1)
+        .filter((a) => !a.startsWith('--'))
+      // The last argument is the destination inside the image, never a context path.
+      for (const src of args.slice(0, -1)) {
+        const clean = src.replace(/^\.\//, '')
+        if (clean === '.' || clean === '') continue
+        const top = clean.split('/')[0]
+        checkedCount += 1
+        if (excluded.has(top) && !reincluded.has(clean)) {
+          fail(
+            `Docker build context: the Dockerfile copies ${src}, but .dockerignore excludes ` +
+              `${top} — that path is not in the build context, so the COPY has nothing to copy.`
+          )
+        }
+      }
+    }
+
     // Tripwire: an empty list makes this whole scan vanish silently while still reporting clean,
     // the same shape as an it.each([]) that generates no tests. Assert it found something.
     checkedCount += 1
