@@ -874,8 +874,22 @@ function validateContinuity(before, after) {
   if (!Number.isInteger(hostPid) || hostPid <= 0 || Number(after.sessionHostPid) !== hostPid) {
     fail('Persistent session-host PID changed across app relaunch.')
   }
-  const startedAt = nonEmptyString(before.sessionHostStartedAt, 'Session-host startedAt')
-  if (after.sessionHostStartedAt !== startedAt) fail('Persistent session-host startedAt changed across app relaunch.')
+  // `startedAt` is a NUMBER, not a string: the session host writes `startedAt: Date.now()`
+  // (src/session-host/host.ts), types it `startedAt: number` (paths.ts) and validates it as
+  // `typeof state.startedAt !== 'number'` (existing-host-state.ts). Demanding a non-empty
+  // STRING here failed every run at the last hurdle, after all five captures were already on
+  // disk — the harness asserting a shape the app has never written.
+  //
+  // What the check is actually for is identity: the same host, still running, across an app
+  // relaunch. A finite positive number carries that exactly as well as a string, so validate
+  // the real type and keep the comparison.
+  const startedAt = Number(before.sessionHostStartedAt)
+  if (!Number.isFinite(startedAt) || startedAt <= 0) {
+    fail(`Session-host startedAt must be a positive finite number (got ${JSON.stringify(before.sessionHostStartedAt)}).`)
+  }
+  if (Number(after.sessionHostStartedAt) !== startedAt) {
+    fail('Persistent session-host startedAt changed across app relaunch.')
+  }
   const protocolVersion = nonEmptyString(
     String(before.sessionHostProtocolVersion ?? ''),
     'Session-host protocol version'
