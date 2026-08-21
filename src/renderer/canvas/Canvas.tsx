@@ -349,6 +349,7 @@ import { useToyLocks } from '../state/toylocks'
 import { useSessionRelock } from '../state/useSessionRelock'
 import { LockWizard } from '../components/toylocks/LockWizard'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
+import { isNodeLockEngaged as isTabLockEngaged } from '@shared/toylock'
 import {
   useCodexIdentity,
   codexFallbackText,
@@ -2497,6 +2498,62 @@ export function Canvas() {
   // "Draw arrow" — see useAnnotationDrawTool.ts for the interaction and src/renderer/lib/annotation.ts
   // for the pure geometry. `drawTool.tool` also gates the crosshair cursor on .flow-wrap below.
   const drawTool = useAnnotationDrawTool({ flowWrapRef, screenToFlowPosition, setNodes, markDirty })
+
+  // Toy-lock enforcement for the ACTIVE project's tab (docs/toy-locks.md — the fix for "a locked
+  // tab does not actually lock and hide"). `ProjectSwitcher` already gates SWITCHING TO a locked,
+  // not-currently-unlocked project (it prompts to unlock instead of teleporting past the lock),
+  // but nothing previously stopped a project that was ALREADY active — or became locked while
+  // active — from just sitting there fully visible and interactive. This mirrors the node-lock
+  // block above almost exactly (same `isNodeLockEngaged` gate, reused generically as
+  // `isTabLockEngaged` — its fields were never node-specific), and covers the whole canvas the
+  // same way that block covers one terminal: a full-screen plate over the flow (and the kanban
+  // board, which is just another view of the SAME project's nodes and must be covered too) rather
+  // than tearing anything down — the project's sessions keep running underneath, exactly like a
+  // locked node's persistent session does.
+  const tabLockRecords = useToyLocks((s) => s.records)
+  const tabLockUnlockedUntil = useToyLocks((s) => s.unlockedUntil)
+  const tabLockStoreLoaded = useToyLocks((s) => s.loaded)
+  useEffect(() => {
+    // Idempotent with ProjectSwitcher's own on-mount refresh() — both just overwrite `records`
+    // with the latest list. Canvas must not assume ProjectSwitcher is mounted first (or at all).
+    void useToyLocks.getState().refresh()
+  }, [])
+  const activeTabLockRecord = activeProjectId
+    ? tabLockRecords.find((r) => r.target.kind === 'tab' && r.target.id === activeProjectId)
+    : undefined
+  const activeTabLockUnlockedUntil = activeTabLockRecord
+    ? tabLockUnlockedUntil[activeTabLockRecord.id]
+    : undefined
+  const activeTabLockUnlockedNow =
+    activeTabLockUnlockedUntil !== undefined && Date.now() < activeTabLockUnlockedUntil
+  const activeTabLocked = isTabLockEngaged({
+    storeLoaded: tabLockStoreLoaded,
+    hasRecord: !!activeTabLockRecord,
+    unlockedNow: activeTabLockUnlockedNow
+  })
+  // A 'minutes' unlock expires by TIMESTAMP, not by an event — nothing else here re-renders on a
+  // schedule while the user is simply looking at the canvas. Without this, an expired-but-still-
+  // rendered-unlocked tab would only actually re-hide on the NEXT incidental re-render, which
+  // could be minutes late. Scoped to only run while there is an active 'minutes' unlock to catch
+  // expiring, same as the node-lock block above.
+  const [, forceTabLockRecheck] = useState(0)
+  useEffect(() => {
+    if (!activeTabLockRecord || activeTabLockRecord.duration !== 'minutes' || !activeTabLockUnlockedNow) {
+      return
+    }
+    const t = setInterval(() => forceTabLockRecheck((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [activeTabLockRecord, activeTabLockUnlockedNow])
+  const [tabUnlockPromptAnchor, setTabUnlockPromptAnchor] = useState<{ x: number; y: number } | null>(
+    null
+  )
+  useEffect(() => {
+    // The record can disappear out from under an open prompt (removed elsewhere while this popover
+    // is open) or the project itself can change underneath it (project switch — though switching
+    // AWAY from a locked-and-visible project should be impossible via the switcher's own gate,
+    // this stays defensive rather than trusting that invariant from a distance).
+    if (tabUnlockPromptAnchor && !activeTabLockRecord) setTabUnlockPromptAnchor(null)
+  }, [tabUnlockPromptAnchor, activeTabLockRecord])
 
   const kanbanOpen = useViewMode((s) => !!activeProjectId && viewFor(s, activeProjectId) === 'kanban')
   const projectKanban = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.kanban)
@@ -12630,7 +12687,7 @@ export function Canvas() {
             )
           })()}
       </div>
-      {kanbanOpen && (
+      {kanbanOpen && !activeTabLocked && (
         <KanbanView
           board={projectKanban ?? seedBoard}
           sessions={kanbanSessions}
@@ -12649,6 +12706,53 @@ export function Canvas() {
           terminalProfileRestartPending={terminalProfileRestartPending}
         />
       )}
+      {/* Toy-lock enforcement for the active tab (docs/toy-locks.md) — see the `activeTabLocked`
+          block above for why this exists. Full-screen, over the canvas AND the kanban board (both
+          are just views of this same project's nodes), under the nav rail / app bar / dialogs so
+          the user can still navigate away or open the unlock popover. The project's name and the
+          unlock affordance stay visible, per the shipped toy-lock copy: this is a for-fun gate,
+          never security, and the recovery route (deleting the app's local application-data
+          folder) is stated in the unlock prompt itself, not hidden along with everything else. */}
+      {activeTabLocked && (
+        <div
+          className="tab-lock-overlay nodrag"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => setTabUnlockPromptAnchor({ x: e.clientX, y: e.clientY })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+              setTabUnlockPromptAnchor({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
+            }
+          }}
+        >
+          <span className="tab-lock-overlay__icon" aria-hidden>
+            🔒
+          </span>
+          <span className="tab-lock-overlay__title">{activeProjectName ?? 'This tab'} is locked</span>
+          <span className="tab-lock-overlay__hint">Click to unlock — just for fun, not security</span>
+        </div>
+      )}
+      {tabUnlockPromptAnchor &&
+        activeTabLockRecord &&
+        (() => {
+          // Re-resolved from the live store (not the closed-over `activeTabLockRecord`), same
+          // pattern as the node-lock prompt below and ProjectSwitcher's own — the record can
+          // change (duration edited in Settings, removed elsewhere) while this popover is open.
+          const record = useToyLocks
+            .getState()
+            .records.find((r) => r.target.kind === 'tab' && r.target.id === activeProjectId)
+          if (!record) return null
+          return (
+            <UnlockPrompt
+              record={record}
+              anchor={tabUnlockPromptAnchor}
+              onClose={() => setTabUnlockPromptAnchor(null)}
+              onUnlocked={() => setTabUnlockPromptAnchor(null)}
+            />
+          )
+        })()}
       <UpdateCard />
 
       <div

@@ -742,6 +742,21 @@
   top: var(--app-bar-h);
   left: var(--nav-rail-w);
 }
+.tab-lock-overlay {
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+}
+.tab-lock-overlay__title {
+  color: var(--md-on-surface);
+}
+.tab-lock-overlay:hover,
+.tab-lock-overlay:focus-visible {
+  background: var(--md-surface-container-high);
+}
+.tab-lock-overlay:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
 .sessions-sidebar {
   top: calc(var(--app-bar-h) + 10px);
   left: calc(var(--nav-rail-w) + 14px);
