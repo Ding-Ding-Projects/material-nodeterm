@@ -136,7 +136,7 @@ import {
   type ResumePhaseOutcome
 } from '../terminal/agent-restart'
 import { FindBar } from '../components/FindBar'
-import { IconSearch, IconChat, IconMic, IconReload } from '../components/icons'
+import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture } from '../components/icons'
 import { NodeLabels } from '../components/kanban/NodeLabels'
 import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
@@ -5129,6 +5129,24 @@ export function TerminalNode({
                 }}
               >
                 <IconReload />
+              </button>
+            </Tooltip>
+          )}
+          {/* "Escape to widget" (docs/canvas-widget.md): pop this node's live session into its
+            own always-on-top-configurable desktop window. Electron-only — a Server Edition
+            browser tab has no OS window to open, so this button is simply absent there rather
+            than present-and-refusing (`isBrowserRuntime()`, the same seam `shell.reveal`'s
+            desktop-only affordance uses). */}
+          {!isBrowserRuntime() && (
+            <Tooltip label="Escape to widget — always-on-top window, same live session">
+              <button
+                className="term-node__widget-escape nodrag"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void window.nodeTerminal.canvasWidget.open(id)
+                }}
+              >
+                <IconPictureInPicture />
               </button>
             </Tooltip>
           )}

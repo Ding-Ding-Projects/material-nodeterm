@@ -10167,3 +10167,112 @@ div.mdx-row[role='menuitemradio']:focus-visible {
     align-items: flex-start;
   }
 }
+
+/* "Escape to widget" — the trimmed chrome for a popped-out canvas-node window
+   (renderer/widget/WidgetApp.tsx). Frameless (see main/canvas-widget-window.ts), so this titlebar
+   is the ONLY chrome: a drag region, always-on-top toggle, back-to-canvas, and close. MD3 tokens
+   only, same as every other surface in this app. */
+.widget-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  overflow: hidden;
+}
+
+.widget-app__titlebar {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 6px;
+  background: var(--md-surface-container);
+  border-bottom: 1px solid var(--md-outline-variant);
+  -webkit-app-region: drag;
+}
+
+.widget-app__drag {
+  flex: 1 1 auto;
+  -webkit-app-region: drag;
+}
+
+.widget-app__btn {
+  -webkit-app-region: no-drag;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.widget-app__btn:hover {
+  background: var(--md-surface-container-high);
+}
+
+.widget-app__btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.widget-app__btn[aria-pressed='true'] {
+  color: var(--md-primary);
+}
+
+.widget-app__error {
+  padding: 8px 12px;
+  color: var(--md-error);
+  font-size: 12px;
+}
+
+.widget-app__term {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px;
+}
+
+/* "Escape to widget" header button — standalone rule rather than joining the shared header-icon
+   selector lists above, so this addition never has to touch those (already very long) lists. */
+.term-node__widget-escape {
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 5px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+
+.term-node__widget-escape:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.term-node__widget-escape:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+.term-node__header--filled .term-node__widget-escape {
+  color: inherit;
+}
+
+.term-node__header--filled .term-node__widget-escape:hover {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  color: inherit;
+}

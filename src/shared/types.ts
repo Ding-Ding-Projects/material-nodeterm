@@ -1119,6 +1119,43 @@ export interface ShellApi {
   openExternal(url: string): void
 }
 
+/** One node's canvas-widget state, as reported over IPC (see `CanvasWidgetState` for what is
+ *  actually persisted — this adds the live `open` flag, which is main-process runtime state, not
+ *  something settings.json remembers across restarts). */
+export interface CanvasWidgetLiveState {
+  nodeId: string
+  /** Is a widget window for this node currently open? */
+  open: boolean
+  alwaysOnTop: boolean
+  bounds?: { x: number; y: number; width: number; height: number }
+}
+
+/**
+ * Pop a terminal node's live session into its own always-on-top-configurable desktop window —
+ * see `CanvasWidgetState`'s doc comment above for the full design and `main/canvas-widget-window.ts`
+ * for the Electron-side implementation this calls into. Electron-only: every method rejects with
+ * `E_UNSUPPORTED` in the Server Edition (no OS window to open), and `onStateChanged` still returns
+ * a real no-op unsubscribe there so a mounting component never has to branch on which shell it is
+ * running under.
+ */
+export interface CanvasWidgetApi {
+  /** Open (or focus, if already open) the widget window for this node. Resolves once the window
+   *  has been created/focused; rejects `E_UNSUPPORTED` in the Server Edition. */
+  open(nodeId: string): Promise<void>
+  /** Close the widget window for this node. A no-op if it isn't open. Never touches the
+   *  underlying pty/session — the session keeps running exactly as it does when a canvas node is
+   *  merely unmounted (see the module doc in `main/canvas-widget-window.ts`). */
+  close(nodeId: string): Promise<void>
+  /** User-configurable always-on-top, both at open time and while the widget is open. Persists
+   *  per node; applies live if the widget window is currently open. */
+  setAlwaysOnTop(nodeId: string, alwaysOnTop: boolean): Promise<void>
+  /** Current live + persisted state for one node. */
+  getState(nodeId: string): Promise<CanvasWidgetLiveState>
+  /** Fires whenever any node's widget state changes (opened, closed, always-on-top toggled, or
+   *  bounds persisted) — main window and widget window alike listen on this. Returns unsubscribe. */
+  onStateChanged(listener: (state: CanvasWidgetLiveState) => void): () => void
+}
+
 export interface DirEntry {
   name: string
   dir: boolean
@@ -3440,6 +3477,8 @@ export interface NodeTerminalApi {
   presence: PresenceApi
   toylock: ToylockApi
   authenticator: AuthenticatorApi
+  /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
+  canvasWidget: CanvasWidgetApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */
   onMarkdownToggle(listener: () => void): () => void
   /** Fires when the user presses Cmd/Ctrl+W (close selected node). Returns unsubscribe. */
