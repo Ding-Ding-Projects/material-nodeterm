@@ -167,6 +167,7 @@ export function buildStubApi(): Omit<
   // userDataDir), so a stub here would make the whole feature silently do nothing in the browser.
   | 'toylock'
   | 'authenticator'
+  | 'passwordManager'
 > {
   const api = {
     ssh: {
@@ -568,6 +569,7 @@ export function buildStubApi(): Omit<
     | 'scheduledSettings'
     | 'toylock'
     | 'authenticator'
+    | 'passwordManager'
     | 'fs'
     | 'git'
     | 'files'

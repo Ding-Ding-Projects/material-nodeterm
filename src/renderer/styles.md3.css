@@ -9221,6 +9221,336 @@ div.mdx-row[role='menuitemradio']:focus-visible {
   color: var(--md-error);
 }
 
+/* ---- Password manager ----
+ * PasswordManagerPanel's portal root (components/passwordManager/PasswordManagerPanel.tsx).
+ * Kept as its OWN small scoped block rather than folded into the .md3-ollama/.md3-converter
+ * shared-primitives group above, because that group's selectors are already comma-joined across
+ * two components -- adding a third name to every one of them (~30 rules) for a drawer whose only
+ * real overlap is "it is also a drawer" was a worse trade than one compact self-contained block.
+ * Reuses .drawer/.drawer__head/.drawer__body/.drawer__close and .sr-only verbatim from the app's
+ * base stylesheet (styles.css) -- those are unscoped and shared by every drawer already. The
+ * code-ring math and countdown text are the SAME contract as the built-in authenticator's
+ * .md3-auth-ring (AuthenticatorSection.tsx / --md3-ring-deg), reimplemented here rather than
+ * shared because .md3-authenticator's scope is that section's content root, not this panel's.
+ */
+.md3-passwordmanager .drawer.passwordmanager {
+  width: 640px;
+  max-width: 94vw;
+  background: var(--md-surface-container-low);
+  border-left: 1px solid var(--md-outline-variant);
+  box-shadow: none;
+  font-family: var(--font-ui);
+  color: var(--md-on-surface);
+}
+.md3-passwordmanager .drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--md-surface-container);
+  border-bottom: 1px solid var(--md-outline-variant);
+  padding: 16px 20px;
+}
+.md3-passwordmanager .drawer__head h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+  margin: 0;
+}
+.md3-passwordmanager .pwm-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.md3-passwordmanager .drawer__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  transition: background-color var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-passwordmanager .drawer__close:hover {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+.md3-passwordmanager .drawer__body {
+  padding: 16px 20px 28px;
+}
+
+/* Locked / uninitialized / error empty states, and the create-vault / unlock forms. */
+.md3-passwordmanager .pwm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--md-on-surface-variant);
+  padding: 24px 4px;
+}
+.md3-passwordmanager .pwm-empty h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+.md3-passwordmanager .pwm-vault-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+}
+.md3-passwordmanager .pwm-vault-form--inline {
+  max-width: none;
+  padding: 8px 0 0;
+}
+
+.md3-passwordmanager .pwm-managers__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.md3-passwordmanager .pwm-managers__head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+}
+
+.md3-passwordmanager .pwm-manager-list,
+.md3-passwordmanager .pwm-credential-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.md3-passwordmanager .pwm-manager-card {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container);
+  overflow: hidden;
+}
+.md3-passwordmanager .pwm-manager-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.md3-passwordmanager .pwm-manager-card__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 4px;
+}
+.md3-passwordmanager .pwm-manager-card__name {
+  font-weight: 600;
+  color: var(--md-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.md3-passwordmanager .pwm-manager-card__body {
+  border-top: 1px solid var(--md-outline-variant);
+  padding: 10px 12px 14px;
+  background: var(--md-surface-container-low);
+}
+.md3-passwordmanager .pwm-manager-card__stale-note {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+.md3-passwordmanager .pwm-credential-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: var(--md-shape-small);
+}
+.md3-passwordmanager .pwm-credential-row:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-passwordmanager .pwm-credential-row__icon {
+  color: var(--md-on-surface-variant);
+  flex-shrink: 0;
+}
+.md3-passwordmanager .pwm-credential-row__id {
+  min-width: 96px;
+  max-width: 160px;
+  overflow: hidden;
+}
+.md3-passwordmanager .pwm-credential-row__label {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--md-on-surface);
+}
+.md3-passwordmanager .pwm-credential-row__code {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.md3-passwordmanager .pwm-secret-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+/* Live TOTP code + countdown ring -- the same conic-gradient contract as the built-in
+ * authenticator's .md3-auth-ring. --md3-ring-deg is set inline per credential, purely
+ * presentational (nothing reads it back for a timing decision -- the real countdown is the text
+ * beside it, per the accessibility rule this feature was built under: the countdown must have a
+ * text equivalent, never colour or motion alone). */
+.md3-passwordmanager .pwm-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.md3-passwordmanager .pwm-code__ring {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: conic-gradient(var(--md-primary) var(--md3-ring-deg, 0deg), var(--md-outline-variant) 0deg);
+}
+.md3-passwordmanager .pwm-code__digits {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--md-on-surface);
+}
+
+.md3-passwordmanager .pwm-hint {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+.md3-passwordmanager .pwm-warn {
+  color: var(--md-error);
+  font-size: 12px;
+  padding: 4px 0;
+}
+.md3-passwordmanager .pwm-revealed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.md3-passwordmanager .pwm-revealed__text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--md-surface-container-highest);
+  border-radius: var(--md-shape-extra-small);
+  padding: 2px 6px;
+  color: var(--md-on-surface);
+  user-select: all;
+}
+
+.md3-passwordmanager .pwm-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.md3-passwordmanager .pwm-add-credential,
+.md3-passwordmanager .pwm-add-manager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.md3-passwordmanager .pwm-input {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-extra-small);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+.md3-passwordmanager .pwm-input:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+.md3-passwordmanager .pwm-select {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-extra-small);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 5px 6px;
+  max-width: 180px;
+}
+.md3-passwordmanager .pwm-select:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
+.md3-passwordmanager .pwm-btn {
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background-color var(--md-motion-effect), color var(--md-motion-effect);
+}
+.md3-passwordmanager .pwm-btn:hover:not(:disabled) {
+  background: var(--md-surface-container-high);
+}
+.md3-passwordmanager .pwm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.md3-passwordmanager .pwm-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+.md3-passwordmanager .pwm-btn--sm {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+.md3-passwordmanager .pwm-btn--primary {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border-color: transparent;
+}
+.md3-passwordmanager .pwm-btn--primary:hover:not(:disabled) {
+  background: var(--md-primary);
+  filter: brightness(1.08);
+}
+.md3-passwordmanager .pwm-btn--danger {
+  color: var(--md-error);
+  border-color: var(--md-error);
+}
+.md3-passwordmanager .pwm-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-error) 12%, transparent);
+}
+
 /* ---- History screen host ----
    The screen itself is height:100% and needs a positioned host. It is INSET behind the app bar
    and the nav rail rather than fixed inset-0, because the rail is how you leave it: z 27 sits

@@ -574,6 +574,8 @@ const KNOWN_PARTIAL_OVERRIDES: KnownPartialOverride[] = [
   { selector: ".subagent-node__task", stillMissing: ["-webkit-box-orient", "-webkit-line-clamp", "display", "font-size", "line-height", "margin-top", "overflow"] },
   { selector: ".subagent-node__term", stillMissing: ["border-radius", "flex", "font-family", "font-size", "line-height", "margin-top", "min-height", "overflow", "padding", "white-space", "word-break"] },
   { selector: ".tab__board-toggle", stillMissing: ["line-height"] },
+  { selector: ".tab-lock-overlay", stillMissing: ["-webkit-app-region", "align-items", "bottom", "cursor", "display", "flex-direction", "gap", "justify-content", "left", "position", "right", "top", "z-index"] },
+  { selector: ".tab-lock-overlay__title", stillMissing: ["font-size", "font-weight"] },
   { selector: ".term-chat", stillMissing: ["display", "flex-direction", "inset", "position", "z-index"] },
   { selector: ".term-chat__bar", stillMissing: ["align-items", "display", "flex", "font-size", "justify-content", "padding"] },
   { selector: ".term-chat__compose", stillMissing: ["flex", "padding"] },

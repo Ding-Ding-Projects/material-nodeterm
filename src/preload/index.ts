@@ -542,6 +542,36 @@ const api: NodeTerminalApi = {
     reveal: (id) => ipcRenderer.invoke(IPC.authenticatorReveal, id),
     exportSecrets: (input) => ipcRenderer.invoke(IPC.authenticatorExportSecrets, input)
   },
+  // Per-project password manager (shared/password-manager.ts). LOCAL-ONLY, same reasoning as
+  // toylock/authenticator above — see PasswordManagerApi's doc comment in shared/types.ts and
+  // main/relay-rpc-policy.ts: a relay peer must never reach credential reveal/code on this
+  // desktop's vault, however trusted it is for the joined project's files/terminals.
+  passwordManager: {
+    status: (projectId) => ipcRenderer.invoke(IPC.passwordManagerStatus, projectId),
+    createVault: (projectId, password) => ipcRenderer.invoke(IPC.passwordManagerCreateVault, projectId, password),
+    unlock: (projectId, password) => ipcRenderer.invoke(IPC.passwordManagerUnlock, projectId, password),
+    lock: (projectId) => ipcRenderer.invoke(IPC.passwordManagerLock, projectId),
+    changePassword: (projectId, input) => ipcRenderer.invoke(IPC.passwordManagerChangePassword, projectId, input),
+    createManager: (projectId, input) => ipcRenderer.invoke(IPC.passwordManagerCreateManager, projectId, input),
+    renameManager: (projectId, input) => ipcRenderer.invoke(IPC.passwordManagerRenameManager, projectId, input),
+    bindManagerGroup: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerBindManagerGroup, projectId, input),
+    releaseGroupBinding: (projectId, groupId) =>
+      ipcRenderer.invoke(IPC.passwordManagerReleaseGroupBinding, projectId, groupId),
+    deleteManager: (projectId, id) => ipcRenderer.invoke(IPC.passwordManagerDeleteManager, projectId, id),
+    createCredential: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerCreateCredential, projectId, input),
+    renameCredential: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerRenameCredential, projectId, input),
+    updateCredentialSecret: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerUpdateCredentialSecret, projectId, input),
+    removeCredential: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerRemoveCredential, projectId, input),
+    revealCredential: (projectId, managerId, credentialId) =>
+      ipcRenderer.invoke(IPC.passwordManagerRevealCredential, projectId, managerId, credentialId),
+    credentialCode: (projectId, managerId, credentialId) =>
+      ipcRenderer.invoke(IPC.passwordManagerCredentialCode, projectId, managerId, credentialId)
+  },
   context: {
     onUpdate: (listener) => {
       const handler = (_e: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)

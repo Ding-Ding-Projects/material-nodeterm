@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   buildFilesApi,
+  buildPasswordManagerApi,
   buildRealApi,
   buildServerFilesApi,
   buildSessionMemoryApi,
@@ -234,6 +235,74 @@ describe('buildFilesApi', () => {
         kind: 'request',
         method: IPC.filesSaveUpload,
         args: ['relay.bin', 'cmVsYXk=']
+      }
+    ])
+  })
+})
+
+describe('buildPasswordManagerApi', () => {
+  // Every one of the 16 methods is reachable and routes to its own exact channel with
+  // `projectId` forwarded first — the vault lives at THAT project's <cwd>/.nodeterm/vault.json
+  // (core/password-manager/vault-store.ts), so a swapped/collapsed channel would silently talk
+  // about the wrong project's vault.
+  it('routes every method to its exact channel with projectId forwarded', async () => {
+    const c = fakeClient()
+    const api = buildPasswordManagerApi(c as never).passwordManager
+    const pid = 'proj-1'
+
+    await api.status(pid)
+    await api.createVault(pid, 'pw')
+    await api.unlock(pid, 'pw')
+    await api.lock(pid)
+    const changePw = { currentPassword: 'old', newPassword: 'new' }
+    await api.changePassword(pid, changePw)
+    const createManager = { name: 'Work logins' }
+    await api.createManager(pid, createManager)
+    const renameManager = { id: 'mgr-1', name: 'Renamed' }
+    await api.renameManager(pid, renameManager)
+    const bindGroup = { id: 'mgr-1', groupId: 'grp-1' }
+    await api.bindManagerGroup(pid, bindGroup)
+    await api.releaseGroupBinding(pid, 'grp-1')
+    await api.deleteManager(pid, 'mgr-1')
+    const createCred = { managerId: 'mgr-1', label: 'GitHub', username: 'u', password: 'p' }
+    await api.createCredential(pid, createCred)
+    const renameCred = { managerId: 'mgr-1', credentialId: 'cred-1', label: 'GitHub (work)' }
+    await api.renameCredential(pid, renameCred)
+    const updateSecret = { managerId: 'mgr-1', credentialId: 'cred-1', password: 'new-pw' }
+    await api.updateCredentialSecret(pid, updateSecret)
+    const removeCred = { managerId: 'mgr-1', credentialId: 'cred-1' }
+    await api.removeCredential(pid, removeCred)
+    await api.revealCredential(pid, 'mgr-1', 'cred-1')
+    await api.credentialCode(pid, 'mgr-1', 'cred-1')
+
+    expect(c.calls).toEqual([
+      { kind: 'request', method: IPC.passwordManagerStatus, args: [pid] },
+      { kind: 'request', method: IPC.passwordManagerCreateVault, args: [pid, 'pw'] },
+      { kind: 'request', method: IPC.passwordManagerUnlock, args: [pid, 'pw'] },
+      { kind: 'request', method: IPC.passwordManagerLock, args: [pid] },
+      { kind: 'request', method: IPC.passwordManagerChangePassword, args: [pid, changePw] },
+      { kind: 'request', method: IPC.passwordManagerCreateManager, args: [pid, createManager] },
+      { kind: 'request', method: IPC.passwordManagerRenameManager, args: [pid, renameManager] },
+      { kind: 'request', method: IPC.passwordManagerBindManagerGroup, args: [pid, bindGroup] },
+      { kind: 'request', method: IPC.passwordManagerReleaseGroupBinding, args: [pid, 'grp-1'] },
+      { kind: 'request', method: IPC.passwordManagerDeleteManager, args: [pid, 'mgr-1'] },
+      { kind: 'request', method: IPC.passwordManagerCreateCredential, args: [pid, createCred] },
+      { kind: 'request', method: IPC.passwordManagerRenameCredential, args: [pid, renameCred] },
+      {
+        kind: 'request',
+        method: IPC.passwordManagerUpdateCredentialSecret,
+        args: [pid, updateSecret]
+      },
+      { kind: 'request', method: IPC.passwordManagerRemoveCredential, args: [pid, removeCred] },
+      {
+        kind: 'request',
+        method: IPC.passwordManagerRevealCredential,
+        args: [pid, 'mgr-1', 'cred-1']
+      },
+      {
+        kind: 'request',
+        method: IPC.passwordManagerCredentialCode,
+        args: [pid, 'mgr-1', 'cred-1']
       }
     ])
   })

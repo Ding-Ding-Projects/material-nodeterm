@@ -38,6 +38,28 @@ import type {
   AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from './authenticator'
+import type {
+  BindManagerGroupInput,
+  ChangeVaultPasswordInput,
+  ChangeVaultPasswordResult,
+  CreateCredentialInput,
+  CreateCredentialResult,
+  CreateManagerInput,
+  CreateManagerResult,
+  CredentialCodeResult,
+  ManagerMutationResult,
+  ReleaseGroupBindingResult,
+  RemoveCredentialInput,
+  RemoveCredentialResult,
+  RenameCredentialInput,
+  RenameManagerInput,
+  RevealCredentialResult,
+  UpdateCredentialResult,
+  UpdateCredentialSecretInput,
+  VaultCreateResult,
+  VaultStatus,
+  VaultUnlockResult
+} from './password-manager'
 
 /** Profile-switch replacement intent. The trusted core validates and re-resolves it before teardown. */
 export interface PtyRecycleTarget {
@@ -3357,6 +3379,33 @@ export interface AuthenticatorApi {
   exportSecrets(input: AuthenticatorExportInput): Promise<AuthenticatorExportResult>
 }
 
+/** Per-project password manager (shared/password-manager.ts, docs pending). Every method is
+ *  scoped by `projectId` because the vault lives at that project's `<cwd>/.nodeterm/vault.json`
+ *  (core/password-manager/vault-store.ts) — there is no machine-global vault. LOCAL-ONLY: this
+ *  namespace is deliberately absent from the relay peer allowlist (main/relay-rpc-policy.ts),
+ *  exactly like ToylockApi/AuthenticatorApi — a mutually-approved relay peer gets shell-equivalent
+ *  access to the joined project, but must never be able to unlock or read this desktop's stored
+ *  credentials. See main/relay-rpc-policy.ts's header comment for why the allowlist is exact
+ *  rather than a blocklist. */
+export interface PasswordManagerApi {
+  status(projectId: string): Promise<VaultStatus>
+  createVault(projectId: string, password: string): Promise<VaultCreateResult>
+  unlock(projectId: string, password: string): Promise<VaultUnlockResult>
+  lock(projectId: string): Promise<void>
+  changePassword(projectId: string, input: ChangeVaultPasswordInput): Promise<ChangeVaultPasswordResult>
+  createManager(projectId: string, input: CreateManagerInput): Promise<CreateManagerResult>
+  renameManager(projectId: string, input: RenameManagerInput): Promise<ManagerMutationResult>
+  bindManagerGroup(projectId: string, input: BindManagerGroupInput): Promise<ManagerMutationResult>
+  releaseGroupBinding(projectId: string, groupId: string): Promise<ReleaseGroupBindingResult>
+  deleteManager(projectId: string, id: string): Promise<ManagerMutationResult>
+  createCredential(projectId: string, input: CreateCredentialInput): Promise<CreateCredentialResult>
+  renameCredential(projectId: string, input: RenameCredentialInput): Promise<ManagerMutationResult>
+  updateCredentialSecret(projectId: string, input: UpdateCredentialSecretInput): Promise<UpdateCredentialResult>
+  removeCredential(projectId: string, input: RemoveCredentialInput): Promise<RemoveCredentialResult>
+  revealCredential(projectId: string, managerId: string, credentialId: string): Promise<RevealCredentialResult>
+  credentialCode(projectId: string, managerId: string, credentialId: string): Promise<CredentialCodeResult>
+}
+
 export interface NodeTerminalApi {
   pty: PtyApi
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
@@ -3413,6 +3462,7 @@ export interface NodeTerminalApi {
   presence: PresenceApi
   toylock: ToylockApi
   authenticator: AuthenticatorApi
+  passwordManager: PasswordManagerApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */
   onMarkdownToggle(listener: () => void): () => void
   /** Fires when the user presses Cmd/Ctrl+W (close selected node). Returns unsubscribe. */

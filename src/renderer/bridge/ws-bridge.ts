@@ -58,7 +58,8 @@ import {
   type Workspace,
   type WorkspaceApi,
   type ToylockApi,
-  type AuthenticatorApi
+  type AuthenticatorApi,
+  type PasswordManagerApi
 } from '../../shared/types'
 import type {
   ToyLockBeginTotpInput,
@@ -84,6 +85,28 @@ import type {
   AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from '../../shared/authenticator'
+import type {
+  BindManagerGroupInput,
+  ChangeVaultPasswordInput,
+  ChangeVaultPasswordResult,
+  CreateCredentialInput,
+  CreateCredentialResult,
+  CreateManagerInput,
+  CreateManagerResult,
+  CredentialCodeResult,
+  ManagerMutationResult,
+  ReleaseGroupBindingResult,
+  RemoveCredentialInput,
+  RemoveCredentialResult,
+  RenameCredentialInput,
+  RenameManagerInput,
+  RevealCredentialResult,
+  UpdateCredentialResult,
+  UpdateCredentialSecretInput,
+  VaultCreateResult,
+  VaultStatus,
+  VaultUnlockResult
+} from '../../shared/password-manager'
 import type { PeerIdentity } from '../../shared/presence'
 import type {
   ScheduledSettingsActiveState,
@@ -1023,6 +1046,58 @@ export function buildAuthenticatorApi(client: RpcClient): Pick<NodeTerminalApi, 
   return { authenticator }
 }
 
+/** Build the `passwordManager` namespace over an RpcClient. Server Edition genuinely registers
+ *  `registerPasswordManagerHandlers` (src/server/index.ts), so — unlike the relay peer surface in
+ *  relay-api.ts, which deliberately excludes this namespace — this is a REAL implementation, not
+ *  a stub: a browser talking to its own Server Edition instance is the machine owner, exactly as
+ *  the Electron preload's `passwordManager` is. See PasswordManagerApi's doc comment in
+ *  shared/types.ts for why the namespace stays out of the relay allowlist. */
+export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi, 'passwordManager'> {
+  const passwordManager: PasswordManagerApi = {
+    status: (projectId: string) => client.request(IPC.passwordManagerStatus, projectId) as Promise<VaultStatus>,
+    createVault: (projectId: string, password: string) =>
+      client.request(IPC.passwordManagerCreateVault, projectId, password) as Promise<VaultCreateResult>,
+    unlock: (projectId: string, password: string) =>
+      client.request(IPC.passwordManagerUnlock, projectId, password) as Promise<VaultUnlockResult>,
+    lock: (projectId: string) => client.request(IPC.passwordManagerLock, projectId) as Promise<void>,
+    changePassword: (projectId: string, input: ChangeVaultPasswordInput) =>
+      client.request(IPC.passwordManagerChangePassword, projectId, input) as Promise<ChangeVaultPasswordResult>,
+    createManager: (projectId: string, input: CreateManagerInput) =>
+      client.request(IPC.passwordManagerCreateManager, projectId, input) as Promise<CreateManagerResult>,
+    renameManager: (projectId: string, input: RenameManagerInput) =>
+      client.request(IPC.passwordManagerRenameManager, projectId, input) as Promise<ManagerMutationResult>,
+    bindManagerGroup: (projectId: string, input: BindManagerGroupInput) =>
+      client.request(IPC.passwordManagerBindManagerGroup, projectId, input) as Promise<ManagerMutationResult>,
+    releaseGroupBinding: (projectId: string, groupId: string) =>
+      client.request(IPC.passwordManagerReleaseGroupBinding, projectId, groupId) as Promise<ReleaseGroupBindingResult>,
+    deleteManager: (projectId: string, id: string) =>
+      client.request(IPC.passwordManagerDeleteManager, projectId, id) as Promise<ManagerMutationResult>,
+    createCredential: (projectId: string, input: CreateCredentialInput) =>
+      client.request(IPC.passwordManagerCreateCredential, projectId, input) as Promise<CreateCredentialResult>,
+    renameCredential: (projectId: string, input: RenameCredentialInput) =>
+      client.request(IPC.passwordManagerRenameCredential, projectId, input) as Promise<ManagerMutationResult>,
+    updateCredentialSecret: (projectId: string, input: UpdateCredentialSecretInput) =>
+      client.request(IPC.passwordManagerUpdateCredentialSecret, projectId, input) as Promise<UpdateCredentialResult>,
+    removeCredential: (projectId: string, input: RemoveCredentialInput) =>
+      client.request(IPC.passwordManagerRemoveCredential, projectId, input) as Promise<RemoveCredentialResult>,
+    revealCredential: (projectId: string, managerId: string, credentialId: string) =>
+      client.request(
+        IPC.passwordManagerRevealCredential,
+        projectId,
+        managerId,
+        credentialId
+      ) as Promise<RevealCredentialResult>,
+    credentialCode: (projectId: string, managerId: string, credentialId: string) =>
+      client.request(
+        IPC.passwordManagerCredentialCode,
+        projectId,
+        managerId,
+        credentialId
+      ) as Promise<CredentialCodeResult>
+  }
+  return { passwordManager }
+}
+
 /**
  * Build the `claude` namespace over an RpcClient. `cliCaps` is a REAL handler on the server
  * (`registerClaudeCliIpc` runs in the server shell too), so the browser resolves the very same
@@ -1227,6 +1302,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildLocalHistoryApi(client),
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),
+    ...buildPasswordManagerApi(client),
     ...buildGitHubApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the

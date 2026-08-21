@@ -184,7 +184,8 @@ import {
   PhonePairPopover,
   KanbanView,
   FileConverterPanel,
-  OllamaManagerPanel
+  OllamaManagerPanel,
+  PasswordManagerPanel
 } from '../components/lazyPanels'
 import { WelcomeScreen, canDismissWelcomeScreen } from '../components/WelcomeScreen'
 import { CloneRepoDialog } from '../components/CloneRepoDialog'
@@ -1175,6 +1176,11 @@ export function Canvas() {
   // toggle-a-flag pattern as every other drawer/panel on this canvas.
   const [converterOpen, setConverterOpen] = useState(false)
   const [ollamaOpen, setOllamaOpen] = useState(false)
+  // Password manager (shared/password-manager.ts) — same drawer pattern, but per-project rather
+  // than per-machine, and it can jump straight to "add a credential" when opened from the canvas
+  // pane menu's "New credential…" row (see onPaneContextMenu below).
+  const [pwmOpen, setPwmOpen] = useState(false)
+  const [pwmIntent, setPwmIntent] = useState<'default' | 'new-credential'>('default')
   // Every full-area screen and drawer on this canvas is mutually exclusive: opening one closes
   // the rest. Hoisted to component scope (from inside the nav-rail block below) because the Help
   // menu's Documentation row opens the same docs screen and needs the same close -- a full-area
@@ -1185,6 +1191,7 @@ export function Canvas() {
     setScOpen(false)
     setConverterOpen(false)
     setOllamaOpen(false)
+    setPwmOpen(false)
     setSettingsOpen(false)
     setNotifCenterOpen(false)
     setHistoryOpen(false)
@@ -8255,6 +8262,20 @@ export function Canvas() {
               onClick: () => openWorktreeDialog(null, at)
             }
           ]),
+          // One row, so `paneMenuGroup` keeps it top level (same shape as Worktree just above).
+          // Opens the drawer already unlocked-and-into-"add credential" mode when a vault exists,
+          // or the create-vault form when it doesn't — the panel itself decides which, from its
+          // own status() read; this row only has to say WHICH intent it wants.
+          ...paneMenuGroup('Password manager', <IconLock />, [
+            {
+              label: 'New credential…',
+              icon: <IconLock />,
+              onClick: () => {
+                setPwmIntent('new-credential')
+                setPwmOpen(true)
+              }
+            }
+          ]),
           // Draw tools (issue #145): arm one, then drag on the canvas — Esc cancels. "Draw colored
           // area" is an empty group frame (the SAME coloured frame `groupSelectedNodes` already
           // builds around a selection); "Draw line"/"Draw arrow" are standalone annotation nodes
@@ -12796,6 +12817,7 @@ export function Canvas() {
           scOpen ||
           converterOpen ||
           ollamaOpen ||
+          pwmOpen ||
           settingsOpen ||
           notifCenterOpen ||
           historyOpen ||
@@ -12853,7 +12875,7 @@ export function Canvas() {
             id: 'tools',
             icon: <IconConvert />,
             label: 'Tools',
-            active: converterOpen || ollamaOpen,
+            active: converterOpen || ollamaOpen || pwmOpen,
             onClick: (anchor: HTMLElement) => {
               closeAllDrawers()
               leaveBoard()
@@ -12863,7 +12885,15 @@ export function Canvas() {
                 y: r.top,
                 items: [
                   { label: 'File converter', onClick: () => setConverterOpen(true) },
-                  { label: 'Ollama manager', onClick: () => setOllamaOpen(true) }
+                  { label: 'Ollama manager', onClick: () => setOllamaOpen(true) },
+                  {
+                    label: 'Password manager',
+                    icon: <IconLock />,
+                    onClick: () => {
+                      setPwmIntent('default')
+                      setPwmOpen(true)
+                    }
+                  }
                 ]
               })
             }
@@ -13451,6 +13481,18 @@ export function Canvas() {
 
       {converterOpen && <FileConverterPanel onClose={() => setConverterOpen(false)} />}
       {ollamaOpen && <OllamaManagerPanel onClose={() => setOllamaOpen(false)} />}
+      {pwmOpen && (
+        <PasswordManagerPanel
+          onClose={() => setPwmOpen(false)}
+          initialIntent={pwmIntent}
+          // Computed only while the drawer is actually open — `nodes` changes on every drag, and
+          // this list is read once per open by the panel itself (see its own header comment on
+          // why a rename mid-session is a cosmetic staleness, not a correctness one).
+          groups={nodes
+            .filter((n) => n.type === 'group')
+            .map((n) => ({ id: n.id, title: n.data.title || 'Untitled group' }))}
+        />
+      )}
 
       <SessionsSidebar
         open={sessionsOpen}
