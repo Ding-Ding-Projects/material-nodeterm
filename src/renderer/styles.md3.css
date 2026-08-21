@@ -3339,6 +3339,127 @@ div.mdx-row[role='menuitemradio']:focus-visible {
   color: var(--md-on-primary-container);
 }
 
+/* ---- MD3: Group picker ("Add to existing group…") ----
+   A searchable listbox dialog, per docs/appearance.md's move-into-group contract: never one
+   context-menu row per group. Its own top-level modal (the menu that opened it has already
+   unmounted), painted like the context menu it replaces — same surface/radius/no-shadow — with
+   the shared .menu-filter head so its search field carries the same anchored regex builder as
+   every other search surface. */
+
+.group-picker__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  background: transparent;
+}
+.group-picker {
+  position: fixed;
+  z-index: 93;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(480px, calc(100vh - 64px));
+  display: flex;
+  flex-direction: column;
+  background: var(--md-surface-container-high);
+  border-radius: 20px;
+  padding: 12px;
+  gap: 8px;
+  animation: md3-pop-in var(--md3-motion-spatial);
+}
+.group-picker__title {
+  font-family: var(--md3-font-ui);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+  padding: 4px 6px 0;
+}
+.group-picker__search { padding: 0; margin: 0; }
+.group-picker__list {
+  overflow-y: auto;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.group-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  padding: 9px 12px;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md3-font-ui);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.group-picker__option:hover,
+.group-picker__option.is-active {
+  background: var(--md-surface-container-highest);
+}
+.group-picker__option:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+.group-picker__swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--md-on-surface-variant);
+  border: 1px solid var(--md-outline-variant);
+}
+.group-picker__swatch svg { width: 12px; height: 12px; }
+.group-picker__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-picker__count {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--md-on-surface-variant);
+}
+.group-picker__empty {
+  padding: 16px 12px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--md3-font-ui);
+  font-size: 12.5px;
+  text-align: center;
+}
+.group-picker__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 4px 0;
+}
+.group-picker__cancel {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-family: var(--md3-font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--md-primary);
+  cursor: pointer;
+}
+.group-picker__cancel:hover {
+  background: var(--md-surface-container-highest);
+}
+.group-picker__cancel:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
 /* ---- MD3: Anchored popover (regex builder, …) ---- */
 
 .anchored-pop__backdrop {
