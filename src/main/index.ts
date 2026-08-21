@@ -55,6 +55,12 @@ import {
   registerBrowserGuestRequest,
   type BrowserGuest
 } from './browser-guest-registry'
+import {
+  addExtension,
+  listLoadedExtensions,
+  reloadPersistedBrowserExtensions,
+  removeExtensionByPath
+} from './browser-extensions'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
@@ -758,6 +764,12 @@ app.whenReady().then(async () => {
     console.error('[browser-use] backend start failed', error)
   })
 
+  // Electron forgets loaded extensions across restarts (its own docs: "loadExtension must be
+  // called on every boot… if you want the changes to be applied"), so replay whatever was
+  // persisted the last time the user added one. Non-blocking on the rest of boot: a slow/failed
+  // reload for one profile must not delay the window opening.
+  void reloadPersistedBrowserExtensions()
+
   // Harden every <webview> guest (WebNode runs its page in its own webContents, so the main
   // window's setWindowOpenHandler / will-navigate above don't cover it). Registered once at
   // startup for all current and future guests.
@@ -1019,6 +1031,24 @@ app.whenReady().then(async () => {
     browserGuests.delete(webContentsId)
     browserUseBackend.unregister(webContentsId)
   })
+
+  // Unpacked Chrome-extension loading, per browser profile — see `BrowserExtensionsApi`'s doc
+  // comment in shared/types.ts for the real limits this establishes from the pinned Electron's
+  // own typings (unpacked-only, no persistence across restarts without the boot-time replay
+  // below, a subset of chrome.* is implemented).
+  ipcMain.handle(IPC.browserExtensionsList, (_e, partition: string | undefined) =>
+    listLoadedExtensions(partition)
+  )
+  ipcMain.handle(IPC.browserExtensionsPickDir, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  })
+  ipcMain.handle(IPC.browserExtensionsAdd, (_e, partition: string | undefined, dirPath: string) =>
+    addExtension(partition, dirPath)
+  )
+  ipcMain.handle(IPC.browserExtensionsRemove, (_e, partition: string | undefined, dirPath: string) =>
+    removeExtensionByPath(partition, dirPath)
+  )
 
   // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS
   // machine. An SSH-project node's `data.cwd` is a path on the REMOTE host — spawning there fails

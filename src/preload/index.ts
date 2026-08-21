@@ -423,6 +423,12 @@ const api: NodeTerminalApi = {
       const handler = (_e: unknown, ev: { url: string; sourceNodeId: string }) => listener(ev)
       ipcRenderer.on(IPC.browserNewWindow, handler)
       return () => ipcRenderer.removeListener(IPC.browserNewWindow, handler)
+    },
+    extensions: {
+      list: (partition) => ipcRenderer.invoke(IPC.browserExtensionsList, partition),
+      pickDir: () => ipcRenderer.invoke(IPC.browserExtensionsPickDir),
+      add: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsAdd, partition, dirPath),
+      remove: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsRemove, partition, dirPath)
     }
   },
   files: {

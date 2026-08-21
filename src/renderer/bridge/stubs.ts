@@ -239,7 +239,16 @@ export function buildStubApi(): Omit<
     browser: {
       register: noop,
       unregister: noop,
-      onBrowserNewWindow: noopUnsub
+      onBrowserNewWindow: noopUnsub,
+      // Electron-only: the Server Edition/relay run inside a real browser tab, which has no
+      // Chromium extension host for the page to load an unpacked extension into — there is no
+      // graceful "sort of works" here, so every member refuses rather than pretending.
+      extensions: {
+        list: U('browser.extensions.list'),
+        pickDir: U('browser.extensions.pickDir'),
+        add: U('browser.extensions.add'),
+        remove: U('browser.extensions.remove')
+      }
     },
     updates: {
       onAvailable: noopUnsub,
