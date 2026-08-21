@@ -106,6 +106,7 @@ import {
   notchHudOnContextUpdate,
   assertRegularDockPresence
 } from './notch-hud'
+import { registerCanvasWidgetIpc, closeAllCanvasWidgets } from './canvas-widget-window'
 import {
   initAgentStatusMirror,
   onMirrorFlush,
@@ -798,6 +799,11 @@ app.whenReady().then(async () => {
 
   settingsStore.init()
   settingsStore.registerIpc()
+  // "Escape to widget" — see main/canvas-widget-window.ts's module doc. Uses the same
+  // `desktopBuildPaths(__dirname)` call every window creation path uses; cheap and pure, so
+  // recomputing it here rather than threading the `createWindow()`-local `buildPaths` through
+  // costs nothing and keeps this registration call self-contained.
+  registerCanvasWidgetIpc(settingsStore, desktopBuildPaths(__dirname), ptyManager)
   // Native Electron IPC on purpose: profile detection is machine-local desktop state and must not
   // enter CorePlatform's relay-dispatch table. The same service resolves the chosen id at spawn.
   // The preload namespace is Windows-only, so keep its handlers absent on every other desktop too.
@@ -3071,6 +3077,10 @@ app.on('window-all-closed', () => {
 let quitFlushed = false
 app.on('before-quit', (e) => {
   quitting = true // from here on, window close-events must NOT be turned into hide
+  // Destroy every open widget window (never the sessions they were co-attached to — see
+  // canvas-widget-window.ts's module doc; PtyManager.killAll() below detaches every client the
+  // normal way, including the ones these windows opened).
+  closeAllCanvasWidgets()
   // Fire-and-forget on purpose (see the method's own doc comment): a managed Minecraft server is
   // an ordinary child process that outlives its parent quitting, so there is nothing to await here
   // — writing "stop" now is enough for it to shut down gracefully on its own schedule. Called on

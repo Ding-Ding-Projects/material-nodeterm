@@ -76,6 +76,21 @@ export const IPC = {
   appZoomActualSize: 'app:zoom-actual-size',
   appCloseWindow: 'app:close-window',
   appFocusWindow: 'app:focus-window',
+  /** Canvas widget mode (`main/canvas-widget-window.ts`, `core/canvas-widget.ts`, `renderer/widget/
+   *  WidgetApp.tsx`): pop one terminal node's live tmux/session-host session into its own
+   *  always-on-top-configurable desktop window — a second co-attached viewer of the SAME session,
+   *  never a copy (see `Settings.canvasWidgets`'s doc comment in shared/types.ts). Electron-only:
+   *  Server Edition has no OS window to open, so the ws-bridge implementation answers every call
+   *  `{ unsupported: true }` rather than registering a handler. All four payloads carry the
+   *  target node id first. `widgetStateChanged` is main → every listening renderer (the main
+   *  window AND the widget window itself), fired on open/close/always-on-top change and once in
+   *  reply to `widgetGetState`, so the "escaped" indicator on the canvas node and the widget's own
+   *  toggle never have to poll. */
+  widgetOpen: 'widget:open',
+  widgetClose: 'widget:close',
+  widgetSetAlwaysOnTop: 'widget:set-always-on-top',
+  widgetGetState: 'widget:get-state',
+  widgetStateChanged: 'widget:state-changed',
   /** Write text to the system clipboard from the MAIN process. Renderer-side `clipboard` access is
    *  deprecated in Electron; resolves true only after MAIN completes the write. */
   clipboardWrite: 'clipboard:write',

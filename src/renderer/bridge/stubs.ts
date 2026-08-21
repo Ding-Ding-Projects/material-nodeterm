@@ -228,6 +228,16 @@ export function buildStubApi(): Omit<
         window.open(url, '_blank', 'noopener')
       }
     },
+    // "Escape to widget" opens a real OS window (`main/canvas-widget-window.ts`) — there is no
+    // such thing in a browser tab, so every call is a documented, coded refusal rather than a
+    // silent no-op the UI would have no way to explain.
+    canvasWidget: {
+      open: U('canvasWidget.open'),
+      close: U('canvasWidget.close'),
+      setAlwaysOnTop: U('canvasWidget.setAlwaysOnTop'),
+      getState: U('canvasWidget.getState'),
+      onStateChanged: noopUnsub
+    },
     media: {
       allow: U('media.allow'),
       // Deliberate graceful degrade: the remote-media cache lives on the DESKTOP shell (scp over

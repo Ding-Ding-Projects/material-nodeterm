@@ -1163,6 +1163,43 @@ export interface ShellApi {
   openExternal(url: string): void
 }
 
+/** One node's canvas-widget state, as reported over IPC (see `CanvasWidgetState` for what is
+ *  actually persisted — this adds the live `open` flag, which is main-process runtime state, not
+ *  something settings.json remembers across restarts). */
+export interface CanvasWidgetLiveState {
+  nodeId: string
+  /** Is a widget window for this node currently open? */
+  open: boolean
+  alwaysOnTop: boolean
+  bounds?: { x: number; y: number; width: number; height: number }
+}
+
+/**
+ * Pop a terminal node's live session into its own always-on-top-configurable desktop window —
+ * see `CanvasWidgetState`'s doc comment above for the full design and `main/canvas-widget-window.ts`
+ * for the Electron-side implementation this calls into. Electron-only: every method rejects with
+ * `E_UNSUPPORTED` in the Server Edition (no OS window to open), and `onStateChanged` still returns
+ * a real no-op unsubscribe there so a mounting component never has to branch on which shell it is
+ * running under.
+ */
+export interface CanvasWidgetApi {
+  /** Open (or focus, if already open) the widget window for this node. Resolves once the window
+   *  has been created/focused; rejects `E_UNSUPPORTED` in the Server Edition. */
+  open(nodeId: string): Promise<void>
+  /** Close the widget window for this node. A no-op if it isn't open. Never touches the
+   *  underlying pty/session — the session keeps running exactly as it does when a canvas node is
+   *  merely unmounted (see the module doc in `main/canvas-widget-window.ts`). */
+  close(nodeId: string): Promise<void>
+  /** User-configurable always-on-top, both at open time and while the widget is open. Persists
+   *  per node; applies live if the widget window is currently open. */
+  setAlwaysOnTop(nodeId: string, alwaysOnTop: boolean): Promise<void>
+  /** Current live + persisted state for one node. */
+  getState(nodeId: string): Promise<CanvasWidgetLiveState>
+  /** Fires whenever any node's widget state changes (opened, closed, always-on-top toggled, or
+   *  bounds persisted) — main window and widget window alike listen on this. Returns unsubscribe. */
+  onStateChanged(listener: (state: CanvasWidgetLiveState) => void): () => void
+}
+
 export interface DirEntry {
   name: string
   dir: boolean
@@ -1517,6 +1554,22 @@ export interface AdhdModes {
   snoozeUntilMs: number | null
 }
 
+/**
+ * One terminal node "escaped" from the canvas into its own always-on-top-configurable desktop
+ * widget window (see `main/canvas-widget-window.ts`, `renderer/widget/WidgetApp.tsx`). The widget
+ * is a SECOND live view of the SAME tmux/session-host session the canvas node owns — the exact
+ * viewer-identity co-attach mechanism the kanban card modal already uses (`ModalTerminal.tsx`) —
+ * never a copy, and closing it never destroys the underlying session (see the widget-open/close
+ * IPC handlers in `main/canvas-widget-window.ts`, which call no pty destroy/kill on window close).
+ */
+export interface CanvasWidgetState {
+  /** Stay above other windows while the widget is open. User-configurable, both when opening the
+   *  widget and while it is open; persists per node. */
+  alwaysOnTop: boolean
+  /** Window bounds in OS screen coordinates, persisted per node so re-opening the SAME node's
+   *  widget reuses its last position/size. Absent until the widget has been moved/resized once. */
+  bounds?: { x: number; y: number; width: number; height: number }
+}
 
 /** User-configurable application settings (settings.json). */
 export interface Settings {
@@ -1577,6 +1630,16 @@ export interface Settings {
   /** Fallback view for projects the user hasn't explicitly toggled (canvas or the kanban board).
    *  Personal machine-local preference; per-project explicit choices override it. */
   defaultProjectView: 'canvas' | 'kanban'
+  /**
+   * Persisted state for a terminal node "escaped" from the canvas into its own desktop widget
+   * window (Windows/Linux/macOS — see `main/canvas-widget-window.ts`). Keyed by node id.
+   * Machine-local UI chrome, exactly like `sidebarCollapsedItems` above: never written into the
+   * git-shared `project.json` (see `core/workspace-files.ts`'s `ProjectFileV1`/`projectToFile`),
+   * because a widget's screen position on THIS machine means nothing on somebody else's. Pruned
+   * against live node ids on every write (`pruneCanvasWidgets` in `core/canvas-widget.ts`) so a
+   * deleted node's widget state doesn't grow settings.json forever.
+   */
+  canvasWidgets: Record<string, CanvasWidgetState>
   /** ms to dwell over a terminal before it takes pointer focus (pan-across guard). */
   panHoverDelay: number
   /**
@@ -1940,6 +2003,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarAutoCollapse: true,
   sidebarCollapsedItems: {},
   defaultProjectView: 'canvas',
+  canvasWidgets: {},
   panHoverDelay: 600,
   rainbowSpeed: 3,
   doubleClickFocus: true,
@@ -3531,6 +3595,9 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
+=======
+  /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
+  canvasWidget: CanvasWidgetApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */
   onMarkdownToggle(listener: () => void): () => void
   /** Fires when the user presses Cmd/Ctrl+W (close selected node). Returns unsubscribe. */

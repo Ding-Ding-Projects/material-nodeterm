@@ -3,6 +3,7 @@ import { IPC } from '../shared/ipc'
 import type {
   CanvasMutation,
   CanvasState,
+  CanvasWidgetLiveState,
   ClipboardWriteOptions,
   NodeTerminalApi,
   PairingDoneResult,
@@ -68,6 +69,7 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
@@ -400,6 +402,14 @@ const api: NodeTerminalApi = {
     reveal: (path: string) => ipcRenderer.send(IPC.shellReveal, path),
     openPath: (path: string) => ipcRenderer.send(IPC.shellOpenPath, path),
     openExternal: (url: string) => ipcRenderer.send(IPC.shellOpenExternal, url)
+  },
+  canvasWidget: {
+    open: (nodeId: string) => ipcRenderer.invoke(IPC.widgetOpen, nodeId),
+    close: (nodeId: string) => ipcRenderer.invoke(IPC.widgetClose, nodeId),
+    setAlwaysOnTop: (nodeId: string, alwaysOnTop: boolean) =>
+      ipcRenderer.invoke(IPC.widgetSetAlwaysOnTop, nodeId, alwaysOnTop),
+    getState: (nodeId: string) => ipcRenderer.invoke(IPC.widgetGetState, nodeId),
+    onStateChanged: subscribeWidgetState
   },
   fs: {
     list: (dirPath: string) => ipcRenderer.invoke(IPC.fsList, dirPath),
