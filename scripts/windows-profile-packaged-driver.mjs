@@ -613,7 +613,7 @@ async function resizeRepresentative(result, profile, catalog) {
   // So ask the PAGE which point is really the header: walk candidate offsets and take the first
   // whose elementFromPoint is the header element (or a non-interactive descendant of it).
   const headerSelector = `${selector} .term-node__header`
-  const point = await waitFor(
+  const headerPoint = await waitFor(
     `(function(){
        var h=document.querySelector(${JSON.stringify(headerSelector)});
        if(!h) return null;
@@ -633,7 +633,7 @@ async function resizeRepresentative(result, profile, catalog) {
      })()`,
     'a clickable point on the node header that is not one of its buttons'
   )
-  await clickPoint(point.x, point.y)
+  await clickPoint(headerPoint.x, headerPoint.y)
   try {
     await waitFor(`!!document.querySelector(${JSON.stringify(`${selector}.selected`)})`, 'representative node selected')
   } catch (error) {
@@ -641,7 +641,7 @@ async function resizeRepresentative(result, profile, catalog) {
     // mis-aimed click from a node that refuses selection, and those need opposite fixes.
     const at = await evaluate(
       `(function(){
-         var el=document.elementFromPoint(${point.x},${point.y});
+         var el=document.elementFromPoint(${headerPoint.x},${headerPoint.y});
          var n=document.querySelector(${JSON.stringify(selector)});
          return {
            at: el ? (el.tagName+'.'+String(el.className||'').slice(0,60)) : null,
@@ -651,7 +651,7 @@ async function resizeRepresentative(result, profile, catalog) {
        })()`
     ).catch(() => null)
     throw new Error(
-      `${error.message} — clicked (${point.x},${point.y}); ` +
+      `${error.message} — clicked (${headerPoint.x},${headerPoint.y}); ` +
         (at ? `elementFromPoint=${at.at}, anyNodeSelected=${at.anySelected}, nodeClass="${at.nodeClass}"` : 'point unreadable')
     )
   }
