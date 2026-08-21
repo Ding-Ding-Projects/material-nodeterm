@@ -7695,6 +7695,38 @@ body,
 }
 .phone-pair__footer { align-self: flex-start; }
 
+/* ---- Toy-lock overlay for the active tab (docs/toy-locks.md) — covers the canvas AND the
+   kanban view (both are just views of the same project's nodes); the project's sessions stay
+   running underneath, this only covers the SCREEN. z 26: over the kanban overlay (25), under the
+   nav rail (28) / app bar (30) / drawers+dialogs (40+) so the user can still navigate away or
+   open the unlock popover. ---- */
+.tab-lock-overlay {
+  position: fixed;
+  top: var(--app-bar-h);
+  left: var(--nav-rail-w);
+  right: 0;
+  bottom: 0;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.tab-lock-overlay__icon {
+  font-size: 40px;
+  line-height: 1;
+}
+.tab-lock-overlay__title {
+  font-size: 16px;
+  font-weight: 500;
+}
+.tab-lock-overlay__hint {
+  font-size: 13px;
+}
+
 /* ---- Kanban view (full-page board over the canvas; the canvas stays mounted under it) ---- */
 .kanban-overlay {
   position: fixed;
