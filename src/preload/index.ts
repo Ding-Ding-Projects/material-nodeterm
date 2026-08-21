@@ -13,6 +13,7 @@ import type {
   RecycledInfo,
   RelayPeerPending,
   RemoteUsageQuery,
+  ServerDeploymentStage,
   SessionMemoryQuery,
   UpdateInfo,
   UpdateProgress,
@@ -186,7 +187,13 @@ const api: NodeTerminalApi = {
   },
   serverDeployment: {
     start: () => ipcRenderer.invoke(IPC.serverDeploymentStart),
-    currentTotp: () => ipcRenderer.invoke(IPC.serverDeploymentTotp)
+    currentTotp: () => ipcRenderer.invoke(IPC.serverDeploymentTotp),
+    status: () => ipcRenderer.invoke(IPC.serverDeploymentStatus),
+    onProgress: (cb: (stage: ServerDeploymentStage) => void) => {
+      const h = (_e: unknown, stage: ServerDeploymentStage) => cb(stage)
+      ipcRenderer.on(IPC.serverDeploymentProgress, h)
+      return () => ipcRenderer.removeListener(IPC.serverDeploymentProgress, h)
+    }
   },
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),
