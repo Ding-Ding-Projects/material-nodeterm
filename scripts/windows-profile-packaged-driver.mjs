@@ -602,11 +602,59 @@ async function resizeRepresentative(result, profile, catalog) {
   // Measured on the same build — `.react-flow__resize-control.handle.bottom.right` is absent
   // before selection and present after, and a header-click → drag then grew the node from
   // 640x440 to 760x520, exactly the requested delta.
-  await clickElement(
-    `document.querySelector(${JSON.stringify(`${selector} .term-node__header`)})`,
-    'representative terminal node header'
+  // Click a point that is provably the HEADER ITSELF, not one of its children.
+  //
+  // `elementPoint` aims at an element's centre, and a terminal node's header centre is not bare
+  // header — the strip is packed with controls (collapse, colour, folder-drag, the click-to-rename
+  // title, search, close), and several call stopPropagation, so React Flow never sees the click
+  // and the node is never selected. Aiming at the header and hitting a button looks identical to
+  // aiming correctly, which is why this failed twice with two different-looking causes.
+  //
+  // So ask the PAGE which point is really the header: walk candidate offsets and take the first
+  // whose elementFromPoint is the header element (or a non-interactive descendant of it).
+  const headerSelector = `${selector} .term-node__header`
+  const point = await waitFor(
+    `(function(){
+       var h=document.querySelector(${JSON.stringify(headerSelector)});
+       if(!h) return null;
+       var r=h.getBoundingClientRect();
+       if(!(r.width>0 && r.height>0)) return null;
+       var y=Math.round(r.top + r.height/2);
+       // Sweep left-to-right across the strip rather than trusting one offset: which side is free
+       // depends on how many action buttons this particular node is showing.
+       for (var f=0.05; f<=0.95; f+=0.05) {
+         var x=Math.round(r.left + r.width*f);
+         var el=document.elementFromPoint(x,y);
+         if(!el) continue;
+         if(el===h) return {x:x,y:y};
+         if(h.contains(el) && !el.closest('button,input,a,[role=button],.nodrag')) return {x:x,y:y};
+       }
+       return null;
+     })()`,
+    'a clickable point on the node header that is not one of its buttons'
   )
-  await waitFor(`!!document.querySelector(${JSON.stringify(`${selector}.selected`)})`, 'representative node selected')
+  await clickPoint(point.x, point.y)
+  try {
+    await waitFor(`!!document.querySelector(${JSON.stringify(`${selector}.selected`)})`, 'representative node selected')
+  } catch (error) {
+    // Report what was actually under the pointer. "did not become true" cannot distinguish a
+    // mis-aimed click from a node that refuses selection, and those need opposite fixes.
+    const at = await evaluate(
+      `(function(){
+         var el=document.elementFromPoint(${point.x},${point.y});
+         var n=document.querySelector(${JSON.stringify(selector)});
+         return {
+           at: el ? (el.tagName+'.'+String(el.className||'').slice(0,60)) : null,
+           anySelected: !!document.querySelector('.react-flow__node.selected'),
+           nodeClass: n ? String(n.className||'').slice(0,90) : null
+         };
+       })()`
+    ).catch(() => null)
+    throw new Error(
+      `${error.message} — clicked (${point.x},${point.y}); ` +
+        (at ? `elementFromPoint=${at.at}, anyNodeSelected=${at.anySelected}, nodeClass="${at.nodeClass}"` : 'point unreadable')
+    )
+  }
   const handleSelector = `${selector} .react-flow__resize-control.handle.bottom.right`
   const before = await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});
     if(!n)return null;var r=n.getBoundingClientRect();return {width:r.width,height:r.height};})()`, 'node dimensions')
