@@ -193,6 +193,17 @@ export interface MinecraftPlayerLists {
   banned: MinecraftBannedPlayerEntry[]
 }
 
+/** One saved copy of the instance's world folder — see core/minecraft/backups.ts. */
+export interface MinecraftBackupSummary {
+  id: string
+  levelName: string
+  createdAt: number
+  sizeBytes: number
+  /** True only for the safety-net copy `restoreBackup` makes automatically of the world it is
+   *  about to overwrite — never for a backup the user asked for explicitly. */
+  auto: boolean
+}
+
 export interface MinecraftCreateInput {
   /** The canvas node id this instance belongs to. One instance per node. */
   id: string
@@ -261,5 +272,23 @@ export interface MinecraftApi {
    *  safe to call — an instance that has never run has none of these files, which reads as three
    *  empty lists rather than an error. */
   readPlayerLists(id: string): Promise<MinecraftPlayerLists>
+  /** Every backup this instance has, newest first. Always safe to call — a fresh instance simply
+   *  has none yet. */
+  listBackups(id: string): Promise<MinecraftBackupSummary[]>
+  /**
+   * Copies the world folder into a new backup. Refused (reported as `phase: 'error'`, never
+   * thrown) while the server is running — copying files a live process still has open cannot be
+   * trusted — and while nothing has been installed for this node yet.
+   */
+  createBackup(id: string): Promise<MinecraftServerStatus>
+  /**
+   * Replaces the current world with a chosen backup. Refused while the server is running, for the
+   * same reason as `createBackup`. The world being replaced is preserved first as an automatic
+   * backup, so choosing the wrong one to restore is never a one-way trip.
+   */
+  restoreBackup(id: string, backupId: string): Promise<MinecraftServerStatus>
+  /** Permanently deletes one backup. Real, irreversible deletion — the caller is responsible for
+   *  gating this behind the destructive-action confirmation, exactly like `remove`. */
+  deleteBackup(id: string, backupId: string): Promise<void>
   onEvent(listener: (event: MinecraftEvent) => void): () => void
 }

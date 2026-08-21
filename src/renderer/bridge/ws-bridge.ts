@@ -914,6 +914,14 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
       client.request(IPC.minecraftPropertiesWrite, id, updates) as ReturnType<MinecraftApi['writeProperties']>,
     readPlayerLists: (id) =>
       client.request(IPC.minecraftPlayerLists, id) as ReturnType<MinecraftApi['readPlayerLists']>,
+    listBackups: (id) =>
+      client.request(IPC.minecraftBackupsList, id) as ReturnType<MinecraftApi['listBackups']>,
+    createBackup: (id) =>
+      client.request(IPC.minecraftBackupCreate, id) as ReturnType<MinecraftApi['createBackup']>,
+    restoreBackup: (id, backupId) =>
+      client.request(IPC.minecraftBackupRestore, id, backupId) as ReturnType<MinecraftApi['restoreBackup']>,
+    deleteBackup: (id, backupId) =>
+      client.request(IPC.minecraftBackupDelete, id, backupId) as Promise<void>,
     onEvent: (listener) => client.subscribe(IPC.minecraftEvent, listener as Listener)
   }
   return { minecraft }

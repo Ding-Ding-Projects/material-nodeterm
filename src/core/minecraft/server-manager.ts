@@ -28,6 +28,7 @@ import { Writable } from 'node:stream'
 import { renameAtomic, tempNameFor, writeFileAtomic } from '../fs-atomic'
 import { DEFAULT_MINECRAFT_PORT, parseServerPort, pickLanIPv4 } from '../lan-address'
 import type {
+  MinecraftBackupSummary,
   MinecraftConsoleLine,
   MinecraftCreateInput,
   MinecraftEvent,
@@ -38,6 +39,7 @@ import type {
 import { detectInstalledJava, ensureJavaRuntime, type JavaProbe } from './java'
 import { applyPropertyUpdates, propertiesToRecord, parseProperties } from './properties'
 import { parseBannedEntries, parsePlayerEntries } from './players'
+import { createBackup, deleteBackup, listBackups, restoreBackup } from './backups'
 import {
   checkJavaCompatibility,
   parseLatestVersions,
@@ -542,6 +544,66 @@ export class MinecraftServerManager {
       ops: parsePlayerEntries(ops),
       banned: parseBannedEntries(banned)
     }
+  }
+
+  /** Vanilla's own `level-name` default is "world" when the key is absent — the same fallback
+   *  `readServerPort` above applies for `server-port`. */
+  private async levelName(dir: string): Promise<string> {
+    try {
+      const raw = await readFile(path.join(dir, 'server.properties'), 'utf-8')
+      const value = propertiesToRecord(parseProperties(raw))['level-name']
+      return value && value.trim() ? value.trim() : 'world'
+    } catch {
+      return 'world'
+    }
+  }
+
+  async listBackups(id: string): Promise<MinecraftBackupSummary[]> {
+    const record = await this.readRecord(id)
+    if (!record) return []
+    return listBackups(record.dir)
+  }
+
+  async createBackup(id: string): Promise<MinecraftServerStatus> {
+    const runtime = this.runtime.get(id)
+    if (runtime?.proc) {
+      return this.oneShotError(
+        id,
+        'A backup while the server is running can capture files mid-write — stop the server first.'
+      )
+    }
+    const record = await this.readRecord(id)
+    if (!record) return this.oneShotError(id, 'No server has been created for this node yet.')
+    try {
+      await createBackup({ dir: record.dir, levelName: await this.levelName(record.dir), now: this.now() })
+    } catch (e) {
+      return this.oneShotError(id, describeError(e))
+    }
+    return this.emitStatus(id)
+  }
+
+  async restoreBackup(id: string, backupId: string): Promise<MinecraftServerStatus> {
+    const runtime = this.runtime.get(id)
+    if (runtime?.proc) {
+      return this.oneShotError(
+        id,
+        'Restoring while the server is running would replace files it still has open — stop it first.'
+      )
+    }
+    const record = await this.readRecord(id)
+    if (!record) return this.oneShotError(id, 'No server has been created for this node yet.')
+    try {
+      await restoreBackup(record.dir, await this.levelName(record.dir), backupId, this.now())
+    } catch (e) {
+      return this.oneShotError(id, describeError(e))
+    }
+    return this.emitStatus(id)
+  }
+
+  async deleteBackup(id: string, backupId: string): Promise<void> {
+    const record = await this.readRecord(id)
+    if (!record) return
+    await deleteBackup(record.dir, backupId)
   }
 
   async create(input: MinecraftCreateInput): Promise<MinecraftServerStatus> {
