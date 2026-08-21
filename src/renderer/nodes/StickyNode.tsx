@@ -5,6 +5,7 @@ import { ColumnPill } from '../components/kanban/ColumnPill'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { alphaTint } from '../components/color/tint'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { nodeHeaderFillStyle } from '../lib/nodeColor'
 
 /**
  * A sticky note node: a colored, resizable card with free-text content.
@@ -28,6 +29,12 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
    */
   const [editingTitle, setEditingTitle] = useState(false)
   const collapsed = !!data.collapsed
+
+  // Collapsed, the header IS the whole node — a thin tint no longer reads as "this note is
+  // orange" the way a full-bleed fill does (same fix as the terminal/editor/etc. headers; see
+  // `nodeHeaderFillStyle`'s doc comment). Expanded keeps its existing low-alpha tint, which already
+  // reads fine against the body text beneath it.
+  const headerFill = collapsed ? nodeHeaderFillStyle(data.color) : null
 
   const toggleCollapse = () =>
     setNodes((ns) =>
@@ -75,7 +82,10 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data-tip="Link in — drop a link here to attach this note as context"
       />
 
-      <div className="sticky-node__header" style={{ background: alphaTint(data.color, 51 / 255) }}>
+      <div
+        className={`sticky-node__header${headerFill?.filled ? ' sticky-node__header--filled' : ''}`}
+        style={headerFill?.filled ? headerFill.style : { background: alphaTint(data.color, 51 / 255) }}
+      >
         <button className="term-node__collapse" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggleCollapse}>
           {collapsed ? '▸' : '▾'}
         </button>

@@ -100,3 +100,42 @@ describe('term-node__header--filled (full-colour title bar)', () => {
     expect(/term-node__header--filled(?!X)/.test(renamed)).toBe(false)
   })
 })
+
+/**
+ * `StickyNode` is the other node kind that can genuinely collapse (the shared-header kinds above
+ * cannot). Its collapsed screenshot is the exact one the original report was against, and its
+ * header was never wired to `nodeHeaderFillStyle` at all — it kept the same low-alpha tint whether
+ * collapsed or expanded, so the "this note is orange" colour barely registered once collapsed.
+ *
+ * Unlike the shared-header kinds, sticky deliberately fills ONLY while collapsed (its expanded tint
+ * is a different, already-fine look this task was not asked to touch) — so the assertions below
+ * check for the gated wiring, not an unconditional call.
+ */
+describe('sticky-node__header--filled (collapsed-only full-colour title bar)', () => {
+  const STICKY = readNode('nodes/StickyNode.tsx')
+
+  it('imports nodeHeaderFillStyle and computes it only for the collapsed state', () => {
+    expect(STICKY).toMatch(/import\s*\{\s*nodeHeaderFillStyle\s*\}\s*from\s*'\.\.\/lib\/nodeColor'/)
+    expect(STICKY).toMatch(/collapsed\s*\?\s*nodeHeaderFillStyle\(data\.color\)\s*:\s*null/)
+  })
+
+  it('applies the --filled class and style only when headerFill.filled is true', () => {
+    expect(STICKY).toMatch(/sticky-node__header--filled/)
+    expect(STICKY).toMatch(/headerFill\?\.filled\s*\?\s*headerFill\.style\s*:/)
+  })
+
+  it('the stylesheet defines the sticky --filled override', () => {
+    expect(CSS).toMatch(/\.sticky-node__header--filled\s*[,{]/)
+  })
+
+  it('is not satisfied by a commented-out or renamed call', () => {
+    const commentedOut = STICKY.replace(
+      /const headerFill = collapsed \? nodeHeaderFillStyle\(data\.color\) : null/,
+      'const headerFill = null'
+    )
+    expect(commentedOut).not.toMatch(/collapsed\s*\?\s*nodeHeaderFillStyle\(/)
+
+    const renamed = STICKY.replace(/sticky-node__header--filled/g, 'sticky-node__header--filledX')
+    expect(/sticky-node__header--filled(?!X)/.test(renamed)).toBe(false)
+  })
+})

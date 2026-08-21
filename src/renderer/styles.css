@@ -3089,6 +3089,22 @@ body,
   display: none;
 }
 
+/* Collapsed full-colour header (`.sticky-node__header--filled`, from `nodeHeaderFillStyle` — same
+   helper the terminal/editor/etc. headers use). Only reached while collapsed; expanded keeps the
+   low-alpha tint above. The header's buttons/title reuse the `term-node__*` classnames, so the
+   same "inherit the computed foreground" rule applies here even though the parent isn't
+   `.term-node__header`. */
+.sticky-node__header--filled,
+.sticky-node__header--filled .term-node__title,
+.sticky-node__header--filled .term-node__title-text,
+.sticky-node__header--filled .term-node__collapse {
+  color: inherit;
+}
+.sticky-node__header--filled .term-node__collapse:hover {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  color: inherit;
+}
+
 /* ---- Top-right controls cluster ---- */
 .controls-cluster {
   position: absolute;
