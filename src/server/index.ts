@@ -24,6 +24,10 @@ import { runGitHubCliCommand } from '../core/github/credentials'
 import { registerServerGitHubControl, ServerGitHubSecretStore } from './github-control'
 import { DownloadTickets } from '../core/download-tickets'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
+import {
+  registerPasswordManagerHandlers,
+  type PasswordManagerRoute
+} from '../core/password-manager/password-manager-handlers'
 import os from 'os'
 import { hookServer } from '../core/agents/hook-server'
 import { installServerEditionControlHandler } from './control-unsupported'
@@ -272,6 +276,14 @@ export async function startServer(
   // an SSH-ref project answers `{ entries: [], unsupported: true }` (v1: no remote board log here).
   registerBoardLogHandlers(platform, {
     route: (projectId: string): BoardLogRoute => {
+      const cwd = workspaceStore.localCwdForProject(projectId)
+      return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
+    }
+  })
+
+  // Password managers (core/password-manager/) — same local-only v1 scope as board log above.
+  registerPasswordManagerHandlers(platform, {
+    route: (projectId: string): PasswordManagerRoute => {
       const cwd = workspaceStore.localCwdForProject(projectId)
       return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
     }

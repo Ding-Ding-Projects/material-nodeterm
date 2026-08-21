@@ -56,6 +56,10 @@ import {
   type BrowserGuest
 } from './browser-guest-registry'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
+import {
+  registerPasswordManagerHandlers,
+  type PasswordManagerRoute
+} from '../core/password-manager/password-manager-handlers'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
 import { PtyManager } from '../core/pty-manager'
@@ -1354,6 +1358,16 @@ app.whenReady().then(async () => {
       const cwd = workspaceStore.localCwdForProject(projectId)
       if (cwd) return { kind: 'local', cwd }
       return { kind: 'unsupported' }
+    }
+  })
+
+  // Password managers (core/password-manager/): v1 is local-only, same starting scope board-log
+  // above shipped with — an SSH-ref or cwd-less inline project answers `unsupported` rather than
+  // guessing at a remote vault path.
+  registerPasswordManagerHandlers(corePlatform, {
+    route: (projectId: string): PasswordManagerRoute => {
+      const cwd = workspaceStore.localCwdForProject(projectId)
+      return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
     }
   })
 
