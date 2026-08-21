@@ -1868,6 +1868,108 @@ const NON_FEATURE_DOCS = new Map([
 }
 
 // ---------------------------------------------------------------------
+// The Docker build must not depend on paths .dockerignore excludes
+//
+// Measured drift, not a hypothetical. On 2026-07-16 .dockerignore was written excluding
+// scripts/, docs/, test/ and *.md, and `npm run build` was exactly `electron-vite build` — so the
+// exclusions were correct. Over the following month `build` grew four repo-hygiene prefixes
+// (check-vocabulary / check-changelog / check-docs-bundle / check-uh-inventory), every one of them
+// under scripts/, and check-uh-inventory additionally reads docs/uh-feature-inventory.md. Nobody
+// connected the two, so the Server Edition image — its primary distribution path — could not build
+// from a clean clone: `RUN npm run build` dies on its FIRST token with
+// "Cannot find module '/app/scripts/check-vocabulary.mjs'".
+//
+// Each change was correct in isolation and the combination was broken, which is exactly the class
+// of defect no reviewer of either diff can see. So the check is mechanical: resolve every script
+// the Dockerfile actually runs (following `npm run X` chains) and refuse any path token under a
+// directory the build context throws away.
+// ---------------------------------------------------------------------
+{
+  let dockerfile = null
+  let dockerignore = null
+  let pkg = null
+  try {
+    dockerfile = readFileSync(join(REPO_ROOT, 'Dockerfile'), 'utf8')
+    dockerignore = readFileSync(join(REPO_ROOT, '.dockerignore'), 'utf8')
+    pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+  } catch (err) {
+    fail(`Docker build context: cannot read Dockerfile/.dockerignore/package.json (${err.message})`)
+  }
+
+  if (dockerfile && dockerignore && pkg) {
+    // Top-level directories the context throws away. A leading "/" only anchors the pattern to the
+    // context root, which for a bare directory name means the same thing here; a "!" line is a
+    // re-include and must NOT be treated as an exclusion.
+    const excluded = new Set()
+    for (const raw of dockerignore.split(/\r?\n/)) {
+      const line = raw.trim()
+      if (!line || line.startsWith('#') || line.startsWith('!')) continue
+      const first = line.replace(/^\/+/, '').split('/')[0]
+      // Only whole-name directory entries can be resolved this cheaply; a glob like *.md cannot be
+      // matched against a path token without reimplementing Docker's matcher, and guessing there
+      // would produce false failures that get the guard disabled rather than the build fixed.
+      if (first && !first.includes('*') && !first.includes('?')) excluded.add(first)
+    }
+
+    // Resolve `npm run X` transitively so a one-line indirection cannot hide the dependency.
+    const seen = new Set()
+    const resolve = (name, trail) => {
+      if (seen.has(name)) return []
+      seen.add(name)
+      const body = pkg.scripts?.[name]
+      if (typeof body !== 'string') return []
+      const here = [{ script: name, body, trail }]
+      for (const m of body.matchAll(/\bnpm run ([A-Za-z0-9:_-]+)/g)) {
+        here.push(...resolve(m[1], `${trail} -> ${m[1]}`))
+      }
+      return here
+    }
+
+    const invoked = [...dockerfile.matchAll(/^RUN .*?\bnpm run ([A-Za-z0-9:_-]+)/gm)].map((m) => m[1])
+    checkedCount += 1
+    if (invoked.length === 0) {
+      fail('Docker build context: the Dockerfile runs no `npm run` script — this guard has stopped guarding anything')
+    }
+
+    // An OUTPUT path is written, not read, so excluding it from the context is correct — the
+    // container creates it. `host:build` writes --outfile=out/session-host/host.cjs, and .dockerignore
+    // rightly throws away a stale local out/. Strip output flags before scanning rather than
+    // blocklisting directory names: a blocklist would also hide a genuine READ of out/, whereas a
+    // missed output flag here fails LOUDLY (a false positive somebody fixes) instead of silently.
+    const inputsOnly = (body) => body.replace(/--(?:outfile|outdir|out-dir)[= ]\S+/g, ' ')
+
+    for (const entry of invoked.flatMap((name) => resolve(name, name))) {
+      const readTokens = inputsOnly(entry.body).split(/[\s'"=(),;|&]+/).filter(Boolean)
+      for (const dir of excluded) {
+        checkedCount += 1
+        // Delimited on both sides: a bare "docs" would match "docs-data" and a bare "test" would
+        // match "testing", turning a real guard into noise that gets it switched off.
+        // NO dynamically-built RegExp here. The first version of this line was
+        //     new RegExp(`(^|[\s'"=(])${dir}/`)
+        // written with ONE backslash, and `\s` is not a recognised escape in a template literal,
+        // so JS dropped the backslash and the character class became [s'"=(] — a literal "s". The
+        // guard then matched nothing, ran clean, and was completely inert. It read as correct and
+        // was caught ONLY by deliberately breaking the Dockerfile and watching it stay green.
+        // Splitting on a regex LITERAL (single backslashes survive there) and comparing plain
+        // strings removes the whole failure mode.
+        // A token must carry a real separator to count as a path. `electron-vite build` yields the
+        // bare word "build", and .dockerignore excludes a build/ DIRECTORY — matching that word
+        // reported a subcommand as a missing path. A guard that cries wolf gets switched off, which
+        // costs more than the bare-token case it would have caught (`rimraf docs`, and similar).
+        if (readTokens.some((t) => t.startsWith(`${dir}/`))) {
+          fail(
+            `Docker build context: the Dockerfile runs \`npm run ${entry.trail}\`, whose script ` +
+              `"${entry.script}" reads ${dir}/ — but .dockerignore excludes ${dir}, so that path is ` +
+              `not in the build context and the image cannot build from a clean clone. Either move ` +
+              `the dependency out of the container build, or stop excluding ${dir}.`
+          )
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------
 console.log('')

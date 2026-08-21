@@ -14,7 +14,8 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "node scripts/check-vocabulary.mjs && node scripts/check-changelog.mjs && node scripts/check-docs-bundle.mjs && node scripts/check-uh-inventory.mjs && electron-vite build && npm run host:build",
+    "build": "node scripts/check-vocabulary.mjs && node scripts/check-changelog.mjs && node scripts/check-docs-bundle.mjs && node scripts/check-uh-inventory.mjs && npm run build:app",
+    "build:app": "electron-vite build && npm run host:build",
     "build-changelog": "node scripts/build-changelog.mjs",
     "check-changelog": "node scripts/check-changelog.mjs",
     "build-docs": "node scripts/build-docs-bundle.mjs",
