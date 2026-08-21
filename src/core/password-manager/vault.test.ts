@@ -196,6 +196,55 @@ describe('managers — cleartext metadata, no key required', () => {
   })
 })
 
+describe('every cleartext manager mutation preserves the credentials it did not touch', () => {
+  // releaseGroupBinding has its own byte-identical assertion below. The mutations here share its
+  // exact `managers.map(m => m.id === id ? { ...m, <field> } : m)` shape, and that shape drops the
+  // whole credential array the moment somebody writes `credentials:` into the spread by accident —
+  // silently, with no error and no failing test. Measured: breaking renameManager to return
+  // `credentials: []` left all 41 tests in this file green.
+  //
+  // The list is HAND-WRITTEN on purpose. A rule-shaped sweep ("every exported mutation preserves")
+  // only ever checks the mutations it already found, so a new one added next year is covered by
+  // nothing. Deleting a row here is visible in the diff; a missing row in a discovery loop is not.
+  const MUTATIONS: ReadonlyArray<{
+    readonly name: string
+    readonly apply: (vault: VaultFileV1, managerId: string, credentialId: string) => VaultFileV1 | null
+  }> = [
+    { name: 'renameManager', apply: (v, id) => renameManager(v, id, 'A different name') },
+    { name: 'bindManagerToGroup (bind)', apply: (v, id) => bindManagerToGroup(v, id, 'group-42') },
+    { name: 'bindManagerToGroup (clear)', apply: (v, id) => bindManagerToGroup(v, id, undefined) },
+    { name: 'renameCredential', apply: (v, id, credId) => renameCredential(v, id, credId, 'Renamed') }
+  ]
+
+  for (const mutation of MUTATIONS) {
+    it(`${mutation.name} leaves the credential ciphertext byte-identical`, () => {
+      const vault0 = freshVault('pw')
+      const key = unlock(vault0, 'pw')
+      const { vault: v1, manager } = createManager(vault0, { name: 'Before' })
+      const { vault: v2, credential } = createCredential(v1, key, {
+        managerId: manager.id,
+        label: 'DB creds',
+        username: 'root',
+        password: 'p@ss'
+      })!
+      const after = mutation.apply(v2, manager.id, credential.id)
+      expect(after).not.toBeNull()
+
+      const survivor = after!.managers.find((m) => m.id === manager.id)!
+      expect(survivor.credentials).toHaveLength(1)
+      expect(survivor.credentials[0].id).toBe(credential.id)
+      // Byte-identical, not merely decryptable: re-encrypting untouched data would still round-trip
+      // while quietly rewriting bytes the user never asked to change.
+      expect(survivor.credentials[0].secret).toEqual(credential.secret)
+
+      // And it still opens under the same key.
+      const revealed = revealCredential(after!, key, manager.id, credential.id)!
+      expect(revealed.username).toBe('root')
+      expect(revealed.password).toBe('p@ss')
+    })
+  }
+})
+
 describe('releaseGroupBinding — the worktree-release precedent, applied to a manager', () => {
   it('clears groupId on every manager bound to that group; NEVER deletes the manager or its credentials', () => {
     const vault0 = freshVault('pw')
