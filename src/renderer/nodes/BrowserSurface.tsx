@@ -4,6 +4,7 @@ import { BrowserStartPage } from './BrowserStartPage'
 import { useBrowserHistory } from '../state/browserHistory'
 import { useDiscardWhenHidden, webviewAudible } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
+import { BrowserExtensionsPanel } from './BrowserExtensionsPanel'
 
 // Minimal typing for the Electron <webview> element methods/events we use.
 type WebviewEl = HTMLElement & {
@@ -67,6 +68,7 @@ export function BrowserSurface({
   const [canBack, setCanBack] = useState(false)
   const [canFwd, setCanFwd] = useState(false)
   const [failed, setFailed] = useState('')
+  const [showExtensions, setShowExtensions] = useState(false)
   // Memory saver (see `useDiscardWhenHidden`): the page is released while hidden and rebuilt on
   // reveal. `loadingRef` mirrors the `loading` state because the hook reads it at fire time, from
   // a callback that must not force the observer to be re-created.
@@ -266,6 +268,20 @@ export function BrowserSurface({
             if (e.key === 'Enter') go()
           }}
         />
+        <div className="browser-ext-panel__anchor">
+          <button
+            className="browser-node__btn"
+            onClick={() => setShowExtensions((v) => !v)}
+            title="Extensions"
+            aria-label="Extensions"
+            aria-expanded={showExtensions}
+          >
+            ⬒
+          </button>
+          {showExtensions && (
+            <BrowserExtensionsPanel partition={partition} onClose={() => setShowExtensions(false)} />
+          )}
+        </div>
       </div>
       <div className="browser-node__view nodrag nowheel">
         {/* The element is UNMOUNTED while discarded — that is what ends the guest process; an

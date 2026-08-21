@@ -1233,12 +1233,58 @@ export interface MediaApi {
   writeHtml(html: string): Promise<string>
 }
 
+/** One extension Electron actually has loaded into a partition's session, as reported live by
+ *  `session.extensions.getAllExtensions()` — id/name/version come from the extension's own
+ *  manifest, never invented by this app. See `BrowserExtensionsApi`. */
+export interface BrowserExtensionInfo {
+  id: string
+  name: string
+  version: string
+  /** Absolute directory path this extension was loaded from (unpacked only — Electron does not
+   *  support installing packed .crx extensions; see `BrowserExtensionsApi` doc). */
+  path: string
+}
+
+/**
+ * Unpacked Chrome-extension loading for a browser profile's Electron session.
+ *
+ * Desktop (Electron) only. Electron's extension support (Manifest V2/V3 subset, see
+ * https://electronjs.org/docs/api/extensions-api) has two real limits worth stating plainly
+ * rather than pretending this is full Chrome Web Store parity:
+ *   - Unpacked directories only — no packed `.crx` install flow, no Web Store browsing.
+ *   - "Electron does not support the full range of Chrome extensions APIs" (Electron's own
+ *     docs) — an extension that leans on an unimplemented `chrome.*` API may partly or fully not
+ *     work; this app cannot detect that in advance, only whether `loadExtension` itself accepted
+ *     the directory.
+ * The Server Edition and relay tabs run in a real browser tab, not Electron, and reject every
+ * method with `E_UNSUPPORTED` — there is no Chromium extension host to load into there at all.
+ */
+export interface BrowserExtensionsApi {
+  /** Extensions currently loaded into this profile's session (`partition` — see
+   *  `browserPartitionFor`; `undefined` = the app's default/unpartitioned session). Read live
+   *  from Electron, so a load that failed at boot never appears here. */
+  list(partition: string | undefined): Promise<BrowserExtensionInfo[]>
+  /** Open a native folder picker for an unpacked extension directory (must contain
+   *  `manifest.json`); `null` if the user cancelled. Desktop-only, mirroring `dialog:select-folder`. */
+  pickDir(): Promise<string | null>
+  /** Load an unpacked extension directory into `partition`'s session and persist it so it reloads
+   *  on the next app launch (Electron itself forgets loaded extensions across restarts). */
+  add(
+    partition: string | undefined,
+    dirPath: string
+  ): Promise<{ ok: true; extension: BrowserExtensionInfo } | { ok: false; error: string }>
+  /** Unload an extension (identified by the directory path it was added with) from `partition`'s
+   *  session and stop reloading it at boot. */
+  remove(partition: string | undefined, dirPath: string): Promise<void>
+}
+
 export interface BrowserApi {
   /** Map a browser node's <webview> guest to its node id (for new-window capture). */
   register(webContentsId: number, nodeId: string, ownerNodeId?: string): void
   unregister(webContentsId: number): void
   /** Fires when a browser guest requested a new window; the renderer opens another browser node. */
   onBrowserNewWindow(listener: (e: { url: string; sourceNodeId: string }) => void): () => void
+  extensions: BrowserExtensionsApi
 }
 
 /** A user-defined agent (BYO CLI). In no capability list, so it gets only spawn +

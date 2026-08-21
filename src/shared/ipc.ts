@@ -385,6 +385,10 @@ export const IPC = {
   browserRegister: 'browser:register',
   browserUnregister: 'browser:unregister',
   browserNewWindow: 'browser:new-window',
+  browserExtensionsList: 'browser:extensions-list',
+  browserExtensionsAdd: 'browser:extensions-add',
+  browserExtensionsRemove: 'browser:extensions-remove',
+  browserExtensionsPickDir: 'browser:extensions-pick-dir',
   remoteHostStart: 'remote:host:start',
   remoteHostStop: 'remote:host:stop',
   // Connection approval gate: main → renderer when a client finishes the handshake (carries the
