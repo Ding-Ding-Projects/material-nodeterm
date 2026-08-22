@@ -552,7 +552,9 @@ const api: NodeTerminalApi = {
     update: (input) => ipcRenderer.invoke(IPC.toylockUpdate, input),
     remove: (id) => ipcRenderer.invoke(IPC.toylockRemove, id),
     verify: (input) => ipcRenderer.invoke(IPC.toylockVerify, input),
-    relock: (lockId) => ipcRenderer.invoke(IPC.toylockRelock, lockId)
+    relock: (lockId) => ipcRenderer.invoke(IPC.toylockRelock, lockId),
+    ladderIssue: (lockId) => ipcRenderer.invoke(IPC.toylockLadderIssue, lockId),
+    ladderVerify: (input) => ipcRenderer.invoke(IPC.toylockLadderVerify, input)
   },
   authenticator: {
     list: () => ipcRenderer.invoke(IPC.authenticatorList),

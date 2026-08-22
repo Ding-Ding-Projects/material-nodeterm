@@ -597,6 +597,11 @@ export const IPC = {
   toylockRemove: 'toylock:remove',
   toylockVerify: 'toylock:verify',
   toylockRelock: 'toylock:relock',
+  // The unlock ladder for a rate-limited toy lock (docs/unlock-ladder.md). Clearing a rung ends
+  // the WAIT and nothing else — it never supplies a credential, never refunds an attempt, and
+  // never shortens the next wait.
+  toylockLadderIssue: 'toylock:ladder-issue',
+  toylockLadderVerify: 'toylock:ladder-verify',
   // The built-in authenticator (docs/authenticator.md). Same core-bound registration pattern.
   authenticatorList: 'authenticator:list',
   authenticatorAddManual: 'authenticator:add-manual',

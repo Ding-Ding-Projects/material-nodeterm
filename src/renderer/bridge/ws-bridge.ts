@@ -71,7 +71,10 @@ import type {
   ToyLockRecord,
   ToyLockUpdateInput,
   ToyLockVerifyInput,
-  ToyLockVerifyResult
+  ToyLockVerifyResult,
+  ToyLockLadderState,
+  ToyLockLadderVerifyInput,
+  ToyLockLadderVerifyResult
 } from '../../shared/toylock'
 import type {
   AuthenticatorAddManualInput,
@@ -1028,7 +1031,11 @@ export function buildToylockApi(client: RpcClient): Pick<NodeTerminalApi, 'toylo
     remove: (id: string) => client.request(IPC.toylockRemove, id) as Promise<void>,
     verify: (input: ToyLockVerifyInput) =>
       client.request(IPC.toylockVerify, input) as Promise<ToyLockVerifyResult>,
-    relock: (lockId: string) => client.request(IPC.toylockRelock, lockId) as Promise<void>
+    relock: (lockId: string) => client.request(IPC.toylockRelock, lockId) as Promise<void>,
+    ladderIssue: (lockId: string) =>
+      client.request(IPC.toylockLadderIssue, lockId) as Promise<ToyLockLadderState>,
+    ladderVerify: (input: ToyLockLadderVerifyInput) =>
+      client.request(IPC.toylockLadderVerify, input) as Promise<ToyLockLadderVerifyResult>
   }
   return { toylock }
 }

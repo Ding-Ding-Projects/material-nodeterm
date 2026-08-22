@@ -14,6 +14,7 @@ import { platform } from '../platform'
 import { IPC } from '../../shared/ipc'
 import { SecureStore, type SealedEntry } from '../secure-store'
 import { createNodeUnlockRegistry } from './node-unlock-registry'
+import { UnlockLadder, UnlockLadderBudget, UnlockLadderChallengeBudget } from '../unlock-ladder'
 import {
   base32Decode,
   base32Encode,
@@ -32,7 +33,10 @@ import type {
   ToyLockRecord,
   ToyLockUpdateInput,
   ToyLockVerifyInput,
-  ToyLockVerifyResult
+  ToyLockVerifyResult,
+  ToyLockLadderState,
+  ToyLockLadderVerifyInput,
+  ToyLockLadderVerifyResult
 } from '../../shared/toylock'
 
 /** The scrypt fields shared by every password-shaped secret (a real password AND a Windows PIN —
@@ -130,10 +134,63 @@ interface RateState {
   lastFailAt: number
 }
 
-export function startToyLockService(): { dispose(): void; mayWriteToNode(nodeId: string): Promise<boolean> } {
+export interface ToyLockServiceDeps {
+  /** Live read of the shared School mode record. School mode removes the dim-sum rung from the
+   *  unlock ladder ENTIRELY (absent, never disabled-with-a-message -- naming the hidden thing is
+   *  what School mode forbids), so this must be a closure re-read per climb rather than a boot-time
+   *  sample: it is a shared switch a running app must pick up without a restart. */
+  schoolMode?: () => boolean
+}
+
+export function startToyLockService(deps: ToyLockServiceDeps = {}): {
+  dispose(): void
+  mayWriteToNode(nodeId: string): Promise<boolean>
+} {
   const store = new SecureStore<ToyLockRecord>('toylocks.json')
   const pending = new Map<string, PendingTotp>()
   const rate = new Map<string, RateState>()
+  // One ladder per LOCK. Every lock carries its own credential and its own wait, so it carries
+  // its own climb too -- clearing one lock's wait says nothing about any other lock. The rolling
+  // clear budget is deliberately SHARED across every lock on this machine: distributing wrong
+  // attempts over several locks must not multiply the number of waits the ladder may skip, which
+  // is the one thing making this playful route safe rather than a second, much weaker password.
+  const ladderBudget = new UnlockLadderBudget()
+  const ladderChallengeBudget = new UnlockLadderChallengeBudget()
+  const ladders = new Map<string, { ladder: UnlockLadder; fails: number }>()
+  const schoolMode = deps.schoolMode ?? ((): boolean => false)
+
+  /** The ladder for one lock, reset whenever a NEW wait begins (a fresh climb per lockout). */
+  const ladderFor = (lockId: string, fails: number): UnlockLadder => {
+    const existing = ladders.get(lockId)
+    if (existing && existing.fails === fails) return existing.ladder
+    const ladder =
+      existing?.ladder ??
+      new UnlockLadder({
+        schoolMode,
+        budget: ladderBudget,
+        challengeBudget: ladderChallengeBudget
+      })
+    if (existing) ladder.reset()
+    ladders.set(lockId, { ladder, fails })
+    return ladder
+  }
+
+  /** How long this lock must still wait, and the fail count that wait was computed from. */
+  const waitState = (lockId: string, now: number): { waitMs: number; fails: number } => {
+    const state = rate.get(lockId)
+    if (!state || state.fails < RATE_LIMIT_THRESHOLD) return { waitMs: 0, fails: state?.fails ?? 0 }
+    const waitMs = Math.min(RATE_LIMIT_MAX_MS, 500 * 2 ** (state.fails - RATE_LIMIT_THRESHOLD))
+    return { waitMs: Math.max(0, state.lastFailAt + waitMs - now), fails: state.fails }
+  }
+
+  /** Rule 1 and rule 2, in three lines: end the WAIT, keep the failure count. Nothing here
+   *  supplies or weakens a credential -- the user still lands back on the same prompt needing the
+   *  same password -- and because `fails` survives, the NEXT wrong attempt waits longer than this
+   *  one would have, exactly as if the wait had been served. */
+  const clearWaitByLadder = (lockId: string): void => {
+    const state = rate.get(lockId)
+    if (state) rate.set(lockId, { ...state, lastFailAt: 0 })
+  }
   // Which node-targeted locks are unlocked RIGHT NOW — the core-side twin of the renderer store,
   // fed by verify below (core witnesses every successful unlock) plus the renderer relock cast
   // (only the renderer can see a session-mode surface being left). Exists because sendText
@@ -431,11 +488,49 @@ export function startToyLockService(): { dispose(): void; mayWriteToNode(nodeId:
     }
   )
 
+  platform().handle(IPC.toylockLadderIssue, async (lockId: string): Promise<ToyLockLadderState> => {
+    // Offered ONLY while a wait is actually in effect: with no wait there is nothing to skip, and
+    // handing out a challenge then would turn a game into a route past a lock nobody was locked
+    // out of. Also refused once the shared rolling budget is spent -- that cap, not the difficulty
+    // of the rungs, is what keeps this safe (every rung is machine-solvable by design).
+    const now = Date.now()
+    const { waitMs, fails } = waitState(lockId, now)
+    if (waitMs <= 0) return { challenge: null, budgetLeft: ladderBudget.left(now) }
+    const ladder = ladderFor(lockId, fails)
+    return { challenge: ladder.issue(), budgetLeft: ladder.budgetLeft() }
+  })
+
+  platform().handle(
+    IPC.toylockLadderVerify,
+    async (input: ToyLockLadderVerifyInput): Promise<ToyLockLadderVerifyResult> => {
+      const now = Date.now()
+      const { waitMs, fails } = waitState(input.lockId, now)
+      if (waitMs <= 0) {
+        // The wait ended on its own while the round was being played. Say so rather than spending
+        // a ladder clear on a wait that is already over.
+        return {
+          cleared: true,
+          next: null,
+          message: 'The wait is over — try your password again.',
+          challenge: null,
+          budgetLeft: ladderBudget.left(now)
+        }
+      }
+      const ladder = ladderFor(input.lockId, fails)
+      const verdict = ladder.verify(input.answer)
+      // The engine is the ONLY thing that can clear a wait, and it does so only on `cleared`.
+      if (verdict.cleared) clearWaitByLadder(input.lockId)
+      const challenge = verdict.cleared || !verdict.next ? null : ladder.issue(verdict.next)
+      return { ...verdict, challenge, budgetLeft: ladder.budgetLeft() }
+    }
+  )
+
   return {
     dispose: (): void => {
       clearInterval(sweepTimer)
       pending.clear()
       rate.clear()
+      ladders.clear()
       nodeUnlocks.clear()
     },
     /** May text be written into this node's terminal right now? The pty layer asks this before

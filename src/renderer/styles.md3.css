@@ -10952,3 +10952,66 @@ button.term-node__title-text:focus-visible {
   background: color-mix(in srgb, currentColor 22%, transparent);
   color: inherit;
 }
+
+/* The unlock ladder offered beside a rate-limited toy lock (docs/unlock-ladder.md). */
+.md3-toylock-wizard .toylock-ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+.md3-toylock-wizard .toylock-ladder__note,
+.md3-toylock-wizard .toylock-ladder__hint,
+.md3-toylock-wizard .toylock-ladder__foot {
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+}
+.md3-toylock-wizard .toylock-ladder__prompt {
+  font-size: 13px;
+  color: var(--md-on-surface);
+}
+.md3-toylock-wizard .toylock-ladder__rung {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.md3-toylock-wizard .toylock-ladder__choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.md3-toylock-wizard .toylock-ladder__sums {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.md3-toylock-wizard .toylock-ladder__sum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--md-on-surface);
+}
+.md3-toylock-wizard .toylock-ladder__sum .toylock-input {
+  width: 56px;
+}
+.md3-toylock-wizard .toylock-ladder__grid {
+  display: grid;
+  gap: 6px;
+}
+.md3-toylock-wizard .toylock-ladder__hole {
+  aspect-ratio: 1;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-high);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  /* The mole must never be signalled by colour alone — the emoji is the state. */
+  transition: background 80ms linear;
+}
+.md3-toylock-wizard .toylock-ladder__hole--up {
+  background: var(--md-secondary-container);
+}

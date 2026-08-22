@@ -24,7 +24,10 @@ import type {
   ToyLockRecord,
   ToyLockUpdateInput,
   ToyLockVerifyInput,
-  ToyLockVerifyResult
+  ToyLockVerifyResult,
+  ToyLockLadderState,
+  ToyLockLadderVerifyInput,
+  ToyLockLadderVerifyResult
 } from './toylock'
 import type {
   AuthenticatorAddManualInput,
@@ -3517,6 +3520,12 @@ export interface ToylockApi {
    *  without this call core would keep authorizing name-addressed writes (dictation) after the
    *  lock visibly re-engaged. Fire-and-forget. */
   relock(lockId: string): Promise<void>
+  /** The unlock ladder for a lock whose wrong attempts have earned a wait (docs/unlock-ladder.md):
+   *  dim sum → ten easy sums → whack-a-mole. `challenge: null` means no ladder is on offer — no
+   *  wait in effect, the rolling budget is spent, or this climb has already been failed to the
+   *  bottom. Clearing a rung ends the WAIT only. */
+  ladderIssue(lockId: string): Promise<ToyLockLadderState>
+  ladderVerify(input: ToyLockLadderVerifyInput): Promise<ToyLockLadderVerifyResult>
 }
 
 /** The built-in authenticator (docs/authenticator.md) — arbitrary TOTP secrets kept locally,

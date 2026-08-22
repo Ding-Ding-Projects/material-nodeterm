@@ -2402,7 +2402,11 @@ app.whenReady().then(async () => {
   // core-bound services — no shell-specific wiring beyond what CorePlatform already offers
   // (userDataDir + Electron's safeStorage seal/unseal). Registered on the Server Edition too, in
   // src/server/index.ts, so a browser tab reaches the exact same service over the WS bridge.
-  const toyLockService = startToyLockService()
+  const toyLockService = startToyLockService({
+    // Live read, never a boot-time sample: School mode is a shared switch a running app must pick
+    // up without a restart, and it removes the ladder's dim-sum rung entirely.
+    schoolMode: () => schoolModeStore.get().enabled
+  })
   // Close the name-addressed write bypass: sendText must ask the lock service before typing into
   // a node (see pty-manager.sendText). Wired here because the service starts after the manager.
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))

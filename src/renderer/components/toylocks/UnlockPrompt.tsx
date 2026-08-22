@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ToyLockRecord } from '@shared/toylock'
 import { useToyLocks } from '../../state/toylocks'
+import { UnlockLadderPanel } from './UnlockLadder'
 
 export function UnlockPrompt({
   record,
@@ -25,6 +26,10 @@ export function UnlockPrompt({
   const [error, setError] = useState<string | null>(null)
   const [retryAfterMs, setRetryAfterMs] = useState(0)
   const [busy, setBusy] = useState(false)
+  // The ladder is offered only while a wait is actually in effect (docs/unlock-ladder.md). It ends
+  // the WAIT and nothing else — the prompt below is still exactly as closed afterwards, and the
+  // same password is still required.
+  const [playing, setPlaying] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const needsPassword = record.credentialKind !== 'totp'
   const needsCode = record.credentialKind === 'totp' || record.credentialKind === 'password-totp'
@@ -146,6 +151,24 @@ export function UnlockPrompt({
             {retryAfterMs > 0 && ` Try again in ${waitSeconds}s.`}
           </div>
         )}
+        {retryAfterMs > 0 &&
+          (playing ? (
+            <UnlockLadderPanel
+              lockId={record.id}
+              onCleared={() => {
+                // The wait is over; the lock is not. Straight back to the same prompt.
+                setRetryAfterMs(0)
+                setError(null)
+                setPlaying(false)
+                inputRef.current?.focus()
+              }}
+              onDone={() => setPlaying(false)}
+            />
+          ) : (
+            <button className="toylock-btn--link" onClick={() => setPlaying(true)}>
+              Play your way out of the wait
+            </button>
+          ))}
         <div className="toylock-wizard__actions">
           <button className="toylock-btn" onClick={onClose}>
             Cancel
