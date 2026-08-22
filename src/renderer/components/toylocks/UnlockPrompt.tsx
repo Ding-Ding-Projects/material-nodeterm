@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import type { ToyLockRecord } from '@shared/toylock'
 import { useToyLocks } from '../../state/toylocks'
 import { UnlockLadderPanel } from './UnlockLadder'
+import { PasswordField } from './PasswordField'
 
 export function UnlockPrompt({
   record,
@@ -100,28 +101,18 @@ export function UnlockPrompt({
       >
         <div className="toylock-wizard__title">🔒 “{record.target.label}” is locked</div>
         {needsPassword && (
-          <div className="toylock-field">
-            <span className="toylock-field__label">
-              {record.credentialKind === 'windows-pin' ? 'PIN' : 'Password'}
-              {record.credentialKind === 'password-totp' && ' (both required)'}
-            </span>
-            <input
-              ref={inputRef}
-              type="password"
-              inputMode={record.credentialKind === 'windows-pin' ? 'numeric' : undefined}
-              className="toylock-input"
-              value={password}
-              onChange={(e) =>
-                setPassword(
-                  record.credentialKind === 'windows-pin' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value
-                )
-              }
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !needsCode) void submit()
-              }}
-              disabled={retryAfterMs > 0}
-            />
-          </div>
+          <PasswordField
+            inputRef={inputRef}
+            label={record.credentialKind === 'windows-pin' ? 'PIN' : 'Password'}
+            hint={record.credentialKind === 'password-totp' ? 'An authenticator code is required too.' : undefined}
+            numeric={record.credentialKind === 'windows-pin'}
+            value={password}
+            onChange={setPassword}
+            // Enter submits from here only when this is the LAST field. With a second factor still
+            // to fill in, Enter would submit a half-finished attempt and spend a real try on it.
+            onSubmit={needsCode ? undefined : () => void submit()}
+            disabled={retryAfterMs > 0}
+          />
         )}
         {needsCode && (
           <div className="toylock-field">

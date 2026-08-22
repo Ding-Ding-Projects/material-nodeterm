@@ -1,24 +1,31 @@
 # Toy locks
 
-A **toy lock** is a purely-for-fun, opt-in password/TOTP gate you can put on a project tab, a
-canvas node, or an appearance setting. Right-click the thing you want to lock and choose
-**"Lock this…"**.
+A **lock** is an opt-in password or authenticator-code gate you can put on a project tab, a canvas
+node, or an appearance setting. Right-click the thing you want to lock and choose **"Lock this…"**.
 
-## This is not security
+(They are called *toy locks* throughout the code and in this file's name, which is where they
+started. They are enforced now - see below - and the name stayed because renaming a persisted
+record type is a migration, not a rename.)
 
-Say it as plainly as possible: a toy lock is a self-imposed speed bump, not encryption, not
-access control, and not protection from anyone who actually has this computer. It exists for the
-same reason a phone lets you require Face ID before opening one app but not another — a small
-"give me a second before I look at this" — never for the reason a disk-encryption password exists.
+## What a lock actually does, and what it does not
 
-Concretely:
+A lock here is **enforced**, not decorative. The app genuinely refuses the locked thing until the
+credential is supplied: a locked terminal node has its view torn down and its pty cut off from
+input, a locked tab will not switch, a locked appearance control will not open, and each of them
+answers a click with the unlock prompt. Attempts are rate-limited with an escalating wait, and the
+credential is hashed and kept in the operating system's credential vault.
 
-- Nothing a toy lock guards is stored any more securely *because* it is locked. Locking a
-  terminal node doesn't encrypt its scrollback; locking a tab doesn't hide the project from
-  anyone who opens `workspace.json`.
-- The credential itself (a password hash, or a TOTP secret) is stored sensibly — see
-  [Credential storage](#credential-storage) below — but that is basic hygiene, not a claim that
-  the lock withstands anyone.
+What it is **not** is encryption of the thing behind it, and that distinction is the whole of the
+honesty here:
+
+- Nothing a lock guards is stored any differently *because* it is locked. Locking a terminal node
+  does not encrypt its scrollback; locking a tab does not hide the project from anyone who opens
+  `workspace.json`. The lock stops the app; it does not stop a text editor.
+- So it protects against someone reaching for your running nodeterm, and not against someone who
+  has your disk. A lock that implied otherwise would be worse than no lock, because somebody would
+  put something behind it that needed the stronger thing.
+- The credential itself is stored properly - see [Credential storage](#credential-storage) below -
+  which is why a wrong guess is genuinely refused rather than merely discouraged.
 - **Recovery is deleting nodeterm's own local application-data folder.** Every lock lives in that
   folder; delete it and every lock resets, along with the rest of nodeterm's local state (managed
   Claude accounts, cached scrollback, etc. — see the app's own docs for what else lives there).
@@ -27,8 +34,10 @@ Concretely:
   prompt's "Forgotten your password?" link) walks through this with a straight face and ends by
   opening the folder in your file manager — see [the Support Tickets section below](#support-tickets).
 
-If you came here looking for a way to protect a nodeterm session from someone else who has your
-laptop unlocked, this isn't it. There is no such feature in nodeterm today.
+If you came here looking for a way to protect a nodeterm session from someone else sitting down at
+your unlocked laptop, this IS that, within the limit above: they will meet the prompt. If you came
+looking for protection from someone who has the machine itself, that is a different thing and
+nodeterm does not have it - use full-disk encryption.
 
 ## What can be locked
 

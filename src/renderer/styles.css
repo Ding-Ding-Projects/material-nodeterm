@@ -12285,6 +12285,61 @@ body,
 .toylock-hint { font-size: 11.5px; color: var(--muted, rgba(var(--tint-rgb), 0.55)); }
 .toylock-success { font-size: 13.5px; font-weight: 600; }
 
+/* The shared password/PIN entry (PasswordField.tsx): the input and its reveal toggle share one
+   bordered surface, so the toggle reads as part of the field rather than a button parked beside it. */
+.toylock-passwordfield {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.toylock-passwordfield__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.toylock-passwordfield__reveal {
+  flex: 0 0 auto;
+  /* A real target rather than a decorative glyph: this is the control that stops somebody locking
+     themselves out with a typo, so it must be as easy to hit as the field is to type in. */
+  min-width: 44px;
+  padding: 0 10px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+}
+
+.toylock-passwordfield__reveal:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.toylock-passwordfield__reveal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toylock-field__warn {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--md-tertiary, var(--md-on-surface-variant));
+}
+
+.toylock-field__hint {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--md-on-surface-variant);
+}
+
 .toylock-btn {
   font-size: 12.5px;
   padding: 6px 12px;

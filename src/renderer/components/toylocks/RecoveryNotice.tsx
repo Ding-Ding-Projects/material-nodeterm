@@ -1,7 +1,16 @@
-// The one honest sentence every toy-lock surface repeats: this is not security, and the real
-// "recovery" is deleting nodeterm's own local application-data folder. Shown in the lock wizard,
-// the unlock prompt, and Support Tickets' resolution — always with the ACTUAL folder path, never
-// a vague "app data" gesture. See docs/toy-locks.md.
+// The honest limits every lock surface repeats, and the real recovery route.
+//
+// These are enforced locks: the app genuinely refuses the thing until the credential is supplied,
+// and the credential itself is hashed and kept in the operating system's credential vault. What
+// they are NOT is encryption of the data behind them - a locked terminal's scrollback and a locked
+// project's canvas are ordinary files on this disk, and anyone with the machine can read them
+// without ever meeting this prompt.
+//
+// Saying so is not a disclaimer to be trimmed. A lock that implies more protection than it has is
+// worse than no lock, because somebody puts something behind it that needed the stronger thing.
+//
+// Shown in the lock wizard, the unlock prompt, and Support Tickets' resolution - always with the
+// ACTUAL folder path, never a vague "app data" gesture. See docs/toy-locks.md.
 import { useEffect, useState } from 'react'
 
 export function RecoveryNotice({ compact = false }: { compact?: boolean }): React.JSX.Element {
@@ -24,8 +33,9 @@ export function RecoveryNotice({ compact = false }: { compact?: boolean }): Reac
   return (
     <div className="toylock-recovery">
       <p className="toylock-recovery__disclaimer">
-        This is just for fun — a speed bump, not security, not encryption, and no protection from
-        anyone who actually has this computer.
+        This lock is enforced by nodeterm, and the credential is stored in this computer's own
+        credential vault. It is not encryption: what is behind it stays readable on disk to anyone
+        who has this machine.
       </p>
       {!compact && (
         <p className="toylock-recovery__how">

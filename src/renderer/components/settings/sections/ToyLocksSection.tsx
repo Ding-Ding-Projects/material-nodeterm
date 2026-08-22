@@ -94,7 +94,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
     <SettingsSection
       id="toylocks"
       title="Toy locks"
-      description="A for-fun, opt-in gate on a tab, a node, or an appearance setting — a password or authenticator-code speed bump, never real security. See what's locked and remove any of them here."
+      description="An opt-in password or authenticator-code lock on a tab, a node, or an appearance setting. nodeterm enforces it and keeps the credential in this computer's credential vault; it is not encryption of what sits behind it. See what's locked and remove any of them here."
       isActive={isActive}
       searchEntries={[ROW]}
     >
