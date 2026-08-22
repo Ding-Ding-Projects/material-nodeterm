@@ -16,8 +16,14 @@ import type { LadderAnswer, LadderChallenge, LadderVerdict } from './unlock-ladd
 
 /** What kind of on-screen thing a lock is attached to. The engine is generic; today's shipped
  *  integrations are a project tab, a canvas node, and one appearance control (Settings →
- *  Appearance → Accent) — see docs/toy-locks.md for how to wire up another target kind. */
-export type ToyLockTargetKind = 'tab' | 'node' | 'appearance'
+ *  Appearance → Accent) — see docs/toy-locks.md for how to wire up another target kind.
+ *
+ *  `'group'` is a canvas GROUP FRAME. It gates the frame's own structural actions — ungroup,
+ *  remove, rename, recolour — and says so on the label pill. It deliberately does NOT hide the
+ *  nodes inside the frame: those are separate objects with their own locks, and pretending
+ *  otherwise would be the one thing a toy lock must never do, which is claim to protect something
+ *  it does not. */
+export type ToyLockTargetKind = 'tab' | 'node' | 'group' | 'appearance'
 
 /** A lockable thing. `id` is whatever identifier the target kind uses natively (a project id, a
  *  node id, a stable setting key like `'accent'`); `label` is a human-readable name captured at

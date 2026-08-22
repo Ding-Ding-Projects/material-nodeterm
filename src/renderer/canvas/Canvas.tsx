@@ -1094,13 +1094,20 @@ export function Canvas() {
   const lastMenuScreenPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   // Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a canvas node. See TabBar.tsx and
   // AppearanceSection.tsx for the same pattern applied to a tab and an appearance control.
-  const [lockWizardTarget, setLockWizardTarget] = useState<{ nodeId: string; x: number; y: number } | null>(
-    null
-  )
+  // `kind` selects which target the lock addresses: a canvas node, or a GROUP FRAME (whose lock
+  // gates the frame's own structural actions -- see GroupNode). Defaulted rather than required so
+  // every existing call site keeps meaning exactly what it meant.
+  const [lockWizardTarget, setLockWizardTarget] = useState<{
+    nodeId: string
+    x: number
+    y: number
+    kind?: 'node' | 'group'
+  } | null>(null)
   const [unlockPromptTarget, setUnlockPromptTarget] = useState<{
     nodeId: string
     x: number
     y: number
+    kind?: 'node' | 'group'
   } | null>(null)
   const [remotePicker, setRemotePicker] = useState<{ x: number; y: number } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -5518,6 +5525,17 @@ export function Canvas() {
       // Order matters: release FIRST (it resolves the children through the group's `parentId`, which
       // `ungroupNodes` is about to clear), then dissolve. The refresh waits for the prune, so the
       // pruned path cannot come back as an orphan the bind dialog offers.
+      // The frame's toy lock is re-asked HERE too, not only on GroupNode's own buttons: this
+      // callback is also the context menu's Ungroup and "Delete (keeps nodes)", and a gate that
+      // only guards one of three routes to the same dissolve is not a gate.
+      const lock = useToyLocks
+        .getState()
+        .records.find((r) => r.target.kind === 'group' && r.target.id === groupId)
+      if (lock && !useToyLocks.getState().isUnlocked(lock.id)) {
+        const pos = lastMenuScreenPosRef.current
+        setUnlockPromptTarget({ nodeId: groupId, x: pos.x, y: pos.y, kind: 'group' })
+        return
+      }
       const wasBound = !!nodesRef.current.find((n) => n.id === groupId)?.data.worktree
       const released = wasBound ? releaseWorktreeBinding(groupId) : null
       setNodes((ns) => ungroupNodes(ns as CanvasNode[], groupId))
@@ -8106,6 +8124,25 @@ export function Canvas() {
                 onClick: () => openWorktreeDialog(groupId)
               } as MenuItem
             ]),
+        ...(() => {
+          // The frame's own toy lock (docs/toy-locks.md). Never hidden by the Settings
+          // "node menu items" list: a lock the user cannot reach from the thing it locks is a
+          // lock they cannot remove either.
+          const lock = useToyLocks
+            .getState()
+            .records.find((r) => r.target.kind === 'group' && r.target.id === groupId)
+          const pos = lastMenuScreenPosRef.current
+          return [
+            {
+              label: lock ? 'Manage frame lock…' : 'Lock this frame…',
+              icon: <IconLock />,
+              onClick: () =>
+                lock
+                  ? setUnlockPromptTarget({ nodeId: groupId, x: pos.x, y: pos.y, kind: 'group' })
+                  : setLockWizardTarget({ nodeId: groupId, x: pos.x, y: pos.y, kind: 'group' })
+            } as MenuItem
+          ]
+        })(),
         { label: 'Ungroup', icon: <IconUngroup />, onClick: () => ungroup(groupId) },
         {
           label: 'Delete (keeps nodes)',
@@ -13415,9 +13452,11 @@ export function Canvas() {
       {lockWizardTarget && (
         <LockWizard
           target={{
-            kind: 'node',
+            kind: lockWizardTarget.kind ?? 'node',
             id: lockWizardTarget.nodeId,
-            label: (nodesRef.current.find((n) => n.id === lockWizardTarget.nodeId)?.data.title as string) || 'this node'
+            label:
+              (nodesRef.current.find((n) => n.id === lockWizardTarget.nodeId)?.data.title as string) ||
+              (lockWizardTarget.kind === 'group' ? 'this frame' : 'this node')
           }}
           anchor={{ x: lockWizardTarget.x, y: lockWizardTarget.y }}
           onClose={() => setLockWizardTarget(null)}
@@ -13427,7 +13466,11 @@ export function Canvas() {
         (() => {
           const record = useToyLocks
             .getState()
-            .records.find((r) => r.target.kind === 'node' && r.target.id === unlockPromptTarget.nodeId)
+            .records.find(
+              (r) =>
+                r.target.kind === (unlockPromptTarget.kind ?? 'node') &&
+                r.target.id === unlockPromptTarget.nodeId
+            )
           if (!record) return null
           return (
             <UnlockPrompt
