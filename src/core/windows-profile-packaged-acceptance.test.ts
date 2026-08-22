@@ -545,7 +545,10 @@ describe('session-host continuity and cleanup precedence', () => {
     mainPid: 100,
     hwnd: 1000,
     sessionHostPid: 200,
-    sessionHostStartedAt: '2026-08-16T00:00:00.000Z',
+    // A NUMBER, because that is what the app actually writes — the harness was corrected to
+    // validate the real shape (see the comment in validateContinuity); this fixture was the stale
+    // half of that change and failed every run against it.
+    sessionHostStartedAt: 1_755_302_400_000,
     sessionHostProtocolVersion: '1',
     terminalProcessPid: 300,
     marker: 'NT_CONTINUITY:fixture',

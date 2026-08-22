@@ -850,13 +850,14 @@ app.whenReady().then(async () => {
       if (!w.isDestroyed()) w.webContents.send(IPC.serverDeploymentProgress, stage)
     }
   })
-  workspaceStore.setProjectHistoryRecorder((project, content) =>
+  workspaceStore.setProjectHistoryRecorder((project, content, change) =>
     localHistoryStore.record({
       domain: `project_${project.id}`,
       filename: 'project.json',
       content,
-      label: `Saved project ${project.name}`,
-      action: 'updated'
+      // What actually happened on the canvas, not that a save happened — see shared/project-diff.ts.
+      label: change.label,
+      action: change.action
     })
   )
   // ONE export/import at a time, enforced HERE and not only by disabled renderer controls — a
