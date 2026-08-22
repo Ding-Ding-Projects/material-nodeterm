@@ -530,7 +530,7 @@ export function ProjectSwitcher({
                       {lockForProject(p.id) && (
                         <span
                           className="md3-switcher-row__lock"
-                          title="This project is locked — just for fun, not security"
+                          title="This project is locked. Click to unlock."
                         >
                           🔒
                         </span>

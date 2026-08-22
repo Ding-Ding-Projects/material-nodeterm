@@ -11,6 +11,7 @@ import type {
 } from '@shared/toylock'
 import { useToyLocks } from '../../state/toylocks'
 import { QrCode } from './QrCode'
+import { PasswordField } from './PasswordField'
 import { RecoveryNotice } from './RecoveryNotice'
 
 type Step = 'setup' | 'password' | 'totp' | 'done'
@@ -304,51 +305,49 @@ export function LockWizard({
 
         {step === 'password' && (
           <>
-            <div className="toylock-field">
-              <span className="toylock-field__label">
-                {credentialKind === 'windows-pin' ? 'PIN' : 'Password'}
-                {credentialKind === 'password-totp' && ' (first factor — an authenticator code is required too)'}
-              </span>
-              <input
-                ref={firstFieldRef}
-                type="password"
-                inputMode={credentialKind === 'windows-pin' ? 'numeric' : undefined}
-                className="toylock-input"
-                value={password}
-                onChange={(e) =>
-                  setPassword(
-                    credentialKind === 'windows-pin' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value
-                  )
-                }
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="toylock-field">
-              <span className="toylock-field__label">
-                {credentialKind === 'windows-pin' ? 'Confirm PIN' : 'Confirm password'}
-              </span>
-              <input
-                type="password"
-                inputMode={credentialKind === 'windows-pin' ? 'numeric' : undefined}
-                className="toylock-input"
-                value={passwordConfirm}
-                onChange={(e) =>
-                  setPasswordConfirm(
-                    credentialKind === 'windows-pin' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value
-                  )
-                }
-                autoComplete="new-password"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void submitPassword()
-                }}
-              />
-            </div>
+            <PasswordField
+              inputRef={firstFieldRef}
+              label={credentialKind === 'windows-pin' ? 'PIN' : 'Password'}
+              hint={
+                credentialKind === 'password-totp'
+                  ? 'First factor. An authenticator code is required too.'
+                  : credentialKind === 'windows-pin'
+                    ? 'Digits only.'
+                    : 'There is no way to recover this. Choose something you will remember.'
+              }
+              numeric={credentialKind === 'windows-pin'}
+              value={password}
+              onChange={setPassword}
+              autoComplete="new-password"
+              autoFocus
+            />
+            <PasswordField
+              label={credentialKind === 'windows-pin' ? 'Confirm PIN' : 'Confirm password'}
+              numeric={credentialKind === 'windows-pin'}
+              value={passwordConfirm}
+              onChange={setPasswordConfirm}
+              autoComplete="new-password"
+              onSubmit={() => void submitPassword()}
+            />
+            {/* Live, and only once the second field has something in it: a mismatch reported while
+                somebody is still halfway through typing the confirmation is nagging, not help. */}
+            {passwordConfirm.length > 0 && password !== passwordConfirm && (
+              <div className="toylock-field__warn" role="status">
+                {credentialKind === 'windows-pin' ? 'The two PINs do not match yet.' : 'The two passwords do not match yet.'}
+              </div>
+            )}
             {error && <div className="toylock-error">{error}</div>}
             <div className="toylock-wizard__actions">
               <button className="toylock-btn" onClick={() => setStep('setup')}>
                 Back
               </button>
-              <button className="toylock-btn toylock-btn--primary" disabled={busy} onClick={() => void submitPassword()}>
+              <button
+                className="toylock-btn toylock-btn--primary"
+                // Disabled until the entry can actually succeed. The submit path still re-checks
+                // every one of these: a disabled button is the visible guard, never the real one.
+                disabled={busy || !password || password !== passwordConfirm}
+                onClick={() => void submitPassword()}
+              >
                 {credentialKind === 'password-totp'
                   ? busy
                     ? 'Continuing…'

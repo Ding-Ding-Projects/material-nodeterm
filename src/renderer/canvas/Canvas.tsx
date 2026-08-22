@@ -12955,7 +12955,7 @@ export function Canvas() {
             🔒
           </span>
           <span className="tab-lock-overlay__title">{activeProjectName ?? 'This tab'} is locked</span>
-          <span className="tab-lock-overlay__hint">Click to unlock — just for fun, not security</span>
+          <span className="tab-lock-overlay__hint">Click to unlock</span>
         </div>
       )}
       {tabUnlockPromptAnchor &&
