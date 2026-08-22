@@ -76,13 +76,13 @@ const code = (f: FakePlatform, managerId: string, credentialId: string, pid = PI
   f.handlers[IPC.passwordManagerCredentialCode](pid, managerId, credentialId) as Promise<CredentialCodeResult>
 
 describe('registerPasswordManagerHandlers — routing', () => {
-  it('unsupported route: status reports uninitialized, and every mutating call refuses cleanly', async () => {
+  it('unsupported route: status reports unsupported, and every mutating call refuses cleanly', async () => {
     const { f } = wire(fakePlatform())
     registerPasswordManagerHandlers(fakePlatform(), routerFor({ kind: 'unsupported' }))
     const g = fakePlatform()
     registerPasswordManagerHandlers(g, routerFor({ kind: 'unsupported' }))
 
-    expect(await status(g)).toEqual({ state: { kind: 'uninitialized' }, managers: [] })
+    expect(await status(g)).toEqual({ state: { kind: 'unsupported' }, managers: [] })
     expect(await createVault(g, 'pw')).toEqual({ ok: false, error: 'unsupported' })
     expect(await unlock(g, 'pw')).toEqual({ ok: false, error: 'unsupported' })
     expect(await createManager(g, { name: 'x' })).toMatchObject({ ok: false })

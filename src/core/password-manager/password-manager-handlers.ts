@@ -75,7 +75,7 @@ export function registerPasswordManagerHandlers(
 
   platform.handle(IPC.passwordManagerStatus, async (projectId: string): Promise<VaultStatus> => {
     const r = route(projectId)
-    if (r.kind !== 'local') return { state: { kind: 'uninitialized' }, managers: [] }
+    if (r.kind !== 'local') return { state: { kind: 'unsupported' }, managers: [] }
     const vault = await store.load(r.cwd)
     return statusOf(vault, store.isUnlocked(r.cwd))
   })

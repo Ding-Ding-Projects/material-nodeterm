@@ -7393,9 +7393,12 @@ export function Canvas() {
           rootNodes.length > 0 &&
           (ids.length === 1 || rootNodes.length > 1) &&
           new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
-        // Frames in the selection that this selection could actually be ADDED to (the pure
-        // transform is asked, so the item can never be a no-op).
-        const targetGroups = selectedNodes.filter(
+        // EVERY frame on the canvas this selection could actually be ADDED to — not only frames
+        // that happen to be selected too. Requiring the destination in the selection made the row
+        // unreachable for the ordinary "I have a node, put it in that group" gesture. The pure
+        // transform is still asked per frame, so the list can never offer a no-op (a frame that
+        // already holds the whole selection, or one that would make a cycle).
+        const targetGroups = (nodesRef.current as CanvasNode[]).filter(
           (node) =>
             node.type === 'group' &&
             addSelectionToGroup(nodesRef.current as CanvasNode[], ids, node.id) !==
@@ -8038,8 +8041,11 @@ export function Canvas() {
         selectedIds.includes(groupId) &&
         rootNodes.length > 1 &&
         new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
+      // Deliberately NOT gated on the frame being selected too: a frame's body passes clicks
+      // through to the pane, so right-clicking one while some nodes are selected is exactly the
+      // gesture that never put the frame in the selection. The pure transform is the only gate.
       const canAddSelection =
-        selectedIds.includes(groupId) &&
+        selectedIds.length > 0 &&
         addSelectionToGroup(nodesRef.current as CanvasNode[], selectedIds, groupId) !==
           nodesRef.current
       const groupHidden = isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
@@ -11746,7 +11752,7 @@ export function Canvas() {
           // exactly as sensitive as the vault's own password: whoever gets the file and the password
           // gets every secret in it. Say so, every time a vault exists, whether locked or unlocked —
           // "unlocked" here is only THIS process's cached key, never the presence of a vault.
-          let vaultKind: 'uninitialized' | 'locked' | 'unlocked' = 'uninitialized'
+          let vaultKind: 'uninitialized' | 'locked' | 'unlocked' | 'unsupported' = 'uninitialized'
           try {
             vaultKind = (await api.passwordManager.status(projectId)).state.kind
           } catch {
@@ -11754,7 +11760,7 @@ export function Canvas() {
             // already succeeded, and a missed warning is strictly safer than a false one.
           }
           const vaultWarning =
-            vaultKind !== 'uninitialized'
+            vaultKind === 'locked' || vaultKind === 'unlocked'
               ? ' This project has a password-manager vault: its encrypted secrets travel inside this file too, and they are only as safe as the vault password.'
               : ''
           notify({

@@ -719,7 +719,7 @@ function CreateVaultForm({ api, projectId, onCreated }: { api: NodeTerminalApi; 
         setError(
           res.error === 'already-initialized'
             ? 'This project already has a password manager set up.'
-            : 'Could not set up the password manager for this session.'
+            : 'This project has no local folder to keep a vault in, so a password manager cannot be set up for it.'
         )
         return
       }
@@ -982,6 +982,103 @@ function CreateManagerForm({
   )
 }
 
+interface ManagerSection {
+  key: string
+  title: string
+  managers: PasswordManagerSummary[]
+}
+
+/** Split the flat manager list into one section per bound group. Pure so the ordering and the
+ *  "bound to a group that no longer exists" case can be reasoned about (and tested) without a DOM. */
+export function groupManagerSections(
+  managers: PasswordManagerSummary[],
+  groups: PasswordManagerGroupOption[]
+): ManagerSection[] {
+  const sections: ManagerSection[] = []
+  const push = (key: string, title: string, list: PasswordManagerSummary[]): void => {
+    if (list.length > 0) sections.push({ key, title, managers: list })
+  }
+  push(
+    'project',
+    'Project-scoped',
+    managers.filter((m) => !m.groupId)
+  )
+  for (const g of groups) {
+    push(
+      `group:${g.id}`,
+      g.title,
+      managers.filter((m) => m.groupId === g.id)
+    )
+  }
+  const known = new Set(groups.map((g) => g.id))
+  push(
+    'orphaned',
+    'Bound to a group that no longer exists',
+    managers.filter((m) => m.groupId && !known.has(m.groupId))
+  )
+  return sections
+}
+
+function ManagerGroupSection({
+  title,
+  managers,
+  api,
+  projectId,
+  groups,
+  autoAddManagerId,
+  onChanged,
+  onError
+}: {
+  title: string
+  managers: PasswordManagerSummary[]
+  api: NodeTerminalApi
+  projectId: string
+  groups: PasswordManagerGroupOption[]
+  autoAddManagerId: string | null
+  onChanged: () => void
+  onError: (message: string) => void
+}): React.JSX.Element {
+  // A section holding the manager the "New credential..." intent is about must never start
+  // collapsed, or that jump would land on a hidden form.
+  const [collapsed, setCollapsed] = useState(false)
+  const holdsAutoAdd = managers.some((m) => m.id === autoAddManagerId)
+  const open = !collapsed || holdsAutoAdd
+  const count = managers.reduce((n, m) => n + m.credentialCount, 0)
+
+  return (
+    <section className="pwm-manager-group">
+      <button
+        className="pwm-manager-group__head"
+        onClick={() => setCollapsed((v) => !v)}
+        aria-expanded={open}
+        title={open ? `Collapse "${title}"` : `Expand "${title}"`}
+      >
+        <MaterialSymbol name={open ? 'arrow_drop_down' : 'chevron_right'} size={18} aria-hidden="true" />
+        <span className="pwm-manager-group__title">{title}</span>
+        <span className="pwm-hint">
+          {managers.length} manager{managers.length === 1 ? '' : 's'} · {count} credential{count === 1 ? '' : 's'}
+        </span>
+      </button>
+      {open && (
+        <ul className="pwm-manager-list">
+          {managers.map((m) => (
+            <ManagerCard
+              key={m.id}
+              api={api}
+              projectId={projectId}
+              manager={m}
+              groups={groups}
+              autoAddCredential={m.id === autoAddManagerId}
+              onChanged={onChanged}
+              onError={onError}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function UnlockedView({
   api,
   projectId,
@@ -1011,6 +1108,13 @@ function UnlockedView({
 
   const wantsAutoAdd = initialIntent === 'new-credential' && !consumedIntent.current
   if (wantsAutoAdd) consumedIntent.current = true
+  const autoAddManagerId = wantsAutoAdd ? (status.managers[0]?.id ?? null) : null
+
+  // Managers are listed under the group they are bound to, so a canvas with several group frames
+  // reads as several sections rather than one long list. Order follows the `groups` array (the
+  // canvas's own order), with project-scoped managers first and any manager bound to a group that
+  // no longer exists kept visible under its own heading rather than silently dropped.
+  const sections = groupManagerSections(status.managers, groups)
 
   return (
     <section className="pwm-managers">
@@ -1026,20 +1130,19 @@ function UnlockedView({
       {status.managers.length === 0 ? (
         <p className="pwm-hint">No managers yet. Create one to start storing credentials.</p>
       ) : (
-        <ul className="pwm-manager-list">
-          {status.managers.map((m, i) => (
-            <ManagerCard
-              key={m.id}
-              api={api}
-              projectId={projectId}
-              manager={m}
-              groups={groups}
-              autoAddCredential={wantsAutoAdd && i === 0}
-              onChanged={onChanged}
-              onError={onError}
-            />
-          ))}
-        </ul>
+        sections.map((section) => (
+          <ManagerGroupSection
+            key={section.key}
+            title={section.title}
+            managers={section.managers}
+            api={api}
+            projectId={projectId}
+            groups={groups}
+            autoAddManagerId={autoAddManagerId}
+            onChanged={onChanged}
+            onError={onError}
+          />
+        ))
       )}
       <CreateManagerForm
         api={api}
@@ -1113,6 +1216,17 @@ function PasswordManagerPanelInner({
     )
   } else if (!status) {
     body = <section className="pwm-empty">Loading…</section>
+  } else if (status.state.kind === 'unsupported') {
+    body = (
+      <section className="pwm-empty">
+        <MaterialSymbol name="lock" size={28} aria-hidden="true" />
+        <h3>Not available for this project</h3>
+        <p className="pwm-hint">
+          A password manager is kept in the project&apos;s own folder, and this project has none — it is either an SSH
+          project or a canvas with no folder. Open a local folder project to use one.
+        </p>
+      </section>
+    )
   } else if (status.state.kind === 'uninitialized') {
     body = <CreateVaultForm api={api} projectId={projectId} onCreated={refresh} />
   } else if (status.state.kind === 'locked') {

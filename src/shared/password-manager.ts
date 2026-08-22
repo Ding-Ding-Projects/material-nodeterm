@@ -79,6 +79,9 @@ export type VaultLockState =
   | { kind: 'uninitialized' } // no project password has ever been set for this project
   | { kind: 'locked' } // a password is set, but this process has not (yet) supplied it
   | { kind: 'unlocked' }
+  // This project has nowhere local to keep a vault (an SSH-ref project, or a cwd-less inline
+  // canvas). v1 is local-only, so say so rather than offering a form that can only fail.
+  | { kind: 'unsupported' }
 
 /** What a manager list looks like to a caller that may or may not currently hold the key —
  *  metadata is always visible; `credentialCount` stands in for the credentials themselves, which

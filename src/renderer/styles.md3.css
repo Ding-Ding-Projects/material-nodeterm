@@ -9503,6 +9503,34 @@ button.term-node__title-text:focus-visible {
   color: var(--md-on-surface-variant);
 }
 
+.md3-passwordmanager .pwm-manager-group {
+  margin-bottom: 4px;
+}
+.md3-passwordmanager .pwm-manager-group__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  color: var(--md-on-surface-variant);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--md-shape-small);
+}
+.md3-passwordmanager .pwm-manager-group__head:hover {
+  background: var(--md-surface-container-high);
+}
+.md3-passwordmanager .pwm-manager-group__title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--md-on-surface);
+}
+
 .md3-passwordmanager .pwm-manager-list,
 .md3-passwordmanager .pwm-credential-list {
   list-style: none;
