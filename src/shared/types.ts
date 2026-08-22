@@ -1093,20 +1093,40 @@ export interface WorkspaceApi {
   /** Save the whole project as ONE file: canvas snapshot, app-owned local history, the project's
    *  git repository (as a bundle) and its working files, in a ZIP container. `contents` states
    *  exactly what was included and every exclusion with its reason. */
-  exportProject(project: Project): Promise<{
+  exportProject(
+    project: Project,
+    /** When given, the finished archive is wrapped whole in AES-256-GCM under a key derived from
+     *  this password (core/project-archive-encryption.ts) and the file leaks nothing about the
+     *  project — not its name, not its file list. Omitted ⇒ the historical plain container. */
+    password?: string
+  ): Promise<{
     ok: boolean
     path?: string
     canceled?: boolean
     error?: string
+    encrypted?: boolean
     contents?: ProjectArchiveContents
   }>
   /** Open and validate a one-file project archive, restoring a fresh project, its history and —
    *  for a V2 archive — its repository and working files into `restoredTo`. */
-  importProject(): Promise<{
+  importProject(opts?: {
+    /** Skip the file picker and open exactly this file — the second leg of the password prompt:
+     *  the first call found the file protected and returned its path, and this one supplies the
+     *  password for that same file rather than making the user pick it again. */
+    path?: string
+    password?: string
+  }): Promise<{
     ok: boolean
     project?: Project
     canceled?: boolean
     error?: string
+    /** The file is password-protected: `path` names it, and nothing was opened. Not an error —
+     *  it is the prompt. */
+    needsPassword?: boolean
+    /** The supplied password did not open the file. Indistinguishable from a tampered file by
+     *  design (see core/project-archive-encryption.ts), and the copy says so. */
+    wrongPassword?: boolean
+    path?: string
     archiveVersion?: 1 | 2
     contents?: ProjectArchiveContents
     restoredTo?: string

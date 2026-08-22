@@ -84,6 +84,7 @@ import { runGitHubCliCommand } from '../core/github/credentials'
 import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './github-control'
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
+import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
 import { desktopBuildPaths } from './desktop-build-paths'
 import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
@@ -864,12 +865,14 @@ app.whenReady().then(async () => {
   // keyboard-driven second submit (or a second window) walks straight past a disabled button, and
   // two concurrent archive operations could interleave dialogs and history-domain writes.
   let projectArchiveBusy = false
-  ipcMain.handle(IPC.projectArchiveExport, async (_event, project: import('../shared/types').Project) => {
+  ipcMain.handle(
+    IPC.projectArchiveExport,
+    async (_event, project: import('../shared/types').Project, password?: string) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
     try {
       const result = await dialog.showSaveDialog({
-        title: 'Save project as one file',
+        title: password ? 'Save protected project as one file' : 'Save project as one file',
         defaultPath: `${project.name.replace(/[<>:"/\\|?*]+/g, '_') || 'project'}.nodeterm-project`,
         filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
       })
@@ -878,32 +881,51 @@ app.whenReady().then(async () => {
       // is temp + atomic rename (binary — the V2 archive is a ZIP container, never utf-8 text), so
       // an interrupted save can never tear an existing save file.
       const exported = await projectArchives.export(project)
+      // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
+      // which repository travelled and what the project is called. See project-archive-encryption.ts.
+      const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes
       const tmp = tempNameFor(result.filePath)
       try {
-        await writeFile(tmp, exported.bytes)
+        await writeFile(tmp, bytes)
         await renameAtomic(tmp, result.filePath)
       } catch (error) {
         await rmFile(tmp, { force: true }).catch(() => {})
         throw error
       }
-      return { ok: true, path: result.filePath, contents: exported.contents }
+      return { ok: true, path: result.filePath, contents: exported.contents, encrypted: Boolean(password) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {
       projectArchiveBusy = false
     }
-  })
-  ipcMain.handle(IPC.projectArchiveImport, async () => {
+    }
+  )
+  ipcMain.handle(IPC.projectArchiveImport, async (_event, opts?: { path?: string; password?: string }) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
     try {
-      const result = await dialog.showOpenDialog({
-        title: 'Open a project file',
-        properties: ['openFile'],
-        filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
-      })
-      if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true }
-      const raw = await readFile(result.filePaths[0])
+      // A password retry re-opens the file the FIRST call already found protected, by path: making
+      // the user pick the same file again for every wrong password would be its own small cruelty.
+      let chosen = opts?.path
+      if (!chosen) {
+        const result = await dialog.showOpenDialog({
+          title: 'Open a project file',
+          properties: ['openFile'],
+          filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
+        })
+        if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true }
+        chosen = result.filePaths[0]
+      }
+      let raw = await readFile(chosen)
+      if (looksLikeEncryptedArchive(raw)) {
+        // Protected: not an error, a prompt. The path travels back so the retry needs no picker.
+        if (!opts?.password) return { ok: false, needsPassword: true, path: chosen }
+        // A malformed envelope THROWS out of here and is reported as the damage it is — showing it
+        // as a wrong password would have the user retype a correct one forever.
+        const opened = decryptArchive(raw, opts.password)
+        if (!opened.ok) return { ok: false, wrongPassword: true, path: chosen }
+        raw = opened.archive
+      }
       const inspection = projectArchives.inspect(raw)
       let destination: string | undefined
       if (inspection.needsDestination) {

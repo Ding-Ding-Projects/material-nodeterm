@@ -4776,6 +4776,15 @@ body,
   background: var(--accent-hover);
 }
 
+/* A failed attempt reported INSIDE the dialog, so the field keeps focus and the reason sits
+   beside what caused it — an error banner elsewhere loses both. */
+.confirm__error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--md-error);
+}
+
 .confirm__msg {
   margin: 0 0 16px;
   /* The scrollable region once the box hits its max-height, so the action buttons

@@ -55,7 +55,8 @@ describe('WelcomeScreen dismiss control', () => {
           onNewProject={noop}
           onOpenFolder={noop}
           onCloneRepo={noop}
-          onConnectSsh={noop}
+          onOpenProjectFile={() => {}}
+      onConnectSsh={noop}
           onClose={onClose}
         />
       )

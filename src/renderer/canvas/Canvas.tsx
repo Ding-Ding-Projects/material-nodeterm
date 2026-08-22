@@ -11758,7 +11758,7 @@ export function Canvas() {
   // independently, and the menu rows read the same ref for their disabled state.
   const projectArchiveBusyRef = useRef(false)
   const exportProjectArchive = useCallback(
-    async (projectId: string) => {
+    async (projectId: string, password?: string) => {
       if (projectArchiveBusyRef.current) {
         notify({ kind: 'info', title: 'Project save already running', body: 'Wait for the current save or open to finish.' })
         return
@@ -11776,7 +11776,7 @@ export function Canvas() {
           title: 'Saving project…',
           body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`
         })
-        const result = await api.workspace.exportProject(project)
+        const result = await api.workspace.exportProject(project, password)
         if (result.ok) {
           // The archive packs the project's OWN git-tracked working files verbatim (see
           // project-archive.ts), and a password-manager vault (core/password-manager/vault-store.ts)
@@ -11799,9 +11799,12 @@ export function Canvas() {
               : ''
           notify({
             kind: vaultKind !== 'uninitialized' ? 'warning' : 'success',
-            title: 'Project saved as one file',
+            title: result.encrypted ? 'Protected project saved as one file' : 'Project saved as one file',
             body:
               [result.path, archiveContentsSummary(result.contents)].filter(Boolean).join(' — ') +
+              (result.encrypted
+                ? ' The file is encrypted: without this password nobody can open it, and there is no way to recover it.'
+                : '') +
               vaultWarning
           })
         } else {
@@ -11818,6 +11821,48 @@ export function Canvas() {
     [api, commitActiveToStore, writeDisk]
   )
 
+  /**
+   * "Save project as one file", with the optional password in front of it. Blank means the
+   * historical plain container — protection is opt-in, because a password nobody chose is a
+   * project nobody can open.
+   *
+   * The retype is not ceremony: there is NO recovery path for this password (the file is
+   * AES-256-GCM under a key derived from it and nothing else), so a typo at this prompt destroys
+   * the save file's usefulness silently, and the user finds out weeks later.
+   */
+  const saveProjectArchive = useCallback(
+    async (projectId: string) => {
+      const password = await promptDialog({
+        message:
+          'Password for this project file — leave blank to save it unprotected. ' +
+          'A protected file cannot be opened without this password, and it cannot be recovered.',
+        placeholder: 'Password (optional)',
+        password: true,
+        confirmLabel: 'Continue'
+      })
+      if (password === null) return
+      if (password !== '') {
+        const again = await promptDialog({
+          message: 'Type the password again to confirm it.',
+          placeholder: 'Password',
+          password: true,
+          confirmLabel: 'Save'
+        })
+        if (again === null) return
+        if (again !== password) {
+          notify({
+            kind: 'error',
+            title: 'The passwords did not match',
+            body: 'Nothing was saved. Try again — a mistyped password here cannot be recovered later.'
+          })
+          return
+        }
+      }
+      await exportProjectArchive(projectId, password === '' ? undefined : password)
+    },
+    [exportProjectArchive]
+  )
+
   const importProjectArchive = useCallback(async () => {
     if (projectArchiveBusyRef.current) {
       notify({ kind: 'info', title: 'Project open already running', body: 'Wait for the current save or open to finish.' })
@@ -11825,7 +11870,35 @@ export function Canvas() {
     }
     projectArchiveBusyRef.current = true
     try {
-      const result = await api.workspace.importProject()
+      let result = await api.workspace.importProject()
+      // A protected file is a PROMPT, not a failure: the first call reports `needsPassword` with
+      // the path it already picked, and each retry re-opens that same file rather than making the
+      // user find it again. `wrongPassword` cannot distinguish a wrong password from a tampered
+      // file (AES-GCM refuses to tell them apart — see core/project-archive-encryption.ts), so the
+      // copy says both rather than guessing at one.
+      let attempt = 0
+      while ((result.needsPassword || result.wrongPassword) && result.path) {
+        attempt += 1
+        const password = await promptDialog({
+          message: `This project file is password-protected.\n\n${result.path}`,
+          placeholder: 'Password',
+          password: true,
+          confirmLabel: 'Open',
+          ...(result.wrongPassword
+            ? { error: 'That password did not open the file. It may be wrong, or the file may have been altered.' }
+            : {})
+        })
+        if (password === null) {
+          notify({ kind: 'info', title: 'Project open cancelled' })
+          return
+        }
+        // Deriving the key deliberately costs 128 MiB of scrypt and a few hundred ms — the same
+        // price an attacker pays per guess — so say something before the UI goes quiet.
+        if (attempt === 1) {
+          notify({ kind: 'info', title: 'Unlocking project file…', body: 'Checking the password.' })
+        }
+        result = await api.workspace.importProject({ path: result.path, password })
+      }
       if (result.ok && result.project) {
         useProjects.getState().adoptProject(result.project)
         await writeDisk()
@@ -11879,7 +11952,7 @@ export function Canvas() {
             label: SAVE_PROJECT_ARCHIVE_ACTION.label,
             icon: <IconSave />,
             disabled: projectArchiveBusyRef.current,
-            onClick: () => void exportProjectArchive(projectId)
+            onClick: () => void saveProjectArchive(projectId)
           },
           {
             label: OPEN_PROJECT_ARCHIVE_ACTION.label,
@@ -11911,7 +11984,7 @@ export function Canvas() {
         ]
       })
     },
-    [activeProjectId, switchProject, renameProject, setProjectFolder, setProjectColor, closeProject, exportProjectArchive, importProjectArchive]
+    [activeProjectId, switchProject, renameProject, setProjectFolder, setProjectColor, closeProject, saveProjectArchive, importProjectArchive]
   )
 
   // Reopen a previously closed project and make it active — the active-project effect reloads its
@@ -12583,7 +12656,7 @@ export function Canvas() {
           onSetDefaultAccount={setProjectDefaultAccount}
           onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
           onSetColor={setProjectColor}
-          onSaveArchive={(id) => void exportProjectArchive(id)}
+          onSaveArchive={(id) => void saveProjectArchive(id)}
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
@@ -13383,6 +13456,13 @@ export function Canvas() {
             }}
             onCloneRepo={cloneRepo}
             onConnectSsh={() => setSshDialogOpen(true)}
+            onOpenProjectFile={() => {
+              // Same rule as "Open folder…": the welcome screen stays up behind the native picker
+              // and the password prompt, and closes only once a project is actually open.
+              void importProjectArchive().then(() => {
+                if (useProjects.getState().projects.some((p) => !p.closed)) setWelcomeOpen(false)
+              })
+            }}
             closedProjects={closedProjects.map((p) => ({ id: p.id, name: p.name, cwd: p.cwd }))}
             onReopen={reopenProject}
             onDeleteClosed={requestDeleteProject}

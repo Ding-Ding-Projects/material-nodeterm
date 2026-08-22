@@ -25,6 +25,13 @@ interface WelcomeScreenProps {
   onCloneRepo: () => void
   /** Open the "Connect over SSH…" flow to create a project hosted on a remote server. */
   onConnectSsh: () => void
+  /**
+   * Open a saved one-file project (`.nodeterm-project`) — the same action the project switcher's
+   * per-project ⋮ menu has always carried, surfaced HERE because a user with no project open has
+   * no switcher to find it in. That was the whole gap: the file could be saved and never reopened
+   * from the one screen that greets an empty workspace.
+   */
+  onOpenProjectFile: () => void
   /** Closed projects that can be reopened (id + display name + folder). */
   closedProjects?: { id: string; name: string; cwd?: string }[]
   /** Reopen a closed project (restores its nodes + sessions). */
@@ -56,6 +63,7 @@ export function WelcomeScreen({
   onNewProject,
   onOpenFolder,
   onCloneRepo,
+  onOpenProjectFile,
   onConnectSsh,
   closedProjects = [],
   onReopen,
@@ -217,6 +225,31 @@ export function WelcomeScreen({
             <span className="md3-welcome__card-body">
               <span className="md3-welcome__card-title">{ts('welcome.card.cloneRepo', 'Clone repo…')}</span>
               <span className="md3-welcome__card-desc">{ts('welcome.card.cloneRepo.desc', 'From GitHub or a URL')}</span>
+            </span>
+          </button>
+
+          <button className="md3-welcome__card" onClick={onOpenProjectFile}>
+            <svg
+              className="md3-welcome__card-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+              <path d="M14 3v5h5" />
+              <path d="M12 12v5M10 15l2 2 2-2" />
+            </svg>
+            <span className="md3-welcome__card-body">
+              <span className="md3-welcome__card-title">
+                {ts('welcome.card.openProjectFile', 'Open project file…')}
+              </span>
+              <span className="md3-welcome__card-desc">
+                {ts('welcome.card.openProjectFile.desc', 'A saved .nodeterm-project')}
+              </span>
             </span>
           </button>
 
