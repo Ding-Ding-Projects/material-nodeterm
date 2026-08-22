@@ -6,6 +6,7 @@ import {
   commonParentId,
   createAccountLoginNode,
   createAnnotationNode,
+  createBrowserNode,
   createCodexAccountLoginNode,
   createAgentNode,
   createCanvasControlTerminalNode,
@@ -1400,5 +1401,20 @@ describe('browser tabs', () => {
       }
     ])
     expect(flow[0].data.browserTabs).toBeUndefined()
+  })
+})
+
+describe('flowToNodeStates — temporary nodes', () => {
+  it('drops a temporary (popup) browser node from every save, and keeps it once promoted', () => {
+    const kept = createBrowserNode(0, 'https://example.com/a')
+    const popup = createBrowserNode(1, 'https://example.com/b', undefined, undefined, undefined, true)
+    expect(popup.data.temporary).toBe(true)
+
+    const saved = flowToNodeStates([kept, popup])
+    expect(saved.map((n) => n.id)).toEqual([kept.id])
+
+    // "Keep" clears the flag; the same node then persists like any other.
+    const promoted = { ...popup, data: { ...popup.data, temporary: undefined } }
+    expect(flowToNodeStates([kept, promoted]).map((n) => n.id)).toEqual([kept.id, popup.id])
   })
 })

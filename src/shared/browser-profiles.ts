@@ -20,6 +20,10 @@ import type { BrowserProfile } from './types'
  *  ours (never collides with a partition another part of the app might create for another
  *  purpose) and grepped for during support/debugging. */
 const PARTITION_PREFIX = 'persist:browser-profile-'
+/** Prefix for the partition a browser node inherits from the GROUP FRAME it sits in. Distinct
+ *  from the profile prefix on purpose: a group id and a profile id are different namespaces, and
+ *  colliding them would let a group called `work` share cookies with a profile called `work`. */
+const GROUP_PARTITION_PREFIX = 'persist:browser-group-'
 
 /**
  * The Electron `partition` a browser node's `<webview>` should use.
@@ -69,4 +73,31 @@ export function findBrowserProfile(
 ): BrowserProfile | undefined {
   if (!profileId) return undefined
   return profiles?.find((p) => p.id === profileId)
+}
+
+/**
+ * The partition a browser node actually gets, resolving the two sources of isolation in priority
+ * order:
+ *
+ *   1. an explicitly chosen PROFILE — the user said which identity this node is, and that beats
+ *      everything, including where the node happens to sit on the canvas;
+ *   2. the GROUP FRAME the node sits in — grouping browsers is how a user says "these belong
+ *      together", so a group is its own cookie jar: two browser nodes in one frame share a login,
+ *      and the same site in another frame is a separate, logged-out session;
+ *   3. neither — the default, unpartitioned Electron session, which is bit-for-bit what every
+ *      pre-feature browser node has always had.
+ *
+ * A node MOVED between frames therefore changes identity, which is the honest reading of "this
+ * group has its own cookies and storage" and is why the group chip in the node header says which
+ * jar is in effect rather than leaving it to be discovered by being logged out.
+ */
+export function browserPartitionForNode(
+  projectId: string,
+  profileId: string | undefined,
+  groupId: string | undefined
+): string | undefined {
+  const byProfile = browserPartitionFor(projectId, profileId)
+  if (byProfile) return byProfile
+  if (!groupId) return undefined
+  return `${GROUP_PARTITION_PREFIX}${sanitize(projectId)}-${sanitize(groupId)}`
 }

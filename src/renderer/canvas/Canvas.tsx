@@ -8842,13 +8842,18 @@ export function Canvas() {
   const presence = presenceForProject(activeProjectId || '')
   useEffect(() => presence.connect(), [presence])
 
-  // A browser guest's new-window (target=_blank / window.open) request → opens a NEW TAB in the
-  // SAME browser node (never a real popup; main denies the real one, and never a sibling canvas
-  // node either — that used to spawn a whole roped node per link click, which is the "big poke
-  // guy" the tab strip replaces). Falls back to spawning a roped sibling node only for a source
-  // that is not a browser-kind node (shouldn't happen: only BrowserSurface registers a guest, and
-  // it always backs a 'browser' node — kept as a safety net, not a designed path). Reads the
-  // latest nodes via nodesRef so the deps stay [].
+  // A browser guest's new-window (target=_blank / window.open) request → opens a TEMPORARY canvas
+  // node beside the opener, roped to it (never a real OS popup; main denies that one).
+  //
+  // It is a canvas node again rather than a new tab, but the thing that made the original
+  // sibling-node behaviour a poke guy is fixed rather than reintroduced: every link click used to
+  // mint a PERSISTED node, so a canvas quietly accumulated roped browsers nobody opened on
+  // purpose and project.json grew with them. A temporary node is dropped by flowToNodeStates, so
+  // closing it leaves nothing behind — which is exactly what a popup is — and the node's own
+  // "Keep" button promotes it if the user wants it kept. The dedup + rate cap below still stands
+  // between a setInterval(window.open) page and the canvas.
+  //
+  // Reads the latest nodes via nodesRef so the deps stay [].
   useEffect(() => {
     return window.nodeTerminal.browser.onBrowserNewWindow(({ url, sourceNodeId }) => {
       const src = nodesRef.current.find((n) => n.id === sourceNodeId)
@@ -8866,39 +8871,31 @@ export function Canvas() {
       recent.push({ url, source: sourceNodeId, t: now })
       browserPopupSpawnsRef.current = recent
 
-      if (src.type === 'browser') {
-        const existing =
-          (src.data.browserTabs as { id: string; url: string; title: string }[] | undefined) ??
-          defaultBrowserTabs(sourceNodeId, src.data.url as string | undefined, (src.data.title as string) || 'New Tab')
-        const newTab = { id: `${sourceNodeId}-tab-${Date.now().toString(36)}`, url, title: url }
-        const nextTabs = [...existing, newTab]
-        setNodes((ns) =>
-          ns.map((n) =>
-            n.id === sourceNodeId
-              ? { ...n, data: { ...n.data, browserTabs: nextTabs, browserActiveTabId: newTab.id } }
-              : n
-          )
-        )
-        markDirty()
-        return
-      }
-
       const srcW = src.measured?.width ?? (src.width as number) ?? 800
       const srcH = src.measured?.height ?? (src.height as number) ?? 560
       // src.position is group-relative when the opener sits in a group frame: place in absolute
       // coords, then join the opener's group (parentInto converts back) so the popup node stays
       // inside the frame and moves with it.
       const srcGroup = src.parentId ? nodesRef.current.find((n) => n.id === src.parentId) : undefined
-      const node = createBrowserNode(nodesRef.current.length, url, {
-        x: src.position.x + (srcGroup?.position.x ?? 0) + srcW / 2 + 40,
-        y: src.position.y + (srcGroup?.position.y ?? 0) + srcH + 80 + 280
-      },
-      src.data.browserOwnerNodeId as string | undefined
-    )
+      const node = createBrowserNode(
+        nodesRef.current.length,
+        url,
+        {
+          x: src.position.x + (srcGroup?.position.x ?? 0) + srcW / 2 + 40,
+          y: src.position.y + (srcGroup?.position.y ?? 0) + srcH + 80 + 280
+        },
+        src.data.browserOwnerNodeId as string | undefined,
+        // The popup inherits the opener's profile, so a login popup lands in the SAME cookie jar
+        // as the page that opened it — a popup in a different session is a popup that cannot
+        // finish the sign-in it was opened for.
+        src.data.browserProfileId as string | undefined,
+        true
+      )
       const placed = src.parentId ? parentInto(node, src.parentId) : node
       setNodes((ns) => [...ns, placed])
       setControlEdges((es) => [...es, ropeEdge(`ctrl-${sourceNodeId}-${placed.id}`, sourceNodeId, placed.id, '#0a84ff')])
-      markDirty()
+      // Deliberately NO markDirty: a temporary node is absent from every save, so marking the
+      // project dirty would write a file whose only change is one the file cannot contain.
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
