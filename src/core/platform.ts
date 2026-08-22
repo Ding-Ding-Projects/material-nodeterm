@@ -8,10 +8,10 @@ export interface CorePlatform {
   readonly userDataDir: string
   readonly appVersion: string
   readonly isPackaged: boolean
-  /** Electron's `process.resourcesPath` — `<app>/Contents/Resources` in a packaged build, where
-   *  extraResources (today: the bundled tmux, see tmux-hint.ts `bundledTmuxPath`) land. OPTIONAL
-   *  because it is an Electron notion: the Server Edition has no such directory and simply omits
-   *  it, which is also how src/core stays Electron-free (no-electron.test.ts). */
+  /** Electron's `process.resourcesPath` — the packaged build's resources dir, where
+   *  extraResources (today: the standalone session host, see session-host-launcher.ts) land.
+   *  OPTIONAL because it is an Electron notion: the Server Edition has no such directory and
+   *  simply omits it, which is also how src/core stays Electron-free (no-electron.test.ts). */
   readonly resourcesPath?: string
   /** Seal / unseal a secret at rest, byte-in byte-out. Present together on a shell that can
    *  encrypt (Desktop: Electron safeStorage). Their ABSENCE is a supported configuration, not a

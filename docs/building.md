@@ -4,7 +4,7 @@ Three scripts live at the repository root, each with a Windows `.bat` and a POSI
 They are shipped surfaces, not conveniences: a checkout with nothing installed should reach a
 running app (or a real installer) by running one of them, and a broken one is worse than none.
 
-| Script | Windows | macOS / Linux | What it does |
+| Script | Windows | Linux | What it does |
 | --- | --- | --- | --- |
 | Dependencies | `download-dependencies.bat` | `download-dependencies.sh` | Installs Node.js, Windows Python/native build tools, and every npm dependency the project needs. |
 | Build | `build.bat` | `build.sh` | Runs the dependency script, builds `out/`, then offers to launch the app. |
@@ -211,7 +211,6 @@ the same version as `package.json`:
 2. Packages through `electron-builder`:
    - Windows: `npm run dist:win` → **Squirrel.Windows** (`dist/squirrel-windows/`: the setup
      `.exe`, the `RELEASES` index, and the full `.nupkg`).
-   - macOS: `npm run dist` → `.dmg` + `.zip` (arm64 + x64) into `dist/`.
    - Linux: `npm run dist:linux` → `.AppImage` + `.deb` into `dist/`.
 3. **Verifies what was actually built**, rather than trusting `electron-builder`'s exit code alone:
    - the expected artifact file exists;
@@ -238,9 +237,8 @@ the same version as `package.json`:
    of scope: root `build.forceCodeSigning` and `build.win.signExecutable` are `false`.
    `build.win.signAndEditExecutable` remains enabled at its default so electron-builder still writes
    the application icon and version resources; disabling signing must not disable resource editing.
-   The mac build uses `identity=null` / `notarize=false`. Installing or opening the artifact triggers
-   Windows SmartScreen /
-   "unknown publisher" or macOS Gatekeeper warnings. That is expected, not a build defect.
+   Installing or opening the artifact triggers Windows SmartScreen /
+   "unknown publisher" warnings. That is expected, not a build defect.
 5. **Never publishes, tags, pushes, or creates a release.** It only builds and verifies a local
    artifact. Shipping a real release is a separate, deliberate action outside these scripts.
 
@@ -280,9 +278,9 @@ Earlier versions of `download-dependencies.bat` and `build.bat` were run end-to-
 Windows checkout with `node_modules` removed; that run exposed the missing native-toolchain
 bootstrap now handled above. `download-dependencies.sh`, `build.sh`, and `build-installer.sh` were
 syntax-checked (`sh -n`) and exercised on the same machine through Git Bash for their
-already-on-`PATH` fast path; their OS-specific install branches (Homebrew, `apt-get`, and the
-macOS/Linux portable-Node fallback) could not be exercised on a Windows host and should be
-verified on a real macOS/Linux machine before being relied on unattended.
+already-on-`PATH` fast path; their OS-specific install branches (`apt-get` and the
+portable-Node fallback) could not be exercised on a Windows host and should be
+verified on a real Linux machine before being relied on unattended.
 
 The Windows entry points now also have an automated behavioral regression test
 (`src/core/build-bat.test.ts`). It runs the production `.bat` files through a real `cmd.exe`

@@ -1,6 +1,5 @@
 // Pure logic for managed Claude accounts (config-dir isolation). No fs/electron imports —
 // everything here is unit-tested; the impure lifecycle lives in claude-accounts.ts.
-import { createHash } from 'crypto'
 import path from 'path'
 
 /** Shape of a valid account id (uuid / opaque token). Shared by every path builder so a bad id
@@ -127,36 +126,25 @@ export function isSafeRemoteTranscriptPath(abs: string, remoteHome: string | und
 }
 
 /**
- * Claude Code ≥ 2.1 scopes its macOS Keychain service name per config dir:
- * 'Claude Code-credentials-' + first 8 hex chars of sha256(CLAUDE_CONFIG_DIR).
- * (Learned from REF's claude-accounts/keychain.ts — undocumented CLI behavior.)
- */
-export function claudeKeychainService(configDir: string): string {
-  const suffix = createHash('sha256').update(configDir).digest('hex').slice(0, 8)
-  return `Claude Code-credentials-${suffix}`
-}
-
-/**
  * Where the usage indicator looks for a Claude OAuth token + identity, per account. With a
- * `configDir` (managed account) the scoped Keychain service comes first — Claude Code ≥ 2.1
- * writes there — with the legacy unscoped services as fallback for older CLIs; the file +
- * identity live under that config dir. Without a `configDir` (system account) it's exactly the
- * legacy layout: unscoped services + `~/.claude`. Pure so it's unit-tested; the impure keychain
- * / fs reads live in claude-usage.ts.
+ * `configDir` (managed account) the file + identity live under that config dir; without (system
+ * account) it's exactly the legacy layout under `~/.claude`. On Windows and Linux the claude CLI
+ * stores credentials in `.credentials.json`, so the file pair is the complete answer. (The macOS
+ * Keychain service names this also used to return — scoped per config dir on Claude Code ≥ 2.1 —
+ * died with the macOS desktop.) Pure so it's unit-tested; the impure fs reads live in
+ * usage-service.ts.
  */
 export function usageCredsPaths(
   homeDir: string,
   configDir?: string
-): { services: string[]; credsFile: string; identityFile: string } {
+): { credsFile: string; identityFile: string } {
   if (configDir) {
     return {
-      services: [claudeKeychainService(configDir), 'Claude Code-credentials', 'claudeAiOauth'],
       credsFile: path.join(configDir, '.credentials.json'),
       identityFile: path.join(configDir, '.claude.json')
     }
   }
   return {
-    services: ['Claude Code-credentials', 'claudeAiOauth'],
     credsFile: path.join(homeDir, '.claude', '.credentials.json'),
     identityFile: path.join(homeDir, '.claude.json')
   }

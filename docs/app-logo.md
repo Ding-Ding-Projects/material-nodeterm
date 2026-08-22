@@ -73,7 +73,7 @@ Selecting a custom image changes **only** what the tab bar's brand mark renders
 (`data:image/png;base64,…` via a plain `<img>`). It does **not**, and — short of a full rebuild
 and re-package of the app — **cannot**:
 
-- Change the packaged application icon (macOS `.icns`, Windows `.ico`, the taskbar/dock icon, the
+- Change the packaged application icon (the Windows `.ico`, the Linux icon, the taskbar icon, the
   installer's own icon). `scripts/make-icon.mjs` is the original SVG master; it generates the PNG
   and committed seven-frame Windows ICO at **package time**, and they are baked into the installer.
   The Windows package also pins the ICO through an immutable source-SHA URL for Apps & Features;

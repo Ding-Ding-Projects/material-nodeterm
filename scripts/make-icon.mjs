@@ -1,15 +1,17 @@
 // Renders the nodeterm app icon into build/icon.png (1024x1024) and the committed,
-// deterministic multi-resolution build/icon.ico used by Windows packaging. electron-builder
-// derives the macOS .icns from the PNG. Run: npm run make-icon
+// deterministic multi-resolution build/icon.ico used by Windows packaging. The PNG doubles as
+// the Linux icon and the runtime `resources/icon.png` extraResource. (The macOS .icns this PNG
+// once fed was dropped with the macOS desktop target.) Run: npm run make-icon
 //
-// Design: a black macOS-Terminal-style window (dark rounded square + window dots),
+// Design: a black terminal-window tile (dark rounded square + window dots),
 // with the nodeterm node-graph mark in our purple inside it.
 import { mkdirSync, writeFileSync } from 'fs'
 import sharp from 'sharp'
 
-// macOS app icons leave a transparent margin around a rounded-square tile so they
-// sit at the same visual size as system icons in the Dock. Apple's grid puts the
-// tile at ~824px inside the 1024 canvas (≈100px margin) with a ~185px corner radius.
+// The mark was drawn on Apple's icon grid: a rounded-square tile at ~824px inside the 1024
+// canvas (≈100px transparent margin) with a ~185px corner radius. The geometry stays even though
+// macOS is no longer a target — every committed .ico frame derives from it, and the Windows
+// packaging wrapper pins those exact bytes, so changing it silently invalidates the tracked ICO.
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">

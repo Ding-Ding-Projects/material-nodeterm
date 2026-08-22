@@ -1,6 +1,17 @@
-// macOS Notch HUD (docs/notch-hud.md) — a transparent, always-on-top, click-through strip along
-// the top edge that shows walking agent mascots beside the MacBook notch while agents work, and
-// expands into a mini session panel. macOS + desktop only; default on (settings.notchHud).
+// Agent HUD (docs/notch-hud.md) — a small, frameless, always-on-top, click-through tool window
+// docked at the top-center of the primary display's WORK AREA, showing walking agent mascots while
+// agents work and expanding into a mini session panel. Windows desktop only; default on
+// (settings.notchHud).
+//
+// HISTORY: this began life as the macOS "Notch HUD", a full-display-width strip fused to the
+// MacBook notch. The macOS desktop was deleted (Windows-only product decision, 2026-08); the HUD
+// itself was REWIRED, not deleted — same model (notch-hud-model.ts, byte-identical), same renderer
+// contract (HudPush), same preload (src/preload/hud.ts). The renderer already draws a standalone
+// floating pill when `hasNotch` is false (its "notchless" mode), so the Windows window simply
+// always reports that. What changed is only the window shape: notch geometry (display bounds,
+// menu-bar inset, AppKit constraint escapes) became work-area geometry, and the NSPanel became a
+// Windows tool window (skipTaskbar + non-focusable, so it never appears in the taskbar/Alt-Tab
+// and never steals focus from the terminal the user is typing into).
 //
 // This module owns the BrowserWindow + the getHudWindow/sendToHud singleton (mirroring
 // main-window.ts) and the mirror/IPC subscriptions. The DATA folding lives in the pure,
@@ -8,7 +19,7 @@
 // extra streams in (the normalized agent-event stream for prompt+subagents, and context-update for
 // the model) via the module-level notchHudOn* functions, which no-op when the HUD is off.
 
-import { app, BrowserWindow, ipcMain, screen } from 'electron'
+import { BrowserWindow, ipcMain, screen } from 'electron'
 import { IPC } from '../shared/ipc'
 import { getMainWindow, sendToMain } from './main-window'
 import { desktopBuildPaths } from './desktop-build-paths'
@@ -23,26 +34,25 @@ import {
 import type { NormalizedAgentEvent } from '../shared/agents/normalize'
 import { createHudModel, type HudModel } from './notch-hud-model'
 
-/** Minimum strip height when there is no physical notch (menu-bar height floor). */
-const NOTCH_BAR_FLOOR = 24
 /**
- * Assumed physical notch WIDTH (px). Electron exposes no `auxiliaryTopLeftArea`, so we assume a
- * centered notch of this width, and the capsule butts against its LEFT edge. Field-tuned to 168 px
- * (200 left a visible gap — the capsule sat too far left). TUNE ON A MAC: raise it to push the
- * capsule LEFT, lower it to slide the capsule RIGHT toward the notch.
+ * The `bar` height pushed to the renderer (px). In the renderer's floating-pill mode this only
+ * seeds the `--bar` CSS variable (pill height/padding come from its own `--pill-*` tunables), but
+ * the contract field is required, and 24 is the strip height the pill was tuned against.
  */
-const NOTCH_WIDTH = 168
-/** Bounds for the user-tunable notch width (settings.notchWidth). */
+const HUD_BAR = 24
+/** Bounds for the user-tunable pill width (settings.notchWidth — the setting name is historical;
+ *  it drives the collapsed pill's symmetric side padding in the renderer). */
 export const NOTCH_WIDTH_MIN = 100
 export const NOTCH_WIDTH_MAX = 320
+const NOTCH_WIDTH_DEFAULT = 168
 /**
- * A top inset (`workArea.y - bounds.y`) at least this tall (px) means a PHYSICAL notch is present:
- * a notched Mac's menu bar is ~37 px, a notchless display's is ~24–25 px. Below this we treat the
- * display as notchless and draw a standalone floating pill instead of fusing to a notch. TUNABLE.
+ * Window WIDTH (px): the expanded panel is 400px wide (hud.css --panel-width) plus its 44px blur
+ * shadow on each side. 560 leaves that whole paint inside the window — a narrower window would
+ * clip the expanded panel's edges, which reads as a rendering bug rather than a size choice.
  */
-const NOTCH_MIN_BAR = 32
+const HUD_WINDOW_WIDTH = 560
 /** Total window height — sized to the EXPANDED box (we never resize the frame; the renderer scales
- *  a CSS transform). Capped to the display height. */
+ *  a CSS transform). Capped to the work-area height. */
 const HUD_WINDOW_HEIGHT = 460
 /** Debounce for coalescing feed changes into one push to the HUD renderer. */
 const PUSH_DEBOUNCE_MS = 150
@@ -51,30 +61,14 @@ const PUSH_DEBOUNCE_MS = 150
 const SWEEP_MS = 60 * 1000
 
 /**
- * Keep the app a REGULAR Dock app even though the HUD is a `focusable:false` (non-activating
- * panel) overlay. On macOS `focusable:false` maps to AppKit's `setDisableKeyOrMainWindow:YES`, so
- * the HUD window can never become the app's key/main window. If such a panel is the only window
- * that is orderFront-ed on screen (e.g. it shows before the main window has finished loading, or
- * while the main window is hidden by hide-on-close), macOS re-evaluates the app as having no
- * regular window and drops its Dock tile — the "Dock icon disappears once the HUD opens" bug.
- * Asserting `regular` + `dock.show()` is idempotent and cheap, and guarantees the HUD never
- * demotes the app's Dock presence. No-op off macOS.
+ * No-op survivor of the macOS Dock guard. On macOS a `focusable:false` panel could demote the
+ * app's Dock presence, and this re-asserted the regular activation policy; Windows has no Dock or
+ * activation policy, and the taskbar is governed per-window (`skipTaskbar` on the HUD, normal on
+ * the main window). The EXPORT stays because src/main/index.ts still calls it from its
+ * window-show handlers — deleting the symbol would break a file this change does not own. Remove
+ * both together when index.ts drops its call sites.
  */
-export function assertRegularDockPresence(): void {
-  if (process.platform !== 'darwin') return
-  try {
-    // Idempotent: re-asserting 'regular' when already regular is a no-op.
-    app.setActivationPolicy('regular')
-  } catch {
-    /* older Electron / transient — ignore */
-  }
-  // `dock.show()` returns a Promise in recent Electron; swallow it either way.
-  try {
-    void Promise.resolve(app.dock?.show()).catch(() => {})
-  } catch {
-    /* ignore */
-  }
-}
+export function assertRegularDockPresence(): void {}
 
 // ---- Singleton (mirror main-window.ts) -----------------------------------------------------
 
@@ -95,18 +89,20 @@ export interface NotchHudDeps {
   getNodeTitle: (nodeId: string) => string | undefined
 }
 
-/** The user-tunable part of the HUD (Settings → Interface → Notch). Applied live, no restart. */
+/** The user-tunable part of the HUD (Settings → Interface). Applied live, no restart. */
 export interface NotchHudTunables {
   enabled: boolean
-  /** Assumed physical notch width in px — the knob that makes the capsule sit flush. */
+  /** Collapsed-pill width hint in px (historically the assumed notch width). */
   notchWidth: number
   /** Expand the panel on hover (else click-only). */
   hoverExpand: boolean
 }
 
-/** Clamp a hand-editable width to something that can't push the capsule off the display. */
+/** Clamp a hand-editable width to something that can't push the pill off the window. */
 function sanitizeNotchWidth(px: number): number {
-  return Number.isFinite(px) ? Math.max(NOTCH_WIDTH_MIN, Math.min(NOTCH_WIDTH_MAX, Math.round(px))) : NOTCH_WIDTH
+  return Number.isFinite(px)
+    ? Math.max(NOTCH_WIDTH_MIN, Math.min(NOTCH_WIDTH_MAX, Math.round(px)))
+    : NOTCH_WIDTH_DEFAULT
 }
 
 class NotchHudController {
@@ -240,12 +236,19 @@ class NotchHudController {
     this.ipcBound = false
   }
 
-  /** Apply live tunables and re-push, so a slider drag moves the capsule as you drag. */
+  /** Apply live tunables and re-push, so a slider drag moves the pill as you drag. */
   setTunables(t: { notchWidth: number; hoverExpand: boolean }): void {
     this.tunables = { notchWidth: t.notchWidth, hoverExpand: t.hoverExpand }
     this.schedulePush()
   }
 
+  /**
+   * Windows geometry: a small window docked at the TOP-CENTER of the primary display's WORK AREA.
+   * `workArea` rather than `bounds` on purpose — a top-docked taskbar shrinks the work area from
+   * above, and a window placed at `bounds.y` would sit UNDER it (always-on-top fights the taskbar's
+   * own topmost band and loses focus-follows clicks either way). The work area is the honest
+   * "top edge the user can see".
+   */
   private geometry(): {
     x: number
     y: number
@@ -254,28 +257,20 @@ class NotchHudController {
     bar: number
     notchWidth: number
     notchCenterX: number
-    hasNotch: boolean
   } {
-    const d = screen.getPrimaryDisplay()
-    const b = d.bounds
-    const wa = d.workArea
-    // The notch bar height is the strip between the display top and the usable work area
-    // (menu-bar / notch). Floor at 24 so we always have room for the mascots.
-    const inset = wa.y - b.y
-    const bar = Math.max(NOTCH_BAR_FLOOR, inset)
-    const height = Math.min(HUD_WINDOW_HEIGHT, b.height)
-    // A physical notch is present only when the display actually has a menu bar (inset > 0) AND that
-    // inset is as tall as a notched Mac's menu bar. Otherwise the renderer draws a floating pill.
-    const hasNotch = inset > 0 && inset >= NOTCH_MIN_BAR
+    const wa = screen.getPrimaryDisplay().workArea
+    const width = Math.min(HUD_WINDOW_WIDTH, wa.width)
+    const height = Math.min(HUD_WINDOW_HEIGHT, wa.height)
     return {
-      x: b.x,
-      y: b.y,
-      width: b.width,
+      x: wa.x + Math.round((wa.width - width) / 2),
+      y: wa.y,
+      width,
       height,
-      bar,
+      bar: HUD_BAR,
       notchWidth: sanitizeNotchWidth(this.tunables.notchWidth),
-      notchCenterX: Math.round(b.width / 2),
-      hasNotch
+      // The pill centers itself on this x (renderer --notch-center-x); the window is centered on
+      // the work area, so the window's own midline is the anchor.
+      notchCenterX: Math.round(width / 2)
     }
   }
 
@@ -284,7 +279,7 @@ class NotchHudController {
     if (!w) return
     const g = this.geometry()
     w.setBounds({ x: g.x, y: g.y, width: g.width, height: g.height })
-    this.schedulePush() // re-send geometry (bar can change with the notch/menu-bar)
+    this.schedulePush() // re-send geometry (work area changes with taskbar/display layout)
   }
 
   private createWindow(): void {
@@ -305,20 +300,14 @@ class NotchHudController {
       maximizable: false,
       fullscreenable: false,
       alwaysOnTop: true,
+      // Never focusable: the HUD is a passive overlay, and a focusable overlay would steal the
+      // keystroke the user was typing into a terminal the moment a row pushed.
       focusable: false,
+      // Tool window: out of the taskbar and Alt-Tab — a status overlay that shows up as a
+      // switchable "app" reads as a stuck ghost window.
       skipTaskbar: true,
+      type: 'toolbar',
       show: false,
-      // LOAD-BEARING (field bug: the capsule rendered as a detached black box BELOW the menu bar
-      // instead of fused with the notch). AppKit's -[NSWindow constrainFrameRect:toScreen:] pushes
-      // every window down so it can't overlap the menu bar / notch strip; Electron only skips that
-      // constraint when enableLargerThanScreen is set. Without it our y = display.bounds.y request
-      // is silently clamped to workArea.y and the window can never paint over the notch.
-      enableLargerThanScreen: true,
-      // NSPanel (non-activating), the same window class agent-notch uses for its indicator: floats
-      // over fullscreen spaces and never takes key/main.
-      type: 'panel',
-      // Do not steal the space or animate; it is a passive overlay.
-      acceptFirstMouse: true,
       backgroundColor: '#00000000',
       webPreferences: {
         preload: buildPaths.hudPreload,
@@ -328,14 +317,11 @@ class NotchHudController {
       }
     })
     hudWin = win
-    // Float above full-screen apps and every Space; screen-saver level keeps it over normal windows.
+    // Screen-saver level keeps the pill above ordinary always-on-top windows (e.g. picture-in-
+    // picture players) — a status overlay that can be covered silently is one nobody trusts.
     win.setAlwaysOnTop(true, 'screen-saver')
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
     // Passive by default: the strip is click-through; the renderer flips this OFF over the hotspot.
     win.setIgnoreMouseEvents(true, { forward: true })
-    // The HUD must NEVER affect the Dock: this is a regular Dock app. Creating a focusable:false
-    // panel can otherwise demote the app to accessory and drop the Dock icon — re-assert here.
-    assertRegularDockPresence()
 
     win.on('closed', () => {
       if (hudWin === win) hudWin = null
@@ -349,9 +335,6 @@ class NotchHudController {
     }
     win.webContents.on('did-finish-load', () => {
       win.showInactive() // show without stealing focus
-      // Showing the panel is exactly when macOS re-evaluates the app's window set — re-assert the
-      // regular Dock policy so the freshly-shown non-activating panel can't demote us to accessory.
-      assertRegularDockPresence()
       this.pushNow()
     })
   }
@@ -372,11 +355,6 @@ class NotchHudController {
     this.model.prune(now)
     const rows = this.model.buildRows(now, this.deps.getNodeTitle)
     const g = this.geometry()
-    // Did AppKit still push us below the menu bar despite enableLargerThanScreen (older macOS, an
-    // unusual display arrangement)? Then the window CANNOT paint over the notch, and reserving the
-    // fused top strip would only make the capsule a tall detached box — the exact field bug. Tell
-    // the renderer so it drops the reserved strip and draws a compact pill instead.
-    const clamped = w.getBounds().y > g.y
     w.webContents.send(IPC.hudRows, {
       rows,
       bar: g.bar,
@@ -384,7 +362,12 @@ class NotchHudController {
       notchWidth: g.notchWidth,
       hoverExpand: this.tunables.hoverExpand,
       notchCenterX: g.notchCenterX,
-      hasNotch: g.hasNotch && !clamped
+      // Always false: no Windows display has a notch, and false is the renderer's floating-pill
+      // mode — the branch the notchless-Mac fallback already exercised, so the renderer needed no
+      // change for the Windows rewire. Do not "optimize" the field away: the push contract is
+      // shared with the preload/renderer pair, and a missing boolean would read as undefined
+      // there and skip the notchless class toggle.
+      hasNotch: false
     })
   }
 }
@@ -394,13 +377,18 @@ class NotchHudController {
 let controller: NotchHudController | null = null
 let controllerDeps: NotchHudDeps | null = null
 
-/** Whether the HUD is supported on this platform (macOS desktop only). */
+/**
+ * Whether the HUD is supported on this platform (Windows desktop only). The Linux Server Edition
+ * never reaches this module (it is src/main, desktop shell only), and the Linux DESKTOP build
+ * never had the HUD (it was darwin-gated before the Windows rewire) — keeping it win32-only keeps
+ * Linux behavior exactly what it was.
+ */
 function supported(): boolean {
-  return process.platform === 'darwin'
+  return process.platform === 'win32'
 }
 
 /**
- * Create the HUD (if darwin + enabled). Idempotent. `deps.getNodeTitle` is retained so a later
+ * Create the HUD (if win32 + enabled). Idempotent. `deps.getNodeTitle` is retained so a later
  * `setNotchHudEnabled(true)` (settings toggle) can recreate it without re-plumbing.
  */
 export function initNotchHud(deps: NotchHudDeps, t: NotchHudTunables): void {
@@ -413,8 +401,8 @@ export function initNotchHud(deps: NotchHudDeps, t: NotchHudTunables): void {
 
 /**
  * Live settings apply: create/destroy the window on the enable toggle, and push the geometry
- * tunables (notch width, hover-expand) straight through to a running HUD — no restart, so the
- * width slider can be dragged while watching the capsule move.
+ * tunables (pill width, hover-expand) straight through to a running HUD — no restart, so the
+ * width slider can be dragged while watching the pill move.
  */
 export function applyNotchHudSettings(t: NotchHudTunables): void {
   if (!supported()) return

@@ -526,11 +526,12 @@ SSH
     treatment `SshProjectManager.connect` uses for the remote `claude --version`.
 
 Surfaces
-27. Server Edition in a browser: grok badges, unread dot, no context meter, notch N/A. Also
+27. Server Edition in a browser: grok badges, unread dot, no context meter, Agent HUD N/A. Also
     confirm the node title does NOT adopt grok's session name there (readSessionName is stubbed).
 28. Phone: does a grok node appear in the inbox with the right state? Its "what it's doing now"
     activity line will be absent (§8.3).
-29. macOS notch: does the grok mark pulse and bloom while it works, on the black capsule, next to
+29. Agent HUD (the Windows rewire of the macOS notch HUD): does the grok mark pulse and bloom
+    while it works, on the black pill, next to
     claude's walking critter without looking out of place?
 30. Kanban board + card modal: badges and the 💬 comments panel on a grok card (the meter row has
     nothing to show).

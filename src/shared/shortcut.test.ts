@@ -13,23 +13,23 @@ import {
 
 describe('parseShortcut', () => {
   it('parses the default combo', () => {
-    expect(parseShortcut('Cmd+Shift+D')).toEqual({ cmd: true, shift: true, alt: false, key: 'D' })
+    expect(parseShortcut('Ctrl+Shift+D')).toEqual({ cmd: true, shift: true, alt: false, key: 'D' })
   })
 
   it('parses a combo without Shift/Alt', () => {
-    expect(parseShortcut('Cmd+D')).toEqual({ cmd: true, shift: false, alt: false, key: 'D' })
+    expect(parseShortcut('Ctrl+D')).toEqual({ cmd: true, shift: false, alt: false, key: 'D' })
   })
 
   it('parses Alt', () => {
-    expect(parseShortcut('Cmd+Alt+D')).toEqual({ cmd: true, shift: false, alt: true, key: 'D' })
+    expect(parseShortcut('Ctrl+Alt+D')).toEqual({ cmd: true, shift: false, alt: true, key: 'D' })
   })
 
   it('parses a named key (F-key)', () => {
-    expect(parseShortcut('Cmd+F5')).toEqual({ cmd: true, shift: false, alt: false, key: 'F5' })
+    expect(parseShortcut('Ctrl+F5')).toEqual({ cmd: true, shift: false, alt: false, key: 'F5' })
   })
 
   it('parses a named key (Space)', () => {
-    expect(parseShortcut('Cmd+Shift+Space')).toEqual({
+    expect(parseShortcut('Ctrl+Shift+Space')).toEqual({
       cmd: true,
       shift: true,
       alt: false,
@@ -38,7 +38,7 @@ describe('parseShortcut', () => {
   })
 
   it('is tolerant of stray whitespace', () => {
-    expect(parseShortcut(' Cmd + Shift + D ')).toEqual({
+    expect(parseShortcut(' Ctrl + Shift + D ')).toEqual({
       cmd: true,
       shift: true,
       alt: false,
@@ -47,11 +47,11 @@ describe('parseShortcut', () => {
   })
 
   it('parses a modifier-only chord (no trailing key) — the v3 hold-to-talk shape', () => {
-    expect(parseShortcut('Cmd+Alt')).toEqual({ cmd: true, alt: true, shift: false, key: null })
+    expect(parseShortcut('Ctrl+Alt')).toEqual({ cmd: true, alt: true, shift: false, key: null })
   })
 
   it('parses a modifier-only chord with all three modifiers', () => {
-    expect(parseShortcut('Cmd+Alt+Shift')).toEqual({
+    expect(parseShortcut('Ctrl+Alt+Shift')).toEqual({
       cmd: true,
       alt: true,
       shift: true,
@@ -60,35 +60,65 @@ describe('parseShortcut', () => {
   })
 })
 
+// settings.json is forever: every pre-rewire install stores its shortcuts (defaults AND rebinds)
+// in the old `Cmd+…` notation. Dropping the alias would kill all of that user's hotkeys on
+// upgrade with no error anywhere — the whole reason `cmd`/`command` stay parseable.
+describe('legacy "Cmd" alias (pre-rewire settings.json compat)', () => {
+  it('parses identically to the canonical Ctrl token', () => {
+    for (const [legacy, canonical] of [
+      ['Cmd+K', 'Ctrl+K'],
+      ['Cmd+Shift+D', 'Ctrl+Shift+D'],
+      ['Cmd+Alt', 'Ctrl+Alt'],
+      ['Command+Enter', 'Ctrl+Enter']
+    ] as const) {
+      expect(parseShortcut(legacy)).toEqual(parseShortcut(canonical))
+    }
+  })
+
+  it('a stored legacy combo still matches a Ctrl keydown on Windows/Linux', () => {
+    expect(
+      matchesShortcut(
+        { metaKey: false, ctrlKey: true, shiftKey: false, altKey: false, key: 'm' },
+        'Cmd+M',
+        false
+      )
+    ).toBe(true)
+  })
+
+  it('a stored legacy combo still renders canonical Ctrl badges', () => {
+    expect(formatShortcut('Cmd+Shift+D', false)).toBe('Ctrl+Shift+D')
+  })
+})
+
 describe('formatShortcut', () => {
-  it('formats the default combo on mac with symbols', () => {
-    expect(formatShortcut('Cmd+Shift+D', true)).toBe('⌘⇧D')
+  it('formats the default combo for the mac browser client with symbols', () => {
+    expect(formatShortcut('Ctrl+Shift+D', true)).toBe('⌘⇧D')
   })
 
   it('formats the default combo off mac as Ctrl+Shift+D', () => {
-    expect(formatShortcut('Cmd+Shift+D', false)).toBe('Ctrl+Shift+D')
+    expect(formatShortcut('Ctrl+Shift+D', false)).toBe('Ctrl+Shift+D')
   })
 
   it('formats Alt on mac', () => {
-    expect(formatShortcut('Cmd+Alt+D', true)).toBe('⌘⌥D')
+    expect(formatShortcut('Ctrl+Alt+D', true)).toBe('⌘⌥D')
   })
 
   it('formats Alt off mac', () => {
-    expect(formatShortcut('Cmd+Alt+D', false)).toBe('Ctrl+Alt+D')
+    expect(formatShortcut('Ctrl+Alt+D', false)).toBe('Ctrl+Alt+D')
   })
 
-  it('formats a bare Cmd combo', () => {
-    expect(formatShortcut('Cmd+D', true)).toBe('⌘D')
-    expect(formatShortcut('Cmd+D', false)).toBe('Ctrl+D')
+  it('formats a bare primary-modifier combo', () => {
+    expect(formatShortcut('Ctrl+D', true)).toBe('⌘D')
+    expect(formatShortcut('Ctrl+D', false)).toBe('Ctrl+D')
   })
 
   it('formats named keys with friendly labels', () => {
-    expect(formatShortcut('Cmd+Space', true)).toBe('⌘Space')
-    expect(formatShortcut('Cmd+Shift+F5', false)).toBe('Ctrl+Shift+F5')
+    expect(formatShortcut('Ctrl+Space', true)).toBe('⌘Space')
+    expect(formatShortcut('Ctrl+Shift+F5', false)).toBe('Ctrl+Shift+F5')
   })
 
   it('round-trips parse -> format -> parse (mac and non-mac agree on the parsed shape)', () => {
-    for (const combo of ['Cmd+Shift+D', 'Cmd+D', 'Cmd+Alt+Shift+F5']) {
+    for (const combo of ['Ctrl+Shift+D', 'Ctrl+D', 'Ctrl+Alt+Shift+F5']) {
       const parsed = parseShortcut(combo)
       // Formatting for either platform is a pure display transform of the same parsed shape —
       // reformatting a fresh capture (captureToShortcut) must reparse identically.
@@ -96,16 +126,16 @@ describe('formatShortcut', () => {
     }
   })
 
-  it('formats a modifier-only chord (Cmd+Alt) on mac with no trailing key badge', () => {
-    expect(formatShortcut('Cmd+Alt', true)).toBe('⌘⌥')
+  it('formats a modifier-only chord (Ctrl+Alt) on mac with no trailing key badge', () => {
+    expect(formatShortcut('Ctrl+Alt', true)).toBe('⌘⌥')
   })
 
-  it('formats a modifier-only chord (Cmd+Alt) off mac with no trailing key badge', () => {
-    expect(formatShortcut('Cmd+Alt', false)).toBe('Ctrl+Alt')
+  it('formats a modifier-only chord (Ctrl+Alt) off mac with no trailing key badge', () => {
+    expect(formatShortcut('Ctrl+Alt', false)).toBe('Ctrl+Alt')
   })
 
   it('round-trips a modifier-only chord through parse -> format -> parse', () => {
-    for (const combo of ['Cmd+Alt', 'Cmd+Alt+Shift']) {
+    for (const combo of ['Ctrl+Alt', 'Ctrl+Alt+Shift']) {
       const parsed = parseShortcut(combo)
       expect(parsed.key).toBeNull()
       // formatShortcut is a display transform; there's no un-format, but shortcutKeyParts should
@@ -119,22 +149,22 @@ describe('formatShortcut', () => {
 
 describe('shortcutKeyParts', () => {
   it('splits the default combo into one badge per key on mac', () => {
-    expect(shortcutKeyParts('Cmd+Shift+D', true)).toEqual(['⌘', '⇧', 'D'])
+    expect(shortcutKeyParts('Ctrl+Shift+D', true)).toEqual(['⌘', '⇧', 'D'])
   })
 
   it('splits the default combo into one badge per key off mac', () => {
-    expect(shortcutKeyParts('Cmd+Shift+D', false)).toEqual(['Ctrl', 'Shift', 'D'])
+    expect(shortcutKeyParts('Ctrl+Shift+D', false)).toEqual(['Ctrl', 'Shift', 'D'])
   })
 
   it('keeps a multi-char named key as a single badge (not split into letters)', () => {
-    expect(shortcutKeyParts('Cmd+Space', true)).toEqual(['⌘', 'Space'])
+    expect(shortcutKeyParts('Ctrl+Space', true)).toEqual(['⌘', 'Space'])
   })
 
   it('joins to the same string formatShortcut returns', () => {
     for (const [combo, isMac] of [
-      ['Cmd+Shift+D', true],
-      ['Cmd+Shift+D', false],
-      ['Cmd+Alt+Shift+F5', true]
+      ['Ctrl+Shift+D', true],
+      ['Ctrl+Shift+D', false],
+      ['Ctrl+Alt+Shift+F5', true]
     ] as const) {
       const parts = shortcutKeyParts(combo, isMac)
       const joined = isMac ? parts.join('') : parts.join('+')
@@ -146,72 +176,72 @@ describe('shortcutKeyParts', () => {
 describe('matchesShortcut', () => {
   const base = { metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, key: 'd' }
 
-  it('matches on mac with metaKey as the primary modifier', () => {
-    expect(matchesShortcut({ ...base, metaKey: true, shiftKey: true }, 'Cmd+Shift+D', true)).toBe(
+  it('matches on the mac browser client with metaKey as the primary modifier', () => {
+    expect(matchesShortcut({ ...base, metaKey: true, shiftKey: true }, 'Ctrl+Shift+D', true)).toBe(
       true
     )
   })
 
   it('does NOT match on mac when ctrlKey stands in for metaKey', () => {
-    expect(matchesShortcut({ ...base, ctrlKey: true, shiftKey: true }, 'Cmd+Shift+D', true)).toBe(
+    expect(matchesShortcut({ ...base, ctrlKey: true, shiftKey: true }, 'Ctrl+Shift+D', true)).toBe(
       false
     )
   })
 
   it('matches off mac with ctrlKey as the primary modifier', () => {
     expect(
-      matchesShortcut({ ...base, ctrlKey: true, shiftKey: true }, 'Cmd+Shift+D', false)
+      matchesShortcut({ ...base, ctrlKey: true, shiftKey: true }, 'Ctrl+Shift+D', false)
     ).toBe(true)
   })
 
   it('does NOT match off mac when metaKey stands in for ctrlKey', () => {
     expect(
-      matchesShortcut({ ...base, metaKey: true, shiftKey: true }, 'Cmd+Shift+D', false)
+      matchesShortcut({ ...base, metaKey: true, shiftKey: true }, 'Ctrl+Shift+D', false)
     ).toBe(false)
   })
 
   it('rejects a missing Shift', () => {
-    expect(matchesShortcut({ ...base, metaKey: true, shiftKey: false }, 'Cmd+Shift+D', true)).toBe(
+    expect(matchesShortcut({ ...base, metaKey: true, shiftKey: false }, 'Ctrl+Shift+D', true)).toBe(
       false
     )
   })
 
   it('rejects an extra Alt not in the combo', () => {
     expect(
-      matchesShortcut({ ...base, metaKey: true, shiftKey: true, altKey: true }, 'Cmd+Shift+D', true)
+      matchesShortcut({ ...base, metaKey: true, shiftKey: true, altKey: true }, 'Ctrl+Shift+D', true)
     ).toBe(false)
   })
 
   it('rejects the wrong letter key', () => {
     expect(
-      matchesShortcut({ ...base, metaKey: true, shiftKey: true, key: 'e' }, 'Cmd+Shift+D', true)
+      matchesShortcut({ ...base, metaKey: true, shiftKey: true, key: 'e' }, 'Ctrl+Shift+D', true)
     ).toBe(false)
   })
 
   it('is case-insensitive on e.key when Shift is held (browsers report the shifted char)', () => {
     // Shift+d is delivered as e.key === 'D' by the DOM; either case must match.
     expect(
-      matchesShortcut({ ...base, metaKey: true, shiftKey: true, key: 'D' }, 'Cmd+Shift+D', true)
+      matchesShortcut({ ...base, metaKey: true, shiftKey: true, key: 'D' }, 'Ctrl+Shift+D', true)
     ).toBe(true)
     expect(
-      matchesShortcut({ ...base, metaKey: true, shiftKey: true, key: 'd' }, 'Cmd+Shift+D', true)
+      matchesShortcut({ ...base, metaKey: true, shiftKey: true, key: 'd' }, 'Ctrl+Shift+D', true)
     ).toBe(true)
   })
 
-  it('matches a bare Cmd combo with no Shift/Alt required', () => {
-    expect(matchesShortcut({ ...base, metaKey: true }, 'Cmd+D', true)).toBe(true)
+  it('matches a bare primary-modifier combo with no Shift/Alt required', () => {
+    expect(matchesShortcut({ ...base, metaKey: true }, 'Ctrl+D', true)).toBe(true)
   })
 
   it('matches named keys (F-key)', () => {
     expect(
-      matchesShortcut({ ...base, metaKey: true, key: 'F5' }, 'Cmd+F5', true)
+      matchesShortcut({ ...base, metaKey: true, key: 'F5' }, 'Ctrl+F5', true)
     ).toBe(true)
   })
 
   it('never matches a modifier-only chord — that shape has no key to check', () => {
     // Even a keydown of a real key while the exact modifiers are held must not match: a
     // modifier-only shortcut is handled by chordHeld, not matchesShortcut.
-    expect(matchesShortcut({ ...base, metaKey: true, altKey: true, key: 'd' }, 'Cmd+Alt', true)).toBe(
+    expect(matchesShortcut({ ...base, metaKey: true, altKey: true, key: 'd' }, 'Ctrl+Alt', true)).toBe(
       false
     )
   })
@@ -219,13 +249,13 @@ describe('matchesShortcut', () => {
 
 describe('isHoldChord', () => {
   it('is true for a modifier-only combo', () => {
-    expect(isHoldChord('Cmd+Alt')).toBe(true)
-    expect(isHoldChord('Cmd+Alt+Shift')).toBe(true)
+    expect(isHoldChord('Ctrl+Alt')).toBe(true)
+    expect(isHoldChord('Ctrl+Alt+Shift')).toBe(true)
   })
 
   it('is false for a keyed combo', () => {
-    expect(isHoldChord('Cmd+Alt+D')).toBe(false)
-    expect(isHoldChord('Cmd+D')).toBe(false)
+    expect(isHoldChord('Ctrl+Alt+D')).toBe(false)
+    expect(isHoldChord('Ctrl+D')).toBe(false)
   })
 })
 
@@ -247,48 +277,48 @@ describe('isModifierEventKey', () => {
 describe('chordHeld', () => {
   const base = { metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, key: 'Alt' }
 
-  it('is true when the event modifiers exactly match the chord (mac)', () => {
-    expect(chordHeld({ ...base, metaKey: true, altKey: true }, 'Cmd+Alt', true)).toBe(true)
+  it('is true when the event modifiers exactly match the chord (mac browser client)', () => {
+    expect(chordHeld({ ...base, metaKey: true, altKey: true }, 'Ctrl+Alt', true)).toBe(true)
   })
 
   it('is true when the event modifiers exactly match the chord (non-mac, ctrlKey primary)', () => {
-    expect(chordHeld({ ...base, ctrlKey: true, altKey: true }, 'Cmd+Alt', false)).toBe(true)
+    expect(chordHeld({ ...base, ctrlKey: true, altKey: true }, 'Ctrl+Alt', false)).toBe(true)
   })
 
   it('is false when the primary modifier is missing', () => {
-    expect(chordHeld({ ...base, altKey: true }, 'Cmd+Alt', true)).toBe(false)
+    expect(chordHeld({ ...base, altKey: true }, 'Ctrl+Alt', true)).toBe(false)
   })
 
   it('is false when a required modifier (alt) is missing', () => {
-    expect(chordHeld({ ...base, metaKey: true }, 'Cmd+Alt', true)).toBe(false)
+    expect(chordHeld({ ...base, metaKey: true }, 'Ctrl+Alt', true)).toBe(false)
   })
 
   it('is false when an EXTRA modifier is held beyond what the chord requires', () => {
-    expect(chordHeld({ ...base, metaKey: true, altKey: true, shiftKey: true }, 'Cmd+Alt', true)).toBe(
+    expect(chordHeld({ ...base, metaKey: true, altKey: true, shiftKey: true }, 'Ctrl+Alt', true)).toBe(
       false
     )
   })
 
   it('is false on the wrong platform primary (ctrlKey standing in for metaKey on mac)', () => {
-    expect(chordHeld({ ...base, ctrlKey: true, altKey: true }, 'Cmd+Alt', true)).toBe(false)
+    expect(chordHeld({ ...base, ctrlKey: true, altKey: true }, 'Ctrl+Alt', true)).toBe(false)
   })
 
   it('ignores e.key entirely — same result regardless of which key the event names', () => {
-    expect(chordHeld({ ...base, metaKey: true, altKey: true, key: 'd' }, 'Cmd+Alt', true)).toBe(true)
+    expect(chordHeld({ ...base, metaKey: true, altKey: true, key: 'd' }, 'Ctrl+Alt', true)).toBe(true)
   })
 })
 
 describe('buildModifierChord', () => {
-  it('builds a Cmd+Alt combo', () => {
-    expect(buildModifierChord({ cmd: true, alt: true, shift: false })).toBe('Cmd+Alt')
+  it('builds a Ctrl+Alt combo', () => {
+    expect(buildModifierChord({ cmd: true, alt: true, shift: false })).toBe('Ctrl+Alt')
   })
 
-  it('builds a Cmd+Alt+Shift combo', () => {
-    expect(buildModifierChord({ cmd: true, alt: true, shift: true })).toBe('Cmd+Alt+Shift')
+  it('builds a Ctrl+Alt+Shift combo', () => {
+    expect(buildModifierChord({ cmd: true, alt: true, shift: true })).toBe('Ctrl+Alt+Shift')
   })
 
-  it('builds a bare Cmd combo', () => {
-    expect(buildModifierChord({ cmd: true, alt: false, shift: false })).toBe('Cmd')
+  it('builds a bare Ctrl combo', () => {
+    expect(buildModifierChord({ cmd: true, alt: false, shift: false })).toBe('Ctrl')
   })
 
   it('returns null when the primary modifier is missing', () => {
@@ -304,19 +334,21 @@ describe('buildModifierChord', () => {
 })
 
 describe('captureToShortcut', () => {
-  it('builds a canonical combo from a mac keydown (metaKey primary)', () => {
+  it('emits the canonical Ctrl token from a mac-browser keydown (metaKey primary)', () => {
+    // The capture NEVER emits the legacy `Cmd` alias — a rebind performed today must be stored
+    // in canonical notation, or new settings files would keep minting mac-era strings.
     expect(
       captureToShortcut({ metaKey: true, ctrlKey: false, shiftKey: true, altKey: false, key: 'd' }, true)
-    ).toBe('Cmd+Shift+D')
+    ).toBe('Ctrl+Shift+D')
   })
 
-  it('builds a canonical combo from a non-mac keydown (ctrlKey primary)', () => {
+  it('emits the canonical Ctrl token from a non-mac keydown (ctrlKey primary)', () => {
     expect(
       captureToShortcut(
         { metaKey: false, ctrlKey: true, shiftKey: true, altKey: false, key: 'd' },
         false
       )
-    ).toBe('Cmd+Shift+D')
+    ).toBe('Ctrl+Shift+D')
   })
 
   it('returns null when the primary modifier is missing', () => {

@@ -541,7 +541,8 @@ SSH + surfaces
     title will NOT adopt gemini's name (readSessionName is stubbed server-side, §7).
 20. Phone: does a gemini node show the right state and a context ring? Its permission-mode flag is
     missing on phone-side launches (§8).
-21. macOS notch + canvas badge: does the gemini mark pulse and bloom, in BOTH themes? Its mark is a
+21. Agent HUD (the Windows rewire of the macOS notch HUD) + canvas badge: does the gemini mark
+    pulse and bloom, in BOTH themes? Its mark is a
     gradient, so the `currentColor` bloom is the LABEL colour, not its own ink — the light theme is
     where that will look worst if it looks bad anywhere.
 22. Kanban card + card modal: badges, the meter row and the 💬 comments panel on a gemini card.

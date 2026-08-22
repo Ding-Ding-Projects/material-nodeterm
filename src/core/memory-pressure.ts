@@ -1,12 +1,9 @@
 // Two-signal memory pressure (cmux's MemoryPressureMonitor pattern, Electron-free): host
-// available-memory watermarks (readMemInfo — the same source session-budget trusts, except on
-// darwin, where it is not measuring what its name says; see hostMemReader) plus this process's
-// own RSS, because the host signal alone can't tell you YOU are the problem.
+// available-memory watermarks (readMemInfo — the same source session-budget trusts) plus this
+// process's own RSS, because the host signal alone can't tell you YOU are the problem.
 // Consumers hang reclaim levers off onPressure; all levers must be idempotent — the monitor
 // re-fires a held severity at most once per RE_FIRE_FLOOR_MS.
-import { hostMemReader, type MemInfo } from './session-budget'
-
-export { hostMemReader }
+import { readMemInfo, type MemInfo } from './session-budget'
 
 export type PressureSeverity = 'warning' | 'critical'
 
@@ -29,7 +26,7 @@ export function createMemoryPressureMonitor(opts: {
   intervalMs?: number
   onPressure: (s: PressureSeverity) => void
 }): MemoryPressureMonitor {
-  const readMem = opts.readMem ?? hostMemReader()
+  const readMem = opts.readMem ?? readMemInfo
   // `memoryUsage.rss()` reads just the one number; `memoryUsage()` builds the whole stats object
   // (heap walk included) every 30 s for a field we throw away.
   const selfRss = opts.selfRssMb ?? ((): number => Math.round(process.memoryUsage.rss() / 1048576))
