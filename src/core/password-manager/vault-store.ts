@@ -1,6 +1,13 @@
 // Per-project vault document I/O, plus the "locked state": whether THIS process currently holds
 // the key a project's password derives.
 //
+// Every method below takes a vault ROOT rather than a project: `<root>/.nodeterm/vault.json`. For
+// a folder project that root IS its cwd and the file is the git-shareable sibling this header
+// describes. For a project with NO folder - an SSH project, a cwd-less canvas, one opened from a
+// one-file save - the root is a working copy under the app's own data directory, so those projects
+// get a password manager too without a second store, a second format or second crypto. Which root
+// a project gets is decided in ONE place: ./vault-location.ts.
+//
 // Deliberately its OWN sibling file, <cwd>/.nodeterm/vault.json — NOT a field on ProjectFileV1
 // (core/workspace-files.ts). That file's own header states the rule this follows: ProjectFileV1
 // "carries CONTENT ONLY. Nothing in here may be state two machines opening the same repo would
@@ -28,8 +35,9 @@ import type { VaultFileV1 } from '../../shared/password-manager'
 export const VAULT_DIR = '.nodeterm'
 export const VAULT_FILE = 'vault.json'
 
-export function vaultPathFor(cwd: string): string {
-  return path.join(cwd, VAULT_DIR, VAULT_FILE)
+/** `root` is a vault root, not necessarily a project folder - see the header. */
+export function vaultPathFor(root: string): string {
+  return path.join(root, VAULT_DIR, VAULT_FILE)
 }
 
 export interface VaultMutation<TResult> {

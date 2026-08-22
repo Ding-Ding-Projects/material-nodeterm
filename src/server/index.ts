@@ -28,6 +28,7 @@ import {
   registerPasswordManagerHandlers,
   type PasswordManagerRoute
 } from '../core/password-manager/password-manager-handlers'
+import { vaultRootFor } from '../core/password-manager/vault-location'
 import os from 'os'
 import { hookServer } from '../core/agents/hook-server'
 import { installServerEditionControlHandler } from './control-unsupported'
@@ -282,10 +283,19 @@ export async function startServer(
   })
 
   // Password managers (core/password-manager/) — same local-only v1 scope as board log above.
+  // A folder project keeps its vault beside project.json (git-shareable, unchanged). A
+  // folder-less one - an SSH project, a cwd-less canvas, a project opened from a one-file save -
+  // keeps a working copy under this machine's app data, which is what stopped the panel from
+  // refusing every project without a folder. See core/password-manager/vault-location.ts.
   registerPasswordManagerHandlers(platform, {
     route: (projectId: string): PasswordManagerRoute => {
-      const cwd = workspaceStore.localCwdForProject(projectId)
-      return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
+      const root = vaultRootFor({
+        projectId,
+        cwd: workspaceStore.localCwdForProject(projectId),
+        userDataDir: platform.userDataDir,
+        known: workspaceStore.hasProject(projectId)
+      })
+      return root ? { kind: 'local', cwd: root } : { kind: 'unsupported' }
     }
   })
 

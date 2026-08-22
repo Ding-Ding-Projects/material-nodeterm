@@ -66,6 +66,52 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
+describe('a folder-less project vault travels inside the save file', () => {
+  // A folder project's vault is one of its own working files and is captured with the rest. A
+  // folder-LESS one (SSH, a cwd-less canvas) keeps a working copy under the app data directory,
+  // so nothing else in the archive would carry it - this is the path that makes those projects'
+  // password managers survive a save and an open.
+  const vaultBytes = (): Buffer =>
+    Buffer.from(
+      JSON.stringify({
+        version: 1,
+        kdf: { N: 16384, r: 8, p: 1, keylen: 32 },
+        salt: 'c2FsdA==',
+        verifier: { v: 1, iv: 'aXY=', ciphertext: 'Y3Q=', tag: 'dGFn' },
+        managers: []
+      }),
+      'utf-8'
+    )
+
+  it('carries the vault out and hands it back on import', async () => {
+    const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
+    const vault = vaultBytes()
+    const { bytes } = await service.export(project({}), { vault })
+
+    const outcome = await service.import(bytes)
+    // Handed BACK rather than written: where a vault belongs depends on the project the import
+    // just minted, and that decision has exactly one home (password-manager/vault-location.ts).
+    expect(outcome.vault?.equals(vault)).toBe(true)
+    expect(outcome.project.cwd).toBeUndefined()
+  })
+
+  it('carries nothing when the project has no vault', async () => {
+    const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
+    const { bytes } = await service.export(project({}))
+    expect((await service.import(bytes)).vault).toBeUndefined()
+  })
+
+  it('still imports a save file written before vaults travelled', async () => {
+    // The entry is additive: an archive from an older build simply has none, and must open
+    // exactly as it always did rather than being refused for a missing section.
+    const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
+    const { bytes } = await service.export(project({ name: 'Older save' }))
+    const outcome = await service.import(bytes)
+    expect(outcome.project.name).toBe('Older save')
+    expect(outcome.vault).toBeUndefined()
+  })
+})
+
 describe('single-file project archives (V2 container)', () => {
   it('round-trips the WHOLE project: canvas, history, repository and uncommitted working state', async () => {
     const repo = await makeFixtureRepo()
