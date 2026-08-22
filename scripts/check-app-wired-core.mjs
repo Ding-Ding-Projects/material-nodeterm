@@ -270,3 +270,38 @@ export function repoElectronPids({
   }
   return lines.map(Number)
 }
+
+/** Resolve true once the child has exited, false when `timeoutMs` passes first. */
+function waitForChildExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true)
+  return new Promise((resolveExit) => {
+    let timer = null
+    const finish = (exited) => {
+      if (timer) clearTimeout(timer)
+      child.off('exit', onExit)
+      resolveExit(exited)
+    }
+    const onExit = () => finish(true)
+    child.once('exit', onExit)
+    if (child.exitCode !== null || child.signalCode !== null) return finish(true)
+    timer = setTimeout(() => finish(false), timeoutMs)
+  })
+}
+
+/**
+ * Stop only the exact Electron child this run spawned, with no repository-wide process sweep.
+ *
+ * Shared by every harness that launches the built app (the screenshot capture and the walkthrough
+ * recorder). One definition rather than one per script: a cleanup routine that drifts between two
+ * copies leaves somebody's Electron running, and the copy that got it wrong is always the one
+ * nobody looked at.
+ */
+export async function terminateSpawnedChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return
+  child.kill()
+  if (await waitForChildExit(child, 3000)) return
+  child.kill('SIGKILL')
+  if (!(await waitForChildExit(child, 3000))) {
+    throw new Error(`spawned Electron child ${child.pid} did not exit within the cleanup deadline`)
+  }
+}

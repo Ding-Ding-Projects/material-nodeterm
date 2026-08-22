@@ -53,6 +53,16 @@ Every colour, typeface, size, weight, radius and spacing the app renders is adju
 through the appearance editor, and every colour control is a continuous field with a colour-space
 translator rather than a fixed list of swatches.
 
+### Watch it run
+
+![A recording of the built app: the first-run cover, creating a project, opening a real terminal on the canvas and running a command in it, the command palette searching, and the settings surface](./docs/assets/app-walkthrough.webp)
+
+A still proves a surface exists. This proves it moves. It is a real recording of the built
+artifact, driven by [`scripts/record-app.mjs`](./scripts/record-app.mjs) against a disposable
+profile, and it is frames of the app's own renderer: nothing here captures a screen, a desktop or
+any other window. Provenance, including the commit it was recorded at, sits beside it in
+[`app-walkthrough.json`](./docs/assets/app-walkthrough.json).
+
 <details>
 <summary><strong>See it</strong> — real captures of the built app, not mockups</summary>
 
