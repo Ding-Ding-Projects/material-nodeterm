@@ -78,6 +78,10 @@ export const COLLAPSED_HEIGHT = 40
 
 /** User data carried in the React Flow node's data field. */
 export interface NodeData {
+  /** A live canvas object that was never asked to survive the session — today only a browser
+   *  popup. `flowToNodeStates` drops it, so it is absent from project.json, the SSH mirror and the
+   *  export archive alike; the node's own "Keep" action clears the flag to promote it. */
+  temporary?: boolean
   /** Set by ADHD focus mode on every node that is NOT the focus target; the stylesheet fades it.
    *  Marked rather than filtered, because focus DIMS and never hides — the node stays in the graph,
    *  stays clickable, and returns to full opacity on hover. Transient: derived on every render from
@@ -842,7 +846,13 @@ export function createBrowserNode(
   url: string,
   center?: { x: number; y: number },
   ownerNodeId?: string,
-  profileId?: string
+  profileId?: string,
+  /** A popup (`target=_blank` / `window.open`) opens as a TEMPORARY canvas node: real, live and
+   *  interactive, but never written to project.json — closing it leaves nothing behind, which is
+   *  what a popup is. The node's own "Keep" action clears this flag and promotes it into an
+   *  ordinary persisted node. See `flowToNodeStates`, which is where the promise is actually
+   *  kept. */
+  temporary?: boolean
 ): CanvasNode {
   const title = url ? url.replace(/^https?:\/\//, '').slice(0, 40) : 'Browser'
   return {
@@ -858,7 +868,8 @@ export function createBrowserNode(
       group: null,
       ...(url ? { url } : {}),
       ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {}),
-      ...(profileId ? { browserProfileId: profileId } : {})
+      ...(profileId ? { browserProfileId: profileId } : {}),
+      ...(temporary ? { temporary: true } : {})
     }
   }
 }
@@ -1808,6 +1819,11 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
   // NODE_START_SIZE for why that is now a typecheck error instead.
   const sizeFor = (kind: NodeKind) => NODE_START_SIZE[kind] ?? TERMINAL_SIZE
   return nodes
+    // Temporary nodes (browser popups) are live canvas objects that were never asked to outlive
+    // the session. Dropping them HERE rather than at each call site means every save path -- the
+    // debounced autosave, an explicit save, the SSH mirror, the export archive -- agrees, and a
+    // popup can never be resurrected by a reload into a node nobody opened.
+    .filter((n) => !n.data.temporary)
     .map((n) => {
       const kind: NodeKind = (n.type as NodeKind) ?? 'terminal'
       const collapsed = !!n.data.collapsed

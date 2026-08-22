@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, Position, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
 import type { BrowserProfile, BrowserTab } from '@shared/types'
-import { browserPartitionFor } from '@shared/browser-profiles'
+import { browserPartitionForNode } from '@shared/browser-profiles'
+import { markWorkspaceDirty } from '../state/workspaceDirty'
 import { defaultBrowserTabs, type CanvasNode } from '../state/workspace'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useProjects } from '../state/projects'
@@ -43,7 +44,12 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
   const setProjectBrowserProfiles = useProjects((s) => s.setProjectBrowserProfiles)
 
   const browserProfileId = data.browserProfileId as string | undefined
-  const partition = browserPartitionFor(activeProjectId, browserProfileId)
+  // The group frame this node sits in, read from React Flow (the live source of truth for
+  // parentage) rather than from `data` — nothing writes a group id into node data, and a stale
+  // one would silently point the webview at the wrong cookie jar.
+  const parentGroupId = useStore((st) => st.nodeLookup.get(id)?.parentId)
+  const partition = browserPartitionForNode(activeProjectId, browserProfileId, parentGroupId)
+  const isTemporary = !!data.temporary
 
   // ── Tabs ────────────────────────────────────────────────────────────────────────────────────
   // `tabs`/`activeTabId` are a LOCAL mirror of `data.browserTabs`/`data.browserActiveTabId`,
@@ -165,6 +171,19 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
           {(data.title as string) || 'Browser'}
         </span>
         <span className="term-node__spacer" />
+        {isTemporary && (
+          <button
+            className="browser-node__keep"
+            title="This popup is temporary — it is not saved with the project. Keep it?"
+            onClick={(e) => {
+              e.stopPropagation()
+              updateNodeData(id, { temporary: undefined })
+              markWorkspaceDirty()
+            }}
+          >
+            Temporary · Keep
+          </button>
+        )}
         <BrowserProfilePicker
           profiles={projectBrowserProfiles}
           selectedId={browserProfileId}

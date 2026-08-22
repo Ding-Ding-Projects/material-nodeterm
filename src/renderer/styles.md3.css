@@ -11015,3 +11015,20 @@ button.term-node__title-text:focus-visible {
 .md3-toylock-wizard .toylock-ladder__hole--up {
   background: var(--md-secondary-container);
 }
+
+/* A temporary (popup) browser node says so, and offers the one action that promotes it. */
+.browser-node__keep {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-small);
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 2px 8px;
+  margin-right: 6px;
+  cursor: pointer;
+}
+.browser-node__keep:hover {
+  filter: brightness(1.08);
+}
